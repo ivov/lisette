@@ -4610,6 +4610,44 @@ fn test() -> string {
 }
 
 #[test]
+fn unit_values_display_as_parens() {
+    let input = r#"
+import "go:fmt"
+
+type Nothing = ()
+
+fn tick(log: mut Ref<Slice<string>>, label: string) {
+  log.* = log.*.append(label)
+}
+
+fn name(log: mut Ref<Slice<string>>) -> string {
+  log.* = log.*.append("name")
+  "n"
+}
+
+fn test() {
+  let u = ()
+  let n: Nothing = ()
+  let r: Result<(), string> = Ok(())
+  let e: Result<int, ()> = Err(())
+  let o = Some(Some(()))
+  let t = ((), 1)
+  let k = 2
+  let got = f"{u}|x{n}y|{r}|{e}|{o}|{t}|{()} {k}"
+  if got != "()|x()y|Ok(())|Err(())|Some(Some(()))|((), 1)|() 2" {
+    panic(got)
+  }
+  let mut log: Slice<string> = []
+  let ordered = f"{name(&log)}{tick(&log, "a")}{name(&log)}"
+  if ordered != "n()n" || fmt.Sprint(log) != "[name a name]" {
+    panic(f"{ordered} {log}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unit_call_as_assignment_rhs() {
     let input = r#"
 fn noop() {}

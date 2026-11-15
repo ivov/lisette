@@ -13,6 +13,14 @@ type Debugger interface {
 	DebugString() string
 }
 
+// display maps unit to "()", because fmt prints struct{}{} as "{}".
+func display(v any) any {
+	if _, ok := v.(struct{}); ok {
+		return "()"
+	}
+	return v
+}
+
 // Debug renders v for a diagnostic: strings quoted, a Debugger via DebugString,
 // slices and maps element-wise, else display form.
 func Debug(v any) string {
@@ -48,5 +56,5 @@ func Debug(v any) string {
 	case reflect.Pointer:
 		return Debug(rv.Elem().Interface())
 	}
-	return fmt.Sprintf("%v", v)
+	return fmt.Sprintf("%v", display(v))
 }

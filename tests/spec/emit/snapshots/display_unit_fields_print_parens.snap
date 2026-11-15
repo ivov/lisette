@@ -1,0 +1,161 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  #[display]
+  struct Mixed { u: (), n: int }
+  
+  #[display]
+  struct OnlyUnit { u: () }
+  
+  #[display]
+  struct Pair((), int)
+  
+  #[display]
+  struct Done(())
+  
+  #[display]
+  enum Event { Fired(()), Moved { u: (), n: int }, Idle }
+  
+  fn test() {
+    let got = fmt.Sprint(Mixed { u: (), n: 1 }, "|", OnlyUnit { u: () }, "|", Pair((), 2), "|", Done(()))
+    if got != "Mixed { u: (), n: 1 }|OnlyUnit { u: () }|Pair((), 2)|Done(())" {
+      panic(got)
+    }
+    let events = fmt.Sprint(Event.Fired(()), "|", Event.Moved { u: (), n: 3 }, "|", Event.Idle)
+    if events != "Fired(())|Moved { u: (), n: 3 }|Idle" {
+      panic(events)
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func MakeEventFired(arg0 struct{}) Event {
+	return Event{Tag: EventFired, Fired: arg0}
+}
+
+func MakeEventMoved(arg0 struct{}, arg1 int) Event {
+	return Event{Tag: EventMoved, U: arg0, N: arg1}
+}
+
+func MakeEventIdle() Event {
+	return Event{Tag: EventIdle}
+}
+
+type Mixed struct {
+	u struct{}
+	n int
+}
+
+func (m Mixed) String() string {
+	return fmt.Sprintf("Mixed { u: (), n: %v }", m.n)
+}
+
+func (m Mixed) toString() string {
+	return m.String()
+}
+
+type OnlyUnit struct {
+	u struct{}
+}
+
+func (o OnlyUnit) String() string {
+	return "OnlyUnit { u: () }"
+}
+
+func (o OnlyUnit) toString() string {
+	return o.String()
+}
+
+type Pair struct {
+	F0 struct{}
+	F1 int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair((), %v)", p.F1)
+}
+
+func (p Pair) toString() string {
+	return p.String()
+}
+
+type Done struct{}
+
+func (d Done) String() string {
+	return "Done(())"
+}
+
+func (d Done) toString() string {
+	return d.String()
+}
+
+type EventTag uint8
+
+const (
+	EventFired EventTag = iota
+	EventMoved
+	EventIdle
+)
+
+type Event struct {
+	Tag   EventTag
+	Fired struct{}
+	U     struct{}
+	N     int
+}
+
+func (e Event) String() string {
+	switch e.Tag {
+	case EventFired:
+		return "Fired(())"
+	case EventMoved:
+		return fmt.Sprintf("Moved { u: (), n: %v }", e.N)
+	case EventIdle:
+		return "Idle"
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+func (e Event) GoString() string {
+	switch e.Tag {
+	case EventFired:
+		return "Event.Fired(())"
+	case EventMoved:
+		return fmt.Sprintf("Event.Moved { u: (), n: %v }", e.N)
+	case EventIdle:
+		return "Event.Idle"
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+func (e Event) toString() string {
+	return e.String()
+}
+
+func test() {
+	got := fmt.Sprint(Mixed{
+		u: struct{}{},
+		n: 1,
+	}, "|", OnlyUnit{u: struct{}{}}, "|", Pair{
+		F0: struct{}{},
+		F1: 2,
+	}, "|", Done(struct{}{}))
+	if got != "Mixed { u: (), n: 1 }|OnlyUnit { u: () }|Pair((), 2)|Done(())" {
+		panic(got)
+	}
+	events := fmt.Sprint(MakeEventFired(struct{}{}), "|", Event{
+		Tag: EventMoved,
+		U:   struct{}{},
+		N:   3,
+	}, "|", MakeEventIdle())
+	if events != "Fired(())|Moved { u: (), n: 3 }|Idle" {
+		panic(events)
+	}
+}

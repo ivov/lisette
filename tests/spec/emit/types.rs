@@ -232,6 +232,40 @@ struct UserId(int)
 }
 
 #[test]
+fn display_unit_fields_print_parens() {
+    let input = r#"
+import "go:fmt"
+
+#[display]
+struct Mixed { u: (), n: int }
+
+#[display]
+struct OnlyUnit { u: () }
+
+#[display]
+struct Pair((), int)
+
+#[display]
+struct Done(())
+
+#[display]
+enum Event { Fired(()), Moved { u: (), n: int }, Idle }
+
+fn test() {
+  let got = fmt.Sprint(Mixed { u: (), n: 1 }, "|", OnlyUnit { u: () }, "|", Pair((), 2), "|", Done(()))
+  if got != "Mixed { u: (), n: 1 }|OnlyUnit { u: () }|Pair((), 2)|Done(())" {
+    panic(got)
+  }
+  let events = fmt.Sprint(Event.Fired(()), "|", Event.Moved { u: (), n: 3 }, "|", Event.Idle)
+  if events != "Fired(())|Moved { u: (), n: 3 }|Idle" {
+    panic(events)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn display_generic_struct_to_string() {
     let input = r#"
 #[display]

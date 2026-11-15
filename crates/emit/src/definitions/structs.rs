@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
+use crate::expressions::literals::UNIT_DISPLAY;
 use crate::expressions::top_items::emit_item_doc;
 use crate::names::go_name::{self, GeneratedPackage, prelude_qualifier};
 use crate::names::packages::PackageRequirements;
@@ -14,7 +15,7 @@ use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::go_names;
 use syntax::program::MethodOrigin;
 use syntax::program::{Definition, DefinitionBody, Methods, interface_requirements};
-use syntax::types::Type;
+use syntax::types::{Type, resolves_to_unit};
 
 pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
 
@@ -173,15 +174,17 @@ impl Planner<'_> {
         let receiver_generics = self.receiver_generics_string(generics);
         let is_type_alias = fields.len() == 1 && generics_string.is_empty();
         let underlying_go_type = is_type_alias.then(|| self.use_go_type(&fields[0].ty));
-        let field_is_function: Vec<bool> =
-            fields.iter().map(|f| is_raw_function_type(&f.ty)).collect();
+        let field_formats: Vec<FieldFormat> = fields
+            .iter()
+            .map(|f| FieldFormat::of(&f.ty, |id| self.facts.definition(id)))
+            .collect();
         for method in methods {
             let code = match method {
                 SynthesizedMethod::Format(format) => {
                     let (code, requirements) = emit_tuple_struct_format_method(
                         name,
                         &receiver_generics,
-                        &field_is_function,
+                        &field_formats,
                         underlying_go_type.as_deref(),
                         format,
                     );
@@ -217,7 +220,7 @@ impl Planner<'_> {
             let stringer_field = StringerField {
                 source_name: f.name.to_string(),
                 go_name,
-                is_function: is_raw_function_type(&f.ty),
+                format: FieldFormat::of(&f.ty, |id| self.facts.definition(id)),
             };
             return (field_with_doc, stringer_field);
         }
@@ -243,7 +246,7 @@ impl Planner<'_> {
         let stringer_field = StringerField {
             source_name: f.name.to_string(),
             go_name: field_name,
-            is_function: is_raw_function_type(&f.ty),
+            format: FieldFormat::of(&f.ty, |id| self.facts.definition(id)),
         };
         (field_with_doc, stringer_field)
     }
@@ -502,7 +505,26 @@ pub(crate) fn struct_field_go_name(
 struct StringerField {
     source_name: String,
     go_name: String,
-    is_function: bool,
+    format: FieldFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FieldFormat {
+    Value,
+    Function,
+    Unit,
+}
+
+impl FieldFormat {
+    pub(crate) fn of<'d>(ty: &Type, definition: impl Fn(&str) -> Option<&'d Definition>) -> Self {
+        if is_raw_function_type(ty) {
+            FieldFormat::Function
+        } else if resolves_to_unit(ty, definition) {
+            FieldFormat::Unit
+        } else {
+            FieldFormat::Value
+        }
+    }
 }
 
 pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
@@ -554,28 +576,44 @@ impl<'a> StringFormat<'a> {
         }
     }
 
-    pub(crate) fn verb(self, is_function: bool) -> &'static str {
-        match (self, is_function) {
-            (_, true) => "%p",
-            (StringFormat::Display { .. }, false) => "%v",
-            (StringFormat::Debug { .. }, false) => "%s",
+    pub(crate) fn verb(self, field: FieldFormat) -> &'static str {
+        match (self, field) {
+            (_, FieldFormat::Unit) => UNIT_DISPLAY,
+            (_, FieldFormat::Function) => "%p",
+            (StringFormat::Display { .. }, FieldFormat::Value) => "%v",
+            (StringFormat::Debug { .. }, FieldFormat::Value) => "%s",
         }
     }
 
     pub(crate) fn argument(
         self,
         value: String,
-        is_function: bool,
+        field: FieldFormat,
         requirements: &mut PackageRequirements,
-    ) -> String {
-        match (self, is_function) {
-            (StringFormat::Display { .. }, _) | (StringFormat::Debug, true) => value,
-            (StringFormat::Debug, false) => {
+    ) -> Option<String> {
+        match (self, field) {
+            (_, FieldFormat::Unit) => None,
+            (StringFormat::Display { .. }, _) | (StringFormat::Debug, FieldFormat::Function) => {
+                Some(value)
+            }
+            (StringFormat::Debug, FieldFormat::Value) => {
                 requirements.require_generated(GeneratedPackage::Prelude);
-                format!("{}.Debug({value})", prelude_qualifier())
+                Some(format!("{}.Debug({value})", prelude_qualifier()))
             }
         }
     }
+}
+
+pub(crate) fn format_return(
+    text: &str,
+    args: &[String],
+    requirements: &mut PackageRequirements,
+) -> String {
+    if args.is_empty() {
+        return format!("return \"{text}\"");
+    }
+    requirements.require_generated(GeneratedPackage::Fmt);
+    format!("return fmt.Sprintf(\"{text}\", {})", args.join(", "))
 }
 
 fn emit_to_string_method(name: &str, receiver_generics: &str, method_name: &str) -> String {
@@ -604,25 +642,24 @@ fn emit_struct_format_method(
         );
         return (code, requirements);
     }
-    requirements.require_generated(GeneratedPackage::Fmt);
     let format_parts: Vec<String> = fields
         .iter()
-        .map(|f| format!("{}: {}", f.source_name, format.verb(f.is_function)))
+        .map(|f| format!("{}: {}", f.source_name, format.verb(f.format)))
         .collect();
     let args: Vec<String> = fields
         .iter()
-        .map(|f| {
+        .filter_map(|f| {
             format.argument(
                 format!("{receiver}.{}", f.go_name),
-                f.is_function,
+                f.format,
                 &mut requirements,
             )
         })
         .collect();
+    let text = format!("{name} {{ {} }}", format_parts.join(", "));
     let code = format!(
-        "func ({receiver} {receiver_type}) {method}() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
-        format_parts.join(", "),
-        args.join(", ")
+        "func ({receiver} {receiver_type}) {method}() string {{\n{}\n}}",
+        format_return(&text, &args, &mut requirements)
     );
     (code, requirements)
 }
@@ -692,7 +729,7 @@ fn emit_struct_shadow_stringer_method(
 fn emit_tuple_struct_format_method(
     name: &str,
     receiver_generics: &str,
-    field_is_function: &[bool],
+    field_formats: &[FieldFormat],
     underlying_go_type: Option<&str>,
     format: StringFormat<'_>,
 ) -> (String, PackageRequirements) {
@@ -701,41 +738,26 @@ fn emit_tuple_struct_format_method(
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     let method = format.method();
     let mut requirements = PackageRequirements::default();
-    if field_is_function.is_empty() {
+    if field_formats.is_empty() {
         let code = format!(
             "func ({receiver} {receiver_type}) {method}() string {{\nreturn \"{name}\"\n}}"
         );
         return (code, requirements);
     }
-    requirements.require_generated(GeneratedPackage::Fmt);
-    if let Some(underlying) = underlying_go_type {
-        let is_function = field_is_function[0];
-        let value = format.argument(
-            render_conversion(underlying, &receiver),
-            is_function,
-            &mut requirements,
-        );
-        let code = format!(
-            "func ({receiver} {receiver_type}) {method}() string {{\nreturn fmt.Sprintf(\"{name}({})\", {value})\n}}",
-            format.verb(is_function)
-        );
-        return (code, requirements);
-    }
-    let placeholders: Vec<&str> = field_is_function
-        .iter()
-        .map(|is_function| format.verb(*is_function))
-        .collect();
-    let args: Vec<String> = field_is_function
+    let field_value = |index: usize| match underlying_go_type {
+        Some(underlying) => render_conversion(underlying, &receiver),
+        None => format!("{receiver}.F{index}"),
+    };
+    let placeholders: Vec<&str> = field_formats.iter().map(|f| format.verb(*f)).collect();
+    let args: Vec<String> = field_formats
         .iter()
         .enumerate()
-        .map(|(i, is_function)| {
-            format.argument(format!("{receiver}.F{i}"), *is_function, &mut requirements)
-        })
+        .filter_map(|(index, f)| format.argument(field_value(index), *f, &mut requirements))
         .collect();
+    let text = format!("{name}({})", placeholders.join(", "));
     let code = format!(
-        "func ({receiver} {receiver_type}) {method}() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
-        placeholders.join(", "),
-        args.join(", ")
+        "func ({receiver} {receiver_type}) {method}() string {{\n{}\n}}",
+        format_return(&text, &args, &mut requirements)
     );
     (code, requirements)
 }

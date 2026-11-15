@@ -61,9 +61,9 @@ func (res Result[T, E]) UnwrapOrElse(f func(E) T) T {
 
 func (res Result[T, E]) String() string {
 	if res.Tag == ResultOk {
-		return fmt.Sprintf("Ok(%v)", res.OkVal)
+		return fmt.Sprintf("Ok(%v)", display(res.OkVal))
 	}
-	return fmt.Sprintf("Err(%v)", res.ErrVal)
+	return fmt.Sprintf("Err(%v)", display(res.ErrVal))
 }
 
 func (res Result[T, E]) DebugString() string {
