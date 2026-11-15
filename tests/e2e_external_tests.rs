@@ -147,7 +147,7 @@ fn a_panic_in_a_helper_is_reported_at_the_panic_line() {
     let out = combined(&test);
     assert!(!test.status.success(), "expected failure: {out}");
     assert!(
-        out.contains("[main.lis:3:5]") && out.contains("panic(\"helper panic\")"),
+        out.contains("proj/src/main.lis:3:5]") && out.contains("panic(\"helper panic\")"),
         "the panic must be anchored at the `panic` call, not at the test header: {out}"
     );
 }
