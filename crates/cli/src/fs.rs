@@ -134,7 +134,7 @@ impl LocalFileSystem {
                 && let Some(name) = path.file_name().and_then(|s| s.to_str())
             {
                 let display_path = base
-                    .relative(&Path::new(fs_name).join(name))
+                    .display_path(&Path::new(fs_name).join(name))
                     .unwrap_or_else(|| name.to_string());
                 files.insert(name.to_string(), FileContent::new(source, display_path));
             }

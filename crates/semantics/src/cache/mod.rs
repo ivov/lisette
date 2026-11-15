@@ -466,7 +466,7 @@ fn cached_file_display_path(
 ) -> String {
     if is_external_test_package(package_id) {
         return root_base
-            .relative(&Path::new(package_id).join(bare_name))
+            .display_path(&Path::new(package_id).join(bare_name))
             .unwrap_or_else(|| bare_name.to_string());
     }
     let rel = if package_id == ENTRY_PACKAGE_ID {
@@ -475,7 +475,7 @@ fn cached_file_display_path(
         Path::new(package_id).join(bare_name)
     };
     src_base
-        .relative(&rel)
+        .display_path(&rel)
         .unwrap_or_else(|| bare_name.to_string())
 }
 

@@ -17,8 +17,8 @@ pub struct File {
     /// Stable bare filename (e.g. `greet.lis`); identity key for caching and
     /// LSP path reconstruction.
     pub name: String,
-    /// Cwd-relative path for diagnostics and `--sourcemap` directives; equals
-    /// `name` for synthetic/test loaders that have no notion of cwd.
+    /// Cwd-relative path for diagnostics and `--sourcemap` directives, absolute
+    /// outside the cwd. Equals `name` for loaders that have no notion of cwd.
     pub display_path: String,
     /// Physical source path when it cannot be reconstructed from the package
     /// and filename, notably for generated Go typedefs.

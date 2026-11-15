@@ -7,7 +7,7 @@ pub fn relative_to_cwd(path: &Path) -> Option<String> {
     relative_to_cwd_with(path, env::current_dir().ok().as_deref())
 }
 
-/// Cwd-relative display paths under a fixed base dir, resolving prefixes once.
+/// Display paths under a fixed base dir, resolving prefixes once.
 pub struct DisplayPathBase {
     resolution: Option<(PathBuf, PathBuf)>,
 }
@@ -35,10 +35,13 @@ impl DisplayPathBase {
         }
     }
 
-    /// Mirrors `relative_to_cwd` on the base dir joined with `rel`.
-    pub fn relative(&self, rel: &Path) -> Option<String> {
+    /// The base dir joined with `rel`, relative to the cwd when it lies inside it,
+    /// else absolute. Returns None if the cwd is unknown.
+    pub fn display_path(&self, rel: &Path) -> Option<String> {
         let (base, cwd) = self.resolution.as_ref()?;
-        relativize(base.join(rel).strip_prefix(cwd).ok()?)
+        let path = base.join(rel);
+        let relative = path.strip_prefix(cwd).ok().and_then(relativize);
+        Some(relative.unwrap_or_else(|| path.display().to_string()))
     }
 }
 
@@ -156,11 +159,11 @@ mod tests {
         stdfs::create_dir_all(cwd.join("src")).unwrap();
         let base = DisplayPathBase::with_cwd(&cwd.join("src"), Some(cwd.to_path_buf()));
         assert_eq!(
-            base.relative(Path::new("main.lis")),
+            base.display_path(Path::new("main.lis")),
             Some("src/main.lis".to_string())
         );
         assert_eq!(
-            base.relative(&Path::new("package_x").join("lib.lis")),
+            base.display_path(&Path::new("package_x").join("lib.lis")),
             Some("src/package_x/lib.lis".to_string())
         );
     }
@@ -171,24 +174,34 @@ mod tests {
         let cwd = tmp.path();
         let base = DisplayPathBase::with_cwd(cwd, Some(cwd.to_path_buf()));
         assert_eq!(
-            base.relative(Path::new("lib.lis")),
+            base.display_path(Path::new("lib.lis")),
             Some("lib.lis".to_string())
         );
     }
 
     #[test]
-    fn display_base_outside_cwd_returns_none() {
+    fn display_base_outside_cwd_is_absolute() {
         let tmp = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
         let base =
             DisplayPathBase::with_cwd(&other.path().join("src"), Some(tmp.path().to_path_buf()));
-        assert_eq!(base.relative(Path::new("main.lis")), None);
+        assert_eq!(
+            base.display_path(Path::new("main.lis")),
+            Some(
+                other
+                    .path()
+                    .join("src")
+                    .join("main.lis")
+                    .display()
+                    .to_string()
+            )
+        );
     }
 
     #[test]
     fn display_base_unknown_cwd_returns_none() {
         let base = DisplayPathBase::with_cwd(Path::new("/any/src"), None);
-        assert_eq!(base.relative(Path::new("main.lis")), None);
+        assert_eq!(base.display_path(Path::new("main.lis")), None);
     }
 
     #[cfg(unix)]
@@ -202,7 +215,7 @@ mod tests {
 
         let base = DisplayPathBase::with_cwd(&real.join("src"), Some(link));
         assert_eq!(
-            base.relative(Path::new("main.lis")),
+            base.display_path(Path::new("main.lis")),
             Some("src/main.lis".to_string())
         );
     }

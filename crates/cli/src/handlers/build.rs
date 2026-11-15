@@ -502,7 +502,10 @@ impl EntryPoint {
                         return Err(1);
                     }
                 };
-                let display = relative_to_cwd(&main_lis).unwrap_or_else(|| "main.lis".to_string());
+                let display = relative_to_cwd(&main_lis).unwrap_or_else(|| {
+                    let absolute = main_lis.canonicalize().unwrap_or_else(|_| main_lis.clone());
+                    absolute.display().to_string()
+                });
                 Ok(Self::Binary { source, display })
             }
             ProjectKind::Library => Ok(Self::Library),
