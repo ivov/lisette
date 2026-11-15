@@ -141,6 +141,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "lisette-lsp"
+version = "0.13.0"
+dependencies = [
+ "lisette-deps",
+ "lisette-diagnostics",
+ "lisette-format",
+ "lisette-passes",
+ "lisette-semantics",
+ "lisette-syntax",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lisette-passes"
 version = "0.13.0"
 dependencies = [
@@ -189,6 +204,7 @@ dependencies = [
  "lisette-diagnostics",
  "lisette-emit",
  "lisette-format",
+ "lisette-lsp",
  "lisette-passes",
  "lisette-semantics",
  "lisette-syntax",

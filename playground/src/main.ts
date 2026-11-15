@@ -2,7 +2,13 @@ import "@fontsource-variable/inter";
 import "@fontsource/lexend/latin-600.css";
 import "./style.css";
 import { setupEditors, GO_PLACEHOLDER } from "./editor/index.js";
-import { loadWasmBridge, type Diagnostic, type LisetteBridge } from "./runner/wasm-bridge.js";
+import {
+  loadFreshLspSession,
+  loadWasmBridge,
+  type Diagnostic,
+  type LisetteBridge,
+} from "./runner/wasm-bridge.js";
+import { LspClient, type LspDiagnostic } from "./runner/lsp-client.js";
 import { executeGoSource, formatGoSource } from "./runner/executor.js";
 import { readSourceFromHash, copyShareUrl } from "./share.js";
 import { EXAMPLES } from "./examples.js";
@@ -168,6 +174,20 @@ function renderDiagnostics(diags: Diagnostic[]) {
     .join("");
 }
 
+function fromLspDiagnostic(diagnostic: LspDiagnostic): Diagnostic {
+  const { start, end } = diagnostic.range;
+  return {
+    severity:
+      diagnostic.severity === 1 ? "error" : diagnostic.severity === 2 ? "warning" : "info",
+    message: diagnostic.message,
+    line: start.line + 1,
+    col: start.character + 1,
+    endLine: end.line + 1,
+    endCol: end.character + 1,
+    code: diagnostic.code === undefined ? undefined : String(diagnostic.code),
+  };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -266,14 +286,53 @@ async function main() {
 
   // A run or a format owns the status pill until it finishes.
   let busy = false;
+
+  let lspDiagnostics: Diagnostic[] | null = null;
+  let compileDiagnostics: Diagnostic[] = [];
+  let compileCrashed = false;
+
+  function currentDiagnostics(): Diagnostic[] {
+    if (lspDiagnostics === null || compileCrashed) {
+      return [...(lspDiagnostics ?? []), ...compileDiagnostics];
+    }
+    const emitDiagnostics = compileDiagnostics.filter((d) => d.code?.startsWith("emit."));
+    return [...lspDiagnostics, ...emitDiagnostics];
+  }
+
+  function showDiagnostics() {
+    const diagnostics = currentDiagnostics();
+    editorResult.addMarkers(diagnostics);
+    renderDiagnostics(diagnostics);
+    if (!busy) showCounts(diagnostics);
+  }
+
+  let lsp: LspClient | null = null;
+  if (bridge) {
+    try {
+      lsp = new LspClient(
+        await loadFreshLspSession(0),
+        editorResult.getCode(),
+        (diagnostics) => {
+          lspDiagnostics = diagnostics.map(fromLspDiagnostic);
+          showDiagnostics();
+        },
+        loadFreshLspSession,
+      );
+      editorResult.setLsp(lsp);
+    } catch (err) {
+      console.warn("The language server failed to start:", err);
+    }
+  }
+
   // Each compile takes a ticket, so a slow result cannot overwrite a newer one.
   let ticket = 0;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function compileWith(compiler: LisetteBridge) {
     const result = await compiler.compile(editorResult.getCode());
-    editorResult.addMarkers(result.diagnostics);
-    renderDiagnostics(result.diagnostics);
+    compileDiagnostics = result.diagnostics;
+    compileCrashed = result.crashed === true;
+    showDiagnostics();
     return result;
   }
 
@@ -292,13 +351,14 @@ async function main() {
     const mine = ++ticket;
     const result = await compileWith(bridge);
     if (mine !== ticket) return;
-    if (!busy) showCounts(result.diagnostics);
     if (result.ok && result.goSource) showGo(result.goSource, mine);
     else settleGo(GO_PLACEHOLDER, mine);
   }
 
   editorResult.mainEditor.onDidChangeModelContent(() => {
     goPane.classList.add("is-stale");
+    compileDiagnostics = [];
+    lsp?.change(editorResult.getCode());
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(refresh, 1000);
   });
@@ -359,7 +419,7 @@ async function main() {
     if (!result.ok || !result.goSource) {
       settleGo(GO_PLACEHOLDER, mine);
       setOutput('<span class="output-hint">The code did not compile.</span>');
-      showCounts(result.diagnostics);
+      showCounts(currentDiagnostics());
       selectTab("diagnostics");
       busy = false;
       setButtons(false);

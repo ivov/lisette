@@ -1,4 +1,5 @@
 mod analysis;
+mod clock;
 mod completion;
 mod definition;
 mod document;
@@ -16,6 +17,7 @@ mod router;
 mod scheduler;
 mod scope;
 mod search;
+pub mod session;
 mod signature_help;
 mod snapshot;
 mod state;

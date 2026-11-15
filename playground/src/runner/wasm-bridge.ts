@@ -5,6 +5,11 @@
  * in `public/wasm/`).  We load it lazily so it doesn't block the initial render.
  */
 
+export interface LspSession {
+  handle(message: string): string;
+  free(): void;
+}
+
 // Matches the wasm-pack generated exports from public/wasm/lisette_wasm.js
 interface LisetteWasmModule {
   default(input?: unknown): Promise<unknown>;
@@ -12,10 +17,7 @@ interface LisetteWasmModule {
   format(code: string): string;
   check(code: string): string;
   compile(code: string): string;
-  complete(code: string, offset: number): string;
-  hover(code: string, offset: number): string;
-  goto_definition(code: string, offset: number): string;
-  signature_help(code: string, offset: number): string;
+  LspSession: new () => LspSession;
 }
 
 export interface Diagnostic {
@@ -32,6 +34,7 @@ export interface Diagnostic {
 
 export interface CompileResult {
   ok: boolean;
+  crashed?: boolean;
   goSource?: string;
   diagnostics: Diagnostic[];
 }
@@ -42,44 +45,11 @@ export interface FormatResult {
   error?: string;
 }
 
-export interface CompletionItem {
-  label: string;
-  kind?: string;
-  detail?: string;
-  documentation?: string;
-  insertText?: string;
-}
-
-export interface HoverResult {
-  markdown: string;
-  startLine?: number;
-  startCol?: number;
-  endLine?: number;
-  endCol?: number;
-}
-
-export interface DefinitionResult {
-  line: number;
-  col: number;
-  endLine: number;
-  endCol: number;
-}
-
-export interface SignatureHelpResult {
-  label: string;
-  parameters: string[];
-  activeParameter: number;
-}
-
 export interface LisetteBridge {
   readonly version: string;
   format(code: string): Promise<FormatResult>;
   check(code: string): Promise<Diagnostic[]>;
   compile(code: string): Promise<CompileResult>;
-  complete(code: string, offset: number): Promise<CompletionItem[]>;
-  hover(code: string, offset: number): Promise<HoverResult | null>;
-  gotoDefinition(code: string, offset: number): Promise<DefinitionResult | null>;
-  signatureHelp(code: string, offset: number): Promise<SignatureHelpResult | null>;
 }
 
 class WasmBridge implements LisetteBridge {
@@ -122,82 +92,11 @@ class WasmBridge implements LisetteBridge {
     } catch (e) {
       return {
         ok: false,
+        crashed: true,
         diagnostics: [
           { severity: "error", message: String(e), line: 1, col: 1 },
         ],
       };
-    }
-  }
-
-  async complete(code: string, offset: number): Promise<CompletionItem[]> {
-    try {
-      const raw = this.wasm.complete(code, offset);
-      return JSON.parse(raw) as CompletionItem[];
-    } catch {
-      return [];
-    }
-  }
-
-  async hover(code: string, offset: number): Promise<HoverResult | null> {
-    try {
-      const raw = this.wasm.hover(code, offset);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as {
-        markdown: string;
-        start_line?: number;
-        start_col?: number;
-        end_line?: number;
-        end_col?: number;
-      };
-      return {
-        markdown: parsed.markdown,
-        startLine: parsed.start_line,
-        startCol: parsed.start_col,
-        endLine: parsed.end_line,
-        endCol: parsed.end_col,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  async gotoDefinition(code: string, offset: number): Promise<DefinitionResult | null> {
-    try {
-      const raw = this.wasm.goto_definition(code, offset);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as {
-        line: number;
-        col: number;
-        end_line: number;
-        end_col: number;
-      };
-      return {
-        line: parsed.line,
-        col: parsed.col,
-        endLine: parsed.end_line,
-        endCol: parsed.end_col,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  async signatureHelp(code: string, offset: number): Promise<SignatureHelpResult | null> {
-    try {
-      const raw = this.wasm.signature_help(code, offset);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as {
-        label: string;
-        parameters: string[];
-        active_parameter: number;
-      };
-      return {
-        label: parsed.label,
-        parameters: parsed.parameters,
-        activeParameter: parsed.active_parameter,
-      };
-    } catch {
-      return null;
     }
   }
 }
@@ -206,18 +105,26 @@ let _bridge: LisetteBridge | null = null;
 
 export async function loadWasmBridge(): Promise<LisetteBridge> {
   if (_bridge) return _bridge;
+  _bridge = new WasmBridge(await importWasmModule());
+  return _bridge;
+}
 
+export async function loadFreshLspSession(instance: number): Promise<LspSession> {
+  const wasm = await importWasmModule(`?instance=${instance}`);
+  return new wasm.LspSession();
+}
+
+async function importWasmModule(query = ""): Promise<LisetteWasmModule> {
   // Load the wasm-pack generated module from public/wasm/.
   // We pass the URL as a parameter so Vite replaces import.meta.env.BASE_URL
   // at build time, while still hiding the dynamic import from tsc (TS2307).
-  const wasmJsUrl = `${import.meta.env.BASE_URL}wasm/lisette_wasm.js`;
+  // A different query string gives a separate module instance.
+  const wasmJsUrl = `${import.meta.env.BASE_URL}wasm/lisette_wasm.js${query}`;
   const loadMod = new Function("url", "return import(url)");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mod = (await loadMod(wasmJsUrl)) as any;
 
   // wasm-pack generates a default export that initialises the WASM binary.
   await mod.default();
-
-  _bridge = new WasmBridge(mod as LisetteWasmModule);
-  return _bridge;
+  return mod as LisetteWasmModule;
 }

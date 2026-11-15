@@ -158,6 +158,38 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
       - run: cargo test -p lisette-lsp --test lsp --locked -- --format terse
+      - run: cargo test -p lisette-lsp --test session --locked -- --format terse
+
+  playground-lsp:
+    name: Playground LSP
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: playground
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: 'false'
+      - run: rustup target add wasm32-unknown-unknown
+      - name: Read the wasm-bindgen version
+        id: wasm-bindgen
+        run: echo "version=$(grep -A1 '^name = "wasm-bindgen"$' wasm/Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6
+        id: cache-wasm-bindgen
+        with:
+          path: ~/.cargo/bin/wasm-bindgen
+          key: wasm-bindgen-${{ steps.wasm-bindgen.outputs.version }}-${{ runner.os }}
+      - if: steps.cache-wasm-bindgen.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version "${{ steps.wasm-bindgen.outputs.version }}" --locked
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cargo build --locked --target wasm32-unknown-unknown --manifest-path wasm/Cargo.toml
+      - run: wasm-bindgen --target web --out-dir "$RUNNER_TEMP/wasm" wasm/target/wasm32-unknown-unknown/debug/lisette_wasm.wasm
+      - run: node scripts/lsp-smoke.mjs "$RUNNER_TEMP/wasm"
 
   e2e-smoke:
     name: E2E smoke

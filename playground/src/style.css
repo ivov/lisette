@@ -437,6 +437,10 @@ select.btn {
   --vscode-editorGutter-background: var(--bg-go);
 }
 
+.monaco-editor .rename-input {
+  color: inherit;
+}
+
 .diagnostics-container {
   flex: 1;
   overflow-y: auto;

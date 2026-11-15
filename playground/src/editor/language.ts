@@ -42,8 +42,6 @@ export const LISETTE_CONSTRUCTORS = [
   "true", "false",
 ];
 
-export const ALL_TYPES = [...LISETTE_PRIMITIVE_TYPES, ...LISETTE_COMPOUND_TYPES];
-
 export function registerLanguage(monaco: typeof Monaco): void {
   monaco.languages.register({
     id: LANG_ID,
@@ -373,17 +371,10 @@ export const LISETTE_SNIPPETS: SnippetDef[] = [
   },
 ];
 
-// ─── Completion provider ──────────────────────────────────────────────────────
-export function registerCompletionProvider(
-  monaco: typeof Monaco,
-  getWasmCompletions: (
-    model: Monaco.editor.ITextModel,
-    position: Monaco.Position
-  ) => Promise<Monaco.languages.CompletionItem[]>
-): Monaco.IDisposable {
+// ─── Snippet provider ─────────────────────────────────────────────────────────
+export function registerSnippetProvider(monaco: typeof Monaco): Monaco.IDisposable {
   return monaco.languages.registerCompletionItemProvider(LANG_ID, {
-    triggerCharacters: [".", ":", "(", " ", "|"],
-    async provideCompletionItems(model, position) {
+    provideCompletionItems(model, position) {
       const word = model.getWordUntilPosition(position);
       const range: Monaco.IRange = {
         startLineNumber: position.lineNumber,
@@ -391,38 +382,8 @@ export function registerCompletionProvider(
         startColumn: word.startColumn,
         endColumn: word.endColumn,
       };
-
-      const keywordItems: Monaco.languages.CompletionItem[] = LISETTE_KEYWORDS.map(
-        (kw) => ({
-          label: kw,
-          kind: monaco.languages.CompletionItemKind.Keyword,
-          insertText: kw,
-          sortText: `z_${kw}`, // sort after semantic completions
-          range,
-        })
-      );
-
-      const typeItems: Monaco.languages.CompletionItem[] = ALL_TYPES.map(
-        (t) => ({
-          label: t,
-          kind: monaco.languages.CompletionItemKind.Class,
-          insertText: t,
-          sortText: `y_${t}`,
-          range,
-        })
-      );
-
-      const constructorItems: Monaco.languages.CompletionItem[] =
-        LISETTE_CONSTRUCTORS.map((c) => ({
-          label: c,
-          kind: monaco.languages.CompletionItemKind.EnumMember,
-          insertText: c,
-          sortText: `y_${c}`,
-          range,
-        }));
-
-      const snippetItems: Monaco.languages.CompletionItem[] =
-        LISETTE_SNIPPETS.map((s) => ({
+      return {
+        suggestions: LISETTE_SNIPPETS.map((s) => ({
           label: s.label,
           kind: monaco.languages.CompletionItemKind.Snippet,
           insertText: s.insertText,
@@ -431,83 +392,8 @@ export function registerCompletionProvider(
           documentation: s.documentation,
           sortText: `z_snippet_${s.label}`,
           range,
-        }));
-
-      let wasmItems: Monaco.languages.CompletionItem[] = [];
-      try {
-        wasmItems = await getWasmCompletions(model, position);
-      } catch {
-        // WASM not ready, fall back to static completions only
-      }
-
-      return {
-        suggestions: [
-          ...wasmItems,
-          ...keywordItems,
-          ...typeItems,
-          ...constructorItems,
-          ...snippetItems,
-        ],
+        })),
       };
-    },
-  });
-}
-
-// ─── Hover provider ───────────────────────────────────────────────────────────
-export function registerHoverProvider(
-  monaco: typeof Monaco,
-  getHover: (
-    model: Monaco.editor.ITextModel,
-    position: Monaco.Position
-  ) => Promise<Monaco.languages.Hover | null>
-): Monaco.IDisposable {
-  return monaco.languages.registerHoverProvider(LANG_ID, {
-    async provideHover(model, position) {
-      try {
-        return await getHover(model, position);
-      } catch {
-        return null;
-      }
-    },
-  });
-}
-
-// ─── Definition provider ─────────────────────────────────────────────────────
-export function registerDefinitionProvider(
-  monaco: typeof Monaco,
-  getDefinition: (
-    model: Monaco.editor.ITextModel,
-    position: Monaco.Position
-  ) => Promise<Monaco.languages.Definition | null>
-): Monaco.IDisposable {
-  return monaco.languages.registerDefinitionProvider(LANG_ID, {
-    async provideDefinition(model, position) {
-      try {
-        return await getDefinition(model, position);
-      } catch {
-        return null;
-      }
-    },
-  });
-}
-
-// ─── Signature help provider ─────────────────────────────────────────────────
-export function registerSignatureHelpProvider(
-  monaco: typeof Monaco,
-  getSignatureHelp: (
-    model: Monaco.editor.ITextModel,
-    position: Monaco.Position
-  ) => Promise<Monaco.languages.SignatureHelpResult | null>
-): Monaco.IDisposable {
-  return monaco.languages.registerSignatureHelpProvider(LANG_ID, {
-    signatureHelpTriggerCharacters: ["(", ","],
-    signatureHelpRetriggerCharacters: [","],
-    async provideSignatureHelp(model, position) {
-      try {
-        return await getSignatureHelp(model, position);
-      } catch {
-        return null;
-      }
     },
   });
 }

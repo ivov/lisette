@@ -1,8 +1,10 @@
 import type * as Monaco from "monaco-editor";
-import { LANG_ID, registerLanguage, registerCompletionProvider, registerHoverProvider, registerFormatProvider, registerDefinitionProvider, registerSignatureHelpProvider } from "./language.js";
+import { LANG_ID, registerLanguage, registerFormatProvider, registerSnippetProvider } from "./language.js";
+import { registerLspProviders } from "./lsp-providers.js";
 import { registerTheme, THEME } from "./theme.js";
 import { wireTextMateGrammar } from "./textmate.js";
 import type { LisetteBridge } from "../runner/wasm-bridge.js";
+import type { LspClient } from "../runner/lsp-client.js";
 
 export const GO_PLACEHOLDER = "// The emitted Go appears here once the code compiles.";
 
@@ -18,6 +20,7 @@ export interface EditorSetupResult {
   getCode: () => string;
   setGoSource: (source: string) => void;
   setBridge: (bridge: LisetteBridge) => void;
+  setLsp: (lsp: LspClient) => void;
   addMarkers: (diagnostics: DiagnosticItem[]) => void;
 }
 
@@ -43,88 +46,12 @@ export async function setupEditors(
 
   let bridge: LisetteBridge | null = null;
 
-  registerCompletionProvider(monaco, async (model, position) => {
-    if (!bridge) return [];
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const completions = await bridge.complete(code, offset);
-    const word = model.getWordUntilPosition(position);
-    const range: Monaco.IRange = {
-      startLineNumber: position.lineNumber,
-      endLineNumber: position.lineNumber,
-      startColumn: word.startColumn,
-      endColumn: word.endColumn,
-    };
-    return completions.map((c) => ({
-      label: c.label,
-      kind: mapCompletionKind(monaco, c.kind),
-      detail: c.detail,
-      documentation: c.documentation,
-      insertText: c.insertText ?? c.label,
-      range,
-    }));
-  });
+  registerSnippetProvider(monaco);
 
   registerFormatProvider(monaco, async (code) => {
     if (!bridge) return null;
     const result = await bridge.format(code);
     return result.ok ? (result.formatted ?? null) : null;
-  });
-
-  registerHoverProvider(monaco, async (model, position) => {
-    if (!bridge) return null;
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const hover = await bridge.hover(code, offset);
-    if (!hover) return null;
-    const result: Monaco.languages.Hover = {
-      contents: [{ value: hover.markdown }],
-    };
-    if (hover.startLine && hover.startCol && hover.endLine && hover.endCol) {
-      result.range = {
-        startLineNumber: hover.startLine,
-        startColumn: hover.startCol,
-        endLineNumber: hover.endLine,
-        endColumn: hover.endCol,
-      };
-    }
-    return result;
-  });
-
-  registerDefinitionProvider(monaco, async (model, position) => {
-    if (!bridge) return null;
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const def = await bridge.gotoDefinition(code, offset);
-    if (!def) return null;
-    return {
-      uri: model.uri,
-      range: {
-        startLineNumber: def.line,
-        startColumn: def.col,
-        endLineNumber: def.endLine,
-        endColumn: def.endCol,
-      },
-    };
-  });
-
-  registerSignatureHelpProvider(monaco, async (model, position) => {
-    if (!bridge) return null;
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const sig = await bridge.signatureHelp(code, offset);
-    if (!sig) return null;
-    return {
-      value: {
-        signatures: [{
-          label: sig.label,
-          parameters: sig.parameters.map((p) => ({ label: p })),
-        }],
-        activeSignature: 0,
-        activeParameter: sig.activeParameter,
-      },
-      dispose: () => {},
-    };
   });
 
   wireTextMateGrammar(monaco).catch((err) => {
@@ -153,6 +80,7 @@ export async function setupEditors(
       showSnippets: true,
     },
     renderLineHighlight: "line",
+    inlayHints: { enabled: "offUnlessPressed" },
     ...BRACKET_COLOURS_OFF,
     guides: { bracketPairs: false, indentation: true },
     smoothScrolling: true,
@@ -190,6 +118,9 @@ export async function setupEditors(
     setBridge: (b: LisetteBridge) => {
       bridge = b;
     },
+    setLsp: (lsp: LspClient) => {
+      registerLspProviders(monaco, lsp);
+    },
     addMarkers: (diagnostics: DiagnosticItem[]) => {
       const model = mainEditor.getModel();
       if (!model) return;
@@ -209,23 +140,4 @@ export async function setupEditors(
       monaco.editor.setModelMarkers(model, "lisette", markers);
     },
   };
-}
-
-function mapCompletionKind(
-  monaco: typeof Monaco,
-  kind: string | undefined
-): Monaco.languages.CompletionItemKind {
-  switch (kind) {
-    case "function":  return monaco.languages.CompletionItemKind.Function;
-    case "variable":  return monaco.languages.CompletionItemKind.Variable;
-    case "type":      return monaco.languages.CompletionItemKind.Class;
-    case "keyword":   return monaco.languages.CompletionItemKind.Keyword;
-    case "module":    return monaco.languages.CompletionItemKind.Module;
-    case "field":     return monaco.languages.CompletionItemKind.Field;
-    case "method":    return monaco.languages.CompletionItemKind.Method;
-    case "enum":      return monaco.languages.CompletionItemKind.Enum;
-    case "constant":  return monaco.languages.CompletionItemKind.Constant;
-    case "snippet":   return monaco.languages.CompletionItemKind.Snippet;
-    default:          return monaco.languages.CompletionItemKind.Text;
-  }
 }

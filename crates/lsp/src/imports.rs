@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use rustc_hash::FxHashSet as HashSet;
 
@@ -9,6 +9,7 @@ use syntax::ast::Expression;
 use syntax::attributes::unsupported_go_symbol;
 use syntax::program::{File, FileImport, go_import_default_name};
 
+use crate::clock::Instant;
 use crate::position::LineIndex;
 use crate::protocol::*;
 use crate::snapshot::AnalysisSnapshot;
