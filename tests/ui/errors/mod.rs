@@ -17213,6 +17213,24 @@ fn test() {
 }
 
 #[test]
+fn infer_select_expression_without_default_arm() {
+    let input = r#"
+fn main() {
+  let (tx, rx) = Channel.new<string>().split()
+  task {
+    tx.send("ping")
+    tx.close()
+  }
+  let got = select {
+    let Some(v) = rx.receive() => v,
+  }
+  let _ = got
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn unknown_struct_literal_values_give_no_follow_on_errors() {
     let source = r#"
 fn main() {

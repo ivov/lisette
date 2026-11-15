@@ -2701,7 +2701,9 @@ pub fn non_exhaustive_select_expression(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Non-exhaustive select expression")
         .with_infer_code("non_exhaustive_select_expression")
         .with_span_label(&span, "may not produce a value")
-        .with_help("Add a default arm `_ => ...` to handle closed channels")
+        .with_help(
+            "To wait for a value, use a `match` receive arm with a `None` case: `match ch.receive() { Some(v) => v, None => ... }`. A default arm `_ => ...` makes the `select` non-blocking",
+        )
 }
 
 pub fn type_must_be_known(span: Span) -> LisetteDiagnostic {
