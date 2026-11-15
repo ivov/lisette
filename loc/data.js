@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794685343112,
+  "lastUpdate": 1794745312609,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -57130,6 +57130,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/3ed0487244663b27a515cb4a79170cdd06a57e65"
         },
         "date": 1794685339736,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 157532,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43155,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30423,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19618,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 16156,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14191,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9373,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7508,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11016,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3b1473782e90a042b70278905e0691797ff6103e",
+          "message": "test: skip snapshot programs importing non-stdlib Go packages (#1695)",
+          "timestamp": "2026-11-15T13:21:29+01:00",
+          "tree_id": "ef0f24a2e197a5bf4e2d7d8e1768229404980e0c",
+          "url": "https://github.com/ivov/lisette/commit/3b1473782e90a042b70278905e0691797ff6103e"
+        },
+        "date": 1794745310837,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
