@@ -1,5 +1,43 @@
 /* @ts-self-types="./lisette_wasm.d.ts" */
 
+export class LspSession {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        LspSessionFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_lspsession_free(ptr, 0);
+    }
+    /**
+     * @param {string} message
+     * @returns {string}
+     */
+    handle(message) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ptr0 = passStringToWasm0(message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.lspsession_handle(this.__wbg_ptr, ptr0, len0);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    constructor() {
+        const ret = wasm.lspsession_new();
+        this.__wbg_ptr = ret;
+        LspSessionFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+}
+if (Symbol.dispose) LspSession.prototype[Symbol.dispose] = LspSession.prototype.free;
+
 /**
  * Type-check source and return a JSON array of diagnostics.
  * @param {string} code
@@ -42,27 +80,6 @@ export function compile(code) {
 }
 
 /**
- * Semantic completion items at byte offset (JSON array).
- * @param {string} code
- * @param {number} offset
- * @returns {string}
- */
-export function complete(code, offset) {
-    let deferred2_0;
-    let deferred2_1;
-    try {
-        const ptr0 = passStringToWasm0(code, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.complete(ptr0, len0, offset);
-        deferred2_0 = ret[0];
-        deferred2_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-    }
-}
-
-/**
  * Format Lisette source. Returns the formatted source, or the original on failure.
  * @param {string} code
  * @returns {string}
@@ -82,71 +99,8 @@ export function format(code) {
     }
 }
 
-/**
- * Go-to-definition at byte offset. Returns JSON `{ "line", "col", "end_line", "end_col" }` or empty.
- * @param {string} code
- * @param {number} offset
- * @returns {string}
- */
-export function goto_definition(code, offset) {
-    let deferred2_0;
-    let deferred2_1;
-    try {
-        const ptr0 = passStringToWasm0(code, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.goto_definition(ptr0, len0, offset);
-        deferred2_0 = ret[0];
-        deferred2_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-    }
-}
-
-/**
- * Hover info at byte offset. Returns JSON `{ "markdown": "...", ... }` or empty string.
- * @param {string} code
- * @param {number} offset
- * @returns {string}
- */
-export function hover(code, offset) {
-    let deferred2_0;
-    let deferred2_1;
-    try {
-        const ptr0 = passStringToWasm0(code, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.hover(ptr0, len0, offset);
-        deferred2_0 = ret[0];
-        deferred2_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-    }
-}
-
 export function init() {
     wasm.init();
-}
-
-/**
- * Signature help for a function call at byte offset. Returns JSON or empty string.
- * @param {string} code
- * @param {number} offset
- * @returns {string}
- */
-export function signature_help(code, offset) {
-    let deferred2_0;
-    let deferred2_1;
-    try {
-        const ptr0 = passStringToWasm0(code, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.signature_help(ptr0, len0, offset);
-        deferred2_0 = ret[0];
-        deferred2_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-    }
 }
 
 /**
@@ -168,6 +122,9 @@ export function version() {
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg___wbindgen_throw_9c31b086c2b26051: function(arg0, arg1) {
+            throw new Error(getStringFromWasm0(arg0, arg1));
+        },
         __wbg_error_a6fa202b58aa1cd3: function(arg0, arg1) {
             let deferred0_0;
             let deferred0_1;
@@ -205,6 +162,10 @@ function __wbg_get_imports() {
         "./lisette_wasm_bg.js": import0,
     };
 }
+
+const LspSessionFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_lspsession_free(ptr, 1));
 
 let cachedDataViewMemory0 = null;
 function getDataViewMemory0() {

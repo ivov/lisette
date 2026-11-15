@@ -94,16 +94,25 @@ pub(crate) struct Client {
 }
 
 impl Client {
+    pub(crate) fn new(sender: mpsc::Sender<Value>) -> Self {
+        Self { sender }
+    }
+
     pub(crate) fn respond(&self, id: RequestId, response: RpcResult<Value>) {
+        self.reply(json!(id), response);
+    }
+
+    pub(crate) fn reply(&self, id: Value, response: RpcResult<Value>) {
         match response {
             Ok(result) => {
                 let _ = self
                     .sender
                     .send(json!({ "jsonrpc": "2.0", "id": id, "result": result }));
             }
-            Err(error) => send_error(&self.sender, json!(id), error),
+            Err(error) => send_error(&self.sender, id, error),
         }
     }
+
     pub(crate) fn register_file_watchers(&self) {
         let _ = self.sender.send(json!({
             "jsonrpc": "2.0",
@@ -182,10 +191,7 @@ where
     W: Write + Send + 'static,
 {
     let (sender, outbound) = mpsc::channel();
-    let client = Client {
-        sender: sender.clone(),
-    };
-    let backend = Backend::new(client, bindgen_setup);
+    let backend = Backend::new(Client::new(sender.clone()), bindgen_setup);
     let workers = backend.scheduler.start(&backend);
 
     let writer_thread = thread::spawn(move || -> io::Result<()> {
@@ -260,16 +266,7 @@ where
         }
 
         if let Some(id) = id {
-            match response {
-                Ok(result) => {
-                    let _ = sender.send(json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "result": result,
-                    }));
-                }
-                Err(error) => send_error(&sender, id, error),
-            }
+            backend.client.reply(id, response);
         }
     };
 

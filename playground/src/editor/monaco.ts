@@ -5,6 +5,7 @@ import "monaco-editor/esm/vs/editor/contrib/bracketMatching/browser/bracketMatch
 import "monaco-editor/esm/vs/editor/contrib/caretOperations/browser/caretOperations";
 import "monaco-editor/esm/vs/editor/contrib/caretOperations/browser/transpose";
 import "monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard";
+import "monaco-editor/esm/vs/editor/contrib/codeAction/browser/codeActionContributions";
 import "monaco-editor/esm/vs/editor/contrib/comment/browser/comment";
 import "monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu";
 import "monaco-editor/esm/vs/editor/contrib/cursorUndo/browser/cursorUndo";
@@ -16,6 +17,7 @@ import "monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/goToCommands";
 import "monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/link/goToDefinitionAtPosition";
 import "monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution";
 import "monaco-editor/esm/vs/editor/contrib/indentation/browser/indentation";
+import "monaco-editor/esm/vs/editor/contrib/inlayHints/browser/inlayHintsContribution";
 import "monaco-editor/esm/vs/editor/contrib/lineSelection/browser/lineSelection";
 import "monaco-editor/esm/vs/editor/contrib/linesOperations/browser/linesOperations";
 import "monaco-editor/esm/vs/editor/contrib/links/browser/links";
@@ -23,6 +25,7 @@ import "monaco-editor/esm/vs/editor/contrib/longLinesHelper/browser/longLinesHel
 import "monaco-editor/esm/vs/editor/contrib/multicursor/browser/multicursor";
 import "monaco-editor/esm/vs/editor/contrib/parameterHints/browser/parameterHints";
 import "monaco-editor/esm/vs/editor/contrib/readOnlyMessage/browser/contribution";
+import "monaco-editor/esm/vs/editor/contrib/rename/browser/rename";
 import "monaco-editor/esm/vs/editor/contrib/smartSelect/browser/smartSelect";
 import "monaco-editor/esm/vs/editor/contrib/snippet/browser/snippetController2";
 import "monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController";

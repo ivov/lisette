@@ -22,6 +22,7 @@ lisette-passes      = { path = "../../crates/passes" }
 lisette-emit        = { path = "../../crates/emit" }
 lisette-diagnostics = { path = "../../crates/diagnostics" }
 lisette-deps        = { path = "../../crates/deps" }
+lisette-lsp         = { path = "../../crates/lsp" }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz"]

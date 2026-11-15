@@ -33,7 +33,7 @@ test-unit:
     cargo test -p lisette --bins --locked --features self-upgrade -- --format terse
 
 _test-check:
-    cargo test --workspace --lib --bins --test suite --test lsp --test manifest_pins -- --format terse
+    cargo test --workspace --lib --bins --test suite --test lsp --test session --test manifest_pins -- --format terse
     cargo test -p lisette --bins --features self-upgrade -- --format terse
 
 test-infer:

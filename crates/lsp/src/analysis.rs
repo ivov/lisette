@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::sync::{Arc, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::protocol::*;
 use rustc_hash::FxHashMap;
@@ -11,6 +11,7 @@ use passes::analyze;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget};
 use syntax::types::{CompoundKind, Type};
 
+use crate::clock::Instant;
 use crate::heap;
 use crate::imports::PackageResolver;
 use crate::loader::ProjectAnalysis;

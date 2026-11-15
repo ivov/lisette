@@ -1,8 +1,10 @@
 import type * as Monaco from "monaco-editor";
-import { LANG_ID, registerLanguage, registerCompletionProvider, registerHoverProvider, registerFormatProvider, registerDefinitionProvider, registerSignatureHelpProvider } from "./language.js";
+import { LANG_ID, registerLanguage, registerFormatProvider, registerSnippetProvider } from "./language.js";
+import { registerLspProviders } from "./lsp-providers.js";
 import { registerTheme, THEME } from "./theme.js";
 import { wireTextMateGrammar } from "./textmate.js";
 import type { LisetteBridge } from "../runner/wasm-bridge.js";
+import type { LspClient } from "../runner/lsp-client.js";
 
 export const GO_PLACEHOLDER = "// The emitted Go appears here once the code compiles.";
 
@@ -18,7 +20,9 @@ export interface EditorSetupResult {
   getCode: () => string;
   setGoSource: (source: string) => void;
   setBridge: (bridge: LisetteBridge) => void;
+  setLsp: (lsp: LspClient) => void;
   addMarkers: (diagnostics: DiagnosticItem[]) => void;
+  showProblems: () => void;
 }
 
 export interface DiagnosticItem {
@@ -28,6 +32,20 @@ export interface DiagnosticItem {
   col: number;
   endLine?: number;
   endCol?: number;
+}
+
+function colorCode(line: Element) {
+  const parts = (line.textContent ?? "").split(/`([^`]*)`/);
+  if (parts.length === 1) return;
+  line.replaceChildren(
+    ...parts.map((part, index) => {
+      if (index % 2 === 0) return part;
+      const code = document.createElement("span");
+      code.className = "message-code";
+      code.textContent = part;
+      return code;
+    }),
+  );
 }
 
 export async function setupEditors(
@@ -43,88 +61,12 @@ export async function setupEditors(
 
   let bridge: LisetteBridge | null = null;
 
-  registerCompletionProvider(monaco, async (model, position) => {
-    if (!bridge) return [];
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const completions = await bridge.complete(code, offset);
-    const word = model.getWordUntilPosition(position);
-    const range: Monaco.IRange = {
-      startLineNumber: position.lineNumber,
-      endLineNumber: position.lineNumber,
-      startColumn: word.startColumn,
-      endColumn: word.endColumn,
-    };
-    return completions.map((c) => ({
-      label: c.label,
-      kind: mapCompletionKind(monaco, c.kind),
-      detail: c.detail,
-      documentation: c.documentation,
-      insertText: c.insertText ?? c.label,
-      range,
-    }));
-  });
+  registerSnippetProvider(monaco);
 
   registerFormatProvider(monaco, async (code) => {
     if (!bridge) return null;
     const result = await bridge.format(code);
     return result.ok ? (result.formatted ?? null) : null;
-  });
-
-  registerHoverProvider(monaco, async (model, position) => {
-    if (!bridge) return null;
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const hover = await bridge.hover(code, offset);
-    if (!hover) return null;
-    const result: Monaco.languages.Hover = {
-      contents: [{ value: hover.markdown }],
-    };
-    if (hover.startLine && hover.startCol && hover.endLine && hover.endCol) {
-      result.range = {
-        startLineNumber: hover.startLine,
-        startColumn: hover.startCol,
-        endLineNumber: hover.endLine,
-        endColumn: hover.endCol,
-      };
-    }
-    return result;
-  });
-
-  registerDefinitionProvider(monaco, async (model, position) => {
-    if (!bridge) return null;
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const def = await bridge.gotoDefinition(code, offset);
-    if (!def) return null;
-    return {
-      uri: model.uri,
-      range: {
-        startLineNumber: def.line,
-        startColumn: def.col,
-        endLineNumber: def.endLine,
-        endColumn: def.endCol,
-      },
-    };
-  });
-
-  registerSignatureHelpProvider(monaco, async (model, position) => {
-    if (!bridge) return null;
-    const code = model.getValue();
-    const offset = model.getOffsetAt(position);
-    const sig = await bridge.signatureHelp(code, offset);
-    if (!sig) return null;
-    return {
-      value: {
-        signatures: [{
-          label: sig.label,
-          parameters: sig.parameters.map((p) => ({ label: p })),
-        }],
-        activeSignature: 0,
-        activeParameter: sig.activeParameter,
-      },
-      dispose: () => {},
-    };
   });
 
   wireTextMateGrammar(monaco).catch((err) => {
@@ -153,6 +95,7 @@ export async function setupEditors(
       showSnippets: true,
     },
     renderLineHighlight: "line",
+    inlayHints: { enabled: "offUnlessPressed" },
     ...BRACKET_COLOURS_OFF,
     guides: { bracketPairs: false, indentation: true },
     smoothScrolling: true,
@@ -180,6 +123,99 @@ export async function setupEditors(
     padding: { top: 12, bottom: 12 },
   });
 
+  const problemsBox = () =>
+    mainEditor.getContribution("editor.contrib.markerController") as unknown as {
+      showAtMarker(marker: Monaco.IRange): void;
+      close(focusEditor: boolean): void;
+      _widget?: {
+        position?: Monaco.IPosition;
+        computeRequiredHeight(): number;
+        _doLayoutBody(height: number, width: number): void;
+        showAtMarker(marker: Monaco.editor.IMarkerData, index: number, total: number): void;
+        _message: {
+          getHeightInLines(): number;
+          update(marker: Monaco.editor.IMarkerData): void;
+          _messageBlock: HTMLElement;
+        };
+        _relayout(): void;
+      };
+    } | null;
+
+  const adjustedBoxes = new WeakSet<object>();
+
+  // Monaco opens at the most severe marker after this position, so the widget is then given this marker.
+  const showBox = (marker: Monaco.editor.IMarkerData) => {
+    const box = problemsBox();
+    box?.showAtMarker(marker);
+    const widget = box?._widget;
+    if (!widget) return;
+    if (!adjustedBoxes.has(widget)) {
+      adjustedBoxes.add(widget);
+      const lineHeight = mainEditor.getOption(monaco.editor.EditorOption.lineHeight);
+      const headHeight = Math.ceil(lineHeight * 1.2);
+      const updateMessage = widget._message.update.bind(widget._message);
+      widget._message.update = (shown) => {
+        updateMessage(shown);
+        for (const line of widget._message._messageBlock.querySelectorAll(":scope > div")) colorCode(line);
+      };
+      const layoutBody = widget._doLayoutBody.bind(widget);
+      widget._doLayoutBody = (height, width) => layoutBody(height + headHeight, width);
+      widget.computeRequiredHeight = () => {
+        const text = mainEditor.getDomNode()?.querySelector<HTMLElement>(".marker-widget .message");
+        const wrapped = text ? Math.round(text.offsetHeight / lineHeight) : 0;
+        return 2 + Math.max(wrapped, widget._message.getHeightInLines());
+      };
+    }
+    widget.showAtMarker(marker, 1, 1);
+    widget._relayout();
+  };
+
+  mainEditor.onDidLayoutChange(() => problemsBox()?._widget?._relayout());
+
+  const pillLines = mainEditor.createDecorationsCollection();
+  let pills: Monaco.editor.IContentWidget[] = [];
+
+  mainEditor.onDidChangeModelContent(() => {
+    for (const pill of pills) mainEditor.layoutContentWidget(pill);
+  });
+
+  const makePill = (index: number, onLine: Monaco.editor.IMarkerData[]): Monaco.editor.IContentWidget => {
+    const [first] = onLine;
+    const kind = first.severity === monaco.MarkerSeverity.Error
+      ? "error"
+      : first.severity === monaco.MarkerSeverity.Warning ? "warning" : "info";
+    const node = document.createElement("button");
+    node.className = `problem-pill problem-pill-${kind}`;
+    const symbol = kind === "error" ? "✕" : kind === "warning" ? "▲" : "●";
+    const icon = document.createElement("span");
+    icon.className = "problem-pill-symbol";
+    icon.textContent = symbol;
+    const label = kind === "info" ? "advisory" : kind;
+    node.append(icon, ` ${onLine.length > 1 ? `${onLine.length} problems` : label}`);
+    node.title = "Show details";
+    node.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const box = problemsBox();
+      const line = pillLines.getRange(index)?.startLineNumber;
+      if (box?._widget?.position?.lineNumber === line) box?.close(true);
+      else showBox(first);
+    });
+    return {
+      getId: () => `problem-pill-${index}`,
+      getDomNode: () => node,
+      getPosition: () => {
+        const model = mainEditor.getModel();
+        const line = pillLines.getRange(index)?.startLineNumber;
+        if (!model || !line) return null;
+        return {
+          position: { lineNumber: line, column: model.getLineMaxColumn(line) },
+          preference: [monaco.editor.ContentWidgetPositionPreference.EXACT],
+        };
+      },
+    };
+  };
+
   return {
     mainEditor,
     goSourceEditor,
@@ -189,6 +225,9 @@ export async function setupEditors(
     },
     setBridge: (b: LisetteBridge) => {
       bridge = b;
+    },
+    setLsp: (lsp: LspClient) => {
+      registerLspProviders(monaco, lsp);
     },
     addMarkers: (diagnostics: DiagnosticItem[]) => {
       const model = mainEditor.getModel();
@@ -207,25 +246,26 @@ export async function setupEditors(
         endColumn: d.endCol ?? d.col + 1,
       }));
       monaco.editor.setModelMarkers(model, "lisette", markers);
+      if (markers.length === 0) problemsBox()?.close(false);
+
+      const byLine = new Map<number, Monaco.editor.IMarkerData[]>();
+      for (const marker of [...markers].sort((a, b) => b.severity - a.severity)) {
+        if (marker.startLineNumber > model.getLineCount()) continue;
+        byLine.set(marker.startLineNumber, [...(byLine.get(marker.startLineNumber) ?? []), marker]);
+      }
+      for (const pill of pills) mainEditor.removeContentWidget(pill);
+      pillLines.set([...byLine.keys()].map((line) => ({
+        range: new monaco.Range(line, 1, line, 1),
+        options: { stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
+      })));
+      pills = [...byLine.values()].map((onLine, index) => makePill(index, onLine));
+      for (const pill of pills) mainEditor.addContentWidget(pill);
+    },
+    showProblems: () => {
+      const model = mainEditor.getModel();
+      if (!model) return;
+      const [first] = monaco.editor.getModelMarkers({ resource: model.uri, owner: "lisette" });
+      if (first) showBox(first);
     },
   };
-}
-
-function mapCompletionKind(
-  monaco: typeof Monaco,
-  kind: string | undefined
-): Monaco.languages.CompletionItemKind {
-  switch (kind) {
-    case "function":  return monaco.languages.CompletionItemKind.Function;
-    case "variable":  return monaco.languages.CompletionItemKind.Variable;
-    case "type":      return monaco.languages.CompletionItemKind.Class;
-    case "keyword":   return monaco.languages.CompletionItemKind.Keyword;
-    case "module":    return monaco.languages.CompletionItemKind.Module;
-    case "field":     return monaco.languages.CompletionItemKind.Field;
-    case "method":    return monaco.languages.CompletionItemKind.Method;
-    case "enum":      return monaco.languages.CompletionItemKind.Enum;
-    case "constant":  return monaco.languages.CompletionItemKind.Constant;
-    case "snippet":   return monaco.languages.CompletionItemKind.Snippet;
-    default:          return monaco.languages.CompletionItemKind.Text;
-  }
 }

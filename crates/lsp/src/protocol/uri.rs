@@ -67,7 +67,9 @@ impl Url {
 
     pub fn from_file_path(path: impl AsRef<Path>) -> Result<Self, InvalidUri> {
         let path = path.as_ref();
-        if !path.is_absolute() {
+        // On wasm32-unknown-unknown, `is_absolute` is false even for `/a/b`.
+        let absolute = path.is_absolute() || (cfg!(target_arch = "wasm32") && path.has_root());
+        if !absolute {
             return Err(InvalidUri);
         }
 

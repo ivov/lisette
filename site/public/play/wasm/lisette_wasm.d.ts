@@ -1,6 +1,13 @@
 /* tslint:disable */
 /* eslint-disable */
 
+export class LspSession {
+    free(): void;
+    [Symbol.dispose](): void;
+    handle(message: string): string;
+    constructor();
+}
+
 /**
  * Type-check source and return a JSON array of diagnostics.
  */
@@ -13,31 +20,11 @@ export function check(code: string): string;
 export function compile(code: string): string;
 
 /**
- * Semantic completion items at byte offset (JSON array).
- */
-export function complete(code: string, offset: number): string;
-
-/**
  * Format Lisette source. Returns the formatted source, or the original on failure.
  */
 export function format(code: string): string;
 
-/**
- * Go-to-definition at byte offset. Returns JSON `{ "line", "col", "end_line", "end_col" }` or empty.
- */
-export function goto_definition(code: string, offset: number): string;
-
-/**
- * Hover info at byte offset. Returns JSON `{ "markdown": "...", ... }` or empty string.
- */
-export function hover(code: string, offset: number): string;
-
 export function init(): void;
-
-/**
- * Signature help for a function call at byte offset. Returns JSON or empty string.
- */
-export function signature_help(code: string, offset: number): string;
 
 /**
  * The Lisette compiler version this WASM was built against.
@@ -48,14 +35,13 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_lspsession_free: (a: number, b: number) => void;
     readonly check: (a: number, b: number) => [number, number];
     readonly compile: (a: number, b: number) => [number, number];
-    readonly complete: (a: number, b: number, c: number) => [number, number];
     readonly format: (a: number, b: number) => [number, number];
-    readonly goto_definition: (a: number, b: number, c: number) => [number, number];
-    readonly hover: (a: number, b: number, c: number) => [number, number];
     readonly init: () => void;
-    readonly signature_help: (a: number, b: number, c: number) => [number, number];
+    readonly lspsession_handle: (a: number, b: number, c: number) => [number, number];
+    readonly lspsession_new: () => number;
     readonly version: () => [number, number];
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

@@ -5,11 +5,12 @@ use std::mem;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::clock::Instant;
 use crate::protocol::{Error, MessageType, RpcResult, dispatch};
 use crate::state::{AnalysisKey, Backend, CancellationToken};
 
@@ -110,6 +111,16 @@ impl Scheduler {
             },
         );
         self.wake.notify_all();
+    }
+
+    pub(crate) fn take_diagnostics(&self) -> Vec<(AnalysisKey, CancellationToken)> {
+        let mut queue = self.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        queue
+            .diagnostics
+            .drain()
+            .filter(|(_, scheduled)| !scheduled.token.is_cancelled())
+            .map(|(key, scheduled)| (key, scheduled.token))
+            .collect()
     }
 
     pub(crate) fn stop(&self, backend: &Backend) {

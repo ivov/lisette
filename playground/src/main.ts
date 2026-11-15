@@ -2,7 +2,13 @@ import "@fontsource-variable/inter";
 import "@fontsource/lexend/latin-600.css";
 import "./style.css";
 import { setupEditors, GO_PLACEHOLDER } from "./editor/index.js";
-import { loadWasmBridge, type Diagnostic, type LisetteBridge } from "./runner/wasm-bridge.js";
+import {
+  loadFreshLspSession,
+  loadWasmBridge,
+  type Diagnostic,
+  type LisetteBridge,
+} from "./runner/wasm-bridge.js";
+import { LspClient, type LspDiagnostic } from "./runner/lsp-client.js";
 import { executeGoSource, formatGoSource } from "./runner/executor.js";
 import { readSourceFromHash, copyShareUrl } from "./share.js";
 import { EXAMPLES } from "./examples.js";
@@ -51,7 +57,6 @@ const vimStatus      = document.getElementById("vim-status")!;
 const versionTag     = document.getElementById("brand-version")!;
 const statusEl       = document.getElementById("status-indicator")!;
 const outputText     = document.getElementById("output-text")!;
-const diagnosticList = document.getElementById("diagnostics-list")!;
 const outputPane     = document.getElementById("output-pane")!;
 const drawerToggle   = document.getElementById("drawer-toggle")!;
 const tabBtns        = document.querySelectorAll<HTMLButtonElement>(".tab-btn[data-tab]");
@@ -132,7 +137,7 @@ function showCounts(diags: Diagnostic[]) {
   const info = count("info");
   if (errors > 0) setStatus("error", `${errors} error${errors === 1 ? "" : "s"}`);
   else if (warnings > 0) setStatus("warning", `${warnings} warning${warnings === 1 ? "" : "s"}`);
-  else if (info > 0) setStatus("info", `${info} info`);
+  else if (info > 0) setStatus("info", `${info} ${info === 1 ? "advisory" : "advisories"}`);
   else statusEl.hidden = true;
 }
 
@@ -147,25 +152,18 @@ function setButtons(disabled: boolean) {
   btnShare.disabled = disabled;
 }
 
-function renderDiagnostics(diags: Diagnostic[]) {
-  if (diags.length === 0) {
-    diagnosticList.innerHTML =
-      '<p class="diagnostics-empty">All checks passed.</p>';
-    return;
-  }
-  diagnosticList.innerHTML = diags
-    .map(
-      (d) => `
-      <div class="diagnostic-item diagnostic-${d.severity}" data-line="${d.line}" data-col="${d.col}">
-        <span class="diagnostic-icon">${d.severity === "error" ? "✕" : d.severity === "warning" ? "▲" : "●"}</span>
-        <div>
-          <div>${escapeHtml(d.message)}</div>
-          ${d.code ? `<div class="diagnostic-location">${escapeHtml(d.code)}</div>` : ""}
-          <div class="diagnostic-location">Line ${d.line}, column ${d.col}</div>
-        </div>
-      </div>`
-    )
-    .join("");
+function fromLspDiagnostic(diagnostic: LspDiagnostic): Diagnostic {
+  const { start, end } = diagnostic.range;
+  return {
+    severity:
+      diagnostic.severity === 1 ? "error" : diagnostic.severity === 2 ? "warning" : "info",
+    message: diagnostic.message,
+    line: start.line + 1,
+    col: start.character + 1,
+    endLine: end.line + 1,
+    endCol: end.character + 1,
+    code: diagnostic.code === undefined ? undefined : String(diagnostic.code),
+  };
 }
 
 function escapeHtml(s: string): string {
@@ -234,14 +232,8 @@ async function main() {
   alignStrips();
   editorResult.mainEditor.onDidLayoutChange(alignStrips);
 
-  diagnosticList.addEventListener("click", (e) => {
-    const item = (e.target as HTMLElement).closest<HTMLElement>(".diagnostic-item");
-    if (!item) return;
-    const line = parseInt(item.dataset["line"] ?? "1", 10);
-    const col  = parseInt(item.dataset["col"] ?? "1", 10);
-    editorResult.mainEditor.revealLineInCenter(line);
-    editorResult.mainEditor.setPosition({ lineNumber: line, column: col });
-    editorResult.mainEditor.focus();
+  statusEl.addEventListener("click", () => {
+    if (/status-(error|warning|info)/.test(statusEl.className)) editorResult.showProblems();
   });
 
   let bridge = await (async () => {
@@ -266,14 +258,52 @@ async function main() {
 
   // A run or a format owns the status pill until it finishes.
   let busy = false;
+
+  let lspDiagnostics: Diagnostic[] | null = null;
+  let compileDiagnostics: Diagnostic[] = [];
+  let compileCrashed = false;
+
+  function currentDiagnostics(): Diagnostic[] {
+    if (lspDiagnostics === null || compileCrashed) {
+      return [...(lspDiagnostics ?? []), ...compileDiagnostics];
+    }
+    const emitDiagnostics = compileDiagnostics.filter((d) => d.code?.startsWith("emit."));
+    return [...lspDiagnostics, ...emitDiagnostics];
+  }
+
+  function showDiagnostics() {
+    const diagnostics = currentDiagnostics();
+    editorResult.addMarkers(diagnostics);
+    if (!busy) showCounts(diagnostics);
+  }
+
+  let lsp: LspClient | null = null;
+  if (bridge) {
+    try {
+      lsp = new LspClient(
+        await loadFreshLspSession(0),
+        editorResult.getCode(),
+        (diagnostics) => {
+          lspDiagnostics = diagnostics.map(fromLspDiagnostic);
+          showDiagnostics();
+        },
+        loadFreshLspSession,
+      );
+      editorResult.setLsp(lsp);
+    } catch (err) {
+      console.warn("The language server failed to start:", err);
+    }
+  }
+
   // Each compile takes a ticket, so a slow result cannot overwrite a newer one.
   let ticket = 0;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function compileWith(compiler: LisetteBridge) {
     const result = await compiler.compile(editorResult.getCode());
-    editorResult.addMarkers(result.diagnostics);
-    renderDiagnostics(result.diagnostics);
+    compileDiagnostics = result.diagnostics;
+    compileCrashed = result.crashed === true;
+    showDiagnostics();
     return result;
   }
 
@@ -292,13 +322,14 @@ async function main() {
     const mine = ++ticket;
     const result = await compileWith(bridge);
     if (mine !== ticket) return;
-    if (!busy) showCounts(result.diagnostics);
     if (result.ok && result.goSource) showGo(result.goSource, mine);
     else settleGo(GO_PLACEHOLDER, mine);
   }
 
   editorResult.mainEditor.onDidChangeModelContent(() => {
     goPane.classList.add("is-stale");
+    compileDiagnostics = [];
+    lsp?.change(editorResult.getCode());
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(refresh, 1000);
   });
@@ -359,8 +390,9 @@ async function main() {
     if (!result.ok || !result.goSource) {
       settleGo(GO_PLACEHOLDER, mine);
       setOutput('<span class="output-hint">The code did not compile.</span>');
-      showCounts(result.diagnostics);
-      selectTab("diagnostics");
+      showCounts(currentDiagnostics());
+      selectTab("output");
+      editorResult.showProblems();
       busy = false;
       setButtons(false);
       return;
