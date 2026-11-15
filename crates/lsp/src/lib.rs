@@ -41,7 +41,7 @@ use crate::imports::EditTarget;
 use crate::position::LineIndex;
 use crate::snapshot::{AnalysisSnapshot, SnapshotDocument};
 use crate::symbol::resolve_symbol;
-use crate::traversal::find_expression_at;
+use crate::traversal::{find_expression_at, shorthand_field_at};
 use std::collections::HashMap;
 use std::sync::Arc;
 use syntax::ast::Expression;
@@ -426,7 +426,11 @@ impl Backend {
             });
         }
 
-        locations.extend(self.reference_locations(uri, &snapshot, definition_span, false)?);
+        locations.extend(
+            self.reference_locations(uri, &snapshot, definition_span, false)?
+                .into_iter()
+                .map(|site| site.location),
+        );
 
         locations.sort_by(|a, b| {
             a.uri
@@ -518,19 +522,29 @@ impl Backend {
             return Ok(None);
         };
         let definition_uri = definition_source.uri.clone();
+        let renames_field = names_a_field(&snapshot, definition_span);
+        let new_text = |shorthand_field: Option<&str>| match shorthand_field {
+            Some(value) if renames_field => format!("{new_name}: {value}"),
+            Some(field) => format!("{field}: {new_name}"),
+            None => new_name.clone(),
+        };
 
+        let definition_shorthand_field = snapshot
+            .files()
+            .get(&definition_span.file_id)
+            .and_then(|file| shorthand_field_at(&file.items, definition_span));
         edits
             .entry(definition_uri.clone())
             .or_default()
             .push(TextEdit {
                 range: definition_source.line_index.span_to_range(definition_span),
-                new_text: new_name.clone(),
+                new_text: new_text(definition_shorthand_field),
             });
 
-        for location in self.reference_locations(uri, &snapshot, definition_span, true)? {
-            edits.entry(location.uri).or_default().push(TextEdit {
-                range: location.range,
-                new_text: new_name.clone(),
+        for site in self.reference_locations(uri, &snapshot, definition_span, true)? {
+            edits.entry(site.location.uri).or_default().push(TextEdit {
+                range: site.location.range,
+                new_text: new_text(site.shorthand_field.as_deref()),
             });
         }
 
@@ -1009,12 +1023,33 @@ fn names_a_type(snapshot: &AnalysisSnapshot, definition_span: Span) -> bool {
     )
 }
 
+fn names_a_field(snapshot: &AnalysisSnapshot, definition_span: Span) -> bool {
+    let Some(file) = snapshot.files().get(&definition_span.file_id) else {
+        return false;
+    };
+    match find_expression_at(&file.items, definition_span.byte_offset) {
+        Some(Expression::Struct { fields, .. }) => fields
+            .iter()
+            .any(|field| field.name_span == definition_span),
+        Some(Expression::Enum { variants, .. }) => variants
+            .iter()
+            .flat_map(|variant| variant.fields.iter())
+            .any(|field| field.name_span == definition_span),
+        _ => false,
+    }
+}
+
+pub(crate) struct ReferenceSite {
+    pub(crate) location: Location,
+    pub(crate) shorthand_field: Option<String>,
+}
+
 fn usage_locations(
     snapshots: impl IntoIterator<Item = Arc<AnalysisSnapshot>>,
     definition_uri: &Url,
     definition_span: Span,
-) -> Vec<Location> {
-    let mut locations = Vec::new();
+) -> Vec<ReferenceSite> {
+    let mut sites = Vec::new();
     for snapshot in snapshots {
         let Some(target_document) = snapshot.document(definition_uri) else {
             continue;
@@ -1028,16 +1063,23 @@ fn usage_locations(
             if usage.definition_span == target_span
                 && let Some(source) = snapshot.source(usage.usage_span.file_id)
             {
-                locations.push(Location {
-                    uri: source.uri.clone(),
-                    range: source
-                        .line_index
-                        .span_to_range(trailing_segment_span(usage.usage_span, &snapshot)),
+                let shorthand_field = snapshot
+                    .files()
+                    .get(&usage.usage_span.file_id)
+                    .and_then(|file| shorthand_field_at(&file.items, usage.usage_span));
+                sites.push(ReferenceSite {
+                    location: Location {
+                        uri: source.uri.clone(),
+                        range: source
+                            .line_index
+                            .span_to_range(trailing_segment_span(usage.usage_span, &snapshot)),
+                    },
+                    shorthand_field: shorthand_field.map(str::to_string),
                 });
             }
         }
     }
-    locations
+    sites
 }
 
 /// Last identifier token in `usage_text`'s head (the run of id chars, dots and

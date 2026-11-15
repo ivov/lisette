@@ -1,6 +1,6 @@
 use std::iter::successors;
 
-use syntax::ast::Expression;
+use syntax::ast::{Expression, Pattern, SelectArm, Span};
 
 use crate::offset_in_span;
 
@@ -19,6 +19,75 @@ pub(crate) fn expression_ancestors(
     successors(root, move |expression| {
         child_containing_offset(expression, offset)
     })
+}
+
+pub(crate) fn shorthand_field_at(items: &[Expression], span: Span) -> Option<&str> {
+    expression_ancestors(items, span.byte_offset).find_map(|expression| match expression {
+        Expression::StructCall {
+            field_assignments, ..
+        } => field_assignments
+            .iter()
+            .find(|field| field.name_span == span && field.value.get_span() == span)
+            .map(|field| field.name.as_str()),
+        _ => expression_patterns(expression)
+            .into_iter()
+            .find_map(|pattern| pattern_shorthand_field_at(pattern, span)),
+    })
+}
+
+fn expression_patterns(expression: &Expression) -> Vec<&Pattern> {
+    match expression {
+        Expression::Let { binding, .. } | Expression::For { binding, .. } => {
+            vec![&binding.pattern]
+        }
+        Expression::Function { params, .. } | Expression::Lambda { params, .. } => {
+            params.iter().map(|binding| &binding.pattern).collect()
+        }
+        Expression::Match { arms, .. } => arms.iter().map(|arm| &arm.pattern).collect(),
+        Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
+            vec![pattern]
+        }
+        Expression::Select { arms, .. } => arms
+            .iter()
+            .flat_map(|arm| match arm {
+                SelectArm::Receive { binding, .. } => vec![binding.as_ref()],
+                SelectArm::MatchReceive { arms, .. } => {
+                    arms.iter().map(|arm| &arm.pattern).collect()
+                }
+                SelectArm::Send { .. } | SelectArm::WildCard { .. } => vec![],
+            })
+            .collect(),
+        _ => vec![],
+    }
+}
+
+fn pattern_shorthand_field_at(pattern: &Pattern, span: Span) -> Option<&str> {
+    match pattern {
+        Pattern::Struct { fields, .. } => fields.iter().find_map(|field| {
+            if field.name_span == span && field.value.get_span() == span {
+                Some(field.name.as_str())
+            } else {
+                pattern_shorthand_field_at(&field.value, span)
+            }
+        }),
+        Pattern::Tuple { elements, .. }
+        | Pattern::Or {
+            patterns: elements, ..
+        }
+        | Pattern::EnumVariant {
+            fields: elements, ..
+        }
+        | Pattern::Slice {
+            prefix: elements, ..
+        } => elements
+            .iter()
+            .find_map(|pattern| pattern_shorthand_field_at(pattern, span)),
+        Pattern::AsBinding { pattern, .. } => pattern_shorthand_field_at(pattern, span),
+        Pattern::Identifier { .. }
+        | Pattern::Literal { .. }
+        | Pattern::Unit { .. }
+        | Pattern::WildCard { .. } => None,
+    }
 }
 
 /// Find which immediate child of `expression` contains `offset`, without recursing.

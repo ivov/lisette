@@ -15099,6 +15099,201 @@ fn shorthand_pattern_keeps_field_navigation_and_binding_rename() {
     client.shutdown();
 }
 
+fn renamed_source(source: &str, line: u32, character: u32, new_name: &str) -> String {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
+    let changes = client
+        .rename(TEST_URI, line, character, new_name)
+        .expect("rename should succeed")
+        .changes
+        .unwrap();
+    client.shutdown();
+    let mut edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap().clone();
+    edits.sort_by_key(|edit| (edit.range.start.line, edit.range.start.character));
+    let offset = |position: Position| {
+        let line_start: usize = source
+            .split_inclusive('\n')
+            .take(position.line as usize)
+            .map(str::len)
+            .sum();
+        line_start + position.character as usize
+    };
+    let mut result = source.to_string();
+    for edit in edits.iter().rev() {
+        result.replace_range(
+            offset(edit.range.start)..offset(edit.range.end),
+            &edit.new_text,
+        );
+    }
+    result
+}
+
+const SHORTHAND_STRUCT_SOURCE: &str = "\
+struct P { x: int, y: int }
+fn mk(x: int) -> P {
+  P { x, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { x, y: _ } = p
+  x
+}";
+
+#[test]
+fn rename_local_at_shorthand_struct_sites_keeps_the_field_name() {
+    assert_eq!(
+        renamed_source(SHORTHAND_STRUCT_SOURCE, 1, 6, "renamed"),
+        "\
+struct P { x: int, y: int }
+fn mk(renamed: int) -> P {
+  P { x: renamed, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { x, y: _ } = p
+  x
+}"
+    );
+    let from_pattern = renamed_source(SHORTHAND_STRUCT_SOURCE, 5, 10, "renamed");
+    assert_eq!(
+        from_pattern,
+        renamed_source(SHORTHAND_STRUCT_SOURCE, 6, 2, "renamed")
+    );
+    assert_eq!(
+        from_pattern,
+        "\
+struct P { x: int, y: int }
+fn mk(x: int) -> P {
+  P { x, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { x: renamed, y: _ } = p
+  renamed
+}"
+    );
+}
+
+#[test]
+fn rename_struct_field_edits_literal_and_pattern_sites() {
+    assert_eq!(
+        renamed_source(SHORTHAND_STRUCT_SOURCE, 0, 11, "renamed"),
+        "\
+struct P { renamed: int, y: int }
+fn mk(x: int) -> P {
+  P { renamed: x, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { renamed: x, y: _ } = p
+  x
+}"
+    );
+    let explicit = "\
+struct P { x: int, y: int }
+fn main() {
+  let p = P { x: 1, y: 2 }
+  let P { x: a, y: _ } = p
+  let _ = p.x + a
+}";
+    assert_eq!(
+        renamed_source(explicit, 0, 11, "renamed"),
+        "\
+struct P { renamed: int, y: int }
+fn main() {
+  let p = P { renamed: 1, y: 2 }
+  let P { renamed: a, y: _ } = p
+  let _ = p.renamed + a
+}"
+    );
+
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, explicit);
+    let mut references: Vec<(u32, u32)> = client
+        .references(TEST_URI, 0, 11, true)
+        .unwrap()
+        .iter()
+        .map(|reference| (reference.range.start.line, reference.range.start.character))
+        .collect();
+    references.sort();
+    assert_eq!(references, vec![(0, 11), (2, 14), (3, 10), (4, 12)]);
+    client.shutdown();
+}
+
+#[test]
+fn rename_constant_at_shorthand_struct_site_keeps_the_field_name() {
+    assert_eq!(
+        renamed_source(
+            "const X = 1\nstruct P { X: int }\nfn main() {\n  let _ = P { X }\n}",
+            0,
+            6,
+            "Y"
+        ),
+        "const Y = 1\nstruct P { X: int }\nfn main() {\n  let _ = P { X: Y }\n}"
+    );
+}
+
+const SHORTHAND_VARIANT_SOURCE: &str = "\
+enum Shape { Sq { side: int }, Rect { side: int, h: int }, Dot }
+fn mk(side: int) -> Shape {
+  Shape.Sq { side }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { side } | Shape.Rect { side, .. } => side * 2,
+    Shape.Dot => 0,
+  }
+}";
+
+#[test]
+fn rename_at_shorthand_enum_struct_variant_sites() {
+    let from_body = renamed_source(SHORTHAND_VARIANT_SOURCE, 6, 51, "renamed");
+    assert_eq!(
+        from_body,
+        renamed_source(SHORTHAND_VARIANT_SOURCE, 6, 37, "renamed")
+    );
+    assert_eq!(
+        from_body,
+        "\
+enum Shape { Sq { side: int }, Rect { side: int, h: int }, Dot }
+fn mk(side: int) -> Shape {
+  Shape.Sq { side }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { side: renamed } | Shape.Rect { side: renamed, .. } => renamed * 2,
+    Shape.Dot => 0,
+  }
+}"
+    );
+    assert_eq!(
+        renamed_source(SHORTHAND_VARIANT_SOURCE, 1, 6, "renamed"),
+        "\
+enum Shape { Sq { side: int }, Rect { side: int, h: int }, Dot }
+fn mk(renamed: int) -> Shape {
+  Shape.Sq { side: renamed }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { side } | Shape.Rect { side, .. } => side * 2,
+    Shape.Dot => 0,
+  }
+}"
+    );
+    assert_eq!(
+        renamed_source(SHORTHAND_VARIANT_SOURCE, 0, 18, "renamed"),
+        "\
+enum Shape { Sq { renamed: int }, Rect { side: int, h: int }, Dot }
+fn mk(side: int) -> Shape {
+  Shape.Sq { renamed: side }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { renamed: side } | Shape.Rect { side, .. } => side * 2,
+    Shape.Dot => 0,
+  }
+}"
+    );
+}
+
 #[test]
 fn symbol_requests_resolve_name_ends_and_stop_one_character_later() {
     let (source, positions) = cursors(
@@ -15634,7 +15829,7 @@ fn reference_search_follows_indirect_dependents_without_analyzing_unrelated_pack
     assert!(client.hover(&uri, line, character).is_some());
     let before = counter.0.load(Ordering::SeqCst);
     let references = client.references(&uri, line, character, true).unwrap();
-    assert_eq!(references.len(), 3);
+    assert_eq!(references.len(), 4);
     assert_eq!(counter.0.load(Ordering::SeqCst) - before, 2);
     let changes = client
         .rename(&uri, line, character, "identifier")

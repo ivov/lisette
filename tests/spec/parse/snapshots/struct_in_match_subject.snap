@@ -166,6 +166,11 @@ description: |
                                     fields: [
                                         StructFieldPattern {
                                             name: "x",
+                                            name_span: Span {
+                                                file_id: 0,
+                                                byte_offset: 92,
+                                                byte_length: 1,
+                                            },
                                             value: Identifier {
                                                 identifier: "val",
                                                 span: Span {

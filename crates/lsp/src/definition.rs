@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 use syntax::ast::{
     ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern,
-    RecordPatternResolution, Span, StructFieldPattern,
+    RecordPatternResolution, Span,
 };
 use syntax::program::DefinitionBody;
 use syntax::program::File;
@@ -307,7 +307,7 @@ pub(crate) fn resolve_enum_in_pattern(
                     return Some(result);
                 }
                 let definition_span = record_pattern_field_span(snapshot, resolution, &field.name);
-                if is_shorthand_field(field, *span, snapshot) {
+                if field.value.get_span() == field.name_span {
                     return definition_span;
                 }
                 return None;
@@ -400,30 +400,4 @@ fn offset_in_variant_token_span(span: Span, offset: u32, snapshot: &AnalysisSnap
     };
     let token_span = Span::new(span.file_id, span.byte_offset + token_offset, token_len);
     offset_in_span(offset, &token_span)
-}
-
-/// True iff `field` is written as shorthand (`{ x }`) rather than explicit
-/// (`{ x: ... }`). Detected by scanning source preceding the value span: a `:`
-/// before any structural delimiter (`,` or `{`) means explicit.
-pub(crate) fn is_shorthand_field(
-    field: &StructFieldPattern,
-    pattern_span: Span,
-    snapshot: &AnalysisSnapshot,
-) -> bool {
-    let Some(source_file) = snapshot.files().get(&pattern_span.file_id) else {
-        return false;
-    };
-    let pattern_start = pattern_span.byte_offset as usize;
-    let value_start = field.value.get_span().byte_offset as usize;
-    if value_start <= pattern_start || value_start > source_file.source.len() {
-        return false;
-    }
-    for ch in source_file.source[pattern_start..value_start].chars().rev() {
-        match ch {
-            ':' => return false,
-            ',' | '{' => return true,
-            _ => {}
-        }
-    }
-    false
 }

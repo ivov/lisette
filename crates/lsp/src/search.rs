@@ -13,10 +13,10 @@ use syntax::program::is_internal_package_id;
 use crate::loader::AnalysisLoader;
 use crate::paths::{ENTRY_PACKAGE_ID, uri_to_package_file};
 use crate::project::ProjectConfig;
-use crate::protocol::{Error, Location, RpcResult, Url};
+use crate::protocol::{Error, RpcResult, Url};
 use crate::snapshot::AnalysisSnapshot;
 use crate::state::{AnalysisKey, SharedState};
-use crate::usage_locations;
+use crate::{ReferenceSite, usage_locations};
 
 impl SharedState {
     pub(crate) fn reference_locations(
@@ -25,7 +25,7 @@ impl SharedState {
         origin: &Arc<AnalysisSnapshot>,
         definition: Span,
         require_complete: bool,
-    ) -> RpcResult<Vec<Location>> {
+    ) -> RpcResult<Vec<ReferenceSite>> {
         let config = self
             .projects
             .config_for(uri)
