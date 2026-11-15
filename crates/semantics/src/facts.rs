@@ -46,7 +46,6 @@ pub struct Facts {
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
     pub interface_satisfied_methods: HashMap<String, HashMap<String, InterfaceSatisfactions>>,
 
-    /// Package-level names that name-not-found errors suggest, counted as used.
     pub suggested_names: HashMap<String, HashSet<String>>,
 
     pub(crate) deferred: DeferredChecks,
