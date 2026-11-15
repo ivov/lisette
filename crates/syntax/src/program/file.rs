@@ -227,14 +227,18 @@ impl File {
     }
 
     pub fn go_filename(&self) -> String {
-        if let Some(stem) = self.name.strip_suffix(".test.lis") {
-            return format!("{stem}_test.go");
-        }
-        Path::new(&self.name)
-            .with_extension("go")
-            .display()
-            .to_string()
+        go_filename(&self.name)
     }
+}
+
+pub fn go_filename(lisette_filename: &str) -> String {
+    if let Some(stem) = lisette_filename.strip_suffix(".test.lis") {
+        return format!("{stem}_test.go");
+    }
+    Path::new(lisette_filename)
+        .with_extension("go")
+        .display()
+        .to_string()
 }
 
 #[cfg(test)]
