@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::definitions::structs::{StringFormat, is_raw_function_type};
+use crate::definitions::structs::{FieldFormat, StringFormat, format_return};
 use crate::names::go_name::{self, GeneratedPackage};
 use crate::names::packages::PackageRequirements;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
@@ -41,14 +41,16 @@ pub(crate) struct FieldLayout {
 
 #[derive(Debug, Clone, Copy)]
 enum FieldKind {
-    Value,
-    Function,
+    Plain(FieldFormat),
     Recursive,
 }
 
 impl FieldLayout {
-    fn is_function(&self) -> bool {
-        matches!(self.kind, FieldKind::Function)
+    fn format(&self) -> FieldFormat {
+        match self.kind {
+            FieldKind::Plain(format) => format,
+            FieldKind::Recursive => FieldFormat::Value,
+        }
     }
 
     pub(crate) fn is_recursive(&self) -> bool {
@@ -140,10 +142,8 @@ impl EnumLayout {
                     &definition,
                 ) {
                     FieldKind::Recursive
-                } else if is_raw_function_type(&field.ty) {
-                    FieldKind::Function
                 } else {
-                    FieldKind::Value
+                    FieldKind::Plain(FieldFormat::of(&field.ty, &definition))
                 };
 
                 FieldLayout {
@@ -311,10 +311,10 @@ impl EnumLayout {
         let args: Vec<String> = variant
             .fields
             .iter()
-            .map(|f| {
+            .filter_map(|f| {
                 format.argument(
                     format!("{receiver}.{}", f.go_name),
-                    f.is_function(),
+                    f.format(),
                     requirements,
                 )
             })
@@ -323,26 +323,19 @@ impl EnumLayout {
             let parts: Vec<String> = variant
                 .fields
                 .iter()
-                .map(|f| format!("{}: {}", f.source_name, format.verb(f.is_function())))
+                .map(|f| format!("{}: {}", f.source_name, format.verb(f.format())))
                 .collect();
             (" { ", " }", parts.join(", "))
         } else {
             let parts: Vec<&str> = variant
                 .fields
                 .iter()
-                .map(|f| format.verb(f.is_function()))
+                .map(|f| format.verb(f.format()))
                 .collect();
             ("(", ")", parts.join(", "))
         };
-        format!(
-            "return fmt.Sprintf(\"{}{}{}{}{}\", {})",
-            prefix,
-            variant.name,
-            open,
-            placeholders,
-            close,
-            args.join(", ")
-        )
+        let text = format!("{prefix}{}{open}{placeholders}{close}", variant.name);
+        format_return(&text, &args, requirements)
     }
 
     pub(crate) fn emit_variants_function(&self, fn_name: &str) -> String {

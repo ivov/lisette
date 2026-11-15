@@ -99,7 +99,7 @@ func (opt Option[T]) OrElse(f func() Option[T]) Option[T] {
 
 func (opt Option[T]) String() string {
 	if opt.Tag == OptionSome {
-		return fmt.Sprintf("Some(%v)", opt.SomeVal)
+		return fmt.Sprintf("Some(%v)", display(opt.SomeVal))
 	}
 	return "None"
 }

@@ -10,11 +10,9 @@ description: |
 ---
 package main
 
-import "fmt"
-
 func noop() {}
 
 func test() string {
 	noop()
-	return fmt.Sprintf("x:%v", struct{}{})
+	return "x:()"
 }

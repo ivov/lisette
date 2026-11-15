@@ -63,11 +63,11 @@ func (p Partial[T, E]) UnwrapOrElse(f func(E) T) T {
 func (p Partial[T, E]) String() string {
 	switch p.Tag {
 	case PartialOk:
-		return fmt.Sprintf("Ok(%v)", p.OkVal)
+		return fmt.Sprintf("Ok(%v)", display(p.OkVal))
 	case PartialErr:
-		return fmt.Sprintf("Err(%v)", p.ErrVal)
+		return fmt.Sprintf("Err(%v)", display(p.ErrVal))
 	default:
-		return fmt.Sprintf("Both(%v, %v)", p.OkVal, p.ErrVal)
+		return fmt.Sprintf("Both(%v, %v)", display(p.OkVal), display(p.ErrVal))
 	}
 }
 

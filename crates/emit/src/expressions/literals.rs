@@ -1,11 +1,12 @@
 use std::fmt::Write;
+use std::mem::take;
 
 use crate::Planner;
 use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::go_expression::{BinaryOp, CompositeLayout};
-use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
@@ -147,7 +148,7 @@ impl Planner<'_> {
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.lower_composite_value(e, ExpressionContext::value()))
+                    Some(self.lower_format_operand(e))
                 } else {
                     None
                 }
@@ -164,24 +165,30 @@ impl Planner<'_> {
 
         if concatenates {
             let mut pieces: Vec<GoExpression> = Vec::with_capacity(parts.len());
+            let mut text = String::new();
             for part in parts {
                 match part {
-                    FormatStringPart::Text(text) => {
-                        let unescaped = text.replace("{{", "{").replace("}}", "}");
-                        let unescaped = convert_escape_sequences(&unescaped);
-                        if !unescaped.is_empty() {
-                            pieces.push(GoExpression::constant(
-                                format!("\"{}\"", unescaped),
-                                ConstantKind::String,
-                            ));
-                        }
+                    FormatStringPart::Text(part_text) => {
+                        let unescaped = part_text.replace("{{", "{").replace("}}", "}");
+                        text.push_str(&convert_escape_sequences(&unescaped));
                     }
-                    FormatStringPart::Expression(_) => pieces.push(
-                        values
+                    FormatStringPart::Expression(expression) => {
+                        let value = values
                             .next()
-                            .expect("sequenced count matches expression parts"),
-                    ),
+                            .expect("sequenced count matches expression parts");
+                        if self.facts.resolves_to_unit(&expression.get_type()) {
+                            text.push_str(UNIT_DISPLAY);
+                            continue;
+                        }
+                        if !text.is_empty() {
+                            pieces.push(string_constant(take(&mut text)));
+                        }
+                        pieces.push(value);
+                    }
                 }
+            }
+            if !text.is_empty() {
+                pieces.push(string_constant(text));
             }
             let mut pieces = pieces.into_iter();
             let first = pieces.next().expect("an interpolated f-string has a piece");
@@ -247,17 +254,32 @@ impl Planner<'_> {
                     }
                 }
                 FormatStringPart::Expression(expression) => {
+                    let value = values
+                        .next()
+                        .expect("sequenced count matches expression parts");
+                    if self.facts.resolves_to_unit(&expression.get_type()) {
+                        format_string.push_str(UNIT_DISPLAY);
+                        continue;
+                    }
                     let peeled = self.facts.peel_alias(&expression.get_type());
                     format_string.push_str(format_verb_for(&peeled));
-                    args.push(
-                        values
-                            .next()
-                            .expect("sequenced count matches expression parts"),
-                    );
+                    args.push(value);
                 }
             }
         }
         (format_string, args)
+    }
+
+    pub(crate) fn lower_format_operand(&mut self, operand: &Expression) -> ValuePlan {
+        if !self.facts.resolves_to_unit(&operand.get_type()) {
+            return self.lower_composite_value(operand, ExpressionContext::value());
+        }
+        let setup = self.lower_discard_value(operand);
+        ValuePlan::built_from(
+            setup,
+            string_constant(UNIT_DISPLAY.to_string()),
+            Stability::Fixed,
+        )
     }
 
     pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {
@@ -283,10 +305,17 @@ impl Planner<'_> {
             .peekable();
         operands.peek().is_some()
             && operands.all(|expression| {
-                self.facts.peel_alias(&expression.get_type()).as_simple()
-                    == Some(SimpleKind::String)
+                self.facts.resolves_to_unit(&expression.get_type())
+                    || self.facts.peel_alias(&expression.get_type()).as_simple()
+                        == Some(SimpleKind::String)
             })
     }
+}
+
+pub(crate) const UNIT_DISPLAY: &str = "()";
+
+fn string_constant(text: String) -> GoExpression {
+    GoExpression::constant(format!("\"{text}\""), ConstantKind::String)
 }
 
 /// The `fmt` printf verb for interpolating a value of alias-peeled `ty` into

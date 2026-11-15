@@ -12,7 +12,7 @@ func MakeTuple2[T any, U any](first T, second U) Tuple2[T, U] {
 }
 
 func (t Tuple2[T, U]) String() string {
-	return fmt.Sprintf("(%v, %v)", t.First, t.Second)
+	return fmt.Sprintf("(%v, %v)", display(t.First), display(t.Second))
 }
 
 type Tuple3[T any, U any, V any] struct {
@@ -26,7 +26,7 @@ func MakeTuple3[T any, U any, V any](first T, second U, third V) Tuple3[T, U, V]
 }
 
 func (t Tuple3[T, U, V]) String() string {
-	return fmt.Sprintf("(%v, %v, %v)", t.First, t.Second, t.Third)
+	return fmt.Sprintf("(%v, %v, %v)", display(t.First), display(t.Second), display(t.Third))
 }
 
 type Tuple4[T any, U any, V any, W any] struct {
@@ -41,7 +41,7 @@ func MakeTuple4[T any, U any, V any, W any](first T, second U, third V, fourth W
 }
 
 func (t Tuple4[T, U, V, W]) String() string {
-	return fmt.Sprintf("(%v, %v, %v, %v)", t.First, t.Second, t.Third, t.Fourth)
+	return fmt.Sprintf("(%v, %v, %v, %v)", display(t.First), display(t.Second), display(t.Third), display(t.Fourth))
 }
 
 type Tuple5[T any, U any, V any, W any, X any] struct {
@@ -57,5 +57,5 @@ func MakeTuple5[T any, U any, V any, W any, X any](first T, second U, third V, f
 }
 
 func (t Tuple5[T, U, V, W, X]) String() string {
-	return fmt.Sprintf("(%v, %v, %v, %v, %v)", t.First, t.Second, t.Third, t.Fourth, t.Fifth)
+	return fmt.Sprintf("(%v, %v, %v, %v, %v)", display(t.First), display(t.Second), display(t.Third), display(t.Fourth), display(t.Fifth))
 }
