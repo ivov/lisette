@@ -143,10 +143,19 @@ impl InferCtx<'_> {
                 {
                     let is_literal = is_numeric_literal(&new_expression);
                     if !self.is_inside_constant_expression() {
-                        if resolved.is_unsigned_int() && !is_literal {
-                            let type_name = resolved.get_name().unwrap_or_default();
+                        // A Lisette rule, so a newtype such as `fs.FileMode` stays exempt.
+                        let unsigned = self
+                            .store
+                            .peeled(&resolved)
+                            .simple_kind()
+                            .is_some_and(SimpleKind::is_unsigned_int);
+                        if unsigned && !is_literal {
+                            let type_name = resolved
+                                .display_name()
+                                .map(|name| name.to_string())
+                                .unwrap_or_default();
                             self.sink
-                                .push(diagnostics::infer::cannot_negate_unsigned(type_name, span));
+                                .push(diagnostics::infer::cannot_negate_unsigned(&type_name, span));
                         }
                         self.check_negative_literal_overflow(&new_expression, &resolved, span);
                     }
@@ -1084,52 +1093,9 @@ fn float_constant_value(expression: &Expression, store: &Store) -> Option<f64> {
 }
 
 fn is_integer_type(ty: &Type, env: &TypeEnv, store: &Store) -> bool {
-    let resolved = ty.resolve_in(env);
-    let direct_match = matches!(
-        resolved.get_name(),
-        Some(
-            "int"
-                | "int8"
-                | "int16"
-                | "int32"
-                | "int64"
-                | "uint"
-                | "uint8"
-                | "uint16"
-                | "uint32"
-                | "uint64"
-                | "uintptr"
-                | "byte"
-                | "rune"
-        )
-    );
-
-    if direct_match {
-        return true;
-    }
-
     store
-        .underlying_numeric_type(&resolved)
-        .is_some_and(|underlying| {
-            matches!(
-                underlying.get_name(),
-                Some(
-                    "int"
-                        | "int8"
-                        | "int16"
-                        | "int32"
-                        | "int64"
-                        | "uint"
-                        | "uint8"
-                        | "uint16"
-                        | "uint32"
-                        | "uint64"
-                        | "uintptr"
-                        | "byte"
-                        | "rune"
-                )
-            )
-        })
+        .underlying_simple_kind(&ty.resolve_in(env))
+        .is_some_and(|kind| kind.integer_range().is_some())
 }
 
 fn is_cast_expression(expression: &Expression) -> bool {

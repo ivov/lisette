@@ -26,7 +26,7 @@ use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::{DefinitionBody, resolved_definition};
-use syntax::types::{FunctionParameter, Type};
+use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 pub(crate) fn is_nil(value: GoExpression) -> GoExpression {
     GoExpression::binary(value, BinaryOp::Eq, GoExpression::nil())
@@ -217,7 +217,7 @@ impl Planner<'_> {
             .map(|(parameter, (source, target))| {
                 let bridge = resolve_layout_bridge(self, target, source);
                 let argument = self.plan_layout_bridge(statements, parameter, &bridge);
-                if source.logical_type().get_name() == Some("VarArgs") {
+                if is_varargs(source.logical_type()) {
                     GoExpression::spread(argument)
                 } else {
                     argument
@@ -941,7 +941,7 @@ impl Planner<'_> {
             let name = self.scope.helper_local(&format!("arg{}", i), self.package);
             param_strs.push(GoParameter::new(name.clone(), self.go_type(&param.ty)));
             let argument = GoExpression::identifier(name);
-            if i == last_index && param.ty.get_name() == Some("VarArgs") {
+            if i == last_index && is_varargs(&param.ty) {
                 arguments.push(GoExpression::spread(argument));
             } else {
                 arguments.push(argument);
@@ -1135,4 +1135,8 @@ pub(crate) fn unexpected_nil_error() -> GoExpression {
         GoExpression::generated(GeneratedPackage::Errors, "New"),
         vec![GoExpression::literal("\"unexpected nil\"".to_string())],
     )
+}
+
+fn is_varargs(ty: &Type) -> bool {
+    matches!(ty.as_compound(), Some((CompoundKind::VarArgs, _)))
 }

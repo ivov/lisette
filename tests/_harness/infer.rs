@@ -590,8 +590,8 @@ fn types_equal_with(
     };
     let (t1, t2) = (&resolved1, &resolved2);
 
-    if let (Some(n1), Some(n2)) = (t1.get_name(), t2.get_name())
-        && n1 == n2
+    if let (Some(n1), Some(n2)) = (t1.display_name(), t2.display_name())
+        && n1.to_string() == n2.to_string()
     {
         let args1 = t1.get_type_params().unwrap_or(&[]);
         let args2 = t2.get_type_params().unwrap_or(&[]);

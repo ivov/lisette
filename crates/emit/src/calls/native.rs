@@ -827,9 +827,9 @@ impl Planner<'_> {
             }
             Expression::IndexedAccess {
                 expression: base, ..
-            } => match self.facts.strip_and_peel(&base.get_type()).get_name() {
-                Some("Map") => false,
-                Some("Slice") => true,
+            } => match self.facts.strip_and_peel(&base.get_type()).as_compound() {
+                Some((CompoundKind::Map, _)) => false,
+                Some((CompoundKind::Slice, _)) => true,
                 _ => self.receiver_is_addressable(base),
             },
             _ => false,
@@ -1052,7 +1052,7 @@ impl Planner<'_> {
 
         let arg_ty = arg.get_type();
         let range_kind = peel_to_range_type(&arg_ty, |id| self.facts.definition(id))
-            .and_then(|ty| RangeShape::from_name(ty.get_name()?))
+            .and_then(|ty| RangeShape::of(&ty))
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.plan_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");

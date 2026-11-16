@@ -58,8 +58,5 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
 }
 
 fn names_primitive_integer(ty: &Type) -> bool {
-    ty.get_name()
-        .and_then(SimpleKind::from_name)
-        .and_then(SimpleKind::integer_range)
-        .is_some()
+    ty.as_simple().and_then(SimpleKind::integer_range).is_some()
 }

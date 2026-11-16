@@ -7087,7 +7087,7 @@ fn main() {
 }
 
 #[test]
-fn equal_operands_uintptr_alias_bitwise_no_diagnostic() {
+fn equal_operands_uintptr_alias_bitwise_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -7103,25 +7103,25 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result
+        !result
             .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the uintptr-alias bitwise type error to still be reported: {:?}",
+        "a uintptr-alias bitwise operation is valid Go: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
-        "must not flag bitwise equal operands on a `uintptr`-backed alias: {:?}",
+        "expected equal operands on a `uintptr`-backed alias: {:?}",
         result.lints()
     );
 }
 
 #[test]
-fn equal_operands_uintptr_newtype_bitwise_no_diagnostic() {
+fn equal_operands_uintptr_newtype_bitwise_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -7137,19 +7137,19 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result
+        !result
             .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the uintptr-newtype bitwise type error to still be reported: {:?}",
+        "a uintptr-newtype bitwise operation is valid Go: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
-        "must not flag bitwise equal operands on a `uintptr`-backed newtype: {:?}",
+        "expected equal operands on a `uintptr`-backed newtype: {:?}",
         result.lints()
     );
 }

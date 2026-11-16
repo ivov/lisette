@@ -179,11 +179,30 @@ pub fn package_for_qualified_name(
     None
 }
 
-fn is_range_type_name(name: &str) -> bool {
-    matches!(
-        name,
-        "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
-    )
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RangeKind {
+    Range,
+    RangeInclusive,
+    RangeFrom,
+    RangeTo,
+    RangeToInclusive,
+}
+
+impl RangeKind {
+    pub fn of(ty: &Type) -> Option<Self> {
+        match ty.get_qualified_id()? {
+            "prelude.Range" => Some(Self::Range),
+            "prelude.RangeInclusive" => Some(Self::RangeInclusive),
+            "prelude.RangeFrom" => Some(Self::RangeFrom),
+            "prelude.RangeTo" => Some(Self::RangeTo),
+            "prelude.RangeToInclusive" => Some(Self::RangeToInclusive),
+            _ => None,
+        }
+    }
+
+    pub fn has_start(self) -> bool {
+        matches!(self, Self::Range | Self::RangeInclusive | Self::RangeFrom)
+    }
 }
 
 pub fn peel_to_range_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
@@ -191,10 +210,68 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let peeled = peel_alias(ty, lookup);
-    peeled
-        .get_name()
-        .is_some_and(is_range_type_name)
-        .then_some(peeled)
+    RangeKind::of(&peeled).is_some().then_some(peeled)
+}
+
+/// A `Ref` stays a `Ref`: a predicate calls `pointee` to look behind it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AliasPeeled(Type);
+
+pub fn peel_alias_view<'d, F>(ty: &Type, lookup: F) -> AliasPeeled
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    AliasPeeled(peel_alias(ty, lookup))
+}
+
+impl AliasPeeled {
+    pub fn ty(&self) -> &Type {
+        &self.0
+    }
+
+    pub fn into_type(self) -> Type {
+        self.0
+    }
+
+    pub fn compound_kind(&self) -> Option<CompoundKind> {
+        self.0.as_compound().map(|(kind, _)| kind)
+    }
+
+    pub fn simple_kind(&self) -> Option<SimpleKind> {
+        self.0.as_simple()
+    }
+
+    pub fn is_simple(&self, kind: SimpleKind) -> bool {
+        self.simple_kind() == Some(kind)
+    }
+
+    pub fn is_array(&self) -> bool {
+        matches!(self.0, Type::Array { .. })
+    }
+
+    pub fn range_kind(&self) -> Option<RangeKind> {
+        RangeKind::of(&self.0)
+    }
+
+    pub fn pointee<'d, F>(&self, lookup: F) -> Option<AliasPeeled>
+    where
+        F: Fn(&str) -> Option<&'d Definition>,
+    {
+        match self.0.as_compound()? {
+            (CompoundKind::Ref, [inner]) => Some(peel_alias_view(inner, lookup)),
+            _ => None,
+        }
+    }
+}
+
+/// Gives out no `&str`, so no code can decide a type property by its spelling.
+#[derive(Debug, Clone, Copy)]
+pub struct DisplayName<'a>(&'a str);
+
+impl Display for DisplayName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
 }
 
 /// Type parameter name -> concrete type.
@@ -1570,25 +1647,30 @@ impl Type {
 }
 
 impl Type {
-    pub fn get_name(&self) -> Option<&str> {
+    pub fn display_name(&self) -> Option<DisplayName<'_>> {
         match self {
-            Type::Simple(kind) => Some(kind.leaf_name()),
+            Type::Simple(kind) => Some(DisplayName(kind.leaf_name())),
             Type::Compound { kind, args, .. } => match kind {
-                CompoundKind::Ref => args.first().and_then(|inner| inner.get_name()),
-                _ => Some(kind.leaf_name()),
+                CompoundKind::Ref => args.first().and_then(|inner| inner.display_name()),
+                _ => Some(DisplayName(kind.leaf_name())),
             },
-            Type::Nominal { id, .. } => Some(id.last_segment()),
-            Type::ImportNamespace(package_id) => {
-                let path = package_id.strip_prefix("go:").unwrap_or(package_id);
-                path.rsplit('/').next()
-            }
-            Type::Array { .. } => Some("Array"),
+            Type::Nominal { id, .. } => Some(DisplayName(id.last_segment())),
+            Type::ImportNamespace(_) => self.namespace_name().map(DisplayName),
+            Type::Array { .. } => Some(DisplayName("Array")),
             _ => None,
         }
     }
 
-    pub fn wraps(&self, name: &str, inner: &Type) -> bool {
-        self.get_name().is_some_and(|n| n == name)
+    pub fn namespace_name(&self) -> Option<&str> {
+        let Type::ImportNamespace(package_id) = self else {
+            return None;
+        };
+        let path = package_id.strip_prefix("go:").unwrap_or(package_id);
+        path.rsplit('/').next()
+    }
+
+    pub fn wraps(&self, is_wrapper: impl Fn(&Type) -> bool, inner: &Type) -> bool {
+        is_wrapper(self)
             && self
                 .get_type_params()
                 .and_then(|p| p.first())

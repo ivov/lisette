@@ -9,7 +9,7 @@ use syntax::program::{
     TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
 };
 use syntax::types;
-use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
+use syntax::types::{AliasPeeled, CompoundKind, SimpleKind, Symbol, Type};
 
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
 pub use syntax::ENTRY_PACKAGE_ID;
@@ -305,6 +305,10 @@ impl Store {
 
     pub fn peel_alias(&self, ty: &Type) -> Type {
         types::peel_alias(ty, |id| self.get_definition(id))
+    }
+
+    pub fn peeled(&self, ty: &Type) -> AliasPeeled {
+        types::peel_alias_view(ty, |id| self.get_definition(id))
     }
 
     /// The nominal type a definition names once its type aliases are peeled.

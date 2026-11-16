@@ -145,8 +145,8 @@ impl InferCtx<'_> {
             };
             if unsupported {
                 let type_name = receiver
-                    .get_name()
-                    .map_or_else(|| receiver.to_string(), str::to_owned);
+                    .display_name()
+                    .map_or_else(|| receiver.to_string(), |name| name.to_string());
                 self.sink
                     .push(diagnostics::infer::unsupported_bound_argument(
                         unqualified_name(&requirement.declaring_interface),
@@ -293,8 +293,8 @@ impl InferCtx<'_> {
                 .any(|method| is_unexported_key(&method.name))
         }) {
             let type_name = resolved
-                .get_name()
-                .map_or_else(|| resolved.to_string(), str::to_owned);
+                .display_name()
+                .map_or_else(|| resolved.to_string(), |name| name.to_string());
             self.sink
                 .push(diagnostics::infer::sealed_interface_not_satisfiable(
                     &sealed.interface_name,
@@ -316,8 +316,8 @@ impl InferCtx<'_> {
             None
         };
         let type_name = resolved
-            .get_name()
-            .map_or_else(|| resolved.to_string(), str::to_owned);
+            .display_name()
+            .map_or_else(|| resolved.to_string(), |name| name.to_string());
         let diagnostic = if let Some(wrapper) = wrapper {
             diagnostics::infer::wrapper_does_not_implement_interface(
                 unqualified_name(interface_qualified_id),
@@ -419,12 +419,14 @@ impl InferCtx<'_> {
             return Ok(());
         }
 
-        let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+        let type_name = ty
+            .display_name()
+            .map_or_else(|| ty.to_string(), |name| name.to_string());
         let diagnostic = if value_is_ref {
             let pointee = self.peel_resolved(&ty.strip_refs());
             let pointee_name = pointee
-                .get_name()
-                .map_or_else(|| pointee.to_string(), str::to_owned);
+                .display_name()
+                .map_or_else(|| pointee.to_string(), |name| name.to_string());
             let names = ptr_methods
                 .into_iter()
                 .map(|(impl_name, _)| impl_name)
@@ -678,8 +680,8 @@ impl InferCtx<'_> {
                 SelectedMethod::UfcsOnly => {
                     if !receiver_generics.is_empty() {
                         let type_name = resolved_receiver
-                            .get_name()
-                            .map_or_else(|| resolved_receiver.to_string(), str::to_owned);
+                            .display_name()
+                            .map_or_else(|| resolved_receiver.to_string(), |name| name.to_string());
                         self.sink.push(
                             diagnostics::infer::specialized_impl_cannot_satisfy_interface(
                                 &type_name,

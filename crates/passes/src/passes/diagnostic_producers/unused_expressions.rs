@@ -1,7 +1,7 @@
 use diagnostics::{LisetteDiagnostic, UnusedExpressionKind};
 use syntax::ast::{Annotation, Expression, MatchArm, SelectArm, Span, UnaryOperator};
 use syntax::program::{CallKind, NativeTypeKind};
-use syntax::types::{Symbol, Type};
+use syntax::types::{CompoundKind, Symbol, Type};
 
 use diagnostics::infer::MismatchedTailKind;
 use semantics::store::Store;
@@ -567,7 +567,7 @@ fn emit_unused_at_leaf(
     let is_literal = is_literal_or_negated_literal(leaf);
     let ty = leaf.get_type();
     let mut allowed_lints = callee_allowed_lints(leaf, package_id, store);
-    if is_channel_send(leaf) {
+    if is_channel_send(leaf, store) {
         allowed_lints.push("unused_value".to_string());
     }
     if let Some(kind) = lvalue_slice_growth_kind(leaf) {
@@ -770,7 +770,7 @@ fn callee_allowed_lints(expression: &Expression, package_id: &str, store: &Store
     vec![]
 }
 
-fn is_channel_send(expression: &Expression) -> bool {
+fn is_channel_send(expression: &Expression, store: &Store) -> bool {
     let Expression::Call {
         expression: callee,
         args,
@@ -790,8 +790,11 @@ fn is_channel_send(expression: &Expression) -> bool {
     if member != "send" || args.len() != 1 {
         return false;
     }
-    let resolved = receiver.get_type().strip_refs();
-    matches!(resolved.get_name(), Some("Channel" | "Sender"))
+    let resolved = store.peeled(&receiver.get_type().strip_refs());
+    matches!(
+        resolved.compound_kind(),
+        Some(CompoundKind::Channel | CompoundKind::Sender)
+    )
 }
 
 fn get_call_return_type(expression: &Expression) -> Option<Type> {

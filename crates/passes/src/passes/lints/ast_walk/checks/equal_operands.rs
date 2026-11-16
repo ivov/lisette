@@ -45,9 +45,7 @@ pub fn check_equal_operands(expression: &Expression, ctx: &NodeCtx) {
     ctx.sink.push(diagnostics::lint::equal_operands(span, note));
 }
 
-/// Bitwise ops also accept a direct `uintptr` (per the checker's
-/// `is_integer_type`), but not a `uintptr` alias/newtype, so that exception is
-/// gated on `as_simple` rather than the underlying kind.
+/// Bitwise ops also accept `uintptr`, and any type based on it.
 fn is_integer_operand(ty: &Type, bitwise: bool, ctx: &NodeCtx<'_>) -> bool {
     if ctx
         .store
@@ -56,5 +54,5 @@ fn is_integer_operand(ty: &Type, bitwise: bool, ctx: &NodeCtx<'_>) -> bool {
     {
         return true;
     }
-    bitwise && ty.as_simple() == Some(SimpleKind::Uintptr)
+    bitwise && ctx.store.underlying_simple_kind(ty) == Some(SimpleKind::Uintptr)
 }

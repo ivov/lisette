@@ -3,7 +3,7 @@ use crate::pattern;
 use std::fmt::Display;
 use std::mem;
 use syntax::ast::{Annotation, BinaryOperator, BindingKind, Span};
-use syntax::types::{FunctionParameter, SELF_TYPE_NAME, SimpleKind, Type};
+use syntax::types::{FunctionParameter, SELF_TYPE_NAME, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MismatchedTailKind {
@@ -2871,17 +2871,17 @@ pub fn not_callable(
     has_underlying_type: bool,
     span: Span,
 ) -> LisetteDiagnostic {
-    let type_name = ty.get_name();
-    let is_type_call = matches!((callee_name, type_name), (Some(c), Some(t)) if c == t);
-    let is_cast_target =
-        has_underlying_type || type_name.is_some_and(|n| SimpleKind::from_name(n).is_some());
+    // The help echoes what the user wrote, so it compares the spelling of the callee.
+    let type_name = ty.display_name().map(|name| name.to_string());
+    let is_type_call = callee_name.is_some() && type_name.as_deref() == callee_name;
+    let is_cast_target = has_underlying_type || ty.as_simple().is_some();
 
     let help = if is_type_call && is_cast_target {
         let subject = arg_name.unwrap_or("value");
         format!(
             "Use `{} as {}` to convert between types",
             subject,
-            type_name.unwrap()
+            type_name.unwrap_or_default()
         )
     } else {
         "Only functions can be called with `()`".to_string()

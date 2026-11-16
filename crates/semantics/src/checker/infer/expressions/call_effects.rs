@@ -3,7 +3,7 @@ use syntax::ast::{Expression, IdentifierResolution, StructFields};
 use syntax::program::{
     CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ValueKind,
 };
-use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
+use syntax::types::{CompoundKind, FunctionParameter, Symbol, Type, peel_to_range_type};
 
 use crate::checker::infer::InferCtx;
 use syntax::program::AliasKind;
@@ -239,9 +239,9 @@ impl InferCtx<'_> {
         };
         let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
 
-        let is_mutating = match receiver_ty.get_name() {
-            Some("Map") => member == "delete",
-            Some("Slice") => member == "copy_from",
+        let is_mutating = match self.store.peeled(&receiver_ty).compound_kind() {
+            Some(CompoundKind::Map) => member == "delete",
+            Some(CompoundKind::Slice) => member == "copy_from",
             _ => false,
         };
         if !is_mutating {
@@ -420,8 +420,8 @@ impl InferCtx<'_> {
             param
                 .ty
                 .resolve_in(&self.env)
-                .get_name()
-                .is_some_and(|n| n == "Range")
+                .get_qualified_id()
+                .is_some_and(|id| id == "prelude.Range")
         })
     }
 }

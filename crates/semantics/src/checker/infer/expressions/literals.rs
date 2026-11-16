@@ -138,7 +138,7 @@ impl InferCtx<'_> {
                             ));
                     }
                     element.as_ref().clone()
-                } else if resolved.get_name() == Some("Slice") {
+                } else if resolved.is_slice() {
                     resolved
                         .inner()
                         .unwrap_or_else(|| self.new_type_var_with_hint("T"))

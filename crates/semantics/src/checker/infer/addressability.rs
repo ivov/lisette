@@ -1,6 +1,6 @@
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::DotAccessResolution;
-use syntax::types::peel_to_range_type;
+use syntax::types::{CompoundKind, peel_to_range_type};
 
 use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
@@ -32,14 +32,13 @@ pub(crate) fn check_is_non_addressable(
             if is_range_index {
                 return Some("sub-slice expression");
             }
-            let expression_ty = expression.get_type().resolve_in(env);
-            if let Some(name) = expression_ty.get_name() {
-                if name == "Map" {
-                    return Some("map index expression");
-                }
-                if name == "Slice" {
-                    return None;
-                }
+            match store
+                .peeled(&expression.get_type().resolve_in(env))
+                .compound_kind()
+            {
+                Some(CompoundKind::Map) => return Some("map index expression"),
+                Some(CompoundKind::Slice) => return None,
+                _ => {}
             }
             if matches!(expression.unwrap_parens(), Expression::Call { .. }) {
                 Some("index access on function call")
@@ -89,7 +88,7 @@ pub(crate) fn check_non_addressable_assignment_target(
         Expression::IndexedAccess {
             expression: base, ..
         } => {
-            if base.get_type().resolve_in(env).get_name() == Some("Array") {
+            if store.peeled(&base.get_type().resolve_in(env)).is_array() {
                 check_is_non_addressable(base, env, store)
                     .or_else(|| check_non_addressable_assignment_target(base, env, store))
             } else {

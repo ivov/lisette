@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use crate::checker::infer::context::{BranchArm, SelectExhaustivenessCheck};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{ChannelOperation, channel_operation};
-use syntax::types::{Type, unqualified_name};
+use syntax::types::{CompoundKind, Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
 use std::mem;
@@ -384,7 +384,10 @@ impl InferCtx<'_> {
 
     fn is_channel_type(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env).strip_refs();
-        matches!(resolved.get_name(), Some("Channel" | "Sender" | "Receiver"))
+        matches!(
+            self.store.peeled(&resolved).compound_kind(),
+            Some(CompoundKind::Channel | CompoundKind::Sender | CompoundKind::Receiver)
+        )
     }
 
     fn check_complex_select_expression(&mut self, expression: &Expression) {
