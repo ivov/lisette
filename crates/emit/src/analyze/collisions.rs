@@ -113,9 +113,6 @@ impl Planner<'_> {
         else {
             return;
         };
-        if self.facts.is_unused(name_span) {
-            return;
-        }
         let go = self.free_function_go_name(name, matches!(visibility, Visibility::Public));
         self.check_reserved_prefix(name, name_span, diagnostics);
         self.check_reserved_prefix(&go, name_span, diagnostics);
@@ -399,9 +396,6 @@ impl Planner<'_> {
             else {
                 continue;
             };
-            if self.facts.is_unused(name_span) {
-                continue;
-            }
             let is_public = matches!(visibility, Visibility::Public);
             let go = if impl_method_is_receiver_method(self, &qualified_type, name, params) {
                 let method_go = self.method_go_name(name, is_public);
@@ -427,14 +421,8 @@ impl Planner<'_> {
         let mut diagnostics = Vec::new();
         for item in files.iter().flat_map(|file| &file.items) {
             match item {
-                Expression::Function {
-                    name_span,
-                    generics,
-                    ..
-                } => {
-                    if !self.facts.is_unused(name_span) {
-                        self.check_reserved_qualifier_generics(generics, &mut diagnostics);
-                    }
+                Expression::Function { generics, .. } => {
+                    self.check_reserved_qualifier_generics(generics, &mut diagnostics);
                 }
                 Expression::TypeAlias { generics, .. }
                 | Expression::Struct { generics, .. }
@@ -464,7 +452,6 @@ impl Planner<'_> {
                     for method in methods {
                         let Expression::Function {
                             name,
-                            name_span,
                             params,
                             generics: method_generics,
                             ..
@@ -472,9 +459,6 @@ impl Planner<'_> {
                         else {
                             continue;
                         };
-                        if self.facts.is_unused(name_span) {
-                            continue;
-                        }
                         if impl_method_is_receiver_method(self, &qualified_type, name, params) {
                             self.check_reserved_qualifier_generics(
                                 method_generics,

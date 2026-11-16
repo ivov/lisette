@@ -38,17 +38,11 @@ impl Planner<'_> {
     /// Emit one impl method as a receiver method or a UFCS free function.
     fn emit_impl_method(&mut self, method: &Expression, ctx: &ImplContext<'_>) -> Option<String> {
         let Expression::Function {
-            doc,
-            visibility,
-            name_span,
-            ..
+            doc, visibility, ..
         } = method
         else {
             return None;
         };
-        if self.facts.is_unused(name_span) {
-            return None;
-        }
         let function = method.function_definition_view();
 
         let is_public = matches!(visibility, Visibility::Public);

@@ -1,7 +1,9 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use syntax::ast::{BindingId, Pattern, RestPattern, Span};
-use syntax::program::{AliasKind, Definition, DefinitionBody, EmitInput, Method, PackageId};
+use syntax::ast::{BindingId, Pattern, RestPattern};
+use syntax::program::{
+    AliasKind, Definition, DefinitionBody, EmitInput, ImportKey, Method, PackageId,
+};
 use syntax::types;
 use syntax::types::SimpleKind;
 use syntax::types::{Symbol, Type};
@@ -203,8 +205,8 @@ impl<'a> EmitFacts<'a> {
         self.input.bindings.is_unused_rest_binding(rest)
     }
 
-    pub(crate) fn is_unused(&self, span: &Span) -> bool {
-        self.input.unused.is_unused(span)
+    pub(crate) fn is_unused_import(&self, key: ImportKey) -> bool {
+        self.input.unused_imports.is_unused_import(key)
     }
 
     pub(crate) fn is_mutated(&self, id: BindingId) -> bool {

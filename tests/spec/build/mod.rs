@@ -4241,7 +4241,7 @@ fn main() {
 }
 
 #[test]
-fn unused_method_with_go_import_not_emitted() {
+fn unused_method_with_go_import_is_emitted() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -4271,7 +4271,7 @@ fn main() {
 }
 
 #[test]
-fn unused_const_naming_an_unused_function_not_emitted() {
+fn unused_const_naming_an_unused_function_is_emitted() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -8018,7 +8018,7 @@ fn reserved_prefix_alias_cannot_shadow_synthesized_test_handle() {
 }
 
 #[test]
-fn go_name_collision_silent_for_unused_function() {
+fn go_name_collision_reported_for_unused_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -8040,8 +8040,8 @@ fn main() {
 
     let codes = emit_diagnostic_codes(fs);
     assert!(
-        !codes.iter().any(|code| code == "emit.go_name_collision"),
-        "FooBar is private and unused, so it is not emitted and cannot collide; got: {codes:?}"
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "FooBar is emitted even when unused, so it collides with foo_bar; got: {codes:?}"
     );
 }
 
@@ -10757,4 +10757,58 @@ fn lowered_partial_both_preserves_argument_order() {
         include_str!("../../fixtures/emit/partial_both_order.lis"),
     );
     assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn type_name_case_does_not_change_which_methods_are_emitted() {
+    let template = r#"
+import "go:fmt"
+
+struct NAME {
+  x: int,
+}
+
+impl NAME {
+  fn get_x(self) -> int { self.x }
+  fn make() -> NAME { NAME { x: 3 } }
+  fn build() -> NAME { NAME { x: 4 } }
+  fn unused_helper() -> int { 5 }
+}
+
+enum KIND {
+  One,
+  Two(int),
+}
+
+impl KIND {
+  fn unit() -> KIND { KIND.Two(1) }
+}
+
+fn start() -> int { NAME.make().x }
+
+fn main() {
+  let f = NAME.build
+  let v = NAME.make()
+  fmt.Println(NAME.get_x(v), f().x, start())
+  match KIND.unit() {
+    KIND.One => fmt.Println("one"),
+    KIND.Two(n) => fmt.Println(n),
+  }
+}
+"#;
+    let emit_with = |name: &str, kind: &str| {
+        let mut fs = MockFileSystem::new();
+        let source = template.replace("NAME", name).replace("KIND", kind);
+        fs.add_file(ENTRY_PACKAGE_ID, "main.lis", &source);
+        let mut files = compile_project_files(fs, "github.com/user/myproject", false);
+        files.sort_by(|a, b| a.name.cmp(&b.name));
+        files
+            .iter()
+            .map(|f| f.to_go())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let upper = emit_with("Zork", "Quux");
+    let lower = emit_with("zork", "quux");
+    assert_eq!(lower, upper.replace("Zork", "zork").replace("Quux", "quux"));
 }

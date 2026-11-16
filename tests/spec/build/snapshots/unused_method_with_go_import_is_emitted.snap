@@ -4,11 +4,18 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Name struct {
 	first string
 	last  string
+}
+
+func (n Name) full() string {
+	return strings.Join([]string{n.first, n.last}, " ")
 }
 
 func main() {

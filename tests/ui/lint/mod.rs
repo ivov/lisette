@@ -29720,3 +29720,30 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn unused_function_silent_for_static_method_on_lowercase_type() {
+    let source = r#"
+struct foo { x: int }
+
+impl foo {
+  fn get_x(self) -> int { self.x }
+  fn make() -> foo { foo { x: 3 } }
+  fn build() -> foo { foo { x: 4 } }
+}
+
+fn main() {
+  let f = foo.build
+  let v = foo.make()
+  let _ = foo.get_x(v) + f().x
+}
+"#;
+    let codes: Vec<_> = lint(source)
+        .iter()
+        .filter_map(|d| d.code_str().map(str::to_string))
+        .collect();
+    assert!(
+        !codes.iter().any(|code| code == "lint.unused_function"),
+        "every method is called; got: {codes:?}"
+    );
+}

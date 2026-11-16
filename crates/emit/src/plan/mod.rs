@@ -49,7 +49,7 @@ impl Planner<'_> {
             .iter()
             .flat_map(|plan| {
                 plan.imports
-                    .used_qualifiers(|span| self.facts.is_unused(span))
+                    .used_qualifiers(|key| self.facts.is_unused_import(key))
             })
             .collect();
         self.package.record_package_block_names(

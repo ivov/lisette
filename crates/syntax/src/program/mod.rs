@@ -12,7 +12,8 @@ pub use definition::{
     methods_for_type, type_has_any_method,
 };
 pub use emit_input::{
-    BindingMutation, EmitBindings, EmitInput, EqualityIndex, TestFunction, TestIndex, UnusedInfo,
+    BindingMutation, EmitBindings, EmitInput, EqualityIndex, ImportKey, TestFunction, TestIndex,
+    UnusedImports,
 };
 pub use file::{
     File, FileImport, SourceFileKind, go_filename, go_import_default_name, is_test_file,

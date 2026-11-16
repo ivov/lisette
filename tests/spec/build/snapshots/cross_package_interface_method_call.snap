@@ -4,6 +4,16 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
+import (
+	"fmt"
+
+	"github.com/user/myproject/models"
+)
+
+func display(item models.Item) {
+	fmt.Println(item.Show())
+}
+
 func main() {}
 
 

@@ -11,7 +11,7 @@ use syntax::{
     ast::{Expression, FunctionBody},
     lex::Lexer,
     parse::Parser,
-    program::{Definition, EmitBindings, EqualityIndex, File, UnusedInfo},
+    program::{Definition, EmitBindings, EqualityIndex, File, UnusedImports},
     types::Symbol,
 };
 
@@ -248,7 +248,7 @@ impl CompiledTest {
             errors,
             definitions,
             package_id: TEST_PACKAGE_ID.to_string(),
-            unused: UnusedInfo::default(),
+            unused_imports: UnusedImports::default(),
             bindings,
             equality_index,
             go_package_names,
@@ -262,7 +262,7 @@ pub struct InferenceResult {
     pub errors: Vec<LisetteDiagnostic>,
     pub definitions: HashMap<Symbol, Definition>,
     pub package_id: String,
-    pub unused: UnusedInfo,
+    pub unused_imports: UnusedImports,
     pub bindings: EmitBindings,
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,

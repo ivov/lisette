@@ -17,7 +17,7 @@ use semantics::store::Store;
 use syntax::ast::{Attribute, AttributeArg, Expression, Span, StructFieldDefinition, Visibility};
 use syntax::program::EqualityIndex;
 use syntax::program::File;
-use syntax::program::UnusedInfo;
+use syntax::program::UnusedImports;
 use syntax::program::{Package, is_internal_package_id};
 
 use extract::{AliasMap, is_upper, walk_expression};
@@ -32,14 +32,13 @@ use visibility_constraints::check_visibility_constraints;
 struct RefLintResult {
     diagnostics: Vec<LisetteDiagnostic>,
     unused_import_spans: HashSet<Span>,
-    unused_definition_spans: Vec<Span>,
 }
 
 pub(crate) fn run(
     store: &Store,
     facts: &Facts,
     unused_item_reporting: UnusedItemReporting,
-) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
+) -> (Vec<LisetteDiagnostic>, UnusedImports) {
     let mut packages: Vec<&Package> = store
         .packages
         .values()
@@ -48,7 +47,7 @@ pub(crate) fn run(
         .collect();
     packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
-    let mut unused = UnusedInfo::default();
+    let mut unused = UnusedImports::default();
 
     if packages.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
@@ -65,12 +64,12 @@ pub(crate) fn run(
         return (sink.into_diagnostics(), unused);
     }
 
-    type WorkerOutput = (LocalSink, UnusedInfo);
+    type WorkerOutput = (LocalSink, UnusedImports);
     let outputs: Vec<WorkerOutput> = packages
         .par_iter()
         .map(|package| {
             let local_sink = LocalSink::new();
-            let mut local_unused = UnusedInfo::default();
+            let mut local_unused = UnusedImports::default();
             apply_ref_lints(
                 package,
                 facts,
@@ -96,16 +95,16 @@ fn apply_ref_lints(
     facts: &Facts,
     store: &Store,
     unused_item_reporting: UnusedItemReporting,
-    unused: &mut UnusedInfo,
+    unused: &mut UnusedImports,
     sink: &LocalSink,
 ) {
     let result = run_ref_lints(package, facts, store, unused_item_reporting);
-    for span in result
-        .unused_import_spans
-        .into_iter()
-        .chain(result.unused_definition_spans)
-    {
-        unused.mark_unused(span);
+    for file in package.files.values() {
+        for import in file.imports() {
+            if result.unused_import_spans.contains(&import.name_span) {
+                unused.mark_unused_import(&import);
+            }
+        }
     }
     let mut diagnostics = result.diagnostics;
     if !diagnostics.is_empty() {
@@ -130,7 +129,6 @@ fn run_ref_lints(
     let equality_index = &store.equality_index;
     let mut diagnostics = Vec::new();
     let mut unused_import_spans = HashSet::default();
-    let mut unused_definition_spans = Vec::new();
     let mut graph = ReferenceGraph::new();
 
     let files_with_aliases: Vec<_> = files
@@ -169,9 +167,6 @@ fn run_ref_lints(
         if matches!(info.kind, ItemKind::Import { .. }) {
             unused_import_spans.insert(info.span);
         }
-        if matches!(info.kind, ItemKind::Function | ItemKind::Constant) {
-            unused_definition_spans.push(info.span);
-        }
         if !report_unused_items {
             continue;
         }
@@ -204,7 +199,6 @@ fn run_ref_lints(
     RefLintResult {
         diagnostics,
         unused_import_spans,
-        unused_definition_spans,
     }
 }
 

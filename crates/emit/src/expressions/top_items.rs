@@ -11,12 +11,8 @@ impl Planner<'_> {
                 doc,
                 visibility,
                 name,
-                name_span,
                 ..
             } => {
-                if self.facts.is_unused(name_span) {
-                    return String::new();
-                }
                 let is_public = matches!(visibility, Visibility::Public);
                 let function = item.function_definition_view();
                 let go_name = self.pick_go_function_name(function, false, is_public);
@@ -101,14 +97,10 @@ impl Planner<'_> {
             Expression::Const {
                 doc,
                 identifier,
-                identifier_span,
                 expression,
                 ty,
                 ..
             } => {
-                if self.facts.is_unused(identifier_span) {
-                    return String::new();
-                }
                 let Some(expression) = expression.value() else {
                     return String::new();
                 };

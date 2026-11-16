@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::go_name;
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use syntax::ast::{ImportAlias, Span};
-use syntax::program::{File, FileImport};
+use syntax::program::{File, FileImport, ImportKey};
 
 use crate::names::packages::PackageRequirements;
 
@@ -23,8 +23,7 @@ struct PlannedImport {
     qualifier: Option<String>,
     path: String,
     span: Span,
-    /// Keys the import in the unused facts.
-    name_span: Span,
+    key: ImportKey,
 }
 
 impl ImportPlan {
@@ -55,7 +54,7 @@ impl ImportPlan {
                 qualifier,
                 path,
                 span,
-                name_span: import.name_span,
+                key: import.key(),
             });
         }
 
@@ -76,10 +75,10 @@ impl ImportPlan {
     /// Non-blank used imports as qualifier and span, in source order.
     pub(crate) fn used_qualifiers(
         &self,
-        is_unused: impl Fn(&Span) -> bool,
+        is_unused: impl Fn(ImportKey) -> bool,
     ) -> impl Iterator<Item = (String, Span)> {
         self.imports.iter().filter_map(move |import| {
-            if is_unused(&import.name_span) {
+            if is_unused(import.key) {
                 return None;
             }
             Some((import.qualifier.clone()?, import.span))
@@ -250,9 +249,14 @@ import kept "two"
 import "three"
 "#;
         let plan = import_plan(source);
-        let unused_path = source.find("\"one\"").unwrap() as u32;
+        let unused_key = plan
+            .imports
+            .iter()
+            .find(|import| import.package == "one")
+            .unwrap()
+            .key;
         let qualifiers: Vec<_> = plan
-            .used_qualifiers(|span| span.byte_offset == unused_path)
+            .used_qualifiers(|key| key == unused_key)
             .map(|(qualifier, span)| {
                 let start = span.byte_offset as usize;
                 let end = start + span.byte_length as usize;

@@ -85,7 +85,7 @@ pub fn compile_e2e_suite_test(
         files: FxHashMap::from_iter([(0, file)]),
         definitions: result.definitions,
         entry_package_id: result.package_id,
-        unused: result.unused,
+        unused_imports: result.unused_imports,
         bindings: result.bindings,
         equality_index: result.equality_index,
         go_package_names: result.go_package_names,

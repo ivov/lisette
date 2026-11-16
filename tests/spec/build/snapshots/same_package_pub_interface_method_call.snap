@@ -10,6 +10,10 @@ type Shape interface {
 	Area() int
 }
 
+func totalArea(s Shape) int {
+	return s.Area()
+}
+
 func main() {
 	fmt.Println("test")
 }

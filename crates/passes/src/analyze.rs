@@ -6,7 +6,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use diagnostics::LisetteDiagnostic;
 use syntax::FileParseStatus;
 use syntax::ast::BindingId;
-use syntax::program::{EmitInput, UnusedInfo, is_internal_package_id};
+use syntax::program::{EmitInput, UnusedImports, is_internal_package_id};
 
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, diagnostic_dependencies_tracked, save_package_cache};
@@ -133,8 +133,8 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         passes::LintMode::Skip
     };
 
-    let unused = if has_pre_check_errors {
-        UnusedInfo::default()
+    let unused_imports = if has_pre_check_errors {
+        UnusedImports::default()
     } else {
         passes::run(&store, &facts, &sink, lint_mode, unused_item_reporting)
     };
@@ -264,7 +264,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             files,
             definitions,
             entry_package_id: ENTRY_PACKAGE_ID.to_string(),
-            unused,
+            unused_imports,
             bindings: emit_bindings,
             cached_packages,
             equality_index: store.equality_index,
