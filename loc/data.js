@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794856925106,
+  "lastUpdate": 1794857347805,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -58030,6 +58030,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 43200,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30519,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19623,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 16212,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14234,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9413,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7674,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11006,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9f9452e830bc91f069dbc412e55073985fac9bdc",
+          "message": "fix: emit no value for `return` of a `Never` call (#1705)",
+          "timestamp": "2026-11-16T20:28:40+01:00",
+          "tree_id": "d6399d83509f9fd21302159b51db62d982978fb5",
+          "url": "https://github.com/ivov/lisette/commit/9f9452e830bc91f069dbc412e55073985fac9bdc"
+        },
+        "date": 1794857345394,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 157986,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43207,
             "unit": "lines"
           },
           {
