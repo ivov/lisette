@@ -1,5 +1,6 @@
 use crate::Planner;
-use crate::definitions::structs::{FieldFormat, StringFormat, format_return};
+use crate::definitions::structs::{StringFormat, format_return};
+use crate::expressions::display_form::DisplayForm;
 use crate::names::go_name::{self, GeneratedPackage};
 use crate::names::packages::PackageRequirements;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
@@ -41,15 +42,15 @@ pub(crate) struct FieldLayout {
 
 #[derive(Debug, Clone, Copy)]
 enum FieldKind {
-    Plain(FieldFormat),
+    Plain(DisplayForm),
     Recursive,
 }
 
 impl FieldLayout {
-    fn format(&self) -> FieldFormat {
+    fn format(&self) -> DisplayForm {
         match self.kind {
             FieldKind::Plain(format) => format,
-            FieldKind::Recursive => FieldFormat::Value,
+            FieldKind::Recursive => DisplayForm::Value,
         }
     }
 
@@ -143,7 +144,7 @@ impl EnumLayout {
                 ) {
                     FieldKind::Recursive
                 } else {
-                    FieldKind::Plain(FieldFormat::of(&field.ty, &definition))
+                    FieldKind::Plain(DisplayForm::of(&field.ty, &definition))
                 };
 
                 FieldLayout {

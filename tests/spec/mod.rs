@@ -8,3 +8,4 @@ mod lex;
 mod parse;
 mod pattern_analysis;
 mod representation;
+mod type_name_guard;

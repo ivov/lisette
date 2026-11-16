@@ -1,6 +1,6 @@
 use std::env;
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 
 use rustc_hash::FxHashMap as HashMap;
@@ -10,12 +10,13 @@ use diagnostics::LisetteDiagnostic;
 use emit::{EmitOptions, OutputFile, Planner};
 
 use passes::analyze;
-use semantics::cache::EmitStamp;
+use semantics::cache::{EmitStamp, discard_package_cache};
 use semantics::{AnalyzeInput, EntryFile, RecoverTarget};
 
 use semantics::CompilePhase;
 use semantics::loader::Loader;
 pub use semantics::{AnalysisScope as CompileScope, ProjectKind};
+use syntax::program::EmitInput;
 pub use syntax::program::TestIndex;
 
 #[derive(Debug, Clone)]
@@ -52,20 +53,28 @@ impl CompileMode {
         }
     }
 
-    fn emit_options(self) -> Option<EmitOptions> {
+    fn emit_options(self) -> EmitOptions {
         match self {
-            Self::Check => None,
-            Self::Emit { sourcemap } => Some(EmitOptions {
+            Self::Check => EmitOptions {
+                sourcemap: false,
+                sourcemap_base: None,
+                emit_tests: false,
+            },
+            Self::Emit { sourcemap } => EmitOptions {
                 sourcemap,
                 sourcemap_base: sourcemap.then(|| env::current_dir().ok()).flatten(),
                 emit_tests: false,
-            }),
-            Self::Test => Some(EmitOptions {
+            },
+            Self::Test => EmitOptions {
                 sourcemap: true,
                 sourcemap_base: env::current_dir().ok(),
                 emit_tests: true,
-            }),
+            },
         }
+    }
+
+    fn keeps_go_files(self) -> bool {
+        !matches!(self, Self::Check)
     }
 
     pub fn sourcemap(self) -> bool {
@@ -141,12 +150,12 @@ pub fn compile(
 
     let disable_cache = mode.disables_cache();
     let emit_options = mode.emit_options();
-    let emit_tests = emit_options
-        .as_ref()
-        .is_some_and(|options| options.emit_tests);
-    let sourcemap_base = emit_options
-        .as_ref()
-        .and_then(|options| options.sourcemap_base.clone());
+    let project_root = match &scope {
+        CompileScope::Project(root) if !disable_cache => Some(root.clone()),
+        _ => None,
+    };
+    let emit_tests = emit_options.emit_tests;
+    let sourcemap_base = emit_options.sourcemap_base.clone();
 
     let mut analysis = analyze(AnalyzeInput {
         load_siblings: !matches!(&scope, CompileScope::Script { .. }),
@@ -161,15 +170,18 @@ pub fn compile(
         recover_target: RecoverTarget::None,
     });
     let failed = analysis.failed();
-    let emit_result = match emit_options {
-        Some(options) if !failed => Some(Planner::emit(
+    let emit_result = (!failed).then(|| {
+        Planner::emit(
             &analysis.emit_input,
             go_module,
             entry_package_name,
-            options,
-        )),
-        _ => None,
-    };
+            emit_options,
+        )
+    });
+
+    if let (Some(root), Some(Err(rejections))) = (&project_root, &emit_result) {
+        discard_rejected_caches(root, locator.target(), &analysis.emit_input, rejections);
+    }
 
     let mut diagnostics = analysis.take_diagnostics();
     if !emit_tests {
@@ -202,7 +214,8 @@ pub fn compile(
     let test_index = mem::take(&mut analysis.emit_input.test_index);
 
     let output = match emit_result {
-        Some(Ok(output)) => output,
+        Some(Ok(output)) if mode.keeps_go_files() => output,
+        Some(Ok(_)) => Vec::new(),
         Some(Err(emit_diagnostics)) => {
             let mut error_count = diagnostics.partition_point(LisetteDiagnostic::is_error);
             for diagnostic in emit_diagnostics {
@@ -230,6 +243,26 @@ pub fn compile(
         emit_stamps,
         test_index,
         sourcemap_base,
+    }
+}
+
+/// A rejected package loses its cache, because check accepts a cache with no emit stamp.
+fn discard_rejected_caches(
+    root: &Path,
+    target: stdlib::Target,
+    input: &EmitInput,
+    rejections: &[LisetteDiagnostic],
+) {
+    let mut packages: Vec<&str> = rejections
+        .iter()
+        .filter_map(LisetteDiagnostic::file_id)
+        .filter_map(|file_id| input.files.get(&file_id))
+        .map(|file| file.package_id.as_str())
+        .collect();
+    packages.sort_unstable();
+    packages.dedup();
+    for package_id in packages {
+        let _ = discard_package_cache(root, package_id, target);
     }
 }
 
@@ -355,6 +388,31 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_what_emit_rejects_and_keeps_no_go_files() {
+        let source = "#[display]\nstruct A {\n  x: int,\n}\n\nimpl A {\n  fn to_string(self) -> int {\n    0\n  }\n}\n\nfn main() {\n  let a = A { x: 1 }\n  let _ = a.to_string()\n}\n";
+        let codes = |phase| {
+            let result = compile_project_source(source, ProjectKind::Binary, phase, "main");
+            let codes: Vec<String> = result
+                .errors()
+                .iter()
+                .filter_map(|d| d.code_str().map(str::to_string))
+                .collect();
+            (codes, result.output.is_empty())
+        };
+        let build = codes(CompilePhase::Emit);
+        assert!(build.0.contains(&"emit.go_name_collision".to_string()));
+        assert_eq!(codes(CompilePhase::Check), build);
+
+        let clean = compile_project_source(
+            "fn main() {}\n",
+            ProjectKind::Binary,
+            CompilePhase::Check,
+            "main",
+        );
+        assert!(clean.errors().is_empty() && clean.output.is_empty());
+    }
+
+    #[test]
     fn library_main_function_skips_binary_signature_check() {
         let binary = compile_project_source(
             "fn main(x: int) {}\n",
@@ -402,6 +460,36 @@ mod tests {
             ),
             (Some("parse.unexpected_token"), 1, Some("fn main("), true)
         );
+    }
+
+    #[test]
+    fn warm_check_keeps_reporting_what_emit_rejects_in_a_package() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir_all(root.join("src").join("shapes")).unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"github.com/test/cache\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("main.lis"),
+            "import \"shapes\"\n\nfn main() {\n  let _ = shapes.make()\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("shapes").join("shapes.lis"),
+            "#[display]\npub struct A {\n  x: int,\n}\n\nimpl A {\n  pub fn to_string(self) -> int {\n    0\n  }\n}\n\npub fn make() -> A {\n  A { x: 1 }\n}\n",
+        )
+        .unwrap();
+
+        let collision = (true, Some("emit.go_name_collision".to_string()));
+        for run in ["cold", "warm", "warm again"] {
+            assert!(
+                check_diagnostics(root).contains(&collision),
+                "{run} check must report the emit rejection"
+            );
+        }
     }
 
     #[test]
@@ -496,6 +584,64 @@ mod tests {
             warm.iter().any(|(is_error, _)| *is_error),
             "editing `dep` must invalidate `top`, whose edge comes from the scanner; got: {warm:?}"
         );
+    }
+
+    #[test]
+    fn a_third_party_typedef_edit_gives_the_same_diagnostics_warm_and_cold() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("proj");
+        stdfs::create_dir_all(root.join("src").join("util")).unwrap();
+        stdfs::create_dir_all(tmp.path().join("gomod")).unwrap();
+        stdfs::write(
+            tmp.path().join("gomod").join("go.mod"),
+            "module example.com/gomod\n\ngo 1.22\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"proj\"\nversion = \"0.1.0\"\n\n[dependencies.go]\n\"example.com/gomod\" = { path = \"../gomod\" }\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("main.lis"),
+            "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("util").join("util.lis"),
+            "import \"go:example.com/gomod\"\n\npub fn value() -> int {\n  gomod.Get()\n}\n",
+        )
+        .unwrap();
+        let typedef = deps::typedef_cache_dir(&root)
+            .join(stdlib::Target::host().cache_segment())
+            .join("replaced/example.com/gomod/local/gomod.d.lis");
+        stdfs::create_dir_all(typedef.parent().unwrap()).unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(&root, stdlib::Target::host()).unwrap();
+        stdfs::write(&typedef, "pub fn Get() -> int\n").unwrap();
+        locator.stamp_local_typedef(&typedef);
+
+        let first = check_diagnostics(&root);
+        assert!(first.is_empty(), "fixture must be clean; got: {first:?}");
+        assert!(
+            cache_file(&root, "util").exists(),
+            "util must be cached for this test to be meaningful"
+        );
+
+        stdfs::write(
+            tmp.path().join("gomod").join("gomod.go"),
+            "package gomod\n\nfunc Get() string { return \"x\" }\n",
+        )
+        .unwrap();
+        stdfs::write(&typedef, "pub fn Get() -> string\n").unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(&root, stdlib::Target::host()).unwrap();
+        locator.stamp_local_typedef(&typedef);
+        let warm = check_diagnostics(&root);
+        stdfs::remove_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        let cold = check_diagnostics(&root);
+        assert!(!cold.is_empty(), "the edited typedef must reject `util`");
+        assert_eq!(warm, cold, "a warm check must match a cold check");
     }
 
     #[test]

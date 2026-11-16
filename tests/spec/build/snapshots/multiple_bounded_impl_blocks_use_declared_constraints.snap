@@ -22,6 +22,10 @@ type Container[T interface {
 	label string
 }
 
+func (c Container[T]) getLabel() string {
+	return c.label
+}
+
 func (c Container[T]) display() string {
 	return "[" + c.label + "] " + c.value.PrintVal()
 }

@@ -43,6 +43,29 @@ pub fn reserved_go_prefix(name: &str, prefix: &str, span: &Span) -> LisetteDiagn
         ))
 }
 
+pub fn unnamable_go_type(go_type: &str, span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Private Go type in a typed position")
+        .with_emit_code("unnamable_go_type")
+        .with_span_primary_label(
+            span,
+            format!("the Go code for this needs the type `{go_type}`"),
+        )
+        .with_help(
+            "Only its own Go package can name this type. Bind the value with `let`, \
+             pass it to a call, or call its methods, so that Go infers the type",
+        )
+}
+
+pub fn type_without_go_form(what: &str, span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Internal compiler error")
+        .with_emit_code("type_without_go_form")
+        .with_span_primary_label(
+            span,
+            format!("the Go code for this needs the Go type of {what}"),
+        )
+        .with_help("The checker should have rejected this program. Please report it as a bug")
+}
+
 pub fn reserved_go_qualifier(name: &str, span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Reserved Go name")
         .with_emit_code("reserved_go_qualifier")

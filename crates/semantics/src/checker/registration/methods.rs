@@ -185,10 +185,7 @@ impl TaskState {
         let Some(resolved) = self.resolve_impl_receiver(store, annotation, generics, span) else {
             return Vec::new();
         };
-        let type_name = resolved
-            .receiver_ty
-            .get_name()
-            .expect("a resolved receiver always has a name");
+        let type_name = resolved.qualified_name.last_segment();
         let receiver = ImplReceiver {
             package_id: &resolved.package_id,
             qualified_name: resolved.qualified_name.as_str(),
@@ -250,7 +247,7 @@ impl TaskState {
         let receiver_ty = self
             .convert_receiver_to_type(&*store, annotation, span)
             .shallow_demoted();
-        let type_name = receiver_ty.get_name()?;
+        let type_name = &receiver_ty.display_name()?.to_string();
         // Prelude built-ins like `Array` have no qualified name to key methods by.
         let Some(receiver_qualified_name) = receiver_ty.get_qualified_name() else {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
@@ -612,9 +609,13 @@ impl TaskState {
             attributes: super::collect_interface_attributes(attributes),
         };
 
-        let package = self.current_package_mut(store);
-
-        package.definitions.insert(
+        let inserted = self.define_package_item(
+            store,
+            super::PackageItem {
+                kind: super::PackageItemKind::Interface,
+                name: interface_name,
+                name_span: *name_span,
+            },
             qualified_name.clone(),
             Definition {
                 visibility,
@@ -627,7 +628,9 @@ impl TaskState {
             },
         );
 
-        self.check_interface_embedding(&*store, &qualified_name, interface_name, name_span);
+        if inserted {
+            self.check_interface_embedding(&*store, &qualified_name, interface_name, name_span);
+        }
     }
 
     fn check_interface_embedding(

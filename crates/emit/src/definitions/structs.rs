@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
-use crate::expressions::literals::UNIT_DISPLAY;
+use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
 use crate::expressions::top_items::emit_item_doc;
 use crate::names::go_name::{self, GeneratedPackage, prelude_qualifier};
 use crate::names::packages::PackageRequirements;
@@ -15,7 +15,7 @@ use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::go_names;
 use syntax::program::MethodOrigin;
 use syntax::program::{Definition, DefinitionBody, Methods, interface_requirements};
-use syntax::types::{Type, resolves_to_unit};
+use syntax::types::Type;
 
 pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
 
@@ -174,9 +174,9 @@ impl Planner<'_> {
         let receiver_generics = self.receiver_generics_string(generics);
         let is_type_alias = fields.len() == 1 && generics_string.is_empty();
         let underlying_go_type = is_type_alias.then(|| self.use_go_type(&fields[0].ty));
-        let field_formats: Vec<FieldFormat> = fields
+        let field_formats: Vec<DisplayForm> = fields
             .iter()
-            .map(|f| FieldFormat::of(&f.ty, |id| self.facts.definition(id)))
+            .map(|f| DisplayForm::of(&f.ty, |id| self.facts.definition(id)))
             .collect();
         for method in methods {
             let code = match method {
@@ -220,7 +220,7 @@ impl Planner<'_> {
             let stringer_field = StringerField {
                 source_name: f.name.to_string(),
                 go_name,
-                format: FieldFormat::of(&f.ty, |id| self.facts.definition(id)),
+                format: DisplayForm::of(&f.ty, |id| self.facts.definition(id)),
             };
             return (field_with_doc, stringer_field);
         }
@@ -246,7 +246,7 @@ impl Planner<'_> {
         let stringer_field = StringerField {
             source_name: f.name.to_string(),
             go_name: field_name,
-            format: FieldFormat::of(&f.ty, |id| self.facts.definition(id)),
+            format: DisplayForm::of(&f.ty, |id| self.facts.definition(id)),
         };
         (field_with_doc, stringer_field)
     }
@@ -505,26 +505,7 @@ pub(crate) fn struct_field_go_name(
 struct StringerField {
     source_name: String,
     go_name: String,
-    format: FieldFormat,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FieldFormat {
-    Value,
-    Function,
-    Unit,
-}
-
-impl FieldFormat {
-    pub(crate) fn of<'d>(ty: &Type, definition: impl Fn(&str) -> Option<&'d Definition>) -> Self {
-        if is_raw_function_type(ty) {
-            FieldFormat::Function
-        } else if resolves_to_unit(ty, definition) {
-            FieldFormat::Unit
-        } else {
-            FieldFormat::Value
-        }
-    }
+    format: DisplayForm,
 }
 
 pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
@@ -576,27 +557,28 @@ impl<'a> StringFormat<'a> {
         }
     }
 
-    pub(crate) fn verb(self, field: FieldFormat) -> &'static str {
+    pub(crate) fn verb(self, field: DisplayForm) -> &'static str {
         match (self, field) {
-            (_, FieldFormat::Unit) => UNIT_DISPLAY,
-            (_, FieldFormat::Function) => "%p",
-            (StringFormat::Display { .. }, FieldFormat::Value) => "%v",
-            (StringFormat::Debug { .. }, FieldFormat::Value) => "%s",
+            (_, DisplayForm::Unit) => UNIT_DISPLAY,
+            (_, DisplayForm::Function) => "%p",
+            (StringFormat::Display { .. }, DisplayForm::Char) => "%c",
+            (StringFormat::Display { .. }, _) => "%v",
+            (StringFormat::Debug { .. }, _) => "%s",
         }
     }
 
     pub(crate) fn argument(
         self,
         value: String,
-        field: FieldFormat,
+        field: DisplayForm,
         requirements: &mut PackageRequirements,
     ) -> Option<String> {
         match (self, field) {
-            (_, FieldFormat::Unit) => None,
-            (StringFormat::Display { .. }, _) | (StringFormat::Debug, FieldFormat::Function) => {
+            (_, DisplayForm::Unit) => None,
+            (StringFormat::Display { .. }, _) | (StringFormat::Debug, DisplayForm::Function) => {
                 Some(value)
             }
-            (StringFormat::Debug, FieldFormat::Value) => {
+            (StringFormat::Debug, _) => {
                 requirements.require_generated(GeneratedPackage::Prelude);
                 Some(format!("{}.Debug({value})", prelude_qualifier()))
             }
@@ -729,7 +711,7 @@ fn emit_struct_shadow_stringer_method(
 fn emit_tuple_struct_format_method(
     name: &str,
     receiver_generics: &str,
-    field_formats: &[FieldFormat],
+    field_formats: &[DisplayForm],
     underlying_go_type: Option<&str>,
     format: StringFormat<'_>,
 ) -> (String, PackageRequirements) {

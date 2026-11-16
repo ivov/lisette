@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::cache::{DiagnosticMode, diagnostic_dependencies_tracked};
+use crate::cache::{CacheKey, CacheKeyInputs, DiagnosticMode};
 use crate::checker::InferredFile;
 use crate::loader;
 use crate::path::DisplayPathBase;
@@ -110,6 +110,38 @@ pub(super) struct PackageInferenceInput<'a> {
     pub(super) recover_target: &'a RecoverTarget,
 }
 
+struct CacheKeyContext<'a> {
+    target: stdlib::Target,
+    third_party_typedefs: String,
+    diagnostic_mode: DiagnosticMode,
+    go_module: &'a str,
+}
+
+impl<'a> CacheKeyContext<'a> {
+    /// No `..`: a new input is a compile error until the cache key covers it.
+    fn of(input: &PackageInferenceInput<'a>) -> Self {
+        let PackageInferenceInput {
+            order: _,
+            files: _,
+            dependencies: _,
+            sink: _,
+            compile_phase,
+            go_module,
+            cache: _,
+            locator,
+            scope: _,
+            project_kind,
+            recover_target: _,
+        } = input;
+        Self {
+            target: locator.target(),
+            third_party_typedefs: locator.third_party_stamp(),
+            diagnostic_mode: DiagnosticMode::new(*compile_phase, *project_kind),
+            go_module: *go_module,
+        }
+    }
+}
+
 pub(super) struct PackageInferenceOutput {
     pub(super) dependencies: DependencyGraph,
     pub(super) facts: Facts,
@@ -127,6 +159,7 @@ pub(super) fn infer_all_packages(
     store: &mut Store,
     mut input: PackageInferenceInput,
 ) -> PackageInferenceOutput {
+    let key_context = CacheKeyContext::of(&input);
     let mut checker =
         TaskState::with_sink(input.sink, input.project_kind, input.scope.script_unit());
 
@@ -209,10 +242,14 @@ pub(super) fn infer_all_packages(
 
         let compiled = (!is_entry).then(|| CompiledPackage {
             package_id: package_id.clone(),
-            artifact_hash: compute_emit_artifact_hash(production_hash, input.go_module),
-            full_hash,
-            dep_hashes,
-            diagnostic_mode: DiagnosticMode::new(input.compile_phase, input.project_kind),
+            artifact_hash: compute_emit_artifact_hash(production_hash, key_context.go_module),
+            key: CacheKey::new(CacheKeyInputs {
+                target: key_context.target,
+                sources: full_hash,
+                dependencies: dep_hashes,
+                third_party_typedefs: key_context.third_party_typedefs.clone(),
+                diagnostic_mode: key_context.diagnostic_mode,
+            }),
         });
 
         let cache_root = input
@@ -467,13 +504,10 @@ fn load_cache_candidates(
     compile_phase: CompilePhase,
     target: stdlib::Target,
 ) -> CacheLoad {
-    // Third-party typedefs can appear after a package saved its diagnostics.
-    let can_replay_diagnostics = diagnostic_dependencies_tracked(store);
     let load = |c: &CacheCandidate| {
         let compiled = &c.pending.package;
         let expected_artifact_hash = compile_phase.emits().then_some(compiled.artifact_hash);
         try_load_cache(compiled, expected_artifact_hash, project_root, target)
-            .filter(|interface| can_replay_diagnostics || !interface.has_diagnostics())
     };
     let loaded: Vec<Option<PackageInterface>> = if candidates.len() < PARALLEL_THRESHOLD {
         candidates.iter().map(load).collect()

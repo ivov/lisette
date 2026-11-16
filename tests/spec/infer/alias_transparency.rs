@@ -27,6 +27,11 @@ const TYPES: &[&str] = &[
     "Ref<P>",
     "(int, string)",
     "Channel<int>",
+    "uint8",
+    "int8",
+    "uintptr",
+    "Array<int, 2>",
+    "Range<int>",
 ];
 
 const WRAPPERS: &[&str] = &["T", "Slice<T>", "Option<T>", "Ref<T>"];
@@ -64,10 +69,24 @@ const OPERATIONS: &[&str] = &[
     "let m = Map.new<int, int>()\n  let _ = m[x]",
     "let _ = [x, x]",
     "let _: int = x",
+    "let _ = &x[0]",
+    "let _ = &x[\"a\"]",
+    "let _ = x & x",
+    "let _ = x << 1",
+    "let _ = ^x",
+    "let s = [1, 2]\n  let _ = s[x]",
+    "select { let Some(v) = x.receive() => { let _ = v }, }",
+    "let _y: {ty} = -1",
+    "let _y: {ty} = -200",
+    "let _ = &make()[0]",
+    "make()[0] = 1",
 ];
 
 fn program(declaration: &str, parameter_ty: &str, operation: &str) -> String {
-    format!("{PRELUDE}\n{declaration}\nfn test(x: {parameter_ty}) {{\n  {operation}\n}}\n")
+    let operation = operation.replace("{ty}", parameter_ty);
+    format!(
+        "{PRELUDE}\n{declaration}\nfn make() -> {parameter_ty} {{ panic(\"make\") }}\nfn test(x: {parameter_ty}) {{\n  {operation}\n}}\n"
+    )
 }
 
 fn error_codes(source_text: &str) -> Vec<String> {
@@ -107,4 +126,18 @@ fn an_alias_checks_like_the_type_it_names() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+#[test]
+fn a_newtype_of_an_unsigned_integer_rejects_a_negative_constant() {
+    infer("struct Mode(uint8)\nfn test() { let _m: Mode = -1 }")
+        .assert_infer_code("cannot_negate_unsigned");
+}
+
+#[test]
+fn integer_operators_reject_a_reference_to_an_integer() {
+    for operation in ["x & x", "x << 1", "^x"] {
+        infer(&format!("fn test(x: Ref<int>) {{ let _ = {operation} }}"))
+            .assert_infer_code("type_mismatch");
+    }
 }

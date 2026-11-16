@@ -61,11 +61,10 @@ pub fn sync(script: Option<&str>) -> i32 {
         }
     };
 
-    if let Err(code) = reconcile_declared_replacements(project_root, target_dir, &manifest) {
-        return code;
-    }
-
-    let mut added = Vec::new();
+    let mut added = match reconcile_declared_replacements(project_root, target_dir, &manifest) {
+        Ok(added) => added,
+        Err(code) => return code,
+    };
     let (prewarm_result, needs_separator) = if !non_blank_imports.is_empty() {
         match prewarm_declaring_missing(&project, &non_blank_imports, &mut added) {
             Ok(prewarmed) => prewarmed,

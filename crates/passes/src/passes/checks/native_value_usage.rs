@@ -1,7 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, IdentifierResolution, StructKind};
 use syntax::program::{Definition, DefinitionBody, NativeTypeKind};
-use syntax::types::{FunctionType, Symbol, Type, unqualified_name};
+use syntax::types::{CompoundKind, FunctionType, Symbol, Type, unqualified_name};
 
 use semantics::store::Store;
 
@@ -149,7 +149,10 @@ fn check_one(
     {
         let ret_ty = fn_signature(ty).map(|f| f.return_type.as_ref());
         if let Some(ret) = ret_ty {
-            let is_native_ret = matches!(ret.get_name(), Some("Channel" | "Map" | "Slice"));
+            let is_native_ret = matches!(
+                store.peeled(ret).compound_kind(),
+                Some(CompoundKind::Channel | CompoundKind::Map | CompoundKind::Slice)
+            );
             if is_native_ret {
                 sink.push(diagnostics::infer::native_constructor_value(value, span));
                 return;

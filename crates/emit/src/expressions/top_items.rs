@@ -6,17 +6,17 @@ use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
     pub(crate) fn emit_top_item(&mut self, item: &Expression) -> String {
+        self.focused(item.get_span(), |this| this.emit_focused_top_item(item))
+    }
+
+    fn emit_focused_top_item(&mut self, item: &Expression) -> String {
         match item {
             Expression::Function {
                 doc,
                 visibility,
                 name,
-                name_span,
                 ..
             } => {
-                if self.facts.is_unused(name_span) {
-                    return String::new();
-                }
                 let is_public = matches!(visibility, Visibility::Public);
                 let function = item.function_definition_view();
                 let go_name = self.pick_go_function_name(function, false, is_public);
@@ -101,14 +101,10 @@ impl Planner<'_> {
             Expression::Const {
                 doc,
                 identifier,
-                identifier_span,
                 expression,
                 ty,
                 ..
             } => {
-                if self.facts.is_unused(identifier_span) {
-                    return String::new();
-                }
                 let Some(expression) = expression.value() else {
                     return String::new();
                 };

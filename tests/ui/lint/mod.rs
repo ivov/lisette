@@ -7087,7 +7087,7 @@ fn main() {
 }
 
 #[test]
-fn equal_operands_uintptr_alias_bitwise_no_diagnostic() {
+fn equal_operands_uintptr_alias_bitwise_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -7103,25 +7103,25 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result
+        !result
             .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the uintptr-alias bitwise type error to still be reported: {:?}",
+        "a uintptr-alias bitwise operation is valid Go: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
-        "must not flag bitwise equal operands on a `uintptr`-backed alias: {:?}",
+        "expected equal operands on a `uintptr`-backed alias: {:?}",
         result.lints()
     );
 }
 
 #[test]
-fn equal_operands_uintptr_newtype_bitwise_no_diagnostic() {
+fn equal_operands_uintptr_newtype_bitwise_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -7137,19 +7137,19 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result
+        !result
             .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the uintptr-newtype bitwise type error to still be reported: {:?}",
+        "a uintptr-newtype bitwise operation is valid Go: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
-        "must not flag bitwise equal operands on a `uintptr`-backed newtype: {:?}",
+        "expected equal operands on a `uintptr`-backed newtype: {:?}",
         result.lints()
     );
 }
@@ -29716,6 +29716,68 @@ fn main() {
   let p: (mut Slice<int>, int) = (a, 1)
   let _ = a
   let _ = p
+}
+"#
+    );
+}
+
+#[test]
+fn unused_function_silent_for_static_method_on_lowercase_type() {
+    let source = r#"
+struct foo { x: int }
+
+impl foo {
+  fn get_x(self) -> int { self.x }
+  fn make() -> foo { foo { x: 3 } }
+  fn build() -> foo { foo { x: 4 } }
+}
+
+fn main() {
+  let f = foo.build
+  let v = foo.make()
+  let _ = foo.get_x(v) + f().x
+}
+"#;
+    let codes: Vec<_> = lint(source)
+        .iter()
+        .filter_map(|d| d.code_str().map(str::to_string))
+        .collect();
+    assert!(
+        !codes.iter().any(|code| code == "lint.unused_function"),
+        "every method is called; got: {codes:?}"
+    );
+}
+
+#[test]
+fn negative_index_from_constant_expression() {
+    assert_lint_snapshot!(
+        r#"
+fn at(xs: Slice<int>) -> int {
+  xs[0 - 1]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_from_constant_expression() {
+    assert_lint_snapshot!(
+        r#"
+fn at(xs: Array<int, 3>) -> int {
+  xs[1 + 2]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_from_named_constant() {
+    assert_lint_snapshot!(
+        r#"
+const LAST = 3
+
+fn at(xs: Array<int, 3>) -> int {
+  xs[LAST]
 }
 "#
     );

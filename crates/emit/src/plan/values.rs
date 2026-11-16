@@ -11,7 +11,6 @@ use crate::plan::go_expression::{
     GoExpressionNode, GoParameter, Operand, Position, SourcePosition, UnaryOp,
 };
 use crate::plan::local::GoIdentifier;
-#[cfg(debug_assertions)]
 use crate::plan::verify::verify_final_function_body;
 use crate::render::writer::GoWriter;
 use crate::types::go_type::GoType;
@@ -313,9 +312,10 @@ impl GoExpression {
         if !result.code.is_empty() {
             body.ensure_go_termination();
         }
-        #[cfg(debug_assertions)]
-        verify_final_function_body(&mut body, !result.code.is_empty())
-            .unwrap_or_else(|error| panic!("{error}"));
+        if cfg!(debug_assertions) {
+            verify_final_function_body(&mut body, !result.code.is_empty())
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
         Self::new(GoExpressionNode::FunctionLiteral {
             parameters,
             result: Box::new(result),

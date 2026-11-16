@@ -15,6 +15,7 @@ use crate::Planner;
 use crate::names::go_name;
 use crate::output::imports::ImportPlan;
 use diagnostics::LisetteDiagnostic;
+use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::Span;
 use syntax::program::File;
 
@@ -32,8 +33,6 @@ pub(crate) struct FilePlan<'a> {
 impl Planner<'_> {
     /// Resolve package-wide names and collisions before any item is rendered.
     pub(crate) fn build_package_plan<'f>(&mut self, files: &[&'f File]) -> PackagePlan<'f> {
-        self.collect_escape_remap(files);
-        let collected = self.collect_names(files);
         let file_plans: Vec<_> = files
             .iter()
             .map(|file| FilePlan {
@@ -49,13 +48,18 @@ impl Planner<'_> {
             .iter()
             .flat_map(|plan| {
                 plan.imports
-                    .used_qualifiers(|span| self.facts.is_unused(span))
+                    .used_qualifiers(|key| self.facts.is_unused_import(key))
             })
             .collect();
-        self.package.record_package_block_names(
-            collected.declared_names(),
-            import_qualifiers.iter().map(|(q, _)| q.clone()).collect(),
-        );
+        let qualifier_names: HashSet<String> =
+            import_qualifiers.iter().map(|(q, _)| q.clone()).collect();
+        // The escape remap numbers names, so every other package-block name must be known first.
+        self.package
+            .record_package_block_names(self.collect_fixed_names(files), qualifier_names.clone());
+        self.collect_escape_remap(files);
+        let collected = self.collect_names(files);
+        self.package
+            .record_package_block_names(collected.declared_names(), qualifier_names);
         self.derive_package_go_consts(files);
         self.collect_generic_renames(files);
         let collision_diagnostics =

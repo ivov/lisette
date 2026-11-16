@@ -3,25 +3,34 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::ast::{BindingId as AstBindingId, Pattern, RestPattern, Span};
 use crate::types::Symbol;
 
-use super::{Definition, File};
+use super::{Definition, File, FileImport};
 
-/// Name spans of unreachable functions and imports (imports keyed by path span).
+/// Name spans of imports that no code in their file uses.
 #[derive(Debug, Clone, Default)]
-pub struct UnusedInfo {
-    spans: HashSet<Span>,
+pub struct UnusedImports {
+    keys: HashSet<ImportKey>,
 }
 
-impl UnusedInfo {
-    pub fn mark_unused(&mut self, span: Span) {
-        self.spans.insert(span);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ImportKey(Span);
+
+impl FileImport {
+    pub fn key(&self) -> ImportKey {
+        ImportKey(self.name_span)
+    }
+}
+
+impl UnusedImports {
+    pub fn mark_unused_import(&mut self, import: &FileImport) {
+        self.keys.insert(import.key());
     }
 
-    pub fn is_unused(&self, span: &Span) -> bool {
-        self.spans.contains(span)
+    pub fn is_unused_import(&self, key: ImportKey) -> bool {
+        self.keys.contains(&key)
     }
 
-    pub fn merge(&mut self, other: UnusedInfo) {
-        self.spans.extend(other.spans);
+    pub fn merge(&mut self, other: UnusedImports) {
+        self.keys.extend(other.keys);
     }
 }
 
@@ -233,7 +242,7 @@ pub struct EmitInput {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
     pub entry_package_id: String,
-    pub unused: UnusedInfo,
+    pub unused_imports: UnusedImports,
     pub bindings: EmitBindings,
     pub cached_packages: HashSet<String>,
     pub equality_index: EqualityIndex,
@@ -250,18 +259,28 @@ mod tests {
         Span::new(0, offset, 1)
     }
 
-    #[test]
-    fn merge_extends_spans() {
-        let mut a = UnusedInfo::default();
-        a.mark_unused(span(1));
+    fn import(offset: u32) -> FileImport {
+        FileImport {
+            name: "go:fmt".into(),
+            name_span: span(offset),
+            alias: None,
+            span: span(offset),
+        }
+    }
 
-        let mut b = UnusedInfo::default();
-        b.mark_unused(span(3));
+    #[test]
+    fn merge_extends_imports() {
+        let mut a = UnusedImports::default();
+        a.mark_unused_import(&import(1));
+
+        let mut b = UnusedImports::default();
+        b.mark_unused_import(&import(3));
 
         a.merge(b);
 
-        assert!(a.is_unused(&span(1)));
-        assert!(a.is_unused(&span(3)));
+        assert!(a.is_unused_import(import(1).key()));
+        assert!(a.is_unused_import(import(3).key()));
+        assert!(!a.is_unused_import(import(2).key()));
     }
 
     #[test]

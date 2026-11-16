@@ -222,10 +222,6 @@ fn emit_undeclared(
     }
 }
 
-const PRELUDE_GO_MODULE: &str = "github.com/ivov/lisette/prelude";
-
 fn is_prelude_go_package(go_pkg: &str) -> bool {
-    go_pkg
-        .strip_prefix(PRELUDE_GO_MODULE)
-        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    deps::ModuleKind::of(go_pkg) == deps::ModuleKind::Prelude
 }

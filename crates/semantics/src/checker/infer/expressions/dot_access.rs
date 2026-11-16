@@ -512,7 +512,7 @@ impl InferCtx<'_> {
 
     fn as_package_member(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {
         let store = self.store;
-        let type_name = args.deref_ty.get_name()?;
+        let type_name = args.deref_ty.namespace_name()?;
         let namespace_id = args.deref_ty.as_import_namespace();
 
         // Look up by type-derived name first (works for non-aliased imports).

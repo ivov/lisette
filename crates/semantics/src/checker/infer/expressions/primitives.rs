@@ -653,7 +653,7 @@ impl InferCtx<'_> {
             let target = self.scopes.impl_receiver_type().map(Type::stringify);
             target.or_else(|| {
                 self.lookup_type(store, "self")
-                    .and_then(|t| t.get_name().map(str::to_owned))
+                    .and_then(|t| t.display_name().map(|name| name.to_string()))
             })
         } else {
             None
@@ -918,7 +918,7 @@ impl InferCtx<'_> {
         ) {
             return None;
         }
-        let local = ty.get_name()?;
+        let local = ty.display_name()?;
         let package = self.store.package_for_qualified_name(id)?;
         if package == self.cursor.package_id() || self.imports.unprefixed_imports.contains(package)
         {

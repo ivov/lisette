@@ -268,6 +268,13 @@ impl TypedefLocator {
             .as_deref()
     }
 
+    pub fn third_party_stamp(&self) -> String {
+        match self.local_stamp_value() {
+            Some(stamp) => stamp.to_string(),
+            None => self.declared_stamp(),
+        }
+    }
+
     pub fn stamp_local_typedef(&self, typedef_path: &Path) {
         if let Some(stamp) = self.local_stamp_value() {
             local_source::write_local_stamp(typedef_path, stamp);

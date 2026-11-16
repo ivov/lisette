@@ -76,6 +76,7 @@ format-check:
 
 lint:
     cargo clippy --all-targets -- -D warnings
+    cargo clippy --release --all-targets -- -D warnings
     cargo clippy -p lisette --all-targets --features self-upgrade -- -D warnings
 
 lint-satellites:

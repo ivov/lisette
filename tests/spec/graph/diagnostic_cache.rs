@@ -433,7 +433,7 @@ fn diagnostic_cache_preserves_internal_test_warnings_and_test_discovery() {
 }
 
 #[test]
-fn third_party_typedefs_prevent_replaying_and_saving_dependency_warnings() {
+fn third_party_typedefs_give_the_same_dependency_warnings_warm_and_cold() {
     use deps::GoDependency;
     use std::collections::BTreeMap;
     use std::fs;
@@ -490,12 +490,15 @@ fn third_party_typedefs_prevent_replaying_and_saving_dependency_warnings() {
     };
     let warm = run();
     assert!(warm.errors().is_empty(), "{:?}", warm.errors());
-    assert!(!warm.emit_input.cached_packages.contains("dependency"));
     let cache = root.path().join("target/.lisette/cache");
     fs::remove_dir_all(&cache).unwrap();
     let cold = run();
     assert_eq!(diagnostics(&cold), diagnostics(&warm));
-    assert!(!cache.exists());
+    fs::write(typedef.join("native.d.lis"), "pub const VERSION: int\n").unwrap();
+    let edited_warm = run();
+    fs::remove_dir_all(&cache).unwrap();
+    let edited_cold = run();
+    assert_eq!(diagnostics(&edited_cold), diagnostics(&edited_warm));
 }
 
 #[test]

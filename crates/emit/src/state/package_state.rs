@@ -1,5 +1,8 @@
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
+use syntax::go_names::is_go_reserved_word;
+
+use crate::names::go_name;
 
 #[derive(Default)]
 pub(crate) struct PackageState {
@@ -61,8 +64,16 @@ impl PackageState {
         self.import_qualifiers.contains(go_name)
     }
 
-    pub(crate) fn package_block_names(&self) -> impl Iterator<Item = &String> {
-        self.declared_names.iter().chain(&self.import_qualifiers)
+    pub(crate) fn fresh_package_name(
+        &self,
+        base: &str,
+        also_taken: impl Fn(&str) -> bool,
+    ) -> String {
+        go_name::fresh_suffixed(base, |candidate| {
+            self.is_package_block_name(candidate)
+                || is_go_reserved_word(candidate)
+                || also_taken(candidate)
+        })
     }
 
     pub(crate) fn extend_go_const_bindings(&mut self, names: impl IntoIterator<Item = String>) {

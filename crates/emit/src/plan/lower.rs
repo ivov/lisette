@@ -282,6 +282,16 @@ impl Planner<'_> {
         item: &Expression,
         region: impl IntoIterator<Item = &'r Expression>,
     ) -> Statement {
+        self.focused(item.get_span(), |this| {
+            this.lower_focused_block_item(item, region)
+        })
+    }
+
+    fn lower_focused_block_item<'r>(
+        &mut self,
+        item: &Expression,
+        region: impl IntoIterator<Item = &'r Expression>,
+    ) -> Statement {
         let Expression::Let {
             binding,
             value,
@@ -305,6 +315,12 @@ impl Planner<'_> {
 
     /// Lower a single statement in the enclosing return context.
     pub(crate) fn lower_statement(&mut self, expression: &Expression) -> Statement {
+        self.focused(expression.get_span(), |this| {
+            this.lower_focused_statement(expression)
+        })
+    }
+
+    fn lower_focused_statement(&mut self, expression: &Expression) -> Statement {
         match expression {
             Expression::If {
                 condition,
@@ -836,7 +852,12 @@ impl Planner<'_> {
 
         let (condition_setup, condition) = self.lower_if_condition(condition);
 
-        let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, place));
+        let then_place = if alternative.is_none() {
+            &PlacePlan::Statement
+        } else {
+            place
+        };
+        let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, then_place));
 
         let preceding_diverges = then_body.ends_with_diverge();
         let else_arm = self.lower_else_chain(alternative, preceding_diverges, place);

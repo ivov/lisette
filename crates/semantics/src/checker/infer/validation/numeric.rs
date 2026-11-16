@@ -15,7 +15,7 @@ impl InferCtx<'_> {
         target_ty: &Type,
         span: Span,
     ) {
-        let Some(bounds) = integer_bounds(target_ty.get_name()) else {
+        let Some(bounds) = self.underlying_integer_bounds(target_ty) else {
             return;
         };
 
@@ -40,12 +40,16 @@ impl InferCtx<'_> {
         target_ty: &Type,
         span: Span,
     ) {
-        let Some(name @ ("float32" | "complex64")) = target_ty.get_name() else {
+        let Some(kind @ (SimpleKind::Float32 | SimpleKind::Complex64)) =
+            self.store.underlying_simple_kind(target_ty)
+        else {
             return;
         };
         if value.is_finite() && (value as f32).is_infinite() {
-            self.sink
-                .push(diagnostics::infer::float_literal_overflow(name, span));
+            self.sink.push(diagnostics::infer::float_literal_overflow(
+                kind.leaf_name(),
+                span,
+            ));
         }
     }
 
@@ -68,20 +72,23 @@ impl InferCtx<'_> {
         target_ty: &Type,
         span: Span,
     ) {
-        let type_name = target_ty.get_name();
+        let Some(kind) = self.store.underlying_simple_kind(target_ty) else {
+            return;
+        };
 
         // Allow `-0` on unsigned types; any nonzero negation is an error.
-        if is_unsigned_type(type_name) {
+        if is_unsigned(kind) {
             if magnitude != 0 {
-                self.sink.push(diagnostics::infer::cannot_negate_unsigned(
-                    type_name.unwrap_or("uint"),
-                    span,
-                ));
+                let type_name = target_ty
+                    .display_name()
+                    .map_or_else(|| kind.leaf_name().to_string(), |name| name.to_string());
+                self.sink
+                    .push(diagnostics::infer::cannot_negate_unsigned(&type_name, span));
             }
             return;
         }
 
-        let Some(bounds) = integer_bounds(type_name) else {
+        let Some(bounds) = integer_bounds(kind) else {
             return;
         };
 
@@ -129,7 +136,8 @@ impl InferCtx<'_> {
             _ => return,
         };
 
-        let Some(bounds) = integer_bounds(resolved.get_name()) else {
+        // Only a primitive target: `constant_cast_overflow` checks alias and newtype targets.
+        let Some(bounds) = resolved.as_simple().and_then(integer_bounds) else {
             return;
         };
 
@@ -156,8 +164,13 @@ struct IntegerBounds {
     max: i128,
 }
 
-fn integer_bounds(type_name: Option<&str>) -> Option<IntegerBounds> {
-    let kind = SimpleKind::from_name(type_name?)?;
+impl InferCtx<'_> {
+    fn underlying_integer_bounds(&self, ty: &Type) -> Option<IntegerBounds> {
+        integer_bounds(self.store.underlying_simple_kind(ty)?)
+    }
+}
+
+fn integer_bounds(kind: SimpleKind) -> Option<IntegerBounds> {
     let (min, max) = kind.integer_range()?;
     let name = match kind {
         SimpleKind::Int | SimpleKind::Int64 => "int64",
@@ -174,9 +187,6 @@ fn integer_bounds(type_name: Option<&str>) -> Option<IntegerBounds> {
     Some(IntegerBounds { name, min, max })
 }
 
-fn is_unsigned_type(type_name: Option<&str>) -> bool {
-    matches!(
-        type_name,
-        Some("uint8" | "byte" | "uint16" | "uint32" | "uint64" | "uint" | "uintptr")
-    )
+fn is_unsigned(kind: SimpleKind) -> bool {
+    kind.is_unsigned_int() || kind == SimpleKind::Uintptr
 }

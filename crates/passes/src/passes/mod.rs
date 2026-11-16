@@ -1,6 +1,6 @@
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
-use syntax::program::{EmitBindings, UnusedInfo};
+use syntax::program::{EmitBindings, UnusedImports};
 use syntax::program::{File, Package};
 
 use semantics::facts::Facts;
@@ -63,7 +63,7 @@ pub fn run(
     sink: &LocalSink,
     lint_mode: LintMode,
     unused_item_reporting: UnusedItemReporting,
-) -> UnusedInfo {
+) -> UnusedImports {
     let ((checks_diagnostics, pattern_lints), lint_outputs) = rayon::join(
         || checks::run_all(store, facts, lint_mode),
         || match lint_mode {
@@ -92,7 +92,7 @@ pub fn run(
         sink.extend(ref_graph_diagnostics);
         unused
     } else {
-        UnusedInfo::default()
+        UnusedImports::default()
     }
 }
 

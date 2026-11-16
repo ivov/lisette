@@ -572,15 +572,30 @@ impl Planner<'_> {
         }) || self.iter_seq_arity(iterable_ty) == Some(2)
     }
 
+    /// Peels one alias at a time, because `iter.Seq` is itself an alias.
     fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
-        let Type::Nominal { id, .. } = iterable_ty.strip_refs() else {
-            return None;
-        };
-        match id.as_str() {
-            "go:iter.Seq" => Some(1),
-            "go:iter.Seq2" => Some(2),
-            _ => None,
+        let mut current = iterable_ty.strip_refs();
+        for _ in 0..64 {
+            let Type::Nominal {
+                id,
+                params,
+                writable,
+            } = &current
+            else {
+                return None;
+            };
+            match id.as_str() {
+                "go:iter.Seq" => return Some(1),
+                "go:iter.Seq2" => return Some(2),
+                _ => {}
+            }
+            let next = self
+                .facts
+                .definition(id)?
+                .instantiate_alias_target(params, *writable)?;
+            current = next.unwrap_forall().clone();
         }
+        None
     }
 }
 

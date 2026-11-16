@@ -150,14 +150,13 @@ impl TaskState {
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        if self.is_lis(&*store) && self.definition_exists(&*store, &qualified_name) {
-            self.sink.push(diagnostics::infer::duplicate_definition(
-                "function", name, *name_span,
-            ));
-        }
-
-        let package = self.current_package_mut(store);
-        package.definitions.insert(
+        self.define_package_item(
+            store,
+            PackageItem {
+                kind: PackageItemKind::Function,
+                name,
+                name_span: *name_span,
+            },
             qualified_name,
             Definition {
                 visibility: item_visibility,
@@ -227,20 +226,18 @@ impl TaskState {
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        if self.is_lis(&*store) && self.definition_exists(&*store, &qualified_name) {
-            self.sink.push(diagnostics::infer::duplicate_definition(
-                "constant",
-                identifier,
-                *identifier_span,
-            ));
-        }
-
         let kind = match expression.value().and_then(canonical_const_value) {
             Some(value) => ValueKind::Constant(value),
             None => ValueKind::ConstantDeclaration,
         };
 
-        self.current_package_mut(store).definitions.insert(
+        self.define_package_item(
+            store,
+            PackageItem {
+                kind: PackageItemKind::Constant,
+                name: identifier,
+                name_span: *identifier_span,
+            },
             qualified_name,
             Definition {
                 visibility: item_visibility,
@@ -293,8 +290,13 @@ impl TaskState {
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        let package = self.current_package_mut(store);
-        package.definitions.insert(
+        self.define_package_item(
+            store,
+            PackageItem {
+                kind: PackageItemKind::Variable,
+                name,
+                name_span: *name_span,
+            },
             qualified_name,
             Definition {
                 visibility: item_visibility,

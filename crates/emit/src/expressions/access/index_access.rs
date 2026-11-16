@@ -39,7 +39,7 @@ impl Planner<'_> {
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
         if let Some(range_kind) = peel_to_range_type(&index_ty, |id| self.facts.definition(id))
-            .and_then(|ty| RangeShape::from_name(ty.get_name()?))
+            .and_then(|ty| RangeShape::of(&ty))
         {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
             if !base_staged.effects().can_duplicate() {

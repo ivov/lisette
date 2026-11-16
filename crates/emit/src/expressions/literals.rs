@@ -4,12 +4,13 @@ use std::mem::take;
 use crate::Planner;
 use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
+use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::go_expression::{BinaryOp, CompositeLayout};
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, FormatStringPart, Literal};
-use syntax::types::{SimpleKind, Type};
+use syntax::types::Type;
 
 impl Planner<'_> {
     pub(super) fn emit_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
@@ -176,7 +177,7 @@ impl Planner<'_> {
                         let value = values
                             .next()
                             .expect("sequenced count matches expression parts");
-                        if self.facts.resolves_to_unit(&expression.get_type()) {
+                        if self.display_form(expression) == DisplayForm::Unit {
                             text.push_str(UNIT_DISPLAY);
                             continue;
                         }
@@ -208,10 +209,10 @@ impl Planner<'_> {
         }
 
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips
-        // the format-string parse. Excluded: `%c`, because Sprint on a rune
+        // the format-string parse. Excluded: a rune, because Sprint on a rune
         // prints the integer codepoint instead of the character.
-        if let ([FormatStringPart::Expression(_)], [_]) = (parts, args.as_slice())
-            && format_string != "%c"
+        if let ([FormatStringPart::Expression(solo)], [_]) = (parts, args.as_slice())
+            && self.display_form(solo) != DisplayForm::Char
         {
             return ValuePlan::plain_call(
                 setup,
@@ -257,13 +258,11 @@ impl Planner<'_> {
                     let value = values
                         .next()
                         .expect("sequenced count matches expression parts");
-                    if self.facts.resolves_to_unit(&expression.get_type()) {
-                        format_string.push_str(UNIT_DISPLAY);
-                        continue;
+                    let form = self.display_form(expression);
+                    format_string.push_str(form.interpolation_verb());
+                    if form != DisplayForm::Unit {
+                        args.push(value);
                     }
-                    let peeled = self.facts.peel_alias(&expression.get_type());
-                    format_string.push_str(format_verb_for(&peeled));
-                    args.push(value);
                 }
             }
         }
@@ -271,7 +270,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn lower_format_operand(&mut self, operand: &Expression) -> ValuePlan {
-        if !self.facts.resolves_to_unit(&operand.get_type()) {
+        if self.display_form(operand) != DisplayForm::Unit {
             return self.lower_composite_value(operand, ExpressionContext::value());
         }
         let setup = self.lower_discard_value(operand);
@@ -292,7 +291,11 @@ impl Planner<'_> {
         let [FormatStringPart::Expression(solo)] = parts else {
             return true;
         };
-        format_verb_for(&self.facts.peel_alias(&solo.get_type())) == "%c"
+        self.display_form(solo) == DisplayForm::Char
+    }
+
+    fn display_form(&self, expression: &Expression) -> DisplayForm {
+        DisplayForm::of(&expression.get_type(), |id| self.facts.definition(id))
     }
 
     fn format_string_concatenates(&self, parts: &[FormatStringPart]) -> bool {
@@ -305,30 +308,16 @@ impl Planner<'_> {
             .peekable();
         operands.peek().is_some()
             && operands.all(|expression| {
-                self.facts.resolves_to_unit(&expression.get_type())
-                    || self.facts.peel_alias(&expression.get_type()).as_simple()
-                        == Some(SimpleKind::String)
+                matches!(
+                    self.display_form(expression),
+                    DisplayForm::Unit | DisplayForm::String
+                )
             })
     }
 }
 
-pub(crate) const UNIT_DISPLAY: &str = "()";
-
 fn string_constant(text: String) -> GoExpression {
     GoExpression::constant(format!("\"{text}\""), ConstantKind::String)
-}
-
-/// The `fmt` printf verb for interpolating a value of alias-peeled `ty` into
-/// an f-string.
-fn format_verb_for(ty: &Type) -> &'static str {
-    match ty.as_simple() {
-        Some(SimpleKind::Rune) => "%c",
-        Some(SimpleKind::String) => "%s",
-        Some(SimpleKind::Bool) => "%t",
-        Some(k) if k.is_signed_int() || k.is_unsigned_int() => "%d",
-        Some(k) if k.is_float() => "%g",
-        _ => "%v",
-    }
 }
 
 pub(crate) fn emit_raw_string(value: &str) -> String {

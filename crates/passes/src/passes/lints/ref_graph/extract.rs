@@ -46,14 +46,16 @@ impl<'a> AliasMap<'a> {
         }
     }
 
+    /// The file's import aliases come first, as in the checker.
     fn resolve(&self, package: &Package, name: &str) -> Option<PackageItemId> {
-        let qualified_name = Symbol::from_parts(&package.id, name);
-        if package.definitions.contains_key(qualified_name.as_str()) {
-            return Some(PackageItemId::new(name));
+        if self.aliases.contains_key(name) {
+            return Some(PackageItemId::import(self.file_id, name));
         }
-        self.aliases
-            .contains_key(name)
-            .then(|| PackageItemId::import(self.file_id, name))
+        let qualified_name = Symbol::from_parts(&package.id, name);
+        package
+            .definitions
+            .contains_key(qualified_name.as_str())
+            .then(|| PackageItemId::new(name))
     }
 
     fn is_import_alias(&self, name: &str) -> bool {
@@ -85,8 +87,17 @@ pub(super) fn walk_expression(
     ctx: Option<&PackageItemId>,
 ) {
     match expression {
-        Expression::Identifier { value, .. } => {
-            walk_identifier(package, value, graph, alias_map, ctx);
+        Expression::Identifier {
+            value, resolution, ..
+        } => {
+            walk_identifier(
+                package,
+                value,
+                resolution.definition(),
+                graph,
+                alias_map,
+                ctx,
+            );
         }
 
         Expression::Call { .. } => {
@@ -326,26 +337,38 @@ pub(super) fn walk_expression(
 fn walk_identifier(
     package: &Package,
     value: &str,
+    definition: Option<&str>,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     ctx: Option<&PackageItemId>,
 ) {
     add_ref(graph, ctx, alias_map, package, extract_base_name(value));
-    let mut segments = value.split('.');
-    let first = segments.next().unwrap_or("");
-    // Static method values are represented as qualified identifiers.
-    if let Some(second) = segments.next()
-        && is_upper(first)
-    {
-        if is_upper(second) {
-            graph.mark_enum_variant_used(EnumVariantId::new(first, second));
-        }
-        add_ref(graph, ctx, alias_map, package, first);
-        if let Some(from) = ctx {
-            let method_name = value.rsplit('.').next().unwrap_or("");
-            graph.add_reference(from, PackageItemId::method(method_name, first));
-        }
+    // The checker resolves a static method, UFCS call or enum variant to `package.Owner.member`.
+    let Some((owner, member)) = definition.and_then(|name| local_member(package, name)) else {
+        return;
+    };
+    let owner_name = unqualified_name(owner);
+    add_ref(graph, ctx, alias_map, package, owner_name);
+    let is_enum = package
+        .definitions
+        .get(owner)
+        .is_some_and(|def| matches!(def.body, DefinitionBody::Enum { .. }));
+    if is_enum {
+        graph.mark_enum_variant_used(EnumVariantId::new(owner_name, member));
     }
+    if let Some(from) = ctx {
+        graph.add_reference(from, PackageItemId::method(member, owner_name));
+    }
+}
+
+fn local_member<'n>(package: &Package, name: &'n str) -> Option<(&'n str, &'n str)> {
+    let local = name.strip_prefix(package.id.as_str())?.strip_prefix('.')?;
+    let (_, member) = local.rsplit_once('.')?;
+    let owner = &name[..name.len() - member.len() - 1];
+    package
+        .definitions
+        .contains_key(owner)
+        .then_some((owner, member))
 }
 
 fn walk_call(
@@ -365,23 +388,13 @@ fn walk_call(
     else {
         return;
     };
-    if let Expression::Identifier { value, .. } = callee.as_ref() {
-        let mut segments = value.split('.');
-        let first = segments.next().unwrap_or("");
-        if segments.next().is_some() && is_upper(first) {
-            add_ref(graph, ctx, alias_map, package, first);
-            if let Some(from) = ctx {
-                let method_name = value.rsplit('.').next().unwrap_or("");
-                graph.add_reference(from, PackageItemId::method(method_name, first));
-            }
-        }
-        if let Some(from) = ctx
-            && (value.as_str() == "Slice.equals" || value.as_str() == "Map.equals")
-            && let Some(receiver) = args.first()
-            && is_container_receiver(&receiver.get_type(), alias_map)
-        {
-            add_equals_references(graph, from, &receiver.get_type(), package, alias_map);
-        }
+    if let Expression::Identifier { value, .. } = callee.as_ref()
+        && let Some(from) = ctx
+        && (value.as_str() == "Slice.equals" || value.as_str() == "Map.equals")
+        && let Some(receiver) = args.first()
+        && is_container_receiver(&receiver.get_type(), alias_map)
+    {
+        add_equals_references(graph, from, &receiver.get_type(), package, alias_map);
     }
     walk_expression(package, callee, graph, alias_map, ctx);
     for arg in args {
@@ -573,7 +586,14 @@ fn walk_pattern(
                 ConstructorPatternResolution::Const { .. }
                     | ConstructorPatternResolution::ConstValue { .. }
             ) {
-                walk_identifier(package, identifier, graph, alias_map, ctx);
+                let definition = match resolution {
+                    ConstructorPatternResolution::Const { qualified_name }
+                    | ConstructorPatternResolution::ConstValue { qualified_name, .. } => {
+                        Some(qualified_name.as_str())
+                    }
+                    _ => None,
+                };
+                walk_identifier(package, identifier, definition, graph, alias_map, ctx);
             } else {
                 mark_constructor_pattern(package, identifier, ty, graph, alias_map, ctx);
             }

@@ -1,3 +1,4 @@
+use diagnostics::LisetteDiagnostic;
 use emit::{EmitOptions, OutputFile, Planner};
 use rustc_hash::FxHashMap as HashMap;
 use syntax::program::{EmitInput, File};
@@ -88,11 +89,33 @@ pub fn emit_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> Emi
     emit_inner(raw_source, None, typedefs)
 }
 
+pub fn emit_diagnostics_with_go_typedefs(
+    raw_source: &str,
+    typedefs: &[(&str, &str)],
+) -> Vec<LisetteDiagnostic> {
+    plan_inner(raw_source, None, typedefs)
+        .err()
+        .unwrap_or_default()
+}
+
 fn emit_inner(
     raw_source: &str,
     source_for_sourcemap: Option<&str>,
     extra_go_typedefs: &[(&str, &str)],
 ) -> EmitResult {
+    let emitted_files = plan_inner(raw_source, source_for_sourcemap, extra_go_typedefs)
+        .unwrap_or_else(|diagnostics| panic!("Emission failed: {diagnostics:?}"));
+
+    EmitResult {
+        files: emitted_files,
+    }
+}
+
+fn plan_inner(
+    raw_source: &str,
+    source_for_sourcemap: Option<&str>,
+    extra_go_typedefs: &[(&str, &str)],
+) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
     let mut pipeline = TestPipeline::new(raw_source).wrapped();
     for (name, source) in extra_go_typedefs {
         pipeline = pipeline.with_go_typedef(name, source);
@@ -121,7 +144,7 @@ fn emit_inner(
         files: HashMap::from_iter([(0, file)]),
         definitions: result.definitions,
         entry_package_id: result.package_id,
-        unused: result.unused,
+        unused_imports: result.unused_imports,
         bindings: result.bindings,
         equality_index: result.equality_index,
         go_package_names: result.go_package_names,
@@ -133,12 +156,7 @@ fn emit_inner(
         sourcemap_base: None,
         emit_tests: false,
     };
-    let emitted_files = Planner::emit(&input, "myproject", "main", options)
-        .unwrap_or_else(|diagnostics| panic!("Emission failed: {diagnostics:?}"));
-
-    EmitResult {
-        files: emitted_files,
-    }
+    Planner::emit(&input, "myproject", "main", options)
 }
 
 pub struct EmitResult {

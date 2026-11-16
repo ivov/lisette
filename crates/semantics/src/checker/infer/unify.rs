@@ -928,17 +928,17 @@ impl InferCtx<'_> {
             return "Dereference with `.*`, e.g. `value.*`".to_string();
         }
 
-        if expected.wraps("Option", actual)
+        if expected.wraps(Type::is_option, actual)
             || self.option_of_interface_help_applies(expected, actual)
         {
             return "Wrap the value: `Some(...)`".to_string();
         }
 
-        if actual.wraps("Option", expected) {
+        if actual.wraps(Type::is_option, expected) {
             return "Unwrap the inner value with `?` or using `match`".to_string();
         }
 
-        if expected.wraps("Result", actual) {
+        if expected.wraps(Type::is_result, actual) {
             return "Wrap the value: `Ok(...)`".to_string();
         }
 
@@ -946,7 +946,7 @@ impl InferCtx<'_> {
             return "Wrap the value: `Err(...)`".to_string();
         }
 
-        if actual.wraps("Result", expected) {
+        if actual.wraps(Type::is_result, expected) {
             return "Unwrap the inner value with `?` or using `match`".to_string();
         }
 
@@ -962,11 +962,11 @@ impl InferCtx<'_> {
             );
         }
 
-        if actual.wraps("Slice", expected) {
+        if actual.wraps(Type::is_slice, expected) {
             return "Index into the slice, e.g. `items[0]`".to_string();
         }
 
-        if expected.wraps("Slice", actual) {
+        if expected.wraps(Type::is_slice, actual) {
             return "Wrap the value in a slice literal".to_string();
         }
 
@@ -1134,7 +1134,7 @@ impl InferCtx<'_> {
 }
 
 fn result_error_help_applies(expected: &Type, actual: &Type) -> bool {
-    expected.get_name().is_some_and(|name| name == "Result")
+    expected.is_result()
         && expected
             .get_type_params()
             .and_then(|params| params.get(1))
