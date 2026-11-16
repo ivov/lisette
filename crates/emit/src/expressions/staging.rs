@@ -10,7 +10,6 @@ use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, Stability, ValuePlan};
-#[cfg(debug_assertions)]
 use crate::plan::verify::verify_operand_order;
 use crate::types::go_type::GoType;
 use crate::utils::reads_value_member;
@@ -432,8 +431,9 @@ impl Planner<'_> {
                 results.push(expression);
             }
         }
-        #[cfg(debug_assertions)]
-        verify_operand_order(&results).unwrap_or_else(|error| panic!("{error}"));
+        if cfg!(debug_assertions) {
+            verify_operand_order(&results).unwrap_or_else(|error| panic!("{error}"));
+        }
         SequencedValues {
             setup,
             values: results,

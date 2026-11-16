@@ -18,7 +18,6 @@ use crate::plan::go_expression::{
 };
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
-#[cfg(debug_assertions)]
 use crate::plan::verify::verify_final_function_body;
 use crate::plan::verify::verify_local_scopes;
 use crate::plan::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
@@ -110,8 +109,10 @@ impl Planner<'_> {
         if matches!(origin, BodyOrigin::Source) {
             self.settle_generated_names(&mut body.statements, parameters);
         }
-        #[cfg(debug_assertions)]
-        verify_final_function_body(&mut body, has_result).unwrap_or_else(|error| panic!("{error}"));
+        if cfg!(debug_assertions) {
+            verify_final_function_body(&mut body, has_result)
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
         verify_local_scopes(&mut body.statements, parameters)
             .unwrap_or_else(|error| panic!("{error}"));
         self.collect_imports(&body.statements);
