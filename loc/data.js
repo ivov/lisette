@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794857347805,
+  "lastUpdate": 1794857701320,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -58144,6 +58144,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 9413,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7674,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11006,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "938ebd4784b01981496331917411a9d2b7c5b505",
+          "message": "fix: reject casts of fractional float constants to integers (#1706)",
+          "timestamp": "2026-11-16T20:34:36+01:00",
+          "tree_id": "085e04368e458031d644d632b6dc88e96e641561",
+          "url": "https://github.com/ivov/lisette/commit/938ebd4784b01981496331917411a9d2b7c5b505"
+        },
+        "date": 1794857699532,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 158017,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43207,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30541,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19623,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 16212,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14234,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9422,
             "unit": "lines"
           },
           {
