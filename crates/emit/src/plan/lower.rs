@@ -852,7 +852,12 @@ impl Planner<'_> {
 
         let (condition_setup, condition) = self.lower_if_condition(condition);
 
-        let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, place));
+        let then_place = if alternative.is_none() {
+            &PlacePlan::Statement
+        } else {
+            place
+        };
+        let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, then_place));
 
         let preceding_diverges = then_body.ends_with_diverge();
         let else_arm = self.lower_else_chain(alternative, preceding_diverges, place);

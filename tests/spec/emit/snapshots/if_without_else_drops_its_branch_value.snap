@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let a = [1, 2, 3]
+    let c = true
+    let mut b = if c { a }
+    b = ()
+    fmt.Println(b, a)
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	a := []int{1, 2, 3}
+	c := true
+	var b struct{}
+	if c {
+		_ = a
+	}
+	b = struct{}{}
+	fmt.Println(b, a)
+}

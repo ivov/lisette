@@ -4974,3 +4974,19 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn if_without_else_drops_its_branch_value() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let a = [1, 2, 3]
+  let c = true
+  let mut b = if c { a }
+  b = ()
+  fmt.Println(b, a)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
