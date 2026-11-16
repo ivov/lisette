@@ -2,7 +2,7 @@
 source: tests/ui/errors/mod.rs
 ---
   ✕ Const pattern outside a match arm
-   ╭─[main.lis:5:7]
+   ╭─[test.lis:5:7]
  4 │ fn test(day: weekday.Weekday) {
  5 │   let weekday.Friday = day
    ·       ───────┬──────

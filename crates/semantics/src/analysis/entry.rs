@@ -79,10 +79,8 @@ pub(super) fn load_sibling_files(
         match package_file_action(&filename, include_tests) {
             PackageFileAction::Load => {}
             PackageFileAction::Skip => continue,
-            PackageFileAction::RejectWrongTestSuffix => {
-                sink.push(diagnostics::package_graph::wrong_test_file_suffix(
-                    &content.display_path,
-                ));
+            PackageFileAction::Reject(rejection) => {
+                sink.push(rejection.diagnostic(&content.display_path));
                 continue;
             }
         }

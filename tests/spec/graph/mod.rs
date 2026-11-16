@@ -417,59 +417,6 @@ fn cycle_still_reports_names_the_dropped_package_never_declared() {
     );
 }
 
-/// A typedef exports every declaration, `pub` or not.
-#[test]
-fn cycle_reads_the_exports_of_a_declaration_only_module() {
-    use passes::analyze;
-    use semantics::loader::MemoryLoader;
-    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
-
-    let tmp = tempfile::tempdir().unwrap();
-
-    let mut fs = MemoryLoader::new();
-    fs.add_file(
-        "decl",
-        "decl.d.lis",
-        "import \"beta\"\n\
-         pub var Counter: int\n\
-         var Hidden: int\n\
-         pub fn helper() -> int\n\
-         enum Mode { Fast, Slow }\n",
-    );
-    fs.add_file(
-        "beta",
-        "beta.lis",
-        "import \"decl\"\npub fn g() -> int { decl.helper() }\n",
-    );
-
-    let source = "import \"decl\"\n\
-                  \n\
-                  fn main() {\n\
-                  \x20 let _ = decl.Counter\n\
-                  \x20 let _ = decl.Hidden\n\
-                  \x20 let _ = decl.helper()\n\
-                  \x20 let _ = decl.Mode.Fast\n\
-                  }\n";
-    let output = analyze(AnalyzeInput {
-        load_siblings: false,
-        scope: AnalysisScope::Project(tmp.path().to_path_buf()),
-        loader: &fs,
-        entry: Some(EntryFile::new(
-            source.to_string(),
-            "main.lis".to_string(),
-            "main.lis".to_string(),
-        )),
-        compile_phase: CompilePhase::Check,
-        project_kind: semantics::ProjectKind::Binary,
-        locator: &deps::TypedefLocator::default(),
-        go_module: "",
-        disable_cache: true,
-        recover_target: semantics::RecoverTarget::None,
-    });
-
-    assert_eq!(error_codes(&output), vec!["resolve.import_cycle"]);
-}
-
 /// Suppression follows the reference, not the file.
 #[test]
 fn cycle_keeps_the_unrelated_errors_of_an_importer() {
@@ -673,7 +620,7 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
 }
 
 #[test]
-fn check_analyzes_tests_in_declaration_only_package() {
+fn typedef_file_in_project_package_is_rejected() {
     use passes::analyze;
     use semantics::loader::MemoryLoader;
     use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
@@ -682,13 +629,9 @@ fn check_analyzes_tests_in_declaration_only_package() {
 
     let mut fs = MemoryLoader::new();
     fs.add_file("decl", "decl.d.lis", "pub fn ext() -> int\n");
-    fs.add_file(
-        "decl",
-        "decl.test.lis",
-        "#[test]\nfn broken() {\n  let _ = 1 + \"x\"\n}\n",
-    );
+    fs.add_file("decl", "real.lis", "pub fn real() -> int { 1 }\n");
 
-    let source = "fn main() {}\n";
+    let source = "import \"decl\"\n\nfn main() {\n  let _ = decl.real()\n}\n";
     let output = analyze(AnalyzeInput {
         load_siblings: false,
         scope: AnalysisScope::Project(tmp.path().to_path_buf()),
@@ -706,13 +649,45 @@ fn check_analyzes_tests_in_declaration_only_package() {
         recover_target: semantics::RecoverTarget::None,
     });
 
-    assert!(
-        output
-            .errors()
-            .iter()
-            .any(|e| e.code_str() == Some("infer.type_mismatch")),
-        "a test in a declaration-plus-test package must be checked: {:?}",
-        output.errors()
+    assert_eq!(
+        error_codes(&output),
+        vec!["resolve.typedef_file_in_project"]
+    );
+}
+
+#[test]
+fn typedef_file_next_to_entry_file_is_rejected() {
+    use passes::analyze;
+    use semantics::loader::MemoryLoader;
+    use semantics::store::ENTRY_PACKAGE_ID;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
+
+    let tmp = tempfile::tempdir().unwrap();
+
+    let mut fs = MemoryLoader::new();
+    fs.add_file(ENTRY_PACKAGE_ID, "root.d.lis", "pub fn rootdecl() -> int\n");
+
+    let source = "fn main() {}\n";
+    let output = analyze(AnalyzeInput {
+        load_siblings: true,
+        scope: AnalysisScope::Project(tmp.path().to_path_buf()),
+        loader: &fs,
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
+        compile_phase: CompilePhase::Check,
+        project_kind: semantics::ProjectKind::Binary,
+        locator: &deps::TypedefLocator::default(),
+        go_module: "",
+        disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
+    });
+
+    assert_eq!(
+        error_codes(&output),
+        vec!["resolve.typedef_file_in_project"]
     );
 }
 

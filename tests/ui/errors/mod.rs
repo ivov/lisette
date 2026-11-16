@@ -3,7 +3,9 @@ use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::formatting::{
     format_diagnostic_for_snapshot, format_project_diagnostic_for_snapshot,
 };
-use crate::_harness::infer::{InferResult, checker_errors, infer, infer_package};
+use crate::_harness::infer::{
+    InferResult, checker_errors, infer, infer_package, infer_with_go_typedefs,
+};
 use crate::{
     assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multipackage_infer_error_snapshot, assert_parse_error_snapshot,
@@ -6275,9 +6277,11 @@ var count: int
 
 #[test]
 fn infer_valueless_const_missing_annotation_in_typedef() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("types", "consts.d.lis", "const MAX_SIZE");
-    infer_package("types", fs).assert_infer_code("valueless_const_missing_annotation");
+    infer_with_go_typedefs(
+        "fn main() {}",
+        &[("go:example.com/types", "const MAX_SIZE")],
+    )
+    .assert_infer_code("valueless_const_missing_annotation");
 }
 
 fn assert_go_hint_error_snapshot(name: &str, input: &str, package: &str, typedef: &str) {
@@ -9497,24 +9501,20 @@ enum HttpMethod {
 fn infer_const_pattern_outside_match_arm() {
     let typedef_source = "pub struct Weekday(int)\npub const Friday: Weekday = 5\n";
     let main_source = r#"
-import "weekday"
+import "go:example.com/weekday"
 
 fn test(day: weekday.Weekday) {
   let weekday.Friday = day
 }
 "#;
-    let mut fs = MockFileSystem::new();
-    fs.add_file("weekday", "weekday.d.lis", typedef_source);
-    fs.add_file("main", "main.lis", main_source);
-    let result = infer_package("main", fs);
-    assert_multipackage_infer_error_snapshot!(result, main_source);
+    assert_infer_error_snapshot!(main_source, &[("go:example.com/weekday", typedef_source)]);
 }
 
 #[test]
 fn infer_const_pattern_not_case_eligible() {
     let typedef_source = "pub struct Weekday(int)\npub fn Today() -> Weekday\n";
     let main_source = r#"
-import "lib"
+import "go:example.com/lib"
 
 fn name(day: lib.Weekday) -> string {
   match day {
@@ -9523,11 +9523,7 @@ fn name(day: lib.Weekday) -> string {
   }
 }
 "#;
-    let mut fs = MockFileSystem::new();
-    fs.add_file("lib", "lib.d.lis", typedef_source);
-    fs.add_file("main", "main.lis", main_source);
-    let result = infer_package("main", fs);
-    assert_multipackage_infer_error_snapshot!(result, main_source);
+    assert_infer_error_snapshot!(main_source, &[("go:example.com/lib", typedef_source)]);
 }
 
 #[test]
@@ -9537,17 +9533,14 @@ pub struct Duration(int64)
 pub const Second: Duration = 1000000000
 "#;
     let main_source = r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let n: int = 100;
   let x = n / time.Second;
 }
 "#;
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", typedef_source);
-    fs.add_file("main", "main.lis", main_source);
-    let result = infer_package("main", fs);
+    let result = infer_with_go_typedefs(main_source, &[("go:example.com/time", typedef_source)]);
 
     assert!(!result.errors.is_empty(), "Expected type error");
 
@@ -9568,17 +9561,14 @@ pub struct Duration(int64)
 pub const Second: Duration = 1000000000
 "#;
     let main_source = r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let n: int = 100;
   let x = n % time.Second;
 }
 "#;
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", typedef_source);
-    fs.add_file("main", "main.lis", main_source);
-    let result = infer_package("main", fs);
+    let result = infer_with_go_typedefs(main_source, &[("go:example.com/time", typedef_source)]);
 
     assert!(!result.errors.is_empty(), "Expected type error");
 
@@ -9599,16 +9589,13 @@ pub struct Duration(int64)
 pub const Second: Duration = 1000000000
 "#;
     let main_source = r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let x = time.Second * 1.5;
 }
 "#;
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", typedef_source);
-    fs.add_file("main", "main.lis", main_source);
-    let result = infer_package("main", fs);
+    let result = infer_with_go_typedefs(main_source, &[("go:example.com/time", typedef_source)]);
 
     assert!(!result.errors.is_empty(), "Expected type error");
 
@@ -9631,16 +9618,13 @@ pub const SecondA: DurationA = 1000000000
 pub const SecondB: DurationB = 1000000000
 "#;
     let main_source = r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let x = time.SecondA + time.SecondB;
 }
 "#;
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", typedef_source);
-    fs.add_file("main", "main.lis", main_source);
-    let result = infer_package("main", fs);
+    let result = infer_with_go_typedefs(main_source, &[("go:example.com/time", typedef_source)]);
 
     assert!(!result.errors.is_empty(), "Expected type error");
 
@@ -9663,19 +9647,14 @@ pub const Second: Duration = 1000000000
 pub fn Sleep(d: Duration)
 "#;
     let main_source = r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let n: int64 = 0;
   time.Sleep(n);
 }
 "#;
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", typedef_source);
-    fs.add_file("main", "main.lis", main_source);
-    let result = infer_package("main", fs);
-
-    assert_multipackage_infer_error_snapshot!(result, main_source);
+    assert_infer_error_snapshot!(main_source, &[("go:example.com/time", typedef_source)]);
 }
 
 #[test]
@@ -14070,13 +14049,13 @@ fn iterate_on_type_alias() {
 
 #[test]
 fn iterate_in_typedef_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "colors",
-        "colors.d.lis",
-        "#[iterate]\npub enum Color { Red, Green }",
+    let result = infer_with_go_typedefs(
+        "fn main() {}",
+        &[(
+            "go:example.com/colors",
+            "#[iterate]\npub enum Color { Red, Green }",
+        )],
     );
-    let result = infer_package("colors", fs);
     assert!(
         has_code(&result, "iterate_in_typedef"),
         "an iterate attribute in a typedef must be rejected, got: {:?}",
@@ -14174,13 +14153,13 @@ fn display_on_type_alias() {
 
 #[test]
 fn display_in_typedef_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "shapes",
-        "shapes.d.lis",
-        "#[display]\npub struct Point { pub x: int, pub y: int }",
+    let result = infer_with_go_typedefs(
+        "fn main() {}",
+        &[(
+            "go:example.com/shapes",
+            "#[display]\npub struct Point { pub x: int, pub y: int }",
+        )],
     );
-    let result = infer_package("shapes", fs);
     assert!(
         has_code(&result, "display_in_typedef"),
         "a display attribute in a typedef must be rejected, got: {:?}",
@@ -14532,13 +14511,13 @@ type Foo = int
 
 #[test]
 fn equality_in_typedef_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "shapes",
-        "shapes.d.lis",
-        "#[equality]\npub struct Point { pub x: int, pub y: int }",
+    let result = infer_with_go_typedefs(
+        "fn main() {}",
+        &[(
+            "go:example.com/shapes",
+            "#[equality]\npub struct Point { pub x: int, pub y: int }",
+        )],
     );
-    let result = infer_package("shapes", fs);
     assert!(
         result
             .errors

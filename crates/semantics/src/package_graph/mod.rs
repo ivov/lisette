@@ -546,10 +546,8 @@ fn batch_scan_packages(
                 match semantics_loader::package_file_action(&filename, include_tests) {
                     semantics_loader::PackageFileAction::Load => {}
                     semantics_loader::PackageFileAction::Skip => continue,
-                    semantics_loader::PackageFileAction::RejectWrongTestSuffix => {
-                        sink.push(diagnostics::package_graph::wrong_test_file_suffix(
-                            &content.display_path,
-                        ));
+                    semantics_loader::PackageFileAction::Reject(rejection) => {
+                        sink.push(rejection.diagnostic(&content.display_path));
                         continue;
                     }
                 }

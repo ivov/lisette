@@ -18,3 +18,11 @@ func main() {
 		fmt.Print("not an int")
 	}
 }
+
+
+// === store/store.go ===
+package store
+
+func GetValue(key string) any {
+	return key
+}

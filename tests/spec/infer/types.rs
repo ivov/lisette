@@ -2822,11 +2822,22 @@ fn tuple_struct_in_function_return() {
 
 #[test]
 fn const_pattern_or_pattern_succeeds() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "weekday",
-        "lib.d.lis",
-        r#"
+    let source = r#"
+import "go:example.com/weekday"
+
+fn is_weekend(day: weekday.Weekday) -> bool {
+  match day {
+    weekday.Sunday | weekday.Saturday => true,
+    _ => false,
+  }
+}
+"#;
+
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/weekday",
+            r#"
 pub struct Weekday(int)
 pub const Sunday: Weekday = 0
 pub const Monday: Weekday = 1
@@ -2836,38 +2847,15 @@ pub const Thursday: Weekday = 4
 pub const Friday: Weekday = 5
 pub const Saturday: Weekday = 6
 "#,
-    );
-
-    let source = r#"
-import "weekday"
-
-fn is_weekend(day: weekday.Weekday) -> bool {
-  match day {
-    weekday.Sunday | weekday.Saturday => true,
-    _ => false,
-  }
-}
-"#;
-    fs.add_file("main", "main.lis", source);
-
-    infer_package("main", fs).assert_no_errors();
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn const_pattern_requires_catch_all() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "weekday",
-        "lib.d.lis",
-        r#"
-pub struct Weekday(int)
-pub const Sunday: Weekday = 0
-pub const Monday: Weekday = 1
-"#,
-    );
-
     let source = r#"
-import "weekday"
+import "go:example.com/weekday"
 
 fn get_name(day: weekday.Weekday) -> string {
   match day {
@@ -2876,26 +2864,25 @@ fn get_name(day: weekday.Weekday) -> string {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
 
-    infer_package("main", fs).assert_exhaustiveness_error();
-}
-
-#[test]
-fn const_pattern_with_catch_all_succeeds() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "weekday",
-        "lib.d.lis",
-        r#"
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/weekday",
+            r#"
 pub struct Weekday(int)
 pub const Sunday: Weekday = 0
 pub const Monday: Weekday = 1
 "#,
-    );
+        )],
+    )
+    .assert_exhaustiveness_error();
+}
 
+#[test]
+fn const_pattern_with_catch_all_succeeds() {
     let source = r#"
-import "weekday"
+import "go:example.com/weekday"
 
 fn get_name(day: weekday.Weekday) -> string {
   match day {
@@ -2905,9 +2892,19 @@ fn get_name(day: weekday.Weekday) -> string {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
 
-    infer_package("main", fs).assert_no_errors();
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/weekday",
+            r#"
+pub struct Weekday(int)
+pub const Sunday: Weekday = 0
+pub const Monday: Weekday = 1
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 fn weekday_typedef() -> &'static str {
@@ -2921,16 +2918,9 @@ pub const Friday: Weekday = 5
 
 #[test]
 fn const_pattern_type_mismatch() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("weekday", "lib.d.lis", weekday_typedef());
-    fs.add_file(
-        "time",
-        "time.d.lis",
-        "pub struct Duration(int64)\npub const Second: Duration = 1000000000\n",
-    );
     let source = r#"
-import "weekday"
-import "time"
+import "go:example.com/weekday"
+import "go:example.com/time"
 
 fn get_name(day: weekday.Weekday) -> string {
   match day {
@@ -2939,16 +2929,23 @@ fn get_name(day: weekday.Weekday) -> string {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+    infer_with_go_typedefs(
+        source,
+        &[
+            ("go:example.com/weekday", weekday_typedef()),
+            (
+                "go:example.com/time",
+                "pub struct Duration(int64)\npub const Second: Duration = 1000000000\n",
+            ),
+        ],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn const_pattern_duplicate_arm_redundant() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("weekday", "lib.d.lis", weekday_typedef());
     let source = r#"
-import "weekday"
+import "go:example.com/weekday"
 
 fn get_name(day: weekday.Weekday) -> string {
   match day {
@@ -2958,24 +2955,14 @@ fn get_name(day: weekday.Weekday) -> string {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_infer_code("redundant_arm");
+    infer_with_go_typedefs(source, &[("go:example.com/weekday", weekday_typedef())])
+        .assert_infer_code("redundant_arm");
 }
 
 #[test]
 fn const_pattern_alias_same_value_redundant() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "codes",
-        "lib.d.lis",
-        r#"
-pub struct Code(int)
-pub const A: Code = 1
-pub const B: Code = 1
-"#,
-    );
     let source = r#"
-import "codes"
+import "go:example.com/codes"
 
 fn name(c: codes.Code) -> string {
   match c {
@@ -2985,23 +2972,24 @@ fn name(c: codes.Code) -> string {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_infer_code("redundant_arm");
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/codes",
+            r#"
+pub struct Code(int)
+pub const A: Code = 1
+pub const B: Code = 1
+"#,
+        )],
+    )
+    .assert_infer_code("redundant_arm");
 }
 
 #[test]
 fn const_pattern_unknown_value_no_string_collision() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "codes",
-        "lib.d.lis",
-        r#"
-pub struct Code(string)
-pub const UNKNOWN: Code
-"#,
-    );
     let source = r#"
-import "codes"
+import "go:example.com/codes"
 
 fn name(c: codes.Code) -> int {
   match c {
@@ -3011,23 +2999,23 @@ fn name(c: codes.Code) -> int {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_no_errors();
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/codes",
+            r#"
+pub struct Code(string)
+pub const UNKNOWN: Code
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn const_pattern_unknown_value_same_symbol_redundant() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "codes",
-        "lib.d.lis",
-        r#"
-pub struct Code(string)
-pub const UNKNOWN: Code
-"#,
-    );
     let source = r#"
-import "codes"
+import "go:example.com/codes"
 
 fn name(c: codes.Code) -> int {
   match c {
@@ -3037,35 +3025,36 @@ fn name(c: codes.Code) -> int {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_infer_code("redundant_arm");
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/codes",
+            r#"
+pub struct Code(string)
+pub const UNKNOWN: Code
+"#,
+        )],
+    )
+    .assert_infer_code("redundant_arm");
 }
 
 #[test]
 fn const_pattern_in_let_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("weekday", "lib.d.lis", weekday_typedef());
     let source = r#"
-import "weekday"
+import "go:example.com/weekday"
 
 fn test() {
   let weekday.Friday = weekday.Monday
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_infer_code("const_pattern_outside_match_arm");
+    infer_with_go_typedefs(source, &[("go:example.com/weekday", weekday_typedef())])
+        .assert_infer_code("const_pattern_outside_match_arm");
 }
 
 #[test]
 fn const_pattern_non_const_target_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "lib",
-        "lib.d.lis",
-        "pub struct Weekday(int)\npub fn Today() -> Weekday\n",
-    );
     let source = r#"
-import "lib"
+import "go:example.com/lib"
 
 fn name(day: lib.Weekday) -> string {
   match day {
@@ -3074,20 +3063,20 @@ fn name(day: lib.Weekday) -> string {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_infer_code("const_pattern_not_eligible");
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/lib",
+            "pub struct Weekday(int)\npub fn Today() -> Weekday\n",
+        )],
+    )
+    .assert_infer_code("const_pattern_not_eligible");
 }
 
 #[test]
 fn const_pattern_sentinel_var_ok() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "io",
-        "lib.d.lis",
-        "pub var EOF: error\npub fn read() -> Result<int, error>\n",
-    );
     let source = r#"
-import "io"
+import "go:example.com/io"
 
 fn handle() -> int {
   match io.read() {
@@ -3097,8 +3086,14 @@ fn handle() -> int {
   }
 }
 "#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_no_errors();
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/io",
+            "pub var EOF: error\npub fn read() -> Result<int, error>\n",
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
@@ -3370,11 +3365,19 @@ fn name(n: int) -> string {
 
 #[test]
 fn named_primitive_method_preserved() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "time",
-        "time.d.lis",
-        r#"
+    let source = r#"
+import "go:example.com/time"
+
+fn describe(d: time.Duration) -> string {
+  let _ = d.Seconds()
+  d.String()
+}
+"#;
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/time",
+            r#"
 pub struct Duration(int64)
 pub const Second: Duration = 1000000000
 impl Duration {
@@ -3382,17 +3385,9 @@ impl Duration {
   pub fn String(self: Duration) -> string
 }
 "#,
-    );
-    let source = r#"
-import "time"
-
-fn describe(d: time.Duration) -> string {
-  let _ = d.Seconds()
-  d.String()
-}
-"#;
-    fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_no_errors();
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
@@ -3980,394 +3975,327 @@ pub const Second: Duration = 1000000000
 
 #[test]
 fn numeric_alias_t_plus_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second + time.Millisecond
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_minus_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second - time.Millisecond
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_times_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second * time.Millisecond
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_times_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second * 5
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_u_times_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   5 * time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_div_t_yields_named() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second / time.Millisecond
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_div_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second / 2
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_rem_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second % 3
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_unary_neg() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   -time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_lt_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.Millisecond < time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_gt_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.Second > 1000
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_u_lt_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   1000 < time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_eq_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.Second == time.Millisecond
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_eq_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.Second == 1000000000
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_neq_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.Second != 0
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_u_div_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   100 / time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_u_rem_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   100 % time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_typed_primitive_divides_named_primitive_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let n: int = 100;
   let x = n / time.Second;
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn numeric_alias_with_variable_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   let n: int = 5;
   time.Second * n
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn numeric_alias_with_variable_cast() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   let n: int = 5;
   time.Second * (n as time.Duration)
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_chained_ops() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second * 2 + time.Millisecond * 500
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_in_function_param() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn sleep(d: time.Duration) {}
 
@@ -4375,310 +4303,262 @@ fn test() {
   sleep(time.Second * 2);
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_in_return() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn get_delay(multiplier: int) -> time.Duration {
   time.Millisecond * (multiplier as time.Duration)
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_rem_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   time.Second % time.Millisecond
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_lte_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.Second <= 2000000000
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_t_gte_u() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.Second >= 500000000
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_u_eq_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   1000000000 == time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_u_neq_t() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   0 != time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_cross_family_error() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let x = time.Second * 1.5;
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn numeric_alias_different_named_types_error() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "time",
-        "time.d.lis",
+    infer_with_go_typedefs(
         r#"
-pub struct DurationA(int64)
-pub struct DurationB(int64)
-pub const SecondA: DurationA = 1000000000
-pub const SecondB: DurationB = 1000000000
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let x = time.SecondA + time.SecondB;
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("incompatible_named_types");
-}
-
-#[test]
-fn numeric_alias_compare_different_named_types_error() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "time",
-        "time.d.lis",
-        r#"
+        &[(
+            "go:example.com/time",
+            r#"
 pub struct DurationA(int64)
 pub struct DurationB(int64)
 pub const SecondA: DurationA = 1000000000
 pub const SecondB: DurationB = 1000000000
 "#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
+        )],
+    )
+    .assert_infer_code("incompatible_named_types");
+}
+
+#[test]
+fn numeric_alias_compare_different_named_types_error() {
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> bool {
   time.SecondA == time.SecondB
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("incompatible_named_types");
+        &[(
+            "go:example.com/time",
+            r#"
+pub struct DurationA(int64)
+pub struct DurationB(int64)
+pub const SecondA: DurationA = 1000000000
+pub const SecondB: DurationB = 1000000000
+"#,
+        )],
+    )
+    .assert_infer_code("incompatible_named_types");
 }
 
 #[test]
 fn alias_backed_named_primitive_rejects_typed_primitive() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "time",
-        "time.d.lis",
+    infer_with_go_typedefs(
         r#"
-type Base = int64
-pub struct Duration(Base)
-pub const Second: Duration = 1000000000
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   let n: int64 = 5;
   time.Second * n
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[(
+            "go:example.com/time",
+            r#"
+type Base = int64
+pub struct Duration(Base)
+pub const Second: Duration = 1000000000
+"#,
+        )],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn uintptr_backed_named_primitive_rejects_typed_primitive() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "sys",
-        "sys.d.lis",
+    infer_with_go_typedefs(
         r#"
-pub struct Errno(uintptr)
-pub const EPERM: Errno = 1
-pub fn current() -> uintptr
-pub fn needs(e: Errno)
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "sys"
+import "go:example.com/sys"
 
 fn test() {
   let n = sys.current()
   sys.needs(n)
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
-}
-
-#[test]
-fn uintptr_backed_named_primitive_cast_escape_hatch() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "sys",
-        "sys.d.lis",
-        r#"
+        &[(
+            "go:example.com/sys",
+            r#"
 pub struct Errno(uintptr)
 pub const EPERM: Errno = 1
 pub fn current() -> uintptr
 pub fn needs(e: Errno)
 "#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
+        )],
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn uintptr_backed_named_primitive_cast_escape_hatch() {
+    infer_with_go_typedefs(
         r#"
-import "sys"
+import "go:example.com/sys"
 
 fn test() {
   let n = sys.current()
   sys.needs(n as sys.Errno)
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[(
+            "go:example.com/sys",
+            r#"
+pub struct Errno(uintptr)
+pub const EPERM: Errno = 1
+pub fn current() -> uintptr
+pub fn needs(e: Errno)
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn uintptr_backed_named_primitive_member_and_const_ok() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "sys",
-        "sys.d.lis",
+    infer_with_go_typedefs(
         r#"
-pub struct Errno(uintptr)
-pub const EPERM: Errno = 1
-pub const ENOENT: Errno = 2
-pub fn needs(e: Errno)
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "sys"
+import "go:example.com/sys"
 
 fn test() {
   sys.needs(sys.EPERM)
   sys.needs(sys.ENOENT)
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[(
+            "go:example.com/sys",
+            r#"
+pub struct Errno(uintptr)
+pub const EPERM: Errno = 1
+pub const ENOENT: Errno = 2
+pub fn needs(e: Errno)
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_complex_chained() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> time.Duration {
   let base = time.Second * 2;
@@ -4686,19 +4566,16 @@ fn test() -> time.Duration {
   base + extra - time.Millisecond
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_parenthesized_ratio() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() -> int64 {
   // T / T yields the named type now; cast to the underlying for a raw ratio
@@ -4706,27 +4583,25 @@ fn test() -> int64 {
   ratio
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn numeric_alias_assignment_from_expression() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 fn test() {
   let d: time.Duration = time.Second * 2;
   let ratio: int64 = (time.Second / time.Millisecond) as int64;
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
@@ -7423,59 +7298,57 @@ fn main() {
 
 #[test]
 fn assign_to_imported_pub_var_succeeds() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "config",
-        "lib.d.lis",
+    infer_with_go_typedefs(
         r#"
-pub var Threshold: int
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "config"
+import "go:example.com/config"
 
 fn main() {
   config.Threshold = 42
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[(
+            "go:example.com/config",
+            r#"
+pub var Threshold: int
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn assign_to_aliased_imported_pub_var_succeeds() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "config",
-        "lib.d.lis",
+    infer_with_go_typedefs(
         r#"
-pub var Threshold: int
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import c "config"
+import c "go:example.com/config"
 
 fn main() {
   c.Threshold = 99
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[(
+            "go:example.com/config",
+            r#"
+pub var Threshold: int
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn ref_self_method_call_through_imported_pub_var_succeeds() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "metrics",
-        "lib.d.lis",
+    infer_with_go_typedefs(
         r#"
+import "go:example.com/metrics"
+
+fn main() {
+  let _ = metrics.Counters.Hits.Value()
+}
+"#,
+        &[(
+            "go:example.com/metrics",
+            r#"
 pub struct Counter {
   pub n: int64,
 }
@@ -7490,19 +7363,9 @@ pub struct Counters_struct {
 
 pub var Counters: Counters_struct
 "#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "metrics"
-
-fn main() {
-  let _ = metrics.Counters.Hits.Value()
-}
-"#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
@@ -7530,23 +7393,9 @@ fn main() {
 
 #[test]
 fn imported_struct_field_forward_references_fn_alias() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "cli",
-        "lib.d.lis",
+    infer_with_go_typedefs(
         r#"
-pub struct Command {
-  pub Args: Option<PositionalArgs>,
-}
-
-pub type PositionalArgs = fn(Ref<Command>, Slice<string>) -> Result<(), error>
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "cli"
+import "go:example.com/cli"
 
 fn validate(_cmd: Ref<cli.Command>, _args: Slice<string>) -> Result<(), error> {
   Ok(())
@@ -7557,8 +7406,18 @@ fn main() {
   let _ = _c.Args
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[(
+            "go:example.com/cli",
+            r#"
+pub struct Command {
+  pub Args: Option<PositionalArgs>,
+}
+
+pub type PositionalArgs = fn(Ref<Command>, Slice<string>) -> Result<(), error>
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
@@ -7873,13 +7732,9 @@ fn test(m: Meters) {
 
 #[test]
 fn alias_to_named_primitive_rejects_typed_primitive_in_operator() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 type D = time.Duration
 
@@ -7889,19 +7744,16 @@ fn test() {
   let _y = x * n
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn alias_to_named_primitive_rejects_typed_primitive_in_comparison() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 type D = time.Duration
 
@@ -7911,19 +7763,16 @@ fn test() -> bool {
   x == n
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn alias_to_named_primitive_with_underlying_value_ok() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("time", "time.d.lis", duration_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "time"
+import "go:example.com/time"
 
 type D = time.Duration
 
@@ -7933,52 +7782,41 @@ fn test() -> D {
   x * time.Second
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[("go:example.com/time", duration_typedef())],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn alias_backed_uintptr_named_primitive_rejects_typed_primitive() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "sys",
-        "sys.d.lis",
+    infer_with_go_typedefs(
         r#"
-type Base = uintptr
-pub struct Errno(Base)
-pub const EPERM: Errno = 1
-pub fn current() -> uintptr
-pub fn needs(e: Errno)
-"#,
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        r#"
-import "sys"
+import "go:example.com/sys"
 
 fn test() {
   let n = sys.current()
   sys.needs(n)
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[(
+            "go:example.com/sys",
+            r#"
+type Base = uintptr
+pub struct Errno(Base)
+pub const EPERM: Errno = 1
+pub fn current() -> uintptr
+pub fn needs(e: Errno)
+"#,
+        )],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn uintptr_backed_named_primitive_adapts_integer_literal() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "sys",
-        "sys.d.lis",
-        "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\npub fn needs(e: Errno)\n",
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "sys"
+import "go:example.com/sys"
 
 fn test() {
   let _e: sys.Errno = 1
@@ -7986,52 +7824,48 @@ fn test() {
   sys.needs(2)
 }
 "#,
-    );
-    infer_package("main", fs).assert_no_errors();
+        &[(
+            "go:example.com/sys",
+            "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\npub fn needs(e: Errno)\n",
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]
 fn uintptr_backed_named_primitive_arithmetic_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "sys",
-        "sys.d.lis",
-        "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "sys"
+import "go:example.com/sys"
 
 fn test() -> sys.Errno {
   sys.EPERM + 1
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[(
+            "go:example.com/sys",
+            "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
+        )],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
 fn uintptr_backed_named_primitive_ordering_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "sys",
-        "sys.d.lis",
-        "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
+    infer_with_go_typedefs(
         r#"
-import "sys"
+import "go:example.com/sys"
 
 fn test() -> bool {
   sys.EPERM < 10
 }
 "#,
-    );
-    infer_package("main", fs).assert_infer_code("type_mismatch");
+        &[(
+            "go:example.com/sys",
+            "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
+        )],
+    )
+    .assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -8072,14 +7906,10 @@ pub fn needs(c: Code)
 }
 
 fn infer_code_main(body: &str) -> InferResult {
-    let mut fs = MockFileSystem::new();
-    fs.add_file("status", "status.d.lis", code_typedef());
-    fs.add_file(
-        "main",
-        "main.lis",
-        &format!("import \"status\"\n\nfn test() {{\n{body}\n}}\n"),
-    );
-    infer_package("main", fs)
+    infer_with_go_typedefs(
+        &format!("import \"go:example.com/status\"\n\nfn test() {{\n{body}\n}}\n"),
+        &[("go:example.com/status", code_typedef())],
+    )
 }
 
 #[test]

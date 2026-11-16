@@ -60,15 +60,35 @@ pub fn is_production_package_file(name: &str) -> bool {
 pub enum PackageFileAction {
     Load,
     Skip,
-    RejectWrongTestSuffix,
+    Reject(FileRejection),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileRejection {
+    WrongTestSuffix,
+    TypedefInProject,
+}
+
+impl FileRejection {
+    pub fn diagnostic(self, display_path: &str) -> diagnostics::LisetteDiagnostic {
+        match self {
+            Self::WrongTestSuffix => {
+                diagnostics::package_graph::wrong_test_file_suffix(display_path)
+            }
+            Self::TypedefInProject => {
+                diagnostics::package_graph::typedef_file_in_project(display_path)
+            }
+        }
+    }
 }
 
 pub fn package_file_action(name: &str, include_tests: bool) -> PackageFileAction {
     match SourceFileKind::of(name) {
-        SourceFileKind::Production | SourceFileKind::Typedef => PackageFileAction::Load,
+        SourceFileKind::Production => PackageFileAction::Load,
         SourceFileKind::Test if include_tests => PackageFileAction::Load,
         SourceFileKind::Test | SourceFileKind::Other => PackageFileAction::Skip,
-        SourceFileKind::MisnamedTest => PackageFileAction::RejectWrongTestSuffix,
+        SourceFileKind::MisnamedTest => PackageFileAction::Reject(FileRejection::WrongTestSuffix),
+        SourceFileKind::Typedef => PackageFileAction::Reject(FileRejection::TypedefInProject),
     }
 }
 
@@ -292,7 +312,7 @@ mod tests {
         assert_eq!(package_file_action("a.lis", false), PackageFileAction::Load);
         assert_eq!(
             package_file_action("a.d.lis", false),
-            PackageFileAction::Load
+            PackageFileAction::Reject(FileRejection::TypedefInProject)
         );
         assert_eq!(
             package_file_action("a.test.lis", false),
@@ -304,7 +324,7 @@ mod tests {
         );
         assert_eq!(
             package_file_action("a_test.lis", true),
-            PackageFileAction::RejectWrongTestSuffix
+            PackageFileAction::Reject(FileRejection::WrongTestSuffix)
         );
         assert_eq!(package_file_action("a.go", true), PackageFileAction::Skip);
     }
