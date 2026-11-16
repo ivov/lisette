@@ -633,6 +633,13 @@ impl<'a> Planner<'a> {
         result
     }
 
+    fn focused<R>(&mut self, span: Span, f: impl FnOnce(&mut Self) -> R) -> R {
+        let previous = self.namespace.rejections().enter(span);
+        let result = f(self);
+        self.namespace.rejections().leave(previous);
+        result
+    }
+
     fn with_declaration_scope<R>(&mut self, f: impl FnOnce(&mut Planner<'_>) -> R) -> R {
         let mut declaration = Planner::new(
             self.facts.clone(),

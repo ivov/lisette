@@ -282,6 +282,16 @@ impl Planner<'_> {
         item: &Expression,
         region: impl IntoIterator<Item = &'r Expression>,
     ) -> Statement {
+        self.focused(item.get_span(), |this| {
+            this.lower_focused_block_item(item, region)
+        })
+    }
+
+    fn lower_focused_block_item<'r>(
+        &mut self,
+        item: &Expression,
+        region: impl IntoIterator<Item = &'r Expression>,
+    ) -> Statement {
         let Expression::Let {
             binding,
             value,
@@ -305,6 +315,12 @@ impl Planner<'_> {
 
     /// Lower a single statement in the enclosing return context.
     pub(crate) fn lower_statement(&mut self, expression: &Expression) -> Statement {
+        self.focused(expression.get_span(), |this| {
+            this.lower_focused_statement(expression)
+        })
+    }
+
+    fn lower_focused_statement(&mut self, expression: &Expression) -> Statement {
         match expression {
             Expression::If {
                 condition,

@@ -6,6 +6,10 @@ use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
     pub(crate) fn emit_top_item(&mut self, item: &Expression) -> String {
+        self.focused(item.get_span(), |this| this.emit_focused_top_item(item))
+    }
+
+    fn emit_focused_top_item(&mut self, item: &Expression) -> String {
         match item {
             Expression::Function {
                 doc,

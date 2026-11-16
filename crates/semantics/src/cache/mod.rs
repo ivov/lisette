@@ -505,6 +505,17 @@ pub fn apply_emit_stamps(
     Ok(())
 }
 
+pub fn discard_package_cache(
+    project_root: &Path,
+    package_id: &str,
+    target: Target,
+) -> io::Result<()> {
+    match fs::remove_file(cache_path(project_root, package_id, target)) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        result => result,
+    }
+}
+
 pub fn clear_emit_stamps(project_root: &Path, target: Target) -> io::Result<()> {
     let entries = match fs::read_dir(cache_dir(project_root, target)) {
         Ok(entries) => entries,

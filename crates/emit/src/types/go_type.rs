@@ -163,12 +163,10 @@ impl Planner<'_> {
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
             Type::Never => GoType::new("struct{}"),
-            Type::Error => unreachable!("Type::Error should not reach the emitter"),
+            Type::Error => self.reject_untyped_position("an error type"),
             Type::Tuple(elements) => self.emit_tuple_type(elements),
             Type::Array { length, element } => GoType::array_of(length, &self.go_type(element)),
-            Type::ImportNamespace(_) => {
-                unreachable!("Type::ImportNamespace should not reach the emitter's go_type")
-            }
+            Type::ImportNamespace(_) => self.reject_untyped_position("a package name"),
             Type::ReceiverPlaceholder => GoType::new("any"),
         }
     }
@@ -319,6 +317,13 @@ impl Planner<'_> {
         .go_type(self)
     }
 
+    fn reject_untyped_position(&self, what: &'static str) -> GoType {
+        self.namespace.rejections().reject(what, |span| {
+            diagnostics::emit::type_without_go_form(what, span)
+        });
+        GoType::new("any")
+    }
+
     fn unqualify_name(&self, id: &str) -> (String, Option<PackageUse>) {
         if id == "Unknown" {
             return ("any".to_string(), None);
@@ -348,17 +353,13 @@ impl Planner<'_> {
             };
 
         if self.facts.is_foreign_package(package) {
-            // A non-exported foreign type name (first char not uppercase) is an
-            // opaque handle that reached a type position and cannot be spelled
-            // from another package. Backstop for any inferred misuse the checker
-            // did not reject.
-            assert!(
-                escaped.starts_with(char::is_uppercase),
-                "emit invariant violated: opaque Go handle `{id}` reached a type position. \
-                 A handle value may only flow by inference as a bare value or direct call \
-                 argument; it cannot be stored, returned, wrapped, or otherwise placed where \
-                 its unexported Go type must be spelled."
-            );
+            // Only its own package can name a non-exported Go type.
+            if !escaped.starts_with(char::is_uppercase) {
+                self.namespace.rejections().reject(id, |span| {
+                    let go_type = id.strip_prefix(go_name::GO_IMPORT_PREFIX).unwrap_or(id);
+                    diagnostics::emit::unnamable_go_type(go_type, span)
+                });
+            }
             let package = self.package_use_for_package(package);
             (
                 format!("{}.{}", package.qualifier(), escaped),

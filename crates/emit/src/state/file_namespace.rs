@@ -1,6 +1,7 @@
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::output::imports::ImportPlan;
 use crate::output::{OutputCollector, OutputImport};
+use crate::state::rejections::Rejections;
 use diagnostics::LisetteDiagnostic;
 
 #[derive(Default)]
@@ -8,6 +9,7 @@ pub(crate) struct FileNamespace {
     imports: ImportPlan,
     requirements: PackageRequirements,
     adapter_declarations: Vec<String>,
+    rejections: Rejections,
 }
 
 impl FileNamespace {
@@ -16,6 +18,7 @@ impl FileNamespace {
             imports,
             requirements: PackageRequirements::default(),
             adapter_declarations: Vec::new(),
+            rejections: Rejections::default(),
         }
     }
 
@@ -35,6 +38,10 @@ impl FileNamespace {
         self.requirements.extend(requirements);
     }
 
+    pub(crate) fn rejections(&self) -> &Rejections {
+        &self.rejections
+    }
+
     pub(crate) fn collect_adapter(&mut self, declaration: String) {
         self.adapter_declarations.push(declaration);
     }
@@ -46,7 +53,8 @@ impl FileNamespace {
         for declaration in self.adapter_declarations {
             source.collect_with_blank(declaration);
         }
-        let (imports, diagnostics) = self.imports.finish(&self.requirements);
+        let (imports, mut diagnostics) = self.imports.finish(&self.requirements);
+        diagnostics.extend(self.rejections.into_diagnostics());
         (imports, source.render(), diagnostics)
     }
 }
