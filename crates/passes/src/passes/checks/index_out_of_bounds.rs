@@ -1,6 +1,6 @@
 use crate::passes::comparison::expressions_equivalent;
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, Literal, UnaryOperator};
+use syntax::ast::{Constant, Expression, Literal};
 use syntax::types::Type;
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
@@ -23,7 +23,12 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
 
     let receiver_ty = ctx.store.peel_alias(&receiver.get_type());
 
-    if let Some(negative) = negative_index_literal(index)
+    let constant_index = match index.fold_constant(&|name| ctx.store.constant_literal(name)) {
+        Some(Constant::Integer(value)) => Some(value),
+        _ => None,
+    };
+
+    if let Some(negative) = constant_index.filter(|value| *value < 0)
         && (matches!(receiver_ty, Type::Array { .. }) || receiver_ty.is_slice())
     {
         ctx.sink.push(diagnostics::infer::negative_index(
@@ -34,7 +39,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     }
 
     if let Type::Array { length, .. } = &receiver_ty
-        && let Some(value) = index.as_integer()
+        && let Some(value) = constant_index.and_then(|value| u64::try_from(value).ok())
         && value >= *length
     {
         ctx.sink.push(diagnostics::infer::index_out_of_bounds(
@@ -83,19 +88,6 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
             &format!("{receiver_text}.length()"),
         ));
     }
-}
-
-fn negative_index_literal(index: &Expression) -> Option<i128> {
-    let Expression::Unary {
-        operator: UnaryOperator::Negative,
-        expression,
-        ..
-    } = index.unwrap_parens()
-    else {
-        return None;
-    };
-    let value = expression.as_integer()?;
-    (value > 0).then_some(-(value as i128))
 }
 
 fn is_dotted_identifier(expression: &Expression) -> bool {

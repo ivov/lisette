@@ -29747,3 +29747,38 @@ fn main() {
         "every method is called; got: {codes:?}"
     );
 }
+
+#[test]
+fn negative_index_from_constant_expression() {
+    assert_lint_snapshot!(
+        r#"
+fn at(xs: Slice<int>) -> int {
+  xs[0 - 1]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_from_constant_expression() {
+    assert_lint_snapshot!(
+        r#"
+fn at(xs: Array<int, 3>) -> int {
+  xs[1 + 2]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_from_named_constant() {
+    assert_lint_snapshot!(
+        r#"
+const LAST = 3
+
+fn at(xs: Array<int, 3>) -> int {
+  xs[LAST]
+}
+"#
+    );
+}

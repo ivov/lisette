@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Index out of bounds
+   ╭─[test.lis:3:5]
+ 2 │ fn at(xs: Array<int, 3>) -> int {
+ 3 │   xs[1 + 2]
+   ·     ───┬───
+   ·        ╰── no element at `3`
+ 4 │ }
+   ╰────
+  help: Indexing at `3` will panic at runtime · code: [infer.index_out_of_bounds]
