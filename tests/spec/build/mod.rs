@@ -2577,9 +2577,11 @@ fn assert_type_emits_concrete_type_arg() {
 
     fs.add_file(
         "store",
-        "store.d.lis",
+        "store.lis",
         r#"
-fn get_value(key: string) -> Unknown
+pub fn get_value(key: string) -> Unknown {
+  key
+}
 "#,
     );
 

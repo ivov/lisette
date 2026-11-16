@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::protocol::{FileChangeType, FileEvent, Url};
 use crate::state::SharedState;
+use syntax::program::SourceFileKind;
 
 impl SharedState {
     pub(crate) fn watched_files_changed(self: &Arc<Self>, changes: Vec<FileEvent>) {
@@ -95,7 +96,9 @@ fn is_analysis_input(path: &Path) -> bool {
     }) {
         return false;
     }
-    path.extension().is_some_and(|extension| extension == "lis")
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| SourceFileKind::of(name).is_lis())
         || path.file_name().is_some_and(|name| name == "lisette.toml")
 }
 

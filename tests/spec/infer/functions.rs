@@ -2178,18 +2178,8 @@ fn private_static_method_not_accessible_cross_package() {
 
 #[test]
 fn go_function_with_non_variadic_any_param_accepts_concrete_type() {
-    use crate::_harness::filesystem::MockFileSystem;
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "mylib",
-        "lib.d.lis",
-        r#"
-pub fn process(data: Slice<uint8>, target: Unknown) -> error
-"#,
-    );
-
     let source = r#"
-import "mylib"
+import "go:example.com/mylib"
 
 struct User {
   pub name: string,
@@ -2200,9 +2190,17 @@ fn main() {
   let _ = mylib.process("data" as Slice<uint8>, &u);
 }
 "#;
-    fs.add_file("main", "main.lis", source);
 
-    infer_package("main", fs).assert_no_errors();
+    infer_with_go_typedefs(
+        source,
+        &[(
+            "go:example.com/mylib",
+            r#"
+pub fn process(data: Slice<uint8>, target: Unknown) -> error
+"#,
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]

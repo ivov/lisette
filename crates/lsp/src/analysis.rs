@@ -25,6 +25,7 @@ use semantics::loader::ExternalTestFileIssue;
 use std::fs;
 use syntax::ast::Span;
 use syntax::program::File;
+use syntax::program::SourceFileKind;
 use syntax::types;
 
 pub(crate) enum AnalysisError {
@@ -72,10 +73,12 @@ fn tree_has_compiled_source(dir: &Path) -> bool {
         if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
             return tree_has_compiled_source(&entry.path());
         }
-        entry
-            .file_name()
-            .to_str()
-            .is_some_and(|name| name.ends_with(".lis") && !loader::is_typedef_file(name))
+        entry.file_name().to_str().is_some_and(|name| {
+            matches!(
+                SourceFileKind::of(name),
+                SourceFileKind::Production | SourceFileKind::Test | SourceFileKind::MisnamedTest
+            )
+        })
     })
 }
 
@@ -167,8 +170,11 @@ impl SharedState {
     pub(crate) fn key_for(&self, uri: &Url) -> Option<AnalysisKey> {
         let config = self.projects.config_for(uri)?;
         let (package_id, filename, external_test) = uri_to_package_file(&config, uri)?;
-        let filtered_from_package =
-            !external_test && (filename.ends_with("_test.lis") || filename.ends_with(".d.lis"));
+        let filtered_from_package = !external_test
+            && matches!(
+                SourceFileKind::of(&filename),
+                SourceFileKind::MisnamedTest | SourceFileKind::Typedef
+            );
         if config.is_script() || filtered_from_package {
             return Some(AnalysisKey::Document { uri: uri.clone() });
         }

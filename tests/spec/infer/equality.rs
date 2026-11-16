@@ -2020,24 +2020,17 @@ fn result_unknown_accepts_concrete_ok() {
 
 #[test]
 fn unknown_map_return_from_typedef_api_allowed() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "ffi",
-        "bindings.d.lis",
+    infer_with_go_typedefs(
         r#"
-    pub fn make() -> Map<Unknown, int>
-        "#,
-    );
-    fs.add_file(
-        "ffi",
-        "main.lis",
-        r#"
+    import "go:example.com/ffi"
+
     fn main() {
-      let _ = make()
+      let _ = ffi.make()
     }
         "#,
-    );
-    infer_package("ffi", fs).assert_no_errors();
+        &[("go:example.com/ffi", "pub fn make() -> Map<Unknown, int>\n")],
+    )
+    .assert_no_errors();
 }
 
 #[test]
@@ -2118,17 +2111,20 @@ fn tuple_unknown_accepts_concrete_at_unknown_position() {
 
 #[test]
 fn unknown_in_param_type_allowed_in_typedef_file() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "ffi",
-        "bindings.d.lis",
+    infer_with_go_typedefs(
         r#"
-    fn external_call(x: Unknown) -> Unknown {
-      return x;
+    import "go:example.com/ffi"
+
+    fn main() {
+      let _ = ffi.external_call(1)
     }
         "#,
-    );
-    infer_package("ffi", fs).assert_no_errors();
+        &[(
+            "go:example.com/ffi",
+            "pub fn external_call(x: Unknown) -> Unknown\n",
+        )],
+    )
+    .assert_no_errors();
 }
 
 #[test]

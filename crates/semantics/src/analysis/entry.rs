@@ -1,5 +1,7 @@
 use super::*;
+use crate::loader::{PackageFileAction, package_file_action};
 use syntax::ParseError;
+use syntax::program::SourceFileKind;
 
 pub(super) struct EntryRegistration {
     filename: Option<String>,
@@ -33,11 +35,12 @@ pub(super) fn register_entry_file(
     let result = entry.parse_mode.parse(&entry.source, ENTRY_FILE_ID);
 
     if result.status != FileParseStatus::Failed {
-        if entry.filename.ends_with("_test.lis") {
+        let kind = SourceFileKind::of(&entry.filename);
+        if kind == SourceFileKind::MisnamedTest {
             sink.push(diagnostics::package_graph::wrong_test_file_suffix(
                 &entry.display_path,
             ));
-        } else if entry.filename.ends_with(".test.lis") && !include_tests {
+        } else if kind == SourceFileKind::Test && !include_tests {
             sink.push(diagnostics::package_graph::cannot_emit_test_file(
                 &entry.display_path,
             ));
@@ -73,17 +76,13 @@ pub(super) fn load_sibling_files(
         if Some(filename.as_str()) == entry_filename {
             continue;
         }
-        if filename.ends_with("_test.lis") {
-            sink.push(diagnostics::package_graph::wrong_test_file_suffix(
-                &content.display_path,
-            ));
-            continue;
-        }
-        if !filename.ends_with(".lis")
-            || filename.ends_with(".d.lis")
-            || (filename.ends_with(".test.lis") && !include_tests)
-        {
-            continue;
+        match package_file_action(&filename, include_tests) {
+            PackageFileAction::Load => {}
+            PackageFileAction::Skip => continue,
+            PackageFileAction::Reject(rejection) => {
+                sink.push(rejection.diagnostic(&content.display_path));
+                continue;
+            }
         }
         let file_id = store.new_file_id();
         let result = mode.parse(&content.source, file_id);

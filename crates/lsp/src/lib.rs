@@ -50,6 +50,7 @@ use syntax::ast::Expression;
 use syntax::ast::Span;
 use syntax::doc::to_markdown;
 use syntax::program::File;
+use syntax::program::is_test_file;
 use syntax::types::SELF_TYPE_NAME;
 
 pub use crate::state::{Backend, SharedState};
@@ -647,7 +648,7 @@ impl Backend {
         // An in-progress `#[ ... ]` is exclusive: when the cursor is in attribute
         // position, offer only the attributes relevant to the target it attaches
         // to, never the general keyword/identifier completions below.
-        let is_test_file = uri.path().ends_with(".test.lis");
+        let is_test_file = is_test_file(uri.path());
         if let Some(items) = attribute_completions(&file.source, offset as usize, is_test_file) {
             return Ok(Some(CompletionResponse::Array(items)));
         }

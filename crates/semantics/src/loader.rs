@@ -1,6 +1,7 @@
 use crate::store;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::parse::ParseResult;
+use syntax::program::{SourceFileKind, is_test_file};
 
 /// Whether parser errors discard the file or preserve its valid partial AST.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,17 +41,59 @@ impl FileContent {
 pub type Files = HashMap<String, FileContent>;
 
 fn counts_for_internal_test_root(name: &str) -> bool {
-    name.ends_with(".lis") && !name.ends_with(".test.lis")
+    match SourceFileKind::of(name) {
+        SourceFileKind::Production | SourceFileKind::MisnamedTest | SourceFileKind::Typedef => true,
+        SourceFileKind::Test | SourceFileKind::Other => false,
+    }
 }
 
 /// The predicate package discovery roots on. Shared so callers that pre-scan
 /// `src/` cannot disagree with the graph about what a production package is.
 pub fn is_production_package_file(name: &str) -> bool {
-    name.ends_with(".lis") && !name.ends_with(".test.lis") && !is_typedef_file(name)
+    match SourceFileKind::of(name) {
+        SourceFileKind::Production | SourceFileKind::MisnamedTest => true,
+        SourceFileKind::Test | SourceFileKind::Typedef | SourceFileKind::Other => false,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageFileAction {
+    Load,
+    Skip,
+    Reject(FileRejection),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileRejection {
+    WrongTestSuffix,
+    TypedefInProject,
+}
+
+impl FileRejection {
+    pub fn diagnostic(self, display_path: &str) -> diagnostics::LisetteDiagnostic {
+        match self {
+            Self::WrongTestSuffix => {
+                diagnostics::package_graph::wrong_test_file_suffix(display_path)
+            }
+            Self::TypedefInProject => {
+                diagnostics::package_graph::typedef_file_in_project(display_path)
+            }
+        }
+    }
+}
+
+pub fn package_file_action(name: &str, include_tests: bool) -> PackageFileAction {
+    match SourceFileKind::of(name) {
+        SourceFileKind::Production => PackageFileAction::Load,
+        SourceFileKind::Test if include_tests => PackageFileAction::Load,
+        SourceFileKind::Test | SourceFileKind::Other => PackageFileAction::Skip,
+        SourceFileKind::MisnamedTest => PackageFileAction::Reject(FileRejection::WrongTestSuffix),
+        SourceFileKind::Typedef => PackageFileAction::Reject(FileRejection::TypedefInProject),
+    }
 }
 
 pub fn is_typedef_file(name: &str) -> bool {
-    name.ends_with(".d.lis")
+    SourceFileKind::of(name) == SourceFileKind::Typedef
 }
 
 pub const EXTERNAL_TESTS_DIR: &str = "tests";
@@ -78,12 +121,12 @@ pub enum ExternalTestFileIssue {
 }
 
 pub fn external_test_file_issue(name: &str) -> Option<ExternalTestFileIssue> {
-    if name.ends_with(".test.lis") {
-        None
-    } else if name.ends_with("_test.lis") {
-        Some(ExternalTestFileIssue::WrongSuffix)
-    } else {
-        Some(ExternalTestFileIssue::NotATestFile)
+    match SourceFileKind::of(name) {
+        SourceFileKind::Test => None,
+        SourceFileKind::MisnamedTest => Some(ExternalTestFileIssue::WrongSuffix),
+        SourceFileKind::Production | SourceFileKind::Typedef | SourceFileKind::Other => {
+            Some(ExternalTestFileIssue::NotATestFile)
+        }
     }
 }
 
@@ -221,7 +264,7 @@ impl Loader for MemoryLoader {
     fn discover_packages(&self) -> DiscoveredPackages {
         let mut discovered = DiscoveredPackages::default();
         for (package_id, files) in &self.folders {
-            let has_tests = files.keys().any(|name| name.ends_with(".test.lis"));
+            let has_tests = files.keys().any(|name| is_test_file(name));
             if is_external_test_package(package_id) {
                 if has_tests {
                     discovered.add_test_root(package_id.clone());
@@ -245,6 +288,46 @@ impl Loader for MemoryLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_predicates_follow_source_file_kind() {
+        assert!(is_typedef_file("api.d.lis"));
+        assert!(!is_typedef_file("api.lis"));
+        assert!(is_production_package_file("api.lis"));
+        assert!(!is_production_package_file("api.d.lis"));
+        assert!(!is_production_package_file("api.test.lis"));
+        assert!(external_test_file_issue("api.test.lis").is_none());
+        assert!(matches!(
+            external_test_file_issue("api_test.lis"),
+            Some(ExternalTestFileIssue::WrongSuffix)
+        ));
+        assert!(matches!(
+            external_test_file_issue("api.lis"),
+            Some(ExternalTestFileIssue::NotATestFile)
+        ));
+    }
+
+    #[test]
+    fn entry_and_packages_share_one_file_rule() {
+        assert_eq!(package_file_action("a.lis", false), PackageFileAction::Load);
+        assert_eq!(
+            package_file_action("a.d.lis", false),
+            PackageFileAction::Reject(FileRejection::TypedefInProject)
+        );
+        assert_eq!(
+            package_file_action("a.test.lis", false),
+            PackageFileAction::Skip
+        );
+        assert_eq!(
+            package_file_action("a.test.lis", true),
+            PackageFileAction::Load
+        );
+        assert_eq!(
+            package_file_action("a_test.lis", true),
+            PackageFileAction::Reject(FileRejection::WrongTestSuffix)
+        );
+        assert_eq!(package_file_action("a.go", true), PackageFileAction::Skip);
+    }
 
     #[test]
     fn external_test_namespace_matches_exact_prefix_only() {

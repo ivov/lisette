@@ -16103,7 +16103,7 @@ fn rename_refuses_to_skip_unreadable_closed_sources() {
 }
 
 #[test]
-fn reference_search_includes_internal_test_roots_with_only_typedef_sources() {
+fn reference_search_includes_internal_test_roots() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     let helper = "pub fn helper() -> int { 42 }";
@@ -16111,7 +16111,7 @@ fn reference_search_includes_internal_test_roots_with_only_typedef_sources() {
         root,
         &[
             ("src/utils/utils.lis", helper),
-            ("src/checks/types.d.lis", "pub struct Marker {}"),
+            ("src/checks/types.lis", "pub struct Marker {}"),
             (
                 "src/checks/api.test.lis",
                 "import \"utils\"\n#[test]\nfn t() { let _ = utils.helper() }",

@@ -28,6 +28,7 @@ use crate::handlers::build::ProjectLayout;
 use crate::handlers::project::FileTarget;
 use crate::lock::acquire_target_lock;
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
+use semantics::loader::is_typedef_file;
 
 struct CheckOptions {
     filter: Filter,
@@ -422,7 +423,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
                     projects.push(root);
                 }
             }
-            FileTarget::Script { .. } if file.to_string_lossy().ends_with(".d.lis") => {}
+            FileTarget::Script { .. } if is_typedef_file(&file.to_string_lossy()) => {}
             FileTarget::Script { inside_project } => loose.push((file, inside_project)),
         }
     }

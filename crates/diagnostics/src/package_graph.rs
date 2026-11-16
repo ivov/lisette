@@ -188,6 +188,16 @@ pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
     .with_help(help)
 }
 
+pub fn typedef_file_in_project(display_path: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!(
+        "Typedef file `{}` is not supported in a project",
+        display_path
+    ))
+    .with_resolve_code("typedef_file_in_project")
+    .with_file_location(display_path)
+    .with_help("Lisette writes no Go code for a `.d.lis` file, so its declarations have no body. Write the code in a `.lis` file, or import a Go package with `import \"go:...\"`")
+}
+
 pub fn non_test_file_under_tests(display_path: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("`{}` is not a test file", display_path))
         .with_resolve_code("non_test_file_under_tests")

@@ -203,7 +203,7 @@ pub struct ScannedFile {
 
 impl ScannedFile {
     pub fn is_d_lis(&self) -> bool {
-        self.name.ends_with(".d.lis")
+        semantics_loader::is_typedef_file(&self.name)
     }
 
     pub fn is_test(&self) -> bool {
@@ -539,14 +539,18 @@ fn batch_scan_packages(
                     }
                     None => {}
                 }
-            } else if filename.ends_with("_test.lis") {
-                sink.push(diagnostics::package_graph::wrong_test_file_suffix(
-                    &content.display_path,
-                ));
-                continue;
-            }
-            if filename.ends_with(".test.lis") && !include_tests {
-                continue;
+                if !include_tests {
+                    continue;
+                }
+            } else {
+                match semantics_loader::package_file_action(&filename, include_tests) {
+                    semantics_loader::PackageFileAction::Load => {}
+                    semantics_loader::PackageFileAction::Skip => continue,
+                    semantics_loader::PackageFileAction::Reject(rejection) => {
+                        sink.push(rejection.diagnostic(&content.display_path));
+                        continue;
+                    }
+                }
             }
             let file_id = store.new_file_id();
             jobs.push(ScanJob {

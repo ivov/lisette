@@ -909,16 +909,12 @@ fn generic_enum_may_mark_a_payload_less_variant() {
 
 #[test]
 fn default_variant_in_typedef_is_rejected() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        "gen",
-        "gen.d.lis",
-        "pub enum Mode { #[default] Fast, Slow }\n",
-    );
-    fs.add_file(
-        "main",
-        "main.lis",
-        "import \"gen\"\nfn f() { let _ = gen.Mode.Fast }\n",
-    );
-    infer_package("main", fs).assert_error_contains("#[default]` in a typedef");
+    infer_with_go_typedefs(
+        "import \"go:example.com/gen\"\nfn f() { let _ = gen.Mode.Fast }\n",
+        &[(
+            "go:example.com/gen",
+            "pub enum Mode { #[default] Fast, Slow }\n",
+        )],
+    )
+    .assert_error_contains("#[default]` in a typedef");
 }
