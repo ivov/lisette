@@ -885,8 +885,7 @@ func (a *MutationAnalysis) invokeWrites(common *ssa.CallCommon) []bool {
 			written[index] = slices.Contains(mutating, name) && !slices.Contains(nonMutating, name)
 			continue
 		}
-		naming := paramNaming{emitted: name, goName: param.Name()}
-		written[index] = isMutableParam(false, mutating, nonMutating, naming, param.Type(), method.Name())
+		written[index] = isMutableParam(false, mutating, nonMutating, name, param.Type(), method.Name())
 	}
 	return written
 }

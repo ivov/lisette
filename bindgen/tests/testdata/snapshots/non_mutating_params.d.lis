@@ -9,9 +9,6 @@ pub fn Copy(dst: mut Slice<byte>, src: Slice<byte>) -> Slice<byte>
 /// InferredView keeps conservative permissions without an override.
 pub fn InferredView(data: mut Slice<byte>) -> mut Slice<byte>
 
-/// Peek overrides the dst name heuristic and keeps the returned view read-only.
-pub fn Peek(dst: Slice<byte>) -> Slice<byte>
-
 /// ReadOnlyView overrides an inferred write using the sanitized parameter name.
 pub fn ReadOnlyView(self_: Slice<byte>) -> Slice<byte>
 

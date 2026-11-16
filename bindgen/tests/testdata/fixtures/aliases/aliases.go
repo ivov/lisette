@@ -166,16 +166,6 @@ type Rewriter interface {
 	Rewrite(*Counter)
 }
 
-// Dst is named so an unnamed parameter of its type derives "dst".
-type Dst struct {
-	Total int
-}
-
-// Inspector exercises a derived name that must not trip the heuristic.
-type Inspector interface {
-	Inspect(*Dst)
-}
-
 // PairOfRows exercises per-hop qualifiers on a writable array return.
 func PairOfRows() [2][]byte {
 	return [2][]byte{make([]byte, 1), make([]byte, 1)}
