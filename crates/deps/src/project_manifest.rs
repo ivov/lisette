@@ -447,6 +447,14 @@ pub fn upsert_into_document(
     module_path: &str,
     dep: &GoDependency,
 ) -> Result<(), String> {
+    match crate::ModuleKind::of(module_path) {
+        crate::ModuleKind::Prelude => {
+            return Err(format!(
+                "`{module_path}` is the Lisette prelude, which every project has built in"
+            ));
+        }
+        crate::ModuleKind::Declarable => {}
+    }
     let go = ensure_go_deps_table(manifest)?;
 
     let via = dep.via().map(|via_list| {

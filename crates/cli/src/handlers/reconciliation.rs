@@ -65,6 +65,9 @@ impl GraphResult {
     }
 
     fn discover(&mut self, module: String, version: String) {
+        if !deps::ModuleKind::of(&module).is_declarable() {
+            return;
+        }
         self.modules
             .entry(module)
             .or_insert_with(|| ModuleNode::new(version));
@@ -72,6 +75,13 @@ impl GraphResult {
 
     /// Record a scan of `module`. Edges recorded at the same version stay.
     fn expand(&mut self, module: String, version: String, dependencies: Vec<String>) {
+        if !deps::ModuleKind::of(&module).is_declarable() {
+            return;
+        }
+        let dependencies: Vec<String> = dependencies
+            .into_iter()
+            .filter(|dependency| deps::ModuleKind::of(dependency).is_declarable())
+            .collect();
         let mut dependencies = Dependencies::from_ordered(dependencies);
         if let Some(previous) = self.modules.get(&module)
             && previous.version == version
@@ -90,10 +100,18 @@ impl GraphResult {
     }
 
     fn rediscover(&mut self, module: String, version: String) {
+        if !deps::ModuleKind::of(&module).is_declarable() {
+            return;
+        }
         self.modules.insert(module, ModuleNode::new(version));
     }
 
     fn record_dependency(&mut self, parent: String, version: String, dependency: String) {
+        if !deps::ModuleKind::of(&parent).is_declarable()
+            || !deps::ModuleKind::of(&dependency).is_declarable()
+        {
+            return;
+        }
         self.modules
             .entry(parent)
             .or_insert_with(|| ModuleNode::new(version))
@@ -160,7 +178,7 @@ pub(crate) fn reconcile_declared_replacements(
     project_root: &Path,
     target_dir: &Path,
     manifest: &deps::Manifest,
-) -> Result<(), i32> {
+) -> Result<Vec<String>, i32> {
     let replaced_roots: Vec<(String, deps::ReplacementSource)> = manifest
         .go_deps()
         .iter()
@@ -171,7 +189,7 @@ pub(crate) fn reconcile_declared_replacements(
         .collect();
 
     if replaced_roots.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     // Seed every declared dep so MVS picks the versions the real build sees.
@@ -210,6 +228,10 @@ pub(crate) fn reconcile_declared_replacements(
     }
 
     let mut manifest = open_manifest_document(project_root)?;
+    let before = deps::go_deps_of_document(&manifest.document).map_err(|message| {
+        error!("failed to read manifest", message);
+        1
+    })?;
     for (original, replacement, graph) in &walked {
         apply_graph_to_document(
             original,
@@ -224,7 +246,14 @@ pub(crate) fn reconcile_declared_replacements(
     }
     save_manifest_document(&manifest)?;
 
-    Ok(())
+    let after = deps::go_deps_of_document(&manifest.document).map_err(|message| {
+        error!("failed to read manifest", message);
+        1
+    })?;
+    Ok(after
+        .into_keys()
+        .filter(|module| !before.contains_key(module))
+        .collect())
 }
 
 /// Declare the modules that source imports reach but the manifest lacks.
@@ -1443,6 +1472,25 @@ mod tests {
             graph.transitive_map("root")["child"],
             ["a-parent", "z-parent"],
         );
+    }
+
+    #[test]
+    fn the_prelude_never_enters_the_module_graph() {
+        let mut graph = GraphResult::default();
+        graph.expand(
+            "example.com/optapi".to_string(),
+            "v0.0.0".to_string(),
+            vec![deps::PRELUDE_GO_MODULE.to_string()],
+        );
+        graph.discover(deps::PRELUDE_GO_MODULE.to_string(), "v0.13.1".to_string());
+        graph.record_dependency(
+            "example.com/optapi".into(),
+            "v0.0.0".into(),
+            deps::PRELUDE_GO_MODULE.into(),
+        );
+
+        assert!(graph.transitive_map("example.com/optapi").is_empty());
+        assert_eq!(graph.version(deps::PRELUDE_GO_MODULE), None);
     }
 
     #[test]

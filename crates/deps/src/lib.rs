@@ -56,6 +56,36 @@ pub use typedef_locator::{
     TypedefOrigin,
 };
 
+pub const PRELUDE_GO_MODULE: &str = "github.com/ivov/lisette/prelude";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleKind {
+    Prelude,
+    /// Not `is_third_party`: a module path without a dot is legal behind a `replace`.
+    Declarable,
+}
+
+impl ModuleKind {
+    pub fn of(module_path: &str) -> Self {
+        if module_path == PRELUDE_GO_MODULE
+            || module_path
+                .strip_prefix(PRELUDE_GO_MODULE)
+                .is_some_and(|rest| rest.starts_with('/'))
+        {
+            Self::Prelude
+        } else {
+            Self::Declarable
+        }
+    }
+
+    pub fn is_declarable(self) -> bool {
+        match self {
+            Self::Prelude => false,
+            Self::Declarable => true,
+        }
+    }
+}
+
 pub fn is_third_party(pkg: &str) -> bool {
     pkg.split('/')
         .next()
