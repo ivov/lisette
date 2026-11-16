@@ -9,7 +9,7 @@ use syntax::ast::BindingId;
 use syntax::program::{EmitInput, UnusedImports, is_internal_package_id};
 
 use semantics::AnalyzeInput;
-use semantics::cache::{EmitStamp, diagnostic_dependencies_tracked, save_package_cache};
+use semantics::cache::{EmitStamp, save_package_cache};
 use semantics::facts::{BindingFact, UsageIndex};
 use semantics::package_graph::DependencyGraph;
 use semantics::store::{ENTRY_FILE_ID, ENTRY_PACKAGE_ID};
@@ -184,7 +184,6 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             .iter()
             .any(|diagnostic| diagnostic.is_error());
         if !has_errors {
-            let dependencies_tracked = diagnostic_dependencies_tracked(&store);
             let save = |compiled: &CompiledPackage| {
                 let Some(package) = store.get_package(&compiled.package_id) else {
                     return;
@@ -204,7 +203,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
                         .methods()
                         .is_some_and(|methods| !methods.is_empty())
                 });
-                if (package_lints.is_empty() || (dependencies_tracked && !has_methods))
+                if (package_lints.is_empty() || !has_methods)
                     && package_lints
                         .iter()
                         .all(|diagnostic| cacheable_lint(diagnostic))

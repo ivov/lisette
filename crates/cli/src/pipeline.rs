@@ -587,6 +587,64 @@ mod tests {
     }
 
     #[test]
+    fn a_third_party_typedef_edit_gives_the_same_diagnostics_warm_and_cold() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("proj");
+        stdfs::create_dir_all(root.join("src").join("util")).unwrap();
+        stdfs::create_dir_all(tmp.path().join("gomod")).unwrap();
+        stdfs::write(
+            tmp.path().join("gomod").join("go.mod"),
+            "module example.com/gomod\n\ngo 1.22\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"proj\"\nversion = \"0.1.0\"\n\n[dependencies.go]\n\"example.com/gomod\" = { path = \"../gomod\" }\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("main.lis"),
+            "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("util").join("util.lis"),
+            "import \"go:example.com/gomod\"\n\npub fn value() -> int {\n  gomod.Get()\n}\n",
+        )
+        .unwrap();
+        let typedef = deps::typedef_cache_dir(&root)
+            .join(stdlib::Target::host().cache_segment())
+            .join("replaced/example.com/gomod/local/gomod.d.lis");
+        stdfs::create_dir_all(typedef.parent().unwrap()).unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(&root, stdlib::Target::host()).unwrap();
+        stdfs::write(&typedef, "pub fn Get() -> int\n").unwrap();
+        locator.stamp_local_typedef(&typedef);
+
+        let first = check_diagnostics(&root);
+        assert!(first.is_empty(), "fixture must be clean; got: {first:?}");
+        assert!(
+            cache_file(&root, "util").exists(),
+            "util must be cached for this test to be meaningful"
+        );
+
+        stdfs::write(
+            tmp.path().join("gomod").join("gomod.go"),
+            "package gomod\n\nfunc Get() string { return \"x\" }\n",
+        )
+        .unwrap();
+        stdfs::write(&typedef, "pub fn Get() -> string\n").unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(&root, stdlib::Target::host()).unwrap();
+        locator.stamp_local_typedef(&typedef);
+        let warm = check_diagnostics(&root);
+        stdfs::remove_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        let cold = check_diagnostics(&root);
+        assert!(!cold.is_empty(), "the edited typedef must reject `util`");
+        assert_eq!(warm, cold, "a warm check must match a cold check");
+    }
+
+    #[test]
     fn a_package_whose_body_fails_to_parse_still_reports_its_syntax_error() {
         let tmp = tempdir().unwrap();
         let root = tmp.path();

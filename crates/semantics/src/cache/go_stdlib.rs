@@ -7,7 +7,7 @@ use stdlib::{Target, get_go_stdlib_typedef};
 
 use super::disk;
 use super::types::CachedDefinition;
-use super::{CACHE_FORMAT_VERSION, COMPILER_VERSION_HASH, GO_STDLIB_HASH};
+use super::{CACHE_FORMAT_VERSION, COMPILER_BUILD_HASH, GO_STDLIB_HASH};
 use crate::store::Store;
 use std::fs;
 use syntax::program::File;
@@ -49,7 +49,7 @@ impl GoStdlibCache {
             bincode::deserialize(bytes.get(HEADER_LENGTH_SIZE..blocks_start)?).ok()?;
         if header.version != CACHE_FORMAT_VERSION
             || header.content_hash != GO_STDLIB_HASH
-            || header.compiler_version != COMPILER_VERSION_HASH
+            || header.compiler_version != COMPILER_BUILD_HASH
         {
             return None;
         }
@@ -73,7 +73,7 @@ impl GoStdlibCache {
         let header = bincode::serialize(&GoStdlibHeader {
             version: CACHE_FORMAT_VERSION,
             content_hash: GO_STDLIB_HASH,
-            compiler_version: COMPILER_VERSION_HASH,
+            compiler_version: COMPILER_BUILD_HASH,
             block_ranges,
         })
         .ok()?;
