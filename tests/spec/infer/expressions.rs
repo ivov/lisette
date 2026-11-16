@@ -3371,3 +3371,16 @@ fn main() {
     assert_eq!(offsets.len(), 2, "{:?}", result.errors);
     assert!(offsets[0] > offsets[1]);
 }
+
+#[test]
+fn whole_float_constant_cast_to_int_valid() {
+    infer(
+        r#"
+    const F = 2.0;
+    fn main() {
+      let _ = F as int;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}

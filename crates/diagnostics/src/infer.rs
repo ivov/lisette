@@ -4825,6 +4825,16 @@ pub fn float_literal_int_cast(span: Span) -> LisetteDiagnostic {
         .with_help("Bind to a variable first: `let f = 1.0; f as int`")
 }
 
+pub fn fractional_float_constant_int_cast(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot convert a float constant with a fraction to an integer")
+        .with_infer_code("float_literal_int_conversion")
+        .with_span_label(
+            &span,
+            "Go rejects a constant conversion that loses the fraction",
+        )
+        .with_help("Bind to a variable first: `let f = F; f as int`")
+}
+
 pub fn const_requires_simple_expression(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`const` requires a simple expression")
         .with_infer_code("const_requires_simple_expression")
