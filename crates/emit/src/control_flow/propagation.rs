@@ -915,6 +915,14 @@ impl Planner<'_> {
 
     pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> LoweredBlock {
         let return_ctx = self.return_ctx();
+        if self.facts.peel_alias(&expression.get_type()).is_never() {
+            // A Go call that never returns has no value, so it cannot follow `return`.
+            let mut statements = vec![self.lower_statement(expression)];
+            if !matches!(return_ctx, ReturnContext::Void(_)) {
+                statements.push(LoweredStatement::UnreachablePanic.into());
+            }
+            return LoweredBlock { statements };
+        }
         let is_unit = return_ctx
             .ty()
             .is_some_and(|ty| self.facts.peel_alias(ty).is_unit());

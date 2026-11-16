@@ -5365,3 +5365,24 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn return_of_never_call_is_a_statement() {
+    let input = r#"
+fn diverges() -> Never {
+  return diverges()
+}
+
+fn pick(x: int) -> int {
+  if x > 5 {
+    return diverges()
+  }
+  x
+}
+
+fn main() {
+  let _ = pick(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
