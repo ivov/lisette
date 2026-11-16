@@ -1,3 +1,5 @@
+mod package_namespace;
+
 use crate::_harness::build::{
     compile_check, compile_check_script, compile_check_with_locator, compile_project_files,
     compile_project_files_with_tests, compile_script_entry, locator_with_go_dep,
@@ -567,8 +569,8 @@ fn main() {
 
     let codes = emit_diagnostic_codes(fs);
     assert!(
-        codes.iter().any(|code| code == "emit.go_name_collision"),
-        "the import binds `documentation` in Go, so `documentation_` collides with it; got: {codes:?}"
+        codes.is_empty(),
+        "the import binds `documentation` in Go, so the escape remap numbers `documentation_` past it; got: {codes:?}"
     );
 }
 

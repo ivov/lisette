@@ -609,9 +609,13 @@ impl TaskState {
             attributes: super::collect_interface_attributes(attributes),
         };
 
-        let package = self.current_package_mut(store);
-
-        package.definitions.insert(
+        let inserted = self.define_package_item(
+            store,
+            super::PackageItem {
+                kind: super::PackageItemKind::Interface,
+                name: interface_name,
+                name_span: *name_span,
+            },
             qualified_name.clone(),
             Definition {
                 visibility,
@@ -624,7 +628,9 @@ impl TaskState {
             },
         );
 
-        self.check_interface_embedding(&*store, &qualified_name, interface_name, name_span);
+        if inserted {
+            self.check_interface_embedding(&*store, &qualified_name, interface_name, name_span);
+        }
     }
 
     fn check_interface_embedding(

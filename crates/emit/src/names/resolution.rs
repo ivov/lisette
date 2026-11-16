@@ -124,7 +124,11 @@ impl Planner<'_> {
             || self.scope.is_go_name_declared(&qualifier)
             || self.package.declares_name(&qualifier)
         {
-            format!("{qualifier}_pkg")
+            self.package
+                .fresh_package_name(&format!("{qualifier}_pkg"), |candidate| {
+                    self.scope.has_binding_for_go_name(candidate)
+                        || self.scope.is_go_name_declared(candidate)
+                })
         } else {
             qualifier
         };

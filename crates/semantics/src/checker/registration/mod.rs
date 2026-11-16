@@ -83,6 +83,51 @@ impl RegistrationTarget<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum PackageItemKind {
+    Struct,
+    Enum,
+    Interface,
+    TypeAlias,
+    Function,
+    Constant,
+    Variable,
+}
+
+impl PackageItemKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Struct => "struct",
+            Self::Enum => "enum",
+            Self::Interface => "interface",
+            Self::TypeAlias => "type alias",
+            Self::Function => "function",
+            Self::Constant => "constant",
+            Self::Variable => "variable",
+        }
+    }
+
+    /// A type name enters early as a placeholder, so a type conflicts only with a type body.
+    fn conflicts_with(self, existing: &Definition) -> bool {
+        match self {
+            Self::Struct | Self::Enum | Self::Interface | Self::TypeAlias => matches!(
+                existing.body,
+                DefinitionBody::Struct { .. }
+                    | DefinitionBody::Enum { .. }
+                    | DefinitionBody::Interface { .. }
+                    | DefinitionBody::TypeAlias { .. }
+            ),
+            Self::Function | Self::Constant | Self::Variable => true,
+        }
+    }
+}
+
+struct PackageItem<'a> {
+    kind: PackageItemKind,
+    name: &'a str,
+    name_span: Span,
+}
+
 #[must_use = "a registered package owns the ASTs that must be passed to inference"]
 pub struct RegisteredPackage {
     pub(crate) id: String,
@@ -125,25 +170,30 @@ impl TaskState {
         self.finalize_tests(store);
     }
 
-    fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        self.current_package(store)
+    fn define_package_item(
+        &mut self,
+        store: &mut Store,
+        item: PackageItem<'_>,
+        qualified_name: Symbol,
+        definition: Definition,
+    ) -> bool {
+        let taken = self
+            .current_package(&*store)
             .definitions
-            .contains_key(qualified_name)
-    }
-
-    fn type_definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        self.current_package(store)
+            .get(qualified_name.as_str())
+            .is_some_and(|existing| item.kind.conflicts_with(existing));
+        if taken && self.is_lis(&*store) {
+            self.sink.push(diagnostics::infer::duplicate_definition(
+                item.kind.label(),
+                item.name,
+                item.name_span,
+            ));
+            return false;
+        }
+        self.current_package_mut(store)
             .definitions
-            .get(qualified_name)
-            .is_some_and(|d| {
-                matches!(
-                    d.body,
-                    DefinitionBody::Struct { .. }
-                        | DefinitionBody::Enum { .. }
-                        | DefinitionBody::Interface { .. }
-                        | DefinitionBody::TypeAlias { .. }
-                )
-            })
+            .insert(qualified_name, definition);
+        true
     }
 
     pub fn register_package(&mut self, store: &mut Store, id: &str) -> RegisteredPackage {

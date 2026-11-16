@@ -76,12 +76,9 @@ impl Planner<'_> {
             if *name == natural {
                 continue;
             }
-            if taken.insert(natural.clone()) {
-                self.package
-                    .record_escape_remap((*name).to_string(), natural.clone());
-                continue;
-            }
-            let fresh = go_name::fresh_suffixed(natural, |candidate| taken.contains(candidate));
+            let fresh = self
+                .package
+                .fresh_package_name(natural, |candidate| taken.contains(candidate));
             taken.insert(fresh.clone());
             self.package.record_escape_remap((*name).to_string(), fresh);
         }
@@ -96,20 +93,23 @@ impl Planner<'_> {
             return;
         }
 
-        let mut taken: HashSet<String> = self.package.package_block_names().cloned().collect();
         let mut colliding: Vec<&EcoString> = generic_names
             .iter()
-            .filter(|name| taken.contains(go_name::escape_type_name(name).as_ref()))
+            .filter(|name| {
+                self.package
+                    .is_package_block_name(go_name::escape_type_name(name).as_ref())
+            })
             .collect();
         if colliding.is_empty() {
             return;
         }
         colliding.sort();
 
-        taken.extend(generic_names.iter().map(EcoString::to_string));
-
+        let mut taken: HashSet<String> = generic_names.iter().map(EcoString::to_string).collect();
         for name in colliding {
-            let fresh = go_name::fresh_suffixed(name, |candidate| taken.contains(candidate));
+            let fresh = self
+                .package
+                .fresh_package_name(name, |candidate| taken.contains(candidate));
             taken.insert(fresh.clone());
             self.package.record_generic_rename(name.to_string(), fresh);
         }

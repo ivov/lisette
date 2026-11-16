@@ -46,14 +46,16 @@ impl<'a> AliasMap<'a> {
         }
     }
 
+    /// The file's import aliases come first, as in the checker.
     fn resolve(&self, package: &Package, name: &str) -> Option<PackageItemId> {
-        let qualified_name = Symbol::from_parts(&package.id, name);
-        if package.definitions.contains_key(qualified_name.as_str()) {
-            return Some(PackageItemId::new(name));
+        if self.aliases.contains_key(name) {
+            return Some(PackageItemId::import(self.file_id, name));
         }
-        self.aliases
-            .contains_key(name)
-            .then(|| PackageItemId::import(self.file_id, name))
+        let qualified_name = Symbol::from_parts(&package.id, name);
+        package
+            .definitions
+            .contains_key(qualified_name.as_str())
+            .then(|| PackageItemId::new(name))
     }
 
     fn is_import_alias(&self, name: &str) -> bool {

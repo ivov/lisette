@@ -68,16 +68,13 @@ impl TaskState {
             .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
-        if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
-            self.sink.push(diagnostics::infer::duplicate_definition(
-                "enum", name, *name_span,
-            ));
-            return;
-        }
-
-        let package = self.current_package_mut(store);
-
-        package.definitions.insert(
+        self.define_package_item(
+            store,
+            super::PackageItem {
+                kind: super::PackageItemKind::Enum,
+                name,
+                name_span: *name_span,
+            },
             qualified_name.clone(),
             Definition {
                 visibility,
@@ -432,14 +429,13 @@ impl TaskState {
             .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
-        if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
-            self.sink.push(diagnostics::infer::duplicate_definition(
-                "struct", name, *name_span,
-            ));
-            return;
-        }
-
-        self.current_package_mut(store).definitions.insert(
+        self.define_package_item(
+            store,
+            super::PackageItem {
+                kind: super::PackageItemKind::Struct,
+                name,
+                name_span: *name_span,
+            },
             qualified_name.clone(),
             Definition {
                 visibility,
@@ -660,16 +656,13 @@ impl TaskState {
                 }
             };
 
-            if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
-                self.sink.push(diagnostics::infer::duplicate_definition(
-                    "type alias",
+            self.define_package_item(
+                store,
+                super::PackageItem {
+                    kind: super::PackageItemKind::TypeAlias,
                     name,
-                    *name_span,
-                ));
-                return;
-            }
-
-            self.current_package_mut(store).definitions.insert(
+                    name_span: *name_span,
+                },
                 qualified_name,
                 Definition {
                     visibility,
@@ -722,16 +715,13 @@ impl TaskState {
             .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
-        if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
-            self.sink.push(diagnostics::infer::duplicate_definition(
-                "type alias",
+        self.define_package_item(
+            store,
+            super::PackageItem {
+                kind: super::PackageItemKind::TypeAlias,
                 name,
-                *name_span,
-            ));
-            return;
-        }
-
-        self.current_package_mut(store).definitions.insert(
+                name_span: *name_span,
+            },
             qualified_name,
             Definition {
                 visibility,

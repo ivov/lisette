@@ -16,6 +16,12 @@ use crate::names::go_name;
 
 type SpanMap = HashMap<String, Vec<Span>>;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PrivateFunctions {
+    Include,
+    Skip,
+}
+
 #[derive(Default)]
 pub(crate) struct CollectedNames {
     package_block: SpanMap,
@@ -59,16 +65,34 @@ impl Planner<'_> {
     }
 
     pub(crate) fn collect_names(&self, files: &[&File]) -> CollectedNames {
+        self.collect_names_with(files, PrivateFunctions::Include)
+    }
+
+    pub(crate) fn collect_fixed_names(&self, files: &[&File]) -> HashSet<String> {
+        self.collect_names_with(files, PrivateFunctions::Skip)
+            .declared_names()
+    }
+
+    fn collect_names_with(
+        &self,
+        files: &[&File],
+        private_functions: PrivateFunctions,
+    ) -> CollectedNames {
         let mut collected = CollectedNames::default();
         for file in files {
             for item in &file.items {
-                self.collect_item(item, &mut collected);
+                self.collect_item(item, &mut collected, private_functions);
             }
         }
         collected
     }
 
-    fn collect_item(&self, item: &Expression, collected: &mut CollectedNames) {
+    fn collect_item(
+        &self,
+        item: &Expression,
+        collected: &mut CollectedNames,
+        private_functions: PrivateFunctions,
+    ) {
         let CollectedNames {
             package_block,
             selectors,
@@ -76,7 +100,9 @@ impl Planner<'_> {
             diagnostics,
         } = collected;
         match item {
-            Expression::Function { .. } => self.collect_function(item, package_block, diagnostics),
+            Expression::Function { .. } => {
+                self.collect_function(item, package_block, diagnostics, private_functions)
+            }
             Expression::Const { .. } => self.collect_const(item, package_block, diagnostics),
             Expression::TypeAlias { .. } => {
                 self.collect_type_alias(item, package_block, diagnostics)
@@ -102,6 +128,7 @@ impl Planner<'_> {
         item: &Expression,
         package_block: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
+        private_functions: PrivateFunctions,
     ) {
         let Expression::Function {
             name,
@@ -113,10 +140,13 @@ impl Planner<'_> {
         else {
             return;
         };
-        let go = self.free_function_go_name(name, matches!(visibility, Visibility::Public));
-        self.check_reserved_prefix(name, name_span, diagnostics);
-        self.check_reserved_prefix(&go, name_span, diagnostics);
-        package_block.entry(go).or_default().push(*name_span);
+        let is_public = matches!(visibility, Visibility::Public);
+        if is_public || private_functions == PrivateFunctions::Include {
+            let go = self.free_function_go_name(name, is_public);
+            self.check_reserved_prefix(name, name_span, diagnostics);
+            self.check_reserved_prefix(&go, name_span, diagnostics);
+            package_block.entry(go).or_default().push(*name_span);
+        }
         if attributes::has_test_attribute(attributes) {
             let wrapper = go_name::go_test_function_name(name);
             package_block.entry(wrapper).or_default().push(*name_span);
@@ -485,9 +515,14 @@ impl Planner<'_> {
         package_block: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
+        // A sibling-file declaration gets a `_pkg` alias, so only the import's own file collides.
         for (qualifier, span) in import_qualifiers {
             self.check_reserved_prefix(qualifier, span, diagnostics);
-            if let Some(spans) = package_block.get_mut(qualifier) {
+            if let Some(spans) = package_block.get_mut(qualifier)
+                && spans
+                    .iter()
+                    .any(|declared| declared.file_id == span.file_id)
+            {
                 spans.push(*span);
             }
         }
