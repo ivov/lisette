@@ -60,7 +60,12 @@ impl InferCtx<'_> {
             return;
         }
 
-        if source_ty.is_complex() || target_ty.is_complex() {
+        let has_complex_underlying = |ty: &Type| {
+            store
+                .underlying_numeric_type(ty)
+                .is_some_and(|underlying| underlying.is_complex())
+        };
+        if has_complex_underlying(&source_ty) || has_complex_underlying(&target_ty) {
             self.sink.push(diagnostics::infer::invalid_cast(
                 raw_source_ty,
                 raw_target_ty,

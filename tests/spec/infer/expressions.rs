@@ -3384,3 +3384,17 @@ fn whole_float_constant_cast_to_int_valid() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn complex_tuple_struct_cast_to_float_rejected() {
+    infer(
+        r#"
+    struct C(complex128)
+    fn main() {
+      let c = C(1.0 + 2.0i);
+      let _ = c as float64;
+    }
+        "#,
+    )
+    .assert_infer_code("invalid_conversion");
+}
