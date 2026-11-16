@@ -49,8 +49,44 @@ impl FileImport {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceFileKind {
+    Production,
+    Test,
+    MisnamedTest,
+    Typedef,
+    Other,
+}
+
+impl SourceFileKind {
+    pub fn of(name: &str) -> Self {
+        if !name.ends_with(".lis") {
+            Self::Other
+        } else if name.ends_with(".d.lis") {
+            Self::Typedef
+        } else if name.ends_with(".test.lis") {
+            Self::Test
+        } else if name.ends_with("_test.lis") {
+            Self::MisnamedTest
+        } else {
+            Self::Production
+        }
+    }
+
+    pub fn is_lis(self) -> bool {
+        !matches!(self, Self::Other)
+    }
+
+    pub fn emits_go(self) -> bool {
+        match self {
+            Self::Production | Self::MisnamedTest => true,
+            Self::Test | Self::Typedef | Self::Other => false,
+        }
+    }
+}
+
 pub fn is_test_file(name: &str) -> bool {
-    name.ends_with(".test.lis")
+    SourceFileKind::of(name) == SourceFileKind::Test
 }
 
 pub fn unaliased_binding_name<'a, S: BuildHasher>(
@@ -130,7 +166,7 @@ impl File {
     }
 
     pub fn is_d_lis(&self) -> bool {
-        self.name.ends_with(".d.lis")
+        SourceFileKind::of(&self.name) == SourceFileKind::Typedef
     }
 
     /// A test file (`*.test.lis`).
@@ -243,7 +279,7 @@ pub fn go_filename(lisette_filename: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{FileImport, Span, go_import_default_name};
+    use super::{FileImport, SourceFileKind, Span, go_import_default_name};
     use crate::ast::ImportAlias;
 
     fn import(raw: &str) -> FileImport {
@@ -335,5 +371,57 @@ mod tests {
     fn bare_v_or_non_numeric_is_not_a_version() {
         assert_eq!(go_import_default_name("go:example.com/foo/v"), "v");
         assert_eq!(go_import_default_name("go:example.com/foo/vx"), "vx");
+    }
+
+    #[test]
+    fn only_production_files_emit_go() {
+        assert!(SourceFileKind::of("a.lis").emits_go());
+        assert!(!SourceFileKind::of("a.d.lis").emits_go());
+        assert!(!SourceFileKind::of("a.test.lis").emits_go());
+        assert!(!SourceFileKind::of("a.go").emits_go());
+    }
+
+    #[test]
+    fn source_file_suffixes_are_checked_only_by_source_file_kind() {
+        use std::fs;
+        use std::path::Path;
+
+        let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let patterns = [
+            "ends_with(\".lis\")",
+            "ends_with(\".d.lis\")",
+            "ends_with(\".test.lis\")",
+            "ends_with(\"_test.lis\")",
+            "== \"lis\"",
+        ];
+        let mut offenders = Vec::new();
+        let mut stack = vec![crates];
+        while let Some(dir) = stack.pop() {
+            for entry in fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+                if path.is_dir() {
+                    if name != "tests" && name != "target" {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if !name.ends_with(".rs") || name == "build.rs" || path.ends_with("program/file.rs")
+                {
+                    continue;
+                }
+                let source = fs::read_to_string(&path).unwrap();
+                let production = source.split("#[cfg(test)]").next().unwrap_or("");
+                for pattern in patterns {
+                    if production.contains(pattern) {
+                        offenders.push(format!("{}: {}", path.display(), pattern));
+                    }
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "use SourceFileKind::of: {offenders:#?}"
+        );
     }
 }

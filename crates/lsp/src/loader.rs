@@ -13,6 +13,8 @@ use semantics::loader::{
 use crate::paths::{ENTRY_PACKAGE_ID, package_id_to_dir, source_package_dir, uri_to_package_file};
 use crate::project::{ProjectConfig, find_project_root, resolve_script_root};
 use crate::state::AnalysisKey;
+use syntax::program::SourceFileKind;
+use syntax::program::is_test_file;
 
 pub(crate) struct ProjectState {
     loader: RwLock<Option<OverlayLoader>>,
@@ -258,12 +260,12 @@ impl AnalysisLoader {
                 })?;
                 let (package_id, _, external_test) = uri_to_package_file(&self.config, &uri)
                     .ok_or_else(|| io::Error::other("Cannot identify a project package"))?;
-                let has_tests = files.keys().any(|name| name.ends_with(".test.lis"));
+                let has_tests = files.keys().any(|name| is_test_file(name));
                 let included = if external_test {
                     has_tests
                 } else {
                     files.keys().any(|name| is_production_package_file(name))
-                        || (has_tests && files.keys().any(|name| !name.ends_with(".test.lis")))
+                        || (has_tests && files.keys().any(|name| !is_test_file(name)))
                 };
                 if included {
                     keys.push(AnalysisKey::Package {
@@ -382,7 +384,7 @@ impl Loader for AnalysisLoader {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if let Some(filename) = path.file_name().and_then(|s| s.to_str())
-                    && filename.ends_with(".lis")
+                    && SourceFileKind::of(filename).is_lis()
                     && let Ok(content) = read_to_string(&path)
                 {
                     files.insert(
@@ -447,7 +449,11 @@ fn capture_directory(
             if !path.join("lisette.toml").is_file() {
                 capture_directory(&path, captured, ancestors)?;
             }
-        } else if path.extension().is_some_and(|extension| extension == "lis") {
+        } else if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| SourceFileKind::of(name).is_lis())
+        {
             let name = entry.file_name().into_string().map_err(|name| {
                 io::Error::other(format!(
                     "Source filename `{}` is not valid UTF-8",

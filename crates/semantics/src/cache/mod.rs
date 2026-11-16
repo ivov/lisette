@@ -17,7 +17,7 @@ use syntax::program::go_filename;
 
 use serde::{Deserialize, Serialize};
 use stdlib::Target;
-use syntax::program::{File, Package, is_test_file};
+use syntax::program::{File, Package, SourceFileKind, is_test_file};
 
 use crate::loader::is_external_test_package;
 use crate::store::{ENTRY_PACKAGE_ID, Store};
@@ -323,10 +323,7 @@ fn all_go_outputs_exist(
     };
 
     for cached_file in cached_files {
-        if cached_file.name.ends_with(".lis")
-            && !cached_file.name.ends_with(".d.lis")
-            && !cached_file.name.ends_with(".test.lis")
-        {
+        if SourceFileKind::of(&cached_file.name).emits_go() {
             let go_name = go_filename(&cached_file.name);
             if !target_dir.join(go_name).exists() {
                 return false;

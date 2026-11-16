@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use syntax::program::SourceFileKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ProjectConfig {
@@ -27,7 +28,10 @@ impl ProjectConfig {
 
 pub(crate) fn find_project_root(start_path: &Path) -> Option<ProjectConfig> {
     let root = deps::find_project_root(start_path)?;
-    let belongs = start_path.extension().is_some_and(|ext| ext == "lis")
+    let belongs = start_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| SourceFileKind::of(name).is_lis())
         && start_path
             .strip_prefix(&root)
             .is_ok_and(|relative| relative.starts_with("src") || relative.starts_with("tests"));

@@ -17,6 +17,7 @@ use crate::protocol::{Error, RpcResult, Url};
 use crate::snapshot::AnalysisSnapshot;
 use crate::state::{AnalysisKey, SharedState};
 use crate::{ReferenceSite, usage_locations};
+use syntax::program::SourceFileKind;
 
 impl SharedState {
     pub(crate) fn reference_locations(
@@ -223,7 +224,10 @@ fn snapshot_matches(
     }
     loader.captured_files().all(|(directory, files)| {
         files.iter().all(|(name, content)| {
-            if name.ends_with(".d.lis") || name.ends_with("_test.lis") {
+            if matches!(
+                SourceFileKind::of(name),
+                SourceFileKind::Typedef | SourceFileKind::MisnamedTest
+            ) {
                 return true;
             }
             let Ok(uri) = Url::from_file_path(directory.join(name)) else {

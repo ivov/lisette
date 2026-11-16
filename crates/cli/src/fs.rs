@@ -13,6 +13,8 @@ use semantics::cache::cache_file_name;
 use semantics::loader::{DiscoveredPackages, FileContent, Files, Loader};
 use semantics::path::DisplayPathBase;
 use semantics::store::ENTRY_PACKAGE_ID;
+use syntax::program::SourceFileKind;
+use syntax::program::is_test_file;
 
 pub use semantics::path::relative_to_cwd;
 
@@ -96,7 +98,7 @@ impl LocalFileSystem {
                 files.iter().any(|path| {
                     path.file_name()
                         .and_then(|name| name.to_str())
-                        .is_some_and(|name| name.ends_with(".test.lis"))
+                        .is_some_and(is_test_file)
                 })
             })
             .filter_map(|(dir, _)| dir.strip_prefix(project_root).ok())
@@ -121,7 +123,7 @@ impl LocalFileSystem {
                 listed = entries
                     .flatten()
                     .map(|entry| entry.path())
-                    .filter(|path| path.extension().is_some_and(|e| e == "lis"))
+                    .filter(|path| is_lis_path(path))
                     .collect::<Vec<PathBuf>>();
                 &listed
             }
@@ -412,6 +414,12 @@ fn is_generated_marker(line: &str) -> bool {
     line.len() >= PREFIX.len() + SUFFIX.len() && line.starts_with(PREFIX) && line.ends_with(SUFFIX)
 }
 
+fn is_lis_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| SourceFileKind::of(name).is_lis())
+}
+
 pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
     use rayon::prelude::*;
 
@@ -430,7 +438,7 @@ pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
         }
         if entry_is_dir(&entry, &path) {
             subdirs.push(path);
-        } else if path.extension().is_some_and(|e| e == "lis") {
+        } else if is_lis_path(&path) {
             files.push(path);
         }
     }
@@ -527,7 +535,7 @@ impl Loader for LocalFileSystem {
                 let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                     continue;
                 };
-                if name.ends_with(".test.lis") {
+                if is_test_file(name) {
                     contents.has_test = true;
                 } else {
                     contents.has_test_root_file = true;
