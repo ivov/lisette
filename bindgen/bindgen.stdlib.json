@@ -439,6 +439,8 @@
           "Reader.Read": ["b"]
         },
         "crypto/cipher": {
+          "AEAD.Open": ["dst"],
+          "AEAD.Seal": ["dst"],
           "Block.Encrypt": ["dst"],
           "Block.Decrypt": ["dst"],
           "BlockMode.CryptBlocks": ["dst"],
@@ -657,6 +659,9 @@
         "os": {
           "File.Read": ["b"],
           "File.ReadAt": ["b"]
+        },
+        "reflect": {
+          "Copy": ["dst"]
         },
         "regexp": {
           "Regexp.AppendText": ["b"],

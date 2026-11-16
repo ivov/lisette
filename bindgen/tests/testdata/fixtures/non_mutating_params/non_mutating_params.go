@@ -14,9 +14,6 @@ func ReadOnlyView(self []byte) []byte {
 	return self
 }
 
-// Peek overrides the dst name heuristic and keeps the returned view read-only.
-func Peek(dst []byte) []byte { return dst[:1] }
-
 // Copy keeps the destination writable while the source and its view are read-only.
 func Copy(dst, src []byte) []byte {
 	inspect(src)

@@ -201,9 +201,8 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 		}
 
 		typeStr := paramType.LisetteType
-		naming := paramNaming{emitted: name, goName: param.Name()}
 		if !directHandled && !isVariadicTail &&
-			isMutableParam(mutation.Mutates(i), mutParams, nonMutParams, naming, param.Type(), methodName) {
+			isMutableParam(mutation.Mutates(i), mutParams, nonMutParams, name, param.Type(), methodName) {
 			writable := writableParamType(param.Type(), optional, c, substitutions)
 			if writable.SkipReason != nil {
 				return nil, writable.SkipReason
@@ -1501,27 +1500,19 @@ func describeConstraint(constraint *types.Interface) string {
 	return "complex"
 }
 
-type paramNaming struct {
-	emitted string
-	goName  string
-}
-
 // isMutableParam lets an explicit read-only contract override all write signals.
 // The writable renderer neutralizes a signal on a type Go cannot write through.
-func isMutableParam(derivedMutates bool, mutParams, nonMutParams []string, names paramNaming, t types.Type, funcName string) bool {
-	if slices.Contains(nonMutParams, names.emitted) {
+func isMutableParam(derivedMutates bool, mutParams, nonMutParams []string, name string, t types.Type, funcName string) bool {
+	if slices.Contains(nonMutParams, name) {
 		return false
 	}
-	return slices.Contains(mutParams, names.emitted) ||
+	return slices.Contains(mutParams, name) ||
 		derivedMutates ||
-		looksLikeMutableParam(names.goName, t, funcName)
+		looksLikeMutableParam(t, funcName)
 }
 
 // looksLikeMutableParam returns true if the parameter is likely written into.
-func looksLikeMutableParam(name string, t types.Type, funcName string) bool {
-	if name == "dst" {
-		return true
-	}
+func looksLikeMutableParam(t types.Type, funcName string) bool {
 	if isByteSlice(t) {
 		switch funcName {
 		case "Read", "ReadAt", "ReadFull", "ReadFrom", "ReadMsgUDP", "Recv", "ReadPixels":

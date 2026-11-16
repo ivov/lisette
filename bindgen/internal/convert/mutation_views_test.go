@@ -5,6 +5,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/ivov/lisette/bindgen/internal/config"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -388,7 +389,14 @@ func ReadByCallee(a, b []byte) [][]byte {
 }
 
 func TestViewsMarkInterfaceWrittenLocalsOpaque(t *testing.T) {
-	analysis, pkg := analyzeSource(t, `
+	cfg := &config.Config{Overrides: config.Overrides{Types: config.TypeOverrides{
+		MutatesParam: map[string]map[string][]string{"probe": {
+			"Filler.Fill":    {"dst"},
+			"Encoder.Encode": {"dst"},
+			"Pointers.Fill":  {"dst"},
+		}},
+	}}}
+	analysis, pkg := analyzeSourceWithConfig(t, cfg, `
 type Filler interface{ Fill(dst [][]byte, v []byte) }
 type Encoder interface{ Encode(dst []byte) }
 

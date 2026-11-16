@@ -417,8 +417,7 @@ func (c *Converter) resultPermissionOf(obj types.Object, results *types.Tuple, i
 			continue
 		}
 		source := params.At(i)
-		naming := paramNaming{emitted: names[i], goName: source.Name()}
-		if !isMutableParam(mutation.Mutates(i), mutParams, nonMutParams, naming, source.Type(), fn.Name()) {
+		if !isMutableParam(mutation.Mutates(i), mutParams, nonMutParams, names[i], source.Type(), fn.Name()) {
 			permission = min(permission, permissionFor(depth))
 		}
 	}
