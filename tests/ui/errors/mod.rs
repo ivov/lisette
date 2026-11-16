@@ -17309,3 +17309,15 @@ fn main() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_fractional_float_constant_int_cast() {
+    let input = r#"
+const F = 2.5
+
+fn main() {
+  let _ = F as int
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

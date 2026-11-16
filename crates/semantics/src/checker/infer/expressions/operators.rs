@@ -998,9 +998,16 @@ impl InferCtx<'_> {
 
         self.check_valid_cast(&source_ty, &target_ty, span);
 
-        if is_float_literal(&new_expression) && is_integer_type(&target_ty, &self.env, self.store) {
-            self.sink
-                .push(diagnostics::infer::float_literal_int_cast(span));
+        if is_integer_type(&target_ty, &self.env, self.store) {
+            if is_float_literal(&new_expression) {
+                self.sink
+                    .push(diagnostics::infer::float_literal_int_cast(span));
+            } else if let Some(value) = float_constant_value(&new_expression, store)
+                && value.fract() != 0.0
+            {
+                self.sink
+                    .push(diagnostics::infer::fractional_float_constant_int_cast(span));
+            }
         }
 
         let result_ty = if source_ty.contains_error() || target_ty.contains_error() {
@@ -1056,6 +1063,23 @@ fn is_float_literal(expression: &Expression) -> bool {
             ..
         } => is_float_literal(expression),
         _ => false,
+    }
+}
+
+fn float_constant_value(expression: &Expression, store: &Store) -> Option<f64> {
+    let definition = match expression.unwrap_parens() {
+        Expression::Unary {
+            operator: Negative,
+            expression,
+            ..
+        } => return float_constant_value(expression, store).map(|value| -value),
+        Expression::Identifier { resolution, .. } => resolution.definition()?,
+        Expression::DotAccess { resolution, .. } => resolution.definition()?,
+        _ => return None,
+    };
+    match store.constant_literal(definition)? {
+        Literal::Float { value, .. } => Some(value),
+        _ => None,
     }
 }
 
