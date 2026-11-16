@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794854604095,
+  "lastUpdate": 1794856925106,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -57931,6 +57931,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/05a6e6be6573c19d578a28b64e276bfa17cadc05"
         },
         "date": 1794854602221,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 157979,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43200,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30519,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19623,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 16212,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14234,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9413,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7674,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11006,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "185a02bf7552c702ad3a4fb083a2ff1a0147c4a2",
+          "message": "fix: skip sibling files for a script in LSP (#1703)",
+          "timestamp": "2026-11-16T20:21:37+01:00",
+          "tree_id": "26aa8d3225c873a9342fb96985ca67620cc7ff02",
+          "url": "https://github.com/ivov/lisette/commit/185a02bf7552c702ad3a4fb083a2ff1a0147c4a2"
+        },
+        "date": 1794856922543,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
