@@ -1,4 +1,5 @@
 pub(crate) mod access;
+pub(crate) mod display_form;
 mod dot_classify;
 mod identifiers;
 pub(crate) mod literals;

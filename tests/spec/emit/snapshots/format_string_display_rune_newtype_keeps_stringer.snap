@@ -20,7 +20,7 @@ import "fmt"
 type Grade rune
 
 func (g Grade) String() string {
-	return fmt.Sprintf("Grade(%v)", rune(g))
+	return fmt.Sprintf("Grade(%c)", rune(g))
 }
 
 func (g Grade) toString() string {
