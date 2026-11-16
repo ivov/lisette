@@ -1048,7 +1048,7 @@ impl InferCtx<'_> {
 
 fn is_zero_constant(expression: &Expression, store: &Store) -> bool {
     if let Expression::Literal {
-        literal: Literal::Float { value, .. },
+        literal: Literal::Float { value, .. } | Literal::Imaginary(value),
         ..
     } = expression.unwrap_parens()
     {

@@ -3386,6 +3386,18 @@ fn whole_float_constant_cast_to_int_valid() {
 }
 
 #[test]
+fn complex_division_by_imaginary_zero_rejected() {
+    infer(
+        r#"
+    fn main() {
+      let _ = (1.0 + 2.0i) / 0i;
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
 fn complex_tuple_struct_cast_to_float_rejected() {
     infer(
         r#"
