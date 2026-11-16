@@ -293,7 +293,7 @@ impl SharedState {
         };
 
         let mut analysis = analyze(AnalyzeInput {
-            load_siblings: true,
+            load_siblings: !script,
             scope: if script {
                 AnalysisScope::Script {
                     inside_project: false,
