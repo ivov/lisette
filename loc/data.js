@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794857701320,
+  "lastUpdate": 1794858412151,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -58238,6 +58238,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 7674,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11006,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d608699a02211c9af02cab39c0591fcc675bb810",
+          "message": "fix: reject `.d.lis` files in project packages (#1707)",
+          "timestamp": "2026-11-16T20:44:18+01:00",
+          "tree_id": "d3b69e83194b7b8bd9f664bcd32ddc6a8e1f34ba",
+          "url": "https://github.com/ivov/lisette/commit/d608699a02211c9af02cab39c0591fcc675bb810"
+        },
+        "date": 1794858410277,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 158131,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43207,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30582,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19623,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 16245,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14242,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9431,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7697,
             "unit": "lines"
           },
           {
