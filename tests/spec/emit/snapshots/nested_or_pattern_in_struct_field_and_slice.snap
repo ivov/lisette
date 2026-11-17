@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn near(p: Point) -> bool {
+    match p {
+      Point { x: 0 | 1, .. } => true,
+      _ => false,
+    }
+  }
+  
+  fn head(xs: Slice<int>) -> int {
+    match xs {
+      [1 | 2, ..rest] => rest.length(),
+      _ => -1,
+    }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func near(p Point) bool {
+	if p.x == 0 || p.x == 1 {
+		return true
+	}
+	return false
+}
+
+func head(xs []int) int {
+	if len(xs) >= 1 && (xs[0] == 1 || xs[0] == 2) {
+		return len(xs[1:])
+	}
+	return -1
+}

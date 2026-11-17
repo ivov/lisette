@@ -2356,7 +2356,10 @@ pub fn or_pattern_in_irrefutable_context(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid or-pattern")
         .with_infer_code("or_pattern_in_irrefutable")
         .with_span_label(&span, "or-patterns are not allowed here")
-        .with_help("Use a `match` expression. Or-patterns can only be used in `match`, `if let`, and `while let`")
+        .with_help(
+            "Use a `match` expression. Or-patterns can only be used in `match`, `if let`, \
+             `while let`, and `let ... else`",
+        )
 }
 
 pub fn or_pattern_binding_mismatch(

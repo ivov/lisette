@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unreachable pattern
+   ╭─[test.lis:5:5]
+ 4 │     Some(1) => 0,
+ 5 │     Some(1) | Some(1) => 1,
+   ·     ────────┬────────
+   ·             ╰── arm #2 is unreachable
+ 6 │     _ => 2,
+   ╰────
+  help: This pattern is unreachable because it is already covered by arm #1: `Option.Some(1)` · code: [infer.redundant_arm]

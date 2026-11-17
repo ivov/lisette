@@ -9,7 +9,7 @@ use diagnostics::LocalSink;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, Span};
 
-use syntax::ast::collect_pattern_bindings;
+use syntax::ast::{collect_pattern_bindings, expand_or_patterns};
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     let sink = ctx.sink;
@@ -58,34 +58,23 @@ fn visit_select_arm(arm: &SelectArm, sink: &LocalSink) {
 }
 
 fn check_pattern(pattern: &Pattern, sink: &LocalSink) {
-    if let Pattern::Or { patterns, .. } = pattern {
-        for alternative in patterns {
-            check_pattern(alternative, sink);
-        }
-        return;
-    }
-
-    if matches!(
-        pattern,
-        Pattern::Identifier { .. }
-            | Pattern::WildCard { .. }
-            | Pattern::Literal { .. }
-            | Pattern::Unit { .. }
-    ) {
-        return;
-    }
-
-    let bindings = collect_pattern_bindings(pattern);
-    let mut seen: HashMap<&str, &Span> = HashMap::default();
-    for (name, span) in &bindings {
-        if let Some(first_span) = seen.get(name.as_str()) {
-            sink.push(diagnostics::infer::duplicate_binding_in_pattern(
-                name,
-                **first_span,
-                *span,
-            ));
-        } else {
-            seen.insert(name.as_str(), span);
+    let mut reported: Vec<(Span, Span)> = vec![];
+    for expansion in expand_or_patterns(pattern, &|_| true) {
+        let bindings = collect_pattern_bindings(&expansion.pattern);
+        let mut seen: HashMap<&str, Span> = HashMap::default();
+        for (name, span) in &bindings {
+            if let Some(first_span) = seen.get(name.as_str()) {
+                if !reported.contains(&(*first_span, *span)) {
+                    reported.push((*first_span, *span));
+                    sink.push(diagnostics::infer::duplicate_binding_in_pattern(
+                        name,
+                        *first_span,
+                        *span,
+                    ));
+                }
+            } else {
+                seen.insert(name.as_str(), *span);
+            }
         }
     }
 }

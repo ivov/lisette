@@ -216,36 +216,6 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_nested_pattern(&mut self) -> Pattern {
-        let pattern = self.parse_pattern();
-
-        if self.is(Pipe) {
-            let token = self.current_token();
-            let span = Span::new(self.file_id, token.byte_offset, token.byte_length);
-            self.emit_nested_or_error(span);
-
-            while self.is(Pipe) {
-                self.next(); // consume `|`
-                self.parse_pattern();
-            }
-        }
-
-        pattern
-    }
-
-    fn emit_nested_or_error(&mut self, span: Span) {
-        let error = ParseError::new("Invalid or-pattern", span, "or-pattern not allowed here")
-            .with_parse_code("nested_or_pattern")
-            .with_help("Use `Ok(x) | Ok(y)` instead of `Ok(x | y)`");
-        self.errors.push(error);
-    }
-
-    fn check_nested_or_pattern(&mut self, pattern: &Pattern) {
-        if let Pattern::Or { span, .. } = pattern {
-            self.emit_nested_or_error(*span);
-        }
-    }
-
     fn parse_integer_pattern(&mut self) -> Pattern {
         let start = self.current_token();
         let text = start.text;
@@ -343,21 +313,14 @@ impl<'source> Parser<'source> {
         let first = self.parse_pattern_allowing_or();
 
         if self.advance_if(RightParen) {
-            if matches!(first, Pattern::Or { .. }) {
-                self.check_nested_or_pattern(&first);
-            }
             return first;
-        }
-
-        if matches!(first, Pattern::Or { .. }) {
-            self.check_nested_or_pattern(&first);
         }
 
         let mut elements = vec![first];
         self.expect_comma_or(RightParen);
 
         while self.is_not(RightParen) {
-            elements.push(self.parse_nested_pattern());
+            elements.push(self.parse_pattern_allowing_or());
             self.expect_comma_or(RightParen);
         }
 
@@ -397,7 +360,7 @@ impl<'source> Parser<'source> {
 
             if rest.is_present() {
                 let suffix_start = self.current_token();
-                self.parse_pattern();
+                self.parse_pattern_allowing_or();
                 let suffix_span = self.span_from_offset(suffix_start.byte_offset);
                 let error = ParseError::new("Invalid pattern", suffix_span, "not supported")
                     .with_parse_code("suffix_slice_pattern")
@@ -409,7 +372,7 @@ impl<'source> Parser<'source> {
                 continue;
             }
 
-            elements.push(self.parse_nested_pattern());
+            elements.push(self.parse_pattern_allowing_or());
             self.expect_comma_or(RightSquareBracket);
         }
 
@@ -538,7 +501,7 @@ impl<'source> Parser<'source> {
             }
 
             let field_pattern = if self.advance_if(Colon) {
-                self.parse_nested_pattern()
+                self.parse_pattern_allowing_or()
             } else {
                 let span = field_name_span;
                 if field_name == "_" {
@@ -590,7 +553,7 @@ impl<'source> Parser<'source> {
                 self.advance_if(Comma);
                 break;
             }
-            fields.push(self.parse_nested_pattern());
+            fields.push(self.parse_pattern_allowing_or());
             self.expect_comma_or(RightParen);
         }
 

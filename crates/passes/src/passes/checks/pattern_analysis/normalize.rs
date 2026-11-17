@@ -2,7 +2,7 @@ use semantics::store::Store;
 use std::slice;
 use syntax::ast::{
     ConstructorPatternResolution, EnumVariant, Generic, Literal, MatchArm, Pattern,
-    RecordPatternResolution, SequencePatternResolution, StructFieldPattern,
+    RecordPatternResolution, SequencePatternResolution, StructFieldPattern, expand_or_patterns,
 };
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, build_substitution_map, substitute, unqualified_name};
@@ -112,13 +112,10 @@ pub fn normalize_arm(
     ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
 ) -> Vec<Row> {
-    match &arm.pattern {
-        Pattern::Or { patterns, .. } => patterns
-            .iter()
-            .map(|alt| vec![normalize_pattern(alt, unions, ctx, cache)])
-            .collect(),
-        pattern => vec![vec![normalize_pattern(pattern, unions, ctx, cache)]],
-    }
+    expand_or_patterns(&arm.pattern, &|_| true)
+        .iter()
+        .map(|expansion| vec![normalize_pattern(&expansion.pattern, unions, ctx, cache)])
+        .collect()
 }
 
 pub fn normalize_pattern(
@@ -174,7 +171,7 @@ pub fn normalize_pattern(
         Pattern::Tuple { elements, .. } => normalize_tuple(elements, unions, ctx, cache),
 
         Pattern::Or { .. } => {
-            unreachable!("Or-pattern should be handled by normalize_arm")
+            unreachable!("Or-patterns are expanded by `expand_or_patterns` before normalization")
         }
     }
 }

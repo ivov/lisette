@@ -834,7 +834,7 @@ pub fn wildcard_in_or_patterns(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("wildcard_in_or_patterns")
         .with_span_label(span, "can be just `_`")
         .with_help(
-            "Replace the whole pattern with `_`. The `_` alternative already matches everything",
+            "Replace the or-pattern with `_`. The `_` alternative already matches everything",
         )
 }
 
