@@ -9,6 +9,7 @@ mod sealing;
 mod state;
 mod type_env;
 
+use crate::store::PackageMetadataMut;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 
@@ -56,9 +57,9 @@ impl TaskState {
             .expect("current package must exist in store")
     }
 
-    fn current_package_mut<'a>(&self, store: &'a mut Store) -> &'a mut Package {
+    fn current_package_mut<'a>(&self, store: &'a mut Store) -> PackageMetadataMut<'a> {
         store
-            .get_package_mut(self.cursor.package_id())
+            .edit_package(self.cursor.package_id())
             .expect("current package must exist in store")
     }
 

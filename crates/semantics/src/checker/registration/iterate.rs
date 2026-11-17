@@ -80,7 +80,7 @@ impl TaskState {
         let fn_ty = Type::function(vec![], Default::default(), Box::new(slice_ty));
 
         let package = store
-            .get_package_mut(&context.package_id)
+            .edit_package(&context.package_id)
             .expect("package must exist");
         package.definitions.insert(
             variants_key,

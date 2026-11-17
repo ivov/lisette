@@ -1027,6 +1027,69 @@ impl Type {
         }
     }
 
+    pub fn without_permissions(&self) -> Type {
+        self.map_children(Type::without_permissions)
+            .shallow_demoted()
+    }
+
+    pub fn map_children(&self, mut map: impl FnMut(&Type) -> Type) -> Type {
+        match self {
+            Self::Nominal {
+                id,
+                params: parameters,
+                writable,
+            } => Self::Nominal {
+                id: id.clone(),
+                params: parameters.iter().map(&mut map).collect(),
+                writable: *writable,
+            },
+            Self::Compound {
+                kind,
+                args: arguments,
+                writable,
+            } => Self::Compound {
+                kind: *kind,
+                args: arguments.iter().map(&mut map).collect(),
+                writable: *writable,
+            },
+            Self::Function(function) => {
+                let parameters = function
+                    .params
+                    .iter()
+                    .map(|parameter| parameter.with_type(map(&parameter.ty)))
+                    .collect();
+                let bounds = function
+                    .bounds
+                    .iter()
+                    .map(|bound| Bound {
+                        param_name: bound.param_name.clone(),
+                        generic: map(&bound.generic),
+                        ty: map(&bound.ty),
+                    })
+                    .collect();
+                function.rebuild(parameters, bounds, Box::new(map(&function.return_type)))
+            }
+            Self::Tuple(elements) => Self::Tuple(elements.iter().map(&mut map).collect()),
+            Self::Array { element, length } => Self::Array {
+                element: Box::new(map(element)),
+                length: *length,
+            },
+            Self::Forall { vars, body } => Self::Forall {
+                vars: vars.clone(),
+                body: Box::new(map(body)),
+            },
+            Self::Simple(_)
+            | Self::ImportNamespace(_)
+            | Self::Var { .. }
+            | Self::Uninferred
+            | Self::Ignored
+            | Self::Parameter(_)
+            | Self::Never
+            | Self::Error
+            | Self::ReceiverPlaceholder => self.clone(),
+        }
+    }
+
     /// Direct child types, for read-only walks. Excludes `Function.bounds`.
     pub fn children(&self) -> Vec<&Type> {
         match self {
@@ -2325,6 +2388,43 @@ fn alpha_index(idx: usize) -> String {
         n /= 26;
     }
     s
+}
+
+pub fn method_receiver_substitution(
+    receiver_ty: &Type,
+    concrete_ty: &Type,
+) -> Option<SubstitutionMap> {
+    let receiver = receiver_ty.strip_refs();
+    let concrete = concrete_ty.strip_refs();
+    let (
+        Type::Nominal {
+            id: receiver_id,
+            params: receiver_params,
+            ..
+        },
+        Type::Nominal {
+            id: concrete_id,
+            params: concrete_params,
+            ..
+        },
+    ) = (&receiver, &concrete)
+    else {
+        return None;
+    };
+    if receiver_id != concrete_id || receiver_params.len() != concrete_params.len() {
+        return None;
+    }
+
+    receiver_params
+        .iter()
+        .zip(concrete_params)
+        .map(|(receiver_param, concrete_param)| {
+            let Type::Parameter(name) = receiver_param else {
+                return None;
+            };
+            Some((name.clone(), concrete_param.clone()))
+        })
+        .collect()
 }
 
 #[cfg(test)]

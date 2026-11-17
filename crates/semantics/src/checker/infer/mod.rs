@@ -9,7 +9,9 @@ mod validation;
 pub use context::InferCtx;
 pub(crate) use unify::BuiltinBound;
 
+use crate::facts::BindingOrigin;
 use rustc_hash::FxHashMap as HashMap;
+use syntax::ast::BindingKind;
 
 use super::freeze::FreezeFolder;
 use super::registration::{RegisteredPackage, RegistrationFile};
@@ -25,10 +27,9 @@ use syntax::types::Type;
 impl TaskState {
     pub(crate) fn install_inferred_files(store: &mut Store, inferred_files: Vec<InferredFile>) {
         for inferred_file in inferred_files {
-            store
-                .get_file_mut(inferred_file.id)
-                .expect("inferred file must remain in the store")
-                .items = inferred_file.items;
+            *store
+                .file_items_mut(inferred_file.id)
+                .expect("inferred file must remain in the store") = inferred_file.items;
         }
     }
 
@@ -85,27 +86,32 @@ impl InferCtx<'_> {
                 file_id,
                 imports: &imports,
             },
-            |ctx| {
-                ctx.check_definition_package_collisions(&file.items, &imports);
+            |context| {
+                context.check_definition_package_collisions(&file.items, &imports);
 
                 let inferred_items: Vec<_> = file
                     .items
                     .into_iter()
                     .map(|item| {
-                        let type_var = ctx.new_type_var();
-                        ctx.infer_root_expression(item, &type_var)
+                        let type_var = context.new_type_var();
+                        context.infer_root_expression(item, &type_var)
                     })
                     .collect();
 
-                ctx.check_reference_sibling_aliasing(&inferred_items);
-                ctx.check_map_bracket_reads(&inferred_items);
-                ctx.resolve_branch_subsumptions();
-                ctx.resolve_select_exhaustiveness();
-                ctx.resolve_statement_tails();
+                context.check_reference_sibling_aliasing(&inferred_items);
+                context.check_map_bracket_reads(&inferred_items);
+                let context::FileObligations {
+                    branch_subsumptions,
+                    select_exhaustiveness,
+                    statement_tails,
+                } = context.file_checks.discharge();
+                context.resolve_branch_subsumptions(branch_subsumptions);
+                context.resolve_select_exhaustiveness(select_exhaustiveness);
+                context.resolve_statement_tails(statement_tails);
 
                 let frozen_items = {
-                    let store = ctx.store;
-                    let state = &mut *ctx.state;
+                    let store = context.store;
+                    let state = &mut *context.state;
                     let folder = FreezeFolder::new(&state.env, store);
                     folder.freeze_facts(&mut state.facts);
                     FreezeFolder::new(&state.env, store).freeze_items(inferred_items)
@@ -181,7 +187,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn register_block_local_items(&mut self, items: &[Expression]) {
+    fn register_block_local_items(&mut self, items: &mut [Expression]) {
         for item in items {
             match item {
                 Expression::Const { .. } => self.register_block_local_const(item),
@@ -191,9 +197,10 @@ impl InferCtx<'_> {
         }
     }
 
-    fn register_block_local_const(&mut self, item: &Expression) {
+    fn register_block_local_const(&mut self, item: &mut Expression) {
         let store = self.store;
         let Expression::Const {
+            binding,
             identifier,
             identifier_span,
             annotation,
@@ -230,8 +237,20 @@ impl InferCtx<'_> {
             }
         });
 
-        let scope = self.scopes.current_mut();
-        scope.insert_const(identifier.to_string(), const_ty);
+        let id = self.facts.add_binding(
+            identifier.to_string(),
+            *identifier_span,
+            BindingKind::Const,
+            BindingOrigin::Name {
+                in_typedef: false,
+                shorthand_field: false,
+            },
+            None,
+        );
+        *binding = Some(id);
+        self.scopes
+            .current_mut()
+            .insert_const(identifier.to_string(), const_ty, id);
     }
 
     fn register_block_local_fn(&mut self, item: &Expression) {

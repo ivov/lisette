@@ -18,7 +18,7 @@ mod values;
 use attributes::*;
 use metadata::{
     declaration_value_position_types, enum_variant_constructor_type, function_signature_pairs,
-    has_recursive_instantiation, wrap_with_impl_generics,
+    wrap_with_impl_generics,
 };
 use std::mem;
 
@@ -205,20 +205,20 @@ impl TaskState {
         let type_name_entries = self.collect_package_type_name_entries(store, id);
         self.insert_type_name_entries(store, id, type_name_entries);
 
-        let files = {
-            let package = store
-                .get_package_mut(id)
-                .expect("package must exist for registration");
-            package
-                .files
-                .values_mut()
-                .map(|file| RegistrationFile {
-                    id: file.id,
-                    imports: file.imports(),
-                    items: mem::take(&mut file.items),
-                })
-                .collect::<Vec<_>>()
-        };
+        let file_inputs: Vec<_> = store
+            .get_package(id)
+            .into_iter()
+            .flat_map(|package| package.files.values())
+            .map(|file| (file.id, file.imports()))
+            .collect();
+        let files = file_inputs
+            .into_iter()
+            .map(|(id, imports)| RegistrationFile {
+                id,
+                imports,
+                items: mem::take(store.file_items_mut(id).expect("registered file exists")),
+            })
+            .collect();
         PredeclaredPackage {
             id: id.to_string(),
             files,
@@ -295,7 +295,7 @@ pub(crate) fn normalize_registered_component_types(store: &mut Store, package_id
     if changed.is_empty() {
         return;
     }
-    let Some(package) = store.get_package_mut(package_id) else {
+    let Some(package) = store.edit_package(package_id) else {
         return;
     };
     for (name, definition) in changed {

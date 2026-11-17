@@ -1181,62 +1181,151 @@ fn are_go_type_aliases(a: &str, b: &str) -> bool {
 /// The actual type's concrete content carrying the expected type's write
 /// qualifiers, so messages show the caller's arguments instead of `K, V`.
 fn overlay_qualifiers(expected: &Type, actual: &Type) -> Type {
-    match (expected, actual) {
-        (Type::Parameter(_), _) => actual.clone(),
-        (
-            Type::Compound {
-                kind: expected_kind,
-                args: expected_args,
-                writable,
-            },
-            Type::Compound {
-                kind: actual_kind,
-                args: actual_args,
+    match expected {
+        Type::Parameter(_) => actual.clone(),
+        Type::Compound {
+            kind,
+            args: arguments,
+            writable,
+        } => {
+            let Type::Compound {
+                kind: other_kind,
+                args: other_args,
                 ..
-            },
-        ) if expected_kind == actual_kind && expected_args.len() == actual_args.len() => {
+            } = actual
+            else {
+                return expected.clone();
+            };
+            if kind != other_kind || arguments.len() != other_args.len() {
+                return expected.clone();
+            }
             Type::Compound {
-                kind: *expected_kind,
-                args: expected_args
-                    .iter()
-                    .zip(actual_args)
-                    .map(|(e, a)| overlay_qualifiers(e, a))
-                    .collect(),
+                kind: *kind,
                 writable: *writable,
+                args: arguments
+                    .iter()
+                    .zip(other_args)
+                    .map(|(expected, actual)| overlay_qualifiers(expected, actual))
+                    .collect(),
             }
         }
-        (
-            Nominal {
-                id,
-                params: expected_params,
-                writable,
-            },
-            Nominal {
-                id: actual_id,
-                params: actual_params,
+        Nominal {
+            id,
+            params: parameters,
+            writable,
+        } => {
+            let Nominal {
+                id: other_id,
+                params: other_params,
                 ..
-            },
-        ) if id == actual_id && expected_params.len() == actual_params.len() => Nominal {
-            id: id.clone(),
-            params: expected_params
-                .iter()
-                .zip(actual_params)
-                .map(|(e, a)| overlay_qualifiers(e, a))
-                .collect(),
-            writable: *writable,
-        },
-        (Type::Tuple(expected_items), Type::Tuple(actual_items))
-            if expected_items.len() == actual_items.len() =>
-        {
-            Type::Tuple(
-                expected_items
+            } = actual
+            else {
+                return expected.clone();
+            };
+            if id != other_id || parameters.len() != other_params.len() {
+                return expected.clone();
+            }
+            Nominal {
+                id: id.clone(),
+                writable: *writable,
+                params: parameters
                     .iter()
-                    .zip(actual_items)
-                    .map(|(e, a)| overlay_qualifiers(e, a))
+                    .zip(other_params)
+                    .map(|(expected, actual)| overlay_qualifiers(expected, actual))
+                    .collect(),
+            }
+        }
+        Type::Tuple(items) => {
+            let Type::Tuple(other_items) = actual else {
+                return expected.clone();
+            };
+            if items.len() != other_items.len() {
+                return expected.clone();
+            }
+            Type::Tuple(
+                items
+                    .iter()
+                    .zip(other_items)
+                    .map(|(expected, actual)| overlay_qualifiers(expected, actual))
                     .collect(),
             )
         }
-        _ => expected.clone(),
+        Type::Array { length, element } => {
+            let Type::Array {
+                length: other_length,
+                element: other_element,
+            } = actual
+            else {
+                return expected.clone();
+            };
+            if length != other_length {
+                return expected.clone();
+            }
+            Type::Array {
+                length: *length,
+                element: Box::new(overlay_qualifiers(element, other_element)),
+            }
+        }
+        Function(function) => {
+            let Function(other) = actual else {
+                return expected.clone();
+            };
+            if function.params.len() != other.params.len()
+                || function.bounds.len() != other.bounds.len()
+            {
+                return expected.clone();
+            }
+            let parameters = function
+                .params
+                .iter()
+                .zip(&other.params)
+                .map(|(expected, actual)| {
+                    expected.with_type(overlay_qualifiers(&expected.ty, &actual.ty))
+                })
+                .collect();
+            let bounds = function
+                .bounds
+                .iter()
+                .zip(&other.bounds)
+                .map(|(expected, actual)| Bound {
+                    param_name: expected.param_name.clone(),
+                    generic: overlay_qualifiers(&expected.generic, &actual.generic),
+                    ty: overlay_qualifiers(&expected.ty, &actual.ty),
+                })
+                .collect();
+            function.rebuild(
+                parameters,
+                bounds,
+                Box::new(overlay_qualifiers(
+                    &function.return_type,
+                    &other.return_type,
+                )),
+            )
+        }
+        Type::Forall { vars, body } => {
+            let Type::Forall {
+                vars: other_vars,
+                body: other_body,
+            } = actual
+            else {
+                return expected.clone();
+            };
+            if vars != other_vars {
+                return expected.clone();
+            }
+            Type::Forall {
+                vars: vars.clone(),
+                body: Box::new(overlay_qualifiers(body, other_body)),
+            }
+        }
+        Type::Simple(_)
+        | Type::ImportNamespace(_)
+        | Type::Var { .. }
+        | Type::Uninferred
+        | Type::Ignored
+        | Type::Never
+        | Type::Error
+        | Type::ReceiverPlaceholder => expected.clone(),
     }
 }
 

@@ -5,7 +5,7 @@ use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
 use semantics::facts::Facts;
 use semantics::store::Store;
-use syntax::ast::Span;
+use syntax::ast::{BindingKind, Span};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lint {
@@ -188,6 +188,9 @@ fn collect_bindings(
     out: &mut Vec<LisetteDiagnostic>,
 ) {
     for b in facts.bindings.values() {
+        if matches!(b.kind, BindingKind::Const) {
+            continue;
+        }
         let is_anon = b.name.starts_with('_');
         let written_but_not_read =
             b.kind.is_mutable() && b.mutation.is_some() && !b.used && !is_anon;
@@ -254,7 +257,7 @@ fn push_suppressible(
         .filter_map(LisetteDiagnostic::file_id)
         .collect();
     let allows: super::suppression::AllowIndex = store
-        .packages
+        .packages()
         .values()
         .flat_map(|package| package.source_files())
         .filter(|file| reported.contains(&file.id))

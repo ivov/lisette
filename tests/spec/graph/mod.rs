@@ -870,7 +870,7 @@ fn store_get_definition_domain_style_go_package() {
     let mut store = Store::new();
     store.add_package("go:github.com/gorilla/mux");
 
-    let package = store.get_package_mut("go:github.com/gorilla/mux").unwrap();
+    let package = store.edit_package("go:github.com/gorilla/mux").unwrap();
     package.definitions.insert(
         "go:github.com/gorilla/mux.Router".into(),
         Definition {

@@ -1,3 +1,4 @@
+use crate::_harness::infer::checker_errors;
 use crate::spec::infer::*;
 
 #[test]
@@ -1271,4 +1272,48 @@ impl<T: Display> Owner<T> {
 "#,
     )
     .assert_infer_code_once("missing_bound_on_param");
+}
+
+#[test]
+#[ignore = "scaling benchmark; run alone with --ignored --nocapture"]
+fn speculation_scales_with_function_count() {
+    use std::time::{Duration, Instant};
+    fn measure(count: usize, shape: &str) -> Duration {
+        let mut source = String::from(
+            "struct Box<T> { value: T }; fn id<T>(x: T) -> T { x }; struct C { values: mut Slice<int> }; struct TC(mut Slice<int>); fn mk() -> mut Slice<int> { [1] }\n",
+        );
+        for i in 0..count {
+            let body = match shape {
+                "unification" => format!(
+                    "let b = Box {{ value: {i} }}; let n = id(b.value); let k = if n > 0 {{ n }} else {{ 0 }}; match x {{ Some(v) => v + k, None => k }}"
+                ),
+                "struct" => "let c = C { values: mk() }; c.values[0]".into(),
+                "tuple struct" => "let c = TC(mk()); c.0[0]".into(),
+                "errors" => "let c = C { values: mk() }; let n: string = 1; c.values[0]".into(),
+                _ => unreachable!(),
+            };
+            source.push_str(&format!(
+                "pub fn f{i}(x: Option<int>) -> int {{ {body} }}\n"
+            ));
+        }
+        source.push_str("fn main() {}\n");
+        let start = Instant::now();
+        let errors = checker_errors(&source, &[]);
+        if shape == "errors" {
+            assert_eq!(errors.len(), count);
+        } else {
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+        start.elapsed()
+    }
+    for shape in ["unification", "struct", "tuple struct", "errors"] {
+        let _warmup = measure(100, shape);
+        let small = (0..3).map(|_| measure(1000, shape)).min().unwrap();
+        let large = (0..3).map(|_| measure(4000, shape)).min().unwrap();
+        eprintln!("{shape}: 1000 functions: {small:?}; 4000 functions: {large:?}");
+        assert!(
+            large < small * 6,
+            "{shape}: speculation no longer scales approximately linearly"
+        );
+    }
 }

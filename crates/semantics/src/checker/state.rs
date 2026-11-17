@@ -89,16 +89,42 @@ pub(crate) struct PendingInterfaceConflictCheck {
 }
 
 impl PendingWork {
-    fn merge(&mut self, other: Self) {
-        self.equality_attributes.extend(other.equality_attributes);
+    pub(super) fn merge(&mut self, other: Self) {
+        let Self {
+            equality_attributes,
+            pre_inference_bound_checks,
+            post_inference_bound_checks,
+            test_functions,
+            array_size_checks,
+            interface_conflict_checks,
+        } = other;
+        self.equality_attributes.extend(equality_attributes);
         self.pre_inference_bound_checks
-            .extend(other.pre_inference_bound_checks);
+            .extend(pre_inference_bound_checks);
         self.post_inference_bound_checks
-            .extend(other.post_inference_bound_checks);
-        self.test_functions.extend(other.test_functions);
-        self.array_size_checks.extend(other.array_size_checks);
+            .extend(post_inference_bound_checks);
+        self.test_functions.extend(test_functions);
+        self.array_size_checks.extend(array_size_checks);
         self.interface_conflict_checks
-            .extend(other.interface_conflict_checks);
+            .extend(interface_conflict_checks);
+    }
+
+    fn freeze(&mut self, env: &TypeEnv) {
+        let Self {
+            pre_inference_bound_checks,
+            post_inference_bound_checks,
+            equality_attributes: _,
+            test_functions: _,
+            array_size_checks: _,
+            interface_conflict_checks: _,
+        } = self;
+        for (argument, required, _) in pre_inference_bound_checks
+            .iter_mut()
+            .chain(post_inference_bound_checks)
+        {
+            env.resolve_in_place(argument);
+            env.resolve_in_place(required);
+        }
     }
 }
 
@@ -194,7 +220,11 @@ impl TaskState {
         }
     }
 
-    pub(crate) fn into_output(self) -> TaskOutput {
+    pub(crate) fn into_output(mut self) -> TaskOutput {
+        self.pending.freeze(&self.env);
+        self.facts.deferred.visit_types_mut(|ty| {
+            self.env.resolve_in_place(ty);
+        });
         let Self {
             env: _,
             scopes: _,

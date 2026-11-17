@@ -39,7 +39,7 @@ impl TryUsage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TryBlockContext {
     pub(crate) ok_ty: Type,
     pub(crate) err_ty: Type,
@@ -47,12 +47,12 @@ pub struct TryBlockContext {
     pub(crate) entry_loop_depth: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RecoverBlockContext {
     pub(crate) entry_loop_depth: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 enum PropagationContext {
     #[default]
     None,
@@ -66,13 +66,13 @@ pub(crate) enum FallibleBlockKind {
     Recover,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum DeferredMapKeyCheck {
     Comparable { key: Type, span: Span },
     Bounds { key: Type, span: Span },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum TestContext {
     Handle,
     Function(EcoString),
@@ -82,7 +82,7 @@ enum TestContext {
 enum ScopedValueKind {
     Value,
     Binding { id: BindingId, mutable: bool },
-    Const,
+    Const { id: BindingId, initialized: bool },
 }
 
 #[derive(Debug, Clone)]
@@ -91,14 +91,14 @@ struct ScopedValue {
     kind: ScopedValueKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum FunctionContext {
     LambdaPendingReturn,
     Lambda(FunctionBodyContext),
     Named(FunctionBodyContext),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FunctionBodyContext {
     return_type: Type,
     deferred_map_key_checks: Vec<DeferredMapKeyCheck>,
@@ -133,7 +133,7 @@ impl FunctionContext {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Scope {
     values: FlatMap<String, ScopedValue>,
     generic_parameters: HashMap<String, Vec<Type>>,
@@ -191,12 +191,15 @@ impl Scope {
         );
     }
 
-    pub(crate) fn insert_const(&mut self, name: String, ty: Type) {
+    pub(crate) fn insert_const(&mut self, name: String, ty: Type, id: BindingId) {
         self.values.insert(
             name,
             ScopedValue {
                 ty,
-                kind: ScopedValueKind::Const,
+                kind: ScopedValueKind::Const {
+                    id,
+                    initialized: false,
+                },
             },
         );
     }
@@ -218,6 +221,7 @@ impl Scope {
     }
 }
 
+#[derive(Clone)]
 pub struct Scopes {
     stack: Vec<Scope>,
 }
@@ -259,6 +263,31 @@ impl Scopes {
         self.lookup_scoped_value(name).map(|value| &value.ty)
     }
 
+    pub(crate) fn binding_ids(&self) -> impl Iterator<Item = BindingId> + '_ {
+        self.stack
+            .iter()
+            .flat_map(|scope| scope.values.iter())
+            .filter_map(|(_, value)| match value.kind {
+                ScopedValueKind::Binding { id, .. } | ScopedValueKind::Const { id, .. } => Some(id),
+                _ => None,
+            })
+    }
+
+    pub(crate) fn binding_type(&self, binding: BindingId) -> Option<&Type> {
+        self.stack
+            .iter()
+            .rev()
+            .flat_map(|scope| scope.values.iter())
+            .find_map(|(_, value)| match value.kind {
+                ScopedValueKind::Binding { id, .. } | ScopedValueKind::Const { id, .. }
+                    if id == binding =>
+                {
+                    Some(&value.ty)
+                }
+                _ => None,
+            })
+    }
+
     /// Check whether the visible value is a mutable binding.
     pub(crate) fn lookup_mutable(&self, name: &str) -> bool {
         matches!(
@@ -271,15 +300,34 @@ impl Scopes {
     pub(crate) fn lookup_const(&self, name: &str) -> bool {
         matches!(
             self.lookup_scoped_value(name).map(|value| value.kind),
-            Some(ScopedValueKind::Const)
+            Some(ScopedValueKind::Const { .. })
         )
+    }
+
+    pub(crate) fn const_is_uninitialized(&self, name: &str) -> bool {
+        matches!(
+            self.lookup_scoped_value(name).map(|value| value.kind),
+            Some(ScopedValueKind::Const {
+                initialized: false,
+                ..
+            })
+        )
+    }
+
+    pub(crate) fn initialize_const(&mut self, name: &str, binding: BindingId) {
+        if let Some(value) = self.current_mut().values.get_mut(name)
+            && let ScopedValueKind::Const { id, initialized } = &mut value.kind
+            && *id == binding
+        {
+            *initialized = true;
+        }
     }
 
     /// Look up a binding ID by walking the scope stack from top to bottom.
     pub(crate) fn lookup_binding_id(&self, name: &str) -> Option<BindingId> {
         match self.lookup_scoped_value(name)?.kind {
-            ScopedValueKind::Binding { id, .. } => Some(id),
-            ScopedValueKind::Value | ScopedValueKind::Const => None,
+            ScopedValueKind::Binding { id, .. } | ScopedValueKind::Const { id, .. } => Some(id),
+            ScopedValueKind::Value => None,
         }
     }
 
@@ -547,9 +595,9 @@ mod tests {
 
         scopes
             .current_mut()
-            .insert_const("value".into(), Type::Error);
+            .insert_const("value".into(), Type::Error, BindingId::new(99));
 
-        assert_eq!(scopes.lookup_binding_id("value"), None);
+        assert_eq!(scopes.lookup_binding_id("value"), Some(BindingId::new(99)));
         assert!(!scopes.lookup_mutable("value"));
         assert!(scopes.lookup_const("value"));
     }

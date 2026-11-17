@@ -83,7 +83,7 @@ impl TaskState {
         self.pending.test_functions.extend(records);
     }
 
-    pub(super) fn finalize_tests(&mut self, store: &mut Store) {
+    pub(crate) fn finalize_tests(&mut self, store: &mut Store) {
         for test in mem::take(&mut self.pending.test_functions) {
             store.test_index.push(test);
         }

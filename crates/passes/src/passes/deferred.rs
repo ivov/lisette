@@ -10,6 +10,14 @@ use syntax::types::Type;
 use syntax::types::{CompoundKind, TypeVarId};
 
 pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
+    let DeferredChecks {
+        generic_calls,
+        generic_bounds,
+        empty_collections,
+        empty_literals,
+        slice_makes,
+        statement_tails,
+    } = checks;
     let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
     let mut collected = Vec::new();
     let mut report_vars = |ty: &Type, package_id: &str| {
@@ -21,7 +29,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         }
         is_new
     };
-    for obligation in &checks.generic_bounds {
+    for obligation in generic_bounds {
         if obligation.argument.has_unbound_variables()
             && report_vars(&obligation.argument, &obligation.package_id)
         {
@@ -49,12 +57,12 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         }
     }
 
-    for check in &checks.generic_calls {
+    for check in generic_calls {
         if check.ty.has_unbound_variables() && report_vars(&check.ty, &check.package_id) {
             sink.push(diagnostics::infer::cannot_infer_type_argument(check.span));
         }
     }
-    for check in &checks.empty_collections {
+    for check in empty_collections {
         if check.ty.has_unbound_variables() && report_vars(&check.ty, &check.package_id) {
             sink.push(diagnostics::infer::uninferred_binding(
                 &check.name,
@@ -63,7 +71,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         }
     }
     let mut reported_literal_spans = HashSet::default();
-    for check in &checks.empty_literals {
+    for check in empty_literals {
         if !check.ty.has_unbound_variables() {
             continue;
         }
@@ -79,7 +87,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
             sink.push(diagnostics::infer::empty_slice_no_element_type(check.span));
         }
     }
-    for check in &checks.slice_makes {
+    for check in slice_makes {
         let slice_ty = store.peel_alias(&check.ty);
         let Some((CompoundKind::Slice, args)) = slice_ty.as_compound() else {
             continue;
@@ -105,7 +113,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
             ));
         }
     }
-    for check in &checks.statement_tails {
+    for check in statement_tails {
         if !check.expected_ty.is_unit()
             && !check.expected_ty.is_variable()
             && !check.expected_ty.is_ignored()

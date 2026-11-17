@@ -213,7 +213,7 @@ impl InferCtx<'_> {
 
     pub(super) fn infer_try_block(
         &mut self,
-        items: Vec<Expression>,
+        mut items: Vec<Expression>,
         try_keyword_span: Span,
         span: Span,
         expected_ty: &Type,
@@ -253,7 +253,7 @@ impl InferCtx<'_> {
                 usage: TryUsage::default(),
                 entry_loop_depth,
             });
-            this.register_block_local_items(&items);
+            this.register_block_local_items(&mut items);
             let new_items = this.infer_fallible_block_items(items, ok_ty.clone(), "try");
             let usage = this
                 .scopes
@@ -304,7 +304,7 @@ impl InferCtx<'_> {
 
     pub(super) fn infer_recover_block(
         &mut self,
-        items: Vec<Expression>,
+        mut items: Vec<Expression>,
         recover_keyword_span: Span,
         span: Span,
         expected_ty: &Type,
@@ -341,7 +341,7 @@ impl InferCtx<'_> {
             let entry_loop_depth = this.loop_depth();
             this.scopes
                 .set_recover_block_context(RecoverBlockContext { entry_loop_depth });
-            this.register_block_local_items(&items);
+            this.register_block_local_items(&mut items);
             this.infer_fallible_block_items(items, inner_ty.clone(), "recover")
         });
 

@@ -149,28 +149,3 @@ pub(super) fn wrap_with_impl_generics(
         },
     }
 }
-
-fn type_contains_constructor(target_id: &str, ty: &Type) -> bool {
-    walk_type(ty, &|id, _| id == target_id)
-}
-
-/// Check if a type contains a recursive generic instantiation.
-/// E.g., a method on `Box<T>` returning `Box<Box<T>>` creates a Go instantiation cycle.
-/// Returns true if `ty` contains `target_id` nested within itself (e.g. `Box<Box<T>>`).
-pub(super) fn has_recursive_instantiation(target_id: &str, ty: &Type) -> bool {
-    walk_type(ty, &|id, params| {
-        id == target_id
-            && params
-                .iter()
-                .any(|p| type_contains_constructor(target_id, p))
-    })
-}
-
-fn walk_type(ty: &Type, predicate: &dyn Fn(&str, &[Type]) -> bool) -> bool {
-    if let Type::Nominal { id, params, .. } = ty
-        && predicate(id, params)
-    {
-        return true;
-    }
-    ty.children().iter().any(|c| walk_type(c, predicate))
-}

@@ -129,8 +129,8 @@ impl TaskState {
         }
 
         let unsupported_go_symbols = take_unsupported_go_symbols(&mut file.items);
-        store
-            .get_package_mut(package_id)
+        *store
+            .edit_package(package_id)
             .expect("package was added above")
             .unsupported_go_symbols = unsupported_go_symbols;
         store.store_file(file);
@@ -144,10 +144,9 @@ impl TaskState {
             },
             |this, store| {
                 let mut items = mem::take(
-                    &mut store
-                        .get_file_mut(file_id)
-                        .expect("file must exist after store_file")
-                        .items,
+                    store
+                        .file_items_mut(file_id)
+                        .expect("file must exist after store_file"),
                 );
                 this.register_types_and_values(store, &mut items, &Visibility::Public);
             },

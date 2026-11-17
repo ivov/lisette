@@ -40,7 +40,7 @@ impl TaskState {
         type_name_entries: Vec<(Symbol, Definition)>,
     ) {
         let package = store
-            .get_package_mut(package_id)
+            .edit_package(package_id)
             .expect("package must exist for declaration");
         for (qualified_name, definition) in type_name_entries {
             package

@@ -7,7 +7,6 @@ use syntax::ast::{Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
-use std::mem;
 
 /// Outcome of unifying branch types: kept first, widened to a supertype, or failed.
 enum BranchReconciliation {
@@ -73,6 +72,7 @@ impl InferCtx<'_> {
         arm_agreement: ArmAgreement,
     ) {
         self.file_checks
+            .pending_mut()
             .branch_subsumptions
             .push(BranchSubsumption {
                 result_ty: result_ty.clone(),
@@ -82,7 +82,7 @@ impl InferCtx<'_> {
     }
 
     fn contains_pending_branch_var(&self, ty: &Type) -> bool {
-        self.file_checks.branch_subsumptions.iter().any(|o| {
+        self.file_checks.branches().iter().any(|o| {
             let Type::Var { id, .. } = self.env.shallow_resolve(&o.result_ty) else {
                 return false;
             };
@@ -90,8 +90,10 @@ impl InferCtx<'_> {
         })
     }
 
-    pub fn resolve_branch_subsumptions(&mut self) {
-        let obligations = mem::take(&mut self.file_checks.branch_subsumptions);
+    pub(in crate::checker::infer) fn resolve_branch_subsumptions(
+        &mut self,
+        obligations: Vec<BranchSubsumption>,
+    ) {
         for obligation in obligations.into_iter().rev() {
             let result_ty = if matches!(obligation.arm_agreement, ArmAgreement::Conflicting)
                 && self
@@ -137,14 +139,14 @@ impl InferCtx<'_> {
         for branch in &branches[1..] {
             let next = &branch.ty;
             if self
-                .speculatively(|this| this.try_unify(&common, next, span))
+                .unify_speculatively(|this| this.try_unify(&common, next, span))
                 .is_ok()
             {
                 continue;
             }
 
             if self
-                .speculatively(|this| this.try_unify(next, &common, span))
+                .unify_speculatively(|this| this.try_unify(next, &common, span))
                 .is_ok()
             {
                 common = next.clone();

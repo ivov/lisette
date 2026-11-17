@@ -163,7 +163,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
     };
 
     let definitions = store
-        .packages
+        .packages()
         .values()
         .flat_map(|package| package.definitions.iter())
         .map(|(name, definition)| (name.clone(), definition.clone()))
@@ -693,4 +693,18 @@ fn types_equal_with(
 
         _ => false,
     }
+}
+
+pub fn for_each_expression(expressions: &[Expression], mut visit: impl FnMut(&Expression)) {
+    let mut pending: Vec<_> = expressions.iter().rev().collect();
+    while let Some(expression) = pending.pop() {
+        visit(expression);
+        pending.extend(expression.children().into_iter().rev());
+    }
+}
+
+pub fn has_code(diagnostics: &[LisetteDiagnostic], code: &str) -> bool {
+    diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code_str() == Some(code))
 }

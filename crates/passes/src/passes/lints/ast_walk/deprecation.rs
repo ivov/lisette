@@ -8,7 +8,7 @@ use semantics::store::Store;
 
 pub(super) fn build_index(store: &Store) -> HashMap<Span, String> {
     let mut index = HashMap::default();
-    for package in store.packages.values() {
+    for package in store.packages().values() {
         for definition in package.definitions.values() {
             if is_function_type(&definition.ty)
                 && let (Some(name_span), Some(doc)) = (definition.name_span, &definition.doc)

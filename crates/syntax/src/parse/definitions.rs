@@ -655,6 +655,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Const {
+            binding: None,
             doc,
             identifier,
             identifier_span,
