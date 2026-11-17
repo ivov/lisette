@@ -27,7 +27,7 @@ func MakeShapeKindCircleKind(arg0 Circle) ShapeKind {
 	return ShapeKind{Tag: ShapeKindCircleKind, CircleKind: arg0}
 }
 
-func MakeShapeKindRectKind(arg0 float64, arg1 float64) ShapeKind {
+func MakeShapeKindRectKind(arg0, arg1 float64) ShapeKind {
 	return ShapeKind{Tag: ShapeKindRectKind, Width: arg0, Height: arg1}
 }
 

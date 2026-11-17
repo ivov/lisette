@@ -149,7 +149,7 @@ impl InferCtx<'_> {
             return Some(*span);
         }
         expression
-            .children()
+            .propagation_children()
             .into_iter()
             .find_map(Self::find_propagate)
     }

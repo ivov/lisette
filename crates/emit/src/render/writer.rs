@@ -21,19 +21,8 @@ impl GoWriter {
         }
     }
 
-    pub(crate) fn continuing(text: String, directives: bool) -> Self {
-        Self {
-            text,
-            ..Self::new(directives)
-        }
-    }
-
     pub(crate) fn into_text(self) -> String {
         self.text
-    }
-
-    pub(crate) fn directives(&self) -> bool {
-        self.directives
     }
 
     pub(crate) fn push(&mut self, character: char) {
@@ -77,13 +66,14 @@ impl GoWriter {
         }
     }
 
-    pub(crate) fn push_line_directive(&mut self, directive: &str) {
-        if !self.directives || self.inline || self.text.ends_with(directive) {
+    pub(crate) fn push_line_directive(&mut self, position: &Position) {
+        let directive = position.line_directive();
+        if !self.directives || self.inline || self.text.ends_with(&directive) {
             return;
         }
-        self.text.push_str(directive);
+        self.text.push_str(&directive);
         self.pending = None;
-        self.line = Position::from_line_directive(directive);
+        self.line = Some(position.clone());
     }
 
     pub(crate) fn line(&self) -> Option<Position> {

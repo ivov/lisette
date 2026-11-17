@@ -1,19 +1,17 @@
 use crate::OuterBindings;
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
-use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
-use crate::analyze::component_uses::{ComponentDemand, ValueDemand};
-use crate::calls::comma_ok::{CommaOkSource, CommaOkValueSlot};
-use crate::calls::go_interop::WrapperTarget;
+use crate::abi::wrapping::WrapperTarget;
+use crate::analyze::component_uses::ComponentDemand;
+use crate::analyze::component_uses::ValueDemand;
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
-use crate::control_flow::fallible_blocks::TryBlockPairPlan;
 use crate::escape_local;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::patterns::decision_tree::collect_pattern_info;
-use crate::patterns::matching::ResultFusePlan;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, Statement, assign, define, define_many, effect_statement,
@@ -24,12 +22,12 @@ use crate::plan::placement::{
     rebind_updated_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{ComponentBinding, ComponentKind, TupleBinding};
+use crate::state::bindings::{ComponentKind, TupleBinding};
 use crate::types::go_type::GoType;
-use std::mem;
 use syntax::EcoString;
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
@@ -39,12 +37,6 @@ pub(crate) struct LetSpec<'a> {
     value: &'a Expression,
     binding_ty: &'a Type,
     mutable: bool,
-}
-
-enum FallibleComponentSource<'a> {
-    TryBlock(TryBlockPairPlan<'a>),
-    CommaOk(CommaOkSource),
-    Result(ResultFusePlan<'a>),
 }
 
 pub(crate) fn needs_explicit_type_declaration(
@@ -252,59 +244,19 @@ impl Planner<'_> {
         } else {
             ComponentKind::OtherResult
         };
-        if demand.value == ValueDemand::Whole && kind.whole_value_constructor().is_none() {
-            return None;
-        }
-        let source = match (value.unwrap_parens(), kind) {
-            (Expression::TryBlock { items, ty, .. }, _)
-                if let Some(plan) = self.try_block_pair_plan(items, ty) =>
-            {
-                FallibleComponentSource::TryBlock(plan)
-            }
-            (_, ComponentKind::Option) => {
-                let source = self.comma_ok_source(value)?;
-                if source.has_nil_guard() {
-                    return None;
-                }
-                FallibleComponentSource::CommaOk(source)
-            }
-            (_, ComponentKind::ErrorResult | ComponentKind::OtherResult) => {
-                let fuse = self.result_fuse_plan(value)?;
-                if fuse.has_nil_guard() || fuse.wraps_error() || !fuse.carries_payload() {
-                    return None;
-                }
-                FallibleComponentSource::Result(fuse)
-            }
-        };
+        let source = self.component_producer(value, demand.value == ValueDemand::Whole, kind)?;
         let slot = if demand.value != ValueDemand::StatusOnly {
             self.declare(go_identifier);
             CommaOkValueSlot::Named(go_identifier.clone())
         } else {
             CommaOkValueSlot::Discarded
         };
-        let mut pair = match source {
-            FallibleComponentSource::TryBlock(plan) => plan.bind(self, slot),
-            FallibleComponentSource::CommaOk(source) => {
-                self.bind_comma_ok_pair(value, source, slot)
-            }
-            FallibleComponentSource::Result(fuse) => fuse.bind(self, slot, None),
-        };
-        let statements = mem::take(&mut pair.statements);
-        let payload = pair
-            .payload_identifier()
-            .cloned()
-            .unwrap_or_else(|| GoIdentifier::external("_".to_string()));
-        let status = pair.status_identifier().clone();
+        let (statements, components) =
+            source.components(self, slot, ty.ok_type(), kind, demand.defaults > 1)?;
         self.scope.set_component_binding(
             let_spec.identifier,
             let_spec.binding_id.as_slice(),
-            ComponentBinding {
-                value: payload,
-                status,
-                payload_type: ty.ok_type(),
-                kind,
-                shared_payload: demand.defaults > 1,
-            },
+            components,
         );
         Some(statements)
     }

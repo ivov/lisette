@@ -3,9 +3,8 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
-use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
-use crate::calls::go_interop::WrapperTarget;
+use crate::abi::wrapping::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
@@ -14,15 +13,13 @@ use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PartialVariant, PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
-    Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, define,
-    expression_statement,
+    Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
 };
-use crate::plan::calls::TaggedArgumentAdapter;
-use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout};
+use crate::plan::go_expression::BinaryOp;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
-use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
+use syntax::program::SlotOrigin;
 
 /// A bare `return v0, v1, ...` statement leaf.
 pub(crate) fn multi_value_return(values: Vec<GoExpression>) -> Statement {
@@ -280,7 +277,7 @@ fn lowered_tuple_values(
             let raw = field(tuple_value, TUPLE_FIELDS[i]);
             if planner.facts.is_nullable_option(slot_ty) {
                 let inner = planner.go_type(&slot_ty.ok_type());
-                planner.plan_option_projection(
+                planner.plan_option_payload_wrap(
                     &mut statements,
                     raw,
                     &inner,
@@ -354,90 +351,6 @@ impl Planner<'_> {
     }
 }
 
-/// Wrap a Lisette tagged-shape function value into a Go closure that
-/// presents `target_abi` to callers.
-pub(crate) fn emit_lisette_callback_wrapper(
-    planner: &mut Planner,
-    setup: &mut Vec<Statement>,
-    fn_value: GoExpression,
-    fn_type: &Type,
-    target_abi: &LoweredReturnAbi,
-) -> GoExpression {
-    let Type::Function(f) = fn_type else {
-        return fn_value;
-    };
-    let params = &f.params;
-
-    let return_type = f.return_type.as_ref();
-
-    let (param_strs, arguments) = planner.build_wrapper_params(params);
-    let params_str = param_strs;
-
-    let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value);
-
-    let mut prelude = Vec::new();
-    let inner_args: Vec<GoExpression> = arguments
-        .into_iter()
-        .zip(params.iter())
-        .map(
-            |(argument, param)| match TaggedArgumentAdapter::plan(planner, &param.ty) {
-                Some(adapter) => lower_arg_to_tagged(planner, &mut prelude, argument, &adapter),
-                None => argument,
-            },
-        )
-        .collect();
-
-    let call = GoExpression::call(GoExpression::identifier(cb_var), inner_args);
-
-    let hint = match target_abi {
-        LoweredReturnAbi::Option(_) => "opt",
-        LoweredReturnAbi::Tuple { .. } => "tup",
-        _ => "res",
-    };
-    prelude.extend(emit_lowered_result_return(
-        planner,
-        call,
-        hint,
-        return_type,
-        target_abi,
-    ));
-    GoExpression::function_literal(
-        params_str,
-        planner
-            .callable_return_go_type(&CallableReturnAbi::Lowered(target_abi.clone()), return_type),
-        LoweredBlock {
-            statements: prelude,
-        },
-        FunctionLiteralLayout::MultiLine,
-    )
-}
-
-/// Wrap a lowered-return fn into a closure re-presenting the return in
-/// `target_shape` (tagged when `None`). Pipes through tagged form so any
-/// (arg, target) shape pair works.
-pub(crate) fn emit_fn_arg_shape_adapter(
-    planner: &mut Planner,
-    setup: &mut Vec<Statement>,
-    fn_value: GoExpression,
-    arg_fn_type: &Type,
-    arg_abi: &CallableReturnAbi,
-    target_abi: &CallableReturnAbi,
-) -> Option<GoExpression> {
-    let params = arg_fn_type.get_function_params()?;
-    let arg_ret = arg_fn_type.get_function_ret()?;
-    let layout = |planner: &Planner, abi: &CallableReturnAbi| {
-        let parameters = params
-            .iter()
-            .map(|param| planner.value_layout(&param.ty, SlotOrigin::Lisette))
-            .collect();
-        let result = planner.value_layout(arg_ret, SlotOrigin::Lisette);
-        planner.function_layout(parameters, &result, abi.clone(), None)
-    };
-    let source = layout(planner, arg_abi);
-    let target = layout(planner, target_abi);
-    Some(planner.plan_function_layout_bridge(setup, fn_value, &source, &target))
-}
-
 /// Return the `source` result of `call` in the `target` ABI, through its tagged value.
 pub(crate) fn reencode_return(
     planner: &mut Planner,
@@ -456,81 +369,6 @@ pub(crate) fn reencode_return(
             statements
         }
     }
-}
-
-/// Wrap a Go-void function value so it fills a slot whose result is a type parameter.
-pub(crate) fn emit_unit_result_adapter(
-    planner: &mut Planner,
-    setup: &mut Vec<Statement>,
-    fn_value: GoExpression,
-    fn_type: &Type,
-    slot_result: Option<GoType>,
-) -> GoExpression {
-    let Some(params) = fn_type.get_function_params() else {
-        return fn_value;
-    };
-    let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value);
-    let (param_strs, arguments) = planner.build_wrapper_params(params);
-    let call = GoExpression::call(GoExpression::identifier(cb_var), arguments);
-    let (result, tail) = match slot_result {
-        Some(result) => (result, LoweredStatement::UnreachablePanic.into()),
-        None => (
-            GoType::new("struct{}"),
-            plain_return(GoExpression::empty_composite(GoType::new("struct{}"))),
-        ),
-    };
-    GoExpression::function_literal(
-        param_strs,
-        result,
-        LoweredBlock {
-            statements: vec![expression_statement(call), tail],
-        },
-        FunctionLiteralLayout::MultiLine,
-    )
-}
-
-/// Emit the already planned conversion from lowered Go ABI to a tagged function value.
-pub(crate) fn lower_arg_to_tagged(
-    planner: &mut Planner,
-    prelude: &mut Vec<Statement>,
-    argument: GoExpression,
-    adapter: &TaggedArgumentAdapter,
-) -> GoExpression {
-    let function = adapter
-        .function
-        .as_function_type()
-        .expect("tagged adapter contains a function signature");
-    let inner_params = &function.params;
-    let inner_ret = function.return_type.as_ref();
-    let abi = adapter.result.clone();
-
-    let (inner_param_strs, inner_arguments) = planner.build_wrapper_params(inner_params);
-    let inner_call = GoExpression::call(argument, inner_arguments);
-    let tagged_ret = planner.go_type(inner_ret);
-
-    let (body, outcome) = planner.lower_abi_wrapping(
-        inner_call,
-        &CallableReturnAbi::Lowered(abi),
-        inner_ret,
-        adapter.bridge.clone(),
-        WrapperTarget::Return,
-    );
-    assert!(
-        outcome.is_none(),
-        "tagged adapter returns its result directly"
-    );
-
-    let tagged_var = planner.fresh_declared("tagged");
-    prelude.push(define(
-        tagged_var.clone(),
-        GoExpression::function_literal(
-            inner_param_strs,
-            tagged_ret,
-            LoweredBlock { statements: body },
-            FunctionLiteralLayout::MultiLine,
-        ),
-    ));
-    GoExpression::identifier(tagged_var)
 }
 
 /// Normalize alias layouts to the callable's result slots, then handle packed
@@ -720,6 +558,6 @@ fn lower_nullable_slot_value(
     let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.go_type(&slot_ty.ok_type());
     value.map_expression(|setup, value| {
-        planner.plan_option_projection(setup, value, &inner, &LayoutBridge::Identity, false)
+        planner.plan_option_payload_wrap(setup, value, &inner, &LayoutBridge::Identity, false)
     })
 }

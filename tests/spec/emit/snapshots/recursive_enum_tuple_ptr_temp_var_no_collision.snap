@@ -24,7 +24,7 @@ func MakeNodeLeaf(arg0 int) Node {
 	return Node{Tag: NodeLeaf, Leaf: arg0}
 }
 
-func MakeNodeBranch(arg0 Node, arg1 Node) Node {
+func MakeNodeBranch(arg0, arg1 Node) Node {
 	return Node{Tag: NodeBranch, Branch0: &arg0, Branch1: &arg1}
 }
 

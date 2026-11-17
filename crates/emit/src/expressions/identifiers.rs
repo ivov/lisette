@@ -25,7 +25,7 @@ impl Planner<'_> {
                 return self.emit_definition_identifier(name, instantiation, ty, ctx);
             }
             IdentifierResolution::Binding(id) => self.scope.resolve_binding_id(*id),
-            // Unresolved names such as function-local consts bind by spelling.
+
             IdentifierResolution::Unresolved => self.scope.resolve_identifier_binding(value),
         };
         let local = match binding {
@@ -179,7 +179,7 @@ pub(crate) fn method_expression(
     go_method: String,
 ) -> GoExpression {
     let receiver = if pointer_receiver {
-        GoType::with_dependencies(format!("(*{})", receiver_type.code), [&receiver_type])
+        GoType::pointer_to(&receiver_type).parenthesized()
     } else {
         receiver_type
     };

@@ -6,8 +6,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::plan::bodies::{
-    AssignForm, CompoundKind, Definition, ElseArm, IfOrigin, IfPlan, LoopTransfer, LoweredBlock,
-    LoweredStatement, SelectArmKind, Statement, SwitchKind, for_each_statements_mut,
+    AssignForm, CompoundKind, Definition, ElseArm, IfOrigin, IfPlan, LoopKind, LoopTransfer,
+    LoweredBlock, LoweredStatement, SelectArmKind, Statement, SwitchKind, for_each_statements_mut,
 };
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{
@@ -209,6 +209,10 @@ fn found_loop_return(block: &[Statement]) -> Option<FoundLoopReturn> {
     let LoweredStatement::Loop(plan) = &block[loop_at].kind else {
         return None;
     };
+
+    if !matches!(plan.kind, LoopKind::FoundFlagSearch) {
+        return None;
+    }
     let element = found_hit(&plan.body.statements.last()?.kind, &flag, value.as_ref())?;
     let failure = flag_guarded_return(&block[loop_at + 1].kind, &flag)?;
     let LoweredStatement::Return(success) = &block[loop_at + 2].kind else {
@@ -1628,7 +1632,7 @@ mod tests {
             .into(),
             define("found".to_string(), literal("false")),
             LoweredStatement::Loop(LoopPlan {
-                kind: LoopKind::Generated { label: None },
+                kind: LoopKind::FoundFlagSearch,
                 header: LoopHeader::Range {
                     key: None,
                     value: Some("element".to_string().into()),
@@ -1649,6 +1653,16 @@ mod tests {
             .into(),
             returned(name("value")),
         ];
+        let mut lookalike = statements.clone();
+        if let LoweredStatement::Loop(plan) = &mut lookalike[2].kind {
+            plan.kind = LoopKind::Source { label: None };
+        }
+        let original = lookalike.clone();
+        return_found_elements_directly(&mut lookalike);
+        assert_eq!(
+            lookalike, original,
+            "a user loop with the same shape does not get the found-flag rewrite"
+        );
         return_found_elements_directly(&mut statements);
         let [found, failure] = statements.as_slice() else {
             panic!("expected loop and failure return");

@@ -105,9 +105,7 @@ impl TaskState {
         );
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &[]);
 
-        let package = store
-            .get_package_mut(package_id)
-            .expect("package must exist");
+        let package = store.edit_package(package_id).expect("package must exist");
         if let Some(methods) = package
             .definitions
             .get_mut(qualified.as_str())

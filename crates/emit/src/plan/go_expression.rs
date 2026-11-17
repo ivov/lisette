@@ -5,10 +5,10 @@ use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::local::GoIdentifier;
 use crate::render::Renderer;
 use crate::render::writer::GoWriter;
+use crate::types::go_type::GoTypeShape;
 use crate::types::go_type::{GoType, conversion_prefix};
 use crate::utils::group_params;
 use std::ops::{Deref, DerefMut};
-use std::slice;
 use std::sync::Arc;
 use syntax::ast::BinaryOperator;
 
@@ -290,17 +290,6 @@ impl Position {
     pub(crate) fn line_directive(&self) -> String {
         format!("//line {}:{}:{}\n", self.path, self.line, self.column)
     }
-
-    pub(crate) fn from_line_directive(directive: &str) -> Option<Self> {
-        let directive = directive.strip_prefix("//line ")?.trim_end();
-        let (rest, column) = directive.rsplit_once(':')?;
-        let (path, line) = rest.rsplit_once(':')?;
-        Some(Self {
-            path: path.into(),
-            line: line.parse().ok()?,
-            column: column.parse().ok()?,
-        })
-    }
 }
 
 /// Trees that differ only in their positions are equal.
@@ -456,7 +445,7 @@ impl GoExpressionNode {
                 go_type: Some(go_type),
                 elements,
                 ..
-            } if go_type.code == "struct{}" && elements.is_empty()
+            } if matches!(go_type.shape.as_ref(), GoTypeShape::Struct(fields) if fields.is_empty()) && elements.is_empty()
         )
     }
 
@@ -911,43 +900,21 @@ impl GoExpressionNode {
                     output.push_str(&result.code);
                 }
                 output.push_str(" {");
-                let lines: Vec<String> = body
-                    .statements
-                    .iter()
-                    .map(|statement| Renderer.render_setup(slice::from_ref(statement), false))
-                    .collect();
-                let single_line = lines
-                    .iter()
-                    .all(|line| line.trim_end_matches('\n').lines().count() <= 1);
+                let single_line = Renderer.can_inline_block(body);
                 let start = output.line();
                 if matches!(layout, FunctionLiteralLayout::Inline) && single_line {
-                    let joined = lines
-                        .iter()
-                        .map(|line| line.trim_end_matches('\n'))
-                        .collect::<Vec<_>>()
-                        .join("; ");
-                    if !joined.is_empty() {
+                    if !body.renders_empty() {
                         output.push(' ');
-                        if output.directives() {
-                            let outer = output.set_inline(true);
-                            Renderer.render_lowered_block(output, body);
-                            output.set_inline(outer);
-                        } else {
-                            output.push_str(&joined);
-                        }
+                        let outer = output.set_inline(true);
+                        Renderer.render_lowered_block(output, body);
+                        output.set_inline(outer);
                         output.push(' ');
                     }
                     output.push('}');
                     output.close_literal(&SourcePosition::default(), start);
                 } else {
                     output.push('\n');
-                    if output.directives() {
-                        Renderer.render_lowered_block(output, body);
-                    } else {
-                        for line in &lines {
-                            output.push_str(line);
-                        }
-                    }
+                    Renderer.render_lowered_block(output, body);
                     output.push('}');
                     output.close_literal(end, start);
                 }

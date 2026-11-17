@@ -238,9 +238,13 @@ fn register_cached_go_package(
         file_ids = &owned_file_id;
     }
 
-    let package = store.get_package_mut(package_id).unwrap();
+    let package = store.edit_package(package_id).unwrap();
     for (qualified_name, cached_definition) in &cached.definitions {
-        cached_definition.install_into(package, qualified_name.clone().into(), file_ids);
+        cached_definition.install_into(
+            package.definitions,
+            qualified_name.clone().into(),
+            file_ids,
+        );
     }
     package.unsupported_go_symbols.extend(
         cached

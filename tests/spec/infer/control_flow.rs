@@ -1,3 +1,4 @@
+use crate::_harness::infer::checker_errors;
 use crate::spec::infer::*;
 
 #[test]
@@ -3263,4 +3264,30 @@ fn match_value_diverging_arm_first_with_ref_arm_resolves_receiver() {
         "#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn shadowed_panic_can_be_used_as_a_function_value() {
+    let errors = checker_errors(
+        "fn invoke(panic: fn() -> int) -> int { let g = panic; g() }; fn main() { let _ = invoke(|| 7) }",
+        &[],
+    );
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn propagation_in_lambda_argument_stays_in_lambda() {
+    let source = r#"fn check(f: fn() -> Option<int>) -> bool { f().is_some() }
+fn main() { if check(|| { let n = Some(1)?; Some(n) }) {} }"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{source}\n{errors:?}");
+}
+
+#[test]
+fn shadowed_panic_call_is_an_ordinary_function_call() {
+    let source = r#"fn consume(n: int) {}
+fn invoke(panic: fn() -> int) { consume(panic()) }
+fn main() { invoke(|| 7) }"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{source}\n{errors:?}");
 }

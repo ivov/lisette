@@ -11,7 +11,7 @@ enum MethodSource<'a> {
     None,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub(super) struct ImportState {
     pub(super) prefixed: HashMap<String, PrefixedImport>,
     /// Packages whose exports are available without prefix (current package and prelude)
@@ -19,7 +19,7 @@ pub(super) struct ImportState {
     pub(super) has_unnamed_failure: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) enum PrefixedImport {
     Namespace {
         package_id: String,

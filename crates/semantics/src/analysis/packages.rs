@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::cache::{CacheKey, CacheKeyInputs, DiagnosticMode};
+use crate::cache::all_go_outputs_exist;
+use crate::cache::{
+    CacheKey, CacheKeyInputs, DiagnosticMode, compute_emit_artifact_hash, global_emit_context,
+};
 use crate::checker::InferredFile;
 use crate::loader;
 use crate::path::DisplayPathBase;
@@ -9,7 +12,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ParseError;
 use syntax::ast::Span;
-use syntax::program::UninferredExports;
+use syntax::program::{GoMethodPolicy, UninferredExports};
 
 struct CacheCandidate {
     pending: CompiledPendingPackage,
@@ -242,7 +245,8 @@ pub(super) fn infer_all_packages(
 
         let compiled = (!is_entry).then(|| CompiledPackage {
             package_id: package_id.clone(),
-            artifact_hash: compute_emit_artifact_hash(production_hash, key_context.go_module),
+
+            artifact_hash: production_hash,
             key: CacheKey::new(CacheKeyInputs {
                 target: key_context.target,
                 sources: full_hash,
@@ -285,14 +289,7 @@ pub(super) fn infer_all_packages(
     let go_cache_package_ids = input.cache.go_package_ids();
 
     let cache_load = match input.cache.package_root() {
-        Some(root) => load_cache_candidates(
-            &mut checker,
-            store,
-            candidates,
-            root,
-            input.compile_phase,
-            input.locator.target(),
-        ),
+        Some(root) => load_cache_candidates(store, candidates, root, input.locator.target()),
         None => {
             debug_assert!(candidates.is_empty());
             CacheLoad::default()
@@ -301,7 +298,7 @@ pub(super) fn infer_all_packages(
     cached_packages.extend(cache_load.cached);
     unparsed.extend(cache_load.missed);
 
-    let has_parse_errors = parse_and_store_packages(
+    let mut has_parse_errors = parse_and_store_packages(
         &mut checker,
         store,
         unparsed,
@@ -325,12 +322,101 @@ pub(super) fn infer_all_packages(
             package
         })
         .collect();
-    let registered = register_packages(&mut checker, store, predeclared, dependencies);
+    let mut registered = register_packages(&mut checker, store, predeclared, dependencies);
+
+    checker.finalize_registration(store);
+    let policy = GoMethodPolicy::compute(
+        store
+            .packages()
+            .values()
+            .flat_map(|package| package.definitions.iter()),
+        |id| store.get_definition(id),
+    );
+    let emit_contexts: HashMap<_, _> = store
+        .packages()
+        .keys()
+        .map(|package_id| {
+            let mut reachable = HashSet::default();
+            let mut pending = vec![package_id.clone(), "prelude".to_string()];
+            while let Some(id) = pending.pop() {
+                if reachable.insert(id.clone()) {
+                    pending.extend(dependencies.dependencies(&id).map(ToString::to_string));
+                }
+            }
+            let relevant = policy.for_definitions(
+                store
+                    .packages()
+                    .iter()
+                    .filter(|(id, _)| reachable.contains(*id))
+                    .flat_map(|(_, package)| package.definitions.iter()),
+            );
+            (package_id.clone(), global_emit_context(&relevant))
+        })
+        .collect();
+    let finalize_hash = |package: &mut CompiledPackage| {
+        package.artifact_hash = compute_emit_artifact_hash(
+            package.artifact_hash,
+            key_context.go_module,
+            emit_contexts[&package.package_id],
+        );
+    };
+    for package in &mut compiled_packages {
+        finalize_hash(package);
+    }
+
+    let mut rebuilt_artifacts = false;
+    for mut artifact in cache_load.artifacts {
+        finalize_hash(&mut artifact.pending.package);
+        if !input.compile_phase.emits()
+            || (artifact.outputs_exist
+                && artifact.stamp == Some(artifact.pending.package.artifact_hash))
+        {
+            checker.collect_cached_package_tests(store, &artifact.pending.package.package_id);
+            continue;
+        }
+        let package_id = &artifact.pending.package.package_id;
+        let mut files: Vec<_> = store
+            .get_package(package_id)
+            .unwrap()
+            .files
+            .values()
+            .cloned()
+            .collect();
+        files.sort_by_key(|file| file.id);
+        for file in &mut files {
+            let parsed = input
+                .recover_target
+                .parse_mode(package_id)
+                .parse(&file.source, file.id);
+            has_parse_errors |= parsed.status != FileParseStatus::Clean;
+            checker.sink.extend_parse_errors(parsed.errors);
+            file.items = parsed.ast;
+            file.parse_status = parsed.status;
+            file.file_comment = parsed.file_comment;
+            if artifact.rewrite_root_import {
+                file.rewrite_import(loader::ROOT_IMPORT, ENTRY_PACKAGE_ID);
+            }
+        }
+        *store.edit_package(package_id).unwrap().definitions = Default::default();
+        for file in files {
+            store.store_file(file);
+        }
+        let predeclared = checker.predeclare_package(store, package_id);
+        registered.push(checker.register_predeclared_package(store, predeclared));
+        rebuilt_artifacts = true;
+        cached_packages.remove(package_id);
+        compiled_packages.push(artifact.pending.package);
+    }
+    if rebuilt_artifacts {
+        checker.finalize_registration(store);
+    }
+
+    checker.finalize_tests(store);
     infer_packages(&mut checker, store, registered);
 
     if !input.cache.is_disabled() {
         let all_go_packages: Vec<String> = store
-            .packages
+            .packages()
             .keys()
             .filter(|id| id.strip_prefix("go:").is_some_and(deps::is_stdlib))
             .cloned()
@@ -488,26 +574,31 @@ fn register_go_package(
     }
 }
 
+struct CachedArtifact {
+    pending: CompiledPendingPackage,
+    stamp: Option<u64>,
+    outputs_exist: bool,
+    rewrite_root_import: bool,
+}
+
 #[derive(Default)]
 struct CacheLoad {
     cached: HashSet<String>,
     diagnostics: Vec<LisetteDiagnostic>,
     missed: Vec<UnparsedPackage>,
+    artifacts: Vec<CachedArtifact>,
 }
 
 /// Merges cache hits into the store and returns the misses, still unparsed.
 fn load_cache_candidates(
-    checker: &mut TaskState,
     store: &mut Store,
     candidates: Vec<CacheCandidate>,
     project_root: &Path,
-    compile_phase: CompilePhase,
     target: stdlib::Target,
 ) -> CacheLoad {
     let load = |c: &CacheCandidate| {
         let compiled = &c.pending.package;
-        let expected_artifact_hash = compile_phase.emits().then_some(compiled.artifact_hash);
-        try_load_cache(compiled, expected_artifact_hash, project_root, target)
+        try_load_cache(compiled, project_root, target)
     };
     let loaded: Vec<Option<PackageInterface>> = if candidates.len() < PARALLEL_THRESHOLD {
         candidates.iter().map(load).collect()
@@ -530,8 +621,19 @@ fn load_cache_candidates(
         result
             .diagnostics
             .extend(interface.take_diagnostics(file_id_base));
+        let package_id = candidate.pending.package.package_id.clone();
+        result.artifacts.push(CachedArtifact {
+            stamp: interface.emit_stamp,
+            outputs_exist: all_go_outputs_exist(
+                &candidate.pending.package.package_id,
+                &interface.files,
+                project_root,
+            ),
+            rewrite_root_import: candidate.rewrite_root_import,
+            pending: candidate.pending,
+        });
         build_jobs.push(CacheBuildJob {
-            package_id: candidate.pending.package.package_id,
+            package_id,
             interface,
             file_id_base,
         });
@@ -557,7 +659,6 @@ fn load_cache_candidates(
     for package in built {
         let package_id = package.id.clone();
         store.insert_prebuilt_package(package);
-        checker.collect_cached_package_tests(store, &package_id);
         result.cached.insert(package_id);
     }
 
@@ -599,8 +700,7 @@ fn register_packages(
             .into_iter()
             .map(|package_id| {
                 let package = store
-                    .packages
-                    .remove(&package_id)
+                    .take_package(&package_id)
                     .expect("fresh package must be stored before registration");
                 let input = inputs
                     .remove(&package_id)
@@ -623,11 +723,10 @@ fn register_packages(
                 let mut registered_inputs = Vec::with_capacity(chunk.len());
                 for (package, input) in chunk {
                     let package_id = package.id.clone();
-                    view.packages.insert(package_id.clone(), package);
+                    view.insert_shared_package(package);
                     registered_inputs.push(worker.register_predeclared_package(&mut view, input));
                     let package = view
-                        .packages
-                        .remove(&package_id)
+                        .take_package(&package_id)
                         .expect("registered package must remain in view");
                     registered_packages.push(package);
                 }
@@ -642,7 +741,7 @@ fn register_packages(
         let mut task_outputs = Vec::with_capacity(outputs.len());
         for output in outputs {
             for package in output.packages {
-                store.packages.insert(package.id.clone(), package);
+                store.insert_shared_package(package);
             }
             all_registered.extend(output.registered);
             task_outputs.push(output.task);
@@ -654,8 +753,6 @@ fn register_packages(
 }
 
 fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<RegisteredPackage>) {
-    checker.finalize_registration(store);
-
     let inferred_files = if packages.len() < PARALLEL_THRESHOLD {
         let mut inferred_files = Vec::new();
         for package in packages {

@@ -52,7 +52,7 @@ impl TaskState {
     ) {
         let mut seen = rustc_hash::FxHashSet::default();
         for (ty, span) in types {
-            if seen.insert(ty.to_string()) {
+            if seen.insert(ty.clone()) {
                 let site = BoundsCheckSite {
                     store,
                     own_generics,
@@ -189,7 +189,7 @@ impl TaskState {
         let mut seen = rustc_hash::FxHashSet::default();
         let mut ctx = InferCtx::new(self, store);
         for (argument, required, span) in pending {
-            if seen.insert((span, argument.to_string(), required.to_string())) {
+            if seen.insert((span, argument.clone(), required.clone())) {
                 ctx.check_concrete_bound(&argument, &required, &span);
             }
         }

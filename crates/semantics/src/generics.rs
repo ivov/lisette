@@ -150,7 +150,7 @@ impl TaskState {
             // Frozen facts may come from workers with different type-variable tables.
             let argument = store.peel_alias(&obligation.argument);
             let required = store.peel_alias(&obligation.required);
-            let key = (obligation.span, argument.to_string(), required.to_string());
+            let key = (obligation.span, argument.clone(), required.clone());
             let builtin = required
                 .get_qualified_id()
                 .and_then(BuiltinBound::from_qualified_id);
@@ -296,7 +296,7 @@ mod tests {
         let mut store = Store::new();
         store.add_package("m");
         store
-            .get_package_mut("m")
+            .edit_package("m")
             .unwrap()
             .definitions
             .insert(Symbol::from_raw("m.A"), self_referential_alias());

@@ -8926,6 +8926,20 @@ fn main() {
 }
 
 #[test]
+fn local_constants_do_not_trigger_variable_lints() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+    const UNUSED = 2
+    const _HIDDEN = 3
+    const USED = 4
+    let _ = USED
+}
+"#
+    );
+}
+
+#[test]
 fn unused_constant() {
     assert_lint_snapshot!(
         r#"

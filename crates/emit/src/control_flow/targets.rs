@@ -78,7 +78,10 @@ impl Legalizer {
         match statement {
             LoweredStatement::If(plan) => self.walk_if(plan, interception),
             LoweredStatement::Loop(plan) => {
-                if matches!(&plan.kind, LoopKind::Generated { .. }) {
+                if matches!(
+                    &plan.kind,
+                    LoopKind::Generated { .. } | LoopKind::FoundFlagSearch
+                ) {
                     self.walk_block(&mut plan.body, Interception::All);
                 }
             }

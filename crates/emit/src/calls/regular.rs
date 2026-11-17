@@ -2,6 +2,8 @@ use super::arguments::CallArgsContext;
 use crate::calls::dispatch::{
     CallArgShape, all_type_params_inferrable, callee_is_go_builtin, go_builtin_name,
 };
+use syntax::program::GoTypeRecipe;
+use syntax::program::resolved_definition;
 
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
@@ -44,9 +46,10 @@ fn builtin_constant(builtin: &str, values: &[GoExpression]) -> Option<ConstantKi
 }
 
 fn go_builtin_conversion(type_args: &GoType) -> Option<GoType> {
-    let inner = type_args.code.strip_prefix('[')?.strip_suffix(']')?;
-    (!inner.is_empty() && !inner.contains(','))
-        .then(|| GoType::with_dependencies(inner, [type_args]))
+    let [argument] = type_args.arguments() else {
+        return None;
+    };
+    Some(argument.clone())
 }
 
 pub(super) fn receiver_type_binding(
@@ -135,16 +138,12 @@ fn classify_fmt_argument(planner: &Planner, expression: &Expression) -> Option<F
             .then_some(FmtArgument::Sprintf),
         Expression::Call {
             expression: callee,
-            args,
+            args: arguments,
             spread,
             ..
-        } => match (
-            callee.unwrap_parens().as_dotted_path().as_deref(),
-            args.as_slice(),
-            spread,
-        ) {
-            (Some("fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
-            (Some("fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
+        } => match (resolved_definition(callee), arguments.as_slice(), spread) {
+            (Some("go:fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
+            (Some("go:fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
             _ => None,
         },
         _ => None,
@@ -157,10 +156,10 @@ enum FmtPrint {
 }
 
 impl FmtPrint {
-    fn from_callee(callee: &str) -> Option<Self> {
-        match callee {
-            "fmt.Print" => Some(Self::Print),
-            "fmt.Println" => Some(Self::Println),
+    fn from_callee(callee: &GoExpressionNode) -> Option<Self> {
+        match fmt_member(callee)? {
+            "Print" => Some(Self::Print),
+            "Println" => Some(Self::Println),
             _ => None,
         }
     }
@@ -176,7 +175,7 @@ fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Opti
     else {
         return None;
     };
-    (called.print() == callee).then_some(arguments.as_slice())
+    (fmt_member(called) == Some(callee)).then_some(arguments.as_slice())
 }
 
 /// Collapse redundant fmt wrappers:
@@ -188,14 +187,14 @@ fn collapse_fmt_print(
     args: &[Expression],
     arguments: &[GoExpression],
 ) -> Option<GoExpression> {
-    let print = FmtPrint::from_callee(&callee.rendered())?;
+    let print = FmtPrint::from_callee(callee.node())?;
     let ([arg_expression], [argument]) = (args, arguments) else {
         return None;
     };
 
     match classify_fmt_argument(planner, arg_expression)? {
         FmtArgument::Sprintf => {
-            let mut inner = call_arguments_of(argument.node(), "fmt.Sprintf")?.to_vec();
+            let mut inner = call_arguments_of(argument.node(), "Sprintf")?.to_vec();
             if let FmtPrint::Println = print {
                 let Some(GoExpressionNode::Literal(format)) = inner.first_mut().map(AsMut::as_mut)
                 else {
@@ -210,7 +209,7 @@ fn collapse_fmt_print(
             ))
         }
         FmtArgument::Sprint => {
-            let inner = call_arguments_of(argument.node(), "fmt.Sprint")?;
+            let inner = call_arguments_of(argument.node(), "Sprint")?;
             Some(GoExpression::call(
                 callee.clone(),
                 inner
@@ -413,7 +412,7 @@ impl<'a> Planner<'a> {
             .values
             .pop()
             .expect("sequenced exactly one argument");
-        let call = match call_arguments_of(value.node(), "fmt.Sprintf") {
+        let call = match call_arguments_of(value.node(), "Sprintf") {
             Some(arguments) => GoExpression::call(
                 GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
                 arguments
@@ -430,11 +429,11 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::plain_call(sequenced.setup, call))
     }
 
-    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<String> {
+    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
         callee
             .declaration?
             .go_type_param_recipe()
-            .map(str::to_string)
+            .map(<[_]>::to_vec)
     }
 
     /// True when Go can infer every type parameter of a collapsed callee from
@@ -542,4 +541,13 @@ fn spread_needs_any_wrap(
             .get_type()
             .inner()
             .is_some_and(|ty| !facts.resolves_to_unknown(&ty))
+}
+
+fn fmt_member(node: &GoExpressionNode) -> Option<&str> {
+    match node {
+        GoExpressionNode::Qualified { package, name } if package.package().path() == "fmt" => {
+            Some(name)
+        }
+        _ => None,
+    }
 }

@@ -15,41 +15,47 @@ use super::dot_access::DotAccessResolutionArgs;
 impl InferCtx<'_> {
     pub(super) fn as_instance_method(
         &mut self,
-        args: &DotAccessResolutionArgs,
+        arguments: &DotAccessResolutionArgs,
     ) -> Option<Expression> {
         let store = self.store;
 
         // Array methods live on the size-erased prelude `Array` impl, reached via
         // the `method_lookup_key` bridge, with the size ignored in receiver unify.
         let (method_ty, is_exported, resolved_definition) = if let Type::Array { .. } =
-            &args.deref_ty
+            &arguments.deref_ty
         {
             (
-                self.method_of_type(store, &args.deref_ty, args.member_name)
+                self.method_of_type(store, &arguments.deref_ty, arguments.member_name)
                     .map(|method| method.ty)?,
                 true,
-                self.resolve_instance_method_definition(&args.deref_ty, args.member_name),
+                self.resolve_instance_method_definition(&arguments.deref_ty, arguments.member_name),
             )
         } else {
             if !matches!(
-                args.deref_ty,
+                arguments.deref_ty,
                 Type::Nominal { .. } | Type::Parameter(_) | Type::Compound { .. } | Type::Simple(_)
             ) {
                 return None;
             }
 
-            let method_ty = self.method_of_type(store, &args.deref_ty, args.member_name)?;
+            let method_ty =
+                self.method_of_type(store, &arguments.deref_ty, arguments.member_name)?;
 
-            if self.is_type_level_receiver(args.expression)
-                && self.method_is_promoted(&args.deref_ty, args.member_name)
+            if self.is_type_level_receiver(arguments.expression)
+                && self.method_is_promoted(&arguments.deref_ty, arguments.member_name)
             {
-                return self.as_promoted_method_expression(args, &method_ty.ty);
+                return self.as_promoted_method_expression(arguments, &method_ty.ty);
             }
 
-            let resolved_definition =
-                self.check_instance_method_access(&args.deref_ty, &method_ty.ty, args, None);
+            let resolved_definition = self.check_instance_method_access(
+                &arguments.deref_ty,
+                &method_ty.ty,
+                arguments,
+                None,
+            );
 
-            let is_exported = self.is_dot_access_exported(&args.deref_ty, args.member_name);
+            let is_exported = method_ty.visibility.is_public()
+                || self.is_dot_access_exported(&arguments.deref_ty, arguments.member_name);
             (method_ty.ty, is_exported, resolved_definition)
         };
 
@@ -60,7 +66,7 @@ impl InferCtx<'_> {
         }
 
         if let Some(expression) = self.as_method_value(
-            args,
+            arguments,
             &mut method_ty,
             is_exported,
             resolved_definition.clone(),
@@ -69,10 +75,10 @@ impl InferCtx<'_> {
             return Some(expression);
         }
 
-        if self.is_callee_context() && self.is_type_level_receiver(args.expression) {
+        if self.is_callee_context() && self.is_type_level_receiver(arguments.expression) {
             self.sink.push(diagnostics::infer::type_used_as_value(
-                &args.expression.as_dotted_path().unwrap_or_default(),
-                args.expression.get_span(),
+                &arguments.expression.as_dotted_path().unwrap_or_default(),
+                arguments.expression.get_span(),
             ));
         }
 
@@ -82,27 +88,27 @@ impl InferCtx<'_> {
 
         let f = Arc::make_mut(f);
         let receiver_ty = f.remove_receiver();
-        let actual_ty = args.expression_ty;
+        let actual_ty = arguments.expression_ty;
 
         let receiver = receiver_ty.resolve_in(&self.env);
         if self.store.parameter_grants_write(&receiver) {
-            match self.reference_receiver_binding(&receiver, actual_ty, args) {
+            match self.reference_receiver_binding(&receiver, actual_ty, arguments) {
                 Some(binding_id) => self.facts.mark_written_through(binding_id),
-                None => self.mark_place_root_mutated(args.expression),
+                None => self.mark_place_root_mutated(arguments.expression),
             }
         }
 
         let receiver_coercion = self.unify_receiver_with_coercion(
             &receiver_ty,
             actual_ty,
-            args.expression,
-            args.member_name,
-            args.span,
+            arguments.expression,
+            arguments.member_name,
+            arguments.span,
         );
 
-        self.unify_member_expectation(args, &method_ty);
+        self.unify_member_expectation(arguments, &method_ty);
 
-        Some(args.build_dot_access(
+        Some(arguments.build_dot_access(
             method_ty,
             DotAccessResolution::InstanceMethod {
                 is_exported,
@@ -482,15 +488,15 @@ impl InferCtx<'_> {
 
     pub(super) fn as_static_method(
         &mut self,
-        args: &DotAccessResolutionArgs,
+        arguments: &DotAccessResolutionArgs,
     ) -> Option<Expression> {
         let store = self.store;
-        let owner_ty = store.peel_alias(&args.deref_ty);
+        let owner_ty = store.peel_alias(&arguments.deref_ty);
         let id = match &owner_ty {
             Type::Nominal { id, .. } => {
                 if let Some(def) = store.get_definition(id)
                     && matches!(def.body, DefinitionBody::Enum { .. })
-                    && !self.is_type_level_receiver(args.expression)
+                    && !self.is_type_level_receiver(arguments.expression)
                 {
                     return None;
                 }
@@ -502,13 +508,13 @@ impl InferCtx<'_> {
         };
 
         if self
-            .method_of_type(store, &args.deref_ty, args.member_name)
+            .method_of_type(store, &arguments.deref_ty, arguments.member_name)
             .is_some()
         {
             return None;
         }
 
-        let method_qualified_name = id.with_segment(args.member_name);
+        let method_qualified_name = id.with_segment(arguments.member_name);
         let method_definition = store.get_definition(&method_qualified_name)?;
 
         let Definition {
@@ -528,16 +534,16 @@ impl InferCtx<'_> {
         let is_public = visibility.is_public();
         let type_simple_name = unqualified_name(&id);
 
-        if !self.is_type_level_receiver(args.expression) {
-            let member_len = args.member_name.len() as u32;
+        if !self.is_type_level_receiver(arguments.expression) {
+            let member_len = arguments.member_name.len() as u32;
             let member_span = Span {
-                file_id: args.span.file_id,
-                byte_offset: args.span.byte_offset + args.span.byte_length - member_len,
+                file_id: arguments.span.file_id,
+                byte_offset: arguments.span.byte_offset + arguments.span.byte_length - member_len,
                 byte_length: member_len,
             };
             self.sink
                 .push(diagnostics::infer::static_method_called_on_instance(
-                    args.member_name,
+                    arguments.member_name,
                     type_simple_name,
                     member_span,
                 ));
@@ -545,34 +551,36 @@ impl InferCtx<'_> {
 
         if self.is_foreign_type(&id) && !is_public {
             self.sink.push(diagnostics::infer::private_method_access(
-                args.member_name,
+                arguments.member_name,
                 type_simple_name,
                 store.package_for_qualified_name(&id).unwrap_or(&id),
-                *args.span,
+                *arguments.span,
             ));
         }
 
         if let Some(definition_span) = name_span {
-            self.facts.add_usage(*args.span, definition_span);
+            self.facts.add_usage(*arguments.span, definition_span);
         }
 
         let type_name_len = type_simple_name.len() as u32;
-        self.track_name_usage(store, &id, args.span, type_name_len);
+        self.track_name_usage(store, &id, arguments.span, type_name_len);
 
         let (method_ty, instantiation) = self.instantiate(&method_ty);
 
         // Solve impl parameters the signature omits from the owner type.
         if let Some(impl_receiver) = impl_receiver {
             let receiver_ty = substitute(&impl_receiver, &instantiation);
-            let _ = self.speculatively(|this| this.try_unify(&receiver_ty, &owner_ty, args.span));
+            let _ = self.unify_speculatively(|this| {
+                this.try_unify(&receiver_ty, &owner_ty, arguments.span)
+            });
         }
 
-        self.unify_member_expectation(args, &method_ty);
+        self.unify_member_expectation(arguments, &method_ty);
 
         let type_package = store.package_for_qualified_name(&id).unwrap_or(&id);
         let is_cross_package = type_package != self.cursor.package_id();
         let is_exported = is_public || is_cross_package;
-        Some(args.build_dot_access(
+        Some(arguments.build_dot_access(
             method_ty,
             DotAccessResolution::StaticMethod {
                 is_exported,

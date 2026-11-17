@@ -1,8 +1,16 @@
 use crate::Planner;
+use crate::control_flow::propagation::plain_return;
 use crate::definitions::structs::SynthesizedMethod;
 use crate::names::go_name;
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredStatement, SwitchKind, SwitchStatementPlan};
+use crate::plan::bodies::{LoweredBlock, SwitchCasePlan};
+use crate::plan::declarations::GoDeclaration;
+use crate::plan::go_expression::BinaryOp;
+use crate::plan::go_expression::{CompositeLayout, GoParameter};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
+use crate::utils::ReceiverGenerics;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
 use syntax::program::{Definition, DefinitionBody};
@@ -15,46 +23,50 @@ impl Planner<'_> {
         generics: &[Generic],
         attributes: &[Attribute],
         doc_comment: &str,
-    ) -> Option<String> {
+    ) -> Option<Vec<GoDeclaration>> {
         let enum_id = self.facts.qualified_current(name);
 
         let layout = self.facts.enum_layout(&enum_id)?;
 
-        let generics_string = self.generics_to_string(generics);
-        let receiver_generics = self.receiver_generics_string(generics);
+        let receiver_generics = self.receiver_generics(generics);
+        let generics = self.plan_generics(
+            &generics
+                .iter()
+                .map(|generic| {
+                    (
+                        generic.name.clone(),
+                        generic
+                            .resolved_bounds()
+                            .expect("generic bounds are resolved before emission")
+                            .cloned()
+                            .collect(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
-        let mut result = layout.emit_definition(self, &generics_string, doc_comment);
+        let mut result = layout.emit_definition(self, generics, doc_comment);
         for method in self.enum_synthesized_methods(name, attributes) {
-            let code = match method {
+            match method {
                 SynthesizedMethod::Format(format) => {
-                    let (code, requirements) =
-                        layout.emit_format_method(&receiver_generics, format);
-                    self.require_packages(&requirements);
-                    code
+                    result.push(layout.format_declaration(self, &receiver_generics, format))
                 }
                 SynthesizedMethod::Json => {
-                    self.require_fmt();
-                    self.require_errors();
-                    if !layout.variants.is_empty() {
-                        self.require_json();
-                    }
-                    layout.emit_json_methods(&receiver_generics)
+                    result.extend(layout.json_declarations(self, &receiver_generics))
                 }
-                SynthesizedMethod::ToString => self.to_string_method(name, &receiver_generics),
+                SynthesizedMethod::ToString => result.push(self.emit_to_string_method(
+                    name,
+                    &receiver_generics,
+                    &self.to_string_method_go_name(),
+                )),
                 SynthesizedMethod::Equals => {
-                    let Some(code) = self.enum_equals_method(name, &enum_id, &receiver_generics)
-                    else {
-                        continue;
-                    };
-                    code
+                    result.extend(self.enum_equals_method(name, &enum_id, &receiver_generics))
                 }
                 SynthesizedMethod::StringerShadow => {
                     unreachable!("only structs embed a stringer to shadow")
                 }
-            };
-            result.push_str("\n\n");
-            result.push_str(&code);
+            }
         }
         if has_iterate {
             let is_public = self
@@ -62,8 +74,7 @@ impl Planner<'_> {
                 .definition(enum_id.as_str())
                 .is_some_and(|definition| definition.visibility.is_public());
             let fn_name = go_name::associated_function_go_name(name, "variants", is_public);
-            result.push_str("\n\n");
-            result.push_str(&layout.emit_variants_function(&fn_name));
+            result.push(layout.variants_declaration(&fn_name));
         }
 
         Some(result)
@@ -73,8 +84,8 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         enum_id: &str,
-        receiver_generics: &str,
-    ) -> Option<String> {
+        receiver_generics: &ReceiverGenerics,
+    ) -> Option<GoDeclaration> {
         let Some(Definition {
             body:
                 DefinitionBody::Enum {
@@ -99,15 +110,15 @@ impl Planner<'_> {
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
         let go_type_name = go_name::escape_type_name(name);
-        let receiver_type = format!("{go_type_name}{receiver_generics}");
+        let receiver_type = receiver_generics.instantiate(&go_type_name);
         let go_method = self.equals_method_go_name();
 
-        let mut cases: Vec<String> = Vec::new();
+        let mut cases: Vec<SwitchCasePlan> = Vec::new();
         for (sem_variant, layout_variant) in sem_variants.iter().zip(layout.variants.iter()) {
             if sem_variant.fields.is_empty() {
                 continue;
             }
-            let comparisons: Vec<String> = sem_variant
+            let comparisons: Vec<GoExpression> = sem_variant
                 .fields
                 .iter()
                 .zip(layout_variant.fields.iter())
@@ -123,105 +134,138 @@ impl Planner<'_> {
                             access
                         }
                     };
-                    let comparison = self.equality_expression(
+
+                    self.equality_expression(
                         field(&receiver),
                         field(&other),
                         &sem_field.ty,
                         &sem_generics,
-                    );
-                    self.render_expression(&comparison)
+                    )
                 })
                 .collect();
-            cases.push(format!(
-                "case {}:\nreturn {}",
-                layout_variant.tag_constant,
-                comparisons.join(" && ")
-            ));
+            let value = comparisons
+                .into_iter()
+                .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
+                .unwrap_or_else(|| GoExpression::literal("true".to_string()));
+            cases.push(SwitchCasePlan {
+                labels: vec![GoExpression::external_name(
+                    layout_variant.tag_constant.clone(),
+                )],
+                body: LoweredBlock {
+                    statements: vec![plain_return(value)],
+                },
+                line: None,
+            });
         }
 
-        if cases.is_empty() {
-            return Some(format!(
-                "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nreturn {receiver}.Tag == {other}.Tag\n}}"
-            ));
-        }
-        let mut method = format!(
-            "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nif {receiver}.Tag != {other}.Tag {{\nreturn false\n}}\nswitch {receiver}.Tag {{\n"
+        let left = GoExpression::selector(
+            GoExpression::identifier(receiver.clone()),
+            "Tag".to_string(),
         );
-        for case in &cases {
-            method.push_str(case);
-            method.push('\n');
-        }
-        method.push_str("default:\nreturn true\n}\n}");
-        Some(method)
+        let right =
+            GoExpression::selector(GoExpression::identifier(other.clone()), "Tag".to_string());
+        let statements = if cases.is_empty() {
+            vec![plain_return(GoExpression::binary(
+                left,
+                BinaryOp::Eq,
+                right,
+            ))]
+        } else {
+            vec![
+                LoweredStatement::If(IfPlan::plain(
+                    GoExpression::binary(left.clone(), BinaryOp::Ne, right),
+                    LoweredBlock {
+                        statements: vec![plain_return(GoExpression::literal("false".to_string()))],
+                    },
+                    ElseArm::None,
+                ))
+                .into(),
+                LoweredStatement::Switch(SwitchStatementPlan {
+                    kind: SwitchKind::Value { subject: left },
+                    cases,
+                    default: Some(LoweredBlock {
+                        statements: vec![plain_return(GoExpression::literal("true".to_string()))],
+                    }),
+                    default_line: None,
+                })
+                .into(),
+            ]
+        };
+        let declaration = GoDeclaration::function(
+            Some(GoParameter::new(receiver, receiver_type.clone())),
+            go_method,
+            Vec::new(),
+            vec![GoParameter::new(other, receiver_type)],
+            GoType::new("bool"),
+            LoweredBlock { statements },
+        );
+        Some(declaration)
     }
 
     pub(crate) fn create_make_function_code(
         &mut self,
         enum_id: &str,
         variant_name: &str,
-    ) -> String {
-        let layout = self
-            .facts
-            .enum_layout(enum_id)
-            .expect("enum layout should exist");
+    ) -> GoDeclaration {
+        let layout = self.facts.enum_layout(enum_id).expect("enum layout exists");
         let variant = layout
             .get_variant(variant_name)
-            .expect("variant should exist in layout");
-
-        let enum_name = layout.enum_name.clone();
-        let generics = layout.generics.clone();
-        let func_name = go_name::enum_make_function(&enum_name, &variant.name);
-        let go_type_name = go_name::escape_type_name(&enum_name);
-        let tag_constant = variant.tag_constant.clone();
-
-        let (fields, params): (Vec<_>, Vec<_>) = variant
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                let argument = format!("arg{}", index);
-                let param = format!("{} {}", argument, self.use_go_type(&field.ty));
-                let value = if field.is_recursive() { "&" } else { "" };
-                let field_assignment = format!("{}: {value}{}", field.go_name, argument);
-                (field_assignment, param)
-            })
-            .unzip();
-        let fields = fields.join(", ");
-        let params = params.join(", ");
-
-        let (generic_params, generic_args) = if generics.is_empty() {
-            (String::new(), String::new())
-        } else {
-            let args = generics
-                .iter()
-                .map(|g| self.generic_go_name(&g.name))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let generics_string = self.generics_to_string(&generics);
-            (generics_string, format!("[{}]", args))
-        };
-
-        let return_type = Type::Nominal {
-            id: Symbol::from_raw(enum_name.clone()),
+            .expect("variant exists in layout");
+        let mut fields = vec![(
+            "Tag".to_string(),
+            GoExpression::external_name(variant.tag_constant.clone()),
+        )];
+        let mut parameters = Vec::new();
+        for (index, field) in variant.fields.iter().enumerate() {
+            let name = self.scope.new_local_identifier(format!("arg{index}"));
+            parameters.push(GoParameter::new(name.clone(), self.go_type(&field.ty)));
+            let value = GoExpression::identifier(name);
+            fields.push((
+                field.go_name.clone(),
+                if field.is_recursive() {
+                    GoExpression::address_of(value)
+                } else {
+                    value
+                },
+            ));
+        }
+        let result = self.go_type(&Type::Nominal {
+            id: Symbol::from_raw(layout.enum_name.clone()),
             writable: false,
-            params: generics
+            params: layout
+                .generics
                 .iter()
-                .map(|g| Type::Parameter(g.name.clone()))
+                .map(|generic| Type::Parameter(generic.name.clone()))
                 .collect(),
-        };
-
-        let return_type = self.use_go_type(&return_type);
-
-        format!(
-            "func {} {} ({}) {} {{\n    return {} {} {{ Tag: {}, {} }}\n}}",
-            func_name,
-            generic_params,
-            params,
-            return_type,
-            go_type_name,
-            generic_args,
-            tag_constant,
-            fields
+        });
+        GoDeclaration::function(
+            None,
+            go_name::enum_make_function(&layout.enum_name, &variant.name),
+            self.plan_generics(
+                &layout
+                    .generics
+                    .iter()
+                    .map(|generic| {
+                        (
+                            generic.name.clone(),
+                            generic
+                                .resolved_bounds()
+                                .expect("generic bounds are resolved before emission")
+                                .cloned()
+                                .collect(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            parameters,
+            result.clone(),
+            LoweredBlock {
+                statements: vec![plain_return(GoExpression::struct_literal(
+                    result,
+                    fields,
+                    CompositeLayout::Inline { padded: true },
+                ))],
+            },
         )
     }
 }

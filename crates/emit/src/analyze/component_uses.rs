@@ -1,3 +1,11 @@
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ValueDemand {
+    #[default]
+    StatusOnly,
+    Payload,
+
+    Whole,
+}
 use crate::patterns::matching::{PreludeVariant, prelude_variant};
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{
@@ -12,16 +20,6 @@ pub(crate) struct ComponentDemand {
     pub(crate) value: ValueDemand,
     pub(crate) read_indices: HashSet<usize>,
     pub(crate) defaults: usize,
-}
-
-/// How much of a fallible local's payload later code reads.
-#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum ValueDemand {
-    #[default]
-    StatusOnly,
-    Payload,
-    /// The whole value, rebuilt from its components.
-    Whole,
 }
 
 pub(crate) fn component_demand<'a, I>(region: I, binding_id: BindingId) -> Option<ComponentDemand>

@@ -17101,6 +17101,20 @@ fn main() {
 }
 
 #[test]
+fn infer_reference_aliases_sibling_distinguishes_reference_and_read() {
+    assert_infer_error_snapshot!(
+        r#"
+struct Counter { n: int }
+fn bump(c: mut Ref<Counter>) -> int { c.n += 1; c.n }
+fn main() {
+    let mut c = Counter { n: 1 }
+    let _ = bump(&c) + c.n
+}
+"#
+    );
+}
+
+#[test]
 fn infer_reference_aliases_sibling_labels_the_writable_reference() {
     let input = r#"
 struct Data { n: int }
@@ -17111,7 +17125,7 @@ fn bump(value: mut Ref<Data>) -> int {
 }
 fn main() {
   let mut data = Data{ n: 1 }
-  let triple = (inspect(&data), data, bump(&data))
+  let triple = (inspect(&data), bump(&data), data)
   let _ = triple
 }
 "#;
@@ -17380,6 +17394,83 @@ const F = 2.5
 fn main() {
   let _ = F as int
 }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_parenthesized_writable_arguments_name_the_place() {
+    let input = r#"
+fn touch(a: mut Slice<int>, b: Slice<int>) { a[0] = 2; let _ = b[0] }
+fn main() { let mut xs = [1]; touch((xs), (xs)) }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_parenthesized_reference_names_the_reference_and_read() {
+    let input = r#"
+struct Inner { n: int }
+struct Counter { inner: Inner }
+fn bump(c: mut Ref<Inner>) -> int { c.n += 1; c.n }
+fn main() {
+  let mut c = Counter { inner: Inner { n: 1 } }
+  let _ = bump(&(c.inner)) + c.inner.n
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_cycle_preserves_alias_spelling() {
+    let input = r#"
+type Wrap<T> = Slice<T>
+interface Chain<T> { fn next() -> Chain<Wrap<T>> }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_method_type_cycle_uses_site_neutral_wording() {
+    let input = r#"
+struct N<T> { v: T }
+impl<T> N<T> {
+  fn pair(self) -> N<(T, T)> { N { v: (self.v, self.v) } }
+}
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_body_type_cycle_omits_literal_permissions() {
+    let input = r#"
+struct N<T> { v: T }
+impl<T> N<T> { fn wrap(self) { let _ = N { v: [self.v] } } }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_cycle_preserves_explicit_permissions() {
+    let input = r#"
+struct N<T> { v: T }
+impl<T> N<T> { fn wrap(self) -> N<mut Slice<T>> { N { v: [self.v] } } }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_type_cycle_chooses_first_method_in_source_order() {
+    let input = r#"
+interface Stream<T> {
+  fn z_first() -> Stream<Option<T>>
+  fn a_second() -> Stream<Slice<T>>
+}
+fn main() {}
 "#;
     assert_infer_error_snapshot!(input);
 }

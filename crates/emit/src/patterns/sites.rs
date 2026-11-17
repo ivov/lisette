@@ -1,3 +1,4 @@
+use crate::abi::fallible_producer::ResultFusePlan;
 use std::borrow::Cow;
 use std::slice;
 
@@ -22,8 +23,8 @@ use crate::patterns::decision_tree::{
     self, BindingTarget, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
 use crate::patterns::matching::{
-    ArmBinding, FusedName, PreludeVariant, ResultFusePlan, field_binding, ok_pattern_field,
-    prelude_variant, some_pattern_field,
+    ArmBinding, FusedName, PreludeVariant, field_binding, ok_pattern_field, prelude_variant,
+    some_pattern_field,
 };
 use crate::plan::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,

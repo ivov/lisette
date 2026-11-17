@@ -239,6 +239,7 @@ impl BindingMutation {
 
 #[derive(Default)]
 pub struct EmitInput {
+    pub conformances: super::ConformanceIndex,
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
     pub entry_package_id: String,

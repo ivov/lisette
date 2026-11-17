@@ -25,9 +25,7 @@ func parse(s string) (int, error) {
 }
 
 func test(xs []string) []lisette.Result[int, error] {
-	cb := parse
-	tagged := func(arg0 string) lisette.Result[int, error] {
-		return lisette.ResultFromPair[int](cb(arg0))
-	}
-	return lisette.SliceMap(xs, tagged)
+	return lisette.SliceMap(xs, func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](parse(arg0))
+	})
 }

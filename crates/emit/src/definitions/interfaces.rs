@@ -1,6 +1,8 @@
 use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
 use crate::names::go_name;
+use crate::plan::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
+use crate::types::go_type::GoType;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
 use syntax::program::Definition;
 use syntax::types::unqualified_name;
@@ -13,32 +15,42 @@ impl Planner<'_> {
         parents: &[ParentInterface],
         generics: &[Generic],
         is_public: bool,
-    ) -> String {
+    ) -> GoDeclaration {
+        let name_go = go_name::escape_type_name(name).into_owned();
         if self.facts.is_current_package(go_name::PRELUDE_PACKAGE) {
-            return format!("type {} struct{{}}", name);
+            return GoDeclaration::new(DeclarationKind::Struct {
+                name: name_go,
+                parameters: Vec::new(),
+                fields: Vec::new(),
+            });
         }
-
         let filtered = strip_self_referential_bounds(generics, name);
-        let generics_str = self.generics_to_string(&filtered);
-
-        let mut output = Vec::new();
-        output.push(format!(
-            "type {}{} interface {{",
-            go_name::escape_type_name(name),
-            generics_str
-        ));
-
-        for parent in parents {
-            output.push(self.use_go_type(&parent.ty));
-        }
-
-        for item in items {
-            output.push(self.emit_interface_method(name, item, is_public));
-        }
-
-        output.push("}".to_string());
-
-        output.join("\n")
+        GoDeclaration::new(DeclarationKind::Interface {
+            name: name_go,
+            parameters: self.plan_generics(
+                &filtered
+                    .iter()
+                    .map(|generic| {
+                        (
+                            generic.name.clone(),
+                            generic
+                                .resolved_bounds()
+                                .expect("generic bounds are resolved before emission")
+                                .cloned()
+                                .collect(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            parents: parents
+                .iter()
+                .map(|parent| self.go_type(&parent.ty))
+                .collect(),
+            methods: items
+                .iter()
+                .map(|item| self.emit_interface_method(name, item, is_public))
+                .collect(),
+        })
     }
 
     /// Emit one interface method signature.
@@ -47,16 +59,16 @@ impl Planner<'_> {
         interface_name: &str,
         item: &Expression,
         is_public: bool,
-    ) -> String {
+    ) -> InterfaceMethod {
         let func = item.function_definition_view();
         let ty = item.get_type();
         let all_args = ty
             .get_function_params()
             .expect("interface method must have function type");
 
-        let args: Vec<String> = all_args
+        let arguments: Vec<GoType> = all_args
             .iter()
-            .map(|param| self.use_go_type(&param.ty))
+            .map(|parameter| self.go_type(&parameter.ty))
             .collect();
         let raw_return_ty = ty
             .get_function_ret()
@@ -76,9 +88,9 @@ impl Planner<'_> {
             .expect("interface method must be registered");
         let return_abi = self.interface_method_return_abi(func.name, method);
         let return_type = if return_abi.is_lowered() {
-            self.render_callable_return_ty(&return_abi, &raw_return_ty)
+            self.callable_return_go_type(&return_abi, &raw_return_ty)
         } else {
-            self.use_go_type(&raw_return_ty)
+            self.go_type(&raw_return_ty)
         };
 
         let mut method_name = self.method_go_name(func.name, is_public);
@@ -86,10 +98,14 @@ impl Planner<'_> {
             method_name = go_name::tagged_twin(&method_name);
         }
 
-        if return_abi == CallableReturnAbi::Void {
-            format!("{}({})", method_name, args.join(", "))
-        } else {
-            format!("{}({}) {}", method_name, args.join(", "), return_type)
+        InterfaceMethod {
+            name: method_name,
+            parameters: arguments,
+            result: if return_abi == CallableReturnAbi::Void {
+                GoType::default()
+            } else {
+                return_type
+            },
         }
     }
 }

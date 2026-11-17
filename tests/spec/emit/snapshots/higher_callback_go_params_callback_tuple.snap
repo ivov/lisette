@@ -34,16 +34,11 @@ func give[T any](f func(int, func(int) int) T) func(int, func(int) int) T {
 
 func main() {
 	calls := 0
-	cb := sort.Find
-	var adapted func(int, func(int) int) lisette.Tuple2[int, bool]
-	if cb != nil {
-		adapted = func(arg0 int, arg1 func(int) int) lisette.Tuple2[int, bool] {
-			ret, ret2 := cb(arg0, arg1)
-			tup := lisette.MakeTuple2(ret, ret2)
-			return tup
-		}
-	}
-	f := give(adapted)
+	f := give(func(arg0 int, arg1 func(int) int) lisette.Tuple2[int, bool] {
+		ret, ret2 := sort.Find(arg0, arg1)
+		tup := lisette.MakeTuple2(ret, ret2)
+		return tup
+	})
 	tmp := f(5, func(i int) int {
 		calls++
 		return 2 - i

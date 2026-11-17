@@ -19,7 +19,7 @@ description: |
 ---
 package main
 
-func MakeEventClick(arg0 int, arg1 int) Event {
+func MakeEventClick(arg0, arg1 int) Event {
 	return Event{Tag: EventClick, X: arg0, Y: arg1}
 }
 

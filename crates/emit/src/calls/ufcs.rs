@@ -1,11 +1,10 @@
 use crate::calls::arguments::CallArgsContext;
 use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
-use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::calls::regular::receiver_type_binding;
+use syntax::program::NativeOperation;
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::plan::bodies::Statement;
@@ -15,6 +14,7 @@ use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
+use syntax::program::SlotOrigin;
 use syntax::program::{NativeTypeKind, resolved_instantiation};
 use syntax::types::Type;
 
@@ -131,7 +131,7 @@ impl Planner<'_> {
             let native_type = NativeTypeKind::from_type(&receiver.get_type())
                 .expect("inlined UFCS receiver has a native type");
             let plain_call =
-                native_method_lowers_to_plain_call(&native_type, member, emitted_args.len());
+                NativeOperation::new(native_type, member).lowers_to_plain_call(emitted_args.len());
             return if plain_call {
                 ValuePlan::plain_call(setup, inlined)
             } else {

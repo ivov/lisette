@@ -5,9 +5,29 @@ use syntax::ast::{BindingId, Span};
 use syntax::types::Type;
 
 use crate::checker::type_env::SpeculationOutcome;
-use crate::checker::{FileContext, TaskState};
+use crate::checker::{EnvResolve, FileContext, TaskState};
+use crate::facts::{Facts, StatementTailCheck};
 use crate::store::Store;
 use std::mem;
+
+pub(crate) struct UnificationAttempt<'context, 'state> {
+    context: &'context mut InferCtx<'state>,
+}
+
+impl UnificationAttempt<'_, '_> {
+    pub(crate) fn try_unify(
+        &mut self,
+        expected: &Type,
+        actual: &Type,
+        span: &Span,
+    ) -> Result<(), super::unify::UnifyError> {
+        self.context.try_unify(expected, actual, span)
+    }
+
+    pub(crate) fn resolve(&self, ty: &Type) -> Type {
+        ty.resolve_in(&self.context.env)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum UseContext {
@@ -18,18 +38,18 @@ pub(super) enum UseContext {
     AssignmentTarget,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) enum LoopContext {
     Statement,
     Value(Type),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct LoopFrames {
     stack: Vec<LoopFrame>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 struct LoopFrame {
     loops: Vec<LoopContext>,
     is_defer: bool,
@@ -84,7 +104,7 @@ impl LoopFrames {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 struct TraversalContext {
     loops: LoopFrames,
     in_negation: bool,
@@ -102,8 +122,9 @@ struct TraversalContext {
     expectation: Option<Expectation>,
 }
 
+#[derive(Clone)]
 pub(super) enum ValueSource {
-    Place(String),
+    Place { name: String, ty: Type },
     Call { callee: Option<String>, span: Span },
     GoFieldCopy(diagnostics::infer::WriteContext),
 }
@@ -125,12 +146,14 @@ impl LetMutability {
     }
 }
 
+#[derive(Clone)]
 pub(super) struct LetInference {
     pub(super) mutability: LetMutability,
     pub(super) source: Option<ValueSource>,
     pub(super) annotated: bool,
 }
 
+#[derive(Clone)]
 pub(super) struct LoopElementInference {
     pub(super) collection: Option<String>,
     pub(super) was_demoted: bool,
@@ -138,6 +161,7 @@ pub(super) struct LoopElementInference {
     pub(super) writes: Vec<Span>,
 }
 
+#[derive(Clone)]
 pub(super) enum BindingInference {
     Let(LetInference),
     LoopElement(LoopElementInference),
@@ -303,19 +327,77 @@ pub(super) struct SelectExhaustivenessCheck {
 }
 
 #[derive(Default)]
-pub(super) struct FileChecks {
+pub(super) struct FileObligations {
     pub(super) branch_subsumptions: Vec<BranchSubsumption>,
     pub(super) select_exhaustiveness: Vec<SelectExhaustivenessCheck>,
+    pub(super) statement_tails: Vec<StatementTailCheck>,
+}
+
+pub(super) enum FileChecks {
+    Collecting(FileObligations),
+    Discharged,
+}
+
+impl Default for FileChecks {
+    fn default() -> Self {
+        Self::Collecting(FileObligations::default())
+    }
+}
+
+impl FileChecks {
+    pub(super) fn pending_mut(&mut self) -> &mut FileObligations {
+        match self {
+            Self::Collecting(pending) => pending,
+            Self::Discharged => panic!("cannot enqueue work after the file inference phase"),
+        }
+    }
+
+    pub(super) fn branches(&self) -> &[BranchSubsumption] {
+        match self {
+            Self::Collecting(pending) => &pending.branch_subsumptions,
+            Self::Discharged => &[],
+        }
+    }
+
+    fn checkpoint(&self) -> Option<(usize, usize, usize)> {
+        match self {
+            Self::Collecting(pending) => Some((
+                pending.branch_subsumptions.len(),
+                pending.select_exhaustiveness.len(),
+                pending.statement_tails.len(),
+            )),
+            Self::Discharged => None,
+        }
+    }
+
+    fn rollback(&mut self, checkpoint: Option<(usize, usize, usize)>) {
+        if let Some((branches, selects, tails)) = checkpoint {
+            let pending = self.pending_mut();
+            pending.branch_subsumptions.truncate(branches);
+            pending.select_exhaustiveness.truncate(selects);
+            pending.statement_tails.truncate(tails);
+        } else {
+            *self = Self::Discharged;
+        }
+    }
+
+    pub(super) fn discharge(&mut self) -> FileObligations {
+        match mem::replace(self, Self::Discharged) {
+            Self::Collecting(pending) => pending,
+            Self::Discharged => panic!("file obligations must be discharged exactly once"),
+        }
+    }
 }
 
 pub struct InferCtx<'a> {
     pub(super) state: &'a mut TaskState,
     pub(crate) store: &'a Store,
     pub(super) file_checks: FileChecks,
-    pub(crate) satisfying_stack: FxHashSet<(String, String)>,
+    pub(crate) satisfying_stack: FxHashSet<(Type, Type)>,
     pub(super) reported_immutable: FxHashSet<BindingId>,
     pub(super) binding_inference: FxHashMap<BindingId, BindingInference>,
-    pub(super) reported_read_only_writes: FxHashSet<(BindingId, String)>,
+    pub(super) reported_read_only_writes:
+        FxHashSet<(BindingId, super::expressions::aliasing::PlaceKey)>,
     /// By span, for the diagnostic when the construction misses a writable expectation.
     pub(super) read_only_constructions: FxHashMap<Span, Vec<diagnostics::infer::ReadOnlyComponent>>,
     traversal: TraversalContext,
@@ -486,19 +568,26 @@ impl<'a> InferCtx<'a> {
         result
     }
 
-    pub(crate) fn speculatively<T, E>(
+    pub(crate) fn unify_speculatively<T, E>(
         &mut self,
-        f: impl FnOnce(&mut Self) -> Result<T, E>,
+        f: impl FnOnce(&mut UnificationAttempt<'_, '_>) -> Result<T, E>,
     ) -> Result<T, E> {
-        self.with_speculation(|this| {
-            let result = f(this);
-            let outcome = if result.is_ok() {
-                SpeculationOutcome::Commit
-            } else {
-                SpeculationOutcome::Rollback
-            };
-            (result, outcome)
-        })
+        let speculation = self.env.begin_speculation();
+        let diagnostics = self.sink.checkpoint();
+
+        let delta = Facts::new(self.facts.allocator());
+        let previous = mem::replace(&mut self.state.facts, delta);
+        let result = f(&mut UnificationAttempt { context: self });
+        let delta = mem::replace(&mut self.state.facts, previous);
+        let outcome = if result.is_ok() {
+            self.facts.merge(delta);
+            SpeculationOutcome::Commit
+        } else {
+            self.sink.rollback(diagnostics);
+            SpeculationOutcome::Rollback
+        };
+        self.env.end_speculation(speculation, outcome);
+        result
     }
 
     /// Runs `f` and discards every unification and diagnostic it produced.
@@ -506,22 +595,96 @@ impl<'a> InferCtx<'a> {
         self.with_speculation(|this| (f(this), SpeculationOutcome::Rollback))
     }
 
-    /// Keep type bindings, diagnostics, and deferred bounds in the same transaction.
     fn with_speculation<T>(&mut self, f: impl FnOnce(&mut Self) -> (T, SpeculationOutcome)) -> T {
-        let diagnostics_before = self.sink.checkpoint();
-        let bounds_before = self.facts.deferred.generic_bounds.len();
+        let Self {
+            state,
+            store: _,
+            file_checks,
+            satisfying_stack,
+            reported_immutable,
+            binding_inference,
+            reported_read_only_writes,
+            read_only_constructions,
+            traversal,
+        } = self;
+        let TaskState {
+            env: _,
+            scopes,
+            cursor,
+            imports,
+            sink: _,
+            facts,
+            project_kind,
+            script,
+            pending,
+        } = &mut **state;
+
+        let mut delta = Facts::new(facts.allocator());
+        delta.bindings.extend(
+            scopes
+                .binding_ids()
+                .filter_map(|id| facts.bindings.get(&id).map(|fact| (id, fact.clone()))),
+        );
+        let mut saved_task = TaskState {
+            env: Default::default(),
+            scopes: scopes.clone(),
+            cursor: cursor.clone(),
+            imports: imports.clone(),
+            sink: Default::default(),
+            facts: mem::replace(facts, delta),
+            project_kind: *project_kind,
+            script: *script,
+            pending: mem::take(pending),
+        };
+        let diagnostics = state.sink.checkpoint();
+        let local_bindings = state
+            .scopes
+            .binding_ids()
+            .filter_map(|id| {
+                binding_inference
+                    .get(&id)
+                    .map(|inference| (id, inference.clone()))
+            })
+            .collect();
+        let saved_binding_inference = mem::replace(binding_inference, local_bindings);
+        let file_checkpoint = file_checks.checkpoint();
+        let saved_context = (
+            satisfying_stack.clone(),
+            reported_immutable.clone(),
+            reported_read_only_writes.clone(),
+            read_only_constructions.clone(),
+            traversal.clone(),
+        );
         let speculation = self.env.begin_speculation();
         let (value, outcome) = f(self);
         match outcome {
             SpeculationOutcome::Commit => {
+                let local = mem::replace(&mut self.binding_inference, saved_binding_inference);
+                self.binding_inference.extend(local);
+                let delta = mem::replace(&mut self.state.facts, saved_task.facts);
+                self.facts.merge(delta);
+                let pending = mem::replace(&mut self.state.pending, saved_task.pending);
+                self.state.pending.merge(pending);
                 self.env
                     .end_speculation(speculation, SpeculationOutcome::Commit);
             }
             SpeculationOutcome::Rollback => {
                 self.env
                     .end_speculation(speculation, SpeculationOutcome::Rollback);
-                self.sink.rollback(diagnostics_before);
-                self.facts.deferred.generic_bounds.truncate(bounds_before);
+
+                saved_task.env = mem::take(&mut self.state.env);
+                self.sink.rollback(diagnostics);
+                saved_task.sink = mem::take(&mut self.state.sink);
+                *self.state = saved_task;
+                self.binding_inference = saved_binding_inference;
+                self.file_checks.rollback(file_checkpoint);
+                (
+                    self.satisfying_stack,
+                    self.reported_immutable,
+                    self.reported_read_only_writes,
+                    self.read_only_constructions,
+                    self.traversal,
+                ) = saved_context;
             }
         }
         value
@@ -640,17 +803,112 @@ mod tests {
     use crate::store;
 
     #[test]
+    #[should_panic(expected = "cannot enqueue work after the file inference phase")]
+    fn discharged_file_rejects_new_obligations() {
+        let mut checks = FileChecks::default();
+        let _completed = checks.discharge();
+        checks
+            .pending_mut()
+            .select_exhaustiveness
+            .push(SelectExhaustivenessCheck {
+                result_ty: Type::int(),
+                span: Span::dummy(),
+            });
+    }
+
+    #[test]
+    fn abandoned_attempt_preserves_facts_usages_and_diagnostics() {
+        use crate::facts::BindingOrigin;
+        use syntax::ast::BindingKind;
+
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
+        let store = Store::new();
+        let mut context = InferCtx::new(&mut task, &store);
+        let binding = context.facts.add_binding(
+            "value".into(),
+            Span::dummy(),
+            BindingKind::Let { mutable: true },
+            BindingOrigin::Name {
+                in_typedef: false,
+                shorthand_field: false,
+            },
+            None,
+        );
+        context
+            .scopes
+            .current_mut()
+            .insert_binding("value".into(), Type::int(), binding, true);
+        context
+            .sink
+            .push(diagnostics::LisetteDiagnostic::error("before"));
+        let before = format!("{:?}", context.facts);
+        context.probe(|context| {
+            assert_eq!(context.facts.bindings[&binding].name, "value");
+            assert!(!context.facts.bindings[&binding].used);
+            context.facts.mark_used(binding);
+            assert!(context.facts.bindings[&binding].used);
+            context.facts.mark_mutated(binding);
+            context.facts.add_usage(Span::dummy(), Span::dummy());
+            context.facts.function_spans.push(Span::dummy());
+            context.with_speculation(|context| {
+                context.facts.mark_method_used_for_interface(
+                    "pkg".into(),
+                    "method".into(),
+                    "Owner".into(),
+                    true,
+                );
+                context
+                    .sink
+                    .push(diagnostics::LisetteDiagnostic::error("nested commit"));
+                ((), SpeculationOutcome::Commit)
+            });
+        });
+        assert_eq!(format!("{:?}", context.facts), before);
+        let diagnostics = task.sink.into_diagnostics();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].plain_message(), "before");
+    }
+
+    #[test]
+    fn unification_attempt_rolls_back_partial_binding_and_nested_facts() {
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
+        let store = Store::new();
+        let mut context = InferCtx::new(&mut task, &store);
+        let variable = context.new_type_var();
+        let before = format!("{:?}", context.facts);
+        let result = context.unify_speculatively(|attempt| {
+            attempt.try_unify(&variable, &Type::int(), &Span::dummy())?;
+
+            attempt.context.unify_speculatively(|nested| {
+                nested.context.facts.add_usage(Span::dummy(), Span::dummy());
+                nested
+                    .context
+                    .sink
+                    .push(diagnostics::LisetteDiagnostic::error("nested"));
+                Ok::<_, UnifyError>(())
+            })?;
+            attempt.try_unify(&variable, &Type::string(), &Span::dummy())
+        });
+        assert!(result.is_err());
+        assert_eq!(variable.resolve_in(&context.env), variable);
+        assert_eq!(format!("{:?}", context.facts), before);
+        assert!(task.sink.into_diagnostics().is_empty());
+    }
+
+    #[test]
     fn failed_speculation_rolls_back_diagnostics() {
         let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
         let store = Store::new();
         let result: Result<(), ()> = {
-            let mut ctx = InferCtx::new(&mut task, &store);
-            ctx.sink
+            let mut context = InferCtx::new(&mut task, &store);
+            context
+                .sink
                 .push(diagnostics::LisetteDiagnostic::error("before"));
-            ctx.speculatively(|ctx| {
-                ctx.sink
+            context.with_speculation(|context| {
+                context
+                    .sink
                     .push(diagnostics::LisetteDiagnostic::error("speculative"));
-                Err(())
+                (Err(()), SpeculationOutcome::Rollback)
             })
         };
 
@@ -661,32 +919,31 @@ mod tests {
     }
 
     #[test]
-    fn probe_rolls_back_a_nested_commit_without_losing_outer_changes() {
+    fn abandoned_attempt_rolls_back_a_nested_commit_without_losing_outer_changes() {
         let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
         let store = Store::new();
-        let mut ctx = InferCtx::new(&mut task, &store);
-        let outer = ctx.new_type_var();
-        let inner = ctx.new_type_var();
+        let mut context = InferCtx::new(&mut task, &store);
+        let outer = context.new_type_var();
+        let inner = context.new_type_var();
         let span = Span::dummy();
 
-        ctx.speculatively(|ctx| {
-            ctx.try_unify(&outer, &Type::int(), &span)?;
-            let observed = ctx.probe(|ctx| {
-                ctx.speculatively(|ctx| {
-                    ctx.try_unify(&inner, &Type::string(), &span)?;
-                    ctx.sink
+        context.with_speculation(|context| {
+            context.try_unify(&outer, &Type::int(), &span).unwrap();
+            let observed = context.probe(|context| {
+                context.with_speculation(|context| {
+                    context.try_unify(&inner, &Type::string(), &span).unwrap();
+                    context
+                        .sink
                         .push(diagnostics::LisetteDiagnostic::error("probe"));
-                    Ok::<_, UnifyError>(inner.resolve_in(&ctx.env))
+                    (inner.resolve_in(&context.env), SpeculationOutcome::Commit)
                 })
-                .unwrap()
             });
             assert_eq!(observed, Type::string());
-            assert_eq!(inner.resolve_in(&ctx.env), inner);
-            Ok::<_, UnifyError>(())
-        })
-        .unwrap();
+            assert_eq!(inner.resolve_in(&context.env), inner);
+            ((), SpeculationOutcome::Commit)
+        });
 
-        assert_eq!(outer.resolve_in(&ctx.env), Type::int());
+        assert_eq!(outer.resolve_in(&context.env), Type::int());
         assert!(task.sink.into_diagnostics().is_empty());
     }
 
@@ -694,10 +951,11 @@ mod tests {
     fn successful_speculation_keeps_diagnostics() {
         let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
         let store = Store::new();
-        let result: Result<(), ()> = InferCtx::new(&mut task, &store).speculatively(|ctx| {
-            ctx.sink
+        let result: Result<(), ()> = InferCtx::new(&mut task, &store).with_speculation(|context| {
+            context
+                .sink
                 .push(diagnostics::LisetteDiagnostic::error("reported"));
-            Ok(())
+            (Ok(()), SpeculationOutcome::Commit)
         });
 
         assert!(result.is_ok());

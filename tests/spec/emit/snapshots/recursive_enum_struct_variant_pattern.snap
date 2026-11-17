@@ -20,7 +20,7 @@ func MakeTreeLeaf[T any](arg0 T) Tree[T] {
 	return Tree[T]{Tag: TreeLeaf, Leaf: arg0}
 }
 
-func MakeTreeNode[T any](arg0 Tree[T], arg1 Tree[T]) Tree[T] {
+func MakeTreeNode[T any](arg0, arg1 Tree[T]) Tree[T] {
 	return Tree[T]{Tag: TreeNode, Left: &arg0, Right: &arg1}
 }
 

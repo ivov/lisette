@@ -3,13 +3,16 @@ use crate::plan::bodies::{
     LoopTransfer, LoweredBlock, LoweredStatement, SelectArmKind, SelectStatementPlan, Statement,
     SwitchKind, SwitchStatementPlan,
 };
+use crate::plan::go_expression::Position;
+use crate::plan::go_expression::{
+    CompositeLayout, FunctionLiteralLayout, GoExpressionNode, TreeVisitor,
+};
 use crate::plan::values::GoExpression;
 use crate::render::Renderer;
 use crate::render::writer::GoWriter;
 use crate::write_line;
-use std::mem;
 
-fn write_header_line(output: &mut GoWriter, line: Option<&String>) {
+fn write_header_line(output: &mut GoWriter, line: Option<&Position>) {
     if let Some(line) = line {
         output.push_line_directive(line);
     }
@@ -24,21 +27,6 @@ fn names<T: ToString>(names: &[T]) -> String {
 }
 
 impl Renderer {
-    /// Render a slice of setup statements to a fresh `String`.
-    pub(crate) fn render_setup(&self, setup: &[Statement], directives: bool) -> String {
-        let mut output = GoWriter::new(directives);
-        for statement in setup {
-            self.render_statement(&mut output, statement);
-        }
-        output.into_text()
-    }
-
-    pub(crate) fn render_body(&self, output: &mut String, block: &LoweredBlock) {
-        let mut writer = GoWriter::continuing(mem::take(output), true);
-        self.render_lowered_block(&mut writer, block);
-        *output = writer.into_text();
-    }
-
     pub(crate) fn render_lowered_block(&self, output: &mut GoWriter, block: &LoweredBlock) {
         for statement in &block.statements {
             self.render_statement(output, statement);
@@ -252,7 +240,7 @@ impl Renderer {
         output.push('\n');
     }
 
-    fn render_loop(&self, output: &mut GoWriter, plan: &LoopPlan, line: Option<&String>) {
+    fn render_loop(&self, output: &mut GoWriter, plan: &LoopPlan, line: Option<&Position>) {
         if let Some(label) = plan.kind.label() {
             write_line!(output, "{}:", label);
             write_header_line(output, line);
@@ -340,5 +328,47 @@ impl Renderer {
                 }
             }
         }
+    }
+
+    pub(crate) fn can_inline_block(&self, block: &LoweredBlock) -> bool {
+        struct InlineEligibility {
+            inline: bool,
+        }
+        impl TreeVisitor for InlineEligibility {
+            fn statement(&mut self, statement: &LoweredStatement) {
+                match statement {
+                    LoweredStatement::If(_)
+                    | LoweredStatement::Loop(_)
+                    | LoweredStatement::Block(_)
+                    | LoweredStatement::Select(_)
+                    | LoweredStatement::Switch(_) => self.inline = false,
+                    LoweredStatement::Body(body) if body.statements.len() > 1 => {
+                        self.inline = false
+                    }
+                    _ => {}
+                }
+            }
+            fn expression(&mut self, expression: &GoExpressionNode) {
+                match expression {
+                    GoExpressionNode::CompositeLiteral {
+                        layout: CompositeLayout::MultiLine { .. },
+                        ..
+                    }
+                    | GoExpressionNode::FunctionLiteral {
+                        layout: FunctionLiteralLayout::MultiLine,
+                        ..
+                    } => self.inline = false,
+                    GoExpressionNode::Literal(text) | GoExpressionNode::Verbatim(text)
+                        if text.contains('\n') =>
+                    {
+                        self.inline = false
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut eligibility = InlineEligibility { inline: true };
+        block.walk(&mut eligibility);
+        eligibility.inline
     }
 }

@@ -17,7 +17,7 @@ func MakeTreeLeaf(arg0 int) Tree {
 	return Tree{Tag: TreeLeaf, Leaf: arg0}
 }
 
-func MakeTreeNode(arg0 Tree, arg1 Tree) Tree {
+func MakeTreeNode(arg0, arg1 Tree) Tree {
 	return Tree{Tag: TreeNode, Node0: &arg0, Node1: &arg1}
 }
 

@@ -49,17 +49,12 @@ func apply(f func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte], da
 func main() {
 	cb := 11
 	f := func() int {
-		cb3 := pem.Decode
-		var adapted func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte]
-		if cb3 != nil {
-			adapted = func(arg0 []byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte] {
-				ret2, ret3 := cb3(arg0)
-				option := lisette.OptionFromNilable[*pem.Block](ret2, ret2 == nil)
-				tup := lisette.MakeTuple2(option, ret3)
-				return tup
-			}
-		}
-		cb2 := apply(adapted, []byte{65, 66})
+		cb2 := apply(func(arg0 []byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte] {
+			ret2, ret3 := pem.Decode(arg0)
+			option := lisette.OptionFromNilable[*pem.Block](ret2, ret2 == nil)
+			tup := lisette.MakeTuple2(option, ret3)
+			return tup
+		}, []byte{65, 66})
 		ch := make(chan int, 1)
 		lisette.ChannelSend(ch, cb2)
 		for {

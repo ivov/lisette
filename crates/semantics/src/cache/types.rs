@@ -4,7 +4,8 @@ use syntax::ast::{
     Annotation, Attribute, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition,
     StructFieldKind, VariantFields,
 };
-use syntax::program::{AliasKind, Definition, DefinitionBody, Interface, Method, Package};
+use syntax::collections::DenseMap;
+use syntax::program::{AliasKind, Definition, DefinitionBody, Interface, Method};
 use syntax::types::Symbol;
 
 /// A definition whose span file IDs are cache-local file indices.
@@ -39,13 +40,11 @@ impl CachedDefinition {
 
     pub(crate) fn install_into(
         &self,
-        package: &mut Package,
+        definitions: &mut DenseMap<Symbol, Definition>,
         qualified_name: Symbol,
         file_ids: &[u32],
     ) {
-        package
-            .definitions
-            .insert(qualified_name, self.to_definition(file_ids));
+        definitions.insert(qualified_name, self.to_definition(file_ids));
     }
 
     pub(crate) fn to_definition(&self, file_ids: &[u32]) -> Definition {

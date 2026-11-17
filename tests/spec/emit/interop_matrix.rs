@@ -1,3 +1,4 @@
+use crate::_harness::emit::emit;
 use crate::assert_emit_snapshot;
 use crate::assert_emit_snapshot_with_go_typedefs;
 
@@ -3928,4 +3929,19 @@ fn main() {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nullable_function_wrapper_returns_constructor_directly() {
+    let go = emit(
+        r#"
+import "go:flag"
+fn lookup() -> fn(string) -> Option<Ref<flag.Flag>> { flag.Lookup }
+"#,
+    )
+    .go_code();
+    assert!(
+        go.contains("return lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)"),
+        "{go}"
+    );
 }

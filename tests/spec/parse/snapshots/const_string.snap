@@ -6,6 +6,7 @@ description: |
 ---
 [
     Const {
+        binding: None,
         doc: None,
         identifier: "GREETING",
         identifier_span: Span {

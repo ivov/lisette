@@ -1,6 +1,7 @@
 use crate::state::bindings::BindingValue;
 use syntax::ast::{Expression, StructFieldDefinition};
 use syntax::parse;
+use syntax::program::GoHint;
 use syntax::program::{
     ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
 };
@@ -9,14 +10,15 @@ use syntax::types::{CompoundKind, Symbol, Type};
 use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
-use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::calls::go_interop::NilGuard;
+use crate::abi::layout::ValueLayout;
+use crate::abi::wrapping::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::Statement;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, Stability, ValuePlan};
 use crate::utils::reads_value_member;
+use syntax::program::SlotOrigin;
 
 struct NullableFieldAccess<'a> {
     value: GoExpression,
@@ -186,7 +188,7 @@ impl Planner<'_> {
         };
         let expression =
             if let Some((source, target)) = self.prelude_receiver_method_layouts(dot_access) {
-                self.plan_function_layout_bridge(&mut setup, expression, &source, &target)
+                self.plan_function_layout_bridge(&mut setup, expression, &source, &target, false)
             } else {
                 expression
             };
@@ -299,12 +301,7 @@ impl Planner<'_> {
                 *is_exported || self.struct_field_is_exported(expression_ty, member)
             }
             DotAccessResolution::InstanceMethod { is_exported, .. } => {
-                *is_exported
-                    || self.method_needs_export(member)
-                    || expression_ty
-                        .get_qualified_id()
-                        .and_then(|owner| self.facts.method(owner, member))
-                        .is_some_and(|method| method.visibility.is_public())
+                *is_exported || self.method_needs_export(member)
             }
             _ => {
                 if self.compute_is_exported_context(expression, expression_ty)
@@ -487,12 +484,7 @@ impl Planner<'_> {
             .get_qualified_id()
             .filter(|owner| owner.starts_with("go:"))
             .and_then(|owner| self.facts.method(owner, method))
-            .is_some_and(|method| {
-                method
-                    .go_hints
-                    .iter()
-                    .any(|hint| hint == "value_method_set")
-            })
+            .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
     }
 
     /// A Go constant above `MaxInt64` has no Go default type, so Go needs the declared type.

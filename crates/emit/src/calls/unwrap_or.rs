@@ -1,11 +1,9 @@
 use super::NativeCallContext;
 use crate::Planner;
-use crate::abi::layout::SlotOrigin;
+use crate::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
-use crate::patterns::matching::{
-    FusedName, OptionArms, OptionFusePlan, ResultFusePlan, field_binding,
-};
+use crate::patterns::matching::{FusedName, OptionArms, field_binding};
 use crate::plan::bodies::{
     ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign, define,
 };
@@ -14,18 +12,14 @@ use crate::plan::placement::collapse_declared_temp;
 use crate::plan::values::{GoExpression, ValuePlan};
 use crate::statements::let_binding::needs_explicit_type_declaration;
 use syntax::ast::{BinaryOperator, Expression, Literal};
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 /// `call.unwrap_or(default)`, `call.map_or(default, |v| ..)`, or `call.map(|v| ..).unwrap_or(default)`.
 struct DefaultedCall<'a> {
-    fuse: FusedCall<'a>,
+    producer: FallibleProducer<'a>,
     map: Option<MapLambda<'a>>,
     default: &'a Expression,
-}
-
-enum FusedCall<'a> {
-    Result(ResultFusePlan<'a>),
-    Option(OptionFusePlan<'a>),
 }
 
 pub(crate) struct MapLambda<'a> {
@@ -171,25 +165,29 @@ impl Planner<'_> {
         {
             return None;
         }
-        let fuse = if receiver_ty.is_option() {
-            let fuse = self.option_fuse_plan(receiver)?;
-            if matches!(fuse, OptionFusePlan::Index { .. })
+        let producer = if receiver_ty.is_option() {
+            let producer = self.option_fuse_plan(receiver)?;
+            if matches!(producer, OptionFusePlan::Index { .. })
                 && map.is_none()
                 && !runs_no_code(default)
             {
                 return None;
             }
-            FusedCall::Option(fuse)
+            FallibleProducer::Option(producer)
         } else if receiver_ty.is_result() && map.is_none() {
-            let fuse = self.result_fuse_plan(receiver)?;
-            if !fuse.carries_payload() {
+            let producer = self.result_fuse_plan(receiver)?;
+            if !producer.carries_payload() {
                 return None;
             }
-            FusedCall::Result(fuse)
+            FallibleProducer::Result(producer)
         } else {
             return None;
         };
-        Some(DefaultedCall { fuse, map, default })
+        Some(DefaultedCall {
+            producer,
+            map,
+            default,
+        })
     }
 
     fn zero_defaulted_map_read(
@@ -197,7 +195,8 @@ impl Planner<'_> {
         call: &DefaultedCall<'_>,
         ty: &Type,
     ) -> Option<(Vec<Statement>, GoExpression)> {
-        let FusedCall::Option(OptionFusePlan::CommaOk { subject, source }) = &call.fuse else {
+        let FallibleProducer::Option(OptionFusePlan::CommaOk { subject, source }) = &call.producer
+        else {
             return None;
         };
         if call.map.is_some()
@@ -212,19 +211,17 @@ impl Planner<'_> {
     /// `x, ok := call` then `if !ok { x = default }`, with `x` as `slot` names it.
     fn lower_default_into_slot(
         &mut self,
-        fuse: FusedCall<'_>,
+        producer: FallibleProducer<'_>,
         default: &Expression,
         ty: &Type,
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, GoIdentifier) {
-        let mut bound = match fuse {
-            FusedCall::Result(fuse) => fuse.bind(self, slot, None),
-            FusedCall::Option(OptionFusePlan::Index { call }) => {
+        let (bound, value) = match producer {
+            FallibleProducer::Option(OptionFusePlan::Index { call }) => {
                 return self.lower_defaulted_index_into_slot(&call, default, ty, slot);
             }
-            FusedCall::Option(fuse) => fuse.bind(self, slot),
+            producer => producer.payload(self, slot),
         };
-        let value = bound.writable_payload(self);
         let failure = bound.failure_condition();
         let mut statements = bound.statements;
         let literal_default = is_literal_default(default);
@@ -320,7 +317,7 @@ impl Planner<'_> {
 
     fn lower_mapped_default_into(
         &mut self,
-        fuse: OptionFusePlan<'_>,
+        producer: OptionFusePlan<'_>,
         map: MapLambda<'_>,
         default: &Expression,
         target: &GoIdentifier,
@@ -333,7 +330,7 @@ impl Planner<'_> {
         };
         let target = GoExpression::identifier(target.clone());
         self.lower_fused_option_arms(
-            fuse,
+            producer,
             arms,
             &PlacePlan::Assign {
                 local: &target,
@@ -360,11 +357,11 @@ impl Planner<'_> {
         let Some(map) = call.map else {
             let slot = CommaOkValueSlot::Named(go_name.clone());
             return Some(
-                self.lower_default_into_slot(call.fuse, call.default, &ty, slot)
+                self.lower_default_into_slot(call.producer, call.default, &ty, slot)
                     .0,
             );
         };
-        let FusedCall::Option(fuse) = call.fuse else {
+        let FallibleProducer::Option(producer) = call.producer else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
         let mut statements = vec![
@@ -375,7 +372,13 @@ impl Planner<'_> {
             }
             .into(),
         ];
-        statements.extend(self.lower_mapped_default_into(fuse, map, call.default, go_name, &ty));
+        statements.extend(self.lower_mapped_default_into(
+            producer,
+            map,
+            call.default,
+            go_name,
+            &ty,
+        ));
         Some(statements)
     }
 
@@ -389,17 +392,21 @@ impl Planner<'_> {
         }
         let ty = expression.get_type();
         let Some(map) = call.map else {
-            let (statements, value) =
-                self.lower_default_into_slot(call.fuse, call.default, &ty, CommaOkValueSlot::Temp);
+            let (statements, value) = self.lower_default_into_slot(
+                call.producer,
+                call.default,
+                &ty,
+                CommaOkValueSlot::Temp,
+            );
             return Some(ValuePlan::captured(statements, value));
         };
-        let FusedCall::Option(fuse) = call.fuse else {
+        let FallibleProducer::Option(producer) = call.producer else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
         let (result_var, declaration) = self.operand_temp_declaration(&ty);
         let mut statements = vec![declaration];
         statements.extend(self.lower_mapped_default_into(
-            fuse,
+            producer,
             map,
             call.default,
             &result_var,

@@ -2,20 +2,22 @@ use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::definitions::functions::is_test_context_ty;
 use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
-use crate::names::go_name::{GeneratedPackage, testkit_qualifier};
+use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
 };
 use crate::plan::go_expression::{CompositeLayout, UnaryOp};
+use crate::plan::values::CaptureBoundary;
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
 
 pub(crate) fn testkit_operand_type() -> GoType {
-    GoType::with_package(
-        format!("{}.Operand", testkit_qualifier()),
-        PackageUse::generated(GeneratedPackage::TestKit),
+    GoType::named(
+        "Operand",
+        &[],
+        Some(PackageUse::generated(GeneratedPackage::TestKit)),
     )
 }
 
@@ -139,7 +141,7 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, GoExpression) {
         let Expression::Call {
             expression: callee,
-            args,
+            args: arguments,
             ..
         } = expression.unwrap_parens()
         else {
@@ -152,17 +154,17 @@ impl Planner<'_> {
         else {
             unreachable!("lower_test_log_call requires a method receiver");
         };
-        let mut statements = Vec::new();
-        let (handle_setup, handle) = self
-            .lower_value(receiver, ExpressionContext::value())
-            .into_parts();
-        statements.extend(handle_setup);
-        let (value_setup, value) = self
-            .lower_value(&args[0], ExpressionContext::value())
-            .into_parts();
-        statements.extend(value_setup);
+        let handle = self.lower_value(receiver, ExpressionContext::value());
+        let value = self.lower_value(&arguments[0], ExpressionContext::value());
+        let sequenced =
+            self.sequence_values(vec![handle, value], CaptureBoundary::SiblingSequence, "log");
+        let statements = sequenced.setup;
+        let [handle, value]: [GoExpression; 2] = sequenced
+            .values
+            .try_into()
+            .expect("handle and logged value");
 
-        let span = args[0].get_span();
+        let span = arguments[0].get_span();
         let call = test_context_call(
             handle,
             "Log",

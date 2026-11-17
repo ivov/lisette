@@ -53,7 +53,7 @@ pub(crate) fn run_all(
     let sink = LocalSink::new();
     let pattern_lint_sink = LocalSink::new();
 
-    let mut package_ids: Vec<&str> = store.packages.keys().map(String::as_str).collect();
+    let mut package_ids: Vec<&str> = store.packages().keys().map(String::as_str).collect();
     package_ids.sort_unstable();
     for package_id in &package_ids {
         visibility::run_package(package_id, store, &sink);

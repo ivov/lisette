@@ -166,7 +166,7 @@ impl TaskState {
                 body: DefinitionBody::Value {
                     kind: ValueKind::Runtime,
                     allowed_lints: extract_attribute_flags(attributes, "allow"),
-                    go_hints: extract_attribute_flags(attributes, "go"),
+                    go_hints: extract_go_hints(attributes),
                     go_name: extract_go_name(attributes),
                     go_type_param_recipe: extract_go_type_param_recipe(attributes),
                     superseded_by: extract_go_superseded_by(attributes),
@@ -306,7 +306,7 @@ impl TaskState {
                 body: DefinitionBody::Value {
                     kind: ValueKind::Variable,
                     allowed_lints: vec![],
-                    go_hints: extract_attribute_flags(attributes, "go"),
+                    go_hints: extract_go_hints(attributes),
                     go_name: None,
                     go_type_param_recipe: None,
                     superseded_by: None,

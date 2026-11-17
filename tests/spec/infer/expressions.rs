@@ -1,3 +1,5 @@
+use crate::_harness::infer::checker_errors;
+use crate::_harness::infer::has_code;
 use crate::_harness::lint::apply_infer_fixes;
 use crate::spec::infer::*;
 use syntax::ast::BinaryOperator;
@@ -3187,10 +3189,7 @@ fn assert_not_sibling_flagged(source: &str) {
     fs.add_file("main", "main.lis", source);
     let result = infer_package("main", fs);
     assert!(
-        !result
-            .errors
-            .iter()
-            .any(|e| e.code_str() == Some("infer.reference_aliases_sibling")),
+        !has_code(&result.errors, "infer.reference_aliases_sibling"),
         "must not flag reference_aliases_sibling, got:\n{:?}",
         result.errors
     );
@@ -3409,4 +3408,32 @@ fn complex_tuple_struct_cast_to_float_rejected() {
         "#,
     )
     .assert_infer_code("invalid_conversion");
+}
+
+#[test]
+fn sibling_reference_aliases_include_fields_and_indices() {
+    for source in [
+        "struct Point { v: int }; fn write(x: mut Ref<int>) -> int { x.* = 3; 0 }; fn two(a: int, b: int) {}; fn main() { let mut p = Point { v: 1 }; two(write(&p.v), p.v) }",
+        "fn write(x: mut Ref<int>) -> int { x.* = 3; 0 }; fn two(a: int, b: int) {}; fn main() { let mut xs: mut Slice<int> = [1]; two(write(&xs[0]), xs[0]) }",
+    ] {
+        let errors = checker_errors(source, &[]);
+        assert!(
+            has_code(&errors, "infer.reference_aliases_sibling"),
+            "{source}\n{errors:?}"
+        );
+    }
+    let errors = checker_errors(
+        "fn read(x: Ref<int>) -> int { x.* }; fn write(x: mut Ref<int>) -> int { x.* = 3; 0 }; fn three(a: int, b: int, c: int) {}; fn main() { let mut x = 1; three(read(&x), x, write(&x)) }",
+        &[],
+    );
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn lambda_parameter_shadow_does_not_alias_writable_sibling() {
+    let source = r#"fn write(x: mut Ref<int>) -> int { x.* = 3; 0 }
+fn consume(a: int, f: fn(int) -> int) { let _ = f(a) }
+fn main() { let mut x = 1; consume(write(&x), |x: int| x) }"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{source}\n{errors:?}");
 }

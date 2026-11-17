@@ -1,15 +1,18 @@
+use super::aliasing::{PlaceKey, render_place};
 use crate::checker::EnvResolve;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, IdentifierResolution, StructFields};
+use syntax::program::resolved_definition;
 use syntax::program::{
     CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ValueKind,
 };
-use syntax::types::{CompoundKind, FunctionParameter, Symbol, Type, peel_to_range_type};
+use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
 
 use crate::checker::infer::InferCtx;
 use syntax::program::AliasKind;
 
 impl InferCtx<'_> {
-    pub(super) fn writable_receiver_place(&self, callee: &Expression) -> Option<String> {
+    pub(super) fn writable_receiver_place(&self, callee: &Expression) -> Option<PlaceKey> {
         let Expression::DotAccess {
             expression: receiver,
             member,
@@ -222,10 +225,7 @@ impl InferCtx<'_> {
     }
 
     pub(super) fn is_panic_call(&self, expression: &Expression) -> bool {
-        match expression {
-            Expression::Identifier { value, .. } => value == "panic",
-            _ => false,
-        }
+        resolved_definition(expression) == Some("prelude.panic")
     }
 
     pub(super) fn mark_native_mutating_call(&mut self, callee: &Expression) {
@@ -239,11 +239,10 @@ impl InferCtx<'_> {
         };
         let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
 
-        let is_mutating = match self.store.peeled(&receiver_ty).compound_kind() {
-            Some(CompoundKind::Map) => member == "delete",
-            Some(CompoundKind::Slice) => member == "copy_from",
-            _ => false,
-        };
+        let is_mutating = NativeTypeKind::from_type(&self.store.peel_alias(&receiver_ty))
+            .is_some_and(|kind| {
+                syntax::program::NativeOperation::new(kind, member).mutates_receiver()
+            });
         if !is_mutating {
             return;
         }
@@ -256,19 +255,19 @@ impl InferCtx<'_> {
 
     pub(super) fn check_aliased_writable_arguments(
         &mut self,
-        args: &[Expression],
+        arguments: &[Expression],
         parameters: &[FunctionParameter],
         variadic: Option<&FunctionParameter>,
-        writable_receiver: Option<String>,
+        writable_receiver: Option<PlaceKey>,
     ) {
-        let places: Vec<Option<String>> = args
+        let places: Vec<Option<PlaceKey>> = arguments
             .iter()
-            .map(|arg| {
-                let arg = arg.unwrap_parens();
-                if self.names_no_storage(arg) {
+            .map(|argument| {
+                let argument = argument.unwrap_parens();
+                if self.names_no_storage(argument) {
                     None
                 } else {
-                    super::aliasing::place_key(arg)
+                    super::aliasing::place_key(argument)
                 }
             })
             .collect();
@@ -281,7 +280,7 @@ impl InferCtx<'_> {
             })
         };
 
-        let writable_positions: Vec<bool> = (0..args.len())
+        let writable_positions: Vec<bool> = (0..arguments.len())
             .map(|i| {
                 parameter_at(i).is_some_and(|param| {
                     self.store
@@ -290,34 +289,32 @@ impl InferCtx<'_> {
             })
             .collect();
 
-        let mutating_positions: Vec<bool> = (0..args.len())
+        let mutating_positions: Vec<bool> = (0..arguments.len())
             .map(|i| {
                 writable_positions[i]
                     || parameter_at(i).is_some_and(|param| {
                         let param_ty = param.ty.resolve_in(&self.env);
                         self.store.is_interface(&param_ty)
                             && self.interface_writes_through_receiver(
-                                &args[i].get_type().resolve_in(&self.env),
+                                &arguments[i].get_type().resolve_in(&self.env),
                                 &param_ty,
                             )
                     })
             })
             .collect();
 
-        let mut reported_places: Vec<&str> = Vec::new();
-        for (i, arg) in args.iter().enumerate() {
+        let mut reported_places: Vec<&PlaceKey> = Vec::new();
+        for (i, argument) in arguments.iter().enumerate() {
             let writable_position = writable_positions[i];
-            let Some(place) = places[i].as_deref() else {
+            let Some(place) = places[i].as_ref() else {
                 continue;
             };
             if mutating_positions[i]
-                && let Some(binding_id) = arg
-                    .get_var_name()
-                    .and_then(|name| self.scopes.lookup_binding_id(&name))
+                && let Some((binding_id, _)) = self.binding_for_place(argument)
             {
                 // The callee gets a copy of a named argument and cannot rebind the name.
-                if matches!(arg.unwrap_parens(), Expression::Identifier { .. }) {
-                    if self.peel_resolved(&arg.get_type()).is_ref() {
+                if matches!(argument.unwrap_parens(), Expression::Identifier { .. }) {
+                    if self.peel_resolved(&argument.get_type()).is_ref() {
                         self.facts.mark_written_through(binding_id);
                     } else {
                         self.facts.mark_mutated(binding_id);
@@ -326,20 +323,102 @@ impl InferCtx<'_> {
                     self.facts.mark_alias_mutated(binding_id);
                 }
             }
-            let aliases_receiver = writable_receiver.as_deref() == Some(place);
+
+            let aliases_receiver = writable_receiver
+                .as_ref()
+                .is_some_and(|other| other.overlaps(place))
+                && self.argument_shares_storage(
+                    &argument.get_type().resolve_in(&self.env),
+                    &mut Default::default(),
+                );
             let aliases_argument = writable_position
-                && places
-                    .iter()
-                    .enumerate()
-                    .any(|(j, other)| j != i && other.as_deref() == Some(place));
+                && places.iter().enumerate().any(|(j, other)| {
+                    j != i
+                        && other.as_ref().is_some_and(|other| other.overlaps(place))
+                        && self.argument_shares_storage(
+                            &arguments[j].get_type().resolve_in(&self.env),
+                            &mut Default::default(),
+                        )
+                });
             if (aliases_receiver || aliases_argument) && !reported_places.contains(&place) {
                 reported_places.push(place);
                 self.sink
                     .push(diagnostics::infer::aliased_writable_argument(
-                        place,
-                        arg.get_span(),
+                        &render_place(argument),
+                        argument.get_span(),
                     ));
             }
+        }
+    }
+
+    fn argument_shares_storage(
+        &self,
+        ty: &Type,
+        visiting: &mut FxHashSet<(Symbol, Vec<Type>)>,
+    ) -> bool {
+        use syntax::types::{build_substitution_map, substitute};
+        match self.store.peel_alias(ty) {
+            Type::Compound { .. } | Type::Function(_) | Type::Parameter(_) | Type::Var { .. } => {
+                true
+            }
+            Type::Tuple(elements) => elements
+                .iter()
+                .any(|ty| self.argument_shares_storage(ty, visiting)),
+            Type::Array { element, .. } => self.argument_shares_storage(&element, visiting),
+            Type::Nominal {
+                id,
+                params: parameters,
+                ..
+            } => {
+                let instance = (id.clone(), parameters.clone());
+                if visiting.contains(&instance) {
+                    return false;
+                }
+
+                if visiting.iter().any(|(owner, arguments)| {
+                    *owner == id
+                        && !arguments.iter().any(|argument| {
+                            argument.contains_type(&Type::Nominal {
+                                id: id.clone(),
+                                params: parameters.clone(),
+                                writable: false,
+                            })
+                        })
+                }) {
+                    return true;
+                }
+                visiting.insert(instance.clone());
+                let shares = self.store.get_definition(&id).is_none_or(|definition| {
+                    let map = build_substitution_map(
+                        definition.body.generics().unwrap_or_default(),
+                        &parameters,
+                    );
+                    let mut field_shares =
+                        |ty: &Type| self.argument_shares_storage(&substitute(ty, &map), visiting);
+                    match &definition.body {
+                        DefinitionBody::Struct { fields, .. } => fields
+                            .as_slice()
+                            .iter()
+                            .any(|field| field_shares(&field.ty)),
+                        DefinitionBody::Enum { variants, .. } => variants
+                            .iter()
+                            .flat_map(|variant| variant.fields.iter())
+                            .any(|field| field_shares(&field.ty)),
+                        DefinitionBody::Interface { .. } | DefinitionBody::TypeAlias { .. } => true,
+                        DefinitionBody::Value { .. } => false,
+                    }
+                });
+                visiting.remove(&instance);
+                shares
+            }
+            Type::Forall { body, .. } => self.argument_shares_storage(&body, visiting),
+            Type::Simple(_)
+            | Type::ImportNamespace(_)
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Never
+            | Type::Error
+            | Type::ReceiverPlaceholder => false,
         }
     }
 

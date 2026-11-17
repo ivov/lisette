@@ -315,10 +315,6 @@ impl GeneratedPackage {
     }
 }
 
-pub(crate) fn prelude_qualifier() -> &'static str {
-    GeneratedPackage::Prelude.qualifier()
-}
-
 pub(crate) fn testkit_qualifier() -> &'static str {
     GeneratedPackage::TestKit.qualifier()
 }

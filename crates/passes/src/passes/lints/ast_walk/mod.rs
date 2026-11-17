@@ -295,7 +295,7 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
     };
 
     let mut packages: Vec<&Package> = store
-        .packages
+        .packages()
         .values()
         .map(Arc::as_ref)
         .filter(|m| !is_internal_package_id(&m.id))

@@ -1,10 +1,9 @@
 use crate::Planner;
 use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::wrapping::NilGuard;
 use crate::calls::bound_value::{BoundValue, LoweredPair, PairValue};
 use crate::calls::dispatch::extract_native_method_name;
-use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name::GeneratedPackage;
 use crate::names::source_name::SourceName;
 use crate::plan::bodies::{Statement, define, define_many};
 use crate::plan::calls::CallableOrigin;
@@ -12,7 +11,6 @@ use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
-use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::program::CallKind;
 use syntax::program::NativeTypeKind;
@@ -111,27 +109,6 @@ impl Planner<'_> {
             Some(BindingValue::Components(components)) => Some(components.clone()),
             _ => None,
         }
-    }
-
-    pub(crate) fn rebuild_from_components(
-        &mut self,
-        components: &ComponentBinding,
-    ) -> GoExpression {
-        let constructor = components
-            .kind
-            .whole_value_constructor()
-            .expect("component binding has no whole-value constructor");
-        let payload_go_type = self.go_type(&components.payload_type);
-        GoExpression::call(
-            GoExpression::instantiation(
-                GoExpression::generated(GeneratedPackage::Prelude, constructor),
-                GoType::type_argument(&payload_go_type),
-            ),
-            vec![
-                GoExpression::identifier(components.value.clone()),
-                GoExpression::identifier(components.status.clone()),
-            ],
-        )
     }
 
     pub(crate) fn comma_ok_source(&self, expression: &Expression) -> Option<CommaOkSource> {

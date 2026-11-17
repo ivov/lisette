@@ -36,11 +36,9 @@ func next(arg0 int) (int, bool) {
 func main() {
 	arg0 := 7
 	cb := func() int {
-		cb2 := next
-		tagged := func(arg0 int) lisette.Option[int] {
-			return lisette.OptionFromCommaOk[int](cb2(arg0))
-		}
-		arg0_2 := lisette.OptionAndThen(lisette.MakeOptionSome(arg0), tagged).UnwrapOr(0)
+		arg0_2 := lisette.OptionAndThen(lisette.MakeOptionSome(arg0), func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](next(arg0))
+		}).UnwrapOr(0)
 		read := func() int {
 			return arg0_2
 		}

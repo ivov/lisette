@@ -6,7 +6,7 @@ use crate::names::go_name;
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::state::package_state::PackageState;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct LocalNames {
     issued: HashSet<String>,
     generated: HashMap<LocalId, String>,

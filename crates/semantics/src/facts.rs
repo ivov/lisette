@@ -1,4 +1,5 @@
 use syntax::collections::DenseMap;
+use syntax::program::ConformanceIndex;
 mod usages;
 pub use usages::{UsageFacts, UsageIndex};
 
@@ -37,6 +38,7 @@ pub struct Facts {
     // Retained after analysis for editor tooling.
     pub bindings: DenseMap<BindingId, BindingFact>,
     pub usages: UsageFacts,
+    pub conformances: ConformanceIndex,
 
     pub dead_code: Vec<DeadCodeFact>,
     pub overused_references: Vec<OverusedReferenceFact>,
@@ -73,12 +75,69 @@ pub struct DeferredChecks {
 
 impl DeferredChecks {
     fn merge(&mut self, other: Self) {
-        self.generic_calls.extend(other.generic_calls);
-        self.generic_bounds.extend(other.generic_bounds);
-        self.empty_collections.extend(other.empty_collections);
-        self.empty_literals.extend(other.empty_literals);
-        self.slice_makes.extend(other.slice_makes);
-        self.statement_tails.extend(other.statement_tails);
+        let Self {
+            generic_calls,
+            generic_bounds,
+            empty_collections,
+            empty_literals,
+            slice_makes,
+            statement_tails,
+        } = other;
+        self.generic_calls.extend(generic_calls);
+        self.generic_bounds.extend(generic_bounds);
+        self.empty_collections.extend(empty_collections);
+        self.empty_literals.extend(empty_literals);
+        self.slice_makes.extend(slice_makes);
+        self.statement_tails.extend(statement_tails);
+    }
+
+    pub(crate) fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {
+        let Self {
+            generic_calls,
+            generic_bounds,
+            empty_collections,
+            empty_literals,
+            slice_makes,
+            statement_tails,
+        } = self;
+        for check in generic_calls {
+            visit(&mut check.ty);
+        }
+        for obligation in generic_bounds {
+            let GenericBoundObligation {
+                argument,
+                required,
+                origin,
+                available_bounds,
+                ..
+            } = obligation;
+            visit(argument);
+            visit(required);
+            if let GenericBoundOrigin::Construction {
+                enclosing_return_type: Some(return_type),
+                ..
+            } = origin
+            {
+                visit(return_type);
+            }
+            for (_, bounds) in available_bounds {
+                for bound in bounds {
+                    visit(bound);
+                }
+            }
+        }
+        for check in empty_collections {
+            visit(&mut check.ty);
+        }
+        for check in empty_literals {
+            visit(&mut check.ty);
+        }
+        for check in slice_makes {
+            visit(&mut check.ty);
+        }
+        for check in statement_tails {
+            visit(&mut check.expected_ty);
+        }
     }
 }
 
@@ -212,6 +271,7 @@ impl Facts {
             type_error_spans: HashSet::default(),
             function_spans: Vec::new(),
             usages: UsageFacts::default(),
+            conformances: ConformanceIndex::default(),
             interface_satisfied_methods: HashMap::default(),
             suggested_names: HashMap::default(),
         }
@@ -394,6 +454,7 @@ impl Facts {
             function_spans,
             usages,
             interface_satisfied_methods,
+            conformances,
             suggested_names,
         } = other;
 
@@ -413,6 +474,7 @@ impl Facts {
         self.function_spans.extend(function_spans);
 
         self.usages.merge(usages);
+        self.conformances.merge(conformances);
 
         for (package_id, methods) in interface_satisfied_methods {
             let existing_methods = self

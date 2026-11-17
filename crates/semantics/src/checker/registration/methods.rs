@@ -5,6 +5,7 @@ use syntax::ast::{
     Annotation, Expression, Generic, Pattern, Span, Visibility as SyntacticVisibility,
 };
 use syntax::display::annotation_to_string;
+use syntax::program::GoHint;
 use syntax::program::MethodOrigin;
 use syntax::program::ValueKind;
 use syntax::program::{
@@ -13,8 +14,7 @@ use syntax::program::{
 use syntax::types::{Bound, Symbol, Type, type_args_match_params, unqualified_name};
 
 use super::{
-    extract_attribute_flags, extract_go_superseded_by, has_recursive_instantiation,
-    wrap_with_impl_generics,
+    extract_attribute_flags, extract_go_hints, extract_go_superseded_by, wrap_with_impl_generics,
 };
 use crate::checker::state::PendingInterfaceConflictCheck;
 use crate::checker::{TaskState, resolved_generic_bounds};
@@ -54,7 +54,7 @@ impl TaskState {
         method: Method,
     ) -> bool {
         let package = store
-            .get_package_mut(receiver.package_id)
+            .edit_package(receiver.package_id)
             .expect("current package must exist in store");
 
         let Some(definition) = package.definitions.get_mut(receiver.qualified_name) else {
@@ -386,24 +386,13 @@ impl TaskState {
 
         let method_ty = wrap_with_impl_generics(&fn_ty, generics, impl_bounds);
 
-        let go_hints = extract_attribute_flags(fn_attrs, "go");
-        let method_key: EcoString =
-            if is_instance_method && go_hints.iter().any(|h| h == "unexported") {
-                super::seal_method_key(is_d_lis, fn_attrs, receiver.package_id, fn_name)
-            } else {
-                fn_name.clone()
-            };
-
-        if !generics.is_empty()
-            && self.impl_has_simple_type_params(receiver.receiver_ty, generics)
-            && has_recursive_instantiation(receiver.qualified_name, &fn_ty)
+        let go_hints = extract_go_hints(fn_attrs);
+        let method_key: EcoString = if is_instance_method && go_hints.contains(&GoHint::Unexported)
         {
-            self.sink
-                .push(diagnostics::infer::recursive_generic_instantiation(
-                    receiver.display_name,
-                    *fn_name_span,
-                ));
-        }
+            super::seal_method_key(is_d_lis, fn_attrs, receiver.package_id, fn_name)
+        } else {
+            fn_name.clone()
+        };
 
         self.check_duplicate_method(
             &*store,
@@ -445,7 +434,7 @@ impl TaskState {
 
         if !is_instance_method {
             let package = store
-                .get_package_mut(receiver.package_id)
+                .edit_package(receiver.package_id)
                 .expect("current package must exist in store");
             package.definitions.insert(
                 package_qualified_name,
@@ -567,8 +556,8 @@ impl TaskState {
                         this.check_value_position_bounds(&*store, &[], &signature_pairs);
                     });
 
-                    let go_hints = extract_attribute_flags(fn_attrs, "go");
-                    let key = if go_hints.iter().any(|h| h == "unexported") {
+                    let go_hints = extract_go_hints(fn_attrs);
+                    let key = if go_hints.contains(&GoHint::Unexported) {
                         super::seal_method_key(is_d_lis, fn_attrs, &package_id, method_name)
                     } else {
                         method_name.clone()

@@ -370,6 +370,7 @@ impl Planner<'_> {
                 self.directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Const {
+                binding,
                 identifier,
                 expression: value,
                 ty,
@@ -378,7 +379,8 @@ impl Planner<'_> {
                 let Some(value) = value.value() else {
                     return LoweredStatement::Block(LoweredBlock { statements: vec![] }).into();
                 };
-                let statement = self.lower_const(identifier, value, ty, ConstPlacement::Local);
+                let statement =
+                    self.lower_const(identifier, *binding, value, ty, ConstPlacement::Local);
                 self.directed_at(expression, statement)
             }
             Expression::Return {
@@ -448,7 +450,7 @@ impl Planner<'_> {
 
     fn directed_at(&self, expression: &Expression, kind: LoweredStatement) -> Statement {
         Statement {
-            line: self.maybe_line_directive(&expression.get_span()),
+            line: self.source_position(&expression.get_span()),
             kind,
         }
     }
@@ -778,7 +780,7 @@ impl Planner<'_> {
             return self.lower_never_return_tail(last, &return_span);
         }
 
-        let line = self.maybe_line_directive(&return_span);
+        let line = self.source_position(&return_span);
         match last {
             Expression::If { .. } | Expression::Select { .. } => {
                 let mut block = self.lower_branching_to_block(last, &PlacePlan::Return);
@@ -813,7 +815,7 @@ impl Planner<'_> {
     }
 
     fn lower_never_return_tail(&mut self, last: &Expression, return_span: &Span) -> Vec<Statement> {
-        let line = self.maybe_line_directive(return_span);
+        let line = self.source_position(return_span);
         directed_first(line, vec![self.lower_statement(last)])
     }
 
@@ -892,7 +894,7 @@ impl Planner<'_> {
             ..
         } = alternative
         {
-            let line = self.maybe_line_directive(&alternative.get_span());
+            let line = self.source_position(&alternative.get_span());
             if next_alternative.is_none() && is_conjunction(condition) {
                 return self.with_scope(|this| {
                     let guard = this.lower_conjunction_guard(condition, |this| {

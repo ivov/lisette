@@ -19,7 +19,7 @@ func MakeTreeLeaf(arg0 int) Tree {
 	return Tree{Tag: TreeLeaf, Leaf: arg0}
 }
 
-func MakeTreeNode(arg0 int, arg1 *Tree, arg2 *Tree) Tree {
+func MakeTreeNode(arg0 int, arg1, arg2 *Tree) Tree {
 	return Tree{Tag: TreeNode, Value: arg0, Left: arg1, Right: arg2}
 }
 

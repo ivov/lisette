@@ -204,7 +204,7 @@ fn package_definitions_are_inserted_by_one_owner() {
             .chars()
             .filter(|c| !c.is_whitespace())
             .collect();
-        let count = compact.matches(".definitions.insert(").count();
+        let count = compact.matches("definitions.insert(").count();
         if count > 0 {
             found.push((path, count));
         }

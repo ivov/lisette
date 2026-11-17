@@ -25,17 +25,12 @@ func useFn(f func(string) lisette.Partial[lisette.Tuple2[string, map[string]stri
 }
 
 func main() {
-	cb := mime.ParseMediaType
-	var adapted func(string) lisette.Partial[lisette.Tuple2[string, map[string]string], error]
-	if cb != nil {
-		adapted = func(arg0 string) lisette.Partial[lisette.Tuple2[string, map[string]string], error] {
-			ret, ret2, ret3 := cb(arg0)
-			tup := lisette.MakeTuple2(ret, ret2)
-			if ret3 != nil {
-				return lisette.MakePartialBoth[lisette.Tuple2[string, map[string]string], error](tup, ret3)
-			}
-			return lisette.MakePartialOk[lisette.Tuple2[string, map[string]string], error](tup)
+	useFn(func(arg0 string) lisette.Partial[lisette.Tuple2[string, map[string]string], error] {
+		ret, ret2, ret3 := mime.ParseMediaType(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
+		if ret3 != nil {
+			return lisette.MakePartialBoth[lisette.Tuple2[string, map[string]string], error](tup, ret3)
 		}
-	}
-	useFn(adapted)
+		return lisette.MakePartialOk[lisette.Tuple2[string, map[string]string], error](tup)
+	})
 }

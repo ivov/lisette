@@ -14,9 +14,18 @@ use std::iter;
 use syntax::ast::Generic;
 
 pub(crate) fn run(store: &Store, sink: &LocalSink) {
+    let call_cycles = check_calls(store, sink);
+    declarations::check_type_declarations(store, sink, &call_cycles);
+}
+
+pub(super) struct CallCycle {
+    span: Span,
+}
+
+fn check_calls(store: &Store, sink: &LocalSink) -> Vec<CallCycle> {
     let targets = collect_generic_targets(store);
     if targets.list.is_empty() {
-        return;
+        return Vec::new();
     }
 
     let mut collector = EdgeCollector {
@@ -30,21 +39,26 @@ pub(crate) fn run(store: &Store, sink: &LocalSink) {
         collector.walk(targets.list[index].body);
     }
 
+    let components = graph::components(&collector.adjacency);
     let mut reported_spans: HashSet<Span> = HashSet::default();
     for edge in &collector.growing {
-        if !reaches(&collector.adjacency, edge.target, edge.source) {
+        if components[edge.target] != components[edge.source] {
             continue;
         }
         if !reported_spans.insert(edge.span) {
             continue;
         }
-        sink.push(diagnostics::infer::instantiation_cycle(
+        sink.push(diagnostics::infer::growing_call_type_argument(
             &edge.var,
             &edge.type_arg,
             &edge.target_name,
             edge.span,
         ));
     }
+    reported_spans
+        .into_iter()
+        .map(|span| CallCycle { span })
+        .collect()
 }
 
 struct GenericTarget<'a> {
@@ -76,12 +90,12 @@ impl<'a> Targets<'a> {
 }
 
 fn collect_generic_targets(store: &Store) -> Targets<'_> {
-    let mut package_ids: Vec<&str> = store.packages.keys().map(String::as_str).collect();
+    let mut package_ids: Vec<&str> = store.packages().keys().map(String::as_str).collect();
     package_ids.sort_unstable();
 
     let mut targets = Targets::default();
     for package_id in package_ids {
-        let package = &store.packages[package_id];
+        let package = &store.packages()[package_id];
         let mut files: Vec<_> = package.source_files().collect();
         files.sort_unstable_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
         for file in files {
@@ -484,18 +498,5 @@ fn mentions_parameter(ty: &Type, name: &EcoString) -> bool {
     }
 }
 
-fn reaches(adjacency: &[Vec<usize>], from: usize, to: usize) -> bool {
-    let mut visited = vec![false; adjacency.len()];
-    let mut stack = vec![from];
-    while let Some(node) = stack.pop() {
-        if node == to {
-            return true;
-        }
-        if visited[node] {
-            continue;
-        }
-        visited[node] = true;
-        stack.extend(adjacency[node].iter().copied());
-    }
-    false
-}
+mod declarations;
+mod graph;

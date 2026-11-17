@@ -6658,3 +6658,54 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn plain_contains_does_not_stage_earlier_reads() {
+    assert_emit_snapshot!(
+        r#"import "go:fmt"
+fn pair(a: int, b: bool) -> string { f"{a} {b}" }
+fn main() {
+    let values = [1]
+    fmt.Println(pair(values[0], values.contains(3)))
+}
+"#
+    );
+}
+
+#[test]
+fn custom_contains_stages_earlier_reads() {
+    assert_emit_snapshot!(
+        r#"import "go:fmt"
+struct Item { id: int, change: fn() }
+impl Item { fn equals(self, other: Item) -> bool { self.change(); self.id == other.id } }
+fn pair(a: int, b: bool) -> string { f"{a} {b}" }
+fn main() {
+    let mut values = [1]
+    let item = Item { id: 3, change: || { values[0] = 9 } }
+    let items = [item]
+    fmt.Println(pair(values[0], items.contains(item)))
+    fmt.Println(values[0])
+    values[0] = 1
+    let needle = || { values[0] = 7; 3 }
+    fmt.Println(pair(values[0], values.contains(needle())))
+    fmt.Println(values[0])
+}
+"#
+    );
+}
+
+#[test]
+fn read_only_reference_before_value_copy_and_mutation() {
+    assert_emit_snapshot!(
+        r#"import "go:fmt"
+struct Data { n: int }
+fn inspect(value: Ref<Data>) -> int { value.n }
+fn bump(value: mut Ref<Data>) -> int { value.n += 1; value.n }
+fn main() {
+    let mut data = Data { n: 1 }
+    let triple = (inspect(&data), data, bump(&data))
+    fmt.Println(triple.0, triple.1.n, triple.2)
+}
+"#
+    );
+}

@@ -1,24 +1,21 @@
 use crate::abi::is_closure_literal;
 use crate::calls::dispatch::extract_native_method_name;
-use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::plan::bodies::AsyncKind;
 use syntax::program::DefinitionBody;
+use syntax::program::NativeOperation;
 
-use crate::abi::callable::{
-    CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
-};
+use crate::abi::bridge::GoResultBridge;
+use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
-use crate::abi::transition::{emit_lisette_callback_wrapper, emit_unit_result_adapter};
-use crate::calls::go_interop::GoResultBridge;
+use crate::abi::layout::ValueLayout;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, Statement, discard, effect_statement, expression_statement,
 };
-use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::plan::calls::{CallPlan, CallableOrigin, FunctionBridge};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
 use crate::state::bindings::BindingValue;
@@ -27,171 +24,89 @@ use crate::types::go_type::GoType;
 use crate::types::go_type::returns_go_void;
 use crate::{Planner, ReturnContext};
 use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
+use syntax::program::SlotOrigin;
 use syntax::program::{CallKind, DotAccessResolution};
 use syntax::types::Type;
-
-enum FunctionValueAdapter {
-    Prelude(LoweredReturnAbi),
-    Layout(Box<(FunctionLayout, FunctionLayout)>),
-}
-
-pub(crate) enum GoFunctionValueBridge {
-    Layout(CoercionPlan),
-    Result(CallableAbi),
-}
 
 impl Planner<'_> {
     pub(crate) fn lower_value(
         &mut self,
         expression: &Expression,
-        ctx: ExpressionContext<'_>,
+        context: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let expression = self.peel_go_slot_alias_cast(expression, ctx);
-        match self.go_function_value_bridge(expression, ctx) {
-            Some(GoFunctionValueBridge::Layout(layout_coercion)) => {
-                let value = self.plan_operand(expression, ctx);
-                return value.map_expression(|setup, value| {
-                    let (bridge_setup, value) = layout_coercion.lower(self, value);
-                    setup.extend(bridge_setup);
-                    value
-                });
-            }
-            Some(GoFunctionValueBridge::Result(abi)) => {
-                let mut setup = Vec::new();
-                let value = if self.go_fn_needs_lowered_tuple_adapter(expression, &abi.result, ctx)
-                {
-                    self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
-                } else if let CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
-                    OptionReturnAbi::Sentinel(value),
-                )) = &abi.result
-                    && matches!(
-                        self.go_fn_slot_abi(expression, ctx),
-                        Some(CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
-                            OptionReturnAbi::CommaOk { .. }
-                        )))
-                    )
-                {
-                    self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
-                } else {
-                    self.emit_go_fn_wrapper(&mut setup, expression, &abi)
-                };
-                return ValuePlan::computed(setup, value).stable_across_calls_if(
-                    self.identifier_immune_to_calls(expression.unwrap_parens()),
-                );
-            }
-            None => {}
-        }
-
-        if let Some(adapter) = self.function_value_adapter(expression, ctx) {
-            let value = self.plan_operand(expression, ctx);
-            return value.map_expression(|setup, value| match adapter {
-                FunctionValueAdapter::Prelude(target) => {
-                    // A prelude function also takes its callbacks tagged.
-                    emit_lisette_callback_wrapper(
-                        self,
-                        setup,
+        let expression = self.peel_go_slot_alias_cast(expression, context);
+        if let Some(bridge) = self.function_value_bridge(expression, context) {
+            return self
+                .plan_operand(expression, context)
+                .map_expression(|statements, value| {
+                    self.plan_function_layout_bridge(
+                        statements,
                         value,
-                        expression.get_type().unwrap_forall(),
-                        &target,
+                        &bridge.source,
+                        &bridge.target,
+                        false,
                     )
-                }
-                FunctionValueAdapter::Layout(layouts) => {
-                    let (source, target) = *layouts;
-                    self.plan_function_layout_bridge(setup, value, &source, &target)
-                }
-            });
+                });
         }
-
-        self.plan_operand(expression, ctx)
+        self.plan_operand(expression, context)
     }
 
-    pub(crate) fn go_function_value_bridge(
+    pub(crate) fn function_value_bridge(
         &self,
         expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<GoFunctionValueBridge> {
-        if !self.is_go_callable(expression) {
+        context: ExpressionContext<'_>,
+    ) -> Option<FunctionBridge> {
+        if context.is_callee() {
             return None;
         }
         let callee = self.resolve_callable_value(expression)?;
-        if !matches!(callee.origin, CallableOrigin::GoInterop) {
-            return None;
-        }
-        let abi = &callee.abi.result;
-        let matches_slot = self.go_fn_slot_abi(expression, ctx).as_ref() == Some(abi);
-        let target_layout = self.value_layout(&expression.get_type(), ctx.function_slot_origin());
-        let same_abi = matches_slot
-            && matches!(
-                &target_layout,
-                ValueLayout::Function { layout, .. } if layout.return_abi == *abi
-            );
-        if !ctx.is_callee() && same_abi {
-            let source_layout = ValueLayout::Function {
-                function_type: expression.get_type(),
-                layout: callee.abi.function_layout(self),
-            };
-            let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
-            if !layout_coercion.is_identity() {
-                return Some(GoFunctionValueBridge::Layout(layout_coercion));
+        let from_go = matches!(callee.origin, CallableOrigin::GoInterop);
+        if from_go {
+            if !self.is_go_callable(expression) {
+                return None;
             }
-        }
-        (!matches_slot).then_some(GoFunctionValueBridge::Result(callee.abi))
-    }
-
-    /// Normalize the callable's physical declaration layout to its value slot.
-    fn function_value_adapter(
-        &self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<FunctionValueAdapter> {
-        if ctx.is_callee()
-            || ctx.forces_tagged_go_function()
+        } else if context.forces_tagged_go_function()
             || is_closure_literal(expression)
-            || self.go_slot_declaration_layout(expression, ctx).is_some()
+            || self
+                .go_slot_declaration_layout(expression, context)
+                .is_some()
         {
             return None;
         }
-        let callee = self.resolve_callable_value(expression)?;
-        if matches!(callee.origin, CallableOrigin::GoInterop) {
-            return None;
-        }
-        let function = expression.get_type();
-        // Ordinary named values normalize to their concrete Lisette type before
-        // the argument/slot adapter handles a Go boundary. Prelude wrappers also
-        // adapt their callback parameters, so they own the destination transition.
-        let origin = if callee.is_prelude_dispatch {
-            ctx.function_slot_origin()
+        let origin = if from_go || callee.is_prelude_dispatch {
+            context.function_slot_origin()
         } else {
             SlotOrigin::Lisette
         };
-        let mut target = self.value_layout(&function, origin);
-        while let ValueLayout::Named { underlying, .. } = target {
-            target = *underlying;
-        }
-        let ValueLayout::Function { layout: target, .. } = target else {
+        let target = self.value_layout(&expression.get_type(), origin);
+        let ValueLayout::Function { layout, .. } = target.underlying() else {
+            if from_go {
+                return None;
+            }
             unreachable!("a resolved function value has a function layout");
         };
-        if callee.is_prelude_dispatch
-            && let Some(target) = target.return_abi.lowered()
-        {
-            return Some(FunctionValueAdapter::Prelude(target.clone()));
+        let mut target = layout.clone();
+        if from_go {
+            let return_abi = self.go_fn_slot_abi(expression, context)?;
+            if target.return_abi != return_abi {
+                target = target.with_return_abi(self, return_abi, SlotOrigin::Lisette);
+            }
         }
         let source = callee.abi.function_layout(self);
-        (!source.same_representation(&target))
-            .then(|| FunctionValueAdapter::Layout(Box::new((source, target))))
+        (!source.same_representation(&target)).then_some(FunctionBridge { source, target })
     }
 
     pub(crate) fn lower_composite_value(
         &mut self,
         expression: &Expression,
-        ctx: ExpressionContext<'_>,
+        context: ExpressionContext<'_>,
     ) -> ValuePlan {
         if self.is_unit_call(expression)
             || (self.facts.resolves_to_unit(&expression.get_type())
                 && matches!(expression.unwrap_parens(), Expression::Block { .. }))
         {
             return self
-                .lower_value(expression, ctx)
+                .lower_value(expression, context)
                 .map_observable_expression(|setup, call| {
                     if !call.is_empty() {
                         setup.push(effect_statement(call));
@@ -200,7 +115,7 @@ impl Planner<'_> {
                 });
         }
         let ty = expression.get_type();
-        if let Some(slot) = ctx.generic_result_slot()
+        if let Some(slot) = context.generic_result_slot()
             && !matches!(
                 expression.unwrap_parens(),
                 Expression::Lambda { .. } | Expression::Function { .. }
@@ -208,18 +123,41 @@ impl Planner<'_> {
             && ty.get_function_ret().is_some_and(Type::is_never)
         {
             // A Never value can fill a slot with a concrete result type.
-            let slot_result = slot
+            let return_type = slot
                 .get_function_ret()
-                .is_some_and(|ret| !returns_go_void(ret))
-                .then(|| self.lambda_return_info(slot, ctx).signature())
-                .filter(|result| !result.is_empty());
+                .filter(|return_type| !returns_go_void(return_type));
+            let (source_result, target_result, return_abi) = match return_type {
+                Some(return_type) => (
+                    self.value_layout(&Type::Never, SlotOrigin::Lisette),
+                    self.value_layout(return_type, SlotOrigin::Lisette),
+                    self.function_expression_return_abi(return_type, context),
+                ),
+                None => (
+                    self.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                    self.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                    CallableReturnAbi::Value,
+                ),
+            };
+            let parameters = ty
+                .get_function_params()
+                .expect("a function has parameters")
+                .iter()
+                .map(|parameter| self.value_layout(&parameter.ty, SlotOrigin::Lisette))
+                .collect::<Vec<_>>();
+            let source = self.function_layout(
+                parameters.clone(),
+                &source_result,
+                CallableReturnAbi::Void,
+                None,
+            );
+            let target = self.function_layout(parameters, &target_result, return_abi, None);
             return self
-                .lower_value(expression, ctx)
-                .map_expression(|setup, value| {
-                    emit_unit_result_adapter(self, setup, value, &ty, slot_result)
+                .lower_value(expression, context)
+                .map_expression(|statements, value| {
+                    self.plan_function_layout_bridge(statements, value, &source, &target, true)
                 });
         }
-        self.lower_value(expression, ctx)
+        self.lower_value(expression, context)
     }
 
     pub(crate) fn lower_call_value(
@@ -279,34 +217,6 @@ impl Planner<'_> {
                 &f.return_type,
                 ctx.with_function_slot_origin(origin),
             ),
-        )
-    }
-
-    /// True when a tuple-ok fallible Go function value must be wrapped to match a lowered slot.
-    fn go_fn_needs_lowered_tuple_adapter(
-        &self,
-        expression: &Expression,
-        source: &CallableReturnAbi,
-        ctx: ExpressionContext<'_>,
-    ) -> bool {
-        matches!(
-            (source.lowered(), self.go_fn_slot_abi(expression, ctx)),
-            (
-                Some(
-                    LoweredReturnAbi::Result {
-                        payload: PayloadLayout::Flattened,
-                    } | LoweredReturnAbi::Partial {
-                        payload: PayloadLayout::Flattened,
-                    }
-                ),
-                Some(CallableReturnAbi::Lowered(
-                    LoweredReturnAbi::Result {
-                        payload: PayloadLayout::Packed,
-                    } | LoweredReturnAbi::Partial {
-                        payload: PayloadLayout::Packed,
-                    }
-                ))
-            )
         )
     }
 
@@ -532,7 +442,7 @@ impl Planner<'_> {
         }
         let source = self.facts.peel_alias(&source_ty);
         let target = self.facts.peel_alias(ty);
-        self.go_type(&source).code == self.go_type(&target).code
+        self.go_type(&source) == self.go_type(&target)
     }
 
     fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<GoType> {
@@ -692,11 +602,13 @@ impl Planner<'_> {
             return statement_plan(setup);
         }
 
+        let checkpoint = self.planning_snapshot();
         let plan = self.lower_value(
             expression,
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
         if needs_iife_for_async(expression, plan.expression()) {
+            self.restore_planning(checkpoint);
             let (mut setup, inner) = self
                 .lower_value(
                     expression,
@@ -850,5 +762,6 @@ fn needs_iife_for_async(expression: &Expression, value: &GoExpression) -> bool {
     let arity = split_native_receiver(function, args).map_or(0, |(_, arguments)| arguments.len());
     // Capture len/append operands at the async site despite their call syntax.
     !matches!(value.syntax_form(), OperandForm::Call)
-        || !native_method_lowers_to_plain_call(kind, extract_native_method_name(function), arity)
+        || !NativeOperation::new(*kind, extract_native_method_name(function))
+            .lowers_to_plain_call(arity)
 }

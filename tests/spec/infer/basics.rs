@@ -1,3 +1,6 @@
+use crate::_harness::infer::checker_errors;
+use crate::_harness::infer::for_each_expression;
+use crate::_harness::infer::has_code;
 use crate::spec::infer::*;
 
 #[test]
@@ -1698,6 +1701,44 @@ fn builtin_names_can_be_local_bindings() {
         infer(&format!("fn g({name}: int) -> int {{ {name} + 1 }}")).assert_no_errors();
     }
     infer("fn f() -> int { let assert_type = || 1\n  assert_type() }").assert_no_errors();
-    infer("fn f() -> int { let panic = 5\n  panic + 1 }")
-        .assert_infer_code("native_constructor_value");
+    infer("fn f() -> int { let panic = 5\n  panic + 1 }").assert_no_errors();
+}
+
+#[test]
+fn local_constants_reject_use_before_initialization() {
+    for source in [
+        "fn main() { let _ = LATE; const LATE = 5 }",
+        "fn main() { let f = || LATE; const LATE = 5; let _ = f() }",
+        "fn main() { const LATE = LATE }",
+    ] {
+        let errors = checker_errors(source, &[]);
+        assert!(
+            has_code(&errors, "infer.const_before_declaration"),
+            "{source}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn local_constants_have_resolved_binding_identities() {
+    use crate::_harness::infer::infer;
+    use syntax::ast::Expression;
+    let result =
+        infer("fn test() -> int { const LIMIT = 3; let f = || LIMIT; f() }").assert_no_errors();
+
+    let mut found = false;
+    for_each_expression(&result.ast, |expression| {
+        if let Expression::Const { binding, .. } = expression {
+            assert!(binding.is_some());
+        }
+        if let Expression::Identifier {
+            value, resolution, ..
+        } = expression
+            && value == "LIMIT"
+        {
+            assert!(resolution.binding_id().is_some());
+            found = true;
+        }
+    });
+    assert!(found);
 }

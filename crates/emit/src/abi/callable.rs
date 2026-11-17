@@ -3,8 +3,9 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::types::go_type::returns_go_void;
 
-use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
+use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::expressions::staging::VariadicCombine;
+use syntax::program::SlotOrigin;
 
 /// How a logical tuple payload occupies a callable's physical Go result slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

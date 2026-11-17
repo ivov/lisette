@@ -871,7 +871,7 @@ impl InferCtx<'_> {
     }
 
     fn some_enum_has_variant(&self, name: &str) -> bool {
-        self.store.packages.values().any(|package| {
+        self.store.packages().values().any(|package| {
             package.definitions.values().any(|definition| {
                 matches!(
                     &definition.body,

@@ -273,3 +273,13 @@ pub fn iterate_variants_conflict(
     }
     diagnostic.with_help("Rename the existing `variants`, or drop `#[iterate]`")
 }
+
+pub fn invalid_go_type_recipe(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid Go type parameter recipe")
+        .with_attribute_code("invalid_go_type_recipe")
+        .with_span_label(
+            span,
+            "expected parameters, Slice<T>, Map<K, V>, or Array<T, N>",
+        )
+        .with_help("Regenerate this typedef by re-running `lis add`")
+}

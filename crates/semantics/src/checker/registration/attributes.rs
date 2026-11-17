@@ -1,26 +1,15 @@
 use super::*;
 use crate::checker::sealing::unexported_key;
+use std::slice::from_ref;
+use syntax::program::GoHint;
+use syntax::program::GoTypeRecipe;
 
-const KNOWN_GO_HINTS: &[&str] = &[
-    "anon_struct",
-    "bit_flag_set",
-    "closed_domain",
-    "collapsed_type_params",
-    "comma_ok",
-    "comparable_if",
-    "constraint",
-    "hidden_embed",
-    "hidden_fields",
-    "incomparable",
-    "read_only",
-    "sentinel_minus_one",
-    "skipped",
-    "superseded_by",
-    "unexported",
-    "value_method_set",
-    "zero_safe",
-    "zero_unsafe",
-];
+pub(super) fn extract_go_hints(attributes: &[Attribute]) -> Vec<GoHint> {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .filter_map(|flag| GoHint::parse(flag))
+        .collect()
+}
 
 pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
     attributes
@@ -41,8 +30,9 @@ pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
 
 /// The recipe string from `#[go(collapsed_type_params, "...")]`. This is
 /// Go's full type-param in declaration order, each entry as a Lisette type.
-pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<String> {
+pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<Vec<GoTypeRecipe>> {
     extract_go_flag_string(attributes, "collapsed_type_params")
+        .and_then(|recipe| GoTypeRecipe::parse_list(&recipe))
 }
 
 pub(super) fn extract_go_superseded_by(attributes: &[Attribute]) -> Option<String> {
@@ -136,9 +126,16 @@ pub(super) fn collect_struct_attributes(
 
 pub(super) fn check_go_hints(attributes: &[Attribute], sink: &diagnostics::LocalSink) {
     for attribute in attributes.iter().filter(|a| a.name == "go") {
+        if has_go_flag(from_ref(attribute), "collapsed_type_params")
+            && extract_go_type_param_recipe(from_ref(attribute)).is_none()
+        {
+            sink.push(diagnostics::attribute::invalid_go_type_recipe(
+                &attribute.span,
+            ));
+        }
         for arg in &attribute.args {
             if let AttributeArg::Flag(flag) = arg
-                && !KNOWN_GO_HINTS.contains(&flag.as_str())
+                && GoHint::parse(flag).is_none()
             {
                 sink.push(diagnostics::attribute::unknown_go_hint(
                     &attribute.span,

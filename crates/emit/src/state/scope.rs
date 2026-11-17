@@ -16,6 +16,7 @@ use syntax::EcoString;
 use syntax::ast::{BindingId, Expression, IdentifierResolution};
 use syntax::types::Type;
 
+#[derive(Clone)]
 pub(crate) struct ScopeState {
     names: LocalNames,
     next_local_id: u32,
@@ -28,12 +29,14 @@ pub(crate) struct ScopeState {
 
 /// One binding can be read by source spelling and by several pattern alternatives.
 /// Later records shadow earlier ones independently for each of those keys.
+#[derive(Clone)]
 struct Binding {
     name: String,
     ids: Vec<BindingId>,
     value: BindingValue,
 }
 
+#[derive(Clone)]
 struct ScopeFrame {
     bindings: Vec<Binding>,
     declarations: DeclarationScope,
@@ -41,6 +44,7 @@ struct ScopeFrame {
     established: Vec<GoExpression>,
 }
 
+#[derive(Clone)]
 enum DeclarationScope {
     /// A semantic binding scope that emits no Go braces. Declarations belong
     /// to the nearest enclosing Go scope.
@@ -51,6 +55,7 @@ enum DeclarationScope {
     Function(FunctionScope),
 }
 
+#[derive(Clone)]
 struct FunctionScope {
     declarations: Declarations,
     return_ctx: ReturnContext,
@@ -72,7 +77,7 @@ impl FunctionScope {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Declarations {
     names: HashSet<String>,
     /// Nothing reads the error variable of a `?` check after the check, so a
@@ -96,6 +101,7 @@ impl Declarations {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct TypeParam {
     pub(crate) name: EcoString,
     pub(crate) go_name: String,
@@ -166,11 +172,12 @@ impl ScopeState {
     pub(crate) fn bind_go_const(
         &mut self,
         lisette_name: &str,
+        ids: &[BindingId],
         go_name: GoIdentifier,
     ) -> GoIdentifier {
         self.bind_name(
             lisette_name.to_string(),
-            &[],
+            ids,
             go_name,
             BindingValue::GoConst,
         )
@@ -828,7 +835,7 @@ mod tests {
                 .resolve_identifier_with_resolution("value", &missing)
                 .is_none()
         );
-        // A local const binds no ID, so a definition reads it by spelling.
+
         let definition = IdentifierResolution::Definition {
             name: "package.value".into(),
             instantiation: SubstitutionMap::default(),
@@ -926,7 +933,7 @@ mod tests {
     #[test]
     fn nested_bindings_restore_names_constants_and_inline_expressions() {
         let mut scope = ScopeState::new();
-        scope.bind_go_const("value", "outer".into());
+        scope.bind_go_const("value", &[], "outer".into());
         scope.push_binding_frame();
         scope.bind_inline_expr(
             "value",

@@ -14,7 +14,7 @@ func MakeShapeCircle(arg0 float64) Shape {
 	return Shape{Tag: ShapeCircle, Circle: arg0}
 }
 
-func MakeShapeRectangle(arg0 float64, arg1 float64) Shape {
+func MakeShapeRectangle(arg0, arg1 float64) Shape {
 	return Shape{Tag: ShapeRectangle, Rectangle0: arg0, Rectangle1: arg1}
 }
 

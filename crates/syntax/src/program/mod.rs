@@ -24,3 +24,20 @@ pub use resolution::{
     CallKind, ChannelOperation, DotAccessResolution, NativeTypeKind, ReceiverCoercion,
     channel_operation, prelude_constructor, resolved_definition, resolved_instantiation,
 };
+
+mod native_operation;
+pub use native_operation::{
+    NativeInlineForm, NativeInlinePackage, NativeInlineRule, NativeOperation,
+};
+
+mod go_interop;
+pub use go_interop::{
+    GoHint, GoInteropContract, GoOptionRepresentation, GoReturnContract, GoTypeRecipe, SlotOrigin,
+    go_boundary_converts_container, go_option_representation, go_return_contract,
+};
+
+mod conformance;
+pub use conformance::{CheckedMethod, ConformanceIndex, ConformanceWitness};
+
+mod go_method_policy;
+pub use go_method_policy::GoMethodPolicy;

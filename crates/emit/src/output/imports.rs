@@ -11,12 +11,13 @@ use super::{ImportGroup, OutputImport};
 
 /// Source imports resolved once during the plan phase. Keeping each import as
 /// one record avoids synchronizing separate lookup and emission collections.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct ImportPlan {
     go_module: String,
     imports: Vec<PlannedImport>,
 }
 
+#[derive(Clone)]
 struct PlannedImport {
     package: String,
     source_alias: Option<String>,

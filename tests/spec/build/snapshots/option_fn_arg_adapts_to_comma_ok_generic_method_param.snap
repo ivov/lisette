@@ -29,8 +29,7 @@ func HolderResolve[R any](self Holder, f func(int) lisette.Option[R]) (R, bool) 
 func main() {
 	ret, ret2 := HolderResolve(Holder{N: 4}, func(arg0 int) lisette.Option[Face] {
 		raw := Lookup(arg0)
-		option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
-		return option
+		return lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
 	})
 	var rez lisette.Option[Face]
 	if ret2 && !lisette.IsNilInterface(ret) {

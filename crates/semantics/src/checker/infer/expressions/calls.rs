@@ -101,7 +101,7 @@ impl InferCtx<'_> {
     }
 
     fn local_enum_variant_with_arity(&self, name: &str, arity: usize) -> Option<String> {
-        let package = self.store.packages.get(self.cursor.package_id())?;
+        let package = self.store.packages().get(self.cursor.package_id())?;
         package
             .definitions
             .iter()
@@ -152,8 +152,13 @@ impl InferCtx<'_> {
         };
         let type_args = type_arguments.into_annotations();
         let callee_path = expression.unwrap_parens().as_dotted_path().filter(|path| {
-            path.split_once('.')
-                .is_none_or(|(prefix, _)| !self.imports.is_failed(prefix))
+            path.split_once('.').is_none_or(|(prefix, _)| {
+                !self.imports.is_failed(prefix)
+                    && (!matches!(prefix, "Array" | "Map" | "Channel")
+                        || (self.scopes.lookup_binding_id(prefix).is_none()
+                            && self.lookup_qualified_name(self.store, prefix).as_deref()
+                                == Some(format!("prelude.{prefix}").as_str())))
+            })
         });
 
         // `Array.new` and `Array.from` have no prelude signature (no const
@@ -244,7 +249,7 @@ impl InferCtx<'_> {
                     || !store.contains_unknown(&resolved_expected))
             {
                 let peeled = store.peel_alias(&resolved_expected);
-                let _ = self.speculatively(|this| this.try_unify(&peeled, &return_ty, &span));
+                let _ = self.unify_speculatively(|this| this.try_unify(&peeled, &return_ty, &span));
             }
         }
 

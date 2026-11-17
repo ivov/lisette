@@ -18,7 +18,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func MakeEventClick(arg0 int, arg1 int) Event {
+func MakeEventClick(arg0, arg1 int) Event {
 	return Event{Tag: EventClick, Click0: arg0, Click1: arg1}
 }
 

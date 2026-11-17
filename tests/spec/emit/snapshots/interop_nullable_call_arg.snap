@@ -32,15 +32,9 @@ func apply(f func(string) lisette.Option[*flag.Flag], name string) bool {
 }
 
 func main() {
-	cb := flag.Lookup
-	var adapted func(string) lisette.Option[*flag.Flag]
-	if cb != nil {
-		adapted = func(arg0 string) lisette.Option[*flag.Flag] {
-			raw := cb(arg0)
-			option := lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
-			return option
-		}
-	}
-	r := apply(adapted, "verbose")
+	r := apply(func(arg0 string) lisette.Option[*flag.Flag] {
+		raw := flag.Lookup(arg0)
+		return lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+	}, "verbose")
 	_ = r
 }

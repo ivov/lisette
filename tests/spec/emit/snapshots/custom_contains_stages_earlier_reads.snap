@@ -1,0 +1,64 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  import "go:fmt"
+  struct Item { id: int, change: fn() }
+  impl Item { fn equals(self, other: Item) -> bool { self.change(); self.id == other.id } }
+  fn pair(a: int, b: bool) -> string { f"{a} {b}" }
+  fn main() {
+      let mut values = [1]
+      let item = Item { id: 3, change: || { values[0] = 9 } }
+      let items = [item]
+      fmt.Println(pair(values[0], items.contains(item)))
+      fmt.Println(values[0])
+      values[0] = 1
+      let needle = || { values[0] = 7; 3 }
+      fmt.Println(pair(values[0], values.contains(needle())))
+      fmt.Println(values[0])
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+type Item struct {
+	id     int
+	change func() struct{}
+}
+
+func (i Item) equals(other Item) bool {
+	i.change()
+	return i.id == other.id
+}
+
+func pair(a int, b bool) string {
+	return fmt.Sprintf("%d %t", a, b)
+}
+
+func main() {
+	values := []int{1}
+	item := Item{
+		id: 3,
+		change: func() struct{} {
+			values[0] = 9
+			return struct{}{}
+		},
+	}
+	items := []Item{item}
+	arg := values[0]
+	want := item
+	fmt.Println(pair(arg, slices.ContainsFunc(items, func(e Item) bool { return e.equals(want) })))
+	fmt.Println(values[0])
+	values[0] = 1
+	needle := func() int {
+		values[0] = 7
+		return 3
+	}
+	arg3 := values[0]
+	arg2 := values
+	fmt.Println(pair(arg3, slices.Contains(arg2, needle())))
+	fmt.Println(values[0])
+}

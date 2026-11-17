@@ -1,9 +1,11 @@
+use std::mem::take;
 use std::sync::Arc;
+use syntax::collections::DenseMap;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use syntax::ast::StructKind;
 use syntax::ast::{EnumVariant, Literal, StructFieldDefinition};
+use syntax::ast::{Expression, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
     TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
@@ -15,11 +17,17 @@ pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
 pub use syntax::ENTRY_PACKAGE_ID;
 pub const ENTRY_FILE_ID: u32 = 0;
 
+pub struct PackageMetadataMut<'a> {
+    pub definitions: &'a mut DenseMap<Symbol, Definition>,
+    pub unsupported_go_symbols: &'a mut HashMap<syntax::EcoString, String>,
+    pub uninferred_exports: &'a mut Option<UninferredExports>,
+}
+
 #[derive(Clone)]
 pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
     /// writes stay zero-copy while a package has a single owner.
-    pub packages: HashMap<String, Arc<Package>>,
+    packages: HashMap<String, Arc<Package>>,
     /// Avoids scanning every package on the hot file-lookup path (see #1227).
     file_packages: HashMap<u32, String>,
     /// Go package ID -> package name from the typedef `// Package:` directive.
@@ -91,52 +99,69 @@ impl Store {
         exports: UninferredExports,
     ) {
         self.store_package(package_id, files);
-        if let Some(package) = self.get_package_mut(package_id) {
-            package.uninferred_exports = Some(exports);
+        if let Some(package) = self.edit_package(package_id) {
+            *package.uninferred_exports = Some(exports);
         }
     }
 
-    /// Stores a file in its owning package.
     pub fn store_file(&mut self, file: File) {
-        let package_id = file.package_id.clone();
-        let file_id = file.id;
-        let package = self
-            .get_package_mut(&package_id)
-            .expect("package must exist to store file");
-        package.files.insert(file_id, file);
-        self.file_packages.insert(file_id, package_id);
+        let owner = file.package_id.clone();
+        let id = file.id;
+        if let Some(previous) = self.file_packages.get(&id)
+            && previous != &owner
+            && let Some(package) = self.packages.get_mut(previous)
+        {
+            Arc::make_mut(package).files.remove(&id);
+        }
+        Arc::make_mut(
+            self.packages
+                .get_mut(&owner)
+                .expect("file owner must exist"),
+        )
+        .files
+        .insert(id, file);
+        self.file_packages.insert(id, owner);
     }
 
     pub fn get_file(&self, file_id: u32) -> Option<&File> {
-        self.file_packages
-            .get(&file_id)
-            .and_then(|package_id| self.packages.get(package_id))
-            .and_then(|package| package.get_file(file_id))
-            // Public package mutation can bypass the index.
-            .or_else(|| {
-                self.packages
-                    .values()
-                    .find_map(|package| package.get_file(file_id))
-            })
+        self.packages
+            .get(self.file_packages.get(&file_id)?)?
+            .get_file(file_id)
     }
 
-    pub(crate) fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
-        if let Some(package_id) = self.file_packages.get(&file_id)
-            && self
-                .packages
-                .get(package_id)
-                .is_some_and(|package| package.files.contains_key(&file_id))
-        {
-            return Arc::make_mut(self.packages.get_mut(package_id)?)
-                .files
-                .get_mut(&file_id);
-        }
+    fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
+        let owner = self.file_packages.get(&file_id)?;
+        Arc::make_mut(self.packages.get_mut(owner)?)
+            .files
+            .get_mut(&file_id)
+    }
 
-        let package = self
-            .packages
-            .values_mut()
-            .find(|package| package.files.contains_key(&file_id))?;
-        Arc::make_mut(package).files.get_mut(&file_id)
+    pub fn packages(&self) -> &HashMap<String, Arc<Package>> {
+        &self.packages
+    }
+
+    pub fn take_packages(&mut self) -> HashMap<String, Arc<Package>> {
+        self.file_packages.clear();
+        take(&mut self.packages)
+    }
+
+    pub(crate) fn take_package(&mut self, id: &str) -> Option<Arc<Package>> {
+        let package = self.packages.remove(id)?;
+        for file_id in package.files.keys() {
+            self.file_packages.remove(file_id);
+        }
+        Some(package)
+    }
+
+    pub(crate) fn insert_shared_package(&mut self, package: Arc<Package>) {
+        self.take_package(&package.id);
+        self.file_packages
+            .extend(package.files.keys().map(|&id| (id, package.id.clone())));
+        self.packages.insert(package.id.clone(), package);
+    }
+
+    pub(crate) fn file_items_mut(&mut self, id: u32) -> Option<&mut Vec<Expression>> {
+        self.get_file_mut(id).map(|file| &mut file.items)
     }
 
     pub fn get_package(&self, package_id: &str) -> Option<&Package> {
@@ -171,24 +196,24 @@ impl Store {
             .insert(package_id.to_string(), Arc::new(Package::new(package_id)));
     }
 
-    pub fn get_package_mut(&mut self, package_id: &str) -> Option<&mut Package> {
-        self.packages.get_mut(package_id).map(Arc::make_mut)
+    pub fn edit_package(&mut self, package_id: &str) -> Option<PackageMetadataMut<'_>> {
+        let Package {
+            id: _,
+            files: _,
+            definitions,
+            unsupported_go_symbols,
+            uninferred_exports,
+        } = Arc::make_mut(self.packages.get_mut(package_id)?);
+        Some(PackageMetadataMut {
+            definitions,
+            unsupported_go_symbols,
+            uninferred_exports,
+        })
     }
 
     /// Inserts a worker-built package (e.g. cache-decoded).
     pub(crate) fn insert_prebuilt_package(&mut self, package: Package) {
-        if let Some(previous) = self.packages.get(&package.id) {
-            for file_id in previous.files.keys() {
-                self.file_packages.remove(file_id);
-            }
-        }
-        self.file_packages.extend(
-            package
-                .files
-                .keys()
-                .map(|&file_id| (file_id, package.id.clone())),
-        );
-        self.packages.insert(package.id.clone(), Arc::new(package));
+        self.insert_shared_package(Arc::new(package));
     }
 
     /// `Arc`-bump snapshot for a registration worker, which inserts its own
@@ -455,69 +480,49 @@ impl Store {
 
     /// Canonical form for a type built from an annotation.
     pub fn normalized_annotation_type(&self, ty: &Type) -> Type {
-        match ty {
+        let mut mapped = ty.map_children(|child| self.normalized_annotation_type(child));
+        match &mut mapped {
             Type::Compound {
                 kind,
-                args,
+                args: arguments,
                 writable,
             } => {
-                let mut args: Vec<Type> = args
-                    .iter()
-                    .map(|arg| self.normalized_annotation_type(arg))
-                    .collect();
                 if *kind == CompoundKind::Ref && *writable {
-                    if let Some(arg) = args.first_mut() {
-                        *arg = types::writable_ref_pointee(arg, &|id| self.get_definition(id));
+                    if let Some(argument) = arguments.first_mut() {
+                        *argument =
+                            types::writable_ref_pointee(argument, &|id| self.get_definition(id));
                     }
                 } else if kind.carries_write_permission()
-                    && !writable
-                    && args.iter().any(|arg| self.demotion_changes(arg))
+                    && !*writable
+                    && arguments
+                        .iter()
+                        .any(|argument| self.demotion_changes(argument))
                 {
-                    args = args.iter().map(|arg| self.demoted(arg)).collect();
-                }
-                Type::Compound {
-                    kind: *kind,
-                    args,
-                    writable: *writable,
+                    *arguments = arguments
+                        .iter()
+                        .map(|argument| self.demoted(argument))
+                        .collect();
                 }
             }
-            Type::Nominal { .. } if self.peel_alias(ty).is_never() => Type::Never,
-            Type::Nominal {
-                id,
-                params,
-                writable,
-            } => Type::Nominal {
-                id: id.clone(),
-                params: params
-                    .iter()
-                    .map(|param| self.normalized_annotation_type(param))
-                    .collect(),
-                writable: *writable && !self.nominal_refuses_write_permission(id.as_str()),
-            },
-            Type::Tuple(elements) => Type::Tuple(
-                elements
-                    .iter()
-                    .map(|element| self.normalized_annotation_type(element))
-                    .collect(),
-            ),
-            Type::Array { length, element } => Type::Array {
-                length: *length,
-                element: Box::new(self.normalized_annotation_type(element)),
-            },
-            Type::Function(f) => f.rebuild(
-                f.params
-                    .iter()
-                    .map(|param| param.with_type(self.normalized_annotation_type(&param.ty)))
-                    .collect(),
-                f.bounds.clone(),
-                Box::new(self.normalized_annotation_type(&f.return_type)),
-            ),
-            Type::Forall { vars, body } => Type::Forall {
-                vars: vars.clone(),
-                body: Box::new(self.normalized_annotation_type(body)),
-            },
-            _ => ty.clone(),
+            Type::Nominal { .. } if self.peel_alias(ty).is_never() => return Type::Never,
+            Type::Nominal { id, writable, .. } => {
+                *writable &= !self.nominal_refuses_write_permission(id.as_str());
+            }
+            Type::Simple(_)
+            | Type::ImportNamespace(_)
+            | Type::Function(_)
+            | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Forall { .. }
+            | Type::Parameter(_)
+            | Type::Never
+            | Type::Tuple(_)
+            | Type::Array { .. }
+            | Type::Error
+            | Type::ReceiverPlaceholder => {}
         }
+        mapped
     }
 
     pub fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
@@ -765,15 +770,11 @@ mod clone_tests {
     }
 
     #[test]
-    fn files_added_through_a_package_are_available_by_id() {
+    fn inserted_files_are_indexed() {
         let mut store = Store::new();
         store.add_package("large");
 
-        store
-            .get_package_mut("large")
-            .unwrap()
-            .files
-            .insert(42, File::new_cached("large", "large.lis", "", "", 42));
+        store.store_file(File::new_cached("large", "large.lis", "", "", 42));
 
         assert_eq!(
             store.get_file(42).map(|file| file.name.as_str()),
@@ -783,18 +784,14 @@ mod clone_tests {
     }
 
     #[test]
-    fn file_lookup_tolerates_ownership_changed_through_public_packages() {
+    fn moving_a_file_updates_both_owners() {
         let mut store = Store::new();
         store.add_package("before");
         store.add_package("after");
         store.store_file(File::new_cached("before", "before.lis", "", "", 42));
 
-        store.get_package_mut("before").unwrap().files.remove(&42);
-        store
-            .get_package_mut("after")
-            .unwrap()
-            .files
-            .insert(42, File::new_cached("after", "after.lis", "", "", 42));
+        store.store_file(File::new_cached("after", "after.lis", "", "", 42));
+        assert!(store.get_package("before").unwrap().files.is_empty());
 
         assert_eq!(store.get_file(42).unwrap().package_id, "after");
         assert_eq!(store.get_file_mut(42).unwrap().package_id, "after");
@@ -935,7 +932,7 @@ mod closed_domain_tests {
     fn insert(store: &mut Store, package: &str, name: &str, def: Definition) {
         store.add_package(package);
         store
-            .get_package_mut(package)
+            .edit_package(package)
             .unwrap()
             .definitions
             .insert(Symbol::from_raw(name), def);
@@ -1359,5 +1356,25 @@ mod closed_domain_tests {
 
         assert!(behind_ref);
         assert_eq!(peeled, nominal_int("m.B"));
+    }
+    #[test]
+    fn annotation_normalization_reaches_array_elements() {
+        let mut store = Store::new();
+        let nominal = nominal_int("m.Count");
+        insert(
+            &mut store,
+            "m",
+            "m.Count",
+            struct_def(nominal.clone(), false),
+        );
+        let input = Type::Array {
+            length: 2,
+            element: Box::new(nominal.clone().make_writable()),
+        };
+        let expected = Type::Array {
+            length: 2,
+            element: Box::new(nominal),
+        };
+        assert_eq!(store.normalized_annotation_type(&input), expected);
     }
 }

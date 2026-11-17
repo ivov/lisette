@@ -80,18 +80,22 @@ fn check_one(
     };
     let value = value.as_str();
     let span = *span;
-    if value != "panic" && matches!(resolution, IdentifierResolution::Binding(_)) {
+    if matches!(resolution, IdentifierResolution::Binding(_)) {
         return;
     }
     if matches!(
-        value,
-        "imaginary" | "assert_type" | "complex" | "real" | "panic" | "zero"
+        resolution.definition(),
+        Some(
+            "prelude.imaginary"
+                | "prelude.assert_type"
+                | "prelude.complex"
+                | "prelude.real"
+                | "prelude.panic"
+                | "prelude.zero"
+        )
     ) {
-        let qualified = Symbol::from_parts(package_id, value);
-        if store.get_definition(&qualified).is_none() {
-            sink.push(diagnostics::infer::native_constructor_value(value, span));
-            return;
-        }
+        sink.push(diagnostics::infer::native_constructor_value(value, span));
+        return;
     }
 
     {

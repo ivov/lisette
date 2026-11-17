@@ -7,7 +7,7 @@ use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::layout::ValueLayout;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout;
@@ -22,6 +22,7 @@ use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan
 use crate::types::go_type::GoType;
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;
+use syntax::program::SlotOrigin;
 use syntax::types;
 use syntax::types::SubstitutionMap;
 
@@ -496,7 +497,7 @@ impl Planner<'_> {
                 ValueLayout::Slice { element, .. },
             ) => {
                 let element = element.go_type(self);
-                let go_type = GoType::with_dependencies(format!("[]{}", element.code), [&element]);
+                let go_type = GoType::slice_of(&element);
                 GoExpression::conversion(go_type, GoExpression::literal("nil".to_string()))
             }
             (
@@ -508,10 +509,7 @@ impl Planner<'_> {
             ) => {
                 let key = key.go_type(self);
                 let value = value.go_type(self);
-                GoExpression::empty_composite(GoType::with_dependencies(
-                    format!("map[{}]{}", key.code, value.code),
-                    [&key, &value],
-                ))
+                GoExpression::empty_composite(GoType::map_of(&key, &value))
             }
             (Type::Compound { .. }, _) => GoExpression::empty_composite(self.go_type(ty)),
             (Type::Nominal { id, params, .. }, _) => {
@@ -626,7 +624,7 @@ impl Planner<'_> {
     /// `[N]E{}` zero differs from Lisette's (e.g. `Option<T>`).
     pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
         let elem_go = self.go_type(elem);
-        let array_type = GoType::with_dependencies(format!("[{len}]{}", elem_go.code), [&elem_go]);
+        let array_type = GoType::array_of(len, &elem_go);
         if len == 0 || self.element_go_zero_ok(elem) {
             return GoExpression::empty_composite(array_type);
         }
@@ -769,10 +767,7 @@ impl Planner<'_> {
                     go_name::snake_to_camel(type_name)
                 };
                 let package = self.package_use_for_package(&canonical);
-                let code = format!("{}.{}{}", package.qualifier(), member, type_args.code);
-                let mut go_type = GoType::with_package(code, package);
-                go_type.merge(&type_args);
-                return go_type;
+                return GoType::named(&member, type_args.arguments(), Some(package));
             }
         }
 

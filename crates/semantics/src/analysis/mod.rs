@@ -20,8 +20,8 @@ use deps::TypedefLocator;
 use crate::loader::ParseMode;
 
 use crate::cache::{
-    CompiledPackage, PackageInterface, build_cached_package, compute_emit_artifact_hash,
-    compute_package_hash, get_dependency_package_hashes,
+    CompiledPackage, PackageInterface, build_cached_package, compute_package_hash,
+    get_dependency_package_hashes,
     go_stdlib::{self, load_cached_go_package},
     hash_package_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
 };

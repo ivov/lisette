@@ -23,7 +23,7 @@ func MakeShapeSquare(arg0 int) Shape {
 	return Shape{Tag: ShapeSquare, Square: arg0}
 }
 
-func MakeShapeLine(arg0 int, arg1 int) Shape {
+func MakeShapeLine(arg0, arg1 int) Shape {
 	return Shape{Tag: ShapeLine, Line0: arg0, Line1: arg1}
 }
 

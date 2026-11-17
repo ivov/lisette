@@ -2,7 +2,6 @@ use std::fmt::Write;
 use std::mem::take;
 
 use crate::Planner;
-use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
 use crate::names::go_name::GeneratedPackage;
@@ -10,6 +9,7 @@ use crate::plan::go_expression::{BinaryOp, CompositeLayout};
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, FormatStringPart, Literal};
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -83,21 +83,23 @@ impl Planner<'_> {
 
     fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
         // A list literal builds a slice or a fixed-size array, per its type.
-        let (element_lisette_ty, type_prefix) = match ty {
-            Type::Array { length, element } => (element.as_ref().clone(), format!("[{}]", length)),
+        let (element_lisette_ty, length) = match ty {
+            Type::Array { length, element } => (element.as_ref().clone(), Some(length)),
             _ => (
                 ty.get_type_params()
                     .expect("Slice type must have type args")
                     .first()
                     .expect("Slice type must have element type")
                     .clone(),
-                "[]".to_string(),
+                None,
             ),
         };
         let element_ty = self.go_type(&element_lisette_ty);
 
-        let go_type =
-            GoType::with_dependencies(format!("{}{}", type_prefix, element_ty.code), [&element_ty]);
+        let go_type = match length {
+            Some(length) => GoType::array_of(length, &element_ty),
+            None => GoType::slice_of(&element_ty),
+        };
         if elements.is_empty() {
             return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }
@@ -216,7 +218,7 @@ impl Planner<'_> {
         {
             return ValuePlan::plain_call(
                 setup,
-                GoExpression::read_only_call(
+                GoExpression::call(
                     GoExpression::generated(GeneratedPackage::Fmt, "Sprint"),
                     args,
                 ),
@@ -226,7 +228,7 @@ impl Planner<'_> {
         arguments.extend(args);
         ValuePlan::plain_call(
             setup,
-            GoExpression::read_only_call(
+            GoExpression::call(
                 GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
                 arguments,
             ),

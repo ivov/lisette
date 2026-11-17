@@ -7,7 +7,7 @@ use semantics::store::Store;
 
 pub(super) fn build_index(store: &Store) -> HashMap<Span, String> {
     let mut index = HashMap::default();
-    for package in store.packages.values() {
+    for package in store.packages().values() {
         for definition in package.definitions.values() {
             if let (Some(name_span), Some(successor)) =
                 (definition.name_span, definition.superseded_by())

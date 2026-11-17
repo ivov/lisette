@@ -2755,10 +2755,22 @@ pub fn unconstrained_type_param(
         .with_help(help)
 }
 
-pub fn instantiation_cycle(
-    param_name: &str,
-    type_arg: &Type,
-    target_fn_name: &str,
+pub fn growing_declaration_type_argument(
+    parameter_name: &str,
+    type_argument: &Type,
+    target_type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Infinitely growing type dependency")
+        .with_infer_code("instantiation_cycle")
+        .with_span_label(&span, format!("`{parameter_name}` occurs inside `{type_argument}` in this recursive type dependency"))
+        .with_help(format!("Break the recursive type dependency or keep its type arguments unchanged. It requires `{target_type_name}` at ever-larger type arguments"))
+}
+
+pub fn growing_call_type_argument(
+    parameter_name: &str,
+    type_argument: &Type,
+    target_function_name: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Growing type argument")
@@ -2767,12 +2779,12 @@ pub fn instantiation_cycle(
             &span,
             format!(
                 "`{}` becomes `{}` in this recursive call",
-                param_name, type_arg
+                parameter_name, type_argument
             ),
         )
         .with_help(format!(
             "Keep type arguments fixed across recursive calls. Each recursive call would need a new version of `{}` at a larger type, so compilation would never finish",
-            target_fn_name
+            target_function_name
         ))
 }
 
@@ -4456,17 +4468,6 @@ where
     }
 }
 
-pub fn recursive_generic_instantiation(type_name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Recursive generic instantiation")
-        .with_infer_code("recursive_instantiation")
-        .with_span_label(&span, format!("`{}` is nested within itself", type_name))
-        .with_help(format!(
-            "Use a wrapper type or a different design. \
-             Go does not allow recursive type instantiation (e.g. `{0}<{0}<T>>`).",
-            type_name
-        ))
-}
-
 pub fn non_comparable_map_key(key_ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid map key type")
         .with_infer_code("non_comparable_map_key")
@@ -4836,6 +4837,13 @@ pub fn fractional_float_constant_int_cast(span: Span) -> LisetteDiagnostic {
             "Go rejects a constant conversion that loses the fraction",
         )
         .with_help("Bind to a variable first: `let f = F; f as int`")
+}
+
+pub fn const_before_declaration(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Cannot use `{name}` before its declaration"))
+        .with_infer_code("const_before_declaration")
+        .with_span_label(&span, "local constant is not initialized yet")
+        .with_help("Move the constant declaration before this use")
 }
 
 pub fn const_requires_simple_expression(span: Span) -> LisetteDiagnostic {
@@ -5298,16 +5306,17 @@ pub fn range_to_for_variadic(span: Span, var_name: Option<&str>) -> LisetteDiagn
 pub fn reference_aliases_sibling(
     ref_span: Span,
     read_span: Span,
-    var_name: &str,
+    reference_name: &str,
+    read_name: &str,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Reference may mutate a value read in the same expression")
         .with_infer_code("reference_aliases_sibling")
-        .with_span_label(&ref_span, format!("may mutate `{}`", var_name))
+        .with_span_label(&ref_span, format!("may mutate `{}`", reference_name))
         .with_span_label(&read_span, "may see the mutated value")
         .with_help(format!(
             "Make evaluation order explicit: to read the value before `&{0}` runs, copy it first \
-             with `let before = {0}`, and to read the value after, bind the reference-taking \
+             with `let before = {1}`, and to read the value after, bind the reference-taking \
              operand to a variable first",
-            var_name
+            reference_name, read_name
         ))
 }

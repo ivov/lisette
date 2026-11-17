@@ -3,10 +3,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
 
 use crate::Planner;
-use crate::abi::callable::{CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
+use crate::abi::callable::{CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
-use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::abi::transition::emit_fn_arg_shape_adapter;
+use crate::abi::layout::ValueLayout;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::generics::extract_type_mapping;
@@ -15,11 +14,13 @@ use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
 use crate::plan::calls::{
-    ArgumentPlan, ArgumentSlotBridge, ArgumentValueSource, CallPlan, CallableOrigin, ResolvedCallee,
+    ArgumentPlan, ArgumentSlotBridge, ArgumentValueSource, CallPlan, CallableOrigin,
+    FunctionBridge, ResolvedCallee,
 };
 use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 pub(super) struct CallArgsContext<'plan, 'facts> {
@@ -68,7 +69,7 @@ impl Planner<'_> {
 
     fn lower_call_arg(
         &mut self,
-        arg: &Expression,
+        argument: &Expression,
         index: usize,
         ctx: &CallArgsContext<'_, '_>,
     ) -> ValuePlan {
@@ -82,44 +83,38 @@ impl Planner<'_> {
             .expect("CallPlan has one argument plan per argument");
 
         match plan {
-            ArgumentPlan::GoCallbackAdapter { source, target } => {
-                self.lower_callback_wrapper(arg, source, target)
-            }
-            ArgumentPlan::GoSlotBridge(bridge) => self.lower_go_slot_bridge(arg, bridge),
-            ArgumentPlan::TaggedGoLowering(adapter) => {
-                let arg_ctx = self.direct_arg_emit_ctx(param, true);
-                let argument = self.lower_composite_value(arg, arg_ctx);
-                argument.map_expression(|setup, value| {
-                    self.emit_lower_arg_to_tagged(setup, value, adapter)
-                })
-            }
-            ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, param, declared_param_ty),
+            ArgumentPlan::Bridge(bridge) => self.lower_go_slot_bridge(argument, bridge),
+            ArgumentPlan::Direct => self.lower_direct_arg(argument, ctx, param, declared_param_ty),
         }
     }
 
     pub(crate) fn plan_argument(
         &self,
-        arg: &Expression,
+        argument: &Expression,
         callee: &ResolvedCallee<'_>,
-        param: Option<&CallableParamAbi>,
+        parameter: Option<&CallableParamAbi>,
     ) -> ArgumentPlan {
-        let effective_param_ty = param.map(|param| &param.instantiated);
-        let declared_param_ty = param.and_then(|param| param.declared.as_ref());
+        let effective_param_ty = parameter.map(|parameter| &parameter.instantiated);
+        let declared_param_ty = parameter.and_then(|parameter| parameter.declared.as_ref());
         if matches!(callee.origin, CallableOrigin::GoInterop)
-            && let Some((source, target)) = self.detect_callback_wrapper(arg, param)
+            && let Some(bridge) = self.detect_callback_wrapper(argument, parameter)
         {
-            return ArgumentPlan::GoCallbackAdapter { source, target };
+            return ArgumentPlan::Bridge(Box::new(bridge.into_argument(argument.get_type())));
         }
         // Prelude callbacks return tagged values even when their instantiated
         // result could use a nullable or multi-value ABI in a Lisette function.
         if would_suppress_tagged_go(callee, declared_param_ty) {
-            return match self.detect_lower_arg_to_tagged(arg, effective_param_ty) {
-                Some(adapter) => ArgumentPlan::TaggedGoLowering(Box::new(adapter)),
+            return match self.detect_lower_arg_to_tagged(argument, effective_param_ty) {
+                Some(adapter) => {
+                    ArgumentPlan::Bridge(Box::new(adapter.into_argument(argument.get_type())))
+                }
                 None => ArgumentPlan::Direct,
             };
         }
-        if let Some(bridge) = param.and_then(|param| self.plan_argument_slot_bridge(arg, param)) {
-            return ArgumentPlan::GoSlotBridge(Box::new(bridge));
+        if let Some(bridge) =
+            parameter.and_then(|parameter| self.plan_argument_slot_bridge(argument, parameter))
+        {
+            return ArgumentPlan::Bridge(Box::new(bridge));
         }
         ArgumentPlan::Direct
     }
@@ -279,6 +274,7 @@ impl Planner<'_> {
             GoExpression::identifier(loop_cb.clone()),
             &source_layout,
             &target_layout,
+            false,
         );
         body.push(assign(
             GoExpression::index(
@@ -320,17 +316,17 @@ impl Planner<'_> {
 
     fn detect_callback_wrapper(
         &self,
-        arg: &Expression,
-        param: Option<&CallableParamAbi>,
-    ) -> Option<(CallableReturnAbi, LoweredReturnAbi)> {
+        argument: &Expression,
+        parameter: Option<&CallableParamAbi>,
+    ) -> Option<FunctionBridge> {
         // Closures already return values in the form expected by the parameter.
-        if is_closure_literal(arg) {
+        if is_closure_literal(argument) {
             return None;
         }
-        let param = param?;
+        let parameter = parameter?;
         let param_fn_ty = self
             .facts
-            .resolve_to_function_type(param.instantiated.unwrap_forall())
+            .resolve_to_function_type(parameter.instantiated.unwrap_forall())
             .filter(|fn_ty| {
                 let Type::Function(f) = fn_ty else {
                     return false;
@@ -343,32 +339,23 @@ impl Planner<'_> {
         let Type::Function(param_f) = &param_fn_ty else {
             return None;
         };
-        let target = self.classify_slot_emission(&param_f.return_type, param.origin)?;
-        let source = self.resolve_callable_value(arg)?.abi.result;
-        (matches!(source, CallableReturnAbi::Lowered(_))
-            && source != CallableReturnAbi::Lowered(target.clone()))
-        .then_some((source, target))
-    }
-
-    fn lower_callback_wrapper(
-        &mut self,
-        arg: &Expression,
-        source: &CallableReturnAbi,
-        target: &LoweredReturnAbi,
-    ) -> ValuePlan {
-        let argument = self.plan_operand(
-            arg,
-            ExpressionContext::value().with_forced_tagged_go_function(true),
-        );
-        argument.map_expression(|setup, value| {
-            let arg_fn_ty = self
-                .facts
-                .resolve_to_function_type(arg.get_type().unwrap_forall())
-                .expect("callback source resolves to a fn type");
-            let target = CallableReturnAbi::Lowered(target.clone());
-            emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, &target)
-                .expect("callback ABI transition has a function signature")
-        })
+        let target = self.classify_slot_emission(&param_f.return_type, parameter.origin)?;
+        let source = self
+            .resolve_callable_value(argument)?
+            .abi
+            .function_layout(self);
+        if !source.return_abi.is_lowered()
+            || source.return_abi == CallableReturnAbi::Lowered(target.clone())
+        {
+            return None;
+        }
+        let layout = self.value_layout(&param_fn_ty, SlotOrigin::Lisette);
+        let ValueLayout::Function { layout, .. } = layout.underlying() else {
+            return None;
+        };
+        let target =
+            layout.with_return_abi(self, CallableReturnAbi::Lowered(target), parameter.origin);
+        Some(FunctionBridge { source, target })
     }
 
     fn plan_argument_slot_bridge(
@@ -439,12 +426,16 @@ impl Planner<'_> {
                     self.plan_operand(argument, ExpressionContext::value())
                 }
             }
+            ArgumentValueSource::Callable => self.plan_operand(
+                argument,
+                ExpressionContext::value().with_forced_tagged_go_function(true),
+            ),
             ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
             ArgumentValueSource::Lisette => self.lower_value(argument, ExpressionContext::value()),
         };
         value.map_expression(|setup, value| {
             let mut coercion_setup = Vec::new();
-            let coerced = self.plan_layout_bridge(&mut coercion_setup, value, &plan.bridge);
+            let coerced = self.plan_layout_bridge(&mut coercion_setup, value, &plan.bridge, true);
             setup.extend(coercion_setup);
             coerced
         })

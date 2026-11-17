@@ -112,7 +112,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     };
     let InferenceOutput {
         dependencies,
-        store,
+        mut store,
         facts,
         sink,
         has_pre_check_errors,
@@ -229,13 +229,13 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     let mut definitions = HashMap::default();
 
     let go_package_ids: HashSet<String> = store
-        .packages
+        .packages()
         .keys()
         .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
         .cloned()
         .collect();
 
-    for (_, package) in store.packages {
+    for (_, package) in store.take_packages() {
         // Worker views are gone by now, so this unwraps without cloning.
         let package = Arc::try_unwrap(package).unwrap_or_else(|shared| (*shared).clone());
         let is_internal = is_internal_package_id(&package.id);
@@ -260,6 +260,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     Analysis {
         dependencies,
         emit_input: EmitInput {
+            conformances: facts.conformances,
             files,
             definitions,
             entry_package_id: ENTRY_PACKAGE_ID.to_string(),

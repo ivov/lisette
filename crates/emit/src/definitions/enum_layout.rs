@@ -1,8 +1,22 @@
 use crate::Planner;
-use crate::definitions::structs::{StringFormat, format_return};
+use crate::abi::transition::multi_value_return;
+use crate::control_flow::propagation::plain_return;
+use crate::definitions::structs::{StringFormat, format_value};
 use crate::expressions::display_form::DisplayForm;
 use crate::names::go_name::{self, GeneratedPackage};
-use crate::names::packages::PackageRequirements;
+use crate::names::packages::PackageUse;
+use crate::plan::bodies::{
+    Definition as GoDefinition, ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock,
+    LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan, assign,
+};
+use crate::plan::declarations::{
+    ConstantDeclaration, DeclarationKind, FunctionSignature, GoDeclaration, TypeParameter,
+};
+use crate::plan::go_expression::{BinaryOp, CompositeLayout, GoParameter};
+use crate::plan::local::GoIdentifier;
+use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
+use crate::utils::ReceiverGenerics;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{EnumVariant, Generic};
 use syntax::containment::enum_payload_pointer_wrapped;
@@ -182,499 +196,592 @@ impl EnumLayout {
         variant.fields.get(index).map(|f| f.go_name.clone())
     }
 
-    /// Call from the declaring file, which owns the import aliases.
     pub(crate) fn emit_definition(
         &self,
         planner: &mut Planner,
-        generics_string: &str,
-        doc_comment: &str,
-    ) -> String {
-        let mut output = Vec::new();
-        let tag_type = format!("{}Tag", self.enum_name);
-
-        output.push(format!("type {} {}", tag_type, self.tag_go_type()));
+        generics: Vec<TypeParameter>,
+        doc: &str,
+    ) -> Vec<GoDeclaration> {
+        let tag = GoType::new(format!("{}Tag", self.enum_name));
+        let mut declarations = vec![GoDeclaration::new(DeclarationKind::Type {
+            name: tag.code.clone(),
+            parameters: Vec::new(),
+            underlying: GoType::new(self.tag_go_type()),
+        })];
         if !self.variants.is_empty() {
-            output.push("const (".to_string());
-
-            let renumbered = self.default_variant.is_some_and(|index| index != 0);
+            let renumbered = self.default_variant.is_some_and(|i| i != 0);
             let values = self.tag_values();
-
-            for (i, variant) in self.variants.iter().enumerate() {
-                if let Some(doc) = &variant.doc {
-                    for line in doc.lines() {
-                        output.push(comment_line(line));
-                    }
-                }
-
-                if renumbered {
-                    output.push(format!(
-                        "{} {} = {}",
-                        variant.tag_constant, tag_type, values[i]
-                    ));
-                } else if i == 0 {
-                    output.push(format!("{} {} = iota", variant.tag_constant, tag_type));
-                } else {
-                    output.push(variant.tag_constant.clone());
-                }
-            }
-
-            output.push(")".to_string());
+            declarations.push(GoDeclaration::new(DeclarationKind::Constants(
+                self.variants
+                    .iter()
+                    .enumerate()
+                    .map(|(i, variant)| ConstantDeclaration {
+                        documentation: variant
+                            .doc
+                            .as_ref()
+                            .map(|doc| doc.lines().map(comment_line).collect::<Vec<_>>().join("\n"))
+                            .unwrap_or_default()
+                            .into(),
+                        name: variant.tag_constant.clone(),
+                        ty: (renumbered || i == 0).then(|| tag.clone()),
+                        value: if renumbered {
+                            Some(GoExpression::literal(values[i].to_string()))
+                        } else {
+                            (i == 0).then(|| GoExpression::external_name("iota".to_string()))
+                        },
+                    })
+                    .collect(),
+            )));
         }
-
-        let go_type_name = go_name::escape_type_name(&self.enum_name);
-        if !doc_comment.is_empty() {
-            output.push(doc_comment.trim_end_matches('\n').to_string());
-        }
-        output.push(format!(
-            "type {}{} struct {{",
-            go_type_name, generics_string
-        ));
-        output.push(format!("Tag {}", tag_type));
-
-        let mut seen_fields = rustc_hash::FxHashMap::default();
+        let mut fields = vec![("Tag".to_string(), tag)];
         for variant in &self.variants {
             for field in &variant.fields {
-                let go_type = planner.use_go_type(&field.ty);
-                let go_type = if field.is_recursive() {
-                    format!("*{go_type}")
+                let ty = planner.go_type(&field.ty);
+                let ty = if field.is_recursive() {
+                    GoType::pointer_to(&ty)
                 } else {
-                    go_type
+                    ty
                 };
-                match seen_fields.get(&field.go_name) {
-                    None => {
-                        output.push(format!("{} {}", field.go_name, go_type));
-                        seen_fields.insert(&field.go_name, go_type);
-                    }
-                    Some(first) => debug_assert_eq!(
-                        first, &go_type,
-                        "enum {} shares Go field `{}` between differing types, so this emits one of them silently",
-                        self.enum_name, field.go_name
-                    ),
+                if let Some((_, existing)) = fields.iter().find(|(name, _)| name == &field.go_name)
+                {
+                    assert!(existing == &ty, "shared enum field has incompatible types");
+                } else {
+                    fields.push((field.go_name.clone(), ty));
                 }
             }
         }
-
-        output.push("}".to_string());
-
-        output.join("\n")
+        let mut declaration = GoDeclaration::new(DeclarationKind::Type {
+            name: go_name::escape_type_name(&self.enum_name).into_owned(),
+            parameters: generics,
+            underlying: GoType::structure(fields),
+        });
+        declaration.documentation = doc.to_string().into();
+        declarations.push(declaration);
+        declarations
     }
 
-    pub(crate) fn emit_format_method(
+    pub(crate) fn format_declaration(
         &self,
-        receiver_generics: &str,
+        planner: &mut Planner,
+        generics: &ReceiverGenerics,
         format: StringFormat<'_>,
-    ) -> (String, PackageRequirements) {
-        let receiver = synthesized_receiver_name(&self.enum_name, receiver_generics);
-        let mut requirements = PackageRequirements::default();
-        requirements.require_generated(GeneratedPackage::Fmt);
-        let go_type_name = go_name::escape_type_name(&self.enum_name);
-        let receiver_type = format!("{}{}", go_type_name, receiver_generics);
-
-        let mut lines = Vec::new();
-        lines.push(format!(
-            "func ({receiver} {receiver_type}) {}() string {{",
-            format.method()
-        ));
-        lines.push(format!("switch {receiver}.Tag {{"));
-
-        for variant in &self.variants {
-            lines.push(format!("case {}:", variant.tag_constant));
-            lines.push(self.build_variant_format_line(
-                variant,
-                &receiver,
-                format,
-                &mut requirements,
-            ));
-        }
-
-        lines.push("default:".to_string());
-        lines.push(format!(
-            "return fmt.Sprintf(\"{}(%d)\", {receiver}.Tag)",
-            self.enum_name
-        ));
-        lines.push("}".to_string());
-        lines.push("}".to_string());
-
-        (lines.join("\n"), requirements)
-    }
-
-    fn build_variant_format_line(
-        &self,
-        variant: &VariantLayout,
-        receiver: &str,
-        format: StringFormat<'_>,
-        requirements: &mut PackageRequirements,
-    ) -> String {
-        let prefix = format.prefix(&self.enum_name);
-        if variant.fields.is_empty() {
-            return format!("return \"{}{}\"", prefix, variant.name);
-        }
-        let args: Vec<String> = variant
-            .fields
+    ) -> GoDeclaration {
+        let receiver = planner
+            .scope
+            .new_local_identifier(synthesized_receiver_name(&self.enum_name, generics));
+        let cases = self
+            .variants
             .iter()
-            .filter_map(|f| {
-                format.argument(
-                    format!("{receiver}.{}", f.go_name),
-                    f.format(),
-                    requirements,
+            .map(|variant| {
+                let prefix = format.prefix(&self.enum_name);
+                let (text, arguments) = if variant.fields.is_empty() {
+                    (format!("{prefix}{}", variant.name), Vec::new())
+                } else {
+                    let arguments = variant
+                        .fields
+                        .iter()
+                        .filter_map(|field| {
+                            format
+                                .format_argument(member(&receiver, &field.go_name), field.format())
+                        })
+                        .collect();
+                    let (open, close, parts) = if variant.is_struct_variant {
+                        (
+                            " { ",
+                            " }",
+                            variant
+                                .fields
+                                .iter()
+                                .map(|field| {
+                                    format!(
+                                        "{}: {}",
+                                        field.source_name,
+                                        format.verb(field.format())
+                                    )
+                                })
+                                .collect::<Vec<_>>(),
+                        )
+                    } else {
+                        (
+                            "(",
+                            ")",
+                            variant
+                                .fields
+                                .iter()
+                                .map(|field| format.verb(field.format()).to_string())
+                                .collect(),
+                        )
+                    };
+                    (
+                        format!("{prefix}{}{open}{}{close}", variant.name, parts.join(", ")),
+                        arguments,
+                    )
+                };
+                let value = format_value(&text, arguments);
+                case(
+                    GoExpression::external_name(variant.tag_constant.clone()),
+                    vec![plain_return(value)],
                 )
             })
             .collect();
-        let (open, close, placeholders) = if variant.is_struct_variant {
-            let parts: Vec<String> = variant
-                .fields
-                .iter()
-                .map(|f| format!("{}: {}", f.source_name, format.verb(f.format())))
-                .collect();
-            (" { ", " }", parts.join(", "))
-        } else {
-            let parts: Vec<&str> = variant
-                .fields
-                .iter()
-                .map(|f| format.verb(f.format()))
-                .collect();
-            ("(", ")", parts.join(", "))
+        let default = vec![plain_return(GoExpression::call(
+            GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
+            vec![
+                string(&format!("{}(%d)", self.enum_name)),
+                member(&receiver, "Tag"),
+            ],
+        ))];
+        let subject = member(&receiver, "Tag");
+        GoDeclaration::function(
+            Some(GoParameter::new(
+                receiver,
+                generics.instantiate(&go_name::escape_type_name(&self.enum_name)),
+            )),
+            format.method(),
+            Vec::new(),
+            Vec::new(),
+            GoType::new("string"),
+            LoweredBlock {
+                statements: vec![switch(subject, cases, default)],
+            },
+        )
+    }
+
+    pub(crate) fn variants_declaration(&self, name: &str) -> GoDeclaration {
+        let ty = GoType::new(go_name::escape_type_name(&self.enum_name).into_owned());
+        let values = self
+            .variants
+            .iter()
+            .map(|variant| {
+                (
+                    None,
+                    GoExpression::struct_literal(
+                        ty.clone(),
+                        vec![(
+                            "Tag".to_string(),
+                            GoExpression::external_name(variant.tag_constant.clone()),
+                        )],
+                        CompositeLayout::Inline { padded: false },
+                    )
+                    .elide_composite_type(&ty),
+                )
+            })
+            .collect();
+        GoDeclaration::new(DeclarationKind::Function {
+            signature: FunctionSignature {
+                receiver: None,
+                name: name.to_string(),
+                generics: Vec::new(),
+                parameters: Vec::new(),
+                result: GoType::slice_of(&ty),
+            },
+            body: LoweredBlock {
+                statements: vec![plain_return(GoExpression::composite(
+                    Some(GoType::slice_of(&ty)),
+                    values,
+                    CompositeLayout::MultiLine { indented: true },
+                ))],
+            },
+        })
+    }
+
+    pub(crate) fn json_declarations(
+        &self,
+        planner: &mut Planner,
+        generics: &ReceiverGenerics,
+    ) -> Vec<GoDeclaration> {
+        let receiver_name = synthesized_receiver_name(&self.enum_name, generics);
+        let receiver = planner.scope.new_local_identifier(&receiver_name);
+        let receiver_type = generics.instantiate(&go_name::escape_type_name(&self.enum_name));
+        let cases = self
+            .variants
+            .iter()
+            .map(|variant| {
+                let payload = if variant.fields.is_empty() {
+                    string(&variant.name)
+                } else {
+                    let inner = if variant.is_struct_variant {
+                        map(variant
+                            .fields
+                            .iter()
+                            .map(|field| {
+                                (
+                                    field.source_name.to_string(),
+                                    member(&receiver, &field.go_name),
+                                )
+                            })
+                            .collect())
+                    } else if variant.fields.len() == 1 {
+                        member(&receiver, &variant.fields[0].go_name)
+                    } else {
+                        GoExpression::composite(
+                            Some(GoType::slice_of(&GoType::new("any"))),
+                            variant
+                                .fields
+                                .iter()
+                                .map(|field| (None, member(&receiver, &field.go_name)))
+                                .collect(),
+                            CompositeLayout::Inline { padded: false },
+                        )
+                    };
+                    map(vec![(variant.name.clone(), inner)])
+                };
+                case(
+                    GoExpression::external_name(variant.tag_constant.clone()),
+                    vec![plain_return(GoExpression::call(
+                        GoExpression::generated(GeneratedPackage::Json, "Marshal"),
+                        vec![payload],
+                    ))],
+                )
+            })
+            .collect();
+        let default = vec![multi_value_return(vec![
+            GoExpression::nil(),
+            GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
+                vec![
+                    string(&format!("unknown {} tag: %d", self.enum_name)),
+                    member(&receiver, "Tag"),
+                ],
+            ),
+        ])];
+        let marshal = GoDeclaration::function(
+            Some(GoParameter::new(receiver.clone(), receiver_type.clone())),
+            "MarshalJSON",
+            Vec::new(),
+            Vec::new(),
+            GoType::result_list(&[GoType::slice_of(&GoType::new("byte")), GoType::new("error")]),
+            LoweredBlock {
+                statements: vec![switch(member(&receiver, "Tag"), cases, default)],
+            },
+        );
+        let fresh = |planner: &mut Planner, base: &str| {
+            planner.scope.new_local_identifier(synthesized_local_name(
+                base,
+                &receiver_name,
+                generics,
+            ))
         };
-        let text = format!("{prefix}{}{open}{placeholders}{close}", variant.name);
-        format_return(&text, &args, requirements)
-    }
-
-    pub(crate) fn emit_variants_function(&self, fn_name: &str) -> String {
-        let go_type_name = go_name::escape_type_name(&self.enum_name);
-
-        let mut lines = Vec::new();
-        lines.push(format!("func {fn_name}() []{go_type_name} {{"));
-        lines.push(format!("return []{go_type_name}{{"));
-        for variant in &self.variants {
-            lines.push(format!("{{Tag: {}}},", variant.tag_constant));
-        }
-        lines.push("}".to_string());
-        lines.push("}".to_string());
-
-        lines.join("\n")
-    }
-
-    pub(crate) fn emit_json_methods(&self, receiver_generics: &str) -> String {
-        let receiver = synthesized_receiver_name(&self.enum_name, receiver_generics);
-        let go_type_name = go_name::escape_type_name(&self.enum_name);
-        let receiver_type = format!("{}{}", go_type_name, receiver_generics);
-        let names = UnmarshalNames::new(&receiver, receiver_generics);
-
-        let marshal = self.emit_marshal_json(&receiver, &receiver_type);
-        let unmarshal = self.emit_unmarshal_json(&receiver, &receiver_type, &names);
-
-        format!("{}\n\n{}", marshal, unmarshal)
-    }
-
-    fn emit_marshal_json(&self, receiver: &str, receiver_type: &str) -> String {
-        let mut lines = Vec::new();
-        lines.push(format!(
-            "func ({receiver} {receiver_type}) MarshalJSON() ([]byte, error) {{"
-        ));
-        lines.push(format!("switch {receiver}.Tag {{"));
-
-        for variant in &self.variants {
-            lines.push(format!("case {}:", variant.tag_constant));
-
-            if variant.fields.is_empty() {
-                lines.push(format!("return json.Marshal(\"{}\")", variant.name));
-            } else if variant.is_struct_variant {
-                let pairs: Vec<String> = variant
-                    .fields
-                    .iter()
-                    .map(|f| format!("\"{}\": {receiver}.{}", f.source_name, f.go_name))
-                    .collect();
-                lines.push(format!(
-                    "return json.Marshal(map[string]any{{\"{}\": map[string]any{{{}}}}})",
-                    variant.name,
-                    pairs.join(", ")
+        let data = fresh(planner, "data");
+        let name = fresh(planner, "name");
+        let obj = fresh(planner, "obj");
+        let key = fresh(planner, "key");
+        let val = fresh(planner, "val");
+        let inner = fresh(planner, "inner");
+        let v = fresh(planner, "v");
+        let arr = fresh(planner, "arr");
+        let raw = GoType::named(
+            "RawMessage",
+            &[],
+            Some(PackageUse::generated(GeneratedPackage::Json)),
+        );
+        let (empty, payload): (Vec<_>, Vec<_>) = self
+            .variants
+            .iter()
+            .partition(|variant| variant.fields.is_empty());
+        let unknown = |value| {
+            plain_return(GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
+                vec![
+                    string(&format!("unknown {} variant: %s", self.enum_name)),
+                    value,
+                ],
+            ))
+        };
+        let invalid = |message: String| {
+            plain_return(GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Errors, "New"),
+                vec![string(&message)],
+            ))
+        };
+        let mut body = Vec::new();
+        if !empty.is_empty() {
+            body.push(variable(&name, GoType::new("string")));
+            let cases = empty
+                .iter()
+                .map(|variant| {
+                    case(
+                        string(&variant.name),
+                        vec![
+                            assign(
+                                member(&receiver, "Tag"),
+                                GoExpression::external_name(variant.tag_constant.clone()),
+                            ),
+                            plain_return(GoExpression::nil()),
+                        ],
+                    )
+                })
+                .collect();
+            let choice = switch(
+                GoExpression::identifier(name.clone()),
+                cases,
+                vec![unknown(GoExpression::identifier(name.clone()))],
+            );
+            if payload.is_empty() {
+                body.push(json_guard(
+                    planner,
+                    GoExpression::identifier(data.clone()),
+                    GoExpression::identifier(name.clone()),
+                    Some(vec![invalid(format!(
+                        "invalid {} JSON: expected string",
+                        self.enum_name
+                    ))]),
+                    false,
                 ));
-            } else if variant.fields.len() == 1 {
-                lines.push(format!(
-                    "return json.Marshal(map[string]any{{\"{}\": {receiver}.{}}})",
-                    variant.name, variant.fields[0].go_name
-                ));
+                body.push(choice);
             } else {
-                let values: Vec<String> = variant
-                    .fields
-                    .iter()
-                    .map(|f| format!("{receiver}.{}", f.go_name))
-                    .collect();
-                lines.push(format!(
-                    "return json.Marshal(map[string]any{{\"{}\": []any{{{}}}}})",
-                    variant.name,
-                    values.join(", ")
+                body.push(json_guard(
+                    planner,
+                    GoExpression::identifier(data.clone()),
+                    GoExpression::identifier(name.clone()),
+                    Some(vec![choice]),
+                    true,
                 ));
             }
         }
-
-        lines.push("default:".to_string());
-        lines.push(format!(
-            "return nil, fmt.Errorf(\"unknown {} tag: %d\", {receiver}.Tag)",
-            self.enum_name
-        ));
-        lines.push("}".to_string());
-        lines.push("}".to_string());
-
-        lines.join("\n")
-    }
-
-    fn emit_unmarshal_json(
-        &self,
-        receiver: &str,
-        receiver_type: &str,
-        names: &UnmarshalNames,
-    ) -> String {
-        let (no_payload, with_payload): (Vec<&VariantLayout>, Vec<&VariantLayout>) =
-            self.variants.iter().partition(|v| v.fields.is_empty());
-
-        let data = &names.data;
-        let mut lines = Vec::new();
-        lines.push(format!(
-            "func ({receiver} *{receiver_type}) UnmarshalJSON({data} []byte) error {{"
-        ));
-
-        if !no_payload.is_empty() {
-            self.emit_unmarshal_no_payload_block(
-                &mut lines,
-                &no_payload,
-                !with_payload.is_empty(),
-                receiver,
-                names,
+        if !payload.is_empty() {
+            body.push(variable(&obj, GoType::map_of(&GoType::new("string"), &raw)));
+            body.push(json_guard(
+                planner,
+                GoExpression::identifier(data.clone()),
+                GoExpression::identifier(obj.clone()),
+                Some(vec![invalid(format!("invalid {} JSON", self.enum_name))]),
+                false,
+            ));
+            let cases = payload
+                .iter()
+                .map(|variant| {
+                    let mut body = vec![assign(
+                        member(&receiver, "Tag"),
+                        GoExpression::external_name(variant.tag_constant.clone()),
+                    )];
+                    if variant.is_struct_variant {
+                        body.push(variable(
+                            &inner,
+                            GoType::map_of(&GoType::new("string"), &raw),
+                        ));
+                        body.push(json_guard(
+                            planner,
+                            GoExpression::identifier(val.clone()),
+                            GoExpression::identifier(inner.clone()),
+                            None,
+                            false,
+                        ));
+                        for field in &variant.fields {
+                            let ok = planner.scope.new_local_identifier("ok");
+                            let mut plan = IfPlan::plain(
+                                GoExpression::identifier(ok.clone()),
+                                LoweredBlock {
+                                    statements: vec![json_guard(
+                                        planner,
+                                        GoExpression::identifier(v.clone()),
+                                        member(&receiver, &field.go_name),
+                                        None,
+                                        false,
+                                    )],
+                                },
+                                ElseArm::None,
+                            );
+                            plan.initializer = Some(GoDefinition {
+                                names: vec![v.clone(), ok],
+                                value: GoExpression::index(
+                                    GoExpression::identifier(inner.clone()),
+                                    string(&field.source_name),
+                                ),
+                            });
+                            body.push(LoweredStatement::If(plan).into());
+                        }
+                        body.push(plain_return(GoExpression::nil()));
+                    } else if variant.fields.len() == 1 {
+                        body.push(plain_return(unmarshal(
+                            GoExpression::identifier(val.clone()),
+                            member(&receiver, &variant.fields[0].go_name),
+                        )));
+                    } else {
+                        body.push(variable(&arr, GoType::slice_of(&raw)));
+                        body.push(json_guard(
+                            planner,
+                            GoExpression::identifier(val.clone()),
+                            GoExpression::identifier(arr.clone()),
+                            None,
+                            false,
+                        ));
+                        let len = GoExpression::call(
+                            GoExpression::external_name("len".to_string()),
+                            vec![GoExpression::identifier(arr.clone())],
+                        );
+                        body.push(
+                            LoweredStatement::If(IfPlan::plain(
+                                GoExpression::binary(
+                                    len.clone(),
+                                    BinaryOp::Ne,
+                                    GoExpression::literal(variant.fields.len().to_string()),
+                                ),
+                                LoweredBlock {
+                                    statements: vec![plain_return(GoExpression::call(
+                                        GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
+                                        vec![
+                                            string(&format!(
+                                                "{} expects {} fields, got %d",
+                                                variant.name,
+                                                variant.fields.len()
+                                            )),
+                                            len,
+                                        ],
+                                    ))],
+                                },
+                                ElseArm::None,
+                            ))
+                            .into(),
+                        );
+                        body.extend(unmarshal_tuple_fields(planner, variant, &arr, &receiver));
+                    }
+                    case(string(&variant.name), body)
+                })
+                .collect();
+            let choice = switch(
+                GoExpression::identifier(key.clone()),
+                cases,
+                vec![unknown(GoExpression::identifier(key.clone()))],
             );
+            body.push(
+                LoweredStatement::Loop(LoopPlan {
+                    kind: LoopKind::Generated { label: None },
+                    header: LoopHeader::Range {
+                        key: Some(key),
+                        value: Some(val),
+                        iterable: GoExpression::identifier(obj.clone()),
+                    },
+                    body: LoweredBlock {
+                        statements: vec![choice],
+                    },
+                })
+                .into(),
+            );
+            body.push(invalid(format!("empty {} JSON object", self.enum_name)));
         }
-
-        if !with_payload.is_empty() {
-            self.emit_unmarshal_with_payload_block(&mut lines, &with_payload, receiver, names);
-        }
-
-        // No variant means no shape can decode, and Go needs a return anyway.
         if self.variants.is_empty() {
-            lines.push(format!(
-                "return errors.New(\"invalid {} JSON\")",
-                self.enum_name
-            ));
+            body.push(invalid(format!("invalid {} JSON", self.enum_name)));
         }
-
-        lines.push("}".to_string());
-
-        lines.join("\n")
-    }
-
-    /// String-shape decoder for payload-less variants. Wrapped in
-    /// `if err == nil` when with-payload variants also exist (so the object
-    /// shape is the fallback).
-    fn emit_unmarshal_no_payload_block(
-        &self,
-        lines: &mut Vec<String>,
-        no_payload: &[&VariantLayout],
-        has_with_payload: bool,
-        receiver: &str,
-        names: &UnmarshalNames,
-    ) {
-        let (data, name) = (&names.data, &names.name);
-        lines.push(format!("var {name} string"));
-        if has_with_payload {
-            lines.push(format!(
-                "if err := json.Unmarshal({data}, &{name}); err == nil {{"
-            ));
-        } else {
-            lines.push(format!(
-                "if err := json.Unmarshal({data}, &{name}); err != nil {{"
-            ));
-            lines.push(format!(
-                "return errors.New(\"invalid {} JSON: expected string\")",
-                self.enum_name
-            ));
-            lines.push("}".to_string());
-        }
-        lines.push(format!("switch {name} {{"));
-        for variant in no_payload {
-            lines.push(format!("case \"{}\":", variant.name));
-            lines.push(format!("{receiver}.Tag = {}", variant.tag_constant));
-            lines.push("return nil".to_string());
-        }
-        lines.push("default:".to_string());
-        lines.push(format!(
-            "return fmt.Errorf(\"unknown {} variant: %s\", {name})",
-            self.enum_name
-        ));
-        lines.push("}".to_string());
-        if has_with_payload {
-            lines.push("}".to_string());
-        }
-    }
-
-    /// Object-shape decoder; per-variant decoding dispatches on shape.
-    fn emit_unmarshal_with_payload_block(
-        &self,
-        lines: &mut Vec<String>,
-        with_payload: &[&VariantLayout],
-        receiver: &str,
-        names: &UnmarshalNames,
-    ) {
-        let (data, obj, key, val) = (&names.data, &names.obj, &names.key, &names.val);
-        lines.push(format!("var {obj} map[string]json.RawMessage"));
-        lines.push(format!(
-            "if err := json.Unmarshal({data}, &{obj}); err != nil {{"
-        ));
-        lines.push(format!(
-            "return errors.New(\"invalid {} JSON\")",
-            self.enum_name
-        ));
-        lines.push("}".to_string());
-        lines.push(format!("for {key}, {val} := range {obj} {{"));
-        lines.push(format!("switch {key} {{"));
-
-        for variant in with_payload {
-            lines.push(format!("case \"{}\":", variant.name));
-            lines.push(format!("{receiver}.Tag = {}", variant.tag_constant));
-            emit_unmarshal_variant_payload(lines, variant, receiver, names);
-        }
-
-        lines.push("default:".to_string());
-        lines.push(format!(
-            "return fmt.Errorf(\"unknown {} variant: %s\", {key})",
-            self.enum_name
-        ));
-        lines.push("}".to_string());
-        lines.push("}".to_string());
-        lines.push(format!(
-            "return errors.New(\"empty {} JSON object\")",
-            self.enum_name
-        ));
+        let unmarshal = GoDeclaration::function(
+            Some(GoParameter::new(
+                receiver,
+                GoType::pointer_to(&receiver_type),
+            )),
+            "UnmarshalJSON",
+            Vec::new(),
+            vec![GoParameter::new(
+                data,
+                GoType::slice_of(&GoType::new("byte")),
+            )],
+            GoType::new("error"),
+            LoweredBlock { statements: body },
+        );
+        vec![marshal, unmarshal]
     }
 }
 
-/// The fixed local/param names `UnmarshalJSON` generates, each freshened away
-/// from the receiver variable and receiver type-parameter names.
-struct UnmarshalNames {
-    data: String,
-    name: String,
-    obj: String,
-    key: String,
-    val: String,
-    inner: String,
-    v: String,
-    arr: String,
+fn member(name: &GoIdentifier, field: &str) -> GoExpression {
+    GoExpression::selector(GoExpression::identifier(name.clone()), field.to_string())
+}
+fn string(value: &str) -> GoExpression {
+    GoExpression::literal(format!("{value:?}"))
 }
 
-impl UnmarshalNames {
-    fn new(receiver: &str, receiver_generics: &str) -> Self {
-        let fresh = |base| synthesized_local_name(base, receiver, receiver_generics);
-        Self {
-            data: fresh("data"),
-            name: fresh("name"),
-            obj: fresh("obj"),
-            key: fresh("key"),
-            val: fresh("val"),
-            inner: fresh("inner"),
-            v: fresh("v"),
-            arr: fresh("arr"),
-        }
+fn map(fields: Vec<(String, GoExpression)>) -> GoExpression {
+    GoExpression::composite(
+        Some(GoType::map_of(&GoType::new("string"), &GoType::new("any"))),
+        fields
+            .into_iter()
+            .map(|(key, value)| (Some(string(&key)), value))
+            .collect(),
+        CompositeLayout::Inline { padded: false },
+    )
+}
+fn variable(name: &GoIdentifier, go_type: GoType) -> Statement {
+    LoweredStatement::VarDecl {
+        name: name.clone(),
+        go_type,
+        value: None,
     }
+    .into()
+}
+fn case(label: GoExpression, body: Vec<Statement>) -> SwitchCasePlan {
+    SwitchCasePlan {
+        labels: vec![label],
+        body: LoweredBlock { statements: body },
+        line: None,
+    }
+}
+fn switch(subject: GoExpression, cases: Vec<SwitchCasePlan>, default: Vec<Statement>) -> Statement {
+    LoweredStatement::Switch(SwitchStatementPlan {
+        kind: SwitchKind::Value { subject },
+        cases,
+        default: Some(LoweredBlock {
+            statements: default,
+        }),
+        default_line: None,
+    })
+    .into()
+}
+
+fn unmarshal(value: GoExpression, target: GoExpression) -> GoExpression {
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::Json, "Unmarshal"),
+        vec![value, GoExpression::address_of(target)],
+    )
+}
+fn json_guard(
+    planner: &mut Planner,
+    value: GoExpression,
+    target: GoExpression,
+    body: Option<Vec<Statement>>,
+    success: bool,
+) -> Statement {
+    let error = planner.scope.new_local_identifier("err");
+    let body = body.unwrap_or_else(|| vec![plain_return(GoExpression::identifier(error.clone()))]);
+    let condition = GoExpression::binary(
+        GoExpression::identifier(error.clone()),
+        if success { BinaryOp::Eq } else { BinaryOp::Ne },
+        GoExpression::nil(),
+    );
+    let mut plan = IfPlan::plain(condition, LoweredBlock { statements: body }, ElseArm::None);
+    plan.initializer = Some(GoDefinition {
+        names: vec![error],
+        value: unmarshal(value, target),
+    });
+    LoweredStatement::If(plan).into()
 }
 
 fn comment_line(line: &str) -> String {
     if line.is_empty() {
         "//".to_string()
     } else {
-        format!("// {}", line)
+        format!("// {line}")
     }
 }
 
-/// Per-variant payload decoding dispatched on shape.
-fn emit_unmarshal_variant_payload(
-    lines: &mut Vec<String>,
+fn unmarshal_tuple_fields(
+    planner: &mut Planner,
     variant: &VariantLayout,
-    receiver: &str,
-    names: &UnmarshalNames,
-) {
-    if variant.is_struct_variant {
-        emit_unmarshal_struct_variant(lines, variant, receiver, names);
-    } else if variant.fields.len() == 1 {
-        emit_unmarshal_single_field_variant(lines, variant, receiver, names);
-    } else {
-        emit_unmarshal_tuple_variant(lines, variant, receiver, names);
-    }
-}
-
-fn emit_unmarshal_struct_variant(
-    lines: &mut Vec<String>,
-    variant: &VariantLayout,
-    receiver: &str,
-    names: &UnmarshalNames,
-) {
-    let (val, inner, v) = (&names.val, &names.inner, &names.v);
-    lines.push(format!("var {inner} map[string]json.RawMessage"));
-    lines.push(format!(
-        "if err := json.Unmarshal({val}, &{inner}); err != nil {{"
-    ));
-    lines.push("return err".to_string());
-    lines.push("}".to_string());
-    for field in &variant.fields {
-        lines.push(format!(
-            "if {v}, ok := {inner}[\"{}\"]; ok {{",
-            field.source_name
-        ));
-        lines.push(format!(
-            "if err := json.Unmarshal({v}, &{receiver}.{}); err != nil {{",
-            field.go_name
-        ));
-        lines.push("return err".to_string());
-        lines.push("}".to_string());
-        lines.push("}".to_string());
-    }
-    lines.push("return nil".to_string());
-}
-
-fn emit_unmarshal_single_field_variant(
-    lines: &mut Vec<String>,
-    variant: &VariantLayout,
-    receiver: &str,
-    names: &UnmarshalNames,
-) {
-    lines.push(format!(
-        "return json.Unmarshal({}, &{receiver}.{})",
-        names.val, variant.fields[0].go_name
-    ));
-}
-
-fn emit_unmarshal_tuple_variant(
-    lines: &mut Vec<String>,
-    variant: &VariantLayout,
-    receiver: &str,
-    names: &UnmarshalNames,
-) {
-    let (val, arr) = (&names.val, &names.arr);
-    let arity = variant.fields.len();
-    lines.push(format!("var {arr} []json.RawMessage"));
-    lines.push(format!(
-        "if err := json.Unmarshal({val}, &{arr}); err != nil {{"
-    ));
-    lines.push("return err".to_string());
-    lines.push("}".to_string());
-    lines.push(format!("if len({arr}) != {} {{", arity));
-    lines.push(format!(
-        "return fmt.Errorf(\"{} expects {} fields, got %d\", len({arr}))",
-        variant.name, arity,
-    ));
-    lines.push("}".to_string());
-
-    for (i, field) in variant.fields.iter().enumerate() {
-        let is_last = i == arity - 1;
-        if is_last {
-            lines.push(format!(
-                "return json.Unmarshal({arr}[{}], &{receiver}.{})",
-                i, field.go_name
-            ));
-        } else {
-            lines.push(format!(
-                "if err := json.Unmarshal({arr}[{}], &{receiver}.{}); err != nil {{",
-                i, field.go_name
-            ));
-            lines.push("return err".to_string());
-            lines.push("}".to_string());
-        }
-    }
+    array: &GoIdentifier,
+    receiver: &GoIdentifier,
+) -> Vec<Statement> {
+    variant
+        .fields
+        .iter()
+        .enumerate()
+        .map(|(index, field)| {
+            let value = GoExpression::index(
+                GoExpression::identifier(array.clone()),
+                GoExpression::literal(index.to_string()),
+            );
+            let target = member(receiver, &field.go_name);
+            if index + 1 == variant.fields.len() {
+                plain_return(unmarshal(value, target))
+            } else {
+                json_guard(planner, value, target, None, false)
+            }
+        })
+        .collect()
 }

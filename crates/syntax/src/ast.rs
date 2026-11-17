@@ -251,6 +251,7 @@ impl ConstInitializer {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindingKind {
+    Const,
     Let { mutable: bool },
     Parameter,
     MatchArm,
@@ -1612,6 +1613,7 @@ pub enum Expression {
         span: Span,
     },
     Const {
+        binding: Option<BindingId>,
         doc: Option<String>,
         identifier: EcoString,
         identifier_span: Span,
@@ -1828,6 +1830,16 @@ impl Expression {
     }
 
     pub fn get_type(&self) -> Type {
+        self.type_ref().cloned().unwrap_or_else(|| {
+            if matches!(self, Self::Break { .. } | Self::Continue { .. }) {
+                Type::Never
+            } else {
+                Type::ignored()
+            }
+        })
+    }
+
+    pub fn type_ref(&self) -> Option<&Type> {
         match self {
             Self::Literal { ty, .. }
             | Self::Function { ty, .. }
@@ -1860,7 +1872,7 @@ impl Expression {
             | Self::Unit { ty, .. }
             | Self::Loop { ty, .. }
             | Self::Range { ty, .. }
-            | Self::Cast { ty, .. } => ty.clone(),
+            | Self::Cast { ty, .. } => Some(ty),
             Self::Enum { .. }
             | Self::Struct { .. }
             | Self::Assignment { .. }
@@ -1871,8 +1883,8 @@ impl Expression {
             | Self::RawGo { .. }
             | Self::While { .. }
             | Self::WhileLet { .. }
-            | Self::For { .. } => Type::ignored(),
-            Self::Break { .. } | Self::Continue { .. } => Type::Never,
+            | Self::For { .. } => None,
+            Self::Break { .. } | Self::Continue { .. } => None,
         }
     }
 
@@ -2087,6 +2099,20 @@ impl Expression {
             Expression::Call { ty, .. } if ty.is_never() => Some(DeadCodeCause::DivergingCall),
 
             _ => None,
+        }
+    }
+
+    pub fn evaluation_children(&self) -> Vec<&Expression> {
+        match self {
+            Self::Function { .. } | Self::Lambda { .. } | Self::Task { .. } => Vec::new(),
+            _ => self.children(),
+        }
+    }
+
+    pub fn propagation_children(&self) -> Vec<&Expression> {
+        match self {
+            Self::TryBlock { .. } | Self::RecoverBlock { .. } => Vec::new(),
+            _ => self.evaluation_children(),
         }
     }
 
@@ -2530,6 +2556,7 @@ impl Expression {
                 span,
             },
             Expression::Const {
+                binding,
                 doc,
                 identifier,
                 identifier_span,
@@ -2539,6 +2566,7 @@ impl Expression {
                 span,
                 ..
             } => Expression::Const {
+                binding,
                 doc,
                 identifier,
                 identifier_span,
@@ -2669,7 +2697,7 @@ pub enum FormatStringPart {
     Expression(Box<Expression>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
     Negative,
     Not,
@@ -2677,7 +2705,7 @@ pub enum UnaryOperator {
     Deref,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOperator {
     Addition,
     Subtraction,

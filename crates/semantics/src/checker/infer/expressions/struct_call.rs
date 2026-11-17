@@ -335,8 +335,9 @@ impl InferCtx<'_> {
         if same_nominal(&peeled_expected, &struct_call_ty)
             && !store.contains_unknown(&peeled_expected)
         {
-            let _ =
-                self.speculatively(|this| this.try_unify(&peeled_expected, &struct_call_ty, &span));
+            let _ = self.unify_speculatively(|this| {
+                this.try_unify(&peeled_expected, &struct_call_ty, &span)
+            });
         }
 
         let new_spread = self.infer_struct_spread(spread, &struct_call_ty);

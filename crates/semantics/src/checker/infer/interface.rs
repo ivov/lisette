@@ -4,11 +4,16 @@ use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
 use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
+use syntax::program::CheckedMethod;
+use syntax::program::ConformanceWitness;
+use syntax::program::GoHint;
+use syntax::program::GoInteropContract;
 use syntax::program::{
     DefinitionBody, InterfaceRequirement, Methods, interface_declares_any_method,
     interface_requirements,
 };
-use syntax::types::{FunctionParameter, GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
+use syntax::types::method_receiver_substitution;
+use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
 use syntax::go_names;
@@ -20,6 +25,7 @@ struct ConformanceTraversal<'a> {
     adapter_capable: bool,
     violations: Vec<InterfaceViolation>,
     reported_violations: usize,
+    methods: Vec<CheckedMethod>,
 }
 
 impl ConformanceTraversal<'_> {
@@ -54,9 +60,15 @@ struct ConformanceSite<'a> {
 }
 
 impl InferCtx<'_> {
+    fn conformance_receiver(&self, ty: &Type) -> Type {
+        promotion::selector_receiver(&ty.resolve_in(&self.env), |id| {
+            self.store.get_definition(id)
+        })
+    }
+
     fn method_in_value_method_set(&self, receiver: &Type, method: &str) -> bool {
         let store = self.store;
-        let resolved = self.peel_resolved(&receiver.strip_refs());
+        let resolved = self.conformance_receiver(receiver);
         let Some(id) = resolved.get_qualified_id() else {
             return false;
         };
@@ -71,12 +83,9 @@ impl InferCtx<'_> {
         if !owner.starts_with(GO_IMPORT_PREFIX) {
             return false;
         }
-        store.get_method(&owner, method).is_some_and(|method| {
-            method
-                .go_hints
-                .iter()
-                .any(|hint| hint == "value_method_set")
-        })
+        store
+            .get_method(&owner, method)
+            .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
     }
 
     pub(crate) fn check_concrete_bound(&mut self, ty: &Type, bound: &Type, span: &Span) {
@@ -122,7 +131,7 @@ impl InferCtx<'_> {
     /// A type argument gets no adapter, so its methods need the Go shapes the bound requires.
     fn check_bound_method_shapes(&mut self, ty: &Type, bound: &Type, span: &Span) {
         let store = self.store;
-        let receiver = self.peel_resolved(&ty.strip_refs());
+        let receiver = self.conformance_receiver(ty);
         let Some(receiver_id) = receiver.get_qualified_id() else {
             return;
         };
@@ -247,33 +256,49 @@ impl InferCtx<'_> {
             return Err(vec![]);
         }
 
-        // Get type ID to track circular satisfaction checks.
-        // If we're already checking if this type satisfies this interface, return success
-        // to prevent infinite recursion (e.g., interface Fluent { fn next() -> Fluent }).
-        let type_id = resolved
-            .get_qualified_id()
-            .map(String::from)
-            .unwrap_or_else(|| ty.to_string());
-        let pair = (type_id, interface_qualified_id.to_string());
+        let owner = |ty: &Type| match ty {
+            Type::Nominal { id, .. } => Type::Nominal {
+                id: id.clone(),
+                params: Vec::new(),
+                writable: false,
+            },
+            other => other.clone(),
+        };
+        let pair = (owner(&resolved), owner(&interface_ty));
 
-        let Some((violations, reported_violations)) = self.with_satisfaction_check(pair, |this| {
-            let adapter_capable = this.adapter_capable_receiver(ty, interface_qualified_id);
-            let mut check = ConformanceTraversal {
-                receiver: ty,
-                span: *span,
-                adapter_capable,
-                violations: Vec::new(),
-                reported_violations: 0,
-            };
-            this.collect_interface_violations(&mut check, &requirements, methods);
-            (check.violations, check.reported_violations)
-        }) else {
+        let Some((violations, reported_violations, checked_methods)) = self
+            .with_satisfaction_check(pair, |this| {
+                let adapter_capable = this.adapter_capable_receiver(ty);
+                let mut check = ConformanceTraversal {
+                    receiver: ty,
+                    span: *span,
+                    adapter_capable,
+                    violations: Vec::new(),
+                    reported_violations: 0,
+                    methods: Vec::new(),
+                };
+                this.collect_interface_violations(&mut check, &requirements, methods);
+                (check.violations, check.reported_violations, check.methods)
+            })
+        else {
             return Ok(());
         };
 
         let builtin_receiver = self.is_builtin_receiver(ty);
 
         if violations.is_empty() && !(builtin_receiver && requires_methods) {
+            if checked_methods.len() == requirements.len() {
+                let receiver = ty.resolve_in(&self.env);
+                let store = self.store;
+                self.facts.conformances.insert(
+                    ConformanceWitness {
+                        receiver,
+                        interface: interface_ty.clone(),
+                        methods: checked_methods,
+                    },
+                    |id| store.get_definition(id),
+                );
+            }
             return Ok(());
         }
 
@@ -368,7 +393,7 @@ impl InferCtx<'_> {
 
     fn with_satisfaction_check<T>(
         &mut self,
-        pair: (String, String),
+        pair: (Type, Type),
         check: impl FnOnce(&mut Self) -> T,
     ) -> Option<T> {
         if !self.satisfying_stack.insert(pair.clone()) {
@@ -381,7 +406,7 @@ impl InferCtx<'_> {
     }
 
     fn is_builtin_receiver(&self, ty: &Type) -> bool {
-        let resolved = self.peel_resolved(&ty.strip_refs());
+        let resolved = self.conformance_receiver(ty);
         match resolved.strip_refs() {
             Type::Simple(_) | Type::Compound { .. } | Type::Array { .. } => true,
             Type::Nominal { id, .. } => {
@@ -423,7 +448,7 @@ impl InferCtx<'_> {
             .display_name()
             .map_or_else(|| ty.to_string(), |name| name.to_string());
         let diagnostic = if value_is_ref {
-            let pointee = self.peel_resolved(&ty.strip_refs());
+            let pointee = self.conformance_receiver(ty);
             let pointee_name = pointee
                 .display_name()
                 .map_or_else(|| pointee.to_string(), |name| name.to_string());
@@ -459,6 +484,26 @@ impl InferCtx<'_> {
         interface_ty: &Type,
     ) -> Vec<(String, bool)> {
         let store = self.store;
+        let receiver = ty.resolve_in(&self.env);
+        if let Some(witness) = self
+            .facts
+            .conformances
+            .get(&receiver, interface_ty, |id| store.get_definition(id))
+        {
+            return witness
+                .methods
+                .iter()
+                .filter_map(|method| {
+                    if !method.pointer_receiver
+                        || self.method_in_value_method_set(ty, &method.selected_name)
+                    {
+                        return None;
+                    }
+                    let receiver = &method.signature.get_function_params()?.first()?.ty;
+                    Some((method.selected_name.to_string(), receiver.is_writable()))
+                })
+                .collect();
+        }
         let methods = self.get_all_methods(store, ty);
         interface_requirements(interface_ty, |id| store.get_definition(id))
             .into_iter()
@@ -511,7 +556,7 @@ impl InferCtx<'_> {
     }
 
     fn conformance_candidate(&self, receiver: &Type, method: &str) -> ConformanceCandidate {
-        let resolved = self.peel_resolved(&receiver.strip_refs());
+        let resolved = self.conformance_receiver(receiver);
         self.own_candidate(&resolved, method)
             .or_else(|| self.promoted_candidate(&resolved, method))
             .or_else(|| self.bound_candidate(&resolved, method))
@@ -576,61 +621,18 @@ impl InferCtx<'_> {
         })
     }
 
-    /// Mirror of emit's `needs_adapter` precondition.
-    fn adapter_capable_receiver(&self, ty: &Type, interface_qualified_id: &str) -> bool {
-        let store = self.store;
-        let resolved = self.peel_resolved(&ty.strip_refs());
+    fn adapter_capable_receiver(&self, ty: &Type) -> bool {
+        let resolved = self.conformance_receiver(ty);
         let Some(id) = resolved.get_qualified_id() else {
             return false;
         };
-        if id.starts_with(GO_IMPORT_PREFIX) {
-            return false;
-        }
-        let own = match store.get_definition(id).map(|d| &d.body) {
-            Some(DefinitionBody::Struct { methods, .. })
-            | Some(DefinitionBody::Enum { methods, .. }) => methods,
-            _ => return false,
-        };
-        self.own_methods_cover_interface(own, id, interface_qualified_id)
-    }
-
-    fn own_methods_cover_interface(
-        &self,
-        own: &Methods,
-        own_id: &str,
-        interface_qualified_id: &str,
-    ) -> bool {
-        let store = self.store;
-        let own_candidate = |name: &str| {
-            store
-                .get_method(own_id, name)
-                .map(|_| ConformanceCandidate::Resolved {
-                    depth: 0,
-                    owner: own_id.into(),
-                    shadowed: self.store.is_ufcs_method(own_id, name),
-                })
-                .unwrap_or(ConformanceCandidate::Unresolved)
-        };
-        let interface_ty = Type::Nominal {
-            id: interface_qualified_id.into(),
-            params: vec![],
-            writable: false,
-        };
-        interface_requirements(&interface_ty, |id| store.get_definition(id))
-            .into_iter()
-            .all(|requirement| {
-                let interface_is_public = store
-                    .get_definition(&requirement.declaring_interface)
-                    .is_some_and(|d| d.visibility.is_public());
-                go_names::conformance_method(
-                    own,
-                    requirement.declaring_interface.as_str(),
-                    interface_is_public,
-                    requirement.name.as_str(),
-                    &own_candidate,
-                )
-                .is_some()
-            })
+        !id.starts_with(GO_IMPORT_PREFIX)
+            && matches!(
+                self.store
+                    .get_definition(id)
+                    .map(|definition| &definition.body),
+                Some(DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. })
+            )
     }
 
     fn collect_interface_violations(
@@ -642,7 +644,7 @@ impl InferCtx<'_> {
         let store = self.store;
         let ty = check.receiver;
         let span = check.span;
-        let resolved_receiver = self.peel_resolved(&ty.strip_refs());
+        let resolved_receiver = self.conformance_receiver(ty);
         let receiver_id = match &resolved_receiver {
             Type::Nominal { id, .. } => Some(id.clone()),
             _ => None,
@@ -728,11 +730,7 @@ impl InferCtx<'_> {
                         check,
                         interface_qualified_id,
                         method_name,
-                        requirement
-                            .method
-                            .go_hints
-                            .iter()
-                            .any(|hint| hint == "comma_ok"),
+                        requirement.method.go_hints.contains(&GoHint::CommaOk),
                         impl_method_name.as_str(),
                     );
                     let spelling_pinned = go_names::interface_matches_by_source_name(
@@ -740,6 +738,55 @@ impl InferCtx<'_> {
                         interface_is_public,
                     );
                     self.record_conformance_use(ty, impl_method_name.as_str(), spelling_pinned);
+                    let selected =
+                        promotion::resolve_selector(store, &resolved_receiver, &impl_method_name);
+                    let promotion::Resolution::Found(member) = selected else {
+                        if !matches!(resolved_receiver, Type::Parameter(_)) {
+                            check.push_violation(
+                                interface_qualified_id,
+                                requirement.parent_of.as_ref(),
+                                InterfaceMethodViolation::Missing(MissingMethod {
+                                    name: method_name.to_string(),
+                                    signature: method_ty.clone(),
+                                    private_candidate: None,
+                                }),
+                            );
+                        }
+                        continue;
+                    };
+                    let promotion::MemberKind::Method(selected_method) = &member.kind else {
+                        continue;
+                    };
+                    let owner = member.declaring_type;
+                    let is_exported = selected_method.visibility.is_public();
+                    let declaring_instance = *member.declaring_instance;
+                    let declared_signature = store
+                        .get_method(&owner, &impl_method_name)
+                        .map(|method| method.ty.clone())
+                        .unwrap_or_else(|| symbol_method.clone());
+                    let substitutions = declared_signature
+                        .unwrap_forall()
+                        .get_function_params()
+                        .and_then(|parameters| parameters.first())
+                        .and_then(|receiver| {
+                            method_receiver_substitution(&receiver.ty, &declaring_instance)
+                        })
+                        .unwrap_or_default();
+                    check.methods.push(CheckedMethod {
+                        required_interface: interface_qualified_id.clone(),
+                        required_name: method_name.clone(),
+                        selected_definition: owner.with_segment(&impl_method_name),
+                        selected_name: impl_method_name.clone(),
+                        pointer_receiver: symbol_method
+                            .unwrap_forall()
+                            .get_function_params()
+                            .and_then(|parameters| parameters.first())
+                            .is_some_and(|receiver| receiver.ty.is_ref()),
+                        signature: symbol_method.clone(),
+                        declared_signature,
+                        substitutions,
+                        is_exported,
+                    });
                 }
                 SignatureCheck::ReceiverMismatch => {
                     check.push_violation(
@@ -866,14 +913,14 @@ impl InferCtx<'_> {
             Signature,
         }
 
-        let candidate_ty = site.ty.strip_refs().resolve_in(&self.env);
+        let candidate_ty = self.conformance_receiver(site.ty);
         let mut resolved_impl_method = None;
         #[expect(
             clippy::map_err_ignore,
             reason = "a speculative unification needs only which part failed, not why"
         )]
-        let sig_match = self.in_invariant_position(|ctx| {
-            ctx.speculatively(|this| {
+        let sig_match = self.in_invariant_position(|context| {
+            context.unify_speculatively(|this| {
                 if let Some(receiver) = &receiver_to_pin {
                     this.try_unify(receiver, &candidate_ty, &Span::dummy())
                         .map_err(|_| Mismatch::Receiver)?;
@@ -882,8 +929,7 @@ impl InferCtx<'_> {
                 let provided = signature_to_match(&impl_for_unify, go_interface);
                 this.try_unify(&required, &provided, &Span::dummy())
                     .map_err(|_| {
-                        resolved_impl_method =
-                            Some(impl_method_without_receiver.resolve_in(&this.env));
+                        resolved_impl_method = Some(this.resolve(&impl_method_without_receiver));
                         Mismatch::Signature
                     })
             })
@@ -908,7 +954,7 @@ impl InferCtx<'_> {
         impl_method_name: &str,
     ) {
         let store = self.store;
-        let resolved_ty = check.receiver.strip_refs().resolve_in(&self.env);
+        let resolved_ty = self.conformance_receiver(check.receiver);
         if resolved_ty.get_qualified_id().is_none() {
             return;
         }
@@ -920,7 +966,7 @@ impl InferCtx<'_> {
         let promotion::MemberKind::Method(method) = member.kind else {
             return;
         };
-        let selected_comma_ok = method.go_hints.iter().any(|hint| hint == "comma_ok");
+        let selected_comma_ok = method.go_hints.contains(&GoHint::CommaOk);
         let adapter_reconciles = check.adapter_capable && interface_comma_ok && !selected_comma_ok;
         if interface_comma_ok != selected_comma_ok && !adapter_reconciles {
             self.sink.push(diagnostics::embed::comma_ok_abi_mismatch(
@@ -933,7 +979,7 @@ impl InferCtx<'_> {
 
     fn record_conformance_use(&mut self, ty: &Type, impl_method_name: &str, spelling_pinned: bool) {
         let store = self.store;
-        if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
+        if let Type::Nominal { id, .. } = self.conformance_receiver(ty)
             && let Some(package) = store.package_for_qualified_name(id.as_str())
             && let Some(type_name) = id.as_str().get(package.len() + 1..)
             && !type_name.contains('.')
@@ -996,24 +1042,9 @@ fn covariant_return_adjustment(
     let iface_ret = &iface_f.return_type;
     let impl_ret = &impl_f.return_type;
 
-    if !iface_ret.is_option() {
-        return None;
-    }
-    let opt_inner = iface_ret.ok_type();
-
-    if !store.is_nilable_go_type(&opt_inner) {
-        return None;
-    }
-
-    let hints = store
-        .get_method(interface_qualified_id, method_name)
-        .map(|method| method.go_hints.as_slice())
-        .unwrap_or(&[]);
-    if hints.iter().any(|h| h == "comma_ok") {
-        return None;
-    }
-
-    if opt_inner != **impl_ret {
+    let declared = store.get_method(interface_qualified_id, method_name)?;
+    let contract = GoInteropContract::new(&declared.ty, interface_method, &declared.go_hints);
+    if !contract.permits_nullable_lift(impl_ret, |id| store.get_definition(id)) {
         return None;
     }
 
@@ -1054,7 +1085,7 @@ fn permission_gap_only_at_type_parameters(declared: &Type, expected: &Type, actu
 
 fn erase_at_parameters(declared: &Type, ty: &Type) -> Option<Type> {
     match (declared, ty) {
-        (Type::Parameter(_), _) => Some(erase_permissions(ty)),
+        (Type::Parameter(_), _) => Some(without_function_bounds(&ty.without_permissions())),
         (Type::Function(declared), Type::Function(f)) => {
             if declared.params.len() != f.params.len() {
                 return None;
@@ -1132,50 +1163,31 @@ fn erase_at_parameters(declared: &Type, ty: &Type) -> Option<Type> {
 }
 
 fn signature_to_match(ty: &Type, clear_parameter_permissions: bool) -> Type {
-    let Type::Function(f) = ty else {
+    let Type::Function(function) = ty else {
         return ty.clone();
     };
-    let params = if clear_parameter_permissions {
-        strip_permissions(&f.params)
+    let parameters = if clear_parameter_permissions {
+        function
+            .params
+            .iter()
+            .map(|parameter| {
+                parameter.with_type(without_function_bounds(&parameter.ty.without_permissions()))
+            })
+            .collect()
     } else {
-        f.params.clone()
+        function.params.clone()
     };
-    f.rebuild(params, vec![], f.return_type.clone())
+    function.rebuild(parameters, vec![], function.return_type.clone())
 }
 
-fn strip_permissions(params: &[FunctionParameter]) -> Vec<FunctionParameter> {
-    params
-        .iter()
-        .map(|param| param.with_type(erase_permissions(&param.ty)))
-        .collect()
-}
-
-fn erase_permissions(ty: &Type) -> Type {
+fn without_function_bounds(ty: &Type) -> Type {
+    let ty = ty.map_children(without_function_bounds);
     match ty {
-        Type::Compound { kind, args, .. } => Type::Compound {
-            kind: *kind,
-            args: args.iter().map(erase_permissions).collect(),
-            writable: false,
-        },
-        Type::Nominal { id, params, .. } => Type::Nominal {
-            id: id.clone(),
-            params: params.iter().map(erase_permissions).collect(),
-            writable: false,
-        },
-        Type::Tuple(elements) => Type::Tuple(elements.iter().map(erase_permissions).collect()),
-        Type::Array { length, element } => Type::Array {
-            length: *length,
-            element: Box::new(erase_permissions(element)),
-        },
-        Type::Function(f) => f.rebuild(
-            strip_permissions(&f.params),
-            Vec::new(),
-            Box::new(erase_permissions(&f.return_type)),
+        Type::Function(function) => function.rebuild(
+            function.params.clone(),
+            vec![],
+            function.return_type.clone(),
         ),
-        Type::Forall { vars, body } => Type::Forall {
-            vars: vars.clone(),
-            body: Box::new(erase_permissions(body)),
-        },
-        other => other.clone(),
+        ty => ty,
     }
 }

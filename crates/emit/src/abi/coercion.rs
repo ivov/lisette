@@ -164,7 +164,9 @@ impl CoercionPlan {
                 let type_name = planner.go_type(&ty);
                 GoExpression::conversion(type_name, value)
             }
-            Self::Layout(bridge) => planner.plan_layout_bridge(&mut statements, value, &bridge),
+            Self::Layout(bridge) => {
+                planner.plan_layout_bridge(&mut statements, value, &bridge, true)
+            }
             Self::RebuildArray {
                 array_type,
                 element,

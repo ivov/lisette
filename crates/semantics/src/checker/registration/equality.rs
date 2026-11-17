@@ -1,5 +1,3 @@
-use rustc_hash::FxHashSet as HashSet;
-
 use syntax::EcoString;
 use syntax::ast::{Generic, Span, StructFields, VariantFields};
 use syntax::program::{Definition, DefinitionBody};
@@ -145,7 +143,7 @@ impl TaskState {
                 }
             }
         }
-        self.record_equality_index(store, &derivations);
+        self.record_equality_index(store);
         self.validate_equality_derivations(store, &derivations);
     }
 
@@ -242,11 +240,9 @@ impl TaskState {
         });
     }
 
-    fn record_equality_index(&mut self, store: &mut Store, derivations: &[Symbol]) {
-        let synthesized: HashSet<&str> = derivations.iter().map(Symbol::as_str).collect();
-
+    fn record_equality_index(&mut self, store: &mut Store) {
         let ids: Vec<Symbol> = store
-            .packages
+            .packages()
             .values()
             .flat_map(|package| package.definitions.iter())
             .filter_map(|(qualified, definition)| match &definition.body {
@@ -273,7 +269,10 @@ impl TaskState {
                     .equality_index
                     .insert_ufcs_lowered(id.to_string(), visibility);
             } else if matches!(classification, UserEquals::ValidReceiver) {
-                if synthesized.contains(id_str) {
+                if store
+                    .get_method(id_str, "equals")
+                    .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
+                {
                     store
                         .equality_index
                         .insert_synthesized_method(id.to_string(), visibility);
@@ -314,9 +313,7 @@ impl TaskState {
         let impl_bounds = resolved_generic_bounds(&generics);
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
 
-        let package = store
-            .get_package_mut(package_id)
-            .expect("package must exist");
+        let package = store.edit_package(package_id).expect("package must exist");
         if let Some(methods) = package
             .definitions
             .get_mut(qualified.as_str())

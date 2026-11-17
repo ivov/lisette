@@ -7,14 +7,12 @@
 //! any remaining unbound `Type::Var` to Go's `any`.
 
 use crate::facts::Facts;
-use crate::facts::GenericBoundOrigin;
 use syntax::ast::{
     Binding, EnumFieldDefinition, Expression, FormatStringPart, IdentifierResolution, Literal,
     Pattern, SelectArm, SequencePatternResolution, StructFieldDefinition, StructSpread,
     VariantFields,
 };
 use syntax::program::DotAccessResolution;
-use syntax::types::Bound;
 use syntax::types::{SubstitutionMap, Type};
 
 use crate::checker::type_env::TypeEnv;
@@ -31,62 +29,13 @@ impl<'a> FreezeFolder<'a> {
     }
 
     fn normalize_ref_aliases(&self, ty: &Type) -> Type {
-        match ty {
-            Type::Nominal {
-                id,
-                params,
-                writable,
-            } => {
-                let peeled = self.store.peel_alias(ty);
-                if peeled.is_ref() {
-                    return self.normalize_ref_aliases(&peeled);
-                }
-                Type::Nominal {
-                    id: id.clone(),
-                    params: params
-                        .iter()
-                        .map(|p| self.normalize_ref_aliases(p))
-                        .collect(),
-                    writable: *writable,
-                }
+        if matches!(ty, Type::Nominal { .. }) {
+            let peeled = self.store.peel_alias(ty);
+            if peeled.is_ref() {
+                return self.normalize_ref_aliases(&peeled);
             }
-            Type::Compound {
-                kind,
-                args,
-                writable,
-            } => Type::qualified_compound(
-                *kind,
-                args.iter().map(|a| self.normalize_ref_aliases(a)).collect(),
-                *writable,
-            ),
-            Type::Tuple(elements) => Type::Tuple(
-                elements
-                    .iter()
-                    .map(|e| self.normalize_ref_aliases(e))
-                    .collect(),
-            ),
-            Type::Function(f) => f.rebuild(
-                f.params
-                    .iter()
-                    .map(|p| p.with_type(self.normalize_ref_aliases(&p.ty)))
-                    .collect(),
-                f.bounds.iter().map(|b| self.normalize_bound(b)).collect(),
-                Box::new(self.normalize_ref_aliases(&f.return_type)),
-            ),
-            Type::Forall { vars, body } => Type::Forall {
-                vars: vars.clone(),
-                body: Box::new(self.normalize_ref_aliases(body)),
-            },
-            _ => ty.clone(),
         }
-    }
-
-    fn normalize_bound(&self, bound: &Bound) -> Bound {
-        Bound {
-            param_name: bound.param_name.clone(),
-            generic: self.normalize_ref_aliases(&bound.generic),
-            ty: self.normalize_ref_aliases(&bound.ty),
-        }
+        ty.map_children(|child| self.normalize_ref_aliases(child))
     }
 
     pub fn freeze_items(&mut self, mut items: Vec<Expression>) -> Vec<Expression> {
@@ -362,37 +311,16 @@ impl<'a> FreezeFolder<'a> {
     }
 
     pub fn freeze_facts(&self, facts: &mut Facts) {
-        for check in &mut facts.deferred.generic_calls {
-            self.env.resolve_in_place(&mut check.ty);
-        }
-        for obligation in &mut facts.deferred.generic_bounds {
-            self.env.resolve_in_place(&mut obligation.argument);
-            self.env.resolve_in_place(&mut obligation.required);
-            if let GenericBoundOrigin::Construction {
-                enclosing_return_type: Some(return_type),
-                ..
-            } = &mut obligation.origin
-            {
-                self.env.resolve_in_place(return_type);
-            }
-            for (_, bounds) in &mut obligation.available_bounds {
-                for bound in bounds {
-                    self.env.resolve_in_place(bound);
-                }
-            }
-        }
-        for check in &mut facts.deferred.empty_collections {
-            self.env.resolve_in_place(&mut check.ty);
-        }
-        for check in &mut facts.deferred.empty_literals {
-            self.env.resolve_in_place(&mut check.ty);
-        }
-        for check in &mut facts.deferred.slice_makes {
-            self.env.resolve_in_place(&mut check.ty);
-        }
-        for check in &mut facts.deferred.statement_tails {
-            self.env.resolve_in_place(&mut check.expected_ty);
-        }
+        facts.conformances.visit_types_mut(
+            |ty| {
+                self.env.resolve_in_place(ty);
+                *ty = self.normalize_ref_aliases(ty);
+            },
+            |id| self.store.get_definition(id),
+        );
+        facts.deferred.visit_types_mut(|ty| {
+            self.env.resolve_in_place(ty);
+        });
     }
 
     fn freeze_ty(&self, ty: &mut Type) {

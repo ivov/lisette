@@ -1,4 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use syntax::program::ConformanceIndex;
 
 use diagnostics::LisetteDiagnostic;
 use semantics::checker::TaskState;
@@ -174,6 +175,7 @@ impl CompiledTest {
             errors,
             definitions,
             bindings,
+            conformances,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -213,18 +215,19 @@ impl CompiledTest {
             }
 
             let definitions: HashMap<Symbol, Definition> = store
-                .packages
+                .packages()
                 .values()
                 .flat_map(|m| m.definitions.iter())
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
 
             let bindings = passes::emit_bindings(&checker.facts);
+            let conformances = checker.facts.conformances;
 
             let equality_index = mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
             let go_package_ids: HashSet<String> = store
-                .packages
+                .packages()
                 .keys()
                 .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
                 .cloned()
@@ -237,6 +240,7 @@ impl CompiledTest {
                 errors,
                 definitions,
                 bindings,
+                conformances,
                 equality_index,
                 go_package_names,
                 go_package_ids,
@@ -250,6 +254,7 @@ impl CompiledTest {
             package_id: TEST_PACKAGE_ID.to_string(),
             unused_imports: UnusedImports::default(),
             bindings,
+            conformances,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -264,6 +269,7 @@ pub struct InferenceResult {
     pub package_id: String,
     pub unused_imports: UnusedImports,
     pub bindings: EmitBindings,
+    pub conformances: ConformanceIndex,
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_package_ids: HashSet<String>,

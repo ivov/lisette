@@ -1,11 +1,11 @@
-use rustc_hash::FxHashSet as HashSet;
-
+use syntax::EcoString;
 use syntax::ast::{Expression, Span};
 use syntax::program::prelude_constructor;
 use syntax::types::{CompoundKind, Type};
 
 use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::expressions::aliasing::{PlaceKey, place_key, render_place};
 
 impl InferCtx<'_> {
     /// Reject `Err(x)?` and `None?` when used as sub-expressions of a larger
@@ -77,141 +77,130 @@ impl InferCtx<'_> {
         self.check_sibling_ref_aliasing_refs(&refs);
     }
 
-    /// In evaluation order, flag a read of `v` when an *earlier* sibling takes
-    /// `&v`, so the read may see the mutation. A `&v` after the read is fine.
     fn check_sibling_ref_aliasing_refs(&mut self, siblings: &[&Expression]) {
-        let mut ref_vars: HashSet<String> = HashSet::default();
-        for sib in siblings {
-            self.collect_ref_targets(sib, &mut ref_vars, false);
-        }
-        if ref_vars.is_empty() {
-            return;
-        }
-
-        for (i, sib) in siblings.iter().enumerate() {
-            let mut reads: HashSet<String> = HashSet::default();
-            collect_read_vars(sib, &mut reads, false);
-            for var in reads.intersection(&ref_vars) {
-                let mut ref_in_same = HashSet::default();
-                self.collect_ref_targets(sib, &mut ref_in_same, false);
-                if ref_in_same.contains(var.as_str()) {
-                    continue; // `&v` and `v` in the same operand is fine
-                }
-                let Some(read_span) = find_read_span(sib, var, false) else {
-                    continue;
-                };
-                for (j, other) in siblings.iter().enumerate() {
-                    if j >= i {
-                        continue; // only a `&v` before the read can affect it
-                    }
-                    if let Some(ref_span) = find_ref_span(other, var) {
-                        let ref_span = siblings
-                            .iter()
-                            .find_map(|sibling| self.find_granting_ref_span(sibling, var, false))
-                            .unwrap_or(ref_span);
-                        self.sink
-                            .push(diagnostics::infer::reference_aliases_sibling(
-                                ref_span, read_span, var,
-                            ));
-                        return; // One error per compound expression is enough
-                    }
+        let accesses: Vec<_> = siblings
+            .iter()
+            .map(|sibling| {
+                let mut accesses = Accesses::default();
+                self.collect_accesses(sibling, false, false, &mut accesses);
+                accesses
+            })
+            .collect();
+        let mut previous: Vec<&Access> = Vec::new();
+        for access in &accesses {
+            for read in &access.reads {
+                if !access
+                    .references
+                    .iter()
+                    .any(|reference| reference.granted && reference.place.overlaps(&read.place))
+                    && let Some(reference) = previous
+                        .iter()
+                        .find(|reference| reference.place.overlaps(&read.place))
+                {
+                    self.sink
+                        .push(diagnostics::infer::reference_aliases_sibling(
+                            reference.span,
+                            read.span,
+                            &reference.name,
+                            &read.name,
+                        ));
+                    return;
                 }
             }
+
+            previous.extend(
+                access
+                    .references
+                    .iter()
+                    .filter(|reference| reference.granted),
+            );
         }
     }
 
-    /// Collect `v` for each `&v` handed to a parameter that permits writing.
-    fn collect_ref_targets(
+    fn collect_accesses(
         &self,
         expression: &Expression,
-        out: &mut HashSet<String>,
         granted: bool,
+        inside_ref: bool,
+        accesses: &mut Accesses,
     ) {
-        match expression.unwrap_parens() {
-            Expression::Reference { expression, .. } => {
-                if granted && let Expression::Identifier { value, .. } = expression.unwrap_parens()
-                {
-                    out.insert(value.to_string());
+        let expression = expression.unwrap_parens();
+        if let Some(place) = place_key(expression) {
+            if !inside_ref {
+                accesses.reads.push(Access {
+                    place,
+                    name: render_place(expression).into(),
+                    span: expression.get_span(),
+                    granted: false,
+                });
+            }
+
+            self.collect_place_indices(expression, accesses);
+            return;
+        }
+        match expression {
+            Expression::Reference {
+                expression, span, ..
+            } => {
+                if let Some(place) = place_key(expression) {
+                    accesses.references.push(Access {
+                        place,
+                        name: render_place(expression).into(),
+                        span: *span,
+                        granted,
+                    });
                 }
-                self.collect_ref_targets(expression, out, granted);
+                self.collect_accesses(expression, granted, true, accesses);
             }
             Expression::Call {
                 expression: callee,
-                args,
+                args: arguments,
                 spread,
                 ..
             } => {
-                self.collect_ref_targets(callee, out, false);
+                self.collect_accesses(callee, false, false, accesses);
                 let resolved = callee.get_type().resolve_in(&self.env);
                 let function = self
                     .store
                     .resolve_to_function_type(&resolved)
                     .unwrap_or(resolved);
-                for (index, arg) in args.iter().enumerate() {
-                    let grants = self.argument_position_grants(&function, index);
-                    self.collect_ref_targets(arg, out, grants);
+                for (index, argument) in arguments.iter().enumerate() {
+                    self.collect_accesses(
+                        argument,
+                        self.argument_position_grants(&function, index),
+                        false,
+                        accesses,
+                    );
                 }
-                if let Some(spread) = spread.as_deref() {
-                    let grants = self.argument_position_grants(&function, args.len());
-                    self.collect_ref_targets(spread, out, grants);
+                if let Some(spread) = spread {
+                    self.collect_accesses(
+                        spread,
+                        self.argument_position_grants(&function, arguments.len()),
+                        false,
+                        accesses,
+                    );
                 }
             }
             other => {
-                for child in other.children() {
-                    self.collect_ref_targets(child, out, granted);
+                for child in other.evaluation_children() {
+                    self.collect_accesses(child, granted, false, accesses);
                 }
             }
         }
     }
 
-    fn find_granting_ref_span(
-        &self,
-        expression: &Expression,
-        var_name: &str,
-        granted: bool,
-    ) -> Option<Span> {
+    fn collect_place_indices(&self, expression: &Expression, accesses: &mut Accesses) {
         match expression.unwrap_parens() {
-            Expression::Reference {
-                expression: inner,
-                span,
-                ..
+            Expression::IndexedAccess {
+                expression, index, ..
             } => {
-                if granted
-                    && let Expression::Identifier { value, .. } = inner.unwrap_parens()
-                    && value.as_str() == var_name
-                {
-                    return Some(*span);
-                }
-                self.find_granting_ref_span(inner, var_name, granted)
+                self.collect_place_indices(expression, accesses);
+                self.collect_accesses(index, false, false, accesses);
             }
-            Expression::Call {
-                expression: callee,
-                args,
-                spread,
-                ..
-            } => {
-                let resolved = callee.get_type().resolve_in(&self.env);
-                let function = self
-                    .store
-                    .resolve_to_function_type(&resolved)
-                    .unwrap_or(resolved);
-                self.find_granting_ref_span(callee, var_name, false)
-                    .or_else(|| {
-                        args.iter().enumerate().find_map(|(index, arg)| {
-                            let grants = self.argument_position_grants(&function, index);
-                            self.find_granting_ref_span(arg, var_name, grants)
-                        })
-                    })
-                    .or_else(|| {
-                        let spread = spread.as_deref()?;
-                        let grants = self.argument_position_grants(&function, args.len());
-                        self.find_granting_ref_span(spread, var_name, grants)
-                    })
+            Expression::DotAccess { expression, .. } | Expression::Unary { expression, .. } => {
+                self.collect_place_indices(expression, accesses);
             }
-            other => other
-                .children()
-                .into_iter()
-                .find_map(|child| self.find_granting_ref_span(child, var_name, granted)),
+            _ => {}
         }
     }
 
@@ -234,56 +223,17 @@ impl InferCtx<'_> {
     }
 }
 
-/// Collect all variable names that are read (not under `&`) anywhere in the expression tree.
-fn collect_read_vars(expression: &Expression, out: &mut HashSet<String>, inside_ref: bool) {
-    match expression.unwrap_parens() {
-        Expression::Identifier { value, .. } => {
-            if !inside_ref {
-                out.insert(value.to_string());
-            }
-        }
-        Expression::Reference { expression, .. } => {
-            collect_read_vars(expression, out, true);
-        }
-        other => {
-            for child in other.children() {
-                collect_read_vars(child, out, false);
-            }
-        }
-    }
+struct Access {
+    granted: bool,
+    place: PlaceKey,
+    name: EcoString,
+    span: Span,
 }
 
-fn find_read_span(expression: &Expression, var_name: &str, inside_ref: bool) -> Option<Span> {
-    match expression.unwrap_parens() {
-        Expression::Identifier { value, span, .. } => {
-            (!inside_ref && value.as_str() == var_name).then_some(*span)
-        }
-        Expression::Reference { expression, .. } => find_read_span(expression, var_name, true),
-        other => other
-            .children()
-            .into_iter()
-            .find_map(|child| find_read_span(child, var_name, false)),
-    }
-}
-
-/// Find the span of `&var_name` in the expression tree.
-fn find_ref_span(expression: &Expression, var_name: &str) -> Option<Span> {
-    match expression.unwrap_parens() {
-        Expression::Reference {
-            expression, span, ..
-        } => {
-            if let Expression::Identifier { value, .. } = expression.unwrap_parens()
-                && value.as_str() == var_name
-            {
-                return Some(*span);
-            }
-            find_ref_span(expression, var_name)
-        }
-        other => other
-            .children()
-            .into_iter()
-            .find_map(|child| find_ref_span(child, var_name)),
-    }
+#[derive(Default)]
+struct Accesses {
+    references: Vec<Access>,
+    reads: Vec<Access>,
 }
 
 /// Whether `?` on this inferred expression always propagates: `None` or `Err(..)`.

@@ -53,6 +53,7 @@ impl InferCtx<'_> {
 
     pub(super) fn infer_const_binding(&mut self, expression: Expression) -> Expression {
         let Expression::Const {
+            binding,
             doc,
             annotation,
             expression,
@@ -102,7 +103,12 @@ impl InferCtx<'_> {
             expression
         });
 
+        if let Some(id) = binding {
+            self.scopes.initialize_const(&identifier, id);
+        }
+
         Expression::Const {
+            binding,
             doc,
             identifier,
             identifier_span,

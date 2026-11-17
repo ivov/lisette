@@ -1,13 +1,19 @@
 use crate::Planner;
+use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
 use crate::expressions::top_items::emit_item_doc;
-use crate::names::go_name::{self, GeneratedPackage, prelude_qualifier};
-use crate::names::packages::PackageRequirements;
+use crate::names::go_name::{self, GeneratedPackage};
+use crate::plan::bodies::LoweredBlock;
+use crate::plan::declarations::GoDeclaration;
+use crate::plan::declarations::{DeclarationKind, FieldDeclaration, TypeParameter};
+use crate::plan::go_expression::BinaryOp;
+use crate::plan::go_expression::GoParameter;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
-use crate::types::go_type::render_conversion;
+use crate::types::go_type::GoType;
+use crate::utils::ReceiverGenerics;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
@@ -25,61 +31,64 @@ impl Planner<'_> {
         name: &str,
         generics: &[Generic],
         fields: &StructFields,
-        struct_attrs: &[Attribute],
-    ) -> String {
-        let generics_string = self.generics_to_string(generics);
-
+        attributes: &[Attribute],
+    ) -> Vec<GoDeclaration> {
+        let parameters = self.plan_generics(
+            &generics
+                .iter()
+                .map(|generic| {
+                    (
+                        generic.name.clone(),
+                        generic
+                            .resolved_bounds()
+                            .expect("generic bounds are resolved before emission")
+                            .cloned()
+                            .collect(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
         let StructFields::Record(fields) = fields else {
             let StructFields::Tuple(fields) = fields else {
                 unreachable!();
             };
-            return self.emit_tuple_struct(name, &generics_string, fields, generics, struct_attrs);
+            return self.emit_tuple_struct(name, parameters, fields, generics, attributes);
         };
-
-        let mut field_strings: Vec<String> = Vec::with_capacity(fields.len());
-        let mut stringer_fields: Vec<StringerField> = Vec::with_capacity(fields.len());
-        for f in fields {
-            let (field_string, stringer_field) = self.emit_struct_field(f, struct_attrs);
-            field_strings.push(field_string);
-            stringer_fields.push(stringer_field);
-        }
-
-        let receiver_generics = self.receiver_generics_string(generics);
-        let go_type_name = go_name::escape_type_name(name);
-
-        let definition = if field_strings.is_empty() {
-            format!("type {}{} struct{{}}", go_type_name, generics_string)
-        } else {
-            format!(
-                "type {}{} struct {{\n{}\n}}",
-                go_type_name,
-                generics_string,
-                field_strings.join("\n")
-            )
-        };
-
-        let mut result = definition;
-        for method in self.struct_synthesized_methods(name, struct_attrs, StructShape::Record) {
-            let (code, requirements) = match method {
-                SynthesizedMethod::Format(format) => {
-                    emit_struct_format_method(name, &receiver_generics, &stringer_fields, format)
-                }
-                SynthesizedMethod::StringerShadow => {
-                    emit_struct_shadow_stringer_method(name, &receiver_generics, &stringer_fields)
-                }
-                SynthesizedMethod::ToString => (
-                    self.to_string_method(name, &receiver_generics),
-                    PackageRequirements::default(),
+        let (fields_plan, stringer_fields): (Vec<_>, Vec<_>) = fields
+            .iter()
+            .map(|field| self.emit_struct_field(field, attributes))
+            .unzip();
+        let receiver_generics = self.receiver_generics(generics);
+        let mut result = vec![GoDeclaration::new(DeclarationKind::Struct {
+            name: go_name::escape_type_name(name).into_owned(),
+            parameters,
+            fields: fields_plan,
+        })];
+        for method in self.struct_synthesized_methods(name, attributes, StructShape::Record) {
+            result.push(match method {
+                SynthesizedMethod::Format(format) => emit_struct_format_method(
+                    self,
+                    name,
+                    &receiver_generics,
+                    &stringer_fields,
+                    format,
                 ),
-                SynthesizedMethod::Equals => (
-                    self.struct_equals_method(name, generics, fields, struct_attrs),
-                    PackageRequirements::default(),
+                SynthesizedMethod::StringerShadow => emit_struct_shadow_stringer_method(
+                    self,
+                    name,
+                    &receiver_generics,
+                    &stringer_fields,
                 ),
+                SynthesizedMethod::ToString => self.emit_to_string_method(
+                    name,
+                    &receiver_generics,
+                    &self.to_string_method_go_name(),
+                ),
+                SynthesizedMethod::Equals => {
+                    self.struct_equals_method(name, generics, fields, attributes)
+                }
                 SynthesizedMethod::Json => unreachable!("only enums synthesize JSON methods"),
-            };
-            self.require_packages(&requirements);
-            result.push_str("\n\n");
-            result.push_str(&code);
+            });
         }
         result
     }
@@ -157,128 +166,94 @@ impl Planner<'_> {
             })
     }
 
-    /// Emit a tuple struct and its optional Stringer.
     fn emit_tuple_struct(
         &mut self,
         name: &str,
-        generics_string: &str,
+        parameters: Vec<TypeParameter>,
         fields: &[StructFieldDefinition],
         generics: &[Generic],
-        struct_attrs: &[Attribute],
-    ) -> String {
-        let mut result = self.emit_tuple_struct_definition(name, generics_string, fields);
-        let methods = self.struct_synthesized_methods(name, struct_attrs, StructShape::Tuple);
-        if methods.is_empty() {
-            return result;
-        }
-        let receiver_generics = self.receiver_generics_string(generics);
-        let is_type_alias = fields.len() == 1 && generics_string.is_empty();
-        let underlying_go_type = is_type_alias.then(|| self.use_go_type(&fields[0].ty));
-        let field_formats: Vec<DisplayForm> = fields
+        attributes: &[Attribute],
+    ) -> Vec<GoDeclaration> {
+        let underlying =
+            (fields.len() == 1 && parameters.is_empty()).then(|| self.go_type(&fields[0].ty));
+        let go_name = go_name::escape_type_name(name).into_owned();
+        let definition = match &underlying {
+            Some(underlying) => DeclarationKind::Type {
+                name: go_name,
+                parameters,
+                underlying: underlying.clone(),
+            },
+            None => DeclarationKind::Struct {
+                name: go_name,
+                parameters,
+                fields: fields
+                    .iter()
+                    .enumerate()
+                    .map(|(index, field)| FieldDeclaration {
+                        documentation: Default::default(),
+                        name: Some(format!("F{index}")),
+                        ty: self.go_type(&field.ty),
+                        tag: None,
+                    })
+                    .collect(),
+            },
+        };
+        let mut result = vec![GoDeclaration::new(definition)];
+        let receiver_generics = self.receiver_generics(generics);
+        let formats = fields
             .iter()
-            .map(|f| DisplayForm::of(&f.ty, |id| self.facts.definition(id)))
-            .collect();
-        for method in methods {
-            let code = match method {
-                SynthesizedMethod::Format(format) => {
-                    let (code, requirements) = emit_tuple_struct_format_method(
-                        name,
-                        &receiver_generics,
-                        &field_formats,
-                        underlying_go_type.as_deref(),
-                        format,
-                    );
-                    self.require_packages(&requirements);
-                    code
-                }
-                SynthesizedMethod::ToString => self.to_string_method(name, &receiver_generics),
-                SynthesizedMethod::StringerShadow
-                | SynthesizedMethod::Equals
-                | SynthesizedMethod::Json => {
-                    unreachable!("a tuple struct synthesizes only formatting methods")
-                }
-            };
-            result.push_str("\n\n");
-            result.push_str(&code);
+            .map(|field| DisplayForm::of(&field.ty, |id| self.facts.definition(id)))
+            .collect::<Vec<_>>();
+        for method in self.struct_synthesized_methods(name, attributes, StructShape::Tuple) {
+            result.push(match method {
+                SynthesizedMethod::Format(format) => emit_tuple_struct_format_method(
+                    self,
+                    name,
+                    &receiver_generics,
+                    &formats,
+                    underlying.as_ref(),
+                    format,
+                ),
+                SynthesizedMethod::ToString => self.emit_to_string_method(
+                    name,
+                    &receiver_generics,
+                    &self.to_string_method_go_name(),
+                ),
+                _ => unreachable!("tuple structs synthesize only formatting methods"),
+            });
         }
         result
     }
 
-    /// Emit one Go struct field with its stringer metadata.
     fn emit_struct_field(
-        &mut self,
-        f: &StructFieldDefinition,
-        struct_attrs: &[Attribute],
-    ) -> (String, StringerField) {
-        if f.is_embedded() {
-            let go_name = struct_field_go_name(f, struct_attrs);
-            let field_with_doc = format!(
-                "{}{}",
-                emit_item_doc(&f.doc, &f.name, &go_name),
-                self.use_go_type(&f.ty)
-            );
-            let stringer_field = StringerField {
-                source_name: f.name.to_string(),
-                go_name,
-                format: DisplayForm::of(&f.ty, |id| self.facts.definition(id)),
-            };
-            return (field_with_doc, stringer_field);
-        }
-
-        let tag_configs = interpret_field_attributes(f, struct_attrs);
-        let is_option = self.facts.peel_alias(&f.ty).is_option();
-        let tag_string = format_tag_string(&f.name, &tag_configs, is_option);
-
-        let field_name = struct_field_go_name(f, struct_attrs);
-
-        let field_definition = if let Some(tags) = tag_string {
-            format!("{} {} {}", field_name, self.use_go_type(&f.ty), tags)
+        &self,
+        field: &StructFieldDefinition,
+        attributes: &[Attribute],
+    ) -> (FieldDeclaration, StringerField) {
+        let name = struct_field_go_name(field, attributes);
+        let tag = if field.is_embedded() {
+            None
         } else {
-            format!("{} {}", field_name, self.use_go_type(&f.ty))
+            let configs = interpret_field_attributes(field, attributes);
+            format_tag_string(
+                &field.name,
+                &configs,
+                self.facts.peel_alias(&field.ty).is_option(),
+            )
         };
-
-        let field_with_doc = format!(
-            "{}{}",
-            emit_item_doc(&f.doc, &f.name, &field_name),
-            field_definition
-        );
-
-        let stringer_field = StringerField {
-            source_name: f.name.to_string(),
-            go_name: field_name,
-            format: DisplayForm::of(&f.ty, |id| self.facts.definition(id)),
+        let declaration = FieldDeclaration {
+            documentation: emit_item_doc(&field.doc, &field.name, &name).into(),
+            name: (!field.is_embedded()).then(|| name.clone()),
+            ty: self.go_type(&field.ty),
+            tag,
         };
-        (field_with_doc, stringer_field)
-    }
-
-    fn emit_tuple_struct_definition(
-        &mut self,
-        name: &str,
-        generics_string: &str,
-        fields: &[StructFieldDefinition],
-    ) -> String {
-        let go_type_name = go_name::escape_type_name(name);
-
-        if fields.is_empty() {
-            return format!("type {}{} struct{{}}", go_type_name, generics_string);
-        }
-
-        if fields.len() == 1 && generics_string.is_empty() {
-            let underlying = self.use_go_type(&fields[0].ty);
-            return format!("type {} {}", go_type_name, underlying);
-        }
-
-        let field_strings: Vec<String> = fields
-            .iter()
-            .enumerate()
-            .map(|(i, f)| format!("F{} {}", i, self.use_go_type(&f.ty)))
-            .collect();
-
-        format!(
-            "type {}{} struct {{\n{}\n}}",
-            go_type_name,
-            generics_string,
-            field_strings.join("\n")
+        (
+            declaration,
+            StringerField {
+                source_name: field.name.to_string(),
+                go_name: name,
+                format: DisplayForm::of(&field.ty, |id| self.facts.definition(id)),
+            },
         )
     }
 
@@ -346,44 +321,43 @@ impl Planner<'_> {
         self.method_go_name("equals", false)
     }
 
-    pub(crate) fn to_string_method(&self, name: &str, receiver_generics: &str) -> String {
-        emit_to_string_method(name, receiver_generics, &self.to_string_method_go_name())
-    }
-
     fn struct_equals_method(
         &mut self,
         name: &str,
         generics: &[Generic],
         fields: &[StructFieldDefinition],
         attributes: &[Attribute],
-    ) -> String {
-        let receiver_generics = self.receiver_generics_string(generics);
+    ) -> GoDeclaration {
+        let receiver_generics = self.receiver_generics(generics);
         let receiver = synthesized_receiver_name(name, &receiver_generics);
         let other = synthesized_local_name("other", &receiver, &receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
-        let comparisons: Vec<String> = fields
+        let comparisons: Vec<GoExpression> = fields
             .iter()
             .map(|f| {
                 let go_field = struct_field_go_name(f, attributes);
                 let field = |base: &GoIdentifier| {
                     GoExpression::selector(GoExpression::identifier(base.clone()), go_field.clone())
                 };
-                let comparison =
-                    self.equality_expression(field(&receiver), field(&other), &f.ty, generics);
-                self.render_expression(&comparison)
+
+                self.equality_expression(field(&receiver), field(&other), &f.ty, generics)
             })
             .collect();
-        let body = if comparisons.is_empty() {
-            "true".to_string()
-        } else {
-            comparisons.join(" && ")
-        };
-        let go_method = self.equals_method_go_name();
-        let go_type_name = go_name::escape_type_name(name);
-        let receiver_type = format!("{go_type_name}{receiver_generics}");
-        format!(
-            "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nreturn {body}\n}}"
+        let body = comparisons
+            .into_iter()
+            .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
+            .unwrap_or_else(|| GoExpression::literal("true".to_string()));
+        let receiver_type = receiver_generics.instantiate(&go_name::escape_type_name(name));
+        GoDeclaration::function(
+            Some(GoParameter::new(receiver, receiver_type.clone())),
+            self.equals_method_go_name(),
+            Vec::new(),
+            vec![GoParameter::new(other, receiver_type)],
+            GoType::new("bool"),
+            LoweredBlock {
+                statements: vec![plain_return(body)],
+            },
         )
     }
 
@@ -567,83 +541,114 @@ impl<'a> StringFormat<'a> {
         }
     }
 
-    pub(crate) fn argument(
+    pub(crate) fn format_argument(
         self,
-        value: String,
+        value: GoExpression,
         field: DisplayForm,
-        requirements: &mut PackageRequirements,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         match (self, field) {
             (_, DisplayForm::Unit) => None,
             (StringFormat::Display { .. }, _) | (StringFormat::Debug, DisplayForm::Function) => {
                 Some(value)
             }
-            (StringFormat::Debug, _) => {
-                requirements.require_generated(GeneratedPackage::Prelude);
-                Some(format!("{}.Debug({value})", prelude_qualifier()))
-            }
+            (StringFormat::Debug, _) => Some(GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Prelude, "Debug"),
+                vec![value],
+            )),
         }
     }
 }
 
-pub(crate) fn format_return(
-    text: &str,
-    args: &[String],
-    requirements: &mut PackageRequirements,
-) -> String {
-    if args.is_empty() {
-        return format!("return \"{text}\"");
-    }
-    requirements.require_generated(GeneratedPackage::Fmt);
-    format!("return fmt.Sprintf(\"{text}\", {})", args.join(", "))
-}
-
-fn emit_to_string_method(name: &str, receiver_generics: &str, method_name: &str) -> String {
-    let receiver = synthesized_receiver_name(name, receiver_generics);
-    let go_type_name = go_name::escape_type_name(name);
-    let receiver_type = format!("{go_type_name}{receiver_generics}");
-    format!(
-        "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn {receiver}.String()\n}}"
+fn string_method(
+    name: &str,
+    generics: &ReceiverGenerics,
+    receiver: GoIdentifier,
+    method: &str,
+    value: GoExpression,
+) -> GoDeclaration {
+    GoDeclaration::function(
+        Some(GoParameter::new(
+            receiver,
+            generics.instantiate(&go_name::escape_type_name(name)),
+        )),
+        method.to_string(),
+        Vec::new(),
+        Vec::new(),
+        GoType::new("string"),
+        LoweredBlock {
+            statements: vec![plain_return(value)],
+        },
     )
 }
-
+pub(crate) fn format_value(text: &str, mut arguments: Vec<GoExpression>) -> GoExpression {
+    let text = GoExpression::literal(format!("{text:?}"));
+    if arguments.is_empty() {
+        return text;
+    }
+    arguments.insert(0, text);
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
+        arguments,
+    )
+}
+impl Planner<'_> {
+    pub(crate) fn emit_to_string_method(
+        &mut self,
+        name: &str,
+        generics: &ReceiverGenerics,
+        method: &str,
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let value = GoExpression::call(
+            GoExpression::selector(
+                GoExpression::identifier(receiver.clone()),
+                "String".to_string(),
+            ),
+            vec![],
+        );
+        string_method(name, generics, receiver, method, value)
+    }
+}
 fn emit_struct_format_method(
+    planner: &mut Planner,
     name: &str,
-    receiver_generics: &str,
+    generics: &ReceiverGenerics,
     fields: &[StringerField],
     format: StringFormat<'_>,
-) -> (String, PackageRequirements) {
-    let receiver = synthesized_receiver_name(name, receiver_generics);
-    let go_type_name = go_name::escape_type_name(name);
-    let receiver_type = format!("{go_type_name}{receiver_generics}");
-    let method = format.method();
-    let mut requirements = PackageRequirements::default();
-    if fields.is_empty() {
-        let code = format!(
-            "func ({receiver} {receiver_type}) {method}() string {{\nreturn \"{name}\"\n}}"
-        );
-        return (code, requirements);
-    }
-    let format_parts: Vec<String> = fields
+) -> GoDeclaration {
+    let receiver = planner
+        .scope
+        .new_local_identifier(synthesized_receiver_name(name, generics));
+    let parts = fields
         .iter()
-        .map(|f| format!("{}: {}", f.source_name, format.verb(f.format)))
-        .collect();
-    let args: Vec<String> = fields
+        .map(|field| format!("{}: {}", field.source_name, format.verb(field.format)))
+        .collect::<Vec<_>>();
+    let arguments = fields
         .iter()
-        .filter_map(|f| {
-            format.argument(
-                format!("{receiver}.{}", f.go_name),
-                f.format,
-                &mut requirements,
+        .filter_map(|field| {
+            format.format_argument(
+                GoExpression::selector(
+                    GoExpression::identifier(receiver.clone()),
+                    field.go_name.clone(),
+                ),
+                field.format,
             )
         })
         .collect();
-    let text = format!("{name} {{ {} }}", format_parts.join(", "));
-    let code = format!(
-        "func ({receiver} {receiver_type}) {method}() string {{\n{}\n}}",
-        format_return(&text, &args, &mut requirements)
-    );
-    (code, requirements)
+    let text = if fields.is_empty() {
+        name.to_string()
+    } else {
+        format!("{name} {{ {} }}", parts.join(", "))
+    };
+    string_method(
+        name,
+        generics,
+        receiver,
+        format.method(),
+        format_value(&text, arguments),
+    )
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -681,65 +686,72 @@ fn definition_declares_string(definition: &Definition, is_ufcs: impl Fn(&str) ->
 }
 
 fn emit_struct_shadow_stringer_method(
+    planner: &mut Planner,
     name: &str,
-    receiver_generics: &str,
+    generics: &ReceiverGenerics,
     fields: &[StringerField],
-) -> (String, PackageRequirements) {
-    let receiver = synthesized_receiver_name(name, receiver_generics);
-    let go_type_name = go_name::escape_type_name(name);
-    let receiver_type = format!("{go_type_name}{receiver_generics}");
-    let mut requirements = PackageRequirements::default();
-    if fields.is_empty() {
-        let code =
-            format!("func ({receiver} {receiver_type}) String() string {{\nreturn \"{{}}\"\n}}");
-        return (code, requirements);
-    }
-    requirements.require_generated(GeneratedPackage::Fmt);
-    let placeholders: Vec<&str> = fields.iter().map(|_| "%v").collect();
-    let args: Vec<String> = fields
+) -> GoDeclaration {
+    let receiver = planner
+        .scope
+        .new_local_identifier(synthesized_receiver_name(name, generics));
+    let text = format!("{{{}}}", vec!["%v"; fields.len()].join(" "));
+    let arguments = fields
         .iter()
-        .map(|f| format!("{receiver}.{}", f.go_name))
+        .map(|field| {
+            GoExpression::selector(
+                GoExpression::identifier(receiver.clone()),
+                field.go_name.clone(),
+            )
+        })
         .collect();
-    let code = format!(
-        "func ({receiver} {receiver_type}) String() string {{\nreturn fmt.Sprintf(\"{{{}}}\", {})\n}}",
-        placeholders.join(" "),
-        args.join(", ")
-    );
-    (code, requirements)
+    string_method(
+        name,
+        generics,
+        receiver,
+        "String",
+        format_value(&text, arguments),
+    )
 }
-
 fn emit_tuple_struct_format_method(
+    planner: &mut Planner,
     name: &str,
-    receiver_generics: &str,
-    field_formats: &[DisplayForm],
-    underlying_go_type: Option<&str>,
+    generics: &ReceiverGenerics,
+    fields: &[DisplayForm],
+    underlying: Option<&GoType>,
     format: StringFormat<'_>,
-) -> (String, PackageRequirements) {
-    let receiver = synthesized_receiver_name(name, receiver_generics);
-    let go_type_name = go_name::escape_type_name(name);
-    let receiver_type = format!("{go_type_name}{receiver_generics}");
-    let method = format.method();
-    let mut requirements = PackageRequirements::default();
-    if field_formats.is_empty() {
-        let code = format!(
-            "func ({receiver} {receiver_type}) {method}() string {{\nreturn \"{name}\"\n}}"
-        );
-        return (code, requirements);
-    }
-    let field_value = |index: usize| match underlying_go_type {
-        Some(underlying) => render_conversion(underlying, &receiver),
-        None => format!("{receiver}.F{index}"),
-    };
-    let placeholders: Vec<&str> = field_formats.iter().map(|f| format.verb(*f)).collect();
-    let args: Vec<String> = field_formats
+) -> GoDeclaration {
+    let receiver = planner
+        .scope
+        .new_local_identifier(synthesized_receiver_name(name, generics));
+    let arguments = fields
         .iter()
         .enumerate()
-        .filter_map(|(index, f)| format.argument(field_value(index), *f, &mut requirements))
+        .filter_map(|(index, field)| {
+            let receiver = GoExpression::identifier(receiver.clone());
+            let value = match underlying {
+                Some(ty) => GoExpression::conversion(ty.clone(), receiver),
+                None => GoExpression::selector(receiver, format!("F{index}")),
+            };
+            format.format_argument(value, *field)
+        })
         .collect();
-    let text = format!("{name}({})", placeholders.join(", "));
-    let code = format!(
-        "func ({receiver} {receiver_type}) {method}() string {{\n{}\n}}",
-        format_return(&text, &args, &mut requirements)
-    );
-    (code, requirements)
+    let text = if fields.is_empty() {
+        name.to_string()
+    } else {
+        format!(
+            "{name}({})",
+            fields
+                .iter()
+                .map(|field| format.verb(*field))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+    string_method(
+        name,
+        generics,
+        receiver,
+        format.method(),
+        format_value(&text, arguments),
+    )
 }

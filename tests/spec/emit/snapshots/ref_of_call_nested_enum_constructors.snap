@@ -17,7 +17,7 @@ func MakeExprNum(arg0 int) Expr {
 	return Expr{Tag: ExprNum, Num: arg0}
 }
 
-func MakeExprAdd(arg0 *Expr, arg1 *Expr) Expr {
+func MakeExprAdd(arg0, arg1 *Expr) Expr {
 	return Expr{Tag: ExprAdd, Add0: arg0, Add1: arg1}
 }
 

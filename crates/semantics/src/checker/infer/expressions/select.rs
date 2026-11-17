@@ -5,7 +5,6 @@ use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::{CompoundKind, Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
-use std::mem;
 use syntax::ast::BindingKind;
 
 fn select_arm_body_span(pattern: &SelectArm) -> Span {
@@ -20,8 +19,11 @@ fn select_arm_body_span(pattern: &SelectArm) -> Span {
 }
 
 impl InferCtx<'_> {
-    pub fn resolve_select_exhaustiveness(&mut self) {
-        for check in mem::take(&mut self.file_checks.select_exhaustiveness) {
+    pub(in crate::checker::infer) fn resolve_select_exhaustiveness(
+        &mut self,
+        checks: Vec<SelectExhaustivenessCheck>,
+    ) {
+        for check in checks {
             let resolved = check.result_ty.resolve_in(&self.env);
             if !resolved.is_unit() && !resolved.is_variable() {
                 self.sink
@@ -132,6 +134,7 @@ impl InferCtx<'_> {
             .any(|arm| matches!(arm, SelectArm::WildCard { .. }));
         if !expected_ty.is_ignored() && shorthand_receive_count == 1 && !has_default {
             self.file_checks
+                .pending_mut()
                 .select_exhaustiveness
                 .push(SelectExhaustivenessCheck {
                     result_ty: result_ty.clone(),

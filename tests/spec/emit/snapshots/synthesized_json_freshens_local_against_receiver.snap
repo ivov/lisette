@@ -21,7 +21,7 @@ import (
 	"fmt"
 )
 
-func MakeVaultFull(arg0 int, arg1 int) Vault {
+func MakeVaultFull(arg0, arg1 int) Vault {
 	return Vault{Tag: VaultFull, A: arg0, B: arg1}
 }
 

@@ -160,13 +160,13 @@ pub enum DefinitionBody {
     Value {
         kind: ValueKind,
         allowed_lints: Vec<String>,
-        go_hints: Vec<String>,
+        go_hints: Vec<super::GoHint>,
         go_name: Option<String>,
         /// Go's full type-parameter list for a `#[go(collapsed_type_params)]`
         /// function, in declaration order, each entry as a Lisette type (e.g.
         /// `"Slice<E>, E"`). Lets emit rebuild Go's type arguments when the
         /// collapsed Lisette list cannot be projected onto Go's positionally.
-        go_type_param_recipe: Option<String>,
+        go_type_param_recipe: Option<Vec<super::GoTypeRecipe>>,
         superseded_by: Option<String>,
         /// The impl receiver of a static method in terms of the impl's generics.
         impl_receiver: Option<Type>,
@@ -330,7 +330,7 @@ impl Definition {
         }
     }
 
-    pub fn go_hints(&self) -> &[String] {
+    pub fn go_hints(&self) -> &[super::GoHint] {
         match &self.body {
             DefinitionBody::Value { go_hints, .. } => go_hints,
             _ => &[],
@@ -344,7 +344,7 @@ impl Definition {
         }
     }
 
-    pub fn go_type_param_recipe(&self) -> Option<&str> {
+    pub fn go_type_param_recipe(&self) -> Option<&[super::GoTypeRecipe]> {
         match &self.body {
             DefinitionBody::Value {
                 go_type_param_recipe,
@@ -390,7 +390,7 @@ impl Definition {
 
     /// A Go var that the bindings type wider than Go, so Go rejects writes and `&`.
     pub fn is_read_only(&self) -> bool {
-        self.is_variable() && self.go_hints().iter().any(|hint| hint == "read_only")
+        self.is_variable() && self.go_hints().contains(&super::GoHint::ReadOnly)
     }
 
     pub fn is_variable(&self) -> bool {
@@ -576,7 +576,7 @@ pub struct Method {
     pub name_span: Option<Span>,
     pub doc: Option<String>,
     pub allowed_lints: Vec<String>,
-    pub go_hints: Vec<String>,
+    pub go_hints: Vec<super::GoHint>,
     pub superseded_by: Option<String>,
 }
 

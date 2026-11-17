@@ -1,13 +1,11 @@
-mod nullable;
-mod wrappers;
-
-use wrappers::WrapperOutcome;
-pub(crate) use wrappers::{NilGuard, WrapperTarget, is_nil, non_nil, unexpected_nil_error};
+use crate::abi::bridge::GoResultBridge;
+use crate::abi::wrapping::WrapperOutcome;
+use crate::abi::wrapping::{NilGuard, WrapperTarget};
 
 use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::layout::ValueLayout;
 use crate::abi::tuple_element_types;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
@@ -17,10 +15,10 @@ use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    /// Lower a raw callable result through its canonical physical ABI.
     pub(crate) fn lower_go_abi_wrapped_call(
         &mut self,
         call_expression: &Expression,
@@ -136,7 +134,6 @@ impl Planner<'_> {
             .collect()
     }
 
-    /// Convert a callable's Go result into its Lisette value and deliver it to `target`.
     pub(crate) fn lower_abi_wrapping(
         &mut self,
         call: GoExpression,
@@ -248,14 +245,21 @@ impl Planner<'_> {
             .map(|(index, value)| {
                 let value = GoExpression::identifier(value);
                 if let Some(bridges) = slot_bridges {
-                    return self.plan_layout_bridge(&mut statements, value, &bridges[index]);
+                    return self.plan_layout_bridge(&mut statements, value, &bridges[index], true);
                 }
                 match slot_tys
                     .get(index)
                     .filter(|slot_ty| self.facts.is_nullable_option(slot_ty))
                 {
                     Some(slot_ty) => {
-                        self.plan_nil_check_option_wrap(&mut statements, value, slot_ty)
+                        let layout = self.value_layout(slot_ty, SlotOrigin::Lisette);
+                        let (wrapping, outcome) = self.lower_nil_check_option_wrap(
+                            value,
+                            &layout,
+                            WrapperTarget::FreshSlot,
+                        );
+                        statements.extend(wrapping);
+                        GoExpression::identifier(outcome.expect("FreshSlot produces a slot"))
                     }
                     None => value,
                 }
@@ -355,24 +359,6 @@ pub(crate) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum GoResultBridge {
-    Tuple(Vec<LayoutBridge>),
-    Whole(CoercionPlan),
-    Payload {
-        value: LayoutBridge,
-        error: LayoutBridge,
-    },
-}
-
-impl GoResultBridge {
-    pub(crate) fn is_identity(&self) -> bool {
-        match self {
-            Self::Tuple(bridges) => bridges.iter().all(LayoutBridge::is_identity),
-            Self::Whole(bridge) => bridge.is_identity(),
-            Self::Payload { value, error } => value.is_identity() && error.is_identity(),
-        }
-    }
-}
 
 pub(crate) struct LoweredCall<'a> {
     pub(crate) call: &'a Expression,
@@ -435,8 +421,7 @@ impl Planner<'_> {
             LoweredReturnAbi::Option(_) => self.nullable_option_nil_guard(&ty),
             _ => None,
         };
-        // Fused consumers bind the payload as an independent value; they do
-        // not reconstruct the enclosing alias's declared storage slots.
+
         let bridge = self.go_result_bridge(&plan.resolved.abi, &self.facts.peel_alias(&ty));
         Some(LoweredCall {
             call,

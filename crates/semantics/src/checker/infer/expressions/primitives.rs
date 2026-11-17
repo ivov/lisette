@@ -127,7 +127,7 @@ impl InferCtx<'_> {
 
     pub(super) fn infer_block(
         &mut self,
-        items: Vec<Expression>,
+        mut items: Vec<Expression>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
@@ -152,7 +152,7 @@ impl InferCtx<'_> {
         }
 
         let (new_items, block_ty) = self.with_scope(|this| {
-            this.register_block_local_items(&items);
+            this.register_block_local_items(&mut items);
             let new_items = this.infer_block_items(items, expected_ty.clone());
             let block_ty = new_items
                 .last()
@@ -271,6 +271,10 @@ impl InferCtx<'_> {
     ) -> Expression {
         let store = self.store;
         let binding_id = self.scopes.lookup_binding_id(&value);
+        if self.scopes.const_is_uninitialized(&value) {
+            self.sink
+                .push(diagnostics::infer::const_before_declaration(&value, span));
+        }
         if let Some(id) = binding_id {
             // Don't mark assignment targets as "used" - only mark actual uses
             if !self.is_assignment_target_context() {
@@ -740,19 +744,17 @@ impl InferCtx<'_> {
         }
     }
 
-    pub fn resolve_statement_tails(&mut self) {
-        let tails: Vec<(Type, Span)> = self
-            .facts
-            .deferred
-            .statement_tails
-            .iter()
-            .map(|check| (check.expected_ty.clone(), check.span))
-            .collect();
-        for (expected_ty, span) in tails {
-            if expected_ty.resolve_in(&self.env).is_variable() {
-                self.unify(&expected_ty, &Type::unit(), &span);
+    pub(in crate::checker::infer) fn resolve_statement_tails(
+        &mut self,
+        tails: Vec<StatementTailCheck>,
+    ) {
+        for check in &tails {
+            if check.expected_ty.resolve_in(&self.env).is_variable() {
+                self.unify(&check.expected_ty, &Type::unit(), &check.span);
             }
         }
+
+        self.facts.deferred.statement_tails.extend(tails);
     }
 
     pub(super) fn infer_block_items(
@@ -793,8 +795,8 @@ impl InferCtx<'_> {
                 if last_item_expected_ty.is_ignored() {
                     // ignored context, never fire
                 } else if matches!(expected, Type::Var { .. }) {
-                    self.facts
-                        .deferred
+                    self.file_checks
+                        .pending_mut()
                         .statement_tails
                         .push(StatementTailCheck {
                             expected_ty: last_item_expected_ty.clone(),

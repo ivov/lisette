@@ -1,22 +1,22 @@
 use crate::Planner;
 use crate::ReturnContext;
+use crate::abi::bridge::GoResultBridge;
 use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::fallible_producer::GuardedPayload;
+use crate::abi::fallible_producer::{OptionFusePlan, ResultFusePlan};
+use crate::abi::layout::ValueLayout;
 use crate::abi::transition;
+use crate::abi::wrapping::{is_nil, non_nil, unexpected_nil_error};
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::calls::go_interop::{
-    GoResultBridge, LoweredCall, is_nil, non_nil, unexpected_nil_error,
-};
+use crate::calls::go_interop::LoweredCall;
 use crate::calls::unwrap_or::{MapLambda, map_lambda};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
 use crate::names::go_name::{GeneratedPackage, PRELUDE_ERROR_ID};
-use crate::patterns::matching::{
-    FusedName, OptionFusePlan, PreludeVariant, ResultFusePlan, prelude_constructor,
-};
+use crate::patterns::matching::{FusedName, PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign,
     define, effect_statement,
@@ -29,6 +29,7 @@ use crate::state::scope::PairStatusKind;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::program::DotAccessResolution;
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 pub(crate) fn plain_return(value: GoExpression) -> Statement {
@@ -390,7 +391,9 @@ impl Planner<'_> {
         let ok_value = value_var.map(|val| {
             let val = GoExpression::identifier(val);
             match &payload_bridge {
-                Some(bridge) if want_value => self.plan_layout_bridge(&mut statements, val, bridge),
+                Some(bridge) if want_value => {
+                    self.plan_layout_bridge(&mut statements, val, bridge, true)
+                }
                 _ => val,
             }
         });
@@ -410,32 +413,21 @@ impl Planner<'_> {
         if fallible.is_result() || !self.returns_fallible() {
             return None;
         }
-        let fuse = self.option_fuse_plan(expression)?;
+        let producer = self.fallible_producer(expression)?;
         let named = self.declare_propagate_target(target);
         let slot = match (named, target) {
             (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
             (None, PropagateTarget::Discard) => CommaOkValueSlot::Unused,
             (None, _) => CommaOkValueSlot::Temp,
         };
-        let bound = fuse.bind(self, slot);
-        let failure = bound.failure_condition();
-        let late_binding = bound.late_binding();
-        let payload = bound.payload();
-        let reads_element = !bound.binds_value();
-        let mut statements = bound.statements;
         let failure_values = self.failure_return_values(fallible, None);
-        statements.push(
-            transition::tag_check_with_initializer(
-                failure.initializer,
-                failure.condition,
-                Vec::new(),
-                failure_values,
-            )
-            .into(),
-        );
-        statements.extend(late_binding);
+        let GuardedPayload {
+            mut statements,
+            payload,
+            payload_is_index,
+        } = producer.control_transfer(self, slot, failure_values);
         let payload = match (target, payload) {
-            (PropagateTarget::Value, Some(payload)) if reads_element => {
+            (PropagateTarget::Value, Some(payload)) if payload_is_index => {
                 Some(GoExpression::identifier(self.hoist_tmp_value_statement(
                     &mut statements,
                     "elem",

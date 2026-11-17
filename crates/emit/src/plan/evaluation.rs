@@ -1,5 +1,7 @@
 //! What evaluating a Go expression can do besides producing its value.
 
+use crate::types::go_type::GoTypeKind;
+
 use crate::plan::go_expression::{BinaryOp, CallPurity, GoExpressionNode};
 use crate::plan::values::Stability;
 
@@ -207,16 +209,21 @@ impl GoExpressionNode {
                 ..Effects::default()
             },
             Self::CompositeLiteral { go_type, .. } => {
-                let go_type = go_type.as_ref().map(|go_type| go_type.code.as_str());
+                let shape = go_type.as_ref().map(|ty| ty.physical_kind());
                 Effects {
-                    may_panic: go_type.is_some_and(|ty| ty.starts_with("map[")),
-                    creates_identity: go_type
-                        .is_none_or(|ty| ty.starts_with("[]") || ty.starts_with("map[")),
+                    may_panic: matches!(shape, Some(GoTypeKind::Map | GoTypeKind::Unclassified)),
+                    creates_identity: matches!(
+                        shape,
+                        None | Some(GoTypeKind::Slice | GoTypeKind::Map | GoTypeKind::Unclassified)
+                    ),
                     ..Effects::default()
                 }
             }
             Self::Conversion { go_type, .. }
-                if go_type.code.starts_with("*[") || go_type.code.starts_with('[') =>
+                if matches!(
+                    go_type.physical_kind(),
+                    GoTypeKind::Array | GoTypeKind::PointerToArray
+                ) =>
             {
                 Effects {
                     may_panic: true,
@@ -458,7 +465,7 @@ mod tests {
     #[test]
     fn new_slices_and_pointers_cannot_repeat() {
         let slice = GoExpressionNode::CompositeLiteral {
-            go_type: Some(Box::new(GoType::new("[]int"))),
+            go_type: Some(Box::new(GoType::slice_of(&GoType::new("int")))),
             elements: Vec::new(),
             layout: CompositeLayout::Inline { padded: true },
             end: SourcePosition::default(),
