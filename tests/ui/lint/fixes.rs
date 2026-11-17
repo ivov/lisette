@@ -420,12 +420,57 @@ pub fn test(n: int) -> int {
 }
 
 #[test]
+fn fix_wildcard_in_nested_or_pattern() {
+    assert_fix_snapshot!(
+        r#"
+pub fn test(o: Option<int>) -> int {
+  match o {
+    Some(0 | _) => 1,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_guards_no_fix_with_or_pattern() {
+    assert_no_fix!(
+        r#"
+pub fn test(t: (int, int)) -> int {
+  match t {
+    (0 | 0, x) if x == 1 => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn wildcard_in_or_pattern_in_guarded_arm_no_warning() {
     assert_no_lint_warnings!(
         r#"
 pub fn test(n: int, retry: fn() -> bool) -> int {
   match n {
     0 | _ if retry() => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn fix_collapsible_match_with_or_pattern_in_inner_arm() {
+    assert_fix_snapshot!(
+        r#"
+pub fn f(o: Option<int>) -> int {
+  match o {
+    Some(x) => match x {
+      1 | 2 => 10,
+      _ => 0,
+    },
     _ => 0,
   }
 }

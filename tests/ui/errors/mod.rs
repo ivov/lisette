@@ -8339,24 +8339,107 @@ fn test(x: int) {
 }
 
 #[test]
-fn parse_nested_or_pattern() {
+fn infer_nested_or_pattern_in_let_binding() {
     let input = r#"
-fn test(opt: Option<int>) -> int {
-  match opt {
-    Some(1 | 2) => 1,
+fn test(t: (bool, int), r: (Result<int, int>, int)) -> int {
+  let (true | false, y) = t
+  let (Ok(v) | Err(v), n) = r
+  y + v + n
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nested_or_pattern_binding_mismatch_in_guarded_arm() {
+    let input = r#"
+enum P { One(int), Pair(int, int) }
+
+fn test(o: Option<P>, b: bool) -> int {
+  match o {
+    Some(P.One(x) | P.Pair(y, _)) if b => 1,
     _ => 0,
   }
 }
 "#;
-    assert_parse_error_snapshot!(input);
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]
-fn parse_nested_or_pattern_in_parens() {
+fn infer_duplicate_binding_in_nested_or_alternative() {
     let input = r#"
-fn test(opt: Option<int>) -> int {
-  match opt {
-    Some((1 | 2)) => 1,
+enum P { One(int), Pair(int, int) }
+
+fn test(o: Option<P>) -> int {
+  match o {
+    Some(P.One(x) | P.Pair(x, x)) => x,
+    _ => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn match_redundant_nested_or_alternative_next_to_another_or_pattern() {
+    let input = r#"
+fn test(t: (int, int)) -> int {
+  match t {
+    (1 | 1, 2 | 3) => 1,
+    _ => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn match_redundant_nested_or_alternative_covered_by_earlier_arm() {
+    let input = r#"
+fn test(o: Option<int>) -> int {
+  match o {
+    Some(1) => 0,
+    Some(1 | 2) => 1,
+    _ => 2,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn match_redundant_arm_whose_alternatives_are_all_covered_by_earlier_arm() {
+    let input = r#"
+fn test(o: Option<int>) -> int {
+  match o {
+    Some(1) => 0,
+    Some(1) | Some(1) => 1,
+    _ => 2,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn match_non_exhaustive_nested_or_pattern() {
+    let input = r#"
+fn test(o: Option<(bool, bool)>) -> int {
+  match o {
+    Some((true | false, true)) => 1,
+    None => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn parse_or_pattern_after_slice_rest() {
+    let input = r#"
+fn test(xs: Slice<int>) -> int {
+  match xs {
+    [..rest, 1 | 2] => 1,
     _ => 0,
   }
 }

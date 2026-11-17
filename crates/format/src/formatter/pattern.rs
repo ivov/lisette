@@ -143,10 +143,17 @@ impl<'a> Formatter<'a> {
                 join(pattern_docs, strict_break(" |", " | ")).group()
             }
 
-            Pattern::AsBinding { pattern, name, .. } => self
-                .pattern(pattern)
-                .append(" as ")
-                .append(Document::string(name.to_string())),
+            Pattern::AsBinding { pattern, name, .. } => {
+                let inner = self.pattern(pattern);
+                let inner = if matches!(pattern.as_ref(), Pattern::Or { .. }) {
+                    Document::str("(").append(inner).append(")")
+                } else {
+                    inner
+                };
+                inner
+                    .append(" as ")
+                    .append(Document::string(name.to_string()))
+            }
         };
         prepend_comments(doc, comments)
     }

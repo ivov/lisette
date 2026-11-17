@@ -242,3 +242,52 @@ match s { Status.Pending | Status.Active => 1, _ => 0 }
         (match_arm
           (match_pattern)
           (integer_literal))))))
+
+================================================================================
+Nested or patterns
+================================================================================
+
+match x { Some(1 | 2) => 1, Point { x: 0 | 1, .. } => 2, (KeyDown(k) | KeyUp(k)) as key => k, _ => 0 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (tuple_struct_pattern
+              type: (identifier)
+              (or_pattern
+                (integer_literal)
+                (integer_literal))))
+          value: (integer_literal))
+        (match_arm
+          pattern: (match_pattern
+            (struct_pattern
+              type: (type_identifier)
+              (field_pattern
+                name: (field_identifier)
+                pattern: (or_pattern
+                  (integer_literal)
+                  (integer_literal)))
+              (remaining_field_pattern)))
+          value: (integer_literal))
+        (match_arm
+          pattern: (match_pattern
+            (as_binding_pattern
+              pattern: (tuple_pattern
+                (or_pattern
+                  (tuple_struct_pattern
+                    type: (identifier)
+                    (identifier))
+                  (tuple_struct_pattern
+                    type: (identifier)
+                    (identifier))))
+              name: (identifier)))
+          value: (identifier))
+        (match_arm
+          pattern: (match_pattern)
+          value: (integer_literal))))))

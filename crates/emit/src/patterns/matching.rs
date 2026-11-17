@@ -8,7 +8,9 @@ use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
 use crate::names::source_name::SourceName;
-use crate::patterns::binding_decls::{pattern_binds_name, pattern_has_bindings};
+use crate::patterns::binding_decls::{
+    has_binding_or_pattern, pattern_binds_name, pattern_has_bindings,
+};
 use crate::patterns::decision_tree;
 use crate::patterns::sites::ResolvedSubject;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
@@ -330,11 +332,11 @@ impl Planner<'_> {
         let subject_ty = subject.get_type();
         let mut tested = vec![false; elements.len()];
         for arm in arms {
+            if pattern_has_bindings(&arm.pattern) {
+                return None;
+            }
             let info = decision_tree::collect_pattern_info(self, &arm.pattern, &subject_ty);
-            if info.has_root_assertion()
-                || pattern_has_bindings(&arm.pattern)
-                || info.requires_materialized_subject
-            {
+            if info.has_root_assertion() || info.requires_materialized_subject {
                 return None;
             }
             let arm_tested = decision_tree::tested_tuple_elements(&info.checks, elements.len())?;
@@ -666,6 +668,9 @@ impl Planner<'_> {
                 (_, Pattern::WildCard { .. })
                     if err_arm.is_none()
                         && ok_arms.iter().any(|ok_arm| {
+                            if has_binding_or_pattern(&ok_arm.pattern) {
+                                return false;
+                            }
                             let info = decision_tree::collect_pattern_info(
                                 self,
                                 &ok_arm.pattern,

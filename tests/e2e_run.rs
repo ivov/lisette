@@ -3594,6 +3594,13 @@ fn pick_pair(t: (int, int), retry: fn() -> bool) -> int {
   }
 }
 
+fn pick_nested(t: (int, int), retry: fn() -> bool) -> int {
+  match t {
+    (0 | _, x) if retry() => x,
+    _ => -1,
+  }
+}
+
 fn main() {
   let mut calls = 0
   let second_call = || {
@@ -3603,7 +3610,9 @@ fn main() {
   let single = pick(0, second_call)
   let single_calls = calls
   let pair = pick_pair((0, 0), second_call)
-  fmt.Println(single, single_calls, pair, calls)
+  let pair_calls = calls
+  let nested = pick_nested((0, 7), second_call)
+  fmt.Println(single, single_calls, pair, pair_calls, nested, calls)
 }
 "#,
     )
@@ -3612,7 +3621,7 @@ fn main() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stdout}\n{stderr}");
-    assert_eq!(stdout.trim(), "7 2 7 4");
+    assert_eq!(stdout.trim(), "7 2 7 4 7 6");
 }
 
 #[cfg(unix)]

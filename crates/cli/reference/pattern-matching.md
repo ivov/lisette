@@ -252,6 +252,18 @@ fn describe(event: Event) -> string {
 }
 ```
 
+An or-pattern can also appear inside another pattern:
+
+```lisette
+fn size(n: Option<int>) -> string {
+  match n {
+    Some(1 | 2) => "small",
+    Some(_) => "large",
+    None => "none",
+  }
+}
+```
+
 ## `as` for value capture
 
 Use `as` to capture the entire matched value:
@@ -266,14 +278,13 @@ fn track(history: Slice<Message>, msg: Message) -> Slice<Message> {
 }
 ```
 
-For an arm with alternatives, place `as` on each one:
+To capture an or-pattern, wrap it in parentheses:
 
 ```lisette
 fn tag(event: Event) -> (rune, Event) {
   match event {
-    // !callout-center[/(?<=KeyDown\(key\) as )pressed/] `Event`
-    // !callout-center[/(?<=KeyUp\(key\) as )pressed/] `Event`
-    KeyDown(key) as pressed | KeyUp(key) as pressed => (key, pressed),
+    // !callout-center[/(?<=as )pressed/] `Event`
+    (KeyDown(key) | KeyUp(key)) as pressed => (key, pressed),
   }
 }
 ```

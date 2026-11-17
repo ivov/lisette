@@ -3,11 +3,10 @@ use crate::plan::local::GoIdentifier;
 use crate::state::scope::ScopeState;
 use rustc_hash::FxHashMap as HashMap;
 use std::borrow::Cow;
-use std::slice;
 
 use syntax::ast::{
     BindingId, ConstructorPatternResolution, Literal, MatchArm, Pattern, RecordPatternResolution,
-    RestPattern, SequencePatternResolution, StructFieldPattern,
+    RestPattern, SequencePatternResolution, StructFieldPattern, expand_or_patterns,
 };
 use syntax::lex::{rune_codepoint, string_bytes};
 use syntax::parse::TUPLE_FIELDS;
@@ -1170,32 +1169,26 @@ fn collect_or_pattern_checks(
     let Pattern::Or { patterns, .. } = pattern else {
         unreachable!("or-pattern collection requires an or-pattern");
     };
-    let has_bindings = pattern_has_bindings(pattern);
-    if !has_bindings {
-        let alt_collectors: Vec<PatternInfo> = patterns
-            .iter()
-            .map(|p| {
-                let mut alt_collector = PatternInfo::new();
-                collect_checks_and_bindings(
-                    planner,
-                    path,
-                    p,
-                    path_ty,
-                    path_layout,
-                    &mut alt_collector,
-                );
-                alt_collector
-            })
-            .collect();
+    assert!(
+        !pattern_has_bindings(pattern),
+        "split or-patterns that bind names with `split_binding_or_patterns` before collection"
+    );
+    let alt_collectors: Vec<PatternInfo> = patterns
+        .iter()
+        .map(|p| {
+            let mut alt_collector = PatternInfo::new();
+            collect_checks_and_bindings(planner, path, p, path_ty, path_layout, &mut alt_collector);
+            alt_collector
+        })
+        .collect();
 
-        if alt_collectors.iter().any(|c| c.checks.is_empty()) {
-            return;
-        }
-
-        collector.checks.push(Check::Or {
-            alternatives: alt_collectors.into_iter().map(|c| c.checks).collect(),
-        });
+    if alt_collectors.iter().any(|c| c.checks.is_empty()) {
+        return;
     }
+
+    collector.checks.push(Check::Or {
+        alternatives: alt_collectors.into_iter().map(|c| c.checks).collect(),
+    });
 }
 
 /// Compute the access path for a struct field, handling enum struct variants
@@ -1750,16 +1743,9 @@ pub(super) fn compile_match_arms(
 ) -> Decision {
     let mut arm_infos = Vec::new();
     for (arm_index, arm) in arms.iter().enumerate() {
-        let alternatives = match &arm.pattern {
-            Pattern::Or { patterns, .. }
-                if arm.has_guard() || pattern_has_bindings(&arm.pattern) =>
-            {
-                patterns.as_slice()
-            }
-            pattern => slice::from_ref(pattern),
-        };
-        for alternative in alternatives {
-            let info = collect_pattern_info(planner, alternative, subject_ty);
+        let split = |pattern: &Pattern| arm.has_guard() || pattern_has_bindings(pattern);
+        for expansion in expand_or_patterns(&arm.pattern, &split) {
+            let info = collect_pattern_info(planner, &expansion.pattern, subject_ty);
             arm_infos.push(ArmInfo {
                 arm_index,
                 checks: info.checks,

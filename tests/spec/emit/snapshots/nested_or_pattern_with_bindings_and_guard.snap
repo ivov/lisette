@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  enum Event { KeyDown(int), KeyUp(int), Click }
+  
+  fn key(e: Option<Event>) -> int {
+    match e {
+      Some(Event.KeyDown(c) | Event.KeyUp(c)) if c > 3 => c * 2,
+      Some(_) => 1,
+      None => 0,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeEventKeyDown(arg0 int) Event {
+	return Event{Tag: EventKeyDown, KeyDown: arg0}
+}
+
+func MakeEventKeyUp(arg0 int) Event {
+	return Event{Tag: EventKeyUp, KeyUp: arg0}
+}
+
+func MakeEventClick() Event {
+	return Event{Tag: EventClick}
+}
+
+type EventTag uint8
+
+const (
+	EventKeyDown EventTag = iota
+	EventKeyUp
+	EventClick
+)
+
+type Event struct {
+	Tag     EventTag
+	KeyDown int
+	KeyUp   int
+}
+
+func key(e lisette.Option[Event]) int {
+	if e.Tag == lisette.OptionSome && e.SomeVal.Tag == EventKeyDown {
+		c := e.SomeVal.KeyDown
+		if c > 3 {
+			return c * 2
+		}
+	}
+	if e.Tag == lisette.OptionSome && e.SomeVal.Tag == EventKeyUp {
+		c := e.SomeVal.KeyUp
+		if c > 3 {
+			return c * 2
+		}
+	}
+	if e.Tag == lisette.OptionSome {
+		return 1
+	}
+	return 0
+}

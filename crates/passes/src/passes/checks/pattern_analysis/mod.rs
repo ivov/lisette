@@ -24,7 +24,8 @@ use semantics::store::Store;
 use std::slice;
 use syntax::ast::MatchArm;
 use syntax::ast::{
-    ConstructorPatternResolution, Expression, IfLetAlternative, Literal, Pattern, SelectArm, Span,
+    ConstructorPatternResolution, Expression, IfLetAlternative, Literal, OrChoice, Pattern,
+    SelectArm, Span, expand_or_patterns, outermost_or_patterns,
 };
 use syntax::types::{Type, unqualified_name};
 
@@ -333,114 +334,163 @@ fn check_redundancy_with_guards(
     cache: &mut InhabitanceCache,
     sink: &LocalSink,
 ) -> bool {
-    let mut unguarded_previous: Vec<(usize, Row)> = vec![];
+    let mut matrix: Vec<Row> = vec![];
+    let mut matrix_arm_indices: Vec<usize> = vec![];
     let mut found_redundant = false;
 
     for (index, arm) in arms.iter().enumerate() {
         if rejected_spans.contains(&arm.pattern.get_span()) {
             continue;
         }
-        let alternatives: Vec<&Pattern> = match &arm.pattern {
-            Pattern::Or { patterns, .. } => patterns.iter().collect(),
-            pattern => vec![pattern],
-        };
-        let valid_alternatives: Vec<&Pattern> = alternatives
-            .iter()
-            .copied()
-            .filter(|pattern| !has_rejected_pattern(pattern, rejected_spans))
-            .collect();
-        let has_rejected_alternative = valid_alternatives.len() < alternatives.len();
-        let current_rows: Vec<Row> = valid_alternatives
-            .iter()
-            .map(|pattern| vec![normalize_pattern(pattern, unions, norm_ctx, cache)])
-            .collect();
 
-        let mut current_arm_rows: Vec<Row> = vec![];
-        let mut redundant_alternatives = Vec::new();
+        let earlier_arms_len = matrix.len();
+        let mut rows: Vec<TestedRow> = vec![];
 
-        for (alt_index, current_row) in current_rows.iter().enumerate() {
-            let mut previous_rows: Vec<Row> =
-                unguarded_previous.iter().map(|(_, r)| r.clone()).collect();
-            previous_rows.extend(current_arm_rows.iter().cloned());
-
-            if !is_useful(&previous_rows, current_row, unions) {
-                let span = if matches!(arm.pattern, Pattern::Or { .. }) {
-                    valid_alternatives[alt_index].get_span()
-                } else {
-                    arm.pattern.get_span()
-                };
-
-                let covered_by_same_arm = current_arm_rows
+        for expansion in expand_or_patterns(&arm.pattern, &|_| true) {
+            let rejected = has_rejected_pattern(&expansion.pattern, rejected_spans)
+                || expansion
+                    .choices
                     .iter()
-                    .any(|prev| !is_useful(slice::from_ref(prev), current_row, unions));
+                    .any(|choice| rejected_spans.contains(&choice.or_span));
+            if rejected {
+                rows.push(TestedRow {
+                    choices: expansion.choices,
+                    row: None,
+                    useful: true,
+                });
+                continue;
+            }
 
-                let help = if covered_by_same_arm {
+            let row = vec![normalize_pattern(
+                &expansion.pattern,
+                unions,
+                norm_ctx,
+                cache,
+            )];
+            let useful = is_useful(&matrix, &row, unions);
+            if !arm.has_guard() {
+                matrix.push(row.clone());
+                matrix_arm_indices.push(index);
+            }
+            rows.push(TestedRow {
+                choices: expansion.choices,
+                row: Some(row),
+                useful,
+            });
+        }
+
+        let earlier_rows = &matrix[..earlier_arms_len];
+        let earlier_indices = &matrix_arm_indices[..earlier_arms_len];
+
+        if rows.iter().all(|row| !row.useful) {
+            let first_row = rows[0].row.as_ref().expect("a useless row is tested");
+            let help =
+                covered_by_earlier_arm_help(earlier_rows, earlier_indices, first_row, unions);
+            sink.push(diagnostics::pattern::redundant_arm(
+                arm.pattern.get_span(),
+                format!("arm #{} is unreachable", index + 1),
+                help,
+            ));
+            found_redundant = true;
+        } else {
+            for alternative_span in redundant_alternatives(&rows) {
+                let first_row = rows
+                    .iter()
+                    .find(|row| {
+                        row.choices
+                            .iter()
+                            .any(|choice| choice.alternative_span == alternative_span)
+                    })
+                    .and_then(|row| row.row.as_ref())
+                    .expect("a useless row is tested");
+                let help = if is_useful(earlier_rows, first_row, unions) {
                     "This alternative is unreachable because it is already covered by an earlier alternative in the same arm"
                         .to_string()
                 } else {
-                    let covering = unguarded_previous
-                        .iter()
-                        .find(|(_, prev)| !is_useful(slice::from_ref(prev), current_row, unions))
-                        .map(|(orig_idx, prev)| (*orig_idx, prev));
-
-                    if let Some((covering_index, covering_row)) = covering {
-                        let covering_pattern = covering_row
-                            .first()
-                            .map(witness::format_pattern)
-                            .unwrap_or_default();
-                        format!(
-                            "This pattern is unreachable because it is already covered by arm #{}: `{}`",
-                            covering_index + 1,
-                            covering_pattern
-                        )
-                    } else {
-                        "This pattern is covered by earlier match arms and will never be reached"
-                            .to_string()
-                    }
+                    covered_by_earlier_arm_help(earlier_rows, earlier_indices, first_row, unions)
                 };
-
-                let label = if covered_by_same_arm {
-                    "this alternative is unreachable".to_string()
-                } else {
-                    format!("arm #{} is unreachable", index + 1)
-                };
-
-                redundant_alternatives.push((span, label, help, covered_by_same_arm));
+                sink.push(diagnostics::pattern::redundant_arm(
+                    alternative_span,
+                    "this alternative is unreachable".to_string(),
+                    help,
+                ));
                 found_redundant = true;
-            }
-
-            if !arm.has_guard() {
-                current_arm_rows.push(current_row.clone());
-            }
-        }
-
-        let whole_arm_redundant = !has_rejected_alternative
-            && current_rows.len() > 1
-            && redundant_alternatives.len() == current_rows.len()
-            && redundant_alternatives
-                .iter()
-                .all(|(_, _, _, covered_by_same_arm)| !covered_by_same_arm);
-        if whole_arm_redundant {
-            let (_, label, help, _) = redundant_alternatives.swap_remove(0);
-            sink.push(diagnostics::pattern::redundant_arm(
-                arm.pattern.get_span(),
-                label,
-                help,
-            ));
-        } else {
-            for (span, label, help, _) in redundant_alternatives {
-                sink.push(diagnostics::pattern::redundant_arm(span, label, help));
-            }
-        }
-
-        if !arm.has_guard() {
-            for current_row in current_rows {
-                unguarded_previous.push((index, current_row));
             }
         }
     }
 
     !found_redundant
+}
+
+struct TestedRow {
+    choices: Vec<OrChoice>,
+    /// `None` for a row that the checker rejected, which counts as useful.
+    row: Option<Row>,
+    useful: bool,
+}
+
+/// An alternative inside a redundant alternative is not listed.
+fn redundant_alternatives(rows: &[TestedRow]) -> Vec<Span> {
+    let mut alternatives: Vec<(Span, bool)> = vec![];
+    for row in rows {
+        for choice in &row.choices {
+            match alternatives
+                .iter_mut()
+                .find(|(span, _)| *span == choice.alternative_span)
+            {
+                Some((_, useful)) => *useful |= row.useful,
+                None => alternatives.push((choice.alternative_span, row.useful)),
+            }
+        }
+    }
+
+    let redundant: Vec<Span> = alternatives
+        .into_iter()
+        .filter(|(_, useful)| !useful)
+        .map(|(span, _)| span)
+        .collect();
+
+    redundant
+        .iter()
+        .copied()
+        .filter(|inner| {
+            !redundant
+                .iter()
+                .any(|outer| outer != inner && span_contains(*outer, *inner))
+        })
+        .collect()
+}
+
+fn span_contains(outer: Span, inner: Span) -> bool {
+    outer.file_id == inner.file_id
+        && outer.byte_offset <= inner.byte_offset
+        && inner.byte_offset + inner.byte_length <= outer.byte_offset + outer.byte_length
+}
+
+fn covered_by_earlier_arm_help(
+    earlier_rows: &[Row],
+    earlier_indices: &[usize],
+    row: &Row,
+    unions: &UnionTable,
+) -> String {
+    let covering = earlier_rows
+        .iter()
+        .zip(earlier_indices)
+        .find(|(earlier, _)| !is_useful(slice::from_ref(*earlier), row, unions));
+
+    if let Some((covering_row, covering_index)) = covering {
+        let covering_pattern = covering_row
+            .first()
+            .map(witness::format_pattern)
+            .unwrap_or_default();
+        format!(
+            "This pattern is unreachable because it is already covered by arm #{}: `{}`",
+            covering_index + 1,
+            covering_pattern
+        )
+    } else {
+        "This pattern is covered by earlier match arms and will never be reached".to_string()
+    }
 }
 
 fn is_rejected(value: &Expression) -> bool {
@@ -500,7 +550,7 @@ fn check_refutability(pattern: &Pattern, ctx: &mut PatternAnalysisContext) -> bo
     while let Pattern::AsBinding { pattern, .. } = innermost {
         innermost = pattern;
     }
-    if matches!(innermost, Pattern::Or { .. } | Pattern::Literal { .. }) {
+    if matches!(innermost, Pattern::Literal { .. }) || !outermost_or_patterns(pattern).is_empty() {
         return true;
     }
 
@@ -576,19 +626,17 @@ pub fn is_pattern_irrefutable(pattern: &Pattern, store: &Store) -> bool {
 
     let mut unions = HashMap::default();
 
-    let rows: Vec<Row> = if let Pattern::Or { patterns, .. } = pattern {
-        patterns
-            .iter()
-            .map(|alt| vec![normalize_pattern(alt, &mut unions, &norm_ctx, &mut cache)])
-            .collect()
-    } else {
-        vec![vec![normalize_pattern(
-            pattern,
-            &mut unions,
-            &norm_ctx,
-            &mut cache,
-        )]]
-    };
+    let rows: Vec<Row> = expand_or_patterns(pattern, &|_| true)
+        .iter()
+        .map(|expansion| {
+            vec![normalize_pattern(
+                &expansion.pattern,
+                &mut unions,
+                &norm_ctx,
+                &mut cache,
+            )]
+        })
+        .collect();
 
     check_exhaustiveness(&rows, &unions).is_ok()
 }
