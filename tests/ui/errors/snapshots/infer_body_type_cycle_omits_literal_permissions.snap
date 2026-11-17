@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Infinitely growing type dependency
+   ╭─[test.lis:3:19]
+ 2 │ struct N<T> { v: T }
+ 3 │ impl<T> N<T> { fn wrap(self) { let _ = N { v: [self.v] } } }
+   ·                   ──┬─
+   ·                     ╰── `T` occurs inside `Slice<T>` in this recursive type dependency
+ 4 │ fn main() {}
+   ╰────
+  help: Break the recursive type dependency or keep its type arguments unchanged. It requires `N` at ever-larger type arguments · code: [infer.instantiation_cycle]

@@ -1,3 +1,5 @@
+use crate::_harness::infer::checker_errors;
+use crate::_harness::infer::has_code;
 use crate::spec::infer::*;
 
 #[test]
@@ -2006,6 +2008,57 @@ fn unconstrained_bounded_type_param_produces_error() {
         "#,
     )
     .assert_infer_code("unconstrained_type_param");
+}
+
+#[test]
+fn interface_cycles_normalize_identity_and_erasing_aliases() {
+    for source in [
+        "type Id<T> = T; interface Stream<T> { fn rest() -> Stream<Id<T>> }; fn main() {}",
+        "type Id<T> = T; interface Stream<T> { fn rest() -> Stream<Id<Id<T>>> }; fn main() {}",
+        "type Id<T> = T; type Again<T> = Id<T>; interface Stream<T> { fn rest() -> Stream<Again<T>> }; fn main() {}",
+        "type Ignore<T> = int; interface Stream<T> { fn rest() -> Stream<Ignore<Slice<T>>> }; fn main() {}",
+        "interface Stream<T> { fn boxed() -> Holder<T> }; struct Holder<T> { inner: Option<Stream<T>> }; fn main() {}",
+        "interface Stream<T> { fn boxed() -> Holder<T> }; enum Holder<T> { Empty, Next(Stream<T>) }; fn main() {}",
+    ] {
+        let errors = checker_errors(source, &[]);
+        assert!(errors.is_empty(), "{source}\n{errors:?}");
+    }
+}
+
+#[test]
+fn interface_cycles_include_alias_struct_and_enum_paths() {
+    for source in [
+        "type Wrap<T> = Stream<Slice<T>>; interface Stream<T> { fn rest() -> Wrap<T> }; fn main() {}",
+        "interface Stream<T> { fn boxed() -> Holder<T> }; struct Holder<T> { inner: Option<Stream<Slice<T>>> }; fn main() {}",
+        "interface Stream<T> { fn boxed() -> Holder<T> }; enum Holder<T> { Empty, Next(Stream<Slice<T>>) }; fn main() {}",
+        "type Id<T> = T; interface Stream<T> { fn rest() -> Stream<Ref<Id<T>>> }; fn main() {}",
+        "type Wrap<T> = Holder<T>; interface Stream<T> { fn boxed() -> Wrap<T> }; struct Holder<T> { inner: Option<Stream<Slice<T>>> }; fn main() {}",
+    ] {
+        let errors = checker_errors(source, &[]);
+        assert!(
+            has_code(&errors, "infer.instantiation_cycle"),
+            "{source}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn growing_interface_instantiations_are_rejected_before_go() {
+    for source in [
+        "interface Chain<T> { fn link() -> Chain<Ref<T>> }; fn main() {}",
+        "interface A<T> { fn next() -> B<Ref<T>> }; interface B<T> { fn next() -> A<T> }; fn main() {}",
+    ] {
+        let errors = checker_errors(source, &[]);
+        assert!(
+            has_code(&errors, "infer.instantiation_cycle"),
+            "{source}\n{errors:?}"
+        );
+    }
+    let errors = checker_errors(
+        "interface Chain<T> { fn link() -> Chain<T> }; fn main() {}",
+        &[],
+    );
+    assert!(errors.is_empty(), "{errors:?}");
 }
 
 #[test]
@@ -5197,7 +5250,7 @@ fn recursive_generic_instantiation_rejected() {
     fn main() {}
         "#,
     )
-    .assert_infer_code("recursive_instantiation");
+    .assert_infer_code_once("instantiation_cycle");
 }
 
 #[test]
@@ -9151,7 +9204,7 @@ fn main() {}
 }
 
 #[test]
-fn satisfy_comma_ok_interface_via_promoted_method_rejected() {
+fn satisfy_comma_ok_interface_via_promoted_method_adapted() {
     let typedef = r#"
 pub interface Lookup {
   #[go(comma_ok)]
@@ -9171,8 +9224,7 @@ struct Mine { embed lib.Base }
 fn as_lookup(m: Mine) -> lib.Lookup { m }
 fn main() {}
 "#;
-    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
-        .assert_infer_code("comma_ok_abi_mismatch");
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
 }
 
 #[test]
@@ -10710,10 +10762,7 @@ fn main() {
 "#;
     let result = infer_with_go_typedefs(input, &[("go:example.com/webrtc/v4", webrtc)]);
     assert!(
-        !result
-            .errors
-            .iter()
-            .any(|error| error.code_str() == Some("resolve.import_conflict")),
+        !has_code(&result.errors, "resolve.import_conflict"),
         "expected no import conflict for distinct `/vN` packages, got: {:?}",
         result.errors
     );
@@ -11277,7 +11326,7 @@ fn main() {
 }
 
 #[test]
-fn promoted_snake_case_method_rejected_for_comma_ok_go_interface() {
+fn promoted_snake_case_method_adapted_for_comma_ok_go_interface() {
     let typedef = r#"
 pub struct Session { pub key: string }
 
@@ -11299,8 +11348,7 @@ fn main() {
   let _ = Outer { Base: Base {} } as cache.Cache
 }
 "#;
-    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
-        .assert_infer_code("comma_ok_abi_mismatch");
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)]).assert_no_errors();
 }
 
 #[test]
@@ -11405,7 +11453,7 @@ fn main() {}
 }
 
 #[test]
-fn mixed_promoted_method_rejected_for_comma_ok_go_interface() {
+fn mixed_promoted_method_adapted_for_comma_ok_go_interface() {
     let typedef = r#"
 pub struct Session { pub key: string }
 
@@ -11431,8 +11479,7 @@ fn main() {
   let _ = S { Base: Base {} } as cache.Cache
 }
 "#;
-    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
-        .assert_infer_code("comma_ok_abi_mismatch");
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)]).assert_no_errors();
 }
 
 #[test]
@@ -11794,4 +11841,108 @@ fn go_proxy_from_environment_rejects_bare_url() {
         "#,
     )
     .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn generic_receiver_methods_reject_growing_parameter_types() {
+    infer("struct N<T> { v: T }; impl<T> N<T> { fn consume(self, other: N<Slice<T>>) { let _ = other } }; fn main() {}")
+        .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn generic_receiver_methods_reject_growing_return_types() {
+    infer("struct N<T> { v: T }; impl<T> N<T> { fn wrap(self) -> Option<N<Slice<T>>> { None } }; fn main() {}")
+        .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn generic_receiver_methods_reject_growing_body_types() {
+    infer("struct N<T> { v: T }; impl<T> N<T> { fn wrap(self) { let _ = N { v: [self.v] } } }; fn main() {}")
+        .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn generic_receiver_methods_map_renamed_impl_parameters() {
+    infer("struct N<T> { v: T }; impl<X> N<X> { fn wrap(self) -> N<Slice<X>> { N { v: [self.v] } } }; fn main() {}")
+        .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn generic_receiver_method_cycles_include_interfaces() {
+    infer(
+        r#"
+interface Stream<T> { fn next() -> Option<T> }
+struct Box<T> { v: T }
+impl<T> Box<T> { fn deeper(self) -> Stream<Slice<T>> { Box { v: [self.v] } } }
+impl<T> Box<T> { fn next(self) -> Option<T> { None } }
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn generic_receiver_methods_allow_fixed_nested_instantiations() {
+    infer("struct N<T> { v: T }; impl<T> N<T> { fn fixed(self) -> N<N<int>> { N { v: N { v: 1 } } } }; fn main() {}")
+        .assert_no_errors();
+}
+
+#[test]
+fn unused_alias_arguments_still_instantiate_nested_named_types() {
+    for source in [
+        "type Phantom<T> = int; struct N<T> { v: T, x: Phantom<N<Option<T>>> }; fn main() {}",
+        "type Ignore<T> = int; interface S<T> { fn rest() -> Ignore<S<Slice<T>>> }; fn main() {}",
+        "type Erase<T> = int; interface Stream<T> { fn rest() -> Stream<Erase<Stream<Slice<T>>>> }; fn main() {}",
+    ] {
+        infer(source).assert_infer_code_once("instantiation_cycle");
+    }
+}
+
+#[test]
+fn long_alias_chains_do_not_recurse_on_the_checker_stack() {
+    use crate::_harness::assert_completes_within;
+    use std::time::Duration;
+    assert_completes_within(Duration::from_secs(20), || {
+        let mut source = (0..1999)
+            .map(|i| format!("type A{i}<T> = A{}<T>\n", i + 1))
+            .collect::<String>();
+        source.push_str("type A1999<T> = Option<T>\nstruct N<T> { v: T, x: Option<Ref<N<A0<T>>>> }\nfn main() {}\n");
+        infer(&source).assert_infer_code_once("instantiation_cycle");
+    });
+}
+
+#[test]
+fn growing_type_cycles_report_once_per_component() {
+    for source in [
+        "struct N<T> { v: T }; impl<T> N<T> { fn a(self) -> Option<N<Option<T>>> { None }; fn b(self) -> Option<N<Slice<T>>> { None } }; fn main() {}",
+        "struct A<T> { b: Option<Ref<B<Option<T>>>> }; struct B<T> { a: Option<Ref<A<Option<T>>>> }; fn main() {}",
+    ] {
+        infer(source).assert_infer_code_once("instantiation_cycle");
+    }
+    let errors = checker_errors(
+        "struct A<T> { a: Option<Ref<A<Option<T>>>> }; struct B<T> { b: Option<Ref<B<Slice<T>>>> }; fn main() {}",
+        &[],
+    );
+    assert_eq!(
+        errors
+            .iter()
+            .filter(|e| e.code_str() == Some("infer.instantiation_cycle"))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn invalid_alias_impls_do_not_add_type_cycle_diagnostics() {
+    for source in [
+        "struct N<T> { v: T }; type A<X> = N<X>; impl<U> A<U> { fn pair(self) -> N<Option<U>> { N { v: Some(self.v) } } }; fn main() {}",
+        "struct Tree<K, V> { k: K, v: V }; type Swap<A, B> = Tree<B, A>; impl<K, V> Swap<K, V> { fn grow(self) -> Tree<Option<K>, V> { Tree { k: None, v: self.v } } }; fn main() {}",
+    ] {
+        let errors = checker_errors(source, &[]);
+        assert!(has_code(&errors, "infer.impl_on_type_alias"), "{errors:?}");
+        assert!(
+            !has_code(&errors, "infer.instantiation_cycle"),
+            "{errors:?}"
+        );
+    }
 }

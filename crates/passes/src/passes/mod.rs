@@ -32,7 +32,7 @@ pub(crate) const PARALLEL_THRESHOLD: usize = 4;
 
 pub(crate) fn source_file_work(store: &Store) -> Vec<(&Package, &File)> {
     let mut work: Vec<_> = store
-        .packages
+        .packages()
         .values()
         .map(Arc::as_ref)
         .flat_map(|package| package.source_files().map(move |file| (package, file)))
