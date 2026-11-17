@@ -1,15 +1,19 @@
 use crate::Planner;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::layout::ValueLayout;
 use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::plan::values::GoExpression;
-use crate::types::native;
+use std::iter::once;
 use std::{fmt::Display, slice};
 use syntax::ast::ResolvedCallTypeArguments;
-use syntax::program::DefinitionBody;
+use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
-use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, SubstitutionMap, Type};
+use syntax::program::SlotOrigin;
+use syntax::program::{Definition, DefinitionBody};
+use syntax::types::{
+    CompoundKind, FunctionParameter, SimpleKind, SubstitutionMap, Type, peel_underlying,
+};
 
 /// Types whose Go definitions come from the Lisette prelude.
 pub(crate) fn is_prelude_type(name: &str) -> bool {
@@ -32,10 +36,6 @@ pub(crate) fn returns_go_void(return_ty: &Type) -> bool {
     return_ty.is_unit() || return_ty.is_never()
 }
 
-pub(crate) fn render_conversion(go_type: &str, value: &str) -> String {
-    format!("{}{})", conversion_prefix(go_type), value)
-}
-
 pub(crate) fn conversion_prefix(go_type: &str) -> String {
     let is_plain_name = go_type
         .chars()
@@ -47,48 +47,148 @@ pub(crate) fn conversion_prefix(go_type: &str) -> String {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChannelDirection {
+    Bidirectional,
+    Send,
+    Receive,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GoTypeShape {
+    Empty,
+    Name(String),
+    Qualified {
+        package: String,
+        member: String,
+    },
+    Instantiated {
+        base: Box<GoType>,
+        arguments: Vec<GoType>,
+    },
+    Arguments(Vec<GoType>),
+    Results(Vec<GoType>),
+    Slice(Box<GoType>),
+    Map(Box<GoType>, Box<GoType>),
+    Pointer(Box<GoType>),
+    Array(String, Box<GoType>),
+    Channel(ChannelDirection, Box<GoType>),
+    Variadic(Box<GoType>),
+    Function(Vec<GoType>, Option<Box<GoType>>),
+    Struct(Vec<(String, GoType)>),
+    Interface(Vec<(String, GoType)>),
+    EmptyInterface,
+    Raw(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GoTypeKind {
+    Value,
+    Slice,
+    Map,
+    Array,
+    PointerToArray,
+    Channel,
+    Unclassified,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct GoType {
     pub(crate) code: String,
+    pub(crate) shape: Box<GoTypeShape>,
     requirements: PackageRequirements,
+    physical_kind: Option<GoTypeKind>,
+}
+
+impl PartialEq for GoType {
+    fn eq(&self, other: &Self) -> bool {
+        self.shape == other.shape
+    }
+}
+impl Eq for GoType {}
+
+impl Default for GoType {
+    fn default() -> Self {
+        Self::new("")
+    }
 }
 
 impl GoType {
     pub(crate) fn new(code: impl Into<String>) -> Self {
+        let code = code.into();
+        let shape = match code.as_str() {
+            "" => GoTypeShape::Empty,
+            "struct{}" => GoTypeShape::Struct(Vec::new()),
+            "any" | "interface{}" => GoTypeShape::EmptyInterface,
+            name if name.chars().all(|character| {
+                character.is_alphanumeric() || character == '_' || character == '.'
+            }) =>
+            {
+                match name.rsplit_once('.') {
+                    Some((package, member)) => GoTypeShape::Qualified {
+                        package: package.to_string(),
+                        member: member.to_string(),
+                    },
+                    None => GoTypeShape::Name(name.to_string()),
+                }
+            }
+            _ => GoTypeShape::Raw(code.clone()),
+        };
         Self {
-            code: code.into(),
+            code,
+            shape: Box::new(shape),
             requirements: PackageRequirements::default(),
+            physical_kind: None,
         }
     }
 
-    pub(crate) fn stdlib(code: impl Into<String>) -> Self {
-        let mut result = Self::new(code);
-        result
-            .requirements
-            .require_generated(go_name::GeneratedPackage::Prelude);
-        result
+    fn structured<'argument>(
+        code: String,
+        shape: GoTypeShape,
+        dependencies: impl IntoIterator<Item = &'argument GoType>,
+    ) -> Self {
+        let mut value = Self {
+            code,
+            shape: Box::new(shape),
+            requirements: PackageRequirements::default(),
+            physical_kind: None,
+        };
+        value.merge_all(dependencies);
+        value
     }
 
-    pub(crate) fn with_package(code: impl Into<String>, package: PackageUse) -> Self {
-        let mut result = Self::new(code);
-        result.requirements.require(package);
-        result
+    pub(crate) fn named(member: &str, arguments: &[GoType], package: Option<PackageUse>) -> Self {
+        let mut base = if let Some(package) = package {
+            let code = format!("{}.{member}", package.qualifier());
+            let mut base = Self::structured(
+                code,
+                GoTypeShape::Qualified {
+                    package: package.qualifier().to_string(),
+                    member: member.to_string(),
+                },
+                [],
+            );
+            base.requirements.require(package);
+            base
+        } else {
+            Self::new(member)
+        };
+        if !arguments.is_empty() {
+            let code = format!("{}{}", base.code, Self::type_arguments(arguments).code);
+            let shape = GoTypeShape::Instantiated {
+                base: Box::new(base.clone()),
+                arguments: arguments.to_vec(),
+            };
+            base = Self::structured(code, shape, once(&base).chain(arguments));
+        }
+        base
     }
 
     pub(crate) fn merge(&mut self, other: &GoType) {
         self.requirements.extend(&other.requirements);
     }
 
-    pub(crate) fn with_dependencies<'a>(
-        code: impl Into<String>,
-        dependencies: impl IntoIterator<Item = &'a GoType>,
-    ) -> Self {
-        let mut result = Self::new(code);
-        result.merge_all(dependencies);
-        result
-    }
-
-    fn merge_all<'a>(&mut self, others: impl IntoIterator<Item = &'a GoType>) {
+    fn merge_all<'argument>(&mut self, others: impl IntoIterator<Item = &'argument GoType>) {
         for other in others {
             self.merge(other);
         }
@@ -97,59 +197,256 @@ impl GoType {
     pub(crate) fn requirements(&self) -> &PackageRequirements {
         &self.requirements
     }
+    pub(crate) fn is_empty(&self) -> bool {
+        matches!(self.shape.as_ref(), GoTypeShape::Empty)
+    }
+    pub(crate) fn is_named(&self, name: &str) -> bool {
+        matches!(self.shape.as_ref(), GoTypeShape::Name(actual) if actual == name)
+    }
 
-    /// A bracketed type argument list, `[A, B]`, or empty without arguments.
+    pub(crate) fn is_channel(&self) -> bool {
+        self.physical_kind() == GoTypeKind::Channel
+    }
+    pub(crate) fn physical_kind(&self) -> GoTypeKind {
+        self.physical_kind
+            .unwrap_or_else(|| match self.shape.as_ref() {
+                GoTypeShape::Slice(_) => GoTypeKind::Slice,
+                GoTypeShape::Map(..) => GoTypeKind::Map,
+                GoTypeShape::Array(..) => GoTypeKind::Array,
+                GoTypeShape::Pointer(inner) if inner.physical_kind() == GoTypeKind::Array => {
+                    GoTypeKind::PointerToArray
+                }
+                GoTypeShape::Channel(..) => GoTypeKind::Channel,
+                GoTypeShape::Raw(_) => GoTypeKind::Unclassified,
+                _ => GoTypeKind::Value,
+            })
+    }
+    fn with_physical_kind(mut self, kind: GoTypeKind) -> Self {
+        self.physical_kind = Some(kind);
+        self
+    }
+
+    pub(crate) fn arguments(&self) -> &[GoType] {
+        match self.shape.as_ref() {
+            GoTypeShape::Arguments(arguments) => arguments,
+            _ => &[],
+        }
+    }
+    pub(crate) fn contains_empty_interface(&self) -> bool {
+        match self.shape.as_ref() {
+            GoTypeShape::EmptyInterface => true,
+            GoTypeShape::Instantiated { base, arguments } => {
+                base.contains_empty_interface()
+                    || arguments.iter().any(Self::contains_empty_interface)
+            }
+            GoTypeShape::Arguments(arguments) | GoTypeShape::Results(arguments) => {
+                arguments.iter().any(Self::contains_empty_interface)
+            }
+            GoTypeShape::Slice(inner)
+            | GoTypeShape::Pointer(inner)
+            | GoTypeShape::Array(_, inner)
+            | GoTypeShape::Channel(_, inner)
+            | GoTypeShape::Variadic(inner) => inner.contains_empty_interface(),
+            GoTypeShape::Map(key, value) => {
+                key.contains_empty_interface() || value.contains_empty_interface()
+            }
+            GoTypeShape::Function(parameters, result) => {
+                parameters.iter().any(Self::contains_empty_interface)
+                    || result
+                        .as_ref()
+                        .is_some_and(|result| result.contains_empty_interface())
+            }
+            GoTypeShape::Struct(fields) | GoTypeShape::Interface(fields) => {
+                fields.iter().any(|(_, ty)| ty.contains_empty_interface())
+            }
+            GoTypeShape::Empty
+            | GoTypeShape::Name(_)
+            | GoTypeShape::Qualified { .. }
+            | GoTypeShape::Raw(_) => false,
+        }
+    }
+
     pub(crate) fn type_arguments(arguments: &[GoType]) -> Self {
         if arguments.is_empty() {
             return Self::default();
         }
-        let codes: Vec<&str> = arguments
-            .iter()
-            .map(|argument| argument.code.as_str())
-            .collect();
-        Self::with_dependencies(format!("[{}]", codes.join(", ")), arguments)
+        let code = format!(
+            "[{}]",
+            arguments
+                .iter()
+                .map(|argument| argument.code.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        Self::structured(code, GoTypeShape::Arguments(arguments.to_vec()), arguments)
     }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.code.is_empty()
-    }
-
     pub(crate) fn type_argument(argument: &GoType) -> Self {
         Self::type_arguments(slice::from_ref(argument))
     }
-
+    pub(crate) fn result_list(results: &[GoType]) -> Self {
+        let code = format!(
+            "({})",
+            results
+                .iter()
+                .map(|result| result.code.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        Self::structured(code, GoTypeShape::Results(results.to_vec()), results)
+    }
+    pub(crate) fn function(parameters: &[GoType], result: Option<&GoType>) -> Self {
+        let parameter_text = parameters
+            .iter()
+            .map(|parameter| parameter.code.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let code = match result {
+            Some(result) => format!("func({parameter_text}) {}", result.code),
+            None => format!("func({parameter_text})"),
+        };
+        Self::structured(
+            code,
+            GoTypeShape::Function(parameters.to_vec(), result.cloned().map(Box::new)),
+            parameters.iter().chain(result),
+        )
+    }
     pub(crate) fn slice_of(element: &GoType) -> Self {
-        Self::with_dependencies(format!("[]{}", element.code), [element])
+        Self::structured(
+            format!("[]{}", element.code),
+            GoTypeShape::Slice(Box::new(element.clone())),
+            [element],
+        )
     }
-
     pub(crate) fn map_of(key: &GoType, value: &GoType) -> Self {
-        Self::with_dependencies(format!("map[{}]{}", key.code, value.code), [key, value])
+        Self::structured(
+            format!("map[{}]{}", key.code, value.code),
+            GoTypeShape::Map(Box::new(key.clone()), Box::new(value.clone())),
+            [key, value],
+        )
     }
-
-    pub(crate) fn pointer_to(pointee: &GoType) -> Self {
-        Self::with_dependencies(format!("*{}", pointee.code), [pointee])
-    }
-
-    pub(crate) fn array_of(length: impl Display, element: &GoType) -> Self {
-        Self::with_dependencies(format!("[{length}]{}", element.code), [element])
-    }
-
-    pub(crate) fn prelude(name: &str, arguments: &[GoType]) -> Self {
-        let arguments = Self::type_arguments(arguments);
-        let mut result = Self::stdlib(format!(
-            "{}.{name}{}",
-            go_name::GO_STDLIB_PKG,
-            arguments.code
-        ));
-        result.merge(&arguments);
+    pub(crate) fn parenthesized(&self) -> Self {
+        let mut result = self.clone();
+        result.code = format!("({})", self.code);
         result
+    }
+    pub(crate) fn pointer_to(pointee: &GoType) -> Self {
+        Self::structured(
+            format!("*{}", pointee.code),
+            GoTypeShape::Pointer(Box::new(pointee.clone())),
+            [pointee],
+        )
+    }
+    pub(crate) fn array_of(length: impl Display, element: &GoType) -> Self {
+        Self::structured(
+            format!("[{length}]{}", element.code),
+            GoTypeShape::Array(length.to_string(), Box::new(element.clone())),
+            [element],
+        )
+    }
+    pub(crate) fn channel(direction: ChannelDirection, element: &GoType) -> Self {
+        let prefix = match direction {
+            ChannelDirection::Send => "chan<-",
+            ChannelDirection::Receive => "<-chan",
+            ChannelDirection::Bidirectional => "chan",
+        };
+        Self::structured(
+            format!("{prefix} {}", element.code),
+            GoTypeShape::Channel(direction, Box::new(element.clone())),
+            [element],
+        )
+    }
+    pub(crate) fn variadic(element: &GoType) -> Self {
+        Self::structured(
+            format!("...{}", element.code),
+            GoTypeShape::Variadic(Box::new(element.clone())),
+            [element],
+        )
+    }
+    pub(crate) fn structure(fields: Vec<(String, GoType)>) -> Self {
+        let code = if fields.is_empty() {
+            "struct{}".to_string()
+        } else {
+            format!(
+                "struct {{ {} }}",
+                fields
+                    .iter()
+                    .map(|(name, ty)| format!("{name} {}", ty.code))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        };
+        Self::structured(
+            code,
+            GoTypeShape::Struct(fields.clone()),
+            fields.iter().map(|(_, ty)| ty),
+        )
+    }
+    pub(crate) fn method_interface(name: &str, parameters: &[GoType], result: &GoType) -> Self {
+        let signature = Self::function(parameters, (!result.is_empty()).then_some(result));
+        let code = format!(
+            "interface {{ {name}({}) {} }}",
+            parameters
+                .iter()
+                .map(|parameter| parameter.code.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            result.code
+        );
+        Self::structured(
+            code,
+            GoTypeShape::Interface(vec![(name.to_string(), signature.clone())]),
+            [&signature],
+        )
+    }
+    pub(crate) fn prelude(name: &str, arguments: &[GoType]) -> Self {
+        Self::named(
+            name,
+            arguments,
+            Some(PackageUse::generated(go_name::GeneratedPackage::Prelude)),
+        )
+    }
+}
+
+fn physical_type_kind<'argument>(
+    ty: &Type,
+    lookup: impl Fn(&str) -> Option<&'argument Definition>,
+) -> GoTypeKind {
+    match peel_underlying(ty, &lookup) {
+        Type::Compound {
+            kind: CompoundKind::Slice,
+            ..
+        } => GoTypeKind::Slice,
+        Type::Compound {
+            kind: CompoundKind::Map,
+            ..
+        } => GoTypeKind::Map,
+        Type::Compound {
+            kind: CompoundKind::Channel | CompoundKind::Sender | CompoundKind::Receiver,
+            ..
+        } => GoTypeKind::Channel,
+        Type::Compound {
+            kind: CompoundKind::Ref,
+            args: arguments,
+            ..
+        } if arguments
+            .first()
+            .is_some_and(|inner| matches!(peel_underlying(inner, &lookup), Type::Array { .. })) =>
+        {
+            GoTypeKind::PointerToArray
+        }
+        Type::Array { .. } => GoTypeKind::Array,
+        _ => GoTypeKind::Value,
     }
 }
 
 impl Planner<'_> {
     pub(crate) fn go_type(&self, ty: &Type) -> GoType {
         match ty {
-            Type::Nominal { id, params, .. } => self.emit_constructor(id, params, ty),
+            Type::Nominal {
+                id,
+                params: parameters,
+                ..
+            } => self.emit_constructor(id, parameters, ty),
             Type::Simple(kind) => {
                 if matches!(kind, SimpleKind::Unit) {
                     GoType::new("struct{}")
@@ -157,7 +454,11 @@ impl Planner<'_> {
                     GoType::new(kind.leaf_name().to_string())
                 }
             }
-            Type::Compound { kind, args, .. } => self.emit_compound(*kind, args, ty),
+            Type::Compound {
+                kind,
+                args: arguments,
+                ..
+            } => self.emit_compound(*kind, arguments, ty),
             Type::Function(f) => self.emit_function_type(&f.params, &f.return_type),
             Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
@@ -171,16 +472,17 @@ impl Planner<'_> {
         }
     }
 
-    fn emit_compound(&self, kind: CompoundKind, args: &[Type], ty: &Type) -> GoType {
+    fn emit_compound(&self, kind: CompoundKind, arguments: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
         match kind {
             CompoundKind::Ref => GoType::pointer_to(
-                &self.go_type(args.first().expect("a reference has a pointee type")),
+                &self.go_type(arguments.first().expect("a reference has a pointee type")),
             ),
             CompoundKind::VarArgs => {
-                let element = self.go_type(args.first().expect("varargs have an element type"));
-                GoType::with_dependencies(format!("...{}", element.code), [&element])
+                let element =
+                    self.go_type(arguments.first().expect("varargs have an element type"));
+                GoType::variadic(&element)
             }
             _ => {
                 let native = NativeTypeKind::from_type(ty)
@@ -190,60 +492,56 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn format_type_args(&self, params: &[Type]) -> GoType {
-        self.format_type_arg_iter(params)
+    pub(crate) fn format_type_args(&self, parameters: &[Type]) -> GoType {
+        self.format_type_arg_iter(parameters)
     }
 
     pub(crate) fn format_resolved_type_args(
         &self,
-        params: ResolvedCallTypeArguments<'_>,
+        parameters: ResolvedCallTypeArguments<'_>,
     ) -> GoType {
-        self.format_type_arg_iter(params.iter())
+        self.format_type_arg_iter(parameters.iter())
     }
 
-    fn format_type_arg_iter<'t>(&self, params: impl IntoIterator<Item = &'t Type>) -> GoType {
-        let args: Vec<GoType> = params
+    fn format_type_arg_iter<'t>(&self, parameters: impl IntoIterator<Item = &'t Type>) -> GoType {
+        let arguments: Vec<GoType> = parameters
             .into_iter()
             .map(|param| self.go_type(param))
             .collect();
-        GoType::type_arguments(&args)
+        GoType::type_arguments(&arguments)
     }
 
     pub(crate) fn reconstruct_collapsed_type_args(
         &self,
-        recipe: &str,
+        recipe: &[GoTypeRecipe],
         mapping: &SubstitutionMap,
     ) -> Option<GoType> {
-        let mut parts = Vec::new();
-        for entry in split_top_level_commas(recipe) {
-            parts.push(self.render_recipe_entry(entry.trim(), mapping)?);
-        }
+        let parts = recipe
+            .iter()
+            .map(|entry| self.render_recipe_entry(entry, mapping))
+            .collect::<Option<Vec<_>>>()?;
         (!parts.is_empty()).then(|| GoType::type_arguments(&parts))
     }
 
-    fn render_recipe_entry(&self, entry: &str, mapping: &SubstitutionMap) -> Option<GoType> {
-        if let Some(elem) = entry
-            .strip_prefix("Slice<")
-            .and_then(|s| s.strip_suffix('>'))
-        {
-            let element = self.go_type(mapping.get(elem.trim())?);
-            return Some(GoType::slice_of(&element));
-        }
-        if let Some(inner) = entry.strip_prefix("Map<").and_then(|s| s.strip_suffix('>')) {
-            let (key, value) = inner.split_once(',')?;
-            let key = self.go_type(mapping.get(key.trim())?);
-            let value = self.go_type(mapping.get(value.trim())?);
-            return Some(GoType::map_of(&key, &value));
-        }
-        if let Some(inner) = entry
-            .strip_prefix("Array<")
-            .and_then(|s| s.strip_suffix('>'))
-        {
-            let (elem, length) = inner.rsplit_once(',')?;
-            let element = self.go_type(mapping.get(elem.trim())?);
-            return Some(GoType::array_of(length.trim(), &element));
-        }
-        Some(self.go_type(mapping.get(entry)?))
+    fn render_recipe_entry(
+        &self,
+        entry: &GoTypeRecipe,
+        mapping: &SubstitutionMap,
+    ) -> Option<GoType> {
+        Some(match entry {
+            GoTypeRecipe::Parameter(name) => self.go_type(mapping.get(name)?),
+            GoTypeRecipe::Slice(element) => {
+                GoType::slice_of(&self.render_recipe_entry(element, mapping)?)
+            }
+            GoTypeRecipe::Map(key, value) => GoType::map_of(
+                &self.render_recipe_entry(key, mapping)?,
+                &self.render_recipe_entry(value, mapping)?,
+            ),
+            GoTypeRecipe::Array(element, length) => GoType::array_of(
+                length.to_string(),
+                &self.render_recipe_entry(element, mapping)?,
+            ),
+        })
     }
 
     fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
@@ -251,9 +549,9 @@ impl Planner<'_> {
         GoType::prelude(&format!("Tuple{}", elements.len()), &element_types)
     }
 
-    fn emit_constructor(&self, qualified_name: &str, params: &[Type], ty: &Type) -> GoType {
+    fn emit_constructor(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
         if let Some(index) = self.facts.type_parameter_alias_index(qualified_name)
-            && let Some(target) = params.get(index)
+            && let Some(target) = parameters.get(index)
         {
             return self.go_type(target);
         }
@@ -268,44 +566,48 @@ impl Planner<'_> {
             return GoType::new("struct{}");
         }
 
-        let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(p)).collect();
-        let type_args = GoType::type_arguments(&param_types);
-
+        let kind = physical_type_kind(ty, |id| self.facts.definition(id));
+        let param_types: Vec<GoType> = parameters
+            .iter()
+            .map(|parameter| self.go_type(parameter))
+            .collect();
         if let Some(package) = package {
-            let mut result = GoType::with_package(format!("{name}{}", type_args.code), package);
-            result.merge(&type_args);
-            return result;
+            let member = name.rsplit('.').next().unwrap_or(&name);
+            return GoType::named(member, &param_types, Some(package)).with_physical_kind(kind);
         }
-
         if let Some(name) = qualified_name.strip_prefix(go_name::PRELUDE_PREFIX)
             && is_prelude_type(name)
         {
             return GoType::prelude(name, &param_types);
         }
-
-        GoType::with_dependencies(format!("{name}{}", type_args.code), [&type_args])
+        GoType::named(&name, &param_types, None).with_physical_kind(kind)
     }
 
     fn emit_native_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
-        if !native::has_type_params(kind) {
-            return GoType::new(native::emit_type_syntax(kind, &[]));
+        let argument = |index| {
+            let stripped = ty.strip_refs();
+            let arguments = stripped.get_type_params().expect("native type arguments");
+            self.go_type(&arguments[index])
+        };
+        match kind {
+            NativeTypeKind::String => GoType::new("string"),
+            NativeTypeKind::Slice | NativeTypeKind::EnumeratedSlice => {
+                GoType::slice_of(&argument(0))
+            }
+            NativeTypeKind::Map => GoType::map_of(&argument(0), &argument(1)),
+            NativeTypeKind::Channel => {
+                GoType::channel(ChannelDirection::Bidirectional, &argument(0))
+            }
+            NativeTypeKind::Sender => GoType::channel(ChannelDirection::Send, &argument(0)),
+            NativeTypeKind::Receiver => GoType::channel(ChannelDirection::Receive, &argument(0)),
+            NativeTypeKind::Array => self.reject_untyped_position("an array without a length"),
         }
-
-        let stripped = ty.strip_refs();
-        let args = stripped
-            .get_type_params()
-            .expect("native type with type params must have type args");
-
-        let arg_types: Vec<GoType> = args.iter().map(|a| self.go_type(a)).collect();
-        let type_args: Vec<String> = arg_types.iter().map(|t| t.code.clone()).collect();
-
-        GoType::with_dependencies(native::emit_type_syntax(kind, &type_args), &arg_types)
     }
 
-    fn emit_function_type(&self, params: &[FunctionParameter], return_ty: &Type) -> GoType {
-        let parameters = params
+    fn emit_function_type(&self, parameters: &[FunctionParameter], return_ty: &Type) -> GoType {
+        let parameters = parameters
             .iter()
-            .map(|p| self.value_layout(&p.ty, SlotOrigin::Lisette))
+            .map(|parameter| self.value_layout(&parameter.ty, SlotOrigin::Lisette))
             .collect();
         let result = self.value_layout(return_ty, SlotOrigin::Lisette);
         self.function_layout(
@@ -378,12 +680,12 @@ impl Planner<'_> {
         type_args: ResolvedCallTypeArguments<'_>,
     ) -> GoType {
         let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
-        let args: Vec<GoType> = receiver_params
+        let arguments: Vec<GoType> = receiver_params
             .iter()
             .chain(type_args.iter())
             .map(|ty| self.go_type(ty))
             .collect();
-        GoType::type_arguments(&args)
+        GoType::type_arguments(&arguments)
     }
 
     pub(crate) fn zero_value(&self, ty: &Type) -> GoExpression {
@@ -468,41 +770,76 @@ impl Planner<'_> {
         let DefinitionBody::Struct { fields, .. } = &definition.body else {
             return None;
         };
-        let mut result = GoType::default();
-        let rendered: Vec<String> = fields
-            .iter()
-            .map(|f| {
-                let field_ty = self.go_type(&f.ty);
-                result.merge(&field_ty);
-                format!("{} {}", struct_field_go_name(f, &[]), field_ty.code)
-            })
-            .collect();
-        result.code = if rendered.is_empty() {
-            "struct{}".to_string()
-        } else {
-            format!("struct {{ {} }}", rendered.join("; "))
-        };
-        Some(result)
+        Some(GoType::structure(
+            fields
+                .iter()
+                .map(|field| (struct_field_go_name(field, &[]), self.go_type(&field.ty)))
+                .collect(),
+        ))
     }
 }
 
-/// Split a recipe like `Map<K, V>, K, V` on commas outside angle brackets, so a
-/// nested `Map<K, V>` stays one entry.
-fn split_top_level_commas(recipe: &str) -> Vec<&str> {
-    let mut entries = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, c) in recipe.char_indices() {
-        match c {
-            '<' => depth += 1,
-            '>' => depth -= 1,
-            ',' if depth == 0 => {
-                entries.push(&recipe[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
+#[cfg(test)]
+mod structural_tests {
+    use super::*;
+
+    #[test]
+    fn qualified_type_identity_does_not_depend_on_constructor() {
+        let named = GoType::named("Flag", &[], Some(PackageUse::new("flag", "flag")));
+        assert_eq!(GoType::new("flag.Flag"), named);
+        assert_ne!(GoType::new("other.Flag"), named);
     }
-    entries.push(&recipe[start..]);
-    entries
+
+    #[test]
+    fn named_type_classification_does_not_expand_tuple_children() {
+        use std::cell::Cell;
+        use syntax::ast::{Annotation, Generic, Span};
+        use syntax::program::{AliasKind, Definition, Visibility};
+        use syntax::types::Symbol;
+
+        let next = Type::Nominal {
+            id: Symbol::from_raw("main.Next"),
+            params: vec![Type::Parameter("T".into())],
+            writable: false,
+        };
+        let target = Type::Tuple(vec![next.clone(), next]);
+        let definition = Definition {
+            ty: target.clone(),
+            visibility: Visibility::Public,
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::TypeAlias {
+                generics: vec![Generic::new("T", vec![], Span::dummy())],
+                alias: AliasKind::Transparent {
+                    annotation: Annotation::Unknown,
+                    target,
+                },
+                methods: Default::default(),
+                attributes: Default::default(),
+            },
+        };
+        let ty = Type::Nominal {
+            id: Symbol::from_raw("main.Root"),
+            params: vec![Type::int()],
+            writable: false,
+        };
+        let lookups = Cell::new(0);
+        let kind = physical_type_kind(&ty, |id| {
+            lookups.set(lookups.get() + 1);
+            assert_eq!(id, "main.Root", "classification expanded a tuple child");
+            Some(&definition)
+        });
+        assert_eq!(kind, GoTypeKind::Value);
+        assert_eq!(lookups.get(), 1);
+    }
+
+    #[test]
+    fn any_and_empty_interface_have_the_same_structural_identity() {
+        let any = GoType::new("any");
+        let interface = GoType::new("interface{}");
+        assert_eq!(any, interface);
+        assert!(any.contains_empty_interface());
+        assert!(GoType::slice_of(&any).contains_empty_interface());
+        assert!(!GoType::new("SomeanyName").contains_empty_interface());
+    }
 }

@@ -4,7 +4,7 @@ use syntax::go_names::is_go_reserved_word;
 
 use crate::names::go_name;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct PackageState {
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,

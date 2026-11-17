@@ -1,3 +1,5 @@
+use crate::plan::declarations::{DeclarationKind, GoDeclaration};
+use crate::types::go_type::GoType;
 mod abi;
 mod analyze;
 pub(crate) mod calls;
@@ -36,8 +38,6 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use abi::catalog::GoAbiCatalog;
 use abi::go_payload_layout;
-use abi::layout::SlotOrigin;
-use analyze::facts::is_nullable_option;
 use context::lowering::LoopContext;
 use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
@@ -48,16 +48,16 @@ use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, Statement, define};
 use plan::go_expression::{GoExpressionNode, Position, TreeVisitor};
 use plan::local::GoIdentifier;
 use plan::values::GoExpression;
-use render::writer::GoWriter;
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
 use state::package_state::PackageState;
 use state::scope::ScopeState;
 use syntax::ast::{BindingId, Expression, Span};
 use syntax::program;
-use syntax::program::{Definition, DefinitionBody, EmitInput, File, interface_requirements};
-use syntax::types::{Symbol, Type, peel_alias};
-use types::go_type::{GoType, is_prelude_type};
+use syntax::program::SlotOrigin;
+use syntax::program::{Definition, DefinitionBody, EmitInput, File, GoMethodPolicy};
+use syntax::types::{Symbol, Type};
+use types::go_type::is_prelude_type;
 
 #[derive(Clone, Debug)]
 pub struct EmitOptions {
@@ -84,16 +84,15 @@ pub(crate) struct GlobalEmitData {
 
 impl GlobalEmitData {
     fn compute(definitions: &HashMap<Symbol, Definition>) -> Self {
+        let policy = GoMethodPolicy::compute(definitions.iter(), |id| definitions.get(id));
         let mut globals = GlobalEmitData {
             go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
-            exported_method_names: HashSet::default(),
-            tagged_method_names: HashSet::default(),
+            exported_method_names: policy.exported_method_names.into_iter().collect(),
+            tagged_method_names: policy.tagged_method_names.into_iter().collect(),
             enum_layouts: HashMap::default(),
         };
 
         for (key, definition) in definitions.iter() {
-            globals.register_exported_methods(key, definition);
-            globals.register_bound_returns(definition, definitions);
             globals.register_enum_layout(key, definition, definitions);
         }
 
@@ -123,136 +122,29 @@ impl GlobalEmitData {
         });
         self.enum_layouts.insert(key.clone(), layout);
     }
-
-    fn register_bound_returns(
-        &mut self,
-        definition: &Definition,
-        definitions: &HashMap<Symbol, Definition>,
-    ) {
-        let function_bounds = definition
-            .ty
-            .as_function_type()
-            .into_iter()
-            .flat_map(|function| &function.bounds)
-            .map(|bound| &bound.ty);
-        let type_bounds = definition
-            .body
-            .generics()
-            .into_iter()
-            .flatten()
-            .flat_map(|generic| generic.resolved_bounds().into_iter().flatten());
-        let method_bounds = definition
-            .methods()
-            .into_iter()
-            .flat_map(|methods| methods.values())
-            .filter_map(|method| method.ty.as_function_type())
-            .flat_map(|function| &function.bounds)
-            .map(|bound| &bound.ty);
-        for bound in function_bounds.chain(type_bounds).chain(method_bounds) {
-            for requirement in interface_requirements(bound, |id| definitions.get(id)) {
-                if go_name::is_go_import(&requirement.declaring_interface) {
-                    continue;
-                }
-                let Some(return_ty) = requirement.method.ty.unwrap_forall().get_function_ret()
-                else {
-                    continue;
-                };
-                if matches!(
-                    peel_alias(return_ty, |id| definitions.get(id)),
-                    Type::Parameter(_)
-                ) {
-                    // A generic result must keep one value for every instantiation.
-                    // Implementations must expose that same ABI to satisfy a Go bound.
-                    self.tagged_method_names
-                        .insert(go_name::snake_to_camel(&requirement.name));
-                }
-            }
-        }
-    }
-
-    fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition) {
-        let is_user_definition =
-            !go_name::is_go_import(key) && !key.starts_with(go_name::PRELUDE_PREFIX);
-        match &definition.body {
-            DefinitionBody::Interface {
-                definition: iface, ..
-            } if definition.visibility.is_public() => {
-                for method_name in iface.methods.keys() {
-                    self.exported_method_names.insert(method_name.to_string());
-                }
-            }
-            DefinitionBody::Value { .. }
-                if definition.visibility.is_public()
-                    && is_user_definition
-                    && key.split('.').nth(2).is_some() =>
-            {
-                let method_name = go_name::unqualified_name(key);
-                self.exported_method_names.insert(method_name.to_string());
-            }
-            _ => {}
-        }
-
-        if is_user_definition && let Some(methods) = definition.methods() {
-            for method in methods
-                .values()
-                .filter(|method| method.visibility.is_public())
-            {
-                self.exported_method_names
-                    .insert(method.source_name.to_string());
-            }
-        }
-
-        if definition.visibility.is_public() && definition.is_display() {
-            self.exported_method_names.insert("to_string".to_string());
-        }
-    }
 }
 
 pub(crate) fn classify_go_return_type(
     definitions: &HashMap<Symbol, Definition>,
     return_ty: &Type,
-    go_hints: &[String],
+    go_hints: &[program::GoHint],
 ) -> Option<LoweredReturnAbi> {
+    use syntax::program::{GoReturnContract as Contract, go_return_contract};
     let payload = || go_payload_layout(return_ty);
-    if return_ty.is_partial() {
-        return Some(LoweredReturnAbi::Partial { payload: payload() });
-    }
-    if return_ty.is_result() {
-        return Some(if return_ty.ok_type().is_unit() {
-            LoweredReturnAbi::BareError
-        } else {
-            LoweredReturnAbi::Result { payload: payload() }
-        });
-    }
-    if return_ty.is_option() {
-        if let Some(value) = sentinel_hint(go_hints) {
-            return Some(LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)));
-        }
-        if !is_nullable_option(definitions, return_ty) {
-            return Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
-                payload: payload(),
-            }));
-        }
-        if go_hints.iter().any(|s| s == "comma_ok") {
-            return Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
-                payload: payload(),
-            }));
-        }
-        return Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable));
-    }
-    if let Some(arity) = return_ty.tuple_arity()
-        && arity >= 2
-    {
-        return Some(LoweredReturnAbi::Tuple { arity });
-    }
-    None
-}
-
-fn sentinel_hint(hints: &[String]) -> Option<i64> {
-    hints
-        .iter()
-        .any(|h| h == "sentinel_minus_one")
-        .then_some(-1)
+    Some(
+        match go_return_contract(return_ty, go_hints, |id| definitions.get(id)) {
+            Contract::Value => return None,
+            Contract::Error => LoweredReturnAbi::BareError,
+            Contract::Result => LoweredReturnAbi::Result { payload: payload() },
+            Contract::Partial => LoweredReturnAbi::Partial { payload: payload() },
+            Contract::CommaOk => {
+                LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { payload: payload() })
+            }
+            Contract::Nullable => LoweredReturnAbi::Option(OptionReturnAbi::Nullable),
+            Contract::Sentinel(value) => LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)),
+            Contract::Tuple(arity) => LoweredReturnAbi::Tuple { arity },
+        },
+    )
 }
 
 pub struct Planner<'a> {
@@ -263,46 +155,125 @@ pub struct Planner<'a> {
     namespace: &'a mut FileNamespace,
 }
 
+pub(crate) struct PlanningSnapshot {
+    package: PackageState,
+    scope: ScopeState,
+    adapter_registry: AdapterRegistry,
+    namespace: FileNamespace,
+}
+
 impl Planner<'_> {
-    fn require_fmt(&mut self) {
-        self.require_generated_package(GeneratedPackage::Fmt);
+    pub(crate) fn planning_snapshot(&self) -> PlanningSnapshot {
+        let Self {
+            facts: _,
+            package,
+            scope,
+            adapter_registry,
+            namespace,
+        } = self;
+        PlanningSnapshot {
+            package: (**package).clone(),
+            scope: scope.clone(),
+            adapter_registry: (**adapter_registry).clone(),
+            namespace: (**namespace).clone(),
+        }
     }
 
-    fn require_errors(&mut self) {
-        self.require_generated_package(GeneratedPackage::Errors);
-    }
-
-    fn require_json(&mut self) {
-        self.require_generated_package(GeneratedPackage::Json);
-    }
-
-    fn require_cmp(&mut self) {
-        self.require_generated_package(GeneratedPackage::Cmp);
+    pub(crate) fn restore_planning(&mut self, saved: PlanningSnapshot) {
+        let PlanningSnapshot {
+            package,
+            scope,
+            adapter_registry,
+            namespace,
+        } = saved;
+        *self.package = package;
+        self.scope = scope;
+        *self.adapter_registry = adapter_registry;
+        *self.namespace = namespace;
     }
 
     fn require_testkit(&mut self) {
         self.require_generated_package(GeneratedPackage::TestKit);
     }
 
-    fn require_testing(&mut self) {
-        self.require_generated_package(GeneratedPackage::Testing);
-    }
-
     fn require_generated_package(&mut self, package: GeneratedPackage) {
         self.namespace.require(PackageUse::generated(package));
     }
 
-    fn use_go_type(&mut self, ty: &Type) -> String {
-        self.use_rendered_go_type(self.go_type(ty))
-    }
-
-    fn use_rendered_go_type(&mut self, go_type: GoType) -> String {
-        self.namespace.absorb(go_type.requirements());
-        go_type.code
-    }
-
     fn require_packages(&mut self, requirements: &PackageRequirements) {
         self.namespace.absorb(requirements);
+    }
+
+    pub(crate) fn collect_declaration_imports(&mut self, declaration: &GoDeclaration) {
+        let mut types: Vec<&GoType> = Vec::new();
+        let generics = match &declaration.kind {
+            DeclarationKind::Type {
+                parameters,
+                underlying,
+                ..
+            }
+            | DeclarationKind::Alias {
+                parameters,
+                underlying,
+                ..
+            } => {
+                types.push(underlying);
+                parameters.as_slice()
+            }
+            DeclarationKind::Struct {
+                parameters, fields, ..
+            } => {
+                types.extend(fields.iter().map(|field| &field.ty));
+                parameters.as_slice()
+            }
+            DeclarationKind::Interface {
+                parameters,
+                parents,
+                methods,
+                ..
+            } => {
+                types.extend(parents);
+                for method in methods {
+                    types.extend(&method.parameters);
+                    types.push(&method.result);
+                }
+                parameters.as_slice()
+            }
+            DeclarationKind::Constants(constants) => {
+                for constant in constants {
+                    types.extend(constant.ty.as_ref());
+                    if let Some(value) = &constant.value {
+                        value.node().walk(&mut ImportCollector(self.namespace));
+                    }
+                }
+                &[]
+            }
+            DeclarationKind::Binding(binding) => {
+                self.collect_imports(&[binding.clone().into()]);
+                &[]
+            }
+            DeclarationKind::Function { signature, body } => {
+                types.extend(
+                    signature
+                        .receiver
+                        .iter()
+                        .map(|parameter| &parameter.go_type),
+                );
+                types.extend(
+                    signature
+                        .parameters
+                        .iter()
+                        .map(|parameter| &parameter.go_type),
+                );
+                types.push(&signature.result);
+                self.collect_imports(&body.statements);
+                signature.generics.as_slice()
+            }
+        };
+        types.extend(generics.iter().flat_map(|parameter| &parameter.bounds));
+        for ty in types {
+            self.require_packages(ty.requirements());
+        }
     }
 
     fn collect_imports(&mut self, statements: &[Statement]) {
@@ -310,13 +281,6 @@ impl Planner<'_> {
         for statement in statements {
             statement.kind.walk(&mut collector);
         }
-    }
-
-    fn render_expression(&mut self, expression: &GoExpression) -> String {
-        expression.node().walk(&mut ImportCollector(self.namespace));
-        let mut output = GoWriter::new(true);
-        expression.write(&mut output);
-        output.into_text()
     }
 }
 
@@ -712,16 +676,6 @@ impl<'a> Planner<'a> {
             .fresh_go_name(Some(name.spelling()), self.package)
     }
 
-    fn maybe_line_directive(&self, span: &Span) -> Option<String> {
-        if span.is_dummy() {
-            return None;
-        }
-        let source = self.facts.line_index(span.file_id)?;
-        let line = source.line_for_offset(span.byte_offset);
-        let col = source.col_for_offset(span.byte_offset);
-        Some(format!("//line {}:{}:{}\n", source.path, line, col))
-    }
-
     fn source_position(&self, span: &Span) -> Option<Position> {
         self.position_at(span, span.byte_offset)
     }
@@ -740,28 +694,6 @@ impl<'a> Planner<'a> {
             line: source.line_for_offset(byte_offset),
             column: source.col_for_offset(byte_offset),
         })
-    }
-
-    /// A line inside a raw string or a block comment gets no directive.
-    fn direct_every_line(&self, span: &Span, code: String) -> String {
-        let Some(line) = self.maybe_line_directive(span) else {
-            return code;
-        };
-        let mut directed = String::with_capacity(code.len());
-        let mut open = GoTextState::Code;
-        for text in code.split_inclusive('\n') {
-            let trimmed = text.trim();
-            if open == GoTextState::Code
-                && !trimmed.is_empty()
-                && !trimmed.starts_with("//")
-                && !trimmed.chars().all(|c| matches!(c, '}' | ')'))
-            {
-                directed.push_str(&line);
-            }
-            directed.push_str(text);
-            open = open.after_line(text);
-        }
-        directed
     }
 
     fn emit_files_with_facts(
@@ -809,8 +741,7 @@ impl<'a> Planner<'a> {
     }
 
     fn render_file_source(&mut self, file: &File) -> OutputCollector {
-        let mut source = OutputCollector::new();
-
+        let mut declarations = Vec::new();
         for expression in &file.items {
             let Expression::Enum { name, variants, .. } = expression else {
                 continue;
@@ -820,18 +751,22 @@ impl<'a> Planner<'a> {
             }
             let enum_id = self.facts.qualified_current(name);
             for variant in variants {
-                let code = self.create_make_function_code(&enum_id, &variant.name);
-                source.collect_with_blank(self.direct_every_line(&variant.name_span, code));
+                let mut declaration = self.create_make_function_code(&enum_id, &variant.name);
+                declaration.position = self.source_position(&variant.name_span);
+                declarations.push(declaration);
             }
         }
-
         for expression in &file.items {
-            let code = self.with_declaration_scope(|this| this.emit_top_item(expression));
-            if !code.is_empty() {
-                source.collect_with_blank(code);
-            }
+            declarations.extend(self.with_declaration_scope(|this| this.emit_top_item(expression)));
         }
-
+        declarations.extend(self.namespace.take_adapters());
+        for declaration in &declarations {
+            self.collect_declaration_imports(declaration);
+        }
+        let mut source = OutputCollector::new();
+        for declaration in &declarations {
+            source.collect_with_blank(Renderer.render_declaration(declaration));
+        }
         source
     }
 }
@@ -868,50 +803,6 @@ fn emit_package<'a>(
         }
         package_output
     })
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum GoTextState {
-    Code,
-    RawString,
-    BlockComment,
-}
-
-impl GoTextState {
-    fn after_line(self, text: &str) -> GoTextState {
-        let mut state = self;
-        let mut chars = text.chars().peekable();
-        while let Some(c) = chars.next() {
-            match state {
-                GoTextState::RawString => {
-                    if c == '`' {
-                        state = GoTextState::Code;
-                    }
-                }
-                GoTextState::BlockComment => {
-                    if c == '*' && chars.next_if_eq(&'/').is_some() {
-                        state = GoTextState::Code;
-                    }
-                }
-                GoTextState::Code => match c {
-                    '`' => state = GoTextState::RawString,
-                    '/' if chars.next_if_eq(&'/').is_some() => return GoTextState::Code,
-                    '/' if chars.next_if_eq(&'*').is_some() => state = GoTextState::BlockComment,
-                    '"' | '\'' => {
-                        while let Some(quoted) = chars.next() {
-                            if quoted == '\\' {
-                                chars.next();
-                            } else if quoted == c {
-                                break;
-                            }
-                        }
-                    }
-                    _ => {}
-                },
-            }
-        }
-        state
-    }
 }
 
 /// A pipeline step's call span starts at the pipeline's first value, not at the step.
@@ -1004,10 +895,14 @@ mod tests {
         planner.with_declaration_scope(|declaration| {
             assert!(declaration.scope.bound_go_identifier("outer").is_none());
             assert_eq!(declaration.fresh_local(Some("value")).spelling(), "value");
-            declaration.require_fmt();
+            declaration
+                .namespace
+                .require(PackageUse::generated(GeneratedPackage::Fmt));
             declaration.with_declaration_scope(|nested| {
                 assert_eq!(nested.fresh_local(Some("value")).spelling(), "value");
-                nested.require_errors();
+                nested
+                    .namespace
+                    .require(PackageUse::generated(GeneratedPackage::Errors));
             });
             assert_eq!(declaration.fresh_local(Some("value")).spelling(), "value2");
         });
@@ -1023,5 +918,50 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["errors", "fmt"]
         );
+    }
+    #[test]
+    fn abandoned_planning_restores_names_imports_and_adapter_declarations() {
+        use crate::plan::declarations::{DeclarationKind, GoDeclaration};
+        use crate::types::go_type::GoType;
+        let input = EmitInput::default();
+        let shared = SharedEmitContext {
+            go_module: "example.com/test",
+            entry_package_name: "main",
+            emit_tests: false,
+            line_indexes: None,
+            globals: GlobalEmitData::default(),
+        };
+        let facts = EmitFacts::new(&input, &shared, "test".into());
+        let mut package = PackageState::default();
+        let mut adapters = AdapterRegistry::default();
+        let mut namespace = FileNamespace::default();
+        let mut planner = Planner::new(facts, &mut package, &mut adapters, &mut namespace);
+        let checkpoint = planner.planning_snapshot();
+        planner.fresh_local(Some("temporary"));
+        planner
+            .namespace
+            .require(PackageUse::generated(GeneratedPackage::Errors));
+        let key = (Type::int(), Type::bool());
+        planner
+            .adapter_registry
+            .register(Some(key.clone()), |_| "abandoned".to_string());
+        planner
+            .namespace
+            .collect_adapters(vec![GoDeclaration::new(DeclarationKind::Type {
+                name: "abandoned".to_string(),
+                parameters: vec![],
+                underlying: GoType::new("int"),
+            })]);
+        planner.restore_planning(checkpoint);
+        assert_eq!(
+            planner.fresh_local(Some("temporary")).spelling(),
+            "temporary"
+        );
+        assert!(planner.adapter_registry.lookup(&key).is_none());
+        assert!(planner.namespace.take_adapters().is_empty());
+        let (imports, source, diagnostics) = namespace.finish(OutputCollector::new());
+        assert!(imports.is_empty());
+        assert!(source.is_empty());
+        assert!(diagnostics.is_empty());
     }
 }

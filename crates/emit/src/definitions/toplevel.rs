@@ -1,15 +1,15 @@
 use crate::Planner;
-use crate::Renderer;
-use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
-use crate::plan::bodies::{ConstPlan, LoweredStatement, Statement};
+use crate::plan::bodies::{ConstPlan, LoweredStatement};
+use crate::plan::declarations::{DeclarationKind, GoDeclaration};
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
-use std::slice;
 use syntax::EcoString;
+use syntax::ast::BindingId;
 use syntax::ast::{Expression, Generic};
+use syntax::program::SlotOrigin;
 use syntax::types::{SimpleKind, Type};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -24,7 +24,7 @@ impl Planner<'_> {
         name: &str,
         generics: &[Generic],
         ty: &Type,
-    ) -> String {
+    ) -> GoDeclaration {
         let params: Vec<Type> = generics
             .iter()
             .map(|generic| Type::Parameter(generic.name.clone()))
@@ -41,28 +41,41 @@ impl Planner<'_> {
             .as_ref()
             .or(declared_target.as_ref())
             .unwrap_or(ty);
-        let ty_string = if is_fn_alias {
+        let underlying_type = if is_fn_alias {
             let target = declared_target.as_ref().unwrap_or(ty);
             let layout = self.value_layout(target, SlotOrigin::Lisette);
-            let go_type = layout.go_type(self);
-            self.use_rendered_go_type(go_type)
+            layout.go_type(self)
         } else {
-            self.use_go_type(underlying)
+            self.go_type(underlying)
         };
 
-        let generics_string = self.generics_to_string(generics);
+        let generics = self.plan_generics(
+            &generics
+                .iter()
+                .map(|generic| {
+                    (
+                        generic.name.clone(),
+                        generic
+                            .resolved_bounds()
+                            .expect("generic bounds are resolved before emission")
+                            .cloned()
+                            .collect(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
 
-        format!(
-            "type {}{} = {}",
-            go_name::escape_type_name(name),
-            generics_string,
-            ty_string
-        )
+        GoDeclaration::new(DeclarationKind::Alias {
+            name: go_name::escape_type_name(name).into_owned(),
+            parameters: generics,
+            underlying: underlying_type,
+        })
     }
 
     pub(crate) fn lower_const(
         &mut self,
         identifier: &EcoString,
+        binding: Option<BindingId>,
         expression: &Expression,
         ty: &Type,
         placement: ConstPlacement,
@@ -92,13 +105,17 @@ impl Planner<'_> {
         };
         if is_const {
             LoweredStatement::Const(ConstPlan {
-                name: self.scope.bind_go_const(identifier, go_name),
+                name: self
+                    .scope
+                    .bind_go_const(identifier, binding.as_slice(), go_name),
                 go_type,
                 value,
             })
         } else {
             LoweredStatement::VarDecl {
-                name: self.scope.bind_source(identifier, &[], go_name),
+                name: self
+                    .scope
+                    .bind_source(identifier, binding.as_slice(), go_name),
                 go_type: go_type.expect("a non-constant `var` names its type"),
                 value: Some(value),
             }
@@ -110,12 +127,8 @@ impl Planner<'_> {
         identifier: &EcoString,
         expression: &Expression,
         ty: &Type,
-    ) -> String {
-        let statement: Statement = self
-            .lower_const(identifier, expression, ty, ConstPlacement::Package)
-            .into();
-        self.collect_imports(slice::from_ref(&statement));
-        let out = Renderer.render_setup(slice::from_ref(&statement), false);
-        out.trim_end_matches('\n').to_string()
+    ) -> GoDeclaration {
+        let binding = self.lower_const(identifier, None, expression, ty, ConstPlacement::Package);
+        GoDeclaration::new(DeclarationKind::Binding(binding))
     }
 }

@@ -1,4 +1,8 @@
 use crate::names::go_name;
+use crate::types::go_type::GoType;
+use std::fmt;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use syntax::ast::{Expression, Literal};
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
@@ -39,28 +43,43 @@ pub(crate) fn fresh_receiver_name(type_name: &str, taken: impl Fn(&str) -> bool)
         .expect("freshening counter is unbounded")
 }
 
-fn receiver_generic_names(receiver_generics: &str) -> impl Iterator<Item = &str> {
-    receiver_generics
-        .trim_start_matches('[')
-        .trim_end_matches(']')
-        .split(',')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
+#[derive(Clone, Default)]
+pub(crate) struct ReceiverGenerics(pub(crate) Vec<String>);
+impl Display for ReceiverGenerics {
+    fn fmt(&self, output: &mut Formatter<'_>) -> fmt::Result {
+        if self.0.is_empty() {
+            Ok(())
+        } else {
+            write!(output, "[{}]", self.0.join(", "))
+        }
+    }
+}
+impl ReceiverGenerics {
+    pub(crate) fn instantiate(&self, name: &str) -> GoType {
+        GoType::named(
+            name,
+            &self.0.iter().map(GoType::new).collect::<Vec<_>>(),
+            None,
+        )
+    }
 }
 
-pub(crate) fn synthesized_receiver_name(type_name: &str, receiver_generics: &str) -> String {
+pub(crate) fn synthesized_receiver_name(
+    type_name: &str,
+    receiver_generics: &ReceiverGenerics,
+) -> String {
     fresh_receiver_name(type_name, |name| {
-        receiver_generic_names(receiver_generics).any(|generic| generic == name)
+        receiver_generics.0.iter().any(|generic| generic == name)
     })
 }
 
 pub(crate) fn synthesized_local_name(
     base: &str,
     receiver: &str,
-    receiver_generics: &str,
+    receiver_generics: &ReceiverGenerics,
 ) -> String {
     go_name::fresh_suffixed(base, |name| {
-        name == receiver || receiver_generic_names(receiver_generics).any(|g| g == name)
+        name == receiver || receiver_generics.0.iter().any(|generic| generic == name)
     })
 }
 

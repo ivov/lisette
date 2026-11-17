@@ -1,12 +1,10 @@
 use crate::Planner;
-use crate::abi::callable::PayloadLayout;
-use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi};
-use crate::calls::NativeCallContext;
+use crate::abi::callable::LoweredReturnAbi;
+use crate::abi::fallible_producer::OptionFusePlan;
+use crate::abi::wrapping::{is_nil, non_nil, unexpected_nil_error};
 use crate::calls::bound_value::{BoundValue, PairCondition};
-use crate::calls::comma_ok::CommaOkSource;
-use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
-use crate::calls::go_interop::{NilGuard, is_nil, non_nil, unexpected_nil_error};
-use crate::calls::slice_loop::FoundSink;
+use crate::calls::comma_ok::CommaOkValueSlot;
+
 use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
 use crate::names::source_name::SourceName;
@@ -23,15 +21,12 @@ use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
-use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use crate::types::go_type::GoType;
 use syntax::EcoString;
-use syntax::ast::{
-    BindingId, ConstructorPatternResolution, Expression, Literal, MatchArm, Pattern,
-};
+use syntax::ast::{BindingId, ConstructorPatternResolution, Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
-use syntax::program::{self, NativeTypeKind};
+use syntax::program;
 use syntax::types::{Type, unqualified_name};
 
 fn finish_nested_pair_arm(bound: &mut BoundValue, body: LoweredBlock) -> LoweredBlock {
@@ -50,168 +45,6 @@ fn finish_nested_pair_arm(bound: &mut BoundValue, body: LoweredBlock) -> Lowered
         bound.discard_value();
     }
     body
-}
-
-pub(crate) struct ResultFusePlan<'a> {
-    subject: &'a Expression,
-    shape: LoweredReturnAbi,
-    nil_guard: Option<NilGuard>,
-    wraps: Vec<&'a Expression>,
-    bound: Option<ComponentBinding>,
-}
-
-impl ResultFusePlan<'_> {
-    pub(crate) fn wraps_error(&self) -> bool {
-        !self.wraps.is_empty()
-    }
-}
-
-pub(crate) enum OptionFusePlan<'a> {
-    Bound(ComponentBinding),
-    CommaOk {
-        subject: &'a Expression,
-        source: CommaOkSource,
-    },
-    Nullable {
-        subject: &'a Expression,
-        nil_guard: NilGuard,
-    },
-    /// `xs.get(i)` on a slice or array: a bounds test guards a direct index.
-    Index {
-        call: NativeCallContext<'a>,
-    },
-    Found {
-        call: NativeCallContext<'a>,
-    },
-}
-
-impl OptionFusePlan<'_> {
-    pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundValue {
-        match self {
-            Self::Bound(components) => planner.bind_component_pair(components, slot),
-            Self::CommaOk { subject, source } => planner.bind_comma_ok_pair(subject, source, slot),
-            Self::Nullable { subject, nil_guard } => {
-                let value = if matches!(subject.unwrap_parens(), Expression::DotAccess { .. }) {
-                    planner.plan_raw_nullable_field(subject)
-                } else {
-                    planner.lower_call(subject, None, ExpressionContext::value())
-                };
-                let (mut statements, call) = value.into_parts();
-                let (value, opens_if) = match slot {
-                    CommaOkValueSlot::Named(name) => (name, false),
-                    CommaOkValueSlot::Arm(name) => (name, true),
-                    CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
-                        (planner.fresh_declared("ret"), false)
-                    }
-                    CommaOkValueSlot::Unused => (planner.fresh_declared("ret"), true),
-                };
-                let initializer_call = if opens_if {
-                    Some(call)
-                } else {
-                    statements.push(define(value.clone(), call));
-                    None
-                };
-                BoundValue::nullable(statements, value, nil_guard, initializer_call)
-            }
-            Self::Index { call } => {
-                let (statements, index) = planner.lower_bounds_checked_index(&call);
-                let target = match slot {
-                    CommaOkValueSlot::Named(name) => Some(name),
-                    _ => None,
-                };
-                BoundValue::index(statements, index, target)
-            }
-            Self::Found { call } => {
-                let value = match slot {
-                    CommaOkValueSlot::Named(name) => Some(name),
-                    CommaOkValueSlot::Arm(name) => {
-                        let name = planner.declared_arm_value_name(&name);
-                        Some(name)
-                    }
-                    CommaOkValueSlot::Temp => Some(planner.fresh_declared("ret")),
-                    CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
-                };
-                let flag = planner.fresh_declared("found");
-                let statements = planner.lower_find_loop(
-                    &call,
-                    FoundSink {
-                        value: value.as_ref(),
-                        flag: &flag,
-                    },
-                );
-                BoundValue::found(statements, value, flag)
-            }
-        }
-    }
-}
-
-impl ResultFusePlan<'_> {
-    pub(crate) fn has_nil_guard(&self) -> bool {
-        self.nil_guard.is_some()
-    }
-
-    pub(super) fn shape(&self) -> &LoweredReturnAbi {
-        &self.shape
-    }
-
-    pub(crate) fn carries_payload(&self) -> bool {
-        matches!(self.shape, LoweredReturnAbi::Result { .. })
-    }
-
-    pub(crate) fn bind(
-        self,
-        planner: &mut Planner<'_>,
-        slot: CommaOkValueSlot,
-        error_name: Option<&SourceName>,
-    ) -> BoundValue {
-        self.bind_wrapped(planner, slot, error_name, false).0
-    }
-
-    fn bind_wrapped(
-        self,
-        planner: &mut Planner<'_>,
-        slot: CommaOkValueSlot,
-        error_name: Option<&SourceName>,
-        read_error: bool,
-    ) -> (BoundValue, Vec<WrapMessage>) {
-        if let Some(components) = self.bound {
-            return (planner.bind_component_pair(components, slot), Vec::new());
-        }
-
-        let carries_value = self.carries_payload();
-        let (setup, call) = planner
-            .lower_call(self.subject, None, ExpressionContext::value())
-            .into_parts();
-        let (message_setup, messages) = planner.prepare_wrap_messages(&self.wraps, read_error);
-        // Bind before any eager message setup.
-        let slot = if message_setup.is_empty() {
-            slot
-        } else {
-            match slot {
-                CommaOkValueSlot::Arm(name) => {
-                    let name = planner.declared_arm_value_name(&name);
-                    CommaOkValueSlot::Named(name)
-                }
-                CommaOkValueSlot::Unused => CommaOkValueSlot::Discarded,
-                slot => slot,
-            }
-        };
-        let mut pair = planner.bind_pair(
-            setup,
-            call,
-            slot,
-            if carries_value {
-                PairKind::Result {
-                    nil_guard: self.nil_guard,
-                }
-            } else {
-                PairKind::BareError
-            },
-            error_name,
-        );
-        pair.statements.extend(message_setup);
-        (pair, messages)
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -549,104 +382,6 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let tree_emitter = TreePlanner::new(self, arms, subject_var, subject_ty);
         tree_emitter.lower(place)
-    }
-
-    /// Recognize a Lisette `Result` function or a Go `(T, error)` one.
-    pub(crate) fn result_fuse_plan<'a>(
-        &self,
-        subject: &'a Expression,
-    ) -> Option<ResultFusePlan<'a>> {
-        if let Some(components) = self.component_binding(subject) {
-            return (components.kind.is_result()).then(|| ResultFusePlan {
-                subject,
-                shape: LoweredReturnAbi::Result {
-                    payload: PayloadLayout::Packed,
-                },
-                nil_guard: None,
-                wraps: Vec::new(),
-                bound: Some(components),
-            });
-        }
-        let lowered = self.lowered_call(subject)?;
-        if !lowered.is_result() || lowered.is_bridged() {
-            return None;
-        }
-        let nil_guard = match lowered.origin {
-            CallableOrigin::GoInterop => {
-                if lowered.has_tuple_payload(self) {
-                    return None;
-                }
-                lowered.nil_guard
-            }
-            _ => None,
-        };
-        Some(ResultFusePlan {
-            subject: lowered.call,
-            shape: lowered.shape,
-            nil_guard,
-            wraps: lowered.wraps,
-            bound: None,
-        })
-    }
-
-    /// Go rejects invalid constant indexes even behind a bounds check.
-    fn index_fuses(&self, receiver: &Expression, index: &Expression) -> bool {
-        match index.unwrap_parens() {
-            Expression::Literal {
-                literal: Literal::Integer { value, .. },
-                ..
-            } => match self.facts.strip_and_peel(&receiver.get_type()) {
-                Type::Array { length, .. } => *value < length,
-                _ => true,
-            },
-            other => !self.is_go_constant_expression(other),
-        }
-    }
-
-    pub(crate) fn option_fuse_plan<'a>(
-        &self,
-        subject: &'a Expression,
-    ) -> Option<OptionFusePlan<'a>> {
-        if let Some(components) = self.component_binding(subject) {
-            return (components.kind == ComponentKind::Option)
-                .then_some(OptionFusePlan::Bound(components));
-        }
-        if let Some(source) = self.comma_ok_source(subject) {
-            return Some(OptionFusePlan::CommaOk { subject, source });
-        }
-        if let Some(call) = self.native_method_call(subject) {
-            let (receiver, arguments) = call.receiver_and_arguments()?;
-            let indexes = matches!(
-                call.native_type,
-                NativeTypeKind::Slice | NativeTypeKind::Array
-            ) && call.method == "get"
-                && arguments.len() == 1
-                && call.spread.is_none()
-                && self.index_fuses(receiver, &arguments[0]);
-            if indexes {
-                return Some(OptionFusePlan::Index { call });
-            }
-            if self.find_loop_fuses(&call) {
-                return Some(OptionFusePlan::Found { call });
-            }
-        }
-
-        if let Some(nil_guard) = self.nullable_field_guard(subject) {
-            return Some(OptionFusePlan::Nullable { subject, nil_guard });
-        }
-
-        let lowered = self.lowered_call(subject)?;
-        if lowered.is_bridged() {
-            return None;
-        }
-        if !matches!(
-            lowered.shape,
-            LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_))
-        ) {
-            return None;
-        }
-        let nil_guard = lowered.nil_guard?;
-        Some(OptionFusePlan::Nullable { subject, nil_guard })
     }
 
     /// Bind `let x = match ...` straight into `x`.

@@ -1,3 +1,4 @@
+use crate::plan::go_expression::Position;
 use std::iter;
 
 use crate::plan::bodies::GoUses;
@@ -390,12 +391,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements.push(LoweredStatement::If(build_chain_plan(branches, trailing)).into());
     }
 
-    fn arm_line(&self, arm_index: usize) -> Option<String> {
+    fn arm_line(&self, arm_index: usize) -> Option<Position> {
         self.planner
-            .maybe_line_directive(&self.arms[arm_index].pattern.get_span())
+            .source_position(&self.arms[arm_index].pattern.get_span())
     }
 
-    fn decision_line(&self, decision: Option<&Decision>) -> Option<String> {
+    fn decision_line(&self, decision: Option<&Decision>) -> Option<Position> {
         decision
             .and_then(Decision::first_arm)
             .and_then(|arm_index| self.arm_line(arm_index))
@@ -489,7 +490,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         guard_renders_inline(condition)
             && guard.leaf.bindings.iter().all(|binding| {
                 !binding.path.contains_deferred_evaluation()
-                    && !(calls && binding.path.reads_element())
+                    && !(calls && binding.path.payload_is_index())
             })
             && self.guarded_tree_flattens(&guard.failure)
     }
@@ -500,8 +501,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         tree: &Decision,
         place: &PlacePlan,
     ) -> bool {
+        let checkpoint = self.planner.planning_snapshot();
         let mut collected: Vec<FlatCase> = Vec::new();
         if !self.collect_flat_cases(tree, &mut Vec::new(), &mut collected, true) {
+            self.planner.restore_planning(checkpoint);
             return false;
         }
         let default_at = collected.iter().position(|case| case.conditions.is_empty());
@@ -1369,7 +1372,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 );
                 let line = consumers
                     .first()
-                    .and_then(|consumer| this.planner.maybe_line_directive(&consumer.get_span()));
+                    .and_then(|consumer| this.planner.source_position(&consumer.get_span()));
                 direct_first(&mut statements[start..], line);
             }
             f(this, statements)
@@ -1540,7 +1543,7 @@ fn group_chain_tests_by_condition(
 struct ChainBranch {
     condition: GoExpression,
     body: LoweredBlock,
-    line: Option<String>,
+    line: Option<Position>,
 }
 
 struct BranchTest {

@@ -16,8 +16,8 @@ use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::calls::go_interop::NilGuard;
+use crate::abi::layout::ValueLayout;
+use crate::abi::wrapping::NilGuard;
 use crate::control_flow::propagation::plain_return;
 use crate::names::generics;
 use crate::names::source_name::SourceName;
@@ -26,6 +26,7 @@ use crate::plan::bodies::{LoweredBlock, define_many};
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, UnaryOp};
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
+use syntax::program::SlotOrigin;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
@@ -149,7 +150,7 @@ impl AccessPath {
         result
     }
 
-    pub(crate) fn reads_element(&self) -> bool {
+    pub(crate) fn payload_is_index(&self) -> bool {
         self.segments
             .iter()
             .any(|segment| matches!(segment, PathSegment::Index(_)))

@@ -4,7 +4,7 @@ use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::Span;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct Rejections {
     focus: Cell<Option<Span>>,
     found: RefCell<Vec<LisetteDiagnostic>>,
@@ -95,5 +95,5 @@ mod tests {
         );
     }
 
-    const PINNED: usize = 98;
+    const PINNED: usize = 99;
 }

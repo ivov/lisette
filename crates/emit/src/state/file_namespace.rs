@@ -1,14 +1,16 @@
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::output::imports::ImportPlan;
 use crate::output::{OutputCollector, OutputImport};
+use crate::plan::declarations::GoDeclaration;
 use crate::state::rejections::Rejections;
 use diagnostics::LisetteDiagnostic;
+use std::mem;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct FileNamespace {
     imports: ImportPlan,
     requirements: PackageRequirements,
-    adapter_declarations: Vec<String>,
+    adapter_declarations: Vec<GoDeclaration>,
     rejections: Rejections,
 }
 
@@ -42,17 +44,17 @@ impl FileNamespace {
         &self.rejections
     }
 
-    pub(crate) fn collect_adapter(&mut self, declaration: String) {
-        self.adapter_declarations.push(declaration);
+    pub(crate) fn collect_adapters(&mut self, declarations: Vec<GoDeclaration>) {
+        self.adapter_declarations.extend(declarations);
+    }
+    pub(crate) fn take_adapters(&mut self) -> Vec<GoDeclaration> {
+        mem::take(&mut self.adapter_declarations)
     }
 
     pub(crate) fn finish(
         self,
-        mut source: OutputCollector,
+        source: OutputCollector,
     ) -> (Vec<OutputImport>, String, Vec<LisetteDiagnostic>) {
-        for declaration in self.adapter_declarations {
-            source.collect_with_blank(declaration);
-        }
         let (imports, mut diagnostics) = self.imports.finish(&self.requirements);
         diagnostics.extend(self.rejections.into_diagnostics());
         (imports, source.render(), diagnostics)

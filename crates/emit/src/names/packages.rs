@@ -52,10 +52,6 @@ impl PackageRequirements {
         self.uses.insert(package);
     }
 
-    pub(crate) fn require_generated(&mut self, package: GeneratedPackage) {
-        self.require(PackageUse::generated(package));
-    }
-
     pub(crate) fn extend(&mut self, other: &Self) {
         self.uses.extend(other.uses.iter().cloned());
     }

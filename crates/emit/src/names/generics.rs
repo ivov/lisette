@@ -1,3 +1,6 @@
+use crate::names::packages::PackageUse;
+use crate::plan::declarations::TypeParameter;
+use crate::utils::ReceiverGenerics;
 use std::borrow::Cow;
 
 use rustc_hash::FxHashMap as HashMap;
@@ -13,7 +16,7 @@ use syntax::types::{SubstitutionMap, Type};
 fn build_type_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
     generics
         .iter()
-        .map(|g| g.name.clone())
+        .map(|generic| generic.name.clone())
         .zip(type_args.iter().cloned())
         .collect()
 }
@@ -56,16 +59,20 @@ impl Planner<'_> {
             return None;
         }
 
-        let args: Vec<GoType> = vars
+        let arguments: Vec<GoType> = vars
             .iter()
             .filter_map(|var| Some(self.go_type(mapping.get(var.as_str())?)))
             .collect();
 
-        if args.len() != vars.len() || args.iter().any(|a| a.code.contains("interface{}")) {
+        if arguments.len() != vars.len()
+            || arguments
+                .iter()
+                .any(|argument| argument.contains_empty_interface())
+        {
             return None;
         }
 
-        Some(GoType::type_arguments(&args))
+        Some(GoType::type_arguments(&arguments))
     }
 
     /// Make `generics` the type parameters of the declaration being emitted.
@@ -81,94 +88,59 @@ impl Planner<'_> {
         self.scope.set_type_params(type_params);
     }
 
-    pub(crate) fn generic_go_name<'a>(&'a self, source_name: &'a str) -> Cow<'a, str> {
+    pub(crate) fn generic_go_name<'argument>(
+        &'argument self,
+        source_name: &'argument str,
+    ) -> Cow<'argument, str> {
         match self.package.generic_rename(source_name) {
             Some(renamed) => Cow::Borrowed(renamed),
             None => go_name::escape_type_name(source_name),
         }
     }
 
-    pub(crate) fn receiver_generics_string(&self, generics: &[Generic]) -> String {
-        if generics.is_empty() {
-            String::new()
-        } else {
-            let params: Vec<Cow<'_, str>> = generics
+    pub(crate) fn receiver_generics(&self, generics: &[Generic]) -> ReceiverGenerics {
+        ReceiverGenerics(
+            generics
                 .iter()
-                .map(|g| self.generic_go_name(&g.name))
-                .collect();
-            format!("[{}]", params.join(", "))
-        }
+                .map(|generic| self.generic_go_name(&generic.name).into_owned())
+                .collect(),
+        )
     }
 
-    pub(crate) fn generics_to_string(&mut self, generics: &[Generic]) -> String {
-        let resolved_generics = generics
-            .iter()
-            .map(|generic| {
-                let bounds = generic
-                    .resolved_bounds()
-                    .expect("generic bounds must be resolved before emission")
-                    .cloned()
-                    .collect();
-                (generic.name.clone(), bounds)
-            })
-            .collect::<Vec<_>>();
-        self.resolved_generics_to_string(&resolved_generics)
-    }
-
-    pub(crate) fn resolved_generics_to_string(
-        &mut self,
-        generics: &[(EcoString, Vec<Type>)],
-    ) -> String {
-        if generics.is_empty() {
-            return String::new();
-        }
-
-        let rendered = generics
+    pub(crate) fn plan_generics(&self, generics: &[(EcoString, Vec<Type>)]) -> Vec<TypeParameter> {
+        generics
             .iter()
             .map(|(name, bounds)| {
-                let constraint = self.render_bounds(bounds);
-                format!("{} {}", self.generic_go_name(name), constraint)
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        format!("[{rendered}]")
-    }
-
-    fn render_bounds(&mut self, bounds: &[Type]) -> String {
-        let has_ordered = bounds.iter().any(is_ordered_bound);
-        let mut named_bounds: Vec<String> = Vec::new();
-        for bound in bounds {
-            if self.bound_needs_dispatch(bound) {
-                // Source conformance is checked; the generated adapter selects
-                // the implementation's physical method ABI without changing T.
-                continue;
-            }
-            if is_zeroable_bound(bound) {
-                // Lisette-only constraint: every Go type is zeroable.
-                continue;
-            }
-            let rendered = if is_comparable_bound(bound) {
-                if has_ordered {
-                    continue;
+                let has_ordered = bounds.iter().any(is_ordered_bound);
+                let mut planned = Vec::new();
+                for bound in bounds {
+                    if self.bound_needs_dispatch(bound) || is_zeroable_bound(bound) {
+                        continue;
+                    }
+                    let ty = if is_comparable_bound(bound) {
+                        if has_ordered {
+                            continue;
+                        }
+                        GoType::new("comparable")
+                    } else if is_ordered_bound(bound) {
+                        GoType::named(
+                            "Ordered",
+                            &[],
+                            Some(PackageUse::generated(go_name::GeneratedPackage::Cmp)),
+                        )
+                    } else {
+                        self.go_type(bound)
+                    };
+                    if !planned.contains(&ty) {
+                        planned.push(ty);
+                    }
                 }
-                "comparable".to_string()
-            } else if is_ordered_bound(bound) {
-                self.require_cmp();
-                "cmp.Ordered".to_string()
-            } else {
-                self.use_go_type(bound)
-            };
-            if !named_bounds.contains(&rendered) {
-                named_bounds.push(rendered);
-            }
-        }
-
-        match named_bounds.as_slice() {
-            [] => "any".to_string(),
-            [single] => single.clone(),
-            multiple => format!("interface {{ {} }}", multiple.join("; ")),
-        }
+                TypeParameter {
+                    name: self.generic_go_name(name).into_owned(),
+                    bounds: planned,
+                }
+            })
+            .collect()
     }
 }
 
@@ -204,22 +176,22 @@ pub(crate) fn extract_type_mapping(
     if let (Some(gen_params), Some(conc_params)) =
         (generic.get_type_params(), concrete.get_type_params())
     {
-        for (g, c) in gen_params.iter().zip(conc_params.iter()) {
-            extract_type_mapping(g, c, mapping);
+        for (generic, c) in gen_params.iter().zip(conc_params.iter()) {
+            extract_type_mapping(generic, c, mapping);
         }
         return;
     }
 
     match (generic, concrete) {
         (Type::Function(gen_f), Type::Function(conc_f)) => {
-            for (g, c) in gen_f.params.iter().zip(conc_f.params.iter()) {
-                extract_type_mapping(&g.ty, &c.ty, mapping);
+            for (generic, c) in gen_f.params.iter().zip(conc_f.params.iter()) {
+                extract_type_mapping(&generic.ty, &c.ty, mapping);
             }
             extract_type_mapping(&gen_f.return_type, &conc_f.return_type, mapping);
         }
         (Type::Tuple(generic_elements), Type::Tuple(conc)) => {
-            for (g, c) in generic_elements.iter().zip(conc.iter()) {
-                extract_type_mapping(g, c, mapping);
+            for (generic, c) in generic_elements.iter().zip(conc.iter()) {
+                extract_type_mapping(generic, c, mapping);
             }
         }
         (
