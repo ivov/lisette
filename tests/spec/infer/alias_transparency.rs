@@ -1,4 +1,5 @@
 //! Every pairing must be accepted or rejected both with and without the alias.
+use crate::_harness::infer::for_each_expression;
 
 use crate::spec::infer::*;
 
@@ -140,4 +141,51 @@ fn integer_operators_reject_a_reference_to_an_integer() {
         infer(&format!("fn test(x: Ref<int>) {{ let _ = {operation} }}"))
             .assert_infer_code("type_mismatch");
     }
+}
+
+#[test]
+fn reference_alias_array_elements_resolve_to_ref() {
+    use crate::_harness::infer::infer;
+    use syntax::ast::Expression;
+    use syntax::types::Type;
+    let result =
+        infer("type IntRef = Ref<int>; fn refs(xs: Array<IntRef, 2>) -> Array<IntRef, 2> { xs }")
+            .assert_no_errors();
+
+    let mut seen = false;
+    for_each_expression(&result.ast, |expression| {
+        if let Expression::Identifier {
+            value,
+            ty: Type::Array { element, .. },
+            ..
+        } = expression
+            && value == "xs"
+        {
+            assert!(
+                element.is_ref(),
+                "array element was not normalized: {element:?}"
+            );
+            seen = true;
+        }
+    });
+    assert!(seen);
+}
+
+#[test]
+fn go_function_alias_preserves_its_declared_method_owner() {
+    infer_with_go_typedefs(
+        r#"import "go:example.com/handler"
+fn accepts(h: handler.Handler) { h.handle() }
+fn main() { let h = handler.HandlerFunc(|| {}); accepts(h) }
+"#,
+        &[(
+            "go:example.com/handler",
+            r#"
+pub interface Handler { fn handle() }
+pub type HandlerFunc = fn()
+impl HandlerFunc { pub fn handle(self) }
+"#,
+        )],
+    )
+    .assert_no_errors();
 }

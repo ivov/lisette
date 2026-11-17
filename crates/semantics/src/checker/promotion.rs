@@ -31,6 +31,7 @@ pub enum MemberKind {
 pub struct ResolvedMember {
     pub(crate) depth: usize,
     pub declaring_type: Symbol,
+    pub declaring_instance: Box<Type>,
     pub kind: MemberKind,
 }
 
@@ -62,6 +63,36 @@ pub fn resolve_selector(store: &Store, outer: &Type, name: &str) -> Resolution {
     let lookup = |id: &str| store.get_definition(id);
     let entries = walk(outer, lookup);
     resolve_in_entries(&entries, outer, name, lookup)
+}
+
+pub(crate) fn selector_receiver<'d>(
+    ty: &Type,
+    lookup: impl Fn(&str) -> Option<&'d Definition>,
+) -> Type {
+    let mut current = ty.unwrap_forall().strip_refs();
+    let mut seen = HashSet::default();
+    while let Type::Nominal {
+        id,
+        params: parameters,
+        writable,
+    } = &current
+    {
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        let Some(definition) = lookup(id) else { break };
+        if definition
+            .methods()
+            .is_some_and(|methods| !methods.is_empty())
+        {
+            break;
+        }
+        let Some(target) = definition.instantiate_alias_target(parameters, *writable) else {
+            break;
+        };
+        current = target.unwrap_forall().strip_refs();
+    }
+    current
 }
 
 /// One promoted or own method, without building the whole promoted set.
@@ -430,6 +461,7 @@ where
     ResolvedMember {
         depth: entry.depth,
         declaring_type: candidate.declaring_type.clone(),
+        declaring_instance: Box::new(entry.ty.clone()),
         kind,
     }
 }
@@ -471,7 +503,7 @@ fn nominal_entry<'d, F>(
 where
     F: Copy + Fn(&str) -> Option<&'d Definition>,
 {
-    let resolved = types::peel_alias(&target, lookup);
+    let resolved = selector_receiver(&target, lookup);
     if !matches!(resolved, Type::Nominal { .. }) {
         return None;
     }
@@ -653,7 +685,7 @@ mod tests {
                 body,
             };
             self.store
-                .get_package_mut(PACKAGE)
+                .edit_package(PACKAGE)
                 .unwrap()
                 .definitions
                 .insert(Symbol::from_parts(PACKAGE, name), def);

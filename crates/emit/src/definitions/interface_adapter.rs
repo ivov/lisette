@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
-use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
+use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::BodyOrigin;
 use crate::names::go_name;
@@ -9,21 +9,29 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, directed_first,
     expression_statement,
 };
+use crate::plan::declarations::{
+    DeclarationKind, FieldDeclaration, FunctionSignature, GoDeclaration,
+};
+use crate::plan::go_expression::GoParameter;
+use crate::plan::go_expression::Position;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use crate::utils::fresh_receiver_name;
-use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::StructFields;
 use syntax::ast::{Expression, FunctionDefinitionView};
 use syntax::go_names;
 use syntax::go_names::ConformanceCandidate;
+use syntax::program::CheckedMethod;
+use syntax::program::GoHint;
+use syntax::program::SlotOrigin;
 use syntax::program::{
     Definition, DefinitionBody, DotAccessResolution, InterfaceRequirement, Method,
     interface_requirements, methods_for_type, resolved_definition,
 };
+use syntax::types::method_receiver_substitution;
 use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
 };
@@ -31,6 +39,7 @@ use syntax::types::{
 pub(crate) struct AdapterPlan {
     concrete_id: EcoString,
     interface_id: EcoString,
+    interface_ty: Type,
     concrete_ty: Type,
     methods: Vec<AdapterMethod>,
     generic_context: Vec<(EcoString, Vec<Type>)>,
@@ -159,7 +168,7 @@ impl Planner<'_> {
         method: FunctionDefinitionView<'_>,
         go_name: &str,
         generic_context: &[(EcoString, Vec<Type>)],
-    ) -> String {
+    ) -> GoDeclaration {
         let (receiver, params) = method
             .params
             .split_first()
@@ -190,16 +199,13 @@ impl Planner<'_> {
             source,
             target,
         };
-        let line = self.maybe_line_directive(&method.name_span);
-        let mut declaration = String::new();
+        let line = self.source_position(&method.name_span);
         self.emit_adapter_method(
-            &mut declaration,
             MethodReceiver::Itself(&receiver.ty),
             generic_context,
             &twin,
             line.as_ref(),
-        );
-        declaration
+        )
     }
 
     fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
@@ -261,10 +267,8 @@ impl Planner<'_> {
 
     pub(crate) fn bound_dispatch_layout(&self, expression: &Expression) -> Option<FunctionLayout> {
         let (_, requirement) = self.bound_dispatch_requirement(expression)?;
-        let mut layout = self.requirement_layout(&requirement, false)?;
-        let result = self.value_layout(&layout.result_type, SlotOrigin::Lisette);
-        layout = self.function_layout(layout.parameters, &result, CallableReturnAbi::Value, None);
-        Some(layout)
+        let layout = self.requirement_layout(&requirement, false)?;
+        Some(layout.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette))
     }
 
     fn requirement_layout(
@@ -335,13 +339,7 @@ impl Planner<'_> {
             let local = self.requirement_layout(&requirement, false)?;
             let foreign = self.requirement_layout(&requirement, true)?;
             let target = if canonical {
-                let result = self.value_layout(&local.result_type, SlotOrigin::Lisette);
-                self.function_layout(
-                    local.parameters.clone(),
-                    &result,
-                    CallableReturnAbi::Value,
-                    None,
-                )
+                local.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette)
             } else if go_name::is_go_import(&requirement.declaring_interface) {
                 foreign.clone()
             } else {
@@ -360,6 +358,7 @@ impl Planner<'_> {
         Some(AdapterPlan {
             concrete_id: name,
             interface_id: id.as_eco().clone(),
+            interface_ty: target.clone(),
             concrete_ty: source.clone(),
             generic_context: self.adapter_generic_context(source, &methods),
             methods,
@@ -367,22 +366,13 @@ impl Planner<'_> {
     }
 
     fn dynamic_method_interface(&mut self, method_name: &str, layout: &FunctionLayout) -> GoType {
-        let params: Vec<GoType> = layout
+        let parameters: Vec<GoType> = layout
             .parameters
             .iter()
             .map(|parameter| parameter.go_type(self))
             .collect();
         let result = layout.result_go_type(self).unwrap_or_default();
-        let param_codes: Vec<&str> = params.iter().map(|param| param.code.as_str()).collect();
-        GoType::with_dependencies(
-            format!(
-                "interface {{ {}({}) {} }}",
-                method_name,
-                param_codes.join(", "),
-                result.code
-            ),
-            params.iter().chain([&result]),
-        )
+        GoType::method_interface(method_name, &parameters, &result)
     }
 
     fn plan_dynamic_adapter_body(
@@ -559,6 +549,7 @@ impl Planner<'_> {
         Some(AdapterPlan {
             concrete_id: source_id.as_eco().clone(),
             interface_id: target_id.as_eco().clone(),
+            interface_ty: target.clone(),
             concrete_ty: source_ty.clone(),
             generic_context: self.adapter_generic_context(source_ty, &methods),
             methods,
@@ -573,6 +564,19 @@ impl Planner<'_> {
         source_stripped: &Type,
         target: &Type,
     ) -> Option<Vec<AdapterMethod>> {
+        let requirements = interface_requirements(target, |id| self.facts.definition(id));
+        if requirements.is_empty() {
+            return None;
+        }
+        let source_is_interface = self
+            .facts
+            .definition(source_id)
+            .is_some_and(|definition| matches!(definition.body, DefinitionBody::Interface { .. }));
+        let witness = self.facts.conformance(source_stripped, target);
+        assert!(
+            witness.is_some() || source_is_interface,
+            "concrete interface coercion has no checked witness: {source_stripped:?} -> {target:?}"
+        );
         let impl_methods = methods_for_type(source_stripped, &HashMap::default(), |id| {
             self.facts.definition(id)
         });
@@ -588,30 +592,45 @@ impl Planner<'_> {
         let mut methods = Vec::new();
         let mut any_adapted = false;
         let mut seen = HashSet::default();
-        for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
+        for requirement in requirements {
             // Parents may spell one Go method with different source names.
             let selector = self.method_go_name(&requirement.name, false);
             if !seen.insert(selector) {
                 continue;
             }
-            let (impl_name, impl_ty) = go_names::conformance_method(
-                &impl_methods,
-                requirement.declaring_interface.as_str(),
-                self.facts
-                    .definition(requirement.declaring_interface.as_str())
-                    .is_some_and(|definition| definition.visibility.is_public()),
-                requirement.name.as_str(),
-                &own_candidate,
-            )?;
+            let checked = witness.and_then(|witness| {
+                witness.methods.iter().find(|method| {
+                    method.required_interface == requirement.declaring_interface
+                        && method.required_name == requirement.name
+                })
+            });
+            let (implementation_name, implementation_type) = if let Some(checked) = checked {
+                (&checked.selected_name, &checked.signature)
+            } else {
+                assert!(
+                    source_is_interface,
+                    "checked witness omits an interface requirement"
+                );
+
+                go_names::conformance_method(
+                    &impl_methods,
+                    requirement.declaring_interface.as_str(),
+                    self.facts
+                        .definition(requirement.declaring_interface.as_str())
+                        .is_some_and(|definition| definition.visibility.is_public()),
+                    requirement.name.as_str(),
+                    &own_candidate,
+                )?
+            };
             let source_requirement = source_requirements
                 .iter()
-                .find(|source| source.name == *impl_name);
+                .find(|source| source.name == *implementation_name);
             let method = self.build_adapter_method(
                 &requirement,
-                impl_name,
-                impl_ty,
+                (implementation_name, implementation_type),
                 source_stripped,
                 source_requirement,
+                checked,
             )?;
             any_adapted |= method.changes_signature();
             methods.push(method);
@@ -641,32 +660,44 @@ impl Planner<'_> {
     fn build_adapter_method(
         &self,
         requirement: &InterfaceRequirement,
-        impl_name: &EcoString,
-        impl_ty: &Type,
+        implementation: (&EcoString, &Type),
         concrete_ty: &Type,
         source_requirement: Option<&InterfaceRequirement>,
+        checked: Option<&CheckedMethod>,
     ) -> Option<AdapterMethod> {
-        let f = impl_ty.as_function_type()?;
-        let (receiver_ty, params) = f.params.split_first()?;
-        let substitution = if source_requirement.is_some() {
+        let (implementation_name, implementation_type) = implementation;
+        let declared = checked.map_or(implementation_type, |method| &method.declared_signature);
+        let function = declared.as_function_type()?;
+        let (receiver_ty, parameters) = function.params.split_first()?;
+        let substitution = if let Some(checked) = checked {
+            checked.substitutions.clone()
+        } else if source_requirement.is_some() {
             SubstitutionMap::default()
         } else {
             method_receiver_substitution(&receiver_ty.ty, concrete_ty)?
         };
-        let param_types: Vec<Type> = params
+        let param_types: Vec<Type> = parameters
             .iter()
             .map(|param| substitute(&param.ty, &substitution))
             .collect();
-        let return_type = substitute(&f.return_type, &substitution);
+        let return_type = substitute(&function.return_type, &substitution);
 
         let source_owner = source_requirement
             .map(|source| source.declaring_interface.as_str())
+            .or_else(|| {
+                checked.and_then(|method| {
+                    method
+                        .selected_definition
+                        .rsplit_once('.')
+                        .map(|(owner, _)| owner)
+                })
+            })
             .or_else(|| concrete_ty.get_qualified_id())?;
-        let source_go_method =
-            go_name::is_go_import(source_owner).then(|| format!("{source_owner}.{impl_name}"));
+        let source_go_method = go_name::is_go_import(source_owner)
+            .then(|| format!("{source_owner}.{implementation_name}"));
         let source_return = source_requirement
             .and_then(|source| source.method.ty.get_function_ret())
-            .unwrap_or(&f.return_type);
+            .unwrap_or(&function.return_type);
         let user_abi = if let Some(id) = &source_go_method {
             self.facts.go_callable_return(id).cloned().map_or_else(
                 || CallableReturnAbi::unlowered(source_return),
@@ -677,7 +708,7 @@ impl Planner<'_> {
         } else if self.requirement_uses_tagged_twin(requirement) {
             CallableReturnAbi::Value
         } else {
-            self.method_return_abi(&f.return_type)
+            self.method_return_abi(&function.return_type)
         };
         let peeled_return = self.facts.peel_alias(&return_type);
         let user_result = self.interface_result_layout(source_go_method.as_deref(), &peeled_return);
@@ -719,22 +750,23 @@ impl Planner<'_> {
                 parameters,
                 &user_result,
                 source.return_abi.clone(),
-                Some(&f.return_type),
+                Some(&function.return_type),
             )
         };
 
+        let selected_exported = checked.is_some_and(|method| method.is_exported);
         let source_go_name = match source_requirement {
             Some(source) => self.requirement_go_name(source),
             None if source_go_method.is_none()
                 && self.requirement_uses_tagged_twin(requirement) =>
             {
-                go_name::tagged_twin(&self.method_go_name(impl_name, false))
+                go_name::tagged_twin(&self.method_go_name(implementation_name, selected_exported))
             }
-            None => self.method_go_name(impl_name, false),
+            None => self.method_go_name(implementation_name, selected_exported),
         };
         Some(AdapterMethod {
             go_name: self.requirement_go_name(requirement),
-            source_name: impl_name.clone(),
+            source_name: implementation_name.clone(),
             source_go_name,
             alternate: None,
             source,
@@ -791,10 +823,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
-        let key = (
-            concrete_dedup_key(&plan.concrete_ty, &plan.concrete_id),
-            plan.interface_id.clone(),
-        );
+        let key = (plan.concrete_ty.clone(), plan.interface_ty.clone());
         let cacheable = plan.generic_context.is_empty();
         if cacheable
             && let Some(name) = self.adapter_registry.lookup(&key)
@@ -813,77 +842,70 @@ impl Planner<'_> {
                 }
                 name
             });
-        let (generics_decl, generics_use) = self.adapter_generics(&plan);
-        let adapter_type = format!("{}{}", base_name, generics_use);
+        let generic_parameters = self.plan_generics(&plan.generic_context);
+        let receiver_type = GoType::named(
+            &base_name,
+            &plan
+                .generic_context
+                .iter()
+                .map(|(name, _)| GoType::new(self.generic_go_name(name).into_owned()))
+                .collect::<Vec<_>>(),
+            None,
+        );
+        let adapter_type = receiver_type.code.clone();
 
-        let concrete_go_ty = self.use_go_type(&plan.concrete_ty);
-
-        let mut declaration = String::new();
-        write_line!(declaration, "type {}{} struct {{", base_name, generics_decl);
-        write_line!(declaration, "inner {}", concrete_go_ty);
-        write_line!(declaration, "}}");
-        declaration.push('\n');
-
+        let mut declarations = vec![GoDeclaration::new(DeclarationKind::Struct {
+            name: base_name,
+            parameters: generic_parameters,
+            fields: vec![FieldDeclaration {
+                documentation: Default::default(),
+                name: Some("inner".to_string()),
+                ty: self.go_type(&plan.concrete_ty),
+                tag: None,
+            }],
+        })];
         for method in &plan.methods {
             let line = self.adapter_method_line(&plan, method);
-            self.emit_adapter_method(
-                &mut declaration,
-                MethodReceiver::Adapter(&adapter_type),
+            declarations.push(self.emit_adapter_method(
+                MethodReceiver::Adapter(&receiver_type),
                 &plan.generic_context,
                 method,
                 line.as_ref(),
-            );
-            declaration.push('\n');
+            ));
         }
-
-        self.namespace.collect_adapter(declaration);
+        self.namespace.collect_adapters(declarations);
         adapter_type
     }
 
-    fn adapter_generics(&mut self, plan: &AdapterPlan) -> (String, String) {
-        if plan.generic_context.is_empty() {
-            return (String::new(), String::new());
-        }
-
-        let names: Vec<String> = plan
-            .generic_context
-            .iter()
-            .map(|(name, _)| self.generic_go_name(name).into_owned())
-            .collect();
-        let decl = self.resolved_generics_to_string(&plan.generic_context);
-        let use_str = format!("[{}]", names.join(", "));
-        (decl, use_str)
-    }
-
-    fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<String> {
+    fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<Position> {
         self.facts
             .method(&plan.concrete_id, &method.source_name)
             .and_then(|source| source.name_span.as_ref())
-            .and_then(|span| self.maybe_line_directive(span))
+            .and_then(|span| self.source_position(span))
             .or_else(|| {
                 self.facts
                     .definition(&plan.interface_id)
                     .and_then(|interface| interface.name_span.as_ref())
-                    .and_then(|span| self.maybe_line_directive(span))
+                    .and_then(|span| self.source_position(span))
             })
     }
 
     fn emit_adapter_method(
         &mut self,
-        declaration: &mut String,
         receiver: MethodReceiver<'_>,
         generic_context: &[(EcoString, Vec<Type>)],
         method: &AdapterMethod,
-        line: Option<&String>,
-    ) {
+        line: Option<&Position>,
+    ) -> GoDeclaration {
         self.with_declaration_scope(|this| {
             this.set_type_params(generic_context);
             let (receiver_type, receiver_name, wraps_inner) = match receiver {
-                MethodReceiver::Adapter(name) => (name.to_string(), "a".to_string(), true),
+                MethodReceiver::Adapter(ty) => (ty.clone(), "a".to_string(), true),
                 MethodReceiver::Itself(ty) => {
-                    let receiver_type = this.use_go_type(ty);
-                    let name =
-                        fresh_receiver_name(&receiver_type, |name| this.shadows_declaration(name));
+                    let receiver_type = this.go_type(ty);
+                    let name = fresh_receiver_name(&receiver_type.code, |name| {
+                        this.shadows_declaration(name)
+                    });
                     (receiver_type, name, false)
                 }
             };
@@ -892,35 +914,30 @@ impl Planner<'_> {
                 .map(|i| this.declare_adapter_method_binding(format!("arg{}", i)))
                 .collect();
 
-            let params_str = param_names
+            let parameters = param_names
                 .iter()
                 .zip(&method.target.parameters)
-                .map(|(name, layout)| {
-                    let go_type = layout.go_type(this);
-                    format!("{} {}", name, this.use_rendered_go_type(go_type))
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
+                .map(|(name, layout)| GoParameter::new(name.clone(), layout.go_type(this)))
+                .collect();
 
             let go_method_name = method.go_name.clone();
             let mut bindings = Vec::with_capacity(param_names.len() + 1);
             bindings.push(receiver_name.clone());
             bindings.extend(param_names);
-            let (go_ret, body) = this.build_adapter_body(method, wraps_inner, &bindings, line);
-            if let Some(line) = line {
-                declaration.push_str(line);
-            }
-            write_method_header(
-                declaration,
-                receiver_name.spelling(),
-                &receiver_type,
-                &go_method_name,
-                &params_str,
-                &go_ret,
-            );
-            declaration.push_str(&body);
-            write_line!(declaration, "}}");
-        });
+            let (go_result, body) = this.build_adapter_body(method, wraps_inner, &bindings, line);
+            let mut plan = GoDeclaration::new(DeclarationKind::Function {
+                signature: FunctionSignature {
+                    receiver: Some(GoParameter::new(receiver_name, receiver_type)),
+                    name: go_method_name,
+                    generics: Vec::new(),
+                    parameters,
+                    result: go_result,
+                },
+                body,
+            });
+            plan.position = line.cloned();
+            plan
+        })
     }
 
     fn declare_adapter_method_binding(&mut self, preferred: String) -> GoIdentifier {
@@ -937,17 +954,17 @@ impl Planner<'_> {
         method: &AdapterMethod,
         wraps_inner: bool,
         parameters: &[GoIdentifier],
-        line: Option<&String>,
-    ) -> (String, String) {
-        let (go_ret, statements) = self.plan_adapter_body(method, wraps_inner, parameters);
+        line: Option<&Position>,
+    ) -> (GoType, LoweredBlock) {
+        let (go_result, statements) = self.plan_adapter_body(method, wraps_inner, parameters);
         let statements = directed_first(line.cloned(), statements);
         let body = self.finish_function_body(
             LoweredBlock { statements },
             &mut parameters.to_vec(),
-            !go_ret.is_empty(),
+            !go_result.is_empty(),
             BodyOrigin::Adapter,
         );
-        (go_ret, crate::Renderer.render_setup(&body.statements, true))
+        (go_result, body)
     }
 
     /// `bindings` holds the receiver, then one binding per parameter.
@@ -956,18 +973,14 @@ impl Planner<'_> {
         method: &AdapterMethod,
         wraps_inner: bool,
         bindings: &[GoIdentifier],
-    ) -> (String, Vec<Statement>) {
+    ) -> (GoType, Vec<Statement>) {
         let (receiver, parameters) = bindings
             .split_first()
             .expect("an adapter method binds its receiver");
         if let Some(alternate) = &method.alternate {
-            let go_ret = method
-                .target
-                .result_go_type(self)
-                .map(|ty| self.use_rendered_go_type(ty))
-                .unwrap_or_default();
+            let go_result = method.target.result_go_type(self).unwrap_or_default();
             return (
-                go_ret,
+                go_result,
                 self.plan_dynamic_adapter_body(method, alternate, receiver, parameters),
             );
         }
@@ -990,12 +1003,8 @@ impl Planner<'_> {
             arguments,
         );
 
-        let return_type = &method.source.result_type;
-        let go_ret = method
-            .target
-            .result_go_type(self)
-            .map(|ty| self.use_rendered_go_type(ty))
-            .unwrap_or_default();
+        let return_type = method.source.result_layout.logical_type();
+        let go_result = method.target.result_go_type(self).unwrap_or_default();
         if method.target.return_abi == CallableReturnAbi::Void {
             statements.push(expression_statement(inner_call));
         } else if method.source.return_abi == CallableReturnAbi::Void {
@@ -1013,101 +1022,13 @@ impl Planner<'_> {
                 &method.target,
             );
         }
-        (go_ret, statements)
+        (go_result, statements)
     }
 }
 
 enum MethodReceiver<'a> {
-    Adapter(&'a str),
+    Adapter(&'a GoType),
     Itself(&'a Type),
-}
-
-fn write_method_header(
-    declaration: &mut String,
-    receiver_name: &str,
-    adapter_name: &str,
-    method_name: &str,
-    params: &str,
-    go_ret: &str,
-) {
-    let ret_suffix = if go_ret.is_empty() {
-        String::new()
-    } else {
-        format!(" {}", go_ret)
-    };
-    write_line!(
-        declaration,
-        "func ({} {}) {}({}){} {{",
-        receiver_name,
-        adapter_name,
-        method_name,
-        params,
-        ret_suffix
-    );
-}
-
-fn method_receiver_substitution(receiver_ty: &Type, concrete_ty: &Type) -> Option<SubstitutionMap> {
-    let receiver = receiver_ty.strip_refs();
-    let concrete = concrete_ty.strip_refs();
-    let (
-        Type::Nominal {
-            id: receiver_id,
-            params: receiver_params,
-            ..
-        },
-        Type::Nominal {
-            id: concrete_id,
-            params: concrete_params,
-            ..
-        },
-    ) = (&receiver, &concrete)
-    else {
-        return None;
-    };
-    if receiver_id != concrete_id || receiver_params.len() != concrete_params.len() {
-        return None;
-    }
-
-    receiver_params
-        .iter()
-        .zip(concrete_params)
-        .map(|(receiver_param, concrete_param)| {
-            let Type::Parameter(name) = receiver_param else {
-                return None;
-            };
-            Some((name.clone(), concrete_param.clone()))
-        })
-        .collect()
-}
-
-fn concrete_dedup_key(concrete_ty: &Type, concrete_id: &EcoString) -> EcoString {
-    let mut depth = 0usize;
-    let mut t = concrete_ty.clone();
-    while t.is_ref() {
-        depth += 1;
-        t = t.inner().expect("Ref<T> must have inner").clone();
-    }
-    let params = match &t {
-        Type::Nominal { params, .. } if !params.is_empty() => Some(params),
-        _ => None,
-    };
-    let params_suffix = params
-        .map(|ps| {
-            let joined = ps
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<_>>()
-                .join(",");
-            format!("<{joined}>")
-        })
-        .unwrap_or_default();
-
-    EcoString::from(format!(
-        "{}{}{}",
-        "*".repeat(depth),
-        concrete_id.as_str(),
-        params_suffix
-    ))
 }
 
 fn adapter_type_name(plan: &AdapterPlan, index: usize) -> String {
@@ -1138,7 +1059,11 @@ fn adapter_uses_type_parameter(
     let parameter = Type::Parameter(name.clone());
     concrete_ty.contains_type(&parameter)
         || methods.iter().any(|method| {
-            method.source.result_type.contains_type(&parameter)
+            method
+                .source
+                .result_layout
+                .logical_type()
+                .contains_type(&parameter)
                 || method
                     .source
                     .parameters
@@ -1162,7 +1087,7 @@ fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
 /// `#[go(comma_ok)]` shifts a nullable `Option` return to comma-ok form.
 pub(crate) fn with_comma_ok_hint(base: CallableReturnAbi, method: &Method) -> CallableReturnAbi {
     if base == CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
-        && method.go_hints.iter().any(|hint| hint == "comma_ok")
+        && method.go_hints.contains(&GoHint::CommaOk)
     {
         return CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
             payload: PayloadLayout::Packed,
