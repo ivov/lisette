@@ -86,10 +86,10 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
 
     let file_ids: &[u32] = &[PRELUDE_FILE_ID];
     let package = store
-        .get_package_mut(PRELUDE_PACKAGE_ID)
+        .edit_package(PRELUDE_PACKAGE_ID)
         .expect("prelude package must be registered before loading cached definitions");
     for (qualified_name, cached_definition) in cached.definitions {
-        cached_definition.install_into(package, qualified_name.into(), file_ids);
+        cached_definition.install_into(package.definitions, qualified_name.into(), file_ids);
     }
 }
 

@@ -13,7 +13,7 @@ use std::io;
 use std::mem;
 use std::path::{Path, PathBuf};
 use syntax::ast::Span;
-use syntax::program::go_filename;
+use syntax::program::{GoMethodPolicy, go_filename};
 
 use serde::{Deserialize, Serialize};
 use stdlib::Target;
@@ -133,7 +133,7 @@ pub struct PackageInterface {
     /// `None` after a Check-phase save or before the post-write stamp call;
     /// `Some(h)` when the on-disk Go files came from a successful Emit for
     /// artifact hash `h`.
-    emit_stamp: Option<u64>,
+    pub(crate) emit_stamp: Option<u64>,
 }
 
 impl PackageInterface {
@@ -194,10 +194,20 @@ pub struct EmitStamp {
 }
 
 /// Hash over the non-sourcemap Go-artifact inputs for one package.
-pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str) -> u64 {
+pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str, context: u64) -> u64 {
     let mut hasher = FnvHasher::new();
     production_hash.hash(&mut hasher);
     go_module.hash(&mut hasher);
+    let input_hash = hasher.finish();
+    let mut hasher = FnvHasher::new();
+    input_hash.hash(&mut hasher);
+    context.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub(crate) fn global_emit_context(policy: &GoMethodPolicy) -> u64 {
+    let mut hasher = FnvHasher::new();
+    policy.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -293,33 +303,31 @@ pub fn cache_file_name(package_id: &str) -> String {
 
 pub(crate) fn try_load_cache(
     compiled: &CompiledPackage,
-    expected_artifact_hash: Option<u64>,
     project_root: &Path,
     target: Target,
 ) -> Option<PackageInterface> {
     let path = cache_path(project_root, &compiled.package_id, target);
     let interface: PackageInterface = disk::read(&path).ok()?;
 
-    if interface.key != compiled.key {
-        if !interface.key.differs_only_in_mode(&compiled.key) {
+    let differs_only_in_mode = interface.key.differs_only_in_mode(&compiled.key);
+    let mode_independent = differs_only_in_mode
+        && interface.key.diagnostic_mode.library == compiled.key.diagnostic_mode.library
+        && interface.files.iter().all(|file| !is_test_file(&file.name))
+        && interface
+            .definitions
+            .values()
+            .all(|definition| definition.as_definition().visibility.is_public());
+    if interface.key != compiled.key && !mode_independent {
+        if !differs_only_in_mode {
             let _ = fs::remove_file(&path);
         }
         return None;
     }
 
-    if let Some(expected_artifact_hash) = expected_artifact_hash {
-        if interface.emit_stamp != Some(expected_artifact_hash) {
-            return None;
-        }
-        if !all_go_outputs_exist(&compiled.package_id, &interface.files, project_root) {
-            return None;
-        }
-    }
-
     Some(interface)
 }
 
-fn all_go_outputs_exist(
+pub(crate) fn all_go_outputs_exist(
     package_id: &str,
     cached_files: &[CachedFile],
     project_root: &Path,
@@ -444,7 +452,7 @@ pub(crate) fn build_cached_package(
     }
 
     for (qualified_name, cached_definition) in cached.definitions {
-        cached_definition.install_into(&mut package, qualified_name.into(), &file_ids);
+        cached_definition.install_into(&mut package.definitions, qualified_name.into(), &file_ids);
     }
 
     package
@@ -578,7 +586,6 @@ mod tests {
                 }),
                 artifact_hash: artifact_hash.unwrap_or_default(),
             },
-            artifact_hash,
             root,
             target,
         )
@@ -1105,8 +1112,8 @@ mod tests {
 
     #[test]
     fn artifact_hash_depends_on_go_module() {
-        let h1 = compute_emit_artifact_hash(100, "github.com/old/proj");
-        let h2 = compute_emit_artifact_hash(100, "github.com/new/proj");
+        let h1 = compute_emit_artifact_hash(100, "github.com/old/proj", 0);
+        let h2 = compute_emit_artifact_hash(100, "github.com/new/proj", 0);
         assert_ne!(h1, h2);
     }
 
@@ -1204,7 +1211,7 @@ mod tests {
     }
 
     #[test]
-    fn try_load_cache_rejects_unstamped_for_emit() {
+    fn semantic_cache_accepts_unstamped_artifacts() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let target = Target::host();
@@ -1232,25 +1239,25 @@ mod tests {
             "greet",
             100,
             &HashMap::default(),
-            Some(compute_emit_artifact_hash(100, "github.com/test/x")),
+            Some(compute_emit_artifact_hash(100, "github.com/test/x", 0)),
             root,
             target,
         );
         assert!(
-            loaded.is_none(),
-            "Emit phase must reject cache with emit_stamp = None"
+            loaded.is_some(),
+            "Missing Go artifacts must not discard semantic interfaces"
         );
     }
 
     #[test]
-    fn try_load_cache_rejects_after_sourcemap_invalidation() {
+    fn semantic_cache_keeps_interface_after_sourcemap_invalidation() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let target = Target::host();
         fs::create_dir_all(root.join("target").join("greet")).unwrap();
         fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
-        let artifact_hash = compute_emit_artifact_hash(100, "github.com/test/x");
+        let artifact_hash = compute_emit_artifact_hash(100, "github.com/test/x", 0);
 
         let interface = PackageInterface {
             key: test_key(100, HashMap::default()),
@@ -1293,7 +1300,7 @@ mod tests {
                 root,
                 target,
             )
-            .is_none()
+            .is_some()
         );
     }
 
