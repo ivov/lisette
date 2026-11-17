@@ -31,213 +31,7 @@ impl NativeCallResult {
     }
 }
 
-#[derive(Clone, Copy)]
-enum InlinePackage {
-    None,
-    Slices,
-    Strings,
-    Prelude,
-}
-
-/// The Go shape a native method inlines to, given the receiver and arguments.
-#[derive(Clone, Copy)]
-enum InlineForm {
-    /// `callee(receiver, arguments...)`.
-    Call(&'static str),
-    /// `len(receiver) == 0`. The negated method flips the operator instead of
-    /// prepending `!`, which binds tighter than `==` in Go.
-    IsEmpty,
-    Receiver,
-    /// `T(receiver)`.
-    Conversion(&'static str),
-    /// `receiver[argument]`.
-    Index,
-}
-
-struct InlineRule {
-    types: &'static [NativeTypeKind],
-    method: &'static str,
-    arity: RuleArity,
-    form: InlineForm,
-    package: InlinePackage,
-}
-
-#[derive(Clone, Copy)]
-enum RuleArity {
-    Exact(usize),
-    Variadic,
-}
-
-impl RuleArity {
-    fn accepts(self, actual: usize) -> bool {
-        match self {
-            Self::Exact(expected) => actual == expected,
-            Self::Variadic => true,
-        }
-    }
-}
-
-impl InlineRule {
-    fn matches(&self, native_type: NativeTypeKind, method: &str, arity: usize) -> bool {
-        self.method == method && self.types.contains(&native_type) && self.arity.accepts(arity)
-    }
-}
-
-type N = NativeTypeKind;
-
-static INLINE_METHODS: &[InlineRule] = &[
-    // No-arg methods
-    InlineRule {
-        types: &[
-            N::Slice,
-            N::Map,
-            N::Channel,
-            N::Sender,
-            N::Receiver,
-            N::String,
-            N::Array,
-        ],
-        method: "length",
-        arity: RuleArity::Exact(0),
-        form: InlineForm::Call("len"),
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[N::Slice, N::Channel, N::Sender, N::Receiver],
-        method: "capacity",
-        arity: RuleArity::Exact(0),
-        form: InlineForm::Call("cap"),
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[
-            N::Slice,
-            N::Map,
-            N::Channel,
-            N::Sender,
-            N::Receiver,
-            N::String,
-        ],
-        method: "is_empty",
-        arity: RuleArity::Exact(0),
-        form: InlineForm::IsEmpty,
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[N::Slice],
-        method: "enumerate",
-        arity: RuleArity::Exact(0),
-        form: InlineForm::Receiver,
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "bytes",
-        arity: RuleArity::Exact(0),
-        form: InlineForm::Conversion("[]byte"),
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "runes",
-        arity: RuleArity::Exact(0),
-        form: InlineForm::Conversion("[]rune"),
-        package: InlinePackage::None,
-    },
-    // Single-arg methods
-    InlineRule {
-        types: &[N::Map],
-        method: "delete",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("delete"),
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[N::Slice],
-        method: "copy_from",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("copy"),
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[N::Slice],
-        method: "contains",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("Contains"),
-        package: InlinePackage::Slices,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "contains",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("Contains"),
-        package: InlinePackage::Strings,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "split",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("Split"),
-        package: InlinePackage::Strings,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "starts_with",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("HasPrefix"),
-        package: InlinePackage::Strings,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "ends_with",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("HasSuffix"),
-        package: InlinePackage::Strings,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "byte_at",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Index,
-        package: InlinePackage::None,
-    },
-    InlineRule {
-        types: &[N::String],
-        method: "rune_at",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("RuneAt"),
-        package: InlinePackage::Prelude,
-    },
-    InlineRule {
-        types: &[N::Slice],
-        method: "join",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("Join"),
-        package: InlinePackage::Strings,
-    },
-    InlineRule {
-        types: &[N::Slice],
-        method: "any",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("ContainsFunc"),
-        package: InlinePackage::Slices,
-    },
-    InlineRule {
-        types: &[N::Slice],
-        method: "reserve",
-        arity: RuleArity::Exact(1),
-        form: InlineForm::Call("Grow"),
-        package: InlinePackage::Slices,
-    },
-    // Variadic methods
-    InlineRule {
-        types: &[N::Slice],
-        method: "append",
-        arity: RuleArity::Variadic,
-        form: InlineForm::Call("append"),
-        package: InlinePackage::None,
-    },
-];
+use syntax::program::{NativeInlineForm, NativeInlinePackage, NativeOperation};
 
 fn clone_slice(receiver: GoExpression) -> GoExpression {
     GoExpression::call(
@@ -264,44 +58,6 @@ pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
     )
 }
 
-/// Natives that write no memory a sibling operand can read and run no caller code.
-pub(super) fn native_method_is_pure(native_type: &NativeTypeKind, method: &str) -> bool {
-    match native_type {
-        NativeTypeKind::String => matches!(
-            method,
-            "length"
-                | "is_empty"
-                | "contains"
-                | "split"
-                | "starts_with"
-                | "ends_with"
-                | "byte_at"
-                | "rune_at"
-                | "bytes"
-                | "runes"
-                | "substring"
-        ),
-        NativeTypeKind::Array => matches!(method, "length" | "get" | "to_slice"),
-        NativeTypeKind::Slice => matches!(
-            method,
-            "length"
-                | "is_empty"
-                | "capacity"
-                | "get"
-                | "append"
-                | "contains"
-                | "enumerate"
-                | "clone"
-                | "join"
-        ),
-        NativeTypeKind::Map => matches!(method, "length" | "is_empty" | "get" | "clone"),
-        NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver => {
-            matches!(method, "length" | "is_empty" | "capacity")
-        }
-        NativeTypeKind::EnumeratedSlice => method == "clone",
-    }
-}
-
 pub(crate) fn is_clip_safe_path(value: &GoExpression) -> bool {
     fn is_path(node: &GoExpressionNode) -> bool {
         match node {
@@ -313,10 +69,10 @@ pub(crate) fn is_clip_safe_path(value: &GoExpression) -> bool {
     is_path(value.node())
 }
 
-fn growth_detach_applies(ctx: &NativeCallContext, receiver: &Expression) -> bool {
-    matches!(ctx.method, "append" | "reserve")
+fn growth_detach_applies(context: &NativeCallContext, receiver: &Expression) -> bool {
+    NativeOperation::new(context.native_type, context.method).grows_slice()
         && !is_fresh_slice_value(receiver)
-        && !ctx
+        && !context
             .retired_receiver
             .is_some_and(|target| retired_covers_receiver(target, receiver))
 }
@@ -334,10 +90,11 @@ fn is_fresh_slice_value(receiver: &Expression) -> bool {
         } => match call_kind {
             CallKind::NativeConstructor(NativeTypeKind::Slice) => true,
             CallKind::NativeMethod(NativeTypeKind::Slice)
-            | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => matches!(
+            | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => NativeOperation::new(
+                NativeTypeKind::Slice,
                 extract_native_method_name(callee.unwrap_parens()),
-                "append" | "reserve" | "clone" | "filter" | "map"
-            ),
+            )
+            .returns_fresh_slice(),
             CallKind::NativeMethod(NativeTypeKind::Array)
             | CallKind::NativeMethodIdentifier(NativeTypeKind::Array) => {
                 extract_native_method_name(callee.unwrap_parens()) == "to_slice"
@@ -363,21 +120,23 @@ fn retired_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
 
 fn build_inline(
     native_type: &NativeTypeKind,
-    form: InlineForm,
-    package: InlinePackage,
+    form: NativeInlineForm,
+    package: NativeInlinePackage,
     receiver: &GoExpression,
     arguments: &[GoExpression],
     negated: bool,
 ) -> GoExpression {
     match form {
-        InlineForm::Call(callee) => {
+        NativeInlineForm::Call(callee) => {
             let callee = match package {
-                InlinePackage::None => GoExpression::external_name(callee.to_string()),
-                InlinePackage::Slices => GoExpression::generated(GeneratedPackage::Slices, callee),
-                InlinePackage::Strings => {
+                NativeInlinePackage::None => GoExpression::external_name(callee.to_string()),
+                NativeInlinePackage::Slices => {
+                    GoExpression::generated(GeneratedPackage::Slices, callee)
+                }
+                NativeInlinePackage::Strings => {
                     GoExpression::generated(GeneratedPackage::Strings, callee)
                 }
-                InlinePackage::Prelude => {
+                NativeInlinePackage::Prelude => {
                     GoExpression::generated(GeneratedPackage::Prelude, callee)
                 }
             };
@@ -385,7 +144,7 @@ fn build_inline(
             all.extend(arguments.iter().cloned());
             GoExpression::call(callee, all)
         }
-        InlineForm::IsEmpty => {
+        NativeInlineForm::IsEmpty => {
             let operator = if negated { BinaryOp::Ne } else { BinaryOp::Eq };
             if matches!(native_type, NativeTypeKind::String) {
                 return GoExpression::binary(
@@ -403,13 +162,13 @@ fn build_inline(
                 GoExpression::literal("0".to_string()),
             )
         }
-        InlineForm::Receiver => receiver.clone(),
+        NativeInlineForm::Receiver => receiver.clone(),
         // A slice type needs no parentheses as a callee, unlike `Conversion`'s general form.
-        InlineForm::Conversion(go_type) => GoExpression::call(
-            GoExpression::type_name(GoType::new(go_type.to_string())),
+        NativeInlineForm::Conversion(go_type) => GoExpression::call(
+            GoExpression::type_name(GoType::slice_of(&GoType::new(go_type))),
             vec![receiver.clone()],
         ),
-        InlineForm::Index => {
+        NativeInlineForm::Index => {
             let base = receiver.clone();
             let index = arguments
                 .first()
@@ -418,16 +177,6 @@ fn build_inline(
             GoExpression::index(base, index)
         }
     }
-}
-
-fn lookup_inline_rule(
-    native_type: &NativeTypeKind,
-    method: &str,
-    arity: usize,
-) -> Option<&'static InlineRule> {
-    INLINE_METHODS
-        .iter()
-        .find(|rule| rule.matches(*native_type, method, arity))
 }
 
 /// Try to inline a native-type method call. `negated` asks for the rule's
@@ -444,8 +193,8 @@ pub(super) fn try_inline_native_method(
     if !negated && method == "append" && arguments.is_empty() {
         return Some(receiver.clone());
     }
-    let rule = lookup_inline_rule(native_type, method, arguments.len())?;
-    if negated && !matches!(rule.form, InlineForm::IsEmpty) {
+    let rule = NativeOperation::new(*native_type, method).inline_rule(arguments.len())?;
+    if negated && !matches!(rule.form, NativeInlineForm::IsEmpty) {
         return None;
     }
     Some(build_inline(
@@ -456,24 +205,6 @@ pub(super) fn try_inline_native_method(
         arguments,
         negated,
     ))
-}
-
-fn is_native_array_method(method: &str) -> bool {
-    matches!(method, "to_slice" | "get")
-}
-
-/// Reads the receiver, runs no user code, and returns no view of it.
-fn slice_method_reads_elements_only(method: &str, arity: usize) -> bool {
-    matches!(
-        (method, arity),
-        ("length", 0)
-            | ("is_empty", 0)
-            | ("clone", 0)
-            | ("get", 1)
-            | ("contains", 1)
-            | ("equals", 1)
-            | ("join", 1)
-    )
 }
 
 fn contains_call_expression(expression: &Expression) -> bool {
@@ -514,27 +245,11 @@ fn array_to_slice_receiver(expression: &Expression) -> Option<&Expression> {
     }
 }
 
-pub(crate) fn native_method_lowers_to_plain_call(
-    native_type: &NativeTypeKind,
-    method: &str,
-    receiver_arity: usize,
-) -> bool {
-    if matches!(method, "substring" | "equals" | "clone") || is_native_array_method(method) {
-        return true;
-    }
-    let Some(rule) = lookup_inline_rule(native_type, method, receiver_arity) else {
-        return true;
-    };
-    matches!(
-        rule.method,
-        "delete" | "contains" | "split" | "starts_with" | "ends_with" | "rune_at" | "join" | "any"
-    )
-}
-
 /// Whether a rule for `(type, method, arity)` has a negated form.
 fn has_inline_negation(native_type: &NativeTypeKind, method: &str, arity: usize) -> bool {
-    lookup_inline_rule(native_type, method, arity)
-        .is_some_and(|rule| matches!(rule.form, InlineForm::IsEmpty))
+    NativeOperation::new(*native_type, method)
+        .inline_rule(arity)
+        .is_some_and(|rule| matches!(rule.form, NativeInlineForm::IsEmpty))
 }
 
 struct StagedNativeMethod {
@@ -624,28 +339,41 @@ impl Planner<'_> {
         })
     }
 
-    pub(super) fn lower_native_method(&mut self, ctx: &NativeCallContext) -> NativeCallResult {
-        let (receiver_expression, arguments) = ctx
+    pub(super) fn lower_native_method(&mut self, context: &NativeCallContext) -> NativeCallResult {
+        let mut result = self.lower_selected_native_method(context);
+
+        let operation = NativeOperation::new(context.native_type, context.method);
+        if operation.read_only_without_callbacks() {
+            result.value = result.value.into_read_only_call();
+        }
+        result
+    }
+
+    fn lower_selected_native_method(&mut self, context: &NativeCallContext) -> NativeCallResult {
+        let (receiver_expression, arguments) = context
             .receiver_and_arguments()
             .expect("native method has a receiver");
 
-        if matches!(ctx.native_type, NativeTypeKind::String)
-            && ctx.method == "substring"
+        if matches!(context.native_type, NativeTypeKind::String)
+            && context.method == "substring"
             && !arguments.is_empty()
         {
             return self.lower_string_substring(
                 receiver_expression,
                 arguments,
-                ctx.capture_boundary,
+                context.capture_boundary,
             );
         }
 
-        if ctx.method == "equals"
-            && matches!(ctx.native_type, NativeTypeKind::Slice | NativeTypeKind::Map)
+        if context.method == "equals"
+            && matches!(
+                context.native_type,
+                NativeTypeKind::Slice | NativeTypeKind::Map
+            )
         {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let staged = self.stage_native_method(ctx);
+                let staged = self.stage_native_method(context);
                 let body = self.equality_test(
                     staged.receiver.clone(),
                     staged.arguments[0].clone(),
@@ -657,36 +385,43 @@ impl Planner<'_> {
             }
         }
 
-        if ctx.method == "contains" && matches!(ctx.native_type, NativeTypeKind::Slice) {
+        if context.method == "contains" && matches!(context.native_type, NativeTypeKind::Slice) {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice()
                 && let Some(element) = receiver_ty.inner()
-                && self.needs_custom_equality(&element, &[])
             {
-                let mut staged = self.stage_native_method(ctx);
-                let searched = staged.arguments[0].clone();
-                let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
-                let predicate =
-                    self.contains_predicate(&element, GoExpression::identifier(target), &[]);
-                let body = GoExpression::call(
-                    GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
-                    vec![staged.receiver.clone(), predicate],
-                );
+                let mut staged = self.stage_native_method(context);
+                let body = if self.needs_custom_equality(&element, &[]) {
+                    let searched = staged.arguments[0].clone();
+                    let target =
+                        self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
+                    let predicate =
+                        self.contains_predicate(&element, GoExpression::identifier(target), &[]);
+                    GoExpression::call(
+                        GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
+                        vec![staged.receiver.clone(), predicate],
+                    )
+                } else {
+                    GoExpression::read_only_call(
+                        GoExpression::generated(GeneratedPackage::Slices, "Contains"),
+                        vec![staged.receiver.clone(), staged.arguments[0].clone()],
+                    )
+                };
                 return staged.finish(body);
             }
         }
 
-        if matches!(ctx.native_type, NativeTypeKind::Array)
-            && is_native_array_method(ctx.method)
+        if matches!(context.native_type, NativeTypeKind::Array)
+            && NativeOperation::new(context.native_type, context.method).reads_array_in_place()
             && matches!(
                 self.facts.strip_and_peel(&receiver_expression.get_type()),
                 Type::Array { .. }
             )
         {
-            let mut staged = self.stage_native_method(ctx);
+            let mut staged = self.stage_native_method(context);
             let index = staged.arguments.first().cloned();
             let body = self.lower_array_method_body(
-                ctx.method,
+                context.method,
                 receiver_expression,
                 staged.receiver.clone(),
                 index,
@@ -695,26 +430,26 @@ impl Planner<'_> {
             return staged.finish(body);
         }
 
-        if matches!(ctx.native_type, NativeTypeKind::Slice)
-            && let Some(result) = self.try_lower_slice_loop(ctx, SliceLoopTarget::Fresh)
+        if matches!(context.native_type, NativeTypeKind::Slice)
+            && let Some(result) = self.try_lower_slice_loop(context, SliceLoopTarget::Fresh)
         {
             return result;
         }
 
-        if ctx.method == "clone" {
+        if context.method == "clone" {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if is_cloneable_container(&receiver_ty) {
-                let staged = self.stage_native_method(ctx);
+                let staged = self.stage_native_method(context);
                 let body = self.clone_expression(staged.receiver.clone(), &receiver_ty);
                 return staged.finish(body);
             }
         }
 
-        let mut staged = self.stage_native_method(ctx);
-        if growth_detach_applies(ctx, receiver_expression) {
+        let mut staged = self.stage_native_method(context);
+        if growth_detach_applies(context, receiver_expression) {
             let detached = self.detach_slice_growth(
                 &mut staged.setup,
-                ctx.method,
+                context.method,
                 staged.receiver.clone(),
                 &staged.arguments,
                 &receiver_expression.get_type(),
@@ -723,8 +458,8 @@ impl Planner<'_> {
         }
 
         if let Some(inlined) = try_inline_native_method(
-            &ctx.native_type,
-            ctx.method,
+            &context.native_type,
+            context.method,
             &staged.receiver,
             &staged.arguments,
             false,
@@ -736,19 +471,24 @@ impl Planner<'_> {
             GeneratedPackage::Prelude,
             format!(
                 "{}{}",
-                native::method_prefix(ctx.native_type),
-                go_name::snake_to_camel(ctx.method)
+                native::method_prefix(context.native_type),
+                go_name::snake_to_camel(context.method)
             ),
         );
-        let type_args = match ctx.form {
+        let type_args = match context.form {
             NativeCallForm::Dot { receiver }
-                if !ctx.resolved_type_args.is_empty() && ctx.call_ty.is_some() =>
+                if !context.resolved_type_args.is_empty() && context.call_ty.is_some() =>
             {
-                self.format_type_args_with_receiver(&receiver.get_type(), ctx.resolved_type_args)
+                self.format_type_args_with_receiver(
+                    &receiver.get_type(),
+                    context.resolved_type_args,
+                )
             }
             NativeCallForm::Dot { .. }
             | NativeCallForm::Identifier
-            | NativeCallForm::Constructor => self.format_resolved_type_args(ctx.resolved_type_args),
+            | NativeCallForm::Constructor => {
+                self.format_resolved_type_args(context.resolved_type_args)
+            }
         };
         let mut emitted_args = vec![staged.receiver.clone()];
         emitted_args.extend(staged.arguments.iter().cloned());
@@ -861,18 +601,19 @@ impl Planner<'_> {
     /// Stage `to_slice()` as `arr[:]` when the consumer cannot observe the skipped clone.
     fn try_stage_to_slice_view(
         &mut self,
-        ctx: &NativeCallContext,
+        context: &NativeCallContext,
         receiver_expression: &Expression,
         arguments: &[Expression],
     ) -> Option<ValuePlan> {
-        if !matches!(ctx.native_type, NativeTypeKind::Slice) {
+        if !matches!(context.native_type, NativeTypeKind::Slice) {
             return None;
         }
-        if !matches!(ctx.capture_boundary, CaptureBoundary::SiblingSequence) {
+        if !matches!(context.capture_boundary, CaptureBoundary::SiblingSequence) {
             return None;
         }
-        if ctx.spread.is_some()
-            || !slice_method_reads_elements_only(ctx.method, arguments.len())
+        if context.spread.is_some()
+            || !NativeOperation::new(context.native_type, context.method)
+                .reads_elements_only(arguments.len())
             || arguments.iter().any(contains_call_expression)
         {
             return None;
@@ -884,7 +625,7 @@ impl Planner<'_> {
         ) {
             return None;
         }
-        if matches!(ctx.method, "contains" | "equals") {
+        if matches!(context.method, "contains" | "equals") {
             let element = self
                 .facts
                 .strip_and_peel(&receiver_expression.get_type())

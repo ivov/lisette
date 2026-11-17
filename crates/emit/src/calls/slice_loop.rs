@@ -7,7 +7,6 @@ use super::NativeCallContext;
 use super::native::NativeCallResult;
 use crate::Planner;
 use crate::abi::is_closure_literal;
-use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::prelude_call;
 use crate::plan::bodies::{
@@ -19,6 +18,7 @@ use crate::plan::lower::is_conjunction;
 use crate::plan::values::{GoExpression, OperandForm, Stability, ValuePlan};
 use crate::statements::let_binding::needs_explicit_type_declaration;
 use crate::types::go_type::GoType;
+use syntax::program::SlotOrigin;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SliceLoop {
@@ -399,7 +399,11 @@ impl Planner<'_> {
         };
         setup.push(
             LoweredStatement::Loop(LoopPlan {
-                kind: LoopKind::Generated { label: None },
+                kind: if matches!(planned, PlannedLoop::FindInto(_)) {
+                    LoopKind::FoundFlagSearch
+                } else {
+                    LoopKind::Generated { label: None }
+                },
                 header,
                 body: LoweredBlock {
                     statements: body_statements,
@@ -583,7 +587,7 @@ impl Planner<'_> {
 
     fn lower_slice_loop_body(&mut self, loop_body: &SliceLoopBody<'_>) -> Vec<Statement> {
         let line = match loop_body.callback {
-            LoweredCallback::Body(body) => self.maybe_line_directive(&body.get_span()),
+            LoweredCallback::Body(body) => self.source_position(&body.get_span()),
             LoweredCallback::Callee(_) => None,
         };
         let statements = self.lower_slice_loop_statements(loop_body);
