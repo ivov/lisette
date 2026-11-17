@@ -1,7 +1,10 @@
 use diagnostics::infer::{ReadOnlyComponent, ReadOnlyComponentKind, WriteContext};
 use syntax::ast::{
-    BindingId, Expression, Literal, Span, StructFieldDefinition, UnaryOperator, tuple_field_name,
+    BindingId, Expression, IdentifierResolution, Literal, Span, StructFieldDefinition,
+    UnaryOperator, tuple_field_name,
 };
+use syntax::program::SlotOrigin;
+use syntax::program::go_boundary_converts_container;
 use syntax::types::{CompoundKind, Type};
 
 use crate::checker::EnvResolve;
@@ -167,34 +170,28 @@ impl InferCtx<'_> {
             Type::Compound {
                 kind:
                     kind @ (CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map),
-                args,
+                args: arguments,
                 ..
-            } if args.iter().any(|arg| self.holds_option(arg)) => Type::Compound {
-                kind: *kind,
-                args: args
-                    .iter()
-                    .map(|arg| self.demote_converted_containers(arg))
-                    .collect(),
-                writable: false,
-            },
+            } if arguments.iter().any(|argument| {
+                go_boundary_converts_container(argument, SlotOrigin::GoField, |id| {
+                    self.store.get_definition(id)
+                })
+            }) =>
+            {
+                Type::Compound {
+                    kind: *kind,
+                    args: arguments
+                        .iter()
+                        .map(|argument| self.demote_converted_containers(argument))
+                        .collect(),
+                    writable: false,
+                }
+            }
             Type::Array { length, element } => Type::Array {
                 length: *length,
                 element: Box::new(self.demote_converted_containers(element)),
             },
             _ => ty.clone(),
-        }
-    }
-
-    fn holds_option(&self, ty: &Type) -> bool {
-        match self.store.peel_alias(ty) {
-            ty if ty.is_option() => true,
-            Type::Compound {
-                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
-                args,
-                ..
-            } => args.iter().any(|arg| self.holds_option(arg)),
-            Type::Array { element, .. } => self.holds_option(&element),
-            _ => false,
         }
     }
 
@@ -220,8 +217,10 @@ impl InferCtx<'_> {
                     .fields_of(&declaring)?
                     .iter()
                     .find(|field| &field.name == member)?;
-                self.holds_option(&field.ty)
-                    .then(|| self.granted_component_type(&field.ty, &owner_ty))
+                go_boundary_converts_container(&field.ty, SlotOrigin::GoField, |id| {
+                    self.store.get_definition(id)
+                })
+                .then(|| self.granted_component_type(&field.ty, &owner_ty))
             }
             Expression::IndexedAccess { expression, .. } => {
                 match self
@@ -270,9 +269,7 @@ impl InferCtx<'_> {
     }
 
     pub(super) fn mark_place_root_mutated(&mut self, place: &Expression) {
-        if let Some(root) = super::aliasing::place_root_name(place.unwrap_parens())
-            && let Some(binding_id) = self.scopes.lookup_binding_id(&root)
-        {
+        if let Some((binding_id, _)) = self.binding_for_place(place) {
             self.facts.mark_alias_mutated(binding_id);
         }
     }
@@ -387,7 +384,7 @@ impl InferCtx<'_> {
     pub(super) fn initializer_context(&self, initializer: &Expression) -> Option<WriteContext> {
         let initializer = initializer.unwrap_parens();
         if let Expression::Identifier { value: name, .. } = initializer
-            && let Some(binding_id) = self.scopes.lookup_binding_id(name)
+            && let Some((binding_id, _)) = self.binding_for_place(initializer)
         {
             if self
                 .facts
@@ -537,21 +534,39 @@ impl InferCtx<'_> {
 }
 
 impl InferCtx<'_> {
+    pub(super) fn binding_for_place<'a>(
+        &self,
+        place: &'a Expression,
+    ) -> Option<(BindingId, &'a str)> {
+        let Expression::Identifier {
+            value, resolution, ..
+        } = super::aliasing::place_root(place.unwrap_parens())?
+        else {
+            return None;
+        };
+        let binding = match resolution {
+            IdentifierResolution::Binding(id) => Some(*id),
+            IdentifierResolution::Definition { .. } => None,
+            IdentifierResolution::Unresolved => self.scopes.lookup_binding_id(value),
+        }?;
+        Some((binding, value.as_str()))
+    }
+
     pub(super) fn write_context(&self, target: &Expression) -> Option<WriteContext> {
         if let Some(element) = self.element_write_declaration(target) {
             return Some(WriteContext::Element(element));
         }
         let hop = self.write_hop(target)?;
         self.value_context(hop)
-            .or_else(|| self.binding_context(&super::aliasing::place_root_name(target)?))
+            .or_else(|| self.binding_context(target))
             .or_else(|| self.writable_parameter_context(target))
     }
 
     fn writable_parameter_context(&self, target: &Expression) -> Option<WriteContext> {
-        let root = super::aliasing::place_root_name(target)?;
-        let binding_id = self.scopes.lookup_binding_id(&root)?;
+        let (binding_id, root) = self.binding_for_place(target)?;
         let kind = self.facts.bindings.get(&binding_id)?.kind;
-        kind.is_param().then_some(WriteContext::Parameter(root))
+        kind.is_param()
+            .then_some(WriteContext::Parameter(root.to_string()))
     }
 
     pub(super) fn value_context(&self, value: &Expression) -> Option<WriteContext> {
@@ -584,16 +599,14 @@ impl InferCtx<'_> {
                     None
                 }
             }
-            identifier @ Expression::Identifier { .. } => {
-                self.binding_context(&identifier.get_var_name()?)
-            }
+            identifier @ Expression::Identifier { .. } => self.binding_context(identifier),
             call @ Expression::Call { .. } => Some(WriteContext::CallResult {
                 callee: declared_callee(call)?,
                 binding_source_span: None,
             }),
             Expression::Reference { expression, .. } => {
                 let name = expression.unwrap_parens().get_var_name()?;
-                let binding_id = self.scopes.lookup_binding_id(&name)?;
+                let (binding_id, _) = self.binding_for_place(expression)?;
                 let inference = self.binding_inference.get(&binding_id)?.as_loop_element()?;
                 Some(WriteContext::LoopCopy {
                     binding: name.to_string(),
@@ -604,8 +617,9 @@ impl InferCtx<'_> {
         }
     }
 
-    fn binding_context(&self, name: &str) -> Option<WriteContext> {
-        let binding_id = self.scopes.lookup_binding_id(name)?;
+    fn binding_context(&self, place: &Expression) -> Option<WriteContext> {
+        let (binding_id, _) = self.binding_for_place(place)?;
+        let name = &self.facts.bindings.get(&binding_id)?.name;
         if let Some(inference) = self
             .binding_inference
             .get(&binding_id)
@@ -621,17 +635,14 @@ impl InferCtx<'_> {
             .bindings
             .get(&binding_id)
             .map(|binding| binding.kind)?;
-        let declared = self.scopes.lookup_value(name)?;
+        let declared = self.scopes.binding_type(binding_id)?;
         if kind.is_param() && !self.store.peel_alias(declared).is_writable() {
             return Some(WriteContext::Parameter(name.to_string()));
         }
         let inference = self.binding_inference.get(&binding_id)?.as_let()?;
         match inference.source.as_ref()? {
-            ValueSource::Place(source) => {
-                let source_writable = self
-                    .scopes
-                    .lookup_value(source)
-                    .is_some_and(|ty| self.peel_resolved(ty).is_writable());
+            ValueSource::Place { name: source, ty } => {
+                let source_writable = self.peel_resolved(ty).is_writable();
                 if inference.annotated && source_writable {
                     return Some(WriteContext::ReadOnlyAnnotation(name.to_string()));
                 }
@@ -705,11 +716,13 @@ impl InferCtx<'_> {
         }
     }
 
-    pub(super) fn read_only_write_key(&self, target: &Expression) -> Option<(BindingId, String)> {
-        let hop = self.write_hop(target)?;
-        let root = super::aliasing::place_root_name(hop)?;
-        let binding_id = self.scopes.lookup_binding_id(&root)?;
-        Some((binding_id, super::aliasing::place_key(hop)?))
+    pub(super) fn read_only_write_key(
+        &self,
+        target: &Expression,
+    ) -> Option<(BindingId, super::aliasing::PlaceKey)> {
+        let owner = self.write_hop(target)?;
+        let (binding_id, _) = self.binding_for_place(owner)?;
+        Some((binding_id, super::aliasing::place_key(owner)?))
     }
 
     fn element_write_declaration(
@@ -829,9 +842,7 @@ impl InferCtx<'_> {
     ) {
         let store = self.store;
         let root = super::aliasing::place_root_name(target.unwrap_parens());
-        let root_binding = root
-            .as_ref()
-            .and_then(|root| self.scopes.lookup_binding_id(root));
+        let root_binding = self.binding_for_place(target).map(|(binding, _)| binding);
         let receiver_needs_mut = root.as_deref() == Some("self")
             && !self
                 .lookup_type(store, "self")
@@ -877,8 +888,9 @@ impl InferCtx<'_> {
 
 impl InferCtx<'_> {
     fn root_write_types(&self, target: &Expression, governing: &Type) -> (String, String) {
-        let root_type = super::aliasing::place_root_name(target.unwrap_parens())
-            .and_then(|root| self.scopes.lookup_value(&root))
+        let root_type = self
+            .binding_for_place(target)
+            .and_then(|(binding, _)| self.scopes.binding_type(binding))
             .map(|ty| self.store.peel_alias(&ty.resolve_in(&self.env)))
             .unwrap_or_else(|| governing.clone());
         let mut layers = 0;
@@ -897,8 +909,7 @@ impl InferCtx<'_> {
     }
 
     fn owner_origin(&self, owner: &Expression) -> Option<String> {
-        let name = owner.unwrap_parens().get_var_name()?;
-        let binding_id = self.scopes.lookup_binding_id(&name)?;
+        let (binding_id, _) = self.binding_for_place(owner)?;
         match self
             .binding_inference
             .get(&binding_id)?
@@ -907,7 +918,7 @@ impl InferCtx<'_> {
             .as_ref()?
         {
             ValueSource::Call { callee, .. } => callee.clone(),
-            ValueSource::Place(_) | ValueSource::GoFieldCopy(_) => None,
+            ValueSource::Place { .. } | ValueSource::GoFieldCopy(_) => None,
         }
     }
 
@@ -922,7 +933,14 @@ impl InferCtx<'_> {
             }),
             place => super::aliasing::place_root_name(place)
                 .filter(|root| root != name)
-                .map(ValueSource::Place),
+                .map(|name| ValueSource::Place {
+                    ty: self
+                        .binding_for_place(place)
+                        .and_then(|(binding, _)| self.scopes.binding_type(binding))
+                        .cloned()
+                        .unwrap_or_else(|| place.get_type()),
+                    name,
+                }),
         }
     }
 }

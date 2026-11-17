@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::abi::layout::SlotOrigin;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::calls::native::{is_clip_safe_path, slice_growth_call};
 use crate::context::expression::ExpressionContext;
@@ -23,6 +22,7 @@ use syntax::ast::Pattern;
 use syntax::ast::{Expression, Literal};
 use syntax::program::CallKind;
 use syntax::program::NativeTypeKind;
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 /// Append `panic("unreachable")` after a branch construct in return position
@@ -164,7 +164,7 @@ pub(crate) fn collapse_declared_temp(
     let declared = declared.clone();
     let value = match &filler.kind {
         LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
-            if !infers_declared_type(&go_type.code, value, value_has_declared_type)
+            if !infers_declared_type(go_type, value, value_has_declared_type)
                 || target.as_identifier() != Some(name)
                 || value.effects().runs_code()
             {
@@ -173,7 +173,7 @@ pub(crate) fn collapse_declared_temp(
             value.clone()
         }
         LoweredStatement::If(plan) => {
-            if go_type.code != "bool" || plan.initializer.is_some() {
+            if !go_type.is_named("bool") || plan.initializer.is_some() {
                 return;
             }
             let ElseArm::Else {
@@ -201,28 +201,31 @@ pub(crate) fn collapse_declared_temp(
 }
 
 fn infers_declared_type(
-    go_type: &str,
+    go_type: &GoType,
     value: &GoExpression,
     value_has_declared_type: bool,
 ) -> bool {
     if let Some(kind) = value.constant_kind() {
         return match kind {
-            ConstantKind::Int => go_type == "int",
-            ConstantKind::Rune => matches!(go_type, "rune" | "int32"),
-            ConstantKind::Float => go_type == "float64",
-            ConstantKind::Complex => go_type == "complex128",
-            ConstantKind::Bool => go_type == "bool",
-            ConstantKind::String => go_type == "string",
+            ConstantKind::Int => go_type.is_named("int"),
+            ConstantKind::Rune => go_type.is_named("rune") || go_type.is_named("int32"),
+            ConstantKind::Float => go_type.is_named("float64"),
+            ConstantKind::Complex => go_type.is_named("complex128"),
+            ConstantKind::Bool => go_type.is_named("bool"),
+            ConstantKind::String => go_type.is_named("string"),
         };
     }
     match value.node() {
         GoExpressionNode::Literal(text) => {
-            matches!(go_type, "int" | "string" | "bool") && text != "nil"
+            ["int", "string", "bool"]
+                .iter()
+                .any(|name| go_type.is_named(name))
+                && text != "nil"
         }
         GoExpressionNode::CompositeLiteral {
             go_type: Some(literal_type),
             ..
-        } => literal_type.code == go_type,
+        } => literal_type.as_ref() == go_type,
         GoExpressionNode::CompositeLiteral { go_type: None, .. }
         | GoExpressionNode::FunctionLiteral { .. }
         | GoExpressionNode::Verbatim(_) => false,
@@ -234,8 +237,8 @@ fn infers_declared_type(
             | BinaryOp::Gt
             | BinaryOp::Ge
             | BinaryOp::And
-            | BinaryOp::Or => go_type == "bool",
-            BinaryOp::Shl | BinaryOp::Shr => go_type == "int",
+            | BinaryOp::Or => go_type.is_named("bool"),
+            BinaryOp::Shl | BinaryOp::Shr => go_type.is_named("int"),
             BinaryOp::Add
             | BinaryOp::Sub
             | BinaryOp::Mul
@@ -249,8 +252,8 @@ fn infers_declared_type(
         GoExpressionNode::Unary {
             operator: UnaryOp::Not,
             ..
-        } => go_type == "bool",
-        _ => value_has_declared_type && !go_type.contains("chan"),
+        } => go_type.is_named("bool"),
+        _ => value_has_declared_type && !go_type.is_channel(),
     }
 }
 
@@ -580,7 +583,7 @@ impl Planner<'_> {
             Expression::Block { items, .. } if items.len() == 1 => &items[0],
             _ => expression,
         };
-        let line = self.maybe_line_directive(&actual_expression.get_span());
+        let line = self.source_position(&actual_expression.get_span());
 
         let statements = match actual_expression {
             Expression::Call {
@@ -657,7 +660,7 @@ impl Planner<'_> {
                 for (index, item) in rest.iter().enumerate() {
                     statements.push(this.lower_block_item(item, &items[index + 1..]));
                 }
-                let line = this.maybe_line_directive(&last.get_span());
+                let line = this.source_position(&last.get_span());
                 let tail = this.lower_assign_tail(last, target, target_ty);
                 statements.extend(directed_first(line, tail));
                 statements
@@ -780,7 +783,7 @@ impl Planner<'_> {
             // Detaching may evaluate an argument before the receiver is read.
             let receiver = if target_differs
                 && !arguments.is_empty()
-                && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read))
+                && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read, false))
             {
                 GoExpression::identifier(self.hoist_tmp_value_statement(
                     &mut capture,
@@ -818,7 +821,7 @@ impl Planner<'_> {
         if let Expression::DotAccess {
             expression, member, ..
         } = func
-            && matches!(member.as_str(), "append" | "reserve")
+            && syntax::program::NativeOperation::new(NativeTypeKind::Slice, member).grows_slice()
             && self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice)
         {
             return Some((member.as_str(), expression));

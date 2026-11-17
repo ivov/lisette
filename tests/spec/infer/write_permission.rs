@@ -1,3 +1,5 @@
+use crate::_harness::infer::checker_errors;
+use crate::_harness::infer::has_code;
 use crate::_harness::{infer, infer_with_go_typedefs};
 
 #[test]
@@ -2859,4 +2861,119 @@ fn drain(part: Ref<multipart.Part>) {
 }"#,
     )
     .assert_infer_code_once("needs_writable");
+}
+
+#[test]
+fn speculative_initializer_preserves_mutation_diagnostics() {
+    let source = r#"
+struct Callbacks { values: mut Slice<fn()> }
+fn main() {
+    let x = 1
+    let callbacks = Callbacks { values: [|| { x = 2 }] }
+    callbacks.values[0]()
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(has_code(&errors, "infer.immutable"), "{errors:?}");
+}
+
+#[test]
+fn writable_arguments_reject_overlapping_storage() {
+    let errors = checker_errors(
+        r#"
+fn touch(a: mut Slice<mut Slice<int>>, b: Slice<int>) { a[0][0] = 9; let _ = b[0] }
+fn main() { let mut rows: mut Slice<mut Slice<int>> = [[1], [2]]; touch(rows, rows[0]) }
+"#,
+        &[],
+    );
+    assert!(
+        has_code(&errors, "infer.aliased_writable_argument"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn writable_arguments_accept_copied_fields() {
+    let source = r#"
+struct Value<T> { n: T }
+struct Container { value: Value<int>, pair: (int, int), array: Array<int, 2> }
+impl Container {
+    fn take(self: mut Ref<Container>, v: Value<int>, pair: (int, int), array: Array<int, 2>) { self.value.n += v.n + pair.0 + array[0] }
+}
+fn main() {
+    let mut c = Container { value: Value { n: 1 }, pair: (2, 3), array: [4, 5] }
+    c.take(c.value, c.pair, c.array)
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn writable_arguments_reject_fields_containing_shared_storage() {
+    for (ty, value) in [
+        ("Slice<int>", "[1]"),
+        ("Ref<int>", "&n"),
+        ("Map<int, int>", "Map.new<int, int>()"),
+        ("Box<Slice<int>>", "Box { value: [1] }"),
+        ("Option<Slice<int>>", "Some([1])"),
+        ("(int, Slice<int>)", "(1, [2])"),
+        ("Array<Slice<int>, 1>", "[[1]]"),
+    ] {
+        let source = format!(
+            "struct Box<T> {{ value: T }}; struct C {{ value: {ty} }}; impl C {{ fn take(self: mut Ref<C>, v: {ty}) {{ let _ = v }} }}; fn main() {{ let n = 1; let mut c = C {{ value: {value} }}; c.take(c.value) }}"
+        );
+        let errors = checker_errors(&source, &[]);
+        assert!(
+            has_code(&errors, "infer.aliased_writable_argument"),
+            "{source}\n{errors:?}"
+        );
+        assert_eq!(errors.len(), 1, "{source}\n{errors:?}");
+    }
+}
+
+#[test]
+fn writable_arguments_inspect_nested_instances_of_the_same_generic() {
+    for (ty, value) in [
+        ("Box<Box<Slice<int>>>", "Box { value: Box { value: [1] } }"),
+        ("Option<Option<Slice<int>>>", "Some(Some([1]))"),
+    ] {
+        let source = format!(
+            "struct Box<T> {{ value: T }}; struct C {{ value: {ty} }}; impl C {{ fn take<T>(self: mut Ref<C>, v: T) {{ let _ = v }} }}; fn main() {{ let mut c = C {{ value: {value} }}; c.take(c.value) }}"
+        );
+        let errors = checker_errors(&source, &[]);
+        assert_eq!(errors.len(), 1, "{source}\n{errors:?}");
+        assert_eq!(
+            errors[0].code_str(),
+            Some("infer.aliased_writable_argument")
+        );
+        let copied = source.replace("Slice<int>", "int").replace("[1]", "1");
+        let errors = checker_errors(&copied, &[]);
+        assert!(errors.is_empty(), "{copied}\n{errors:?}");
+    }
+}
+
+#[test]
+fn writable_arguments_stop_growing_recursive_storage() {
+    use crate::_harness::assert_completes_within;
+    use std::time::Duration;
+    assert_completes_within(Duration::from_secs(5), || {
+        for payload in ["(T, T)", "W<T>"] {
+            let source = format!(
+                r#"
+struct W<T> {{ v: T }}
+enum Tree<T> {{ Leaf(T), Node(Tree<{payload}>) }}
+struct S {{ t: Tree<int>, xs: mut Slice<int> }}
+fn f(a: mut Slice<int>, _b: S) {{ a[0] = 1 }}
+fn main() {{ let mut s = S {{ t: Tree.Leaf(1), xs: [1] }}; f(s.xs, s) }}
+"#
+            );
+            let errors = checker_errors(&source, &[]);
+            assert!(
+                has_code(&errors, "infer.aliased_writable_argument"),
+                "{errors:?}"
+            );
+            assert!(has_code(&errors, "infer.instantiation_cycle"), "{errors:?}");
+        }
+    });
 }

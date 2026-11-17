@@ -103,15 +103,11 @@ impl InferCtx<'_> {
 
             Expression::Let { .. } => self.infer_let_binding(expression, expected_ty),
 
-            Expression::Call {
-                expression: ref callee,
-                span,
-                ..
-            } => {
-                let is_panic =
-                    matches!(&**callee, Expression::Identifier { value, .. } if value == "panic");
+            Expression::Call { span, .. } => {
                 let checkpoint = self.sink.checkpoint();
                 let result = self.infer_function_call(expression, expected_ty);
+                let is_panic = matches!(&result, Expression::Call { expression, .. }
+                    if self.is_panic_call(expression));
                 let reported_panic_position = self
                     .sink
                     .has_code_since(checkpoint, "infer.panic_in_expression_position");

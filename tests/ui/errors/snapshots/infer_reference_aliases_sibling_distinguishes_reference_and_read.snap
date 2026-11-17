@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Reference may mutate a value read in the same expression
+   ╭─[test.lis:6:18]
+ 5 │     let mut c = Counter { n: 1 }
+ 6 │     let _ = bump(&c) + c.n
+   ·                  ─┬    ─┬─
+   ·                   │     ╰── may see the mutated value
+   ·                   ╰── may mutate `c`
+ 7 │ }
+   ╰────
+  help: Make evaluation order explicit: to read the value before `&c` runs, copy it first with `let before = c.n`, and to read the value after, bind the reference-taking operand to a variable first · code: [infer.reference_aliases_sibling]

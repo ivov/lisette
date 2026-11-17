@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::layout::ValueLayout;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::is_order_sensitive;
@@ -13,6 +13,7 @@ use crate::plan::values::{GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
@@ -51,7 +52,7 @@ impl<'a> PlaceOrdering<'a> {
     }
 
     fn pins(self, plan: &ValuePlan) -> bool {
-        self.later().prepend(plan) || (self.read_twice && !plan.effects().can_duplicate())
+        self.later().prepend(plan, false) || (self.read_twice && !plan.effects().can_duplicate())
     }
 }
 
@@ -355,9 +356,9 @@ impl Planner<'_> {
         let base_plan = ValuePlan::computed(Vec::new(), base_expression)
             .with_stability(self.place_read_stability(base));
         let mut later = ordering.later();
-        later.prepend(&index_plan);
+        later.prepend(&index_plan, false);
         let pin_base = ordering.pins(&base_plan)
-            || later.prepend(&base_plan)
+            || later.prepend(&base_plan, false)
             || (is_order_sensitive(base)
                 && (base_plan.expression().effects().runs_code()
                     || index_plan.effects().runs_code()));

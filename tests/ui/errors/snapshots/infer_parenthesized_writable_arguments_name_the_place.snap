@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Aliased writable argument
+   ╭─[test.lis:3:37]
+ 2 │ fn touch(a: mut Slice<int>, b: Slice<int>) { a[0] = 2; let _ = b[0] }
+ 3 │ fn main() { let mut xs = [1]; touch((xs), (xs)) }
+   ·                                     ──┬─
+   ·                                       ╰── `xs` is passed writably and again in the same call
+   ╰────
+  help: Pass `xs.clone()` in one position. The callee's other view of `xs` would change under it · code: [infer.aliased_writable_argument]

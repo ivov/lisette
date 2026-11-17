@@ -1,6 +1,9 @@
-use syntax::ast::{Expression, Literal, UnaryOperator};
+use syntax::EcoString;
+use syntax::ast::{
+    BinaryOperator, BindingId, Expression, IdentifierResolution, Literal, UnaryOperator,
+};
 
-fn place_root(expression: &Expression) -> Option<&Expression> {
+pub(super) fn place_root(expression: &Expression) -> Option<&Expression> {
     match expression {
         Expression::Identifier { .. } => Some(expression),
         Expression::DotAccess {
@@ -23,87 +26,120 @@ pub(super) fn place_root_name(expression: &Expression) -> Option<String> {
     place_root(expression)?.get_var_name()
 }
 
-/// Identifies which storage a place names, piece by piece. `None` when any
-/// piece cannot be pinned down, so unknown places never compare equal.
-pub(super) fn place_key(expression: &Expression) -> Option<String> {
-    match expression {
-        Expression::Identifier { .. } => expression.get_var_name(),
-        Expression::DotAccess {
-            expression: inner,
-            member,
-            ..
-        } => Some(format!("{}.{member}", place_key(inner.unwrap_parens())?)),
-        Expression::IndexedAccess {
-            expression: inner,
-            index,
-            ..
-        } => {
-            let index = index_key(index.unwrap_parens())?;
-            Some(format!("{}[{index}]", place_key(inner.unwrap_parens())?))
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum PlaceKey {
+    Binding(BindingId),
+    Definition(EcoString),
+    Field(Box<PlaceKey>, EcoString),
+    Index(Box<PlaceKey>, Box<IndexKey>),
+    Dereference(Box<PlaceKey>),
+}
+
+impl PlaceKey {
+    pub(crate) fn overlaps(&self, other: &Self) -> bool {
+        self.is_prefix_of(other) || other.is_prefix_of(self)
+    }
+
+    fn is_prefix_of(&self, other: &Self) -> bool {
+        if self == other {
+            return true;
         }
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } => Some(format!("{}.*", place_key(inner.unwrap_parens())?)),
-        _ => None,
+        match other {
+            Self::Field(parent, _) | Self::Index(parent, _) | Self::Dereference(parent) => {
+                self.is_prefix_of(parent)
+            }
+            Self::Binding(_) | Self::Definition(_) => false,
+        }
     }
 }
 
-/// Identifies an index expression, `None` when its value cannot be pinned
-/// down, so `rows[i + 1]` twice is one place while `rows[i + 1]` and
-/// `rows[j + 1]` are not compared.
-fn index_key(expression: &Expression) -> Option<String> {
-    let expression = expression.unwrap_parens();
-    match expression {
-        Expression::Identifier { .. } => expression.get_var_name(),
-        Expression::Literal { .. } => render_scalar(expression),
-        // A selector, nested index, or deref compares by structural identity.
-        Expression::DotAccess { .. }
-        | Expression::IndexedAccess { .. }
-        | Expression::Unary {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum IndexKey {
+    Place(PlaceKey),
+    Integer(u64),
+    String(String),
+    Boolean(bool),
+    Range(Option<Box<IndexKey>>, Option<Box<IndexKey>>, bool),
+    Binary(BinaryOperator, Box<IndexKey>, Box<IndexKey>),
+    Unary(UnaryOperator, Box<IndexKey>),
+}
+
+pub(crate) fn place_key(expression: &Expression) -> Option<PlaceKey> {
+    Some(match expression.unwrap_parens() {
+        Expression::Identifier { resolution, .. } => match resolution {
+            IdentifierResolution::Binding(id) => PlaceKey::Binding(*id),
+            IdentifierResolution::Definition { name, .. } => PlaceKey::Definition(name.clone()),
+            IdentifierResolution::Unresolved => return None,
+        },
+        Expression::DotAccess {
+            expression, member, ..
+        } => PlaceKey::Field(Box::new(place_key(expression)?), member.clone()),
+        Expression::IndexedAccess {
+            expression, index, ..
+        } => PlaceKey::Index(
+            Box::new(place_key(expression)?),
+            Box::new(index_key(index)?),
+        ),
+        Expression::Unary {
             operator: UnaryOperator::Deref,
+            expression,
             ..
-        } => place_key(expression),
+        } => PlaceKey::Dereference(Box::new(place_key(expression)?)),
+        _ => return None,
+    })
+}
+
+fn index_key(expression: &Expression) -> Option<IndexKey> {
+    Some(match expression.unwrap_parens() {
+        Expression::Literal {
+            literal: Literal::Integer { value, .. },
+            ..
+        } => IndexKey::Integer(*value),
+        Expression::Literal {
+            literal: Literal::String { value, .. },
+            ..
+        } => IndexKey::String(value.clone()),
+        Expression::Literal {
+            literal: Literal::Boolean(value),
+            ..
+        } => IndexKey::Boolean(*value),
         Expression::Range {
             start,
             end,
             inclusive,
             ..
         } => {
-            let endpoint = |e: &Option<Box<Expression>>| match e {
-                None => Some(String::new()),
-                Some(e) => index_key(e),
+            let endpoint = |value: &Option<Box<Expression>>| match value {
+                Some(value) => Some(Some(Box::new(index_key(value)?))),
+                None => Some(None),
             };
-            Some(format!(
-                "({}{}{})",
-                endpoint(start)?,
-                if *inclusive { "..=" } else { ".." },
-                endpoint(end)?
-            ))
+            IndexKey::Range(endpoint(start)?, endpoint(end)?, *inclusive)
         }
         Expression::Binary {
             operator,
             left,
             right,
             ..
-        } => Some(format!(
-            "({}{operator:?}{})",
-            index_key(left)?,
-            index_key(right)?
-        )),
+        } => IndexKey::Binary(
+            *operator,
+            Box::new(index_key(left)?),
+            Box::new(index_key(right)?),
+        ),
         Expression::Unary {
             operator,
-            expression: inner,
+            expression,
             ..
-        } => Some(format!("({operator:?}{})", index_key(inner)?)),
-        _ => None,
-    }
+        } if *operator != UnaryOperator::Deref => {
+            IndexKey::Unary(operator.clone(), Box::new(index_key(expression)?))
+        }
+        other => IndexKey::Place(place_key(other)?),
+    })
 }
 
 /// Reconstructed source text for a place expression. Indexes that are not
 /// literals or identifiers render as `..` placeholders.
-pub(super) fn render_place(expression: &Expression) -> String {
+pub(crate) fn render_place(expression: &Expression) -> String {
+    let expression = expression.unwrap_parens();
     match expression {
         Expression::Identifier { .. } => expression.get_var_name().unwrap_or_default(),
         Expression::DotAccess {
