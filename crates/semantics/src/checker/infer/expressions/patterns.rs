@@ -5,6 +5,7 @@ use syntax::ast::{BindingId, BindingKind};
 use syntax::ast::{
     ConstructorPatternResolution, Expression, Pattern, RecordPatternResolution, RestPattern,
     SequencePatternResolution, Span, StructFieldPattern, collect_pattern_bindings,
+    expand_or_patterns,
 };
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{CompoundKind, Type, substitute, unqualified_name};
@@ -1149,9 +1150,11 @@ impl InferCtx<'_> {
                 })
             });
             let mut alt = alt;
-            for (name, alt_span) in collect_pattern_bindings(&alt) {
-                if let Some((_, first_span)) = first_bindings.iter().find(|(n, _)| *n == name) {
-                    self.facts.add_usage(alt_span, *first_span);
+            for expansion in expand_or_patterns(&alt, &|_| true) {
+                for (name, alt_span) in collect_pattern_bindings(&expansion.pattern) {
+                    if let Some((_, first_span)) = first_bindings.iter().find(|(n, _)| *n == name) {
+                        self.facts.add_usage(alt_span, *first_span);
+                    }
                 }
             }
             clear_bindings(&mut alt);

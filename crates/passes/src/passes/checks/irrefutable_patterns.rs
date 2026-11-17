@@ -8,8 +8,8 @@
 //!   through arm to branch to.
 //! - Literal patterns would never match for non-literal scrutinees: the
 //!   compiler cannot prove they always match, so they are rejected.
-//! - Or-patterns are rejected because they imply branching; an irrefutable
-//!   single arm cannot choose among alternatives.
+//! - Or-patterns are rejected at any depth because they imply branching; an
+//!   irrefutable single arm cannot choose among alternatives.
 //!
 //! `let pat else { ... }` and `let assert pat = ...` relax the or-pattern rule
 //! (a refutable arm handles the non-matching case) but still reject bare literal
@@ -17,7 +17,7 @@
 
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
-use syntax::ast::{Binding, Expression, Pattern, SelectArm};
+use syntax::ast::{Binding, Expression, Pattern, SelectArm, outermost_or_patterns};
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     let sink = ctx.sink;
@@ -100,9 +100,9 @@ fn check_binding_pattern(pattern: &Pattern, sink: &LocalSink) {
         ));
     }
 
-    if matches!(pattern, Pattern::Or { .. }) {
+    for or_pattern in outermost_or_patterns(pattern) {
         sink.push(diagnostics::infer::or_pattern_in_irrefutable_context(
-            pattern.get_span(),
+            or_pattern.get_span(),
         ));
     }
 }

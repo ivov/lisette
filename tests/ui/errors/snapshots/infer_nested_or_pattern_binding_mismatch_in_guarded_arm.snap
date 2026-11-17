@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid or-pattern
+   ╭─[test.lis:6:16]
+ 5 │   match o {
+ 6 │     Some(P.One(x) | P.Pair(y, _)) if b => 1,
+   ·                ┬
+   ·                ╰── only bound here
+ 7 │     _ => 0,
+   ╰────
+  help: Use a wildcard `_` instead of a binding, or ensure all alternatives bind the same variable. Variable x is not bound in all alternatives · code: [infer.or_pattern_binding_mismatch]

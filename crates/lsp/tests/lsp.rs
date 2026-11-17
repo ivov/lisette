@@ -781,10 +781,14 @@ fn rename_or_pattern_binding_edits_every_alternative() {
         TEST_URI,
         "\
 enum Event { KeyDown(int), KeyUp(int), Click }
-fn code(e: Event) -> int {
+fn code(e: Event, o: Option<Event>) -> int {
   match e {
     Event.KeyDown(c) | Event.KeyUp(c) => c + 1,
     Event.Click => 0,
+  }
+  match o {
+    Some(Event.KeyDown(d) | Event.KeyUp(d)) => d,
+    _ => 0,
   }
 }",
     );
@@ -794,6 +798,9 @@ fn code(e: Event) -> int {
 
     let from_second_alternative = edited_columns(client.rename(TEST_URI, 3, 35, "key"));
     assert_eq!(from_second_alternative, vec![(3, 18), (3, 35), (3, 41)]);
+
+    let nested = edited_columns(client.rename(TEST_URI, 7, 47, "key"));
+    assert_eq!(nested, vec![(7, 23), (7, 40), (7, 47)]);
 
     client.shutdown();
 }

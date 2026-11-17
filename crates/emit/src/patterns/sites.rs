@@ -1,6 +1,7 @@
+use std::borrow::Cow;
 use std::slice;
 
-use crate::patterns::binding_decls::pattern_has_bindings;
+use crate::patterns::binding_decls::{has_binding_or_pattern, split_binding_or_patterns};
 use crate::plan::bodies::GoUses;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 
@@ -328,7 +329,7 @@ impl Planner<'_> {
         };
 
         let subject_is_fixed = self.is_unmutated_identifier(scrutinee);
-        let body = if matches!(pattern, Pattern::Or { .. }) {
+        let body = if matches!(pattern, Pattern::Or { .. }) || has_binding_or_pattern(pattern) {
             self.lower_let_else_or_pattern(pattern, subject, fail)
         } else {
             self.lower_let_else_single_pattern(pattern, subject, fail, subject_is_fixed)
@@ -376,6 +377,9 @@ impl Planner<'_> {
         let (PreludeVariant::Ok, [payload]) = prelude_variant(pattern)? else {
             return None;
         };
+        if has_binding_or_pattern(payload) {
+            return None;
+        }
         let payload_ty = self.facts.peel_alias(&scrutinee.get_type()).ok_type();
         let info = decision_tree::collect_pattern_info(self, payload, &payload_ty);
         if !info.is_irrefutable() {
@@ -525,14 +529,11 @@ impl Planner<'_> {
         let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
         // Only a binding or-pattern tests each alternative in turn.
-        let alternatives = match pattern {
-            Pattern::Or { patterns, .. } if pattern_has_bindings(pattern) => patterns.as_slice(),
-            _ => slice::from_ref(pattern),
-        };
+        let alternatives = split_binding_or_patterns(pattern);
         let mut loop_body = subject_setup;
         self.lower_while_let_alternatives(
             &mut loop_body,
-            alternatives,
+            &alternatives,
             TypedSubject {
                 var: &subject_var,
                 ty: &scrutinee_ty,
@@ -735,12 +736,14 @@ impl Planner<'_> {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let Pattern::Or { patterns, .. } = pattern else {
-            unreachable!("lower_let_else_or_pattern requires an Or pattern");
+        let alternatives = match pattern {
+            Pattern::Or { patterns, .. } => patterns.as_slice(),
+            _ => slice::from_ref(pattern),
         };
-        let mut infos: Vec<_> = patterns
+        let mut infos: Vec<_> = alternatives
             .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
+            .flat_map(split_binding_or_patterns)
+            .map(|alt| decision_tree::collect_pattern_info(self, &alt, subject_ty))
             .collect();
         let mut bindings: Vec<_> = infos.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);
@@ -840,7 +843,7 @@ impl Planner<'_> {
     fn lower_while_let_alternatives(
         &mut self,
         statements: &mut Vec<Statement>,
-        patterns: &[Pattern],
+        patterns: &[Cow<'_, Pattern>],
         subject: TypedSubject,
         body: &Expression,
     ) {

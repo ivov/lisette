@@ -2318,6 +2318,155 @@ fn shape_size(s: Shape) -> int {
 }
 
 #[test]
+fn nested_or_pattern_literals_share_a_switch_case() {
+    let input = r#"
+fn size(n: Option<int>) -> string {
+  match n {
+    Some(1 | 2) => "small",
+    Some(3) => "three",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_or_pattern_in_struct_field_and_slice() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn near(p: Point) -> bool {
+  match p {
+    Point { x: 0 | 1, .. } => true,
+    _ => false,
+  }
+}
+
+fn head(xs: Slice<int>) -> int {
+  match xs {
+    [1 | 2, ..rest] => rest.length(),
+    _ => -1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_or_pattern_with_bindings_and_guard() {
+    let input = r#"
+enum Event { KeyDown(int), KeyUp(int), Click }
+
+fn key(e: Option<Event>) -> int {
+  match e {
+    Some(Event.KeyDown(c) | Event.KeyUp(c)) if c > 3 => c * 2,
+    Some(_) => 1,
+    None => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_or_pattern_product_of_alternatives_with_bindings() {
+    let input = r#"
+enum Shape { Circle(int), Square(int), Line(int, int) }
+
+fn total(p: (Shape, Shape)) -> int {
+  match p {
+    (Shape.Circle(a) | Shape.Square(a), Shape.Circle(b) | Shape.Square(b)) => a + b,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_or_pattern_bound_with_as() {
+    let input = r#"
+#[display]
+enum Event { KeyDown(int), KeyUp(int), Click }
+
+fn describe(e: Event) -> string {
+  match e {
+    (Event.KeyDown(c) | Event.KeyUp(c)) as key => f"{c} {key}",
+    Event.Click => "click",
+  }
+}
+
+fn is_key(e: Event) -> string {
+  match e {
+    (Event.KeyDown(_) | Event.KeyUp(_)) as key => f"{key}",
+    Event.Click => "click",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_or_pattern_in_if_let_let_else_and_while_let() {
+    let input = r#"
+enum Event { KeyDown(int), KeyUp(int), Click }
+
+fn if_let(e: Option<Event>) -> int {
+  if let Some(Event.KeyDown(c) | Event.KeyUp(c)) = e {
+    c
+  } else {
+    0
+  }
+}
+
+fn let_else(e: Option<Event>) -> int {
+  let Some(Event.KeyDown(c) | Event.KeyUp(c)) = e else {
+    return -1
+  }
+  c
+}
+
+fn while_let(xs: Slice<Option<Event>>) -> int {
+  let mut total = 0
+  let mut i = 0
+  while let Some(Event.KeyDown(c) | Event.KeyUp(c)) = xs.get(i).flatten() {
+    total += c
+    i += 1
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_or_pattern_with_bindings_in_ok_payload() {
+    let input = r#"
+enum Event { KeyDown(int), KeyUp(int), Click }
+
+fn read() -> Result<Event, error> {
+  Ok(Event.Click)
+}
+
+fn key() -> int {
+  match read() {
+    Ok(Event.KeyDown(c) | Event.KeyUp(c)) => c,
+    _ => 0,
+  }
+}
+
+fn key_or_fail() -> int {
+  let Ok(Event.KeyDown(c) | Event.KeyUp(c)) = read() else {
+    return -1
+  }
+  c
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn try_block_basic_result() {
     let input = r#"
 fn risky() -> Result<int, string> {

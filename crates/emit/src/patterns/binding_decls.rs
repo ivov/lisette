@@ -1,4 +1,6 @@
-use syntax::ast::{Literal, Pattern, RestPattern};
+use std::borrow::Cow;
+
+use syntax::ast::{Literal, Pattern, RestPattern, expand_or_patterns, outermost_or_patterns};
 
 use crate::Planner;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
@@ -122,4 +124,19 @@ pub(crate) fn pattern_has_bindings(pattern: &Pattern) -> bool {
         Pattern::AsBinding { .. } => true,
         Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
     }
+}
+
+/// An or-pattern without bindings never contains one that binds.
+pub(crate) fn has_binding_or_pattern(pattern: &Pattern) -> bool {
+    outermost_or_patterns(pattern)
+        .into_iter()
+        .any(pattern_has_bindings)
+}
+
+/// An or-pattern without bindings stays whole and becomes a `Check::Or`.
+pub(crate) fn split_binding_or_patterns(pattern: &Pattern) -> Vec<Cow<'_, Pattern>> {
+    expand_or_patterns(pattern, &pattern_has_bindings)
+        .into_iter()
+        .map(|expansion| expansion.pattern)
+        .collect()
 }

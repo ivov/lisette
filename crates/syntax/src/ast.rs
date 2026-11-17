@@ -5,8 +5,10 @@ use crate::program::{CallKind, DotAccessResolution};
 use crate::types;
 use crate::types::Type;
 use fmt::Formatter;
+use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Display;
+use std::iter;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Index;
@@ -484,6 +486,197 @@ pub fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
         }
         Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => vec![],
     }
+}
+
+pub fn outermost_or_patterns(pattern: &Pattern) -> Vec<&Pattern> {
+    match pattern {
+        Pattern::Or { .. } => vec![pattern],
+        Pattern::Tuple {
+            elements: patterns, ..
+        }
+        | Pattern::EnumVariant {
+            fields: patterns, ..
+        }
+        | Pattern::Slice {
+            prefix: patterns, ..
+        } => patterns.iter().flat_map(outermost_or_patterns).collect(),
+        Pattern::Struct { fields, .. } => fields
+            .iter()
+            .flat_map(|field| outermost_or_patterns(&field.value))
+            .collect(),
+        Pattern::AsBinding { pattern, .. } => outermost_or_patterns(pattern),
+        Pattern::Identifier { .. }
+        | Pattern::WildCard { .. }
+        | Pattern::Literal { .. }
+        | Pattern::Unit { .. } => vec![],
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OrExpansion<'a> {
+    pub pattern: Cow<'a, Pattern>,
+    pub choices: Vec<OrChoice>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OrChoice {
+    pub or_span: Span,
+    pub alternative_span: Span,
+}
+
+/// One pattern per combination of alternatives of the or-patterns that `split` accepts.
+pub fn expand_or_patterns<'a>(
+    pattern: &'a Pattern,
+    split: &impl Fn(&Pattern) -> bool,
+) -> Vec<OrExpansion<'a>> {
+    match pattern {
+        Pattern::Or { patterns, span } if split(pattern) => patterns
+            .iter()
+            .flat_map(|alternative| {
+                let choice = OrChoice {
+                    or_span: *span,
+                    alternative_span: alternative.get_span(),
+                };
+                expand_or_patterns(alternative, split)
+                    .into_iter()
+                    .map(move |mut expansion| {
+                        expansion.choices.insert(0, choice);
+                        expansion
+                    })
+            })
+            .collect(),
+        Pattern::AsBinding {
+            pattern: inner,
+            name,
+            name_span,
+            span,
+            binding,
+        } => expand_children(pattern, iter::once(inner.as_ref()), split, |mut inner| {
+            Pattern::AsBinding {
+                pattern: Box::new(inner.remove(0)),
+                name: name.clone(),
+                name_span: *name_span,
+                span: *span,
+                binding: *binding,
+            }
+        }),
+        Pattern::Tuple { elements, span } => {
+            expand_children(pattern, elements.iter(), split, |elements| Pattern::Tuple {
+                elements,
+                span: *span,
+            })
+        }
+        Pattern::EnumVariant {
+            identifier,
+            fields,
+            rest,
+            resolution,
+            ty,
+            span,
+        } => expand_children(pattern, fields.iter(), split, |fields| {
+            Pattern::EnumVariant {
+                identifier: identifier.clone(),
+                fields,
+                rest: *rest,
+                resolution: resolution.clone(),
+                ty: ty.clone(),
+                span: *span,
+            }
+        }),
+        Pattern::Struct {
+            identifier,
+            fields,
+            rest,
+            resolution,
+            ty,
+            span,
+        } => expand_children(
+            pattern,
+            fields.iter().map(|field| &field.value),
+            split,
+            |values| Pattern::Struct {
+                identifier: identifier.clone(),
+                fields: fields
+                    .iter()
+                    .zip(values)
+                    .map(|(field, value)| StructFieldPattern {
+                        name: field.name.clone(),
+                        name_span: field.name_span,
+                        value,
+                    })
+                    .collect(),
+                rest: *rest,
+                resolution: resolution.clone(),
+                ty: ty.clone(),
+                span: *span,
+            },
+        ),
+        Pattern::Slice {
+            prefix,
+            rest,
+            resolution,
+            span,
+        } => expand_children(pattern, prefix.iter(), split, |prefix| Pattern::Slice {
+            prefix,
+            rest: rest.clone(),
+            resolution: resolution.clone(),
+            span: *span,
+        }),
+        Pattern::Or { .. }
+        | Pattern::Identifier { .. }
+        | Pattern::WildCard { .. }
+        | Pattern::Literal { .. }
+        | Pattern::Unit { .. } => unexpanded(pattern),
+    }
+}
+
+fn unexpanded(pattern: &Pattern) -> Vec<OrExpansion<'_>> {
+    vec![OrExpansion {
+        pattern: Cow::Borrowed(pattern),
+        choices: vec![],
+    }]
+}
+
+fn expand_children<'a>(
+    pattern: &'a Pattern,
+    children: impl Iterator<Item = &'a Pattern>,
+    split: &impl Fn(&Pattern) -> bool,
+    rebuild: impl Fn(Vec<Pattern>) -> Pattern,
+) -> Vec<OrExpansion<'a>> {
+    let child_expansions: Vec<Vec<OrExpansion<'a>>> = children
+        .map(|child| expand_or_patterns(child, split))
+        .collect();
+    if child_expansions
+        .iter()
+        .flatten()
+        .all(|expansion| expansion.choices.is_empty())
+    {
+        return unexpanded(pattern);
+    }
+
+    let mut combinations: Vec<(Vec<Pattern>, Vec<OrChoice>)> = vec![(vec![], vec![])];
+    for expansions in &child_expansions {
+        combinations = combinations
+            .into_iter()
+            .flat_map(|(children, choices)| {
+                expansions.iter().map(move |expansion| {
+                    let mut children = children.clone();
+                    children.push(expansion.pattern.as_ref().clone());
+                    let mut choices = choices.clone();
+                    choices.extend_from_slice(&expansion.choices);
+                    (children, choices)
+                })
+            })
+            .collect();
+    }
+
+    combinations
+        .into_iter()
+        .map(|(children, choices)| OrExpansion {
+            pattern: Cow::Owned(rebuild(children)),
+            choices,
+        })
+        .collect()
 }
 
 impl Pattern {

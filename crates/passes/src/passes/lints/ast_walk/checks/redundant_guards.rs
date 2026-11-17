@@ -2,7 +2,7 @@ use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, Pattern, Span};
 
-use syntax::ast::collect_pattern_bindings;
+use syntax::ast::{collect_pattern_bindings, outermost_or_patterns};
 
 use super::helpers::{is_float_operand, mentions_identifier, span_text};
 
@@ -20,6 +20,10 @@ fn check_arm(arm: &MatchArm, ctx: &NodeCtx) {
     let Some(guard) = &arm.guard else {
         return;
     };
+    // Without the guard, alternatives that a failed guard retries become redundant.
+    if !outermost_or_patterns(&arm.pattern).is_empty() {
+        return;
+    }
     let Expression::Binary {
         operator: BinaryOperator::Equal,
         left,

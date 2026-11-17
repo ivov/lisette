@@ -1530,6 +1530,19 @@ fn or_pattern_with_binding() {
 }
 
 #[test]
+fn or_pattern_bound_with_as_keeps_parentheses() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  match e {
+    (KeyDown(k) | KeyUp(k)) as key => k,
+    Some((A | B) as x) => 1,
+    _ => 0,
+  }
+}"#
+    );
+}
+
+#[test]
 fn or_pattern_multiline() {
     assert_format_snapshot!(
         r#"fn test() {
