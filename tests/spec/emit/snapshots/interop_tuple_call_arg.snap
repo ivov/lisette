@@ -30,15 +30,10 @@ func useSplit(f func(string) lisette.Tuple2[string, string], p string) string {
 }
 
 func main() {
-	cb := path.Split
-	var adapted func(string) lisette.Tuple2[string, string]
-	if cb != nil {
-		adapted = func(arg0 string) lisette.Tuple2[string, string] {
-			ret, ret2 := cb(arg0)
-			tup := lisette.MakeTuple2(ret, ret2)
-			return tup
-		}
-	}
-	r := useSplit(adapted, "/foo/bar.txt")
+	r := useSplit(func(arg0 string) lisette.Tuple2[string, string] {
+		ret, ret2 := path.Split(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
+		return tup
+	}, "/foo/bar.txt")
 	_ = r
 }

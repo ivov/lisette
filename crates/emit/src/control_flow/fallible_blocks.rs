@@ -3,7 +3,6 @@ use crate::Planner;
 use crate::ReturnContext;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::SlotOrigin;
 use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::context::expression::ExpressionContext;
@@ -14,6 +13,7 @@ use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 pub(crate) struct TryBlockPairPlan<'e> {
@@ -143,7 +143,7 @@ impl Planner<'_> {
             .enumerate()
             .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
             .collect();
-        let line = self.maybe_line_directive(&last.get_span());
+        let line = self.source_position(&last.get_span());
         let tail = self.lower_try_tail(last, fallible);
         statements.extend(directed_first(line, tail));
         statements

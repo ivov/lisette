@@ -39,12 +39,10 @@ func file(n int) *multipart.FileHeader {
 }
 
 func main() {
-	cb := file
-	tagged := func(arg0 int) lisette.Option[*multipart.FileHeader] {
-		raw := cb(arg0)
+	picked := lisette.OptionAndThen(lisette.MakeOptionSome(3), func(arg0 int) lisette.Option[*multipart.FileHeader] {
+		raw := file(arg0)
 		return lisette.OptionFromNilable[*multipart.FileHeader](raw, raw == nil)
-	}
-	picked := lisette.OptionAndThen(lisette.MakeOptionSome(3), tagged)
+	})
 	files := make(map[string][]lisette.Option[*multipart.FileHeader])
 	files["key"] = []lisette.Option[*multipart.FileHeader]{
 		picked,

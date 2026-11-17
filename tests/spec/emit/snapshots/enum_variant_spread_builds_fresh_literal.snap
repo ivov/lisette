@@ -14,11 +14,11 @@ description: |
 ---
 package main
 
-func MakeCursorPoint(arg0 int, arg1 int) Cursor {
+func MakeCursorPoint(arg0, arg1 int) Cursor {
 	return Cursor{Tag: CursorPoint, Id: arg0, X: arg1}
 }
 
-func MakeCursorArea(arg0 int, arg1 int) Cursor {
+func MakeCursorArea(arg0, arg1 int) Cursor {
 	return Cursor{Tag: CursorArea, Id: arg0, W: arg1}
 }
 

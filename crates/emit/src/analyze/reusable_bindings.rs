@@ -7,7 +7,7 @@ use syntax::types::Type;
 
 /// Pairs each `let` with the same-block binding of the same type that it hides,
 /// when no closure or shared storage can see the hidden variable afterwards.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct ReusableBindings {
     hidden: HashMap<BindingId, BindingId>,
 }

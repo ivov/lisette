@@ -2,11 +2,12 @@ use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::coercion::LayoutBridge;
 use crate::abi::is_prelude_container_type;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::calls::go_interop::GoResultBridge;
+use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::patterns::matching::prelude_constructor;
 use syntax::ast::{Expression, IdentifierResolution};
+use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
+use syntax::program::SlotOrigin;
 use syntax::program::{CallKind, Definition, Method, Visibility, resolved_definition};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
@@ -64,7 +65,7 @@ impl<'a> CallableDeclaration<'a> {
         matches!(self, Self::Definition(definition) if definition.is_type_definition())
     }
 
-    pub(crate) fn go_type_param_recipe(self) -> Option<&'a str> {
+    pub(crate) fn go_type_param_recipe(self) -> Option<&'a [GoTypeRecipe]> {
         match self {
             Self::Definition(definition) => definition.go_type_param_recipe(),
             Self::Method(_) => None,
@@ -83,30 +84,28 @@ pub(crate) enum CallableOrigin {
 #[derive(Debug, Clone)]
 pub(crate) enum ArgumentPlan {
     Direct,
-    GoCallbackAdapter {
-        source: CallableReturnAbi,
-        target: LoweredReturnAbi,
-    },
-    GoSlotBridge(Box<ArgumentSlotBridge>),
-    TaggedGoLowering(Box<TaggedArgumentAdapter>),
+    Bridge(Box<ArgumentSlotBridge>),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TaggedArgumentAdapter {
-    pub(crate) function: Type,
-    pub(crate) result: LoweredReturnAbi,
-    pub(crate) bridge: Option<GoResultBridge>,
+pub(crate) struct FunctionBridge {
+    pub(crate) source: FunctionLayout,
+    pub(crate) target: FunctionLayout,
 }
 
-impl TaggedArgumentAdapter {
-    pub(crate) fn plan(planner: &Planner, ty: &Type) -> Option<Self> {
-        let function = ty.as_function_type()?;
-        let result = planner.classify_direct_emission(&function.return_type)?;
-        Some(Self {
-            function: ty.unwrap_forall().clone(),
-            result,
-            bridge: None,
-        })
+impl FunctionBridge {
+    pub(crate) fn into_argument(self, function_type: Type) -> ArgumentSlotBridge {
+        ArgumentSlotBridge {
+            target: ValueLayout::Function {
+                function_type,
+                layout: self.target.clone(),
+            },
+            bridge: LayoutBridge::Function {
+                source: Box::new(self.source),
+                target: Box::new(self.target),
+            },
+            source: ArgumentValueSource::Callable,
+        }
     }
 }
 
@@ -115,6 +114,8 @@ pub(crate) enum ArgumentValueSource {
     Lisette,
     GoPhysical,
     GoSlot,
+
+    Callable,
 }
 
 #[derive(Debug, Clone)]

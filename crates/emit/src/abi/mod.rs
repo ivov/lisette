@@ -1,8 +1,11 @@
+pub(crate) mod bridge;
 pub(crate) mod callable;
 pub(crate) mod catalog;
 pub(crate) mod coercion;
+pub(crate) mod fallible_producer;
 pub(crate) mod layout;
 pub(crate) mod transition;
+pub(crate) mod wrapping;
 
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
@@ -12,8 +15,9 @@ use crate::plan::calls::CallableOrigin;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;
-use layout::{FunctionLayout, SlotOrigin, ValueLayout};
+use layout::{FunctionLayout, ValueLayout};
 use syntax::ast::Expression;
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 /// Go spells a tuple payload as one result per element.
@@ -139,12 +143,11 @@ impl Planner<'_> {
         else {
             return layout;
         };
-        let result_type = &layout.result_type;
-        let result = self.value_layout(result_type, SlotOrigin::Lisette);
+        let result_type = layout.result_layout.logical_type();
         let return_abi = self.function_expression_return_abi(result_type, ctx);
         ValueLayout::Function {
             function_type,
-            layout: self.function_layout(layout.parameters, &result, return_abi, None),
+            layout: layout.with_return_abi(self, return_abi, SlotOrigin::Lisette),
         }
     }
 
@@ -345,15 +348,6 @@ impl Planner<'_> {
             || self.facts.is_nilable_go_type(&err)
     }
 
-    pub(crate) fn render_callable_return_ty(
-        &mut self,
-        abi: &CallableReturnAbi,
-        return_ty: &Type,
-    ) -> String {
-        let go_type = self.callable_return_go_type(abi, return_ty);
-        self.use_rendered_go_type(go_type)
-    }
-
     /// The Go result of a Lisette-authored callable with this return ABI.
     pub(crate) fn callable_return_go_type(
         &self,
@@ -366,18 +360,6 @@ impl Planner<'_> {
             .result_go_type(self)
             .unwrap_or_else(|| self.go_type(&peeled))
     }
-}
-
-pub(crate) fn go_result_list(slots: &[GoType]) -> GoType {
-    let code = format!(
-        "({})",
-        slots
-            .iter()
-            .map(|slot| slot.code.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    GoType::with_dependencies(code, slots)
 }
 
 pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {

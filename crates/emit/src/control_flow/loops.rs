@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
+use crate::expressions::staging::SequenceStage;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::GoUses;
@@ -8,7 +9,8 @@ use crate::plan::bodies::{
 };
 use crate::plan::go_expression::BinaryOp;
 use crate::plan::local::GoIdentifier;
-use crate::plan::values::{CaptureBoundary, GoExpression};
+use crate::plan::values::ConstantKind;
+use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::types::shape::RangeShape;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
@@ -43,7 +45,7 @@ impl Planner<'_> {
         let body = body.as_ref();
         let shape = self.classify_for(binding, iterable);
 
-        let line = self.maybe_line_directive(&full_expression.get_span());
+        let line = self.source_position(&full_expression.get_span());
         let plan = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range => this.lower_range_for(binding, iterable, body),
@@ -418,43 +420,32 @@ impl Planner<'_> {
             unreachable!("lower_range_for requires a Range iterable");
         };
 
-        let mut prologue = Vec::new();
-        let (mut start_expression, start_is_observable) = match start {
-            Some(start) => {
-                let plan = self.plan_operand(start, ExpressionContext::value());
-                let is_observable = !plan.can_delay();
-                let (setup, value) = plan.into_parts();
-                prologue.extend(setup);
-                (value, is_observable)
-            }
-            None => (GoExpression::literal("0".to_string()), false),
-        };
-        let checkpoint = prologue.len();
-        let counts_from_zero = !*inclusive && start_expression.as_literal() == Some("0");
-        let end_expression = end.as_ref().map(|end| {
-            self.capture_value_at_boundary(
-                &mut prologue,
-                end,
-                "bound",
-                // `for i := range n` reads `n` once.
-                if counts_from_zero {
-                    CaptureBoundary::SiblingSequence
-                } else {
-                    CaptureBoundary::Delayed
-                },
-            )
-        });
-        if prologue.len() > checkpoint
-            && start
-                .as_ref()
-                .is_some_and(|start| start_is_observable && !self.is_unmutated_identifier(start))
-        {
-            // The end bound's capture inserted statements after the start value;
-            // hoist start into its own temp before them so it evaluates first.
-            let var = self.fresh_declared("start");
-            prologue.insert(checkpoint, define(var.clone(), start_expression));
-            start_expression = GoExpression::identifier(var);
+        let start_plan = start.as_ref().map_or_else(
+            || ValuePlan::constant("0".to_string(), ConstantKind::Int),
+            |start| self.plan_operand(start, ExpressionContext::value()),
+        );
+        let counts_from_zero = !*inclusive && start_plan.expression().as_literal() == Some("0");
+        let mut stages = vec![SequenceStage {
+            plan: start_plan,
+            prefix: "start",
+            capture: false,
+            line: None,
+        }];
+        if let Some(end) = end {
+            let plan = self.plan_operand(end, ExpressionContext::value());
+            let capture = !counts_from_zero && !plan.can_delay();
+            stages.push(SequenceStage {
+                plan,
+                prefix: "bound",
+                capture,
+                line: None,
+            });
         }
+        let sequenced = self.sequence_stages(stages, CaptureBoundary::SiblingSequence);
+        let prologue = sequenced.setup;
+        let mut operands = sequenced.values.into_iter();
+        let start_expression = operands.next().expect("range start");
+        let end_expression = operands.next();
 
         let (header, lowered_body) = self.with_scope(|this| {
             let header = match end_expression {

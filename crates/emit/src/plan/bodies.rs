@@ -1,6 +1,7 @@
 //! Lowered body IR: the typed vocabulary `plan::lower` produces and `render/`
 //! consumes.
 
+use crate::plan::go_expression::Position;
 use crate::plan::go_expression::{BinaryOp, Expressions, GoExpressionNode, TreeVisitor};
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
@@ -173,14 +174,14 @@ fn remove_unlabeled_breaks(exits: &mut Vec<FlowExit>) -> bool {
 
 /// Put `line` on the first statement unless it has a more specific directive.
 pub(crate) fn directed_first(
-    line: Option<String>,
+    line: Option<Position>,
     mut statements: Vec<Statement>,
 ) -> Vec<Statement> {
     direct_first(&mut statements, line);
     statements
 }
 
-pub(crate) fn direct_first(statements: &mut [Statement], line: Option<String>) {
+pub(crate) fn direct_first(statements: &mut [Statement], line: Option<Position>) {
     if let Some(first) = statements.first_mut()
         && first.line.is_none()
     {
@@ -189,7 +190,7 @@ pub(crate) fn direct_first(statements: &mut [Statement], line: Option<String>) {
 }
 
 /// Give each statement without a directive the one before it, or the enclosing one.
-pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: Option<&String>) {
+pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: Option<&Position>) {
     let mut previous = enclosing.cloned();
     for statement in statements {
         if statement.line.is_none() {
@@ -289,7 +290,7 @@ pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: O
     }
 }
 
-fn inherit_into_if(plan: &mut IfPlan, line: Option<&String>) {
+fn inherit_into_if(plan: &mut IfPlan, line: Option<&Position>) {
     if let Some(initializer) = &mut plan.initializer {
         inherit_into_expression(&mut initializer.value, line);
     }
@@ -307,7 +308,11 @@ fn inherit_into_if(plan: &mut IfPlan, line: Option<&String>) {
 }
 
 /// Go counts a `case`, `default:` or `} else if` line forward from the previous branch.
-fn inherit_header(header: &mut Option<String>, body: &LoweredBlock, enclosing: Option<&String>) {
+fn inherit_header(
+    header: &mut Option<Position>,
+    body: &LoweredBlock,
+    enclosing: Option<&Position>,
+) {
     if header.is_none() {
         *header = body
             .statements
@@ -318,8 +323,8 @@ fn inherit_header(header: &mut Option<String>, body: &LoweredBlock, enclosing: O
     }
 }
 
-fn inherit_into_expression(expression: &mut GoExpression, line: Option<&String>) {
-    fn walk(node: &mut GoExpressionNode, line: Option<&String>) {
+fn inherit_into_expression(expression: &mut GoExpression, line: Option<&Position>) {
+    fn walk(node: &mut GoExpressionNode, line: Option<&Position>) {
         if let GoExpressionNode::FunctionLiteral { body, .. } = node {
             inherit_line_directives(&mut body.statements, line);
         } else {
@@ -347,7 +352,7 @@ impl Definition {
 /// A lowered statement entry with its optional sourcemap `line` directive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Statement {
-    pub(crate) line: Option<String>,
+    pub(crate) line: Option<Position>,
     pub(crate) kind: LoweredStatement,
 }
 
@@ -451,7 +456,7 @@ pub(crate) struct SwitchStatementPlan {
     pub(crate) kind: SwitchKind,
     pub(crate) cases: Vec<SwitchCasePlan>,
     pub(crate) default: Option<LoweredBlock>,
-    pub(crate) default_line: Option<String>,
+    pub(crate) default_line: Option<Position>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -474,7 +479,7 @@ pub(crate) enum SwitchKind {
 pub(crate) struct SwitchCasePlan {
     pub(crate) labels: Vec<GoExpression>,
     pub(crate) body: LoweredBlock,
-    pub(crate) line: Option<String>,
+    pub(crate) line: Option<Position>,
 }
 
 impl SwitchStatementPlan {
@@ -511,7 +516,7 @@ pub(crate) struct SelectStatementPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SelectArmPlan {
     pub(crate) kind: SelectArmKind,
-    pub(crate) line: Option<String>,
+    pub(crate) line: Option<Position>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -636,12 +641,15 @@ pub(crate) enum LoopHeader {
 pub(crate) enum LoopKind {
     Source { label: Option<String> },
     Generated { label: Option<String> },
+
+    FoundFlagSearch,
 }
 
 impl LoopKind {
     pub(crate) fn label(&self) -> Option<&str> {
         match self {
             LoopKind::Source { label } | LoopKind::Generated { label } => label.as_deref(),
+            LoopKind::FoundFlagSearch => None,
         }
     }
 }
@@ -654,7 +662,7 @@ pub(crate) struct IfPlan {
     pub(crate) condition: GoExpression,
     pub(crate) then_body: LoweredBlock,
     pub(crate) else_arm: ElseArm,
-    pub(crate) else_if_line: Option<String>,
+    pub(crate) else_if_line: Option<Position>,
     pub(crate) origin: IfOrigin,
 }
 
@@ -1066,7 +1074,7 @@ impl LoweredStatement {
                 diverges: true,
             } => {
                 let go_panic = matches!(expression.node(), GoExpressionNode::Call { callee, .. }
-                    if matches!(callee.as_ref(), GoExpressionNode::Identifier(name) if name.spelling() == "panic"));
+                    if matches!(callee.as_ref(), GoExpressionNode::Identifier(name) if name.is_external() && name.spelling() == "panic"));
                 if go_panic {
                     FlowSummary::terminal()
                 } else {

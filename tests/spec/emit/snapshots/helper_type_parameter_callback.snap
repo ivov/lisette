@@ -15,11 +15,9 @@ func some[T any](value T) (T, bool) {
 }
 
 func adapt[arg0 any](seed arg0) (arg0, bool) {
-	cb := some[arg0]
-	tagged := func(arg0_2 arg0) lisette.Option[arg0] {
-		return lisette.OptionFromCommaOk[arg0](cb(arg0_2))
-	}
-	v := lisette.OptionAndThen(lisette.MakeOptionSome(seed), tagged)
+	v := lisette.OptionAndThen(lisette.MakeOptionSome(seed), func(arg0_2 arg0) lisette.Option[arg0] {
+		return lisette.OptionFromCommaOk[arg0](some[arg0](arg0_2))
+	})
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}

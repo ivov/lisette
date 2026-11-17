@@ -1,19 +1,23 @@
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
-use crate::abi::transition::lower_arg_to_tagged;
+use crate::abi::callable::CallableReturnAbi;
+use crate::abi::layout::ValueLayout;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::prelude_constructor;
+use crate::plan::bodies::direct_first;
 use crate::plan::bodies::{Definition, LoweredStatement, Statement};
-use crate::plan::calls::{CallableOrigin, TaggedArgumentAdapter};
+use crate::plan::calls::{CallableOrigin, FunctionBridge};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::Position;
 use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, Stability, ValuePlan};
 use crate::plan::verify::verify_operand_order;
 use crate::types::go_type::GoType;
 use crate::utils::reads_value_member;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
+use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 /// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)`: Go rejects the former.
@@ -37,6 +41,13 @@ pub(crate) struct LaterStages {
     inline: Effects,
 }
 
+pub(crate) struct SequenceStage {
+    pub(crate) plan: ValuePlan,
+    pub(crate) prefix: &'static str,
+    pub(crate) capture: bool,
+    pub(crate) line: Option<Position>,
+}
+
 impl LaterStages {
     pub(crate) fn sequenced(setup: &[Statement], inline: Effects) -> Self {
         Self {
@@ -54,10 +65,9 @@ impl LaterStages {
             && effects.without_go_order().can_move_across(self.inline)
     }
 
-    /// Returns whether `stage` must be pinned.
-    pub(crate) fn prepend(&mut self, stage: &ValuePlan) -> bool {
+    pub(crate) fn prepend(&mut self, stage: &ValuePlan, capture: bool) -> bool {
         let effects = stage.effects();
-        let pinned = !self.can_follow(effects);
+        let pinned = capture || !self.can_follow(effects);
         self.before = self.before.union(setup_effects(stage.setup()));
         if pinned {
             self.before = self.before.union(effects);
@@ -282,7 +292,13 @@ impl Planner<'_> {
 
         if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
             return staged.map_expression(|setup, value| {
-                self.emit_lower_arg_to_tagged(setup, value, &adapter)
+                self.plan_function_layout_bridge(
+                    setup,
+                    value,
+                    &adapter.source,
+                    &adapter.target,
+                    false,
+                )
             });
         }
 
@@ -302,7 +318,8 @@ impl Planner<'_> {
             .is_some_and(Type::is_never);
         suppress
             && !(arg_ctx.result_fills_type_parameter() && returns_never)
-            && self.go_function_value_bridge(callback, arg_ctx).is_none()
+            && (!self.is_go_callable(callback)
+                || self.function_value_bridge(callback, arg_ctx).is_none())
             && self
                 .detect_lower_arg_to_tagged(callback, param_ty)
                 .is_none()
@@ -313,7 +330,7 @@ impl Planner<'_> {
         &self,
         arg: &Expression,
         param_ty: Option<&Type>,
-    ) -> Option<TaggedArgumentAdapter> {
+    ) -> Option<FunctionBridge> {
         if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
             return None;
         }
@@ -322,25 +339,22 @@ impl Planner<'_> {
         if matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
         }
-        let result = callee.abi.result.lowered()?.clone();
+        if !callee.abi.result.is_lowered() {
+            return None;
+        }
         let function = param_ty?.unwrap_forall();
         let signature = function.as_function_type()?;
-        let bridge = self.go_result_bridge(&callee.abi, &signature.return_type);
-        Some(TaggedArgumentAdapter {
-            function: function.clone(),
-            result,
-            bridge,
-        })
-    }
-
-    pub(crate) fn emit_lower_arg_to_tagged(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        value: GoExpression,
-        adapter: &TaggedArgumentAdapter,
-    ) -> GoExpression {
-        let cb_var = self.hoist_tmp_value_statement(setup, "cb", value);
-        lower_arg_to_tagged(self, setup, GoExpression::identifier(cb_var), adapter)
+        let source = callee.abi.function_layout(self);
+        let layout = self.value_layout(function, SlotOrigin::Lisette);
+        let ValueLayout::Function { layout, .. } = layout.underlying() else {
+            return None;
+        };
+        let target = layout.with_return_abi(
+            self,
+            CallableReturnAbi::unlowered(&signature.return_type),
+            SlotOrigin::Lisette,
+        );
+        Some(FunctionBridge { source, target })
     }
 
     pub(crate) fn stage_native_method_args_from(
@@ -405,13 +419,35 @@ impl Planner<'_> {
         boundary: CaptureBoundary,
         prefix: &'static str,
     ) -> SequencedValues {
+        self.sequence_stages(
+            stages
+                .into_iter()
+                .map(|plan| SequenceStage {
+                    plan,
+                    prefix,
+                    capture: false,
+                    line: None,
+                })
+                .collect(),
+            boundary,
+        )
+    }
+
+    pub(crate) fn sequence_stages(
+        &mut self,
+        stages: Vec<SequenceStage>,
+        boundary: CaptureBoundary,
+    ) -> SequencedValues {
         let eager = boundary.delays_reads();
         let mut later = LaterStages::default();
         let stages: Vec<_> = stages
             .into_iter()
             .rev()
             .map(|stage| {
-                let pin = later.prepend(&stage);
+                let pin = later.prepend(
+                    &stage.plan,
+                    stage.capture || (eager && !stage.plan.can_delay()),
+                );
                 (stage, pin)
             })
             .collect();
@@ -420,8 +456,15 @@ impl Planner<'_> {
         let mut results = Vec::with_capacity(stages.len());
         let mut stability = Stability::Fixed;
         for (stage, pin) in stages.into_iter().rev() {
-            let can_delay = stage.can_delay();
-            let (stage_setup, expression, stage_stability) = stage.into_parts_with_stability();
+            let SequenceStage {
+                plan,
+                prefix,
+                capture: _,
+                line,
+            } = stage;
+            let start = setup.len();
+            let can_delay = plan.can_delay();
+            let (stage_setup, expression, stage_stability) = plan.into_parts_with_stability();
             setup.extend(stage_setup);
             if pin || (eager && !can_delay) {
                 let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
@@ -430,6 +473,7 @@ impl Planner<'_> {
                 stability = stability.max(stage_stability);
                 results.push(expression);
             }
+            direct_first(&mut setup[start..], line);
         }
         if cfg!(debug_assertions) {
             verify_operand_order(&results).unwrap_or_else(|error| panic!("{error}"));

@@ -3647,3 +3647,668 @@ fn a_shebang_survives_check_format_emit_and_build() {
         "the shebang is a kernel instruction, not Go:\n{go}"
     );
 }
+
+#[test]
+fn select_operand_order() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+fn channel(ch: Channel<int>) -> Channel<int> { fmt.Println("channel"); ch }
+fn value() -> Option<int> { fmt.Println("value"); Some(7) }
+fn test() -> Option<int> {
+  let ch = Channel.buffered<int>(1)
+  select {
+    channel(ch).send(value()?) => {},
+    _ => {},
+  }
+  Some(0)
+}
+fn main() { fmt.Println(test()) }
+"#,
+        "channel\nvalue\nSome(0)",
+    );
+}
+
+#[test]
+fn format_callback_effects() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+struct Item { change: fn() }
+impl Item { fn String(self) -> string { self.change(); "item" } }
+fn main() {
+ let mut values = [1]
+ let item = Item { change: || { values[0] = 2 } }
+ fmt.Println(values[0], f"{item}")
+ fmt.Println(values[0])
+}
+"#,
+        "1 item\n2",
+    );
+}
+
+#[test]
+fn consumer_abi_invalidates_dependency_artifact() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = scratch.path();
+    fs::create_dir_all(root.join("src/support")).unwrap();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"audit\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/support/lib.lis"),
+        "pub struct Provider {}\nimpl Provider { pub fn get(self) -> Option<int> { Some(42) } }\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/main.lis"),
+        r#"import "go:fmt"
+import "support"
+fn main() { fmt.Println(support.Provider {}.get()) }
+"#,
+    )
+    .unwrap();
+    let initial = lis(root, "build");
+    assert!(
+        initial.status.success(),
+        "{}",
+        String::from_utf8_lossy(&initial.stderr)
+    );
+    let consumer = r#"import "go:fmt"
+import "support"
+interface Getter<T> { fn get() -> T }
+fn use_get<G: Getter<Option<int>>>(g: G) -> Option<int> { g.get() }
+fn main() { fmt.Println(use_get(support.Provider {})) }
+"#;
+    fs::write(root.join("src/main.lis"), consumer).unwrap();
+    let warmed = lis(root, "build");
+    assert!(
+        warmed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&warmed.stderr)
+    );
+    let warm_go = fs::read_to_string(root.join("target/support/lib.go")).unwrap();
+    assert!(warm_go.contains("Get_"), "{warm_go}");
+    assert_cold_build_matches(
+        root,
+        &["lisette.toml", "src/main.lis", "src/support/lib.lis"],
+        &["build"],
+        "target/support/lib.go",
+    );
+}
+
+#[test]
+fn consumer_comment_preserves_dependency_cache_and_modes_build() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = scratch.path();
+    fs::create_dir_all(root.join("src/support")).unwrap();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"cache_reuse\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/support/lib.lis"),
+        "pub fn answer() -> int { 42 }\n",
+    )
+    .unwrap();
+    let main =
+        "import \"go:fmt\"\nimport \"support\"\nfn main() { fmt.Println(support.answer()) }\n";
+    fs::write(root.join("src/main.lis"), main).unwrap();
+    let build = lis(root, "build");
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let cache = fs::read_dir(root.join("target/.lisette/cache"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path().join("support.cache"))
+        .find(|path| path.exists())
+        .expect("dependency semantic cache");
+    let original_stamp = fs::metadata(&cache).unwrap().modified().unwrap();
+    let original_bytes = fs::read(&cache).unwrap();
+    fs::write(
+        root.join("src/main.lis"),
+        format!("{main}\n// consumer-only edit\n"),
+    )
+    .unwrap();
+    let output = lis(root, "build");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::metadata(&cache).unwrap().modified().unwrap(),
+        original_stamp,
+        "consumer comment rewrote the dependency's semantic cache"
+    );
+    assert_eq!(fs::read(&cache).unwrap(), original_bytes);
+
+    for mode in ["test", "build", "test", "build"] {
+        let output = lis(root, mode);
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    assert_cold_build_matches(
+        root,
+        &["lisette.toml", "src/main.lis", "src/support/lib.lis"],
+        &["test", "build"],
+        "target/support/lib.go",
+    );
+}
+
+#[test]
+fn promoted_method_participates_in_adapter() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+struct Thing { n: int }
+interface Opt { fn find() -> Option<Ref<Thing>>; fn name() -> string }
+struct Base {}
+impl Base { fn name(self) -> string { "base" } }
+struct Bar<T> { embed Base, x: Option<T> }
+impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
+fn show(o: Opt) -> string {
+    match o.find() { Some(t) => fmt.Sprintf("%s %d", o.name(), t.n), None => o.name() }
+}
+fn main() {
+    let b: Bar<Ref<Thing>> = Bar { Base: Base {}, x: Some(&Thing { n: 1 }) }
+    fmt.Println(show(b))
+}
+"#,
+        "base 1",
+    );
+}
+
+#[test]
+fn select_orders_arms_and_channel_propagation() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+fn channel(label: string, ch: Channel<int>, ok: bool) -> Option<Channel<int>> {
+  fmt.Println(label)
+  if ok { Some(ch) } else { None }
+}
+fn value() -> Option<int> { fmt.Println("value"); Some(7) }
+fn run(ok: bool) -> Option<int> {
+  let a = Channel.buffered<int>(1)
+  let b = Channel.buffered<int>(1)
+  let c = Channel.buffered<int>(1)
+  select {
+    channel("A", a, true)?.receive() => {},
+    let Some(_) = channel("B", b, ok)?.receive() => {},
+    channel("C", c, true)?.send(value()?) => { fmt.Println("sent") },
+  }
+  Some(0)
+}
+fn main() { fmt.Println(run(true)); fmt.Println(run(false)) }
+"#,
+        "A\nB\nC\nvalue\nsent\nSome(0)\nA\nB\nNone",
+    );
+}
+
+#[test]
+fn select_retry_evaluates_operands_once() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+fn channel(label: string, ch: Channel<int>) -> Channel<int> { fmt.Println(label); ch }
+fn value() -> Option<int> { fmt.Println("value"); Some(7) }
+fn run() -> Option<int> {
+  let closed = Channel.buffered<int>(1)
+  closed.close()
+  let blocked = Channel.new<int>()
+  select {
+    let Some(_) = channel("closed", closed).receive() => { panic("closed matched Some") },
+    channel("blocked", blocked).send(value()?) => { panic("unbuffered send") },
+    _ => { fmt.Println("default") },
+  }
+  Some(0)
+}
+fn main() { fmt.Println(run()) }
+"#,
+        "closed\nblocked\nvalue\ndefault\nSome(0)",
+    );
+}
+
+#[test]
+fn callbacks_keep_their_propagation_regions() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    fs::create_dir_all(scratch.path().join("src")).unwrap();
+    fs::write(
+        scratch.path().join("lisette.toml"),
+        "[project]\nname = \"callback_regions\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        scratch.path().join("src/main.lis"),
+        r#"
+import "go:fmt"
+fn check(f: fn() -> Option<int>) -> bool { f().is_some() }
+fn deferred(f: fn() -> Option<int>) { fmt.Println("defer", check(f)) }
+fn shadow(panic: fn() -> int) { let g = panic; fmt.Println(panic(), g()) }
+fn main() {
+  let bound: fn() -> Option<int> = || { let n = Some(1)?; Some(n) }
+  let a = true && check(|| { let n = Some(1)?; Some(n) })
+  let b = false || check(|| { let n = Some(1)?; Some(n) })
+  let c = true && check(bound)
+  let d = false || check(bound)
+  let mut count = 0
+  while count < 1 && check(|| { let n = Some(1)?; Some(n) }) { count += 1 }
+  while count < 2 && check(bound) { count += 1 }
+  defer deferred(|| { let n = Some(1)?; Some(n) })
+  defer deferred(bound)
+  fmt.Println(a, b, c, d, count)
+  shadow(|| 7)
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        scratch.path().join("src/callbacks.test.lis"),
+        r#"
+#[test]
+fn assertions() {
+  let bound: fn() -> Option<int> = || { let n = Some(1)?; Some(n) }
+  assert check(|| { let n = Some(1)?; Some(n) })
+  assert check(bound)
+}
+"#,
+    )
+    .unwrap();
+    let run = lis(scratch.path(), "run");
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout).trim(),
+        "true true true true 2\n7 7\ndefer true\ndefer true"
+    );
+    let test = lis(scratch.path(), "test");
+    assert!(
+        test.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&test.stdout),
+        String::from_utf8_lossy(&test.stderr)
+    );
+}
+
+#[test]
+fn adapter_keys_preserve_packages_and_erase_permissions() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = scratch.path();
+    for package in ["a", "b"] {
+        fs::create_dir_all(root.join(format!("src/{package}"))).unwrap();
+        fs::write(
+            root.join(format!("src/{package}/lib.lis")),
+            "pub struct Item { pub n: int }\n",
+        )
+        .unwrap();
+    }
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"adapter_identity\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/main.lis"),
+        r#"
+import "go:fmt"
+import "a"
+import "b"
+interface View<T> { fn find() -> Option<Ref<T>> }
+struct Bar<T> { x: Option<T> }
+impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
+fn first(v: View<a.Item>) -> int { match v.find() { Some(item) => item.n, None => 0 } }
+fn second(v: View<b.Item>) -> int { match v.find() { Some(item) => item.n, None => 0 } }
+fn main() {
+  let mut one: Bar<Ref<a.Item>> = Bar { x: Some(&a.Item { n: 1 }) }
+  let two: Bar<Ref<b.Item>> = Bar { x: Some(&b.Item { n: 2 }) }
+  let writable: mut Ref<Bar<Ref<a.Item>>> = &one
+  fmt.Println(first(&one), first(writable), second(&two))
+}
+"#,
+    )
+    .unwrap();
+    let run = lis(root, "run");
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "1 1 2");
+    let source = fs::read_to_string(root.join("target/main.go")).unwrap();
+    let adapters = source
+        .lines()
+        .filter(|line| line.starts_with("type ") && line.contains("Bar_View_"))
+        .count();
+    assert_eq!(
+        adapters, 2,
+        "same package types share across permissions, different packages do not:\n{source}"
+    );
+}
+
+#[test]
+fn ref_alias_interface_witness() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+interface Named { fn name() -> string }
+struct P { n: string }
+impl P { fn name(self) -> string { self.n } }
+type RP = Ref<P>
+fn show(n: Named) -> string { n.name() }
+fn get(p: RP) -> Named { p }
+fn main() {
+  let p = P { n: "x" }
+  let r: RP = &p
+  fmt.Println(show(r), get(&p).name())
+}
+"#,
+        "x x",
+    );
+}
+
+#[test]
+fn nested_ref_alias_interface_witness() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+struct Thing { n: int }
+type RThing = Ref<Thing>
+interface Opt2<T> { fn find() -> Option<T> }
+struct Bar<T> { x: Option<T> }
+impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
+struct Hold { o: Opt2<RThing> }
+fn show(o: Opt2<RThing>) -> int { match o.find() { Some(t) => t.n, None => -1 } }
+fn mk(b: Bar<RThing>) -> Opt2<RThing> { b }
+fn main() {
+  let b: Bar<RThing> = Bar { x: Some(&Thing { n: 4 }) }
+  let h = Hold { o: b }
+  fmt.Println(show(b), show(mk(b)), show(h.o))
+}
+"#,
+        "4 4 4",
+    );
+}
+
+#[test]
+fn ref_alias_pointer_receiver_witness() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+import "go:strings"
+type SB = Ref<strings.Builder>
+fn as_stringer(b: SB) -> fmt.Stringer { b }
+fn main() {
+  let mut b = strings.Builder{}
+  b.WriteString("hey")
+  fmt.Println(as_stringer(&b).String())
+}
+"#,
+        "hey",
+    );
+}
+
+#[test]
+fn writable_argument_scalar_copies() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+struct Counter { n: int, items: mut Slice<int> }
+impl Counter {
+  fn add(self: mut Ref<Counter>, k: int) { self.n += k }
+  fn put(self: mut Ref<Counter>, k: int) { self.items[0] = k }
+}
+fn grow(xs: mut Slice<int>, n: int) { xs[0] = n }
+fn bump(c: mut Ref<Counter>, k: int) { c.n += k }
+fn main() {
+  let mut c = Counter { n: 1, items: [0] }
+  c.add(c.n)
+  c.put(c.items[0])
+  grow(c.items, c.items[0])
+  let mut xs = [5, 6]
+  grow(xs, xs[1])
+  bump(&c, c.n)
+  fmt.Println(c.n, c.items, xs)
+}
+"#,
+        "4 [0] [6 6]",
+    );
+}
+
+#[test]
+fn synthesized_equals_invalidates_sibling_artifact() {
+    if !go_available() {
+        return;
+    }
+    for lint in [false, true] {
+        let scratch = tempfile::tempdir().unwrap();
+        let root = scratch.path();
+        for dir in ["src/p", "src/s"] {
+            fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        fs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"equals_cache\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("src/p/lib.lis"),
+            r#"pub struct X { pub v: int }
+impl X { fn equals(self, other: X) -> bool { self.v == other.v } }
+pub fn same(a: X, b: X) -> bool { a.equals(b) }
+"#,
+        )
+        .unwrap();
+        let consumer = r#"import "go:fmt"
+import "p"
+import "s"
+interface Eq { fn equals(other: p.X) -> bool }
+fn accept(e: Eq) -> bool { e.equals(p.X { v: 1 }) }
+fn main() { fmt.Println(accept(p.X { v: 1 }), s.s()) }
+"#;
+
+        let initial_consumer =
+            consumer.replace("accept(p.X { v: 1 })", "p.same(p.X { v: 1 }, p.X { v: 1 })");
+        fs::write(root.join("src/main.lis"), &initial_consumer).unwrap();
+        let sibling = if lint {
+            "pub fn s() -> int { let unused = 1; 1 }\n"
+        } else {
+            "pub fn s() -> int { 1 }\n"
+        };
+        fs::write(root.join("src/s/lib.lis"), sibling).unwrap();
+        let first = lis(root, "build");
+        assert!(
+            first.status.success(),
+            "{}",
+            String::from_utf8_lossy(&first.stderr)
+        );
+        let initial_go = fs::read_to_string(root.join("target/p/lib.go")).unwrap();
+        assert!(initial_go.contains("func (x X) equals("), "{initial_go}");
+        for derived in [true, false] {
+            fs::write(
+                root.join("src/main.lis"),
+                if derived { consumer } else { &initial_consumer },
+            )
+            .unwrap();
+            let source = if derived {
+                format!("#[equality]\npub struct Y {{ pub v: int }}\n{sibling}")
+            } else {
+                sibling.to_string()
+            };
+            fs::write(root.join("src/s/lib.lis"), source).unwrap();
+
+            for _ in 0..2 {
+                let warm = lis(root, "build");
+                assert!(
+                    warm.status.success(),
+                    "lint={lint}, derived={derived}: {}",
+                    String::from_utf8_lossy(&warm.stderr)
+                );
+            }
+            let warm_go = fs::read_to_string(root.join("target/p/lib.go")).unwrap();
+            let selector = if derived { "Equals" } else { "equals" };
+            assert!(
+                warm_go.contains(&format!("func (x X) {selector}(")),
+                "{warm_go}"
+            );
+            assert_cold_build_matches(
+                root,
+                &[
+                    "lisette.toml",
+                    "src/main.lis",
+                    "src/p/lib.lis",
+                    "src/s/lib.lis",
+                ],
+                &["build"],
+                "target/p/lib.go",
+            );
+        }
+    }
+}
+
+#[test]
+fn contains_preserves_plain_and_custom_evaluation() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+struct Item { id: int, change: fn() }
+impl Item { fn equals(self, other: Item) -> bool { self.change(); self.id == other.id } }
+fn pair(a: int, b: bool) -> string { f"{a} {b}" }
+fn main() {
+    let mut values = [1]
+    let item = Item { id: 3, change: || { values[0] = 9 } }
+    let items = [item]
+    fmt.Println(pair(values[0], items.contains(item)))
+    fmt.Println(values[0])
+    values[0] = 1
+    let needle = || { values[0] = 7; 3 }
+    fmt.Println(pair(values[0], values.contains(needle())))
+    fmt.Println(values[0])
+}
+"#,
+        "1 true\n9\n1 false\n7",
+    );
+}
+
+#[test]
+fn read_only_reference_before_value_copy_and_mutation() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+struct Data { n: int }
+fn inspect(value: Ref<Data>) -> int { value.n }
+fn bump(value: mut Ref<Data>) -> int { value.n += 1; value.n }
+fn main() {
+    let mut data = Data { n: 1 }
+    let triple = (inspect(&data), data, bump(&data))
+    fmt.Println(triple.0, triple.1.n, triple.2)
+}
+"#,
+        "1 1 2",
+    );
+}
+
+#[test]
+fn identity_alias_in_recursive_interface() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+type Id<T> = T
+interface Stream<T> { fn next() -> Option<T>; fn rest() -> Stream<Id<T>> }
+fn main() { fmt.Println("ok") }
+"#,
+        "ok",
+    );
+}
+
+#[test]
+fn ref_aliases_use_concrete_interface_adapter_methods() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Foo<T> { fn get() -> T }
+struct Bar { n: int }
+impl Bar { fn get(self: Ref<Bar>) -> Result<int, error> { Ok(self.n) } }
+type RB = Ref<Bar>
+type R<T> = Ref<T>
+type RR = R<Bar>
+type MB = mut Ref<Bar>
+fn show(foo: Foo<Result<int, error>>) { fmt.Println(foo.get()) }
+fn converted(r: RB) -> Foo<Result<int, error>> { r }
+fn main() {
+  let mut b = Bar { n: 1 }
+  let r: RB = &b
+  let rr: RR = &b
+  let m: MB = &b
+  show(r)
+  show(rr)
+  show(m)
+  show(converted(r))
+  let xs: Slice<Foo<Result<int, error>>> = [r]
+  show(xs[0])
+  let opt: Option<Foo<Result<int, error>>> = Some(r)
+  if let Some(foo) = opt { show(foo) }
+  let pair: (Foo<Result<int, error>>, int) = (r, 0)
+  show(pair.0)
+}
+"#,
+        "Ok(1)\nOk(1)\nOk(1)\nOk(1)\nOk(1)\nOk(1)\nOk(1)",
+    );
+}
+
+#[test]
+fn ref_aliases_instantiate_generic_impl_receivers() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Show { fn show() -> string }
+struct Box<T> { v: T }
+impl<T> Box<T> { fn show(self) -> string { fmt.Sprint(self.v) } }
+type RB = Ref<Box<int>>
+fn show(s: Show) { fmt.Println(s.show()) }
+fn main() {
+  let b = Box { v: 4 }
+  let r: RB = &b
+  show(r)
+  let direct: Ref<Box<int>> = &b
+  show(direct)
+}
+"#,
+        "4\n4",
+    );
+}
+
+fn assert_cold_build_matches(root: &Path, sources: &[&str], commands: &[&str], generated: &str) {
+    let cold = tempfile::tempdir().unwrap();
+    for name in sources {
+        let destination = cold.path().join(name);
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        fs::copy(root.join(name), destination).unwrap();
+    }
+    for command in commands {
+        let output = lis(cold.path(), command);
+        assert!(
+            output.status.success(),
+            "cold {command}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(root.join(generated)).unwrap(),
+        fs::read_to_string(cold.path().join(generated)).unwrap()
+    );
+}

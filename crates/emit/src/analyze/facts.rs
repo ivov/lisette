@@ -1,4 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use syntax::program::ConformanceWitness;
+use syntax::program::GoHint;
 
 use syntax::ast::{BindingId, Pattern, RestPattern};
 use syntax::program::{
@@ -47,6 +49,16 @@ impl<'a> EmitFacts<'a> {
         self.input.definitions.get(id)
     }
 
+    pub(crate) fn conformance(
+        &self,
+        receiver: &Type,
+        interface: &Type,
+    ) -> Option<&ConformanceWitness> {
+        self.input
+            .conformances
+            .get(receiver, interface, |id| self.definition(id))
+    }
+
     pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
         self.definition(owner)?.methods()?.get(name)
     }
@@ -59,7 +71,7 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn classify_go_return_type(
         &self,
         return_ty: &Type,
-        go_hints: &[String],
+        go_hints: &[GoHint],
     ) -> Option<LoweredReturnAbi> {
         classify_go_return_type(&self.input.definitions, return_ty, go_hints)
     }
@@ -126,10 +138,6 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn resolves_to_unit(&self, ty: &Type) -> bool {
         types::resolves_to_unit(ty, |id| self.definition(id))
-    }
-
-    pub(crate) fn contains_unknown(&self, ty: &Type) -> bool {
-        types::contains_unknown(ty, |id| self.definition(id))
     }
 
     pub(crate) fn strip_and_peel(&self, ty: &Type) -> Type {

@@ -32,13 +32,11 @@ func main() {
 	}
 	first := tup.First.SomeVal
 	second := tup.Second.SomeVal
-	cb := pair[lisette.Option[*int]]
-	tagged := func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
-		ret3, ret4 := cb(arg0)
+	subject := lisette.OptionMap(lisette.MakeOptionSome(lisette.MakeOptionSome(&x)), func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
+		ret3, ret4 := pair[lisette.Option[*int]](arg0)
 		tup2 := lisette.MakeTuple2(ret3, ret4)
 		return tup2
-	}
-	subject := lisette.OptionMap(lisette.MakeOptionSome(lisette.MakeOptionSome(&x)), tagged)
+	})
 	if !(subject.Tag == lisette.OptionSome && subject.SomeVal.First.Tag == lisette.OptionSome && subject.SomeVal.Second.Tag == lisette.OptionSome) {
 		panic("generic alias callback")
 	}

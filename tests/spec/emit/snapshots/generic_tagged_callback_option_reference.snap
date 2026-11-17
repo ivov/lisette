@@ -20,15 +20,13 @@ func some[T any](x T) (T, bool) {
 
 func main() {
 	x := 3
-	cb := some[*int]
-	tagged := func(arg0 *int) lisette.Option[*int] {
-		ret, ret2 := cb(arg0)
+	got := lisette.OptionAndThen(lisette.MakeOptionSome(&x), func(arg0 *int) lisette.Option[*int] {
+		ret, ret2 := some[*int](arg0)
 		if ret2 && ret != nil {
 			return lisette.MakeOptionSome[*int](ret)
 		}
 		return lisette.MakeOptionNone[*int]()
-	}
-	got := lisette.OptionAndThen(lisette.MakeOptionSome(&x), tagged)
+	})
 	if got.Tag != lisette.OptionSome {
 		panic("generic option reference")
 	}

@@ -1,61 +1,35 @@
 use syntax::ast::Expression;
 use syntax::program::DotAccessResolution;
+use syntax::program::{GoOptionRepresentation, go_option_representation};
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use crate::abi::{go_result_list, is_prelude_container_type, tuple_element_types};
+use crate::abi::{is_prelude_container_type, tuple_element_types};
 use crate::types::go_type::GoType;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SlotOrigin {
-    Lisette,
-    GoParameter,
-    GoReturn,
-    GoField,
-    GoAny,
-}
-
-impl SlotOrigin {
-    pub(crate) fn go_parameter(is_any: bool) -> Self {
-        Self::go_slot(Self::GoParameter, is_any)
-    }
-
-    pub(crate) fn go_return(is_any: bool) -> Self {
-        Self::go_slot(Self::GoReturn, is_any)
-    }
-
-    pub(crate) fn go_field(is_any: bool) -> Self {
-        Self::go_slot(Self::GoField, is_any)
-    }
-
-    fn go_slot(origin: Self, is_any: bool) -> Self {
-        if is_any { Self::GoAny } else { origin }
-    }
-
-    fn nested(self) -> Self {
-        if matches!(self, Self::GoAny) {
-            Self::Lisette
-        } else {
-            self
-        }
-    }
-
-    pub(crate) fn declared_by_go(self) -> bool {
-        matches!(self, Self::GoParameter | Self::GoReturn | Self::GoField)
-    }
-}
+use syntax::program::SlotOrigin;
 
 #[derive(Debug, Clone)]
 pub(crate) struct FunctionLayout {
     pub(crate) parameters: Vec<ValueLayout>,
-    pub(crate) result_type: Type,
+    pub(crate) result_layout: Box<ValueLayout>,
     /// One layout per Go result ahead of the status slot.
     pub(crate) results: Vec<ValueLayout>,
     pub(crate) return_abi: CallableReturnAbi,
 }
 
 impl FunctionLayout {
+    pub(crate) fn with_return_abi(
+        &self,
+        planner: &Planner<'_>,
+        return_abi: CallableReturnAbi,
+        origin: SlotOrigin,
+    ) -> Self {
+        let result = planner.value_layout(self.result_layout.logical_type(), origin);
+        planner.function_layout(self.parameters.clone(), &result, return_abi, None)
+    }
+
     pub(crate) fn same_representation(&self, other: &Self) -> bool {
         self.same_parameter_representation(other) && self.same_result_representation(other)
     }
@@ -75,25 +49,14 @@ impl FunctionLayout {
             .map(|parameter| parameter.go_type(planner))
             .collect();
         let result = self.result_go_type(planner);
-        let parameter_code = parameters
-            .iter()
-            .map(|parameter| parameter.code.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let code = if let Some(result) = &result {
-            format!("func({parameter_code}) {}", result.code)
-        } else {
-            format!("func({parameter_code})")
-        };
-        let mut go_type = GoType::with_dependencies(code, &parameters);
-        if let Some(result) = &result {
-            go_type.merge(result);
-        }
-        go_type
+        GoType::function(&parameters, result.as_ref())
     }
 
     fn result_err_type(&self, planner: &Planner<'_>) -> Type {
-        planner.facts.peel_alias(&self.result_type).err_type()
+        planner
+            .facts
+            .peel_alias(self.result_layout.logical_type())
+            .err_type()
     }
 
     pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> Option<GoType> {
@@ -117,13 +80,13 @@ impl FunctionLayout {
             Some(LoweredReturnAbi::BareError) => planner.go_type(&self.result_err_type(planner)),
             Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. }) => {
                 slots.push(planner.go_type(&self.result_err_type(planner)));
-                go_result_list(&slots)
+                GoType::result_list(&slots)
             }
             Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })) => {
                 slots.push(GoType::new("bool"));
-                go_result_list(&slots)
+                GoType::result_list(&slots)
             }
-            Some(LoweredReturnAbi::Tuple { .. }) => go_result_list(&slots),
+            Some(LoweredReturnAbi::Tuple { .. }) => GoType::result_list(&slots),
         })
     }
 }
@@ -736,7 +699,7 @@ impl Planner<'_> {
         };
         FunctionLayout {
             parameters,
-            result_type: result.logical_type().clone(),
+            result_layout: Box::new(result.clone()),
             results,
             return_abi,
         }
@@ -863,39 +826,20 @@ impl Planner<'_> {
                     error,
                 };
             }
-            return match origin {
-                SlotOrigin::Lisette | SlotOrigin::GoAny => ValueLayout::TaggedOption {
+
+            return match go_option_representation(&ty, origin, |id| self.facts.definition(id)) {
+                GoOptionRepresentation::Tagged => ValueLayout::TaggedOption {
                     option_type: ty,
                     payload,
                 },
-                SlotOrigin::GoParameter | SlotOrigin::GoField
-                    if self.facts.is_nullable_option(&ty) =>
-                {
-                    ValueLayout::NullableOption {
-                        option_type: ty,
-                        payload,
-                    }
-                }
-                SlotOrigin::GoParameter | SlotOrigin::GoReturn | SlotOrigin::GoField
-                    if self.is_non_nilable_option(&ty) =>
-                {
-                    ValueLayout::PointerOption {
-                        option_type: ty,
-                        payload,
-                    }
-                }
-                SlotOrigin::GoReturn if self.facts.is_nullable_option(&ty) => {
-                    ValueLayout::NullableOption {
-                        option_type: ty,
-                        payload,
-                    }
-                }
-                SlotOrigin::GoParameter | SlotOrigin::GoReturn | SlotOrigin::GoField => {
-                    ValueLayout::TaggedOption {
-                        option_type: ty,
-                        payload,
-                    }
-                }
+                GoOptionRepresentation::Nullable => ValueLayout::NullableOption {
+                    option_type: ty,
+                    payload,
+                },
+                GoOptionRepresentation::Pointer => ValueLayout::PointerOption {
+                    option_type: ty,
+                    payload,
+                },
             };
         }
 

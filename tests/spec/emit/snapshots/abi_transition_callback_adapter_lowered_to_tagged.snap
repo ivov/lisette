@@ -17,11 +17,9 @@ func double(x int) (int, bool) {
 }
 
 func run() (int, bool) {
-	cb := double
-	tagged := func(arg0 int) lisette.Option[int] {
-		return lisette.OptionFromCommaOk[int](cb(arg0))
-	}
-	v := lisette.OptionAndThen(lisette.MakeOptionSome(2), tagged)
+	v := lisette.OptionAndThen(lisette.MakeOptionSome(2), func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](double(arg0))
+	})
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}

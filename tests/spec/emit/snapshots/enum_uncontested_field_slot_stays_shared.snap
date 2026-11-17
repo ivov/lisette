@@ -16,7 +16,7 @@ description: |
 ---
 package main
 
-func MakeShapeRect(arg0 float64, arg1 float64) Shape {
+func MakeShapeRect(arg0, arg1 float64) Shape {
 	return Shape{Tag: ShapeRect, W: arg0, H: arg1}
 }
 

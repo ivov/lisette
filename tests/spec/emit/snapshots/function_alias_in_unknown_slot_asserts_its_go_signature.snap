@@ -35,8 +35,7 @@ func make_() ast.Node {
 func main() {
 	var maker Maker = func() MaybeNode {
 		raw := make_()
-		option := lisette.OptionFromNilable[ast.Node](raw, lisette.IsNilInterface(raw))
-		return option
+		return lisette.OptionFromNilable[ast.Node](raw, lisette.IsNilInterface(raw))
 	}
 	cb := maker
 	var adapted func() ast.Node
@@ -62,8 +61,7 @@ func main() {
 		if cb2 != nil {
 			adapted3 = func() MaybeNode {
 				raw2 := cb2()
-				option2 := lisette.OptionFromNilable[ast.Node](raw2, lisette.IsNilInterface(raw2))
-				return option2
+				return lisette.OptionFromNilable[ast.Node](raw2, lisette.IsNilInterface(raw2))
 			}
 		}
 		adapted2.SomeVal = adapted3

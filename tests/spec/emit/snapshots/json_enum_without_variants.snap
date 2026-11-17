@@ -13,6 +13,7 @@ import (
 )
 
 type NothingTag uint8
+
 type Nothing struct {
 	Tag NothingTag
 }

@@ -1,21 +1,16 @@
 use crate::Planner;
+use crate::abi::fallible_producer::FallibleProducer;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::patterns::matching::{OptionFusePlan, ResultFusePlan};
+
 use crate::plan::bodies::Statement;
 use crate::plan::values::ValuePlan;
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::CallKind;
 
-enum FusedPredicate<'a> {
-    Result {
-        fuse: ResultFusePlan<'a>,
-        succeeds: bool,
-    },
-    Option {
-        fuse: OptionFusePlan<'a>,
-        succeeds: bool,
-    },
+struct FusedPredicate<'a> {
+    producer: FallibleProducer<'a>,
+    succeeds: bool,
 }
 
 pub(crate) fn strip_negations(expression: &Expression) -> (&Expression, bool) {
@@ -58,17 +53,15 @@ impl Planner<'_> {
             return None;
         };
         let receiver_ty = self.facts.peel_alias(&receiver.get_type());
-        match member.as_str() {
-            "is_ok" | "is_err" if receiver_ty.is_result() => Some(FusedPredicate::Result {
-                fuse: self.result_fuse_plan(receiver)?,
-                succeeds: member == "is_ok",
-            }),
-            "is_some" | "is_none" if receiver_ty.is_option() => Some(FusedPredicate::Option {
-                fuse: self.option_fuse_plan(receiver)?,
-                succeeds: member == "is_some",
-            }),
-            _ => None,
-        }
+        let succeeds = match member.as_str() {
+            "is_ok" | "is_err" if receiver_ty.is_result() => member == "is_ok",
+            "is_some" | "is_none" if receiver_ty.is_option() => member == "is_some",
+            _ => return None,
+        };
+        Some(FusedPredicate {
+            producer: self.fallible_producer(receiver)?,
+            succeeds,
+        })
     }
 
     fn bind_fused_predicate(
@@ -77,10 +70,8 @@ impl Planner<'_> {
         negated: bool,
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, PairCondition) {
-        let (bound, succeeds) = match predicate {
-            FusedPredicate::Result { fuse, succeeds } => (fuse.bind(self, slot, None), succeeds),
-            FusedPredicate::Option { fuse, succeeds } => (fuse.bind(self, slot), succeeds),
-        };
+        let succeeds = predicate.succeeds;
+        let bound = predicate.producer.bind_slot(self, slot);
         let condition = if succeeds != negated {
             bound.success_condition()
         } else {

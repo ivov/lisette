@@ -25,7 +25,6 @@ func Resolve[T any, R any](a T, f func(T) lisette.Option[R]) (R, bool) {
 func main() {
 	Resolve(0, func(arg0 int) lisette.Option[Face] {
 		raw := Lookup(arg0)
-		option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
-		return option
+		return lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
 	})
 }

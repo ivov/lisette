@@ -32,14 +32,9 @@ func apply(f func(string, string) lisette.Option[int], s string) int {
 }
 
 func main() {
-	cb := idx.Find
-	var adapted func(string, string) lisette.Option[int]
-	if cb != nil {
-		adapted = func(arg0, arg1 string) lisette.Option[int] {
-			ret := cb(arg0, arg1)
-			return lisette.OptionFromCommaOk[int](ret, ret != -1)
-		}
-	}
-	r := apply(adapted, "hello")
+	r := apply(func(arg0, arg1 string) lisette.Option[int] {
+		ret := idx.Find(arg0, arg1)
+		return lisette.OptionFromCommaOk[int](ret, ret != -1)
+	}, "hello")
 	_ = r
 }

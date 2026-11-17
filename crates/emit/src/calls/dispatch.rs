@@ -1,12 +1,12 @@
 use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::types::go_type::ChannelDirection;
 use std::borrow::Cow;
 
 use super::{NativeCallContext, NativeCallForm};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::layout::ValueLayout;
 use crate::abi::transition::multi_value_return;
-use crate::calls::native::{native_method_is_pure, native_method_lowers_to_plain_call};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
@@ -24,7 +24,9 @@ use crate::types::go_type::GoType;
 use crate::{Planner, written_span};
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
+use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
+use syntax::program::SlotOrigin;
 use syntax::program::{
     CallKind, Definition, DefinitionBody, resolved_definition, resolved_instantiation,
 };
@@ -216,9 +218,9 @@ impl<'a> Planner<'a> {
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(GoType::with_dependencies(
-                            format!("chan {}", element.code),
-                            [&element],
+                        vec![GoExpression::type_name(GoType::channel(
+                            ChannelDirection::Bidirectional,
+                            &element,
                         ))],
                     ),
                 ))
@@ -232,9 +234,9 @@ impl<'a> Planner<'a> {
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
                         vec![
-                            GoExpression::type_name(GoType::with_dependencies(
-                                format!("chan {}", element.code),
-                                [&element],
+                            GoExpression::type_name(GoType::channel(
+                                ChannelDirection::Bidirectional,
+                                &element,
                             )),
                             capacity,
                         ],
@@ -347,8 +349,7 @@ impl<'a> Planner<'a> {
         let argument = ctx.args.first()?;
 
         let element_go = self.go_type(&element);
-        let array_go =
-            GoType::with_dependencies(format!("[{length}]{}", element_go.code), [&element_go]);
+        let array_go = GoType::array_of(length, &element_go);
 
         let staged = self.plan_operand(argument, ExpressionContext::value());
         let (setup, source) = staged.into_parts();
@@ -362,7 +363,7 @@ impl<'a> Planner<'a> {
                     slice_name.clone(),
                     GoType::slice_of(&element_go),
                 )],
-                GoType::with_dependencies(format!("({}, bool)", array_go.code), [&array_go]),
+                GoType::result_list(&[array_go.clone(), GoType::new("bool")]),
                 LoweredBlock {
                     statements: vec![
                         LoweredStatement::If(IfPlan::plain(
@@ -652,18 +653,18 @@ impl<'a> Planner<'a> {
         self.lower_regular_call(call_expression, &plan, call_ty, ctx)
     }
 
-    pub(super) fn lower_native_call(&mut self, ctx: &NativeCallContext) -> ValuePlan {
-        if let Some(result) = self.try_lower_native_constructor(ctx) {
+    pub(super) fn lower_native_call(&mut self, context: &NativeCallContext) -> ValuePlan {
+        if let Some(result) = self.try_lower_native_constructor(context) {
             return result;
         }
-        let result = self.lower_native_method(ctx);
-        let is_constructor = matches!(ctx.form, NativeCallForm::Constructor);
-        let split = ctx.receiver_and_arguments();
+        let result = self.lower_native_method(context);
+        let is_constructor = matches!(context.form, NativeCallForm::Constructor);
+        let split = context.receiver_and_arguments();
         // Channel length can change without rebinding the receiver.
-        let reads_fixed_length = matches!(ctx.method, "length" | "capacity")
+        let reads_fixed_length = matches!(context.method, "length" | "capacity")
             && !is_constructor
             && !matches!(
-                ctx.native_type,
+                context.native_type,
                 NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver
             )
             && split.is_some_and(|(receiver, _)| {
@@ -680,16 +681,12 @@ impl<'a> Planner<'a> {
         }
         let receiver_arity = split.map_or(0, |(_, arguments)| arguments.len());
         let plain_call = !is_constructor
-            && native_method_lowers_to_plain_call(&ctx.native_type, ctx.method, receiver_arity);
-        let value = if !is_constructor && native_method_is_pure(&ctx.native_type, ctx.method) {
-            result.value.into_read_only_call()
-        } else {
-            result.value
-        };
+            && NativeOperation::new(context.native_type, context.method)
+                .lowers_to_plain_call(receiver_arity);
         let plan = if plain_call {
-            ValuePlan::plain_call(result.setup, value)
+            ValuePlan::plain_call(result.setup, result.value)
         } else {
-            ValuePlan::computed(result.setup, value)
+            ValuePlan::computed(result.setup, result.value)
         };
         if reads_fixed_length {
             plan.with_stability(Stability::Fixed)

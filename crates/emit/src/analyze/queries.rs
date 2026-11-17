@@ -236,19 +236,6 @@ impl Planner<'_> {
             .then(|| resolved.id.to_string())
     }
 
-    /// `Option<T>` where T is a concrete non-nilable Go value type, bridged
-    /// as `*T`. Excludes `Option<Unknown>`/`Option<any>` (`interface{}`).
-    pub(crate) fn is_non_nilable_option(&self, ty: &Type) -> bool {
-        if !ty.is_option() {
-            return false;
-        }
-        let inner = ty.ok_type();
-        if self.facts.contains_unknown(&inner) || inner.has_name("any") {
-            return false;
-        }
-        !self.facts.is_nilable_go_type(&inner)
-    }
-
     /// Returns true if the Option wraps a Go interface type (not a pointer).
     /// These need `IsNilInterface` instead of `!= nil` to catch typed nils.
     pub(crate) fn is_interface_option(&self, ty: &Type) -> bool {

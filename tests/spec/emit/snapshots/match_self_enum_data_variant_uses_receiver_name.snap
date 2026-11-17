@@ -22,7 +22,7 @@ func MakeShapeCircle(arg0 int) Shape {
 	return Shape{Tag: ShapeCircle, Circle: arg0}
 }
 
-func MakeShapeRectangle(arg0 int, arg1 int) Shape {
+func MakeShapeRectangle(arg0, arg1 int) Shape {
 	return Shape{Tag: ShapeRectangle, Width: arg0, Height: arg1}
 }
 

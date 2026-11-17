@@ -263,7 +263,7 @@ impl GoExpression {
     /// Drop the type of a composite literal nested in a literal of `element_type`.
     pub(crate) fn elide_composite_type(mut self, element_type: &GoType) -> Self {
         if let GoExpressionNode::CompositeLiteral { go_type, .. } = &mut self.node
-            && go_type.as_ref().map(|go_type| &go_type.code) == Some(&element_type.code)
+            && go_type.as_deref() == Some(element_type)
         {
             *go_type = None;
         }
@@ -272,7 +272,7 @@ impl GoExpression {
 
     pub(crate) fn instantiation(base: GoExpression, type_arguments: impl Into<GoType>) -> Self {
         let type_arguments = type_arguments.into();
-        if type_arguments.code.is_empty() {
+        if type_arguments.is_empty() {
             return base;
         }
         let node = GoExpressionNode::Instantiation {
@@ -754,13 +754,6 @@ impl ValuePlan {
 
     pub(crate) fn make_observable(&mut self) {
         self.stability = Stability::Observable;
-    }
-
-    pub(crate) fn stable_across_calls_if(mut self, stable_across_calls: bool) -> Self {
-        if stable_across_calls {
-            self.stability = Stability::StableAcrossCalls;
-        }
-        self
     }
 
     pub(crate) fn pin(

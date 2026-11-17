@@ -14,7 +14,7 @@ description: |
 ---
 package main
 
-func MakeShapeRectangle(arg0 int, arg1 int, arg2 int, arg3 int) Shape {
+func MakeShapeRectangle(arg0, arg1, arg2, arg3 int) Shape {
 	return Shape{Tag: ShapeRectangle, X: arg0, Y: arg1, Width: arg2, Height: arg3}
 }
 

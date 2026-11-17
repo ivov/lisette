@@ -1,6 +1,7 @@
 use crate::Planner;
+use crate::abi::wrapping::{NilGuard, is_nil, non_nil};
 use crate::calls::bounds::BoundsCheckedIndex;
-use crate::calls::go_interop::{NilGuard, is_nil, non_nil};
+
 use crate::plan::bodies::{Definition, Statement, define, discard};
 use crate::plan::go_expression::{BinaryOp, UnaryOp};
 use crate::plan::local::GoIdentifier;

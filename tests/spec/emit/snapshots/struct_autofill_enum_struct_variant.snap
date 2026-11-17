@@ -13,7 +13,7 @@ description: |
 ---
 package main
 
-func MakeActionMove(arg0 int, arg1 int, arg2 int) Action {
+func MakeActionMove(arg0, arg1, arg2 int) Action {
 	return Action{Tag: ActionMove, X: arg0, Y: arg1, Dist: arg2}
 }
 

@@ -1,12 +1,13 @@
 use rustc_hash::FxHashMap as HashMap;
+use syntax::program::GoHint;
 use syntax::program::{Definition, DefinitionBody, ValueKind};
 use syntax::types::{Symbol, Type};
 
 use crate::abi::callable::LoweredReturnAbi;
-use crate::abi::layout::SlotOrigin;
 use crate::analyze::facts::resolve_to_function_type;
 use crate::classify_go_return_type;
 use crate::names::go_name;
+use syntax::program::SlotOrigin;
 use syntax::types;
 
 #[derive(Debug, Default)]
@@ -93,7 +94,7 @@ impl GoAbiCatalog {
         definitions: &HashMap<Symbol, Definition>,
         qualified_name: &str,
         ty: &Type,
-        go_hints: &[String],
+        go_hints: &[GoHint],
     ) {
         let Type::Function(function) = ty.unwrap_forall() else {
             return;
