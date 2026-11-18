@@ -82,6 +82,7 @@ lint:
 lint-satellites:
     cd playground/wasm && cargo fmt -- --check && cargo clippy --all-targets -- -D warnings
     cd editors/zed && cargo fmt -- --check && cargo clippy --all-targets -- -D warnings
+    cd fuzz && cargo fmt -- --check && cargo clippy --locked --all-targets -- -D warnings
 
 lintfix:
     cargo clippy --fix --allow-dirty --allow-staged
@@ -106,7 +107,7 @@ loc:
     open target/loc-chart/loc/index.html
 
 check-fuzz-targets:
-    cargo check --manifest-path fuzz/Cargo.toml
+    cargo check --locked --manifest-path fuzz/Cargo.toml
 
 fuzz-parse duration="300":
     cargo +nightly fuzz run --sanitizer address parse fuzz/corpus/parse fuzz/seed_corpus -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict

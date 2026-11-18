@@ -5,7 +5,7 @@ use lisette_syntax::ast::Expression;
 use lisette_syntax::imports::scan_imports;
 use lisette_syntax::program::FileImport;
 
-/// The graph reads imports with the scanner, which must agree with the parser.
+// The graph reads imports with the scanner, which must agree with the parser.
 fuzz_target!(|data: &[u8]| {
     let Ok(source) = std::str::from_utf8(data) else {
         return;
@@ -39,5 +39,8 @@ fuzz_target!(|data: &[u8]| {
         })
         .collect();
 
-    assert_eq!(scanned, parsed, "scanner and parser disagree on: {source:?}");
+    assert_eq!(
+        scanned, parsed,
+        "scanner and parser disagree on: {source:?}"
+    );
 });

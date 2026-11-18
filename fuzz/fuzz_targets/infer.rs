@@ -1,42 +1,51 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use lisette_semantics::checker::infer::InferCtx;
+use lisette_semantics::checker::TaskState;
+use lisette_semantics::store::Store;
+use lisette_syntax::program::File;
+use std::sync::OnceLock;
+
+const PACKAGE_ID: &str = "fuzz";
+const FILE_ID: u32 = 0;
+
+fn prelude_store() -> Store {
+    static TEMPLATE: OnceLock<Store> = OnceLock::new();
+    TEMPLATE
+        .get_or_init(|| {
+            let mut store = Store::new();
+            let sink = lisette_diagnostics::LocalSink::new();
+            lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);
+            store
+        })
+        .clone()
+}
 
 fuzz_target!(|data: &[u8]| {
     let Ok(source) = std::str::from_utf8(data) else {
         return;
     };
 
-    let mut ast_result = lisette_syntax::build_ast(source, 0);
+    let ast_result = lisette_syntax::build_ast(source, FILE_ID);
     if ast_result.has_errors() {
         return;
     }
 
-    let sink = lisette_diagnostics::LocalSink::new();
-    let mut store = lisette_semantics::store::Store::new();
-    store.add_package("fuzz");
-    lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);
-
-    let mut checker = lisette_semantics::checker::TaskState::for_package("fuzz");
-    checker.put_prelude_in_scope(&store);
-
-    checker.register_types_and_values(
-        &mut store,
-        &mut ast_result.ast,
-        &lisette_syntax::program::Visibility::Private,
+    let mut store = prelude_store();
+    store.add_package(PACKAGE_ID);
+    let (file, _) = File::from_parse(
+        FILE_ID,
+        PACKAGE_ID,
+        "fuzz.lis".to_string(),
+        "fuzz.lis".to_string(),
+        source.to_string(),
+        ast_result,
     );
+    store.store_file(file);
+
+    let mut checker = TaskState::for_package(PACKAGE_ID);
+    let package = checker.register_package(&mut store, PACKAGE_ID);
     checker.finalize_registration(&mut store);
-
-    let mut ctx = InferCtx::new(&mut checker, &store);
-    for expression in ast_result.ast {
-        let type_var = ctx.new_type_var();
-        let _ = ctx.infer_root_expression(expression, &type_var);
-
-        if ctx.failed() {
-            break;
-        }
-    }
-    ctx.resolve_branch_subsumptions();
-    ctx.resolve_select_exhaustiveness();
+    checker.infer_package(&mut store, package);
+    checker.check_post_inference_bounds(&store);
 });
