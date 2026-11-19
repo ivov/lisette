@@ -28,9 +28,12 @@ pub(crate) fn strip_negations(expression: &Expression) -> (&Expression, bool) {
     (expression, negated)
 }
 
-impl Planner<'_> {
+impl<'p> Planner<'p> {
     /// `call().is_ok()` and its siblings on a call whose Go result can be tested directly.
-    fn fused_predicate<'a>(&self, expression: &'a Expression) -> Option<FusedPredicate<'a>> {
+    fn fused_predicate<'a>(&self, expression: &'a Expression) -> Option<FusedPredicate<'a>>
+    where
+        'p: 'a,
+    {
         let Expression::Call {
             expression: callee,
             args,
@@ -51,16 +54,15 @@ impl Planner<'_> {
         }
         let Expression::DotAccess {
             expression: receiver,
-            member,
             ..
         } = callee.unwrap_parens()
         else {
             return None;
         };
-        let receiver_ty = self.facts.peel_alias(&receiver.get_type());
-        let succeeds = match member.as_str() {
-            "is_ok" | "is_err" if receiver_ty.is_result() => member == "is_ok",
-            "is_some" | "is_none" if receiver_ty.is_option() => member == "is_some",
+        let definition = self.facts.checked(callee).callee().definition.as_deref()?;
+        let succeeds = match definition {
+            "prelude.Result.is_ok" | "prelude.Option.is_some" => true,
+            "prelude.Result.is_err" | "prelude.Option.is_none" => false,
             _ => return None,
         };
         Some(FusedPredicate {

@@ -1,7 +1,6 @@
 use crate::calls::arguments::CallArgsContext;
 use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
 use crate::calls::regular::receiver_type_binding;
-use syntax::program::NativeOperation;
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
@@ -13,7 +12,6 @@ use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
-use syntax::program::NativeTypeKind;
 use syntax::program::ReceiverCoercion;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
@@ -118,20 +116,6 @@ impl Planner<'_> {
         };
         let (setup, receiver_arg, emitted_args) =
             self.lower_ufcs_call_args(&args_ctx, receiver_stage, args);
-
-        if let Some(inlined) =
-            try_inline_native_ufcs(receiver, member, &receiver_arg, &emitted_args)
-        {
-            let native_type = NativeTypeKind::from_type(&receiver.get_type())
-                .expect("inlined UFCS receiver has a native type");
-            let plain_call =
-                NativeOperation::new(native_type, member).lowers_to_plain_call(emitted_args.len());
-            return if plain_call {
-                ValuePlan::plain_call(setup, inlined)
-            } else {
-                ValuePlan::computed(setup, inlined)
-            };
-        }
 
         let mut new_args = vec![receiver_arg];
         new_args.extend(emitted_args);
@@ -277,16 +261,6 @@ impl Planner<'_> {
             GoExpression::call(GoExpression::selector(receiver, go_method), emitted_all),
         )
     }
-}
-
-fn try_inline_native_ufcs(
-    receiver: &Expression,
-    member: &str,
-    receiver_arg: &GoExpression,
-    emitted_args: &[GoExpression],
-) -> Option<GoExpression> {
-    let native_type = NativeTypeKind::from_type(&receiver.get_type())?;
-    super::native::try_inline_native_method(&native_type, member, receiver_arg, emitted_args, false)
 }
 
 fn is_address_of_composite_literal(arg: Option<&Expression>) -> bool {

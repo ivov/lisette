@@ -1287,6 +1287,19 @@ impl SimpleKind {
         })
     }
 
+    /// The bits that a value of this numeric kind takes, with `int` and `uint` taking 64 as on 64-bit targets.
+    pub fn numeric_bits(self) -> Option<u32> {
+        use SimpleKind::*;
+        Some(match self {
+            Int8 | Uint8 | Byte => 8,
+            Int16 | Uint16 => 16,
+            Int32 | Rune | Uint32 | Float32 => 32,
+            Int | Int64 | Uint | Uint64 | Uintptr | Float64 | Complex64 => 64,
+            Complex128 => 128,
+            Bool | String | Unit => return None,
+        })
+    }
+
     pub fn is_unsigned_int(self) -> bool {
         matches!(
             self,

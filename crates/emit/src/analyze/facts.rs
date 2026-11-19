@@ -130,14 +130,6 @@ impl<'a> EmitFacts<'a> {
         types::underlying_simple_kind(ty, |id| self.definition(id))
     }
 
-    pub(crate) fn underlying_numeric_type(&self, ty: &Type) -> Option<Type> {
-        types::underlying_numeric_type(ty, |id| self.definition(id))
-    }
-
-    pub(crate) fn is_aliased_numeric_type(&self, ty: &Type) -> bool {
-        types::is_aliased_numeric_type(ty, |id| self.definition(id))
-    }
-
     pub(crate) fn resolves_to_unknown(&self, ty: &Type) -> bool {
         types::resolves_to_unknown(ty, |id| self.definition(id))
     }

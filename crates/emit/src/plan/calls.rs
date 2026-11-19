@@ -8,7 +8,9 @@ use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
-use syntax::program::{CallOperation, Definition, Method, Visibility, resolved_definition};
+use syntax::program::{
+    CallOperation, CheckedCallee, Definition, Method, Visibility, resolved_definition,
+};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
@@ -150,8 +152,13 @@ impl<'a> Planner<'a> {
         };
         let definition = checked.definition.as_ref().map(ToString::to_string);
 
-        let resolved =
-            self.resolve_callee(function, origin, definition, go_return.as_ref(), args.len());
+        let resolved = self.resolve_callee(
+            function,
+            origin,
+            definition,
+            go_return.as_ref(),
+            checked.receiver_offset(),
+        );
         debug_assert!(
             !resolved.abi.result.is_lowered() || {
                 let peeled = self.facts.peel_alias(ty);
@@ -181,7 +188,7 @@ impl<'a> Planner<'a> {
         origin: CallableOrigin<'a>,
         id: Option<String>,
         go_return: Option<&LoweredReturnAbi>,
-        arg_count: usize,
+        receiver_offset: usize,
     ) -> ResolvedCallee<'a> {
         let bound_layout = self.bound_dispatch_layout(function);
         let declaration = id.as_deref().and_then(|id| self.callable_declaration(id));
@@ -195,7 +202,6 @@ impl<'a> Planner<'a> {
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
         let declared_params = declared_type.and_then(|ty| ty.unwrap_forall().get_function_params());
         let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
-        let receiver_offset = receiver_offset(declared_params, &instantiated, arg_count);
         let params = build_param_abi(
             self,
             &instantiated,
@@ -280,7 +286,6 @@ impl<'a> Planner<'a> {
         let instantiated = self
             .facts
             .resolve_to_function_type(expression.get_type().unwrap_forall())?;
-        let params = instantiated.get_function_params()?;
         let return_ty = instantiated.get_function_ret()?;
         let go_return = self.resolve_go_callee_abi(expression, return_ty);
         let origin = if self.is_go_callable(expression) {
@@ -289,7 +294,12 @@ impl<'a> Planner<'a> {
             CallableOrigin::Source(&CallOperation::Function)
         };
         let (id, _) = self.resolve_callee_definition(expression);
-        Some(self.resolve_callee(expression, origin, id, go_return.as_ref(), params.len()))
+        let receiver_offset = self
+            .facts
+            .checked(expression)
+            .function_value()
+            .map_or(0, CheckedCallee::receiver_offset);
+        Some(self.resolve_callee(expression, origin, id, go_return.as_ref(), receiver_offset))
     }
 
     /// The declaration that the callee or function value `function` names, as the checker recorded it.
@@ -474,21 +484,6 @@ fn receiver_is_prelude_type(ty: &Type) -> bool {
         ty.strip_refs().unwrap_forall(),
         Type::Nominal { id, .. } if id.starts_with("prelude.")
     )
-}
-
-/// Declared parameters the receiver takes up, a variadic parameter counted once.
-fn receiver_offset(
-    declared_params: Option<&[FunctionParameter]>,
-    instantiated: &Type,
-    arg_count: usize,
-) -> usize {
-    let Some(declared) = declared_params else {
-        return 0;
-    };
-    let supplied = instantiated
-        .get_function_params()
-        .map_or(arg_count, <[FunctionParameter]>::len);
-    declared.len().saturating_sub(supplied)
 }
 
 fn build_param_abi(

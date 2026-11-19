@@ -895,7 +895,10 @@ impl Planner<'_> {
                 left,
                 right,
                 ..
-            } => self.plan_binary(operator, left, right, ctx),
+            } => {
+                let conversion = self.facts.checked(expression).operand_conversion();
+                self.plan_binary(operator, left, right, conversion, ctx)
+            }
             Expression::Unary {
                 operator,
                 expression,

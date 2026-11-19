@@ -277,7 +277,7 @@ impl FallibleProducer<'_> {
     }
 }
 
-impl Planner<'_> {
+impl<'p> Planner<'p> {
     pub(crate) fn rebuild_from_components(
         &mut self,
         components: &ComponentBinding,
@@ -302,7 +302,10 @@ impl Planner<'_> {
     pub(crate) fn fallible_producer<'a>(
         &self,
         subject: &'a Expression,
-    ) -> Option<FallibleProducer<'a>> {
+    ) -> Option<FallibleProducer<'a>>
+    where
+        'p: 'a,
+    {
         let ty = self.facts.peel_alias(&subject.get_type());
         if ty.is_option() {
             self.option_fuse_plan(subject).map(FallibleProducer::Option)
@@ -318,7 +321,10 @@ impl Planner<'_> {
         subject: &'a Expression,
         needs_whole_value: bool,
         kind: ComponentKind,
-    ) -> Option<FallibleProducer<'a>> {
+    ) -> Option<FallibleProducer<'a>>
+    where
+        'p: 'a,
+    {
         if needs_whole_value && kind.whole_value_constructor().is_none() {
             return None;
         }
@@ -379,10 +385,10 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn option_fuse_plan<'a>(
-        &self,
-        subject: &'a Expression,
-    ) -> Option<OptionFusePlan<'a>> {
+    pub(crate) fn option_fuse_plan<'a>(&self, subject: &'a Expression) -> Option<OptionFusePlan<'a>>
+    where
+        'p: 'a,
+    {
         if let Some(components) = self.component_binding(subject) {
             return (components.kind == ComponentKind::Option)
                 .then_some(OptionFusePlan::Bound(components));

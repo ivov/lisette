@@ -46,5 +46,5 @@ mod checked;
 pub use checked::{
     Adaptation, CallOperation, CheckedBodies, CheckedBodiesBuilder, CheckedCallee,
     CheckedExpression, CheckedValueUse, ElementEquality, EqualityRecipe, InterfaceConversion,
-    ValueUseKey,
+    OperandConversion, ValueUseKey,
 };

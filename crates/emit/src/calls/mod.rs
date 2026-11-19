@@ -15,18 +15,20 @@ pub(crate) mod wrap_err;
 
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
-use crate::calls::dispatch::extract_native_method_name;
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::CaptureBoundary;
 use syntax::ast::Expression;
 use syntax::program::{CallOperation, NativeTypeKind};
 use syntax::types::Type;
 
-impl Planner<'_> {
+impl<'p> Planner<'p> {
     pub(crate) fn native_method_call<'a>(
         &self,
         value: &'a Expression,
-    ) -> Option<NativeCallContext<'a>> {
+    ) -> Option<NativeCallContext<'a>>
+    where
+        'p: 'a,
+    {
         let Expression::Call {
             expression: callee,
             args,
@@ -39,7 +41,7 @@ impl Planner<'_> {
             return None;
         };
         let plan = self.plan_call(value.unwrap_parens())?;
-        let CallableOrigin::Source(CallOperation::Native { kind, .. }) = plan.resolved.origin
+        let CallableOrigin::Source(CallOperation::Native { kind, method }) = plan.resolved.origin
         else {
             return None;
         };
@@ -49,7 +51,7 @@ impl Planner<'_> {
         Some(NativeCallContext {
             native_type: *kind,
             form,
-            method: extract_native_method_name(function),
+            method,
             function,
             args,
             spread: spread.as_deref(),

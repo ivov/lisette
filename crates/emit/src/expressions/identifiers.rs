@@ -6,6 +6,7 @@ use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, IdentifierResolution};
+use syntax::program::CallOperation;
 use syntax::types::FunctionParameter;
 use syntax::types::Type;
 
@@ -94,7 +95,7 @@ impl Planner<'_> {
             }
         }
 
-        if let Some(expression) = self.try_emit_method_expression(symbol, ty) {
+        if let Some(expression) = self.try_emit_method_expression(identifier, ty) {
             return expression;
         }
         let function = self.definition_reference(symbol);
@@ -132,26 +133,23 @@ impl Planner<'_> {
     }
 
     /// Go method-expression syntax for an instance method of a type.
-    fn try_emit_method_expression(&mut self, symbol: &str, id_ty: &Type) -> Option<GoExpression> {
-        let package = self.facts.package_for_qualified_name(symbol)?;
-        let (owner, method) = symbol[package.len() + 1..].rsplit_once('.')?;
-        let owner_id = self.peel_alias_id(&format!("{package}.{owner}"));
-        let first = id_ty.as_function_type()?.params.first()?;
-        let receiver = first.ty.strip_refs();
-        if !matches!(&receiver, Type::Nominal { id, .. } if id.as_str() == owner_id)
-            || self.facts.is_ufcs_method(&owner_id, method)
-        {
+    fn try_emit_method_expression(
+        &mut self,
+        identifier: &Expression,
+        id_ty: &Type,
+    ) -> Option<GoExpression> {
+        let recorded = self.facts.checked(identifier).function_value()?;
+        let CallOperation::ReceiverMethod { is_public } = recorded.operation else {
             return None;
-        }
-        let is_public = self
-            .facts
-            .method(&owner_id, method)
-            .is_some_and(|method| method.visibility.is_public());
+        };
+        let symbol = recorded.definition.as_deref()?;
+        let (_, method) = symbol.rsplit_once('.')?;
+        let first = id_ty.as_function_type()?.params.first()?;
         let mut go_method = self.method_go_name(method, is_public);
         if self.definition_selects_tagged_twin(symbol) {
             go_method = go_name::tagged_twin(&go_method);
         }
-        let receiver_type = self.go_type(&receiver);
+        let receiver_type = self.go_type(&first.ty.strip_refs());
         Some(method_expression(
             receiver_type,
             first.ty.is_ref(),

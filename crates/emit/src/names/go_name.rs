@@ -39,6 +39,7 @@ pub(crate) fn reserved_prefix_of(go: &str) -> Option<&'static str> {
 pub const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
 pub(crate) const TEST_PRELUDE_PACKAGE: &str = "**test_prelude";
+pub(crate) const TEST_LOG_METHOD: &str = "**test_prelude.TestContext.log";
 pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
 const TESTKIT_PKG: &str = "testkit";
 

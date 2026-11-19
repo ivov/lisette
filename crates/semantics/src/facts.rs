@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use syntax::EcoString;
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Expression, ExpressionId, Span};
-use syntax::program::BindingMutation;
+use syntax::program::{BindingMutation, OperandConversion};
 use syntax::types::Type;
 
 #[derive(Debug, Default)]
@@ -82,6 +82,8 @@ pub(crate) struct ValueUseObligations {
     pub(crate) selected_witnesses: Vec<ConformanceWitness>,
     /// Each `if let` with no `else`, with the unit value it produces when its pattern does not match.
     pub(crate) implicit_units: Vec<(ExpressionId, ExpressionId)>,
+    /// Each binary expression with an operand that converts to the type of the other operand.
+    pub(crate) operand_conversions: Vec<(ExpressionId, OperandConversion)>,
 }
 
 #[derive(Debug, Clone)]
@@ -100,6 +102,7 @@ impl ValueUseObligations {
         self.receivers.extend(other.receivers);
         self.selected_witnesses.extend(other.selected_witnesses);
         self.implicit_units.extend(other.implicit_units);
+        self.operand_conversions.extend(other.operand_conversions);
     }
 
     pub(crate) fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {

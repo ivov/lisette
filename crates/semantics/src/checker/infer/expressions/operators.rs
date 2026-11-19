@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{BinaryOperator, Constant, Expression, Literal, Span, UnaryOperator};
 use syntax::lex::rune_codepoint;
-use syntax::program::ValueUseKey;
+use syntax::program::{OperandConversion, ValueUseKey};
 use syntax::types::{NumericFamily, SimpleKind, Type};
 
 use BinaryOperator::*;
@@ -464,7 +464,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
 
-        let (expression_ty, reported) = self.tracking_diagnostics(|this| {
+        let ((expression_ty, conversion), reported) = self.tracking_diagnostics(|this| {
             this.resolve_binary_type(
                 &operator,
                 BinaryOperands {
@@ -491,8 +491,15 @@ impl InferCtx<'_> {
 
         self.unify(expected_ty, &expression_ty, &span);
 
+        let id = self.fresh_expression_id();
+        if !reported && let Some(conversion) = conversion {
+            self.facts
+                .value_uses
+                .operand_conversions
+                .push((id, conversion));
+        }
         let expression = Expression::Binary {
-            id: self.fresh_expression_id(),
+            id,
             operator,
             left: left.expression.into(),
             right: right.expression.into(),
@@ -502,13 +509,13 @@ impl InferCtx<'_> {
         InferredOperand::new(expression, expression_ty)
     }
 
-    /// Resolve the result type of a binary operation given already-inferred operand types.
+    /// Resolve the result type of a binary operation given already-inferred operand types, with the operand that converts to the type of the other.
     fn resolve_binary_type(
         &mut self,
         operator: &BinaryOperator,
         operands: BinaryOperands<'_>,
         span: Span,
-    ) -> Type {
+    ) -> (Type, Option<OperandConversion>) {
         let left_operand_ty = operands.left.ty;
         let right_operand_ty = operands.right.ty;
         let left_span = &operands.left.span;
@@ -516,16 +523,28 @@ impl InferCtx<'_> {
         let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
         let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
         let same_operand_types = resolved_left_operand == resolved_right_operand;
-        match operator {
+        let mut conversion = None;
+        let ty = match operator {
             Equal | NotEqual => {
                 if !self.report_named_type_boundary(
                     &resolved_left_operand,
                     &resolved_right_operand,
                     span,
-                ) && !self
-                    .numerically_compatible(&resolved_left_operand, &resolved_right_operand)
-                {
-                    self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
+                ) {
+                    if self.numerically_compatible(&resolved_left_operand, &resolved_right_operand)
+                    {
+                        conversion = self.plain_operand_conversion(
+                            &resolved_left_operand,
+                            &resolved_right_operand,
+                        );
+                    } else {
+                        self.unify_binary_operands(
+                            operator,
+                            left_operand_ty,
+                            right_operand_ty,
+                            &span,
+                        );
+                    }
                 }
                 let operands_match =
                     left_operand_ty.resolve_in(&self.env) == right_operand_ty.resolve_in(&self.env);
@@ -563,13 +582,15 @@ impl InferCtx<'_> {
                     &resolved_right_operand,
                     span,
                 ) {
-                    return Type::bool();
+                    return (Type::bool(), None);
                 }
 
                 if self.numerically_compatible(&resolved_left_operand, &resolved_right_operand)
                     && self.store.is_orderable(&resolved_left_operand)
                     && self.store.is_orderable(&resolved_right_operand)
                 {
+                    conversion = self
+                        .plain_operand_conversion(&resolved_left_operand, &resolved_right_operand);
                     Type::bool()
                 } else {
                     let (_, mismatched) = self.tracking_diagnostics(|this| {
@@ -588,12 +609,13 @@ impl InferCtx<'_> {
             }
 
             Addition => {
-                if let Some(result_ty) = self.try_operation_with_numeric_alias(
+                if let Some((result_ty, converts)) = self.try_operation_with_numeric_alias(
                     operator,
                     &resolved_left_operand,
                     &resolved_right_operand,
                     &span,
                 ) {
+                    conversion = converts;
                     result_ty
                 } else if self.report_named_type_boundary(
                     &resolved_left_operand,
@@ -645,12 +667,13 @@ impl InferCtx<'_> {
                     ));
                 }
 
-                if let Some(result_ty) = self.try_operation_with_numeric_alias(
+                if let Some((result_ty, converts)) = self.try_operation_with_numeric_alias(
                     operator,
                     &resolved_left_operand,
                     &resolved_right_operand,
                     &span,
                 ) {
+                    conversion = converts;
                     result_ty
                 } else if let Some((float_ty, coefficient)) = scaled_imaginary(
                     operator,
@@ -685,12 +708,13 @@ impl InferCtx<'_> {
             }
 
             BitwiseAnd | BitwiseOr | BitwiseXor | BitwiseAndNot => {
-                if let Some(result_ty) = self.try_operation_with_numeric_alias(
+                if let Some((result_ty, converts)) = self.try_operation_with_numeric_alias(
                     operator,
                     &resolved_left_operand,
                     &resolved_right_operand,
                     &span,
                 ) {
+                    conversion = converts;
                     result_ty
                 } else {
                     let left_ok =
@@ -721,6 +745,60 @@ impl InferCtx<'_> {
             Pipeline => {
                 unreachable!("pipeline expressions are lowered before binary inference")
             }
+        };
+        if let Some(conversion) = conversion
+            && self.reject_narrowing_conversion(
+                conversion,
+                &resolved_left_operand,
+                &resolved_right_operand,
+                span,
+            )
+        {
+            return (ty, None);
+        }
+        (ty, conversion)
+    }
+
+    /// Report a plain operand that is wider than the numeric alias it converts to, because the conversion would cut its value.
+    fn reject_narrowing_conversion(
+        &mut self,
+        conversion: OperandConversion,
+        left: &Type,
+        right: &Type,
+        span: Span,
+    ) -> bool {
+        let (plain, alias) = match conversion {
+            OperandConversion::Left => (left, right),
+            OperandConversion::Right => (right, left),
+        };
+        let bits = |ty: &Type| {
+            self.store
+                .underlying_numeric_type(ty)
+                .and_then(|numeric| numeric.as_simple())
+                .and_then(SimpleKind::numeric_bits)
+        };
+        let (Some(plain_bits), Some(alias_bits)) = (bits(plain), bits(alias)) else {
+            return false;
+        };
+        if plain_bits <= alias_bits {
+            return false;
+        }
+        self.sink
+            .push(diagnostics::infer::named_primitive_needs_cast(
+                plain, alias, span,
+            ));
+        true
+    }
+
+    /// The plain operand of two resolved operands that `numerically_compatible` accepts, which converts to the numeric alias of the other.
+    fn plain_operand_conversion(&self, left: &Type, right: &Type) -> Option<OperandConversion> {
+        if left == right {
+            return None;
+        }
+        if self.store.is_aliased_numeric_type(left) {
+            Some(OperandConversion::Right)
+        } else {
+            Some(OperandConversion::Left)
         }
     }
 
@@ -878,7 +956,7 @@ impl InferCtx<'_> {
         left_ty: &Type,
         right_ty: &Type,
         span: &Span,
-    ) -> Option<Type> {
+    ) -> Option<(Type, Option<OperandConversion>)> {
         let store = self.store;
         let left_underlying = store.underlying_numeric_type(left_ty);
         let right_underlying = store.underlying_numeric_type(right_ty);
@@ -913,7 +991,7 @@ impl InferCtx<'_> {
                 if left_ty == right_ty
                     || store.peel_alias(left_ty) == store.peel_alias(right_ty) =>
             {
-                Some(left_ty.clone())
+                Some((left_ty.clone(), None))
             }
 
             (true, true) => {
@@ -921,7 +999,7 @@ impl InferCtx<'_> {
                     &left_underlying,
                     *span,
                 ));
-                Some(left_ty.clone())
+                Some((left_ty.clone(), None))
             }
 
             (true, false) => {
@@ -931,7 +1009,7 @@ impl InferCtx<'_> {
                             right_ty, left_ty, *span,
                         ));
                 }
-                Some(left_ty.clone())
+                Some((left_ty.clone(), Some(OperandConversion::Right)))
             }
             (false, true) => {
                 if is_nominal_defined_type(right_ty, store) {
@@ -945,7 +1023,7 @@ impl InferCtx<'_> {
                     ));
                     return None;
                 }
-                Some(right_ty.clone())
+                Some((right_ty.clone(), Some(OperandConversion::Left)))
             }
         }
     }

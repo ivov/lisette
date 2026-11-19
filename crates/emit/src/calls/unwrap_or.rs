@@ -103,7 +103,7 @@ pub(crate) fn map_lambda(function: &Expression) -> Option<MapLambda<'_>> {
     (!escapes_lambda(body)).then_some(MapLambda { param, body })
 }
 
-impl Planner<'_> {
+impl<'p> Planner<'p> {
     pub(crate) fn prelude_method_call<'a>(
         &self,
         expression: &'a Expression,
@@ -140,7 +140,10 @@ impl Planner<'_> {
         Some((receiver, args))
     }
 
-    fn defaulted_call<'a>(&self, expression: &'a Expression) -> Option<DefaultedCall<'a>> {
+    fn defaulted_call<'a>(&self, expression: &'a Expression) -> Option<DefaultedCall<'a>>
+    where
+        'p: 'a,
+    {
         let (receiver, map, default) = if let Some((receiver, [default])) =
             self.prelude_method_call(expression, "unwrap_or")
         {

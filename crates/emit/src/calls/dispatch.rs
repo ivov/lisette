@@ -816,20 +816,10 @@ impl<'a> Planner<'a> {
         (setup, value)
     }
 
-    /// Look up the `#[go("name")]` override for a callee, if any.
+    /// The `#[go("name")]` override of the declaration that a callee names, if any.
     pub(super) fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
-        let Expression::Identifier { value, .. } = function else {
-            return None;
-        };
-        if self.is_local_binding(function) {
-            return None;
-        }
-        let qualified = self.facts.qualified_current(value);
-        let prelude_qualified = format!("prelude.{}", value);
-        self.facts
-            .definition(qualified.as_str())
-            .or_else(|| self.facts.definition(prelude_qualified.as_str()))
-            .and_then(|d| d.go_name())
+        let symbol = self.facts.checked(function).callee().definition.as_ref()?;
+        self.facts.definition(symbol)?.go_name()
     }
 
     pub(crate) fn is_local_binding(&self, function: &Expression) -> bool {
@@ -859,16 +849,6 @@ impl<'a> Planner<'a> {
             .iter()
             .any(|p| self.facts.is_interface_or_unknown(p) || self.is_function_alias(p))
             .then(|| self.format_type_args(params))
-    }
-}
-
-pub(crate) fn extract_native_method_name(function: &Expression) -> &str {
-    match function {
-        Expression::DotAccess { member, .. } => member,
-        Expression::Identifier { value, .. } => {
-            value.split_once('.').map(|(_, m)| m).unwrap_or(value)
-        }
-        _ => "",
     }
 }
 
