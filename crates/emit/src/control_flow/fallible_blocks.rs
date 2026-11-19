@@ -176,11 +176,11 @@ impl Planner<'_> {
         if final_expression.is_empty() {
             statements.extend(self.lower_try_unit_return(fallible));
         } else {
-            let final_expression = self.coerce_value(
+            let final_expression = self.apply_type_coercion(
                 &mut statements,
+                Some(fallible.ok_ty()),
+                last,
                 final_expression,
-                &last.get_type(),
-                fallible.ok_ty(),
             );
             statements.extend(self.success_return(fallible, final_expression));
         }
@@ -230,8 +230,9 @@ impl Planner<'_> {
             _ => return None,
         };
 
-        let error = err_arg
-            .map(|value| self.convert_error_to_return_context(&mut statements, value, fallible));
+        let error = err_arg.map(|value| {
+            self.convert_error_to_return_context(&mut statements, expression, value, fallible)
+        });
         statements.push(self.failure_return(fallible, error));
         Some(statements)
     }
@@ -301,7 +302,8 @@ impl Planner<'_> {
         let (mut statements, expression) = self
             .lower_value(last, ExpressionContext::value())
             .into_parts();
-        let expression = self.coerce_value(&mut statements, expression, &item_ty, fallible.ok_ty());
+        let expression =
+            self.apply_type_coercion(&mut statements, Some(fallible.ok_ty()), last, expression);
         statements.push(plain_return(expression));
         statements
     }
@@ -317,6 +319,8 @@ impl Planner<'_> {
     fn unit_value(&mut self, statements: &mut Vec<Statement>, ok_ty: &Type) -> GoExpression {
         let unit_ty = Type::unit();
         let unit_val = self.zero_value(&unit_ty);
-        self.coerce_value(statements, unit_val, &unit_ty, ok_ty)
+        let (setup, value) = CoercionPlan::internal(self, &unit_ty, ok_ty).lower(self, unit_val);
+        statements.extend(setup);
+        value
     }
 }

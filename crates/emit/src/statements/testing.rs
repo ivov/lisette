@@ -12,6 +12,7 @@ use crate::plan::values::CaptureBoundary;
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
+use syntax::program::EqualityRecipe;
 
 pub(crate) fn testkit_operand_type() -> GoType {
     GoType::named(
@@ -61,8 +62,10 @@ impl Planner<'_> {
             && is_assert_relation(operator)
         {
             self.lower_relation_assert(operator, left, right, &mut statements)
-        } else if let Some((recv, arg)) = self.as_equals_decomposition(operand) {
-            self.lower_labeled_assert(recv, arg, &mut statements)
+        } else if let Some(recipe) = self.facts.checked(expression).equality()
+            && let Some((recv, arg)) = equals_decomposition(operand)
+        {
+            self.lower_labeled_assert(recv, arg, recipe, &mut statements)
         } else {
             self.lower_bare_assert(operand, &mut statements)
         };
@@ -212,12 +215,12 @@ impl Planner<'_> {
         &mut self,
         recv: &Expression,
         arg: &Expression,
+        recipe: &EqualityRecipe,
         statements: &mut Vec<Statement>,
     ) -> AssertShape {
-        let recv_ty = recv.get_type();
         let (lhs, rhs) = self.stage_assert_operands(recv, arg, LiteralInlining::Denied, statements);
         let (lhs, rhs) = (lhs.value.expression(), rhs.value.expression());
-        let failure_condition = self.inequality_expression(lhs.clone(), rhs.clone(), &recv_ty, &[]);
+        let failure_condition = self.inequality_expression(lhs.clone(), rhs.clone(), recipe);
         AssertShape {
             failure_condition,
             kind: "labeled",
@@ -348,34 +351,30 @@ impl Planner<'_> {
             value: ValuePlan::captured(Vec::new(), name),
         }
     }
+}
 
-    fn as_equals_decomposition<'a>(
-        &self,
-        operand: &'a Expression,
-    ) -> Option<(&'a Expression, &'a Expression)> {
-        let Expression::Call {
-            expression: callee,
-            args,
-            ..
-        } = operand
-        else {
-            return None;
-        };
-        let Expression::DotAccess {
-            expression: recv,
-            member,
-            ..
-        } = callee.unwrap_parens()
-        else {
-            return None;
-        };
-        if member != "equals" || args.len() != 1 {
-            return None;
-        }
-        let recv_ty = self.facts.peel_alias(&recv.get_type());
-        (recv_ty.is_slice() || recv_ty.is_map() || self.type_has_equals(&recv_ty, &[]))
-            .then(|| (recv.unwrap_parens(), &args[0]))
+/// The receiver and argument of `receiver.equals(argument)`.
+fn equals_decomposition(operand: &Expression) -> Option<(&Expression, &Expression)> {
+    let Expression::Call {
+        expression: callee,
+        args,
+        ..
+    } = operand
+    else {
+        return None;
+    };
+    let Expression::DotAccess {
+        expression: recv,
+        member,
+        ..
+    } = callee.unwrap_parens()
+    else {
+        return None;
+    };
+    if member != "equals" || args.len() != 1 {
+        return None;
     }
+    Some((recv.unwrap_parens(), &args[0]))
 }
 
 struct AssertShape {

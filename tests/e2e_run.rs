@@ -4301,6 +4301,103 @@ fn main() {
     );
 }
 
+#[test]
+fn dispatched_bound_converts_to_parent_interface() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+import "go:io"
+interface Base { fn fetch(fail: bool) -> Partial<int, error> }
+interface Child {
+  embed Base
+  fn name() -> string
+}
+struct Source {}
+impl Source {
+  fn fetch(self, fail: bool) -> Partial<int, error> {
+    if fail { Partial.Err(io.EOF) } else { Partial.Both(0, io.EOF) }
+  }
+  fn name(self) -> string { "s" }
+}
+fn take(b: Base) -> Base { b }
+fn widen<T: Child>(source: T) -> Base { take(source as Base) }
+fn main() {
+  let b = widen(Source {})
+  fmt.Println(b.fetch(false).is_both())
+}
+"#,
+        "true",
+    );
+}
+
+#[test]
+fn channel_send_converts_value_to_interface_element() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Named { fn name() -> string }
+struct P { n: string }
+impl P { fn name(self) -> string { self.n } }
+struct S {}
+impl S { fn String(self) -> string { "s" } }
+fn main() {
+  let ch = Channel.buffered<Named>(2)
+  ch.send(P { n: "x" })
+  ch.send(P { n: "y" } as Named)
+  if let Some(first) = ch.receive() { fmt.Println(first.name()) }
+  if let Some(second) = ch.receive() { fmt.Println(second.name()) }
+  let stringers = Channel.buffered<fmt.Stringer>(1)
+  stringers.send(S {})
+  if let Some(s) = stringers.receive() { fmt.Println(s.String()) }
+}
+"#,
+        "x\ny\ns",
+    );
+}
+
+#[test]
+fn generic_argument_converts_value_to_interface_type_argument() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Named { fn name() -> string }
+struct P { n: string }
+impl P { fn name(self) -> string { self.n } }
+fn second<T>(_first: T, value: T) -> T { value }
+fn show(x: Named) { fmt.Println(x.name()) }
+fn main() {
+  let q: Named = P { n: "q" }
+  show(second(q, P { n: "x" }))
+  show(second(P { n: "y" } as Named, P { n: "z" }))
+}
+"#,
+        "x\nz",
+    );
+}
+
+#[test]
+fn tuple_binding_return_wraps_interface_adapter() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+struct Thing { n: int }
+interface Opt { fn find() -> Option<Ref<Thing>> }
+struct Bar<T> { x: Option<T> }
+impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
+fn pair(b: Bar<Ref<Thing>>) -> (Opt, int) {
+  let t = (b, 1)
+  t
+}
+fn main() {
+  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let (opt, n) = pair(b)
+  fmt.Println(opt.find().is_some(), n)
+}
+"#,
+        "true 1",
+    );
+}
+
 fn assert_cold_build_matches(root: &Path, sources: &[&str], commands: &[&str], generated: &str) {
     let cold = tempfile::tempdir().unwrap();
     for name in sources {
@@ -4319,5 +4416,201 @@ fn assert_cold_build_matches(root: &Path, sources: &[&str], commands: &[&str], g
     assert_eq!(
         fs::read_to_string(root.join(generated)).unwrap(),
         fs::read_to_string(cold.path().join(generated)).unwrap()
+    );
+}
+
+fn run_script(name: &str, source: &str) -> String {
+    let scratch = tempfile::tempdir().unwrap();
+    let path = scratch.path().join(name);
+    fs::write(&path, source).unwrap();
+    let output = lis(&path, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    stdout
+}
+
+#[test]
+fn go_interface_value_goes_into_option_slots() {
+    if !go_available() {
+        return;
+    }
+    let stdout = run_script(
+        "fileserver.lis",
+        r#"
+import "go:fmt"
+import "go:net"
+import "go:net/http"
+
+fn serve(root: string) -> Result<(), error> {
+  let listener = net.Listen("tcp", "127.0.0.1:0")?
+  listener.Close()
+  http.Serve(listener, http.FileServer(http.Dir(root)))
+}
+
+fn has_handler(handler: Option<http.Handler>) -> bool {
+  handler.is_some()
+}
+
+fn tail() -> Option<http.Handler> {
+  http.FileServer(http.Dir("."))
+}
+
+fn pair() -> (Option<http.Handler>, int) {
+  (http.FileServer(http.Dir(".")), 1)
+}
+
+fn main() {
+  let reader: Option<http.Handler> = http.FileServer(http.Dir("."))
+  let server = http.Server { Addr: ":0", Handler: http.FileServer(http.Dir(".")), .. }
+  fmt.Println(serve(".").is_err(), reader.is_some(), server.Addr)
+  fmt.Println(has_handler(http.FileServer(http.Dir("."))))
+  let (handler, n) = pair()
+  fmt.Println(tail().is_some(), handler.is_some(), n)
+}
+"#,
+    );
+    assert_eq!(stdout.trim(), "true true :0\ntrue\ntrue true 1");
+}
+
+const ADAPTED_BAR: &str = r#"
+import "go:fmt"
+struct Thing { n: int }
+interface Opt { fn find() -> Option<Ref<Thing>> }
+struct Bar<T> { x: Option<T> }
+impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
+"#;
+
+fn assert_adapted_bar_runs(source: &str, expected: &str) {
+    assert_generic_program_runs(&format!("{ADAPTED_BAR}{source}"), expected);
+}
+
+#[test]
+fn tail_binding_in_if_arm_converts_to_interface() {
+    assert_adapted_bar_runs(
+        r#"
+fn pick(b: Bar<Ref<Thing>>, c: bool, d: bool) -> Opt {
+  if d {
+    let t = if c { b } else { b }
+    t
+  } else {
+    let u = match c { true => b, false => b }
+    u
+  }
+}
+fn main() {
+  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  fmt.Println(pick(b, true, false).find().is_some(), pick(b, false, true).find().is_some())
+}
+"#,
+        "true true",
+    );
+}
+
+#[test]
+fn tail_binding_in_if_arm_converts_tuple_element() {
+    assert_adapted_bar_runs(
+        r#"
+fn pick(b: Bar<Ref<Thing>>, c: bool, d: bool) -> (Opt, int) {
+  if d {
+    let t = if c { (b, 1) } else { (b, 2) }
+    t
+  } else {
+    (b, 3)
+  }
+}
+fn main() {
+  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let (o, n) = pick(b, true, true)
+  fmt.Println(o.find().is_some(), n)
+}
+"#,
+        "true 1",
+    );
+}
+
+#[test]
+fn tail_binding_in_match_arm_converts_to_interface() {
+    assert_adapted_bar_runs(
+        r#"
+fn pick(b: Bar<Ref<Thing>>, c: int) -> Opt {
+  match c {
+    0 => {
+      let t = if c == 0 { b } else { b }
+      t
+    },
+    _ => b,
+  }
+}
+fn main() {
+  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  fmt.Println(pick(b, 0).find().is_some())
+}
+"#,
+        "true",
+    );
+}
+
+#[test]
+fn tail_binding_in_if_let_arm_converts_to_interface() {
+    assert_adapted_bar_runs(
+        r#"
+fn pick(o: Option<int>, b: Bar<Ref<Thing>>) -> Opt {
+  if let Some(n) = o {
+    let t = match n { 0 => b, _ => b }
+    t
+  } else {
+    b
+  }
+}
+fn main() {
+  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  fmt.Println(pick(Some(0), b).find().is_some())
+}
+"#,
+        "true",
+    );
+}
+
+#[test]
+fn tail_binding_in_closure_arm_converts_to_interface() {
+    assert_adapted_bar_runs(
+        r#"
+fn main() {
+  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let f = |c: bool| -> Opt {
+    if c {
+      let t = if c { b } else { b }
+      t
+    } else { b }
+  }
+  fmt.Println(f(true).find().is_some())
+}
+"#,
+        "true",
+    );
+}
+
+#[test]
+fn tail_binding_in_if_arm_wraps_implicit_some() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+import "go:io"
+import "go:os"
+fn pick(c: bool, d: bool) -> Option<io.Writer> {
+  let w: io.Writer = os.Stdout
+  if d {
+    let t = if c { w } else { w }
+    t
+  } else {
+    None
+  }
+}
+fn main() {
+  fmt.Println(pick(true, true).is_some(), pick(true, false).is_some())
+}
+"#,
+        "true false",
     );
 }

@@ -882,7 +882,11 @@ impl Planner<'_> {
         }
         match expression {
             Expression::Paren { expression, .. } => self.plan_operand(expression, ctx),
-            Expression::Cast { expression, ty, .. } => self.plan_cast(expression, ty, ctx),
+            Expression::Cast {
+                expression: operand,
+                ty,
+                ..
+            } => self.plan_cast(expression, operand, ty, ctx),
             Expression::IndexedAccess {
                 expression, index, ..
             } => self.plan_index_access(expression, index),
@@ -897,7 +901,7 @@ impl Planner<'_> {
                 expression,
                 ..
             } => self.plan_unary(operator, expression, ctx),
-            Expression::Tuple { elements, ty, .. } => self.plan_tuple_value(elements, ty, false),
+            Expression::Tuple { .. } => self.plan_tuple_value(expression, false),
             Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
             Expression::StructCall {
                 name,

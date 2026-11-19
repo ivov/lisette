@@ -1,14 +1,15 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use semantics::checker::promotion::{self, MemberKind, Resolution};
+use semantics::facts::Selections;
 use semantics::store::Store;
 use syntax::ast::{
     Annotation, Attribute, ConstructorPatternResolution, Expression, Pattern, SelectArm, Span,
     StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{DefinitionBody, DotAccessResolution, EqualityIndex, Package};
-use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
+use syntax::program::{DefinitionBody, DotAccessResolution, EqualityRecipe, Package};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, PackageItemId, ReferenceGraph, StructFieldId};
 
@@ -16,6 +17,7 @@ pub struct AliasMap<'a> {
     aliases: HashMap<String, ImportSpans>,
     file_id: u32,
     store: &'a Store,
+    selections: &'a Selections,
 }
 
 struct ImportSpans {
@@ -24,7 +26,7 @@ struct ImportSpans {
 }
 
 impl<'a> AliasMap<'a> {
-    pub fn build(file: &File, store: &'a Store) -> Self {
+    pub fn build(file: &File, store: &'a Store, selections: &'a Selections) -> Self {
         let mut aliases = HashMap::default();
 
         for import in file.imports() {
@@ -43,6 +45,7 @@ impl<'a> AliasMap<'a> {
             aliases,
             file_id: file.id,
             store,
+            selections,
         }
     }
 
@@ -139,16 +142,12 @@ pub(super) fn walk_expression(
             ..
         } => {
             let enum_ctx = PackageItemId::new(name);
-            let synthesizes_equality =
-                has_synthesized_equality(package, name, attributes, alias_map);
             for v in variants {
                 for f in &v.fields {
                     walk_annotation(package, &f.annotation, graph, alias_map, &enum_ctx);
-                    if synthesizes_equality {
-                        mark_equals_roots(graph, &f.ty, package, alias_map);
-                    }
                 }
             }
+            mark_synthesized_equals_roots(graph, package, name, attributes, alias_map);
         }
 
         Expression::Struct {
@@ -164,14 +163,10 @@ pub(super) fn walk_expression(
                     walk_annotation(package, bound, graph, alias_map, &struct_ctx);
                 }
             }
-            let synthesizes_equality =
-                has_synthesized_equality(package, name, attributes, alias_map);
             for f in fields {
                 walk_annotation(package, &f.annotation, graph, alias_map, &struct_ctx);
-                if synthesizes_equality {
-                    mark_equals_roots(graph, &f.ty, package, alias_map);
-                }
             }
+            mark_synthesized_equals_roots(graph, package, name, attributes, alias_map);
         }
 
         Expression::TypeAlias {
@@ -388,13 +383,11 @@ fn walk_call(
     else {
         return;
     };
-    if let Expression::Identifier { value, .. } = callee.as_ref()
+    if let Expression::Identifier { .. } = callee.as_ref()
         && let Some(from) = ctx
-        && (value.as_str() == "Slice.equals" || value.as_str() == "Map.equals")
-        && let Some(receiver) = args.first()
-        && is_container_receiver(&receiver.get_type(), alias_map)
+        && let Some(recipe) = alias_map.selections.equality(callee.id())
     {
-        add_equals_references(graph, from, &receiver.get_type(), package, alias_map);
+        add_equals_references(graph, from, recipe, package);
     }
     walk_expression(package, callee, graph, alias_map, ctx);
     for arg in args {
@@ -516,10 +509,9 @@ fn walk_dot_access(
         graph.add_reference(from, to);
     }
     if let Some(from) = ctx
-        && member == "equals"
-        && is_container_receiver(&receiver_ty, alias_map)
+        && let Some(recipe) = alias_map.selections.equality(dot_access.id())
     {
-        add_equals_references(graph, from, &receiver_ty, package, alias_map);
+        add_equals_references(graph, from, recipe, package);
     }
 }
 
@@ -854,101 +846,48 @@ fn has_equality_attr(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "equality")
 }
 
-fn has_synthesized_equality(
+/// Mark the `equals` methods that the synthesized `equals` of `name` calls on its fields, as the checker selected them.
+fn mark_synthesized_equals_roots(
+    graph: &mut ReferenceGraph,
     package: &Package,
     name: &str,
     attributes: &[Attribute],
     alias_map: &AliasMap,
-) -> bool {
+) {
+    if !has_equality_attr(attributes) {
+        return;
+    }
     let owner = format!("{}.{}", package.id, name);
-    has_equality_attr(attributes) && alias_map.store.equality_index.is_synthesized(&owner)
+    for recipe in alias_map.store.equality_index.synthesized_fields(&owner) {
+        mark_equals_roots(graph, recipe, package);
+    }
 }
 
 fn add_equals_references(
     graph: &mut ReferenceGraph,
     from: &PackageItemId,
-    ty: &Type,
+    recipe: &EqualityRecipe,
     package: &Package,
-    aliases: &AliasMap,
 ) {
-    let mut targets = Vec::new();
-    let ty = ty.strip_refs();
-    equals_targets(
-        &ty,
-        package,
-        aliases.store,
-        &aliases.store.equality_index,
-        &mut targets,
-    );
-    for to in targets {
+    for to in equals_targets(recipe, package) {
         graph.add_reference(from, to);
     }
 }
 
-fn mark_equals_roots(graph: &mut ReferenceGraph, ty: &Type, package: &Package, aliases: &AliasMap) {
-    let mut targets = Vec::new();
-    equals_targets(
-        ty,
-        package,
-        aliases.store,
-        &aliases.store.equality_index,
-        &mut targets,
-    );
-    for target in targets {
+fn mark_equals_roots(graph: &mut ReferenceGraph, recipe: &EqualityRecipe, package: &Package) {
+    for target in equals_targets(recipe, package) {
         graph.mark_as_used(target);
     }
 }
 
-pub(super) fn equals_targets(
-    ty: &Type,
-    package: &Package,
-    store: &Store,
-    index: &EqualityIndex,
-    out: &mut Vec<PackageItemId>,
-) {
-    let mut current = ty.clone();
-    let mut seen = HashSet::default();
-    while let Type::Nominal { id, .. } = &current {
-        if !seen.insert(id.clone()) {
-            break;
-        }
-        let Some(next) = store.underlying_type(&current) else {
-            break;
-        };
-        current = next;
-    }
-    match &current {
-        Type::Compound {
-            kind: CompoundKind::Slice,
-            args,
-            ..
-        } => {
-            if let Some(element) = args.first() {
-                equals_targets(element, package, store, index, out);
-            }
-        }
-        Type::Compound {
-            kind: CompoundKind::Map,
-            args,
-            ..
-        } => {
-            if let Some(value) = args.get(1) {
-                equals_targets(value, package, store, index, out);
-            }
-        }
-        Type::Nominal { id, .. }
-            if id.as_str().starts_with(&format!("{}.", package.id))
-                && index.usable_from(id.as_str(), &package.id) =>
-        {
-            out.push(PackageItemId::equals_method(unqualified_name(id)));
-        }
-        _ => {}
-    }
-}
-
-fn is_container_receiver(receiver_ty: &Type, aliases: &AliasMap) -> bool {
-    let current = deref_for_keying(receiver_ty, aliases);
-    current.is_slice() || current.is_map()
+/// The `equals` methods of `package` that `recipe` calls.
+fn equals_targets(recipe: &EqualityRecipe, package: &Package) -> Vec<PackageItemId> {
+    recipe
+        .owners()
+        .into_iter()
+        .filter(|owner| owner.as_str().starts_with(&format!("{}.", package.id)))
+        .map(|owner| PackageItemId::equals_method(unqualified_name(owner)))
+        .collect()
 }
 
 fn mark_promoted_field_read(

@@ -20,7 +20,7 @@ impl<'source> Parser<'source> {
                 if self.is(LeftParen) {
                     self.collect_delimited_expressions(LeftParen, RightParen);
                 }
-                Self::error_expression(self.span_from_offset(start.byte_offset))
+                self.error_expression(self.span_from_offset(start.byte_offset))
             }
         }
     }
@@ -47,6 +47,9 @@ impl<'source> Parser<'source> {
             }
         };
 
-        Expression::RawGo { text }
+        Expression::RawGo {
+            id: self.next_expression_id(),
+            text,
+        }
     }
 }

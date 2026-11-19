@@ -37,6 +37,7 @@ impl<'source> Parser<'source> {
         self.ensure(RightCurlyBrace);
 
         Expression::Match {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             subject: subject.into(),
             arms,
@@ -101,6 +102,7 @@ impl<'source> Parser<'source> {
             };
 
             Expression::If {
+                id: parser.next_expression_id(),
                 ty: Type::uninferred(),
                 condition: condition.into(),
                 consequence: consequence.into(),
@@ -112,7 +114,7 @@ impl<'source> Parser<'source> {
         }
         let span = self.span_from_token(self.current_token());
         self.resync_on_error();
-        Self::error_expression(span)
+        self.error_expression(span)
     }
 
     fn parse_if_let_expression(&mut self, start: crate::lex::Token) -> Expression {
@@ -141,6 +143,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::IfLet {
+            id: self.next_expression_id(),
             pattern,
             scrutinee: scrutinee.into(),
             consequence: consequence.into(),
@@ -157,6 +160,7 @@ impl<'source> Parser<'source> {
 
         let expression = match self.current_token().kind {
             Semicolon | RightCurlyBrace => Expression::Unit {
+                id: self.next_expression_id(),
                 ty: Type::uninferred(),
                 span: self.span_from_offset(start.byte_offset),
             },
@@ -170,6 +174,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Return {
+            id: self.next_expression_id(),
             expression: expression.into(),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -222,6 +227,7 @@ impl<'source> Parser<'source> {
         }
 
         Expression::Tuple {
+            id: self.next_expression_id(),
             elements,
             ty: Type::uninferred(),
             span,
@@ -240,6 +246,7 @@ impl<'source> Parser<'source> {
         let expression = self.parse_expression();
 
         Expression::Assert {
+            id: self.next_expression_id(),
             expression: expression.into(),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -274,6 +281,7 @@ impl<'source> Parser<'source> {
         let body = self.parse_block_expression();
 
         Expression::For {
+            id: self.next_expression_id(),
             binding: Box::new(binding),
             iterable: iterable.into(),
             body: body.into(),
@@ -294,6 +302,7 @@ impl<'source> Parser<'source> {
         let body = self.parse_block_expression();
 
         Expression::While {
+            id: self.next_expression_id(),
             condition: condition.into(),
             body: body.into(),
             span: self.span_from_offset(start.byte_offset),
@@ -309,6 +318,7 @@ impl<'source> Parser<'source> {
         let body = self.parse_block_expression();
 
         Expression::WhileLet {
+            id: self.next_expression_id(),
             pattern,
             scrutinee: scrutinee.into(),
             body: body.into(),
@@ -323,6 +333,7 @@ impl<'source> Parser<'source> {
         let body = self.parse_block_expression();
 
         Expression::Loop {
+            id: self.next_expression_id(),
             body: body.into(),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -340,6 +351,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Break {
+            id: self.next_expression_id(),
             value,
             span: self.span_from_offset(start.byte_offset),
         }
@@ -351,6 +363,7 @@ impl<'source> Parser<'source> {
         self.next();
 
         Expression::Continue {
+            id: self.next_expression_id(),
             span: self.span_from_offset(start.byte_offset),
         }
     }

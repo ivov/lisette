@@ -12,7 +12,6 @@ use crate::control_flow::fallible_blocks::TryBlockPairPlan;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::source_name::SourceName;
 use crate::plan::bodies::{Statement, define};
-use crate::plan::calls::CallableOrigin;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{ComponentBinding, ComponentKind};
@@ -350,14 +349,13 @@ impl Planner<'_> {
         if !lowered.is_result() || lowered.is_bridged() {
             return None;
         }
-        let nil_guard = match lowered.origin {
-            CallableOrigin::GoInterop => {
-                if lowered.has_tuple_payload(self) {
-                    return None;
-                }
-                lowered.nil_guard
+        let nil_guard = if lowered.from_go {
+            if lowered.has_tuple_payload(self) {
+                return None;
             }
-            _ => None,
+            lowered.nil_guard
+        } else {
+            None
         };
         Some(ResultFusePlan {
             subject: lowered.call,

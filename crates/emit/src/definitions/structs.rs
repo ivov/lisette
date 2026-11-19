@@ -333,15 +333,22 @@ impl Planner<'_> {
         let other = synthesized_local_name("other", &receiver, &receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
+        let qualified = self.facts.qualified_current(name);
+        let mut recipes = self
+            .facts
+            .synthesized_field_equalities(qualified.as_str())
+            .iter();
         let comparisons: Vec<GoExpression> = fields
             .iter()
             .map(|f| {
+                let recipe = recipes
+                    .next()
+                    .expect("internal error: the checker records the equality of every field");
                 let go_field = struct_field_go_name(f, attributes);
                 let field = |base: &GoIdentifier| {
                     GoExpression::selector(GoExpression::identifier(base.clone()), go_field.clone())
                 };
-
-                self.equality_expression(field(&receiver), field(&other), &f.ty, generics)
+                self.equality_expression(field(&receiver), field(&other), recipe)
             })
             .collect();
         let body = comparisons

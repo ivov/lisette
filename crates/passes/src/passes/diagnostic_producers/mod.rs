@@ -4,18 +4,19 @@ mod unused_expressions;
 use diagnostics::LisetteDiagnostic;
 use rayon::prelude::*;
 
+use semantics::facts::Selections;
 use semantics::store::Store;
 
 use super::{PARALLEL_THRESHOLD, source_file_work};
 
-pub(crate) fn run_all(store: &Store) -> Vec<LisetteDiagnostic> {
+pub(crate) fn run_all(store: &Store, selections: &Selections) -> Vec<LisetteDiagnostic> {
     let work = source_file_work(store);
 
     if work.len() < PARALLEL_THRESHOLD {
         let mut local = Vec::new();
         for (package, file) in &work {
             generics::run(&file.items, &mut local);
-            unused_expressions::run(&file.items, &package.id, store, &mut local);
+            unused_expressions::run(&file.items, &package.id, store, selections, &mut local);
         }
         return local;
     }
@@ -25,7 +26,7 @@ pub(crate) fn run_all(store: &Store) -> Vec<LisetteDiagnostic> {
         .map(|(package, file)| {
             let mut local = Vec::new();
             generics::run(&file.items, &mut local);
-            unused_expressions::run(&file.items, &package.id, store, &mut local);
+            unused_expressions::run(&file.items, &package.id, store, selections, &mut local);
             local
         })
         .collect();

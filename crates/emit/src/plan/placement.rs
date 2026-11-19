@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::analyze::facts::EmitFacts;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::calls::native::{is_clip_safe_path, slice_growth_call};
 use crate::context::expression::ExpressionContext;
@@ -20,7 +21,7 @@ use crate::types::go_type::GoType;
 use std::slice;
 use syntax::ast::Pattern;
 use syntax::ast::{Expression, Literal};
-use syntax::program::CallKind;
+use syntax::program::CallOperation;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
@@ -35,27 +36,26 @@ pub(crate) fn unreachable_panic_if_needed(
     (place.is_return() && !is_exhaustive).then(|| LoweredStatement::UnreachablePanic.into())
 }
 
-fn calls_a_function(expression: &Expression) -> bool {
-    let Expression::Call { call_kind, .. } = expression else {
-        return false;
-    };
+fn calls_a_function(operation: Option<&CallOperation>) -> bool {
     matches!(
-        call_kind,
-        CallKind::Regular
-            | CallKind::UfcsMethod
-            | CallKind::NativeMethod(_)
-            | CallKind::NativeMethodIdentifier(_)
-            | CallKind::ReceiverMethodUfcs { .. }
+        operation,
+        Some(
+            CallOperation::Function
+                | CallOperation::BoundMethod { .. }
+                | CallOperation::UfcsFunction
+                | CallOperation::Native { .. }
+                | CallOperation::ReceiverMethod { .. }
+        )
     )
 }
 
 /// True when discarding `expression` is safe to omit: its value has no
 /// side effects. `FormatString` and `Slice` literals are excluded since they
 /// can hold sub-expressions that do.
-fn is_side_effect_free_discard(expression: &Expression) -> bool {
+fn is_side_effect_free_discard(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
     match expression {
         Expression::Unit { .. } => true,
-        _ if is_zero_call(expression) => true,
+        _ if is_zero_call(facts, expression) => true,
         Expression::Literal { literal, .. } => matches!(
             literal,
             Literal::Integer { .. }
@@ -69,14 +69,8 @@ fn is_side_effect_free_discard(expression: &Expression) -> bool {
     }
 }
 
-pub(crate) fn is_zero_call(expression: &Expression) -> bool {
-    matches!(
-        expression.unwrap_parens(),
-        Expression::Call {
-            call_kind: CallKind::Zero,
-            ..
-        }
-    )
+pub(crate) fn is_zero_call(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
+    matches!(facts.call_operation(expression), Some(CallOperation::Zero))
 }
 
 /// A `target = value` assignment with no lvalue capture, after the value's setup.
@@ -332,10 +326,11 @@ impl ElidableTail {
     }
 }
 
-pub(crate) fn try_elide_tail_let(
-    items: &[Expression],
+pub(crate) fn try_elide_tail_let<'i>(
+    facts: &EmitFacts<'_>,
+    items: &'i [Expression],
     elidable: ElidableTail,
-) -> Option<(&Expression, &[Expression])> {
+) -> Option<(&'i Expression, &'i [Expression])> {
     if items.len() < 2 {
         return None;
     }
@@ -364,7 +359,8 @@ pub(crate) fn try_elide_tail_let(
     let Pattern::Identifier { identifier, .. } = &binding.pattern else {
         return None;
     };
-    if identifier != tail_name {
+    // The values of `<CF>` take only the adaptation into `X`, so a conversion of `X` itself needs the binding.
+    if identifier != tail_name || facts.checked(last).value_use().adaptation.converts() {
         return None;
     }
     if !elidable.accepts(value.as_ref()) {
@@ -425,8 +421,10 @@ impl Planner<'_> {
     pub(crate) fn is_unit_call(&self, expression: &Expression) -> bool {
         // `zero<()>()` yields a value rather than running for its effect.
         self.facts.resolves_to_unit(&expression.get_type())
-            && matches!(expression.unwrap_parens(), Expression::Call { call_kind, .. }
-                if *call_kind != CallKind::Zero)
+            && self
+                .facts
+                .call_operation(expression)
+                .is_some_and(|operation| *operation != CallOperation::Zero)
     }
 
     pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
@@ -442,7 +440,7 @@ impl Planner<'_> {
     pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<Statement> {
         let unwrapped = value.unwrap_parens();
 
-        if is_side_effect_free_discard(unwrapped) {
+        if is_side_effect_free_discard(&self.facts, unwrapped) {
             return Vec::new();
         }
 
@@ -489,7 +487,10 @@ impl Planner<'_> {
 
         let staged = self.plan_operand(value, ExpressionContext::value());
         let (mut statements, staged_value) = staged.into_parts();
-        if calls_a_function(unwrapped) && staged_value.stands_as_a_statement() {
+        if calls_a_function(self.facts.call_operation(unwrapped))
+            && matches!(unwrapped, Expression::Call { .. })
+            && staged_value.stands_as_a_statement()
+        {
             statements.push(expression_statement(staged_value));
         } else {
             statements.push(discard(staged_value));
@@ -861,8 +862,8 @@ impl Planner<'_> {
     /// Lower `last` as a tail value. Tuple literals widen slot types to the
     /// return-slot types.
     pub(crate) fn lower_tail_value(&mut self, last: &Expression) -> (Vec<Statement>, GoExpression) {
-        let plan = if let Expression::Tuple { elements, ty, .. } = last {
-            self.plan_tuple_value(elements, ty, true)
+        let plan = if let Expression::Tuple { .. } = last {
+            self.plan_tuple_value(last, true)
         } else if matches!(
             last,
             Expression::For { .. } | Expression::While { .. } | Expression::WhileLet { .. }

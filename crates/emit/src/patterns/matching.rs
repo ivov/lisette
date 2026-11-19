@@ -1558,7 +1558,8 @@ mod tests {
         classify_selective_partial_arms, prelude_constructor, prelude_variant,
     };
     use syntax::ast::{
-        ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern, Span,
+        ConstructorPatternResolution, Expression, ExpressionId, IdentifierResolution, MatchArm,
+        Pattern, Span,
     };
     use syntax::types::Type;
 
@@ -1589,6 +1590,7 @@ mod tests {
             pattern,
             guard: None,
             expression: Box::new(Expression::Unit {
+                id: ExpressionId::parsed(0, 7),
                 ty: Type::unit(),
                 span: Span::dummy(),
             }),
@@ -1630,6 +1632,7 @@ mod tests {
     fn prelude_constructor_reads_the_resolved_definition_not_the_spelling() {
         let classify = |value: &str, definition: &str| {
             prelude_constructor(&Expression::Identifier {
+                id: ExpressionId::parsed(0, 6),
                 value: value.into(),
                 ty: Type::uninferred(),
                 span: Span::dummy(),

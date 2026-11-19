@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use crate::checker::EnvResolve;
 use syntax::ast::{BindingId, Expression, Span};
-use syntax::program::{Definition, DefinitionBody, DotAccessResolution, ReceiverCoercion};
+use syntax::program::{
+    CallOperation, Definition, DefinitionBody, DotAccessResolution, ReceiverCoercion,
+};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 use super::super::addressability::check_is_non_addressable;
@@ -21,12 +23,11 @@ impl InferCtx<'_> {
 
         // Array methods live on the size-erased prelude `Array` impl, reached via
         // the `method_lookup_key` bridge, with the size ignored in receiver unify.
-        let (method_ty, is_exported, resolved_definition) = if let Type::Array { .. } =
+        let (selected, is_exported, resolved_definition) = if let Type::Array { .. } =
             &arguments.deref_ty
         {
             (
-                self.method_of_type(store, &arguments.deref_ty, arguments.member_name)
-                    .map(|method| method.ty)?,
+                self.method_of_type(store, &arguments.deref_ty, arguments.member_name)?,
                 true,
                 self.resolve_instance_method_definition(&arguments.deref_ty, arguments.member_name),
             )
@@ -38,28 +39,28 @@ impl InferCtx<'_> {
                 return None;
             }
 
-            let method_ty =
+            let selected =
                 self.method_of_type(store, &arguments.deref_ty, arguments.member_name)?;
 
             if self.is_type_level_receiver(arguments.expression)
                 && self.method_is_promoted(&arguments.deref_ty, arguments.member_name)
             {
-                return self.as_promoted_method_expression(arguments, &method_ty.ty);
+                return self.as_promoted_method_expression(arguments, &selected.method.ty);
             }
 
             let resolved_definition = self.check_instance_method_access(
                 &arguments.deref_ty,
-                &method_ty.ty,
+                &selected.method.ty,
                 arguments,
                 None,
             );
 
-            let is_exported = method_ty.visibility.is_public()
+            let is_exported = selected.method.visibility.is_public()
                 || self.is_dot_access_exported(&arguments.deref_ty, arguments.member_name);
-            (method_ty.ty, is_exported, resolved_definition)
+            (selected, is_exported, resolved_definition)
         };
 
-        let (mut method_ty, instantiation) = self.instantiate(&method_ty);
+        let (mut method_ty, instantiation) = self.instantiate(&selected.method.ty);
 
         if !matches!(method_ty, Type::Function(_)) {
             return None;
@@ -108,15 +109,29 @@ impl InferCtx<'_> {
 
         self.unify_member_expectation(arguments, &method_ty);
 
-        Some(arguments.build_dot_access(
+        self.record_receiver_change(arguments.expression, receiver_coercion);
+        let dot_access = arguments.build_dot_access(
             method_ty,
             DotAccessResolution::InstanceMethod {
                 is_exported,
                 receiver_coercion,
                 definition: resolved_definition,
-                instantiation,
+                instantiation: instantiation.clone(),
             },
-        ))
+        );
+        let operation = match selected.bound {
+            Some(bound) => CallOperation::BoundMethod {
+                bound,
+                method: arguments.member_name.into(),
+            },
+            None => CallOperation::Function,
+        };
+        let mut type_arguments = selected.owner_arguments;
+        for (name, argument) in instantiation.iter() {
+            type_arguments.insert(name.clone(), argument.clone());
+        }
+        self.record_callee(&dot_access, operation, type_arguments);
+        Some(dot_access)
     }
 
     /// The binding whose reference a writing method writes through, leaving

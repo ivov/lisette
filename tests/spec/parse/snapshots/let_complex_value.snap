@@ -142,7 +142,6 @@ description: |
                                     byte_offset: 43,
                                     byte_length: 21,
                                 },
-                                call_kind: Unresolved,
                             },
                             ty: Var {
                                 id: uninferred,

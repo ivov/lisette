@@ -301,8 +301,12 @@ impl SubstitutionMap {
         self.0.iter().map(|(name, _)| name)
     }
 
-    fn iter(&self) -> impl Iterator<Item = (&EcoString, &Type)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&EcoString, &Type)> {
         self.0.iter().map(|(name, ty)| (name, ty))
+    }
+
+    pub fn types(&self) -> impl ExactSizeIterator<Item = &Type> + Clone {
+        self.0.iter().map(|(_, ty)| ty)
     }
 
     pub fn types_mut(&mut self) -> impl Iterator<Item = &mut Type> {

@@ -4,6 +4,7 @@ use crate::checker::infer::context::{
 };
 use syntax::ast::BindingKind;
 use syntax::ast::{Expression, IfLetAlternative, MatchArm, Pattern, Span};
+use syntax::program::ValueUseKey;
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
@@ -109,9 +110,12 @@ impl InferCtx<'_> {
                 if arm.is_never() || arm.is_error() {
                     continue;
                 }
-                let (unification, reported) = self.tracking_diagnostics(|this| {
-                    this.try_unify(&result_ty, &branch.ty, &branch.span)
+                let ((unification, reported), witnesses) = self.selecting_witnesses(|this| {
+                    this.tracking_diagnostics(|this| {
+                        this.try_unify(&result_ty, &branch.ty, &branch.span)
+                    })
                 });
+                self.attach_witnesses(&branch.values, &witnesses);
                 if unification.is_err() && !reported {
                     let result = result_ty.resolve_in(&self.env);
                     self.sink.push(diagnostics::infer::branch_type_mismatch(
@@ -242,10 +246,12 @@ impl InferCtx<'_> {
                     BranchArm {
                         ty: consequence_ty.clone(),
                         span: consequence_span,
+                        values: vec![ValueUseKey::value(&new_consequence)],
                     },
                     BranchArm {
                         ty: alternative_ty.clone(),
                         span: alternative_span,
+                        values: vec![ValueUseKey::value(new_alternative)],
                     },
                 ],
                 &span,
@@ -266,6 +272,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
         Expression::If {
+            id: self.fresh_expression_id(),
             condition: new_condition.into(),
             consequence: new_consequence.into(),
             alternative: new_alternative.map(Box::new),
@@ -285,6 +292,7 @@ impl InferCtx<'_> {
             self.infer_match_arms(subject, arms, MatchArmsKind::Match, span, expected_ty);
 
         Expression::Match {
+            id: self.fresh_expression_id(),
             subject: new_subject.into(),
             arms: new_arms,
             ty: result_ty,
@@ -311,6 +319,7 @@ impl InferCtx<'_> {
         let (alternative, else_span) = match alternative {
             IfLetAlternative::Absent => (
                 Expression::Unit {
+                    id: self.fresh_expression_id(),
                     ty: Type::uninferred(),
                     span,
                 },
@@ -347,7 +356,15 @@ impl InferCtx<'_> {
         let wildcard_arm = new_arms.pop().expect("if-let has an else arm");
         let pattern_arm = new_arms.pop().expect("if-let has a pattern arm");
 
+        let id = self.fresh_expression_id();
+        if else_span.is_none() {
+            self.facts
+                .value_uses
+                .implicit_units
+                .push((id, wildcard_arm.expression.id()));
+        }
         Expression::IfLet {
+            id,
             pattern: pattern_arm.pattern,
             scrutinee: new_scrutinee.into(),
             consequence: pattern_arm.expression,
@@ -449,6 +466,7 @@ impl InferCtx<'_> {
                 .map(|arm| BranchArm {
                     ty: arm.expression.get_type(),
                     span: arm.expression.get_span(),
+                    values: vec![ValueUseKey::value(&arm.expression)],
                 })
                 .collect();
             self.reconcile_and_unify(&result_ty, &branches, &span);

@@ -1,11 +1,11 @@
 use syntax::EcoString;
 use syntax::ast::{Generic, Span, StructFields, VariantFields};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{Definition, DefinitionBody, EqualityRecipe};
 use syntax::types::{FunctionParameter, Symbol, Type};
 
 use super::{TaskState, resolved_generic_bounds, wrap_with_impl_generics};
 use crate::checker::infer::expressions::comparison::{
-    check_not_equatable, param_is_comparable, param_is_equatable,
+    check_not_equatable, param_is_comparable, param_is_equatable, select_equality,
 };
 use crate::checker::registration::derived_attributes::{
     DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
@@ -255,10 +255,10 @@ impl TaskState {
             })
             .collect();
 
-        for id in ids {
+        for id in &ids {
             let id_str = id.as_str();
             let visibility = equals_visibility(store, id_str);
-            let classification = user_equals(store, &id);
+            let classification = user_equals(store, id);
             if store.is_ufcs_method(id_str, "equals")
                 && matches!(
                     classification,
@@ -282,6 +282,15 @@ impl TaskState {
                         .insert_declared_method(id.to_string(), visibility);
                 }
             }
+        }
+        for id in ids {
+            if !store.equality_index.is_synthesized(id.as_str()) {
+                continue;
+            }
+            let fields = synthesized_field_equalities(store, &id);
+            store
+                .equality_index
+                .insert_synthesized_fields(id.to_string(), fields);
         }
     }
 
@@ -396,5 +405,32 @@ fn type_generics(definition: &Definition) -> Option<Vec<Generic>> {
             Some(generics.clone())
         }
         _ => None,
+    }
+}
+
+/// The equality that the synthesized `equals` of `id` tests each field with, in declaration order.
+fn synthesized_field_equalities(store: &Store, id: &Symbol) -> Vec<EqualityRecipe> {
+    let package = store
+        .package_for_qualified_name(id.as_str())
+        .unwrap_or_default();
+    let Some(definition) = store.get_definition(id.as_str()) else {
+        return Vec::new();
+    };
+    let select = |generics: &[Generic], ty: &Type| select_equality(store, ty, package, generics);
+    match &definition.body {
+        DefinitionBody::Struct {
+            generics, fields, ..
+        } => fields
+            .iter()
+            .map(|field| select(generics, &field.ty))
+            .collect(),
+        DefinitionBody::Enum {
+            generics, variants, ..
+        } => variants
+            .iter()
+            .flat_map(|variant| variant.fields.iter())
+            .map(|field| select(generics, &field.ty))
+            .collect(),
+        _ => Vec::new(),
     }
 }

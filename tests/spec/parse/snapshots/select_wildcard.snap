@@ -75,7 +75,6 @@ description: |
                                         byte_offset: 33,
                                         byte_length: 16,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                         ],

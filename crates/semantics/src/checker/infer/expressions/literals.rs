@@ -202,7 +202,12 @@ impl InferCtx<'_> {
                 (Literal::FormatString(new_parts), string_ty)
             }
         };
-        Expression::Literal { literal, ty, span }
+        Expression::Literal {
+            id: self.fresh_expression_id(),
+            literal,
+            ty,
+            span,
+        }
     }
 
     fn hole_would_interpolate(&self, name: &str) -> bool {
@@ -216,14 +221,22 @@ impl InferCtx<'_> {
     pub(super) fn infer_unit(&mut self, ty: Type, span: Span, expected_ty: &Type) -> Expression {
         if matches!(ty, Type::Error) {
             self.unify(expected_ty, &ty, &span);
-            return Expression::Unit { ty, span };
+            return Expression::Unit {
+                id: self.fresh_expression_id(),
+                ty,
+                span,
+            };
         }
 
         let new_ty = self.new_type_var();
         let unit_ty = Type::unit();
         self.unify(&new_ty, &unit_ty, &span);
         self.unify(expected_ty, &new_ty, &span);
-        Expression::Unit { ty: new_ty, span }
+        Expression::Unit {
+            id: self.fresh_expression_id(),
+            ty: new_ty,
+            span,
+        }
     }
 }
 

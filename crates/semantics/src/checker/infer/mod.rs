@@ -1,10 +1,12 @@
 pub(crate) mod addressability;
 mod context;
+mod equality;
 pub(crate) mod expressions;
 mod generic_obligations;
 pub(crate) mod interface;
 mod unify;
 mod validation;
+mod value_uses;
 
 pub use context::InferCtx;
 pub(crate) use unify::BuiltinBound;
@@ -116,6 +118,7 @@ impl InferCtx<'_> {
                     folder.freeze_facts(&mut state.facts);
                     FreezeFolder::new(&state.env, store).freeze_items(inferred_items)
                 };
+                context.finalize_value_uses(&frozen_items, file_id);
 
                 InferredFile {
                     id: file_id,

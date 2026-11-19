@@ -63,15 +63,17 @@ impl Planner<'_> {
         else {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
-        let receiver_coercion = resolution.receiver_coercion().filter(|coercion| {
-            *coercion != ReceiverCoercion::AutoAddress
-                || !self.has_go_value_receiver(&expression.get_type(), member)
-        });
+        let receiver_coercion =
+            self.facts
+                .checked(expression)
+                .receiver_change()
+                .filter(|coercion| {
+                    *coercion != ReceiverCoercion::AutoAddress
+                        || !self.has_go_value_receiver(&expression.get_type(), member)
+                });
         let tagged_twin = self.selects_tagged_twin(dot_access);
 
-        if let Some(expression) =
-            self.try_emit_pre_receiver_dot(member, result_ty, resolution, tagged_twin, ctx)
-        {
+        if let Some(expression) = self.try_emit_pre_receiver_dot(dot_access, tagged_twin, ctx) {
             let plan = ValuePlan::computed(Vec::new(), expression);
             if matches!(resolution, DotAccessResolution::EnumVariant { .. }) {
                 return plan.with_stability(Stability::Fixed);
@@ -123,7 +125,7 @@ impl Planner<'_> {
         if let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) {
             let receiver_type = self.facts.strip_and_peel(&expression_ty);
             let adapter = self
-                .dynamic_interface_adapter(&receiver_type, &bound, true)
+                .dynamic_interface_adapter(&receiver_type, &bound, None)
                 .expect("a dispatched bound has an adapter");
             let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
             setup.extend(adapter_setup);
@@ -178,7 +180,7 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, wrapped);
         }
         let expression =
-            self.append_cross_package_type_args(selector, &expression_ty, resolution, ctx);
+            self.append_cross_package_type_args(selector, dot_access, &expression_ty, ctx);
         let expression = if let Some(package) = expression_ty.as_import_namespace()
             && self.go_constant_exceeds_int(package, member, result_ty)
         {
@@ -197,18 +199,25 @@ impl Planner<'_> {
 
     fn try_emit_pre_receiver_dot(
         &mut self,
-        member: &str,
-        result_ty: &Type,
-        resolution: &DotAccessResolution,
+        dot_access: &Expression,
         tagged_twin: bool,
         ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
+        let Expression::DotAccess {
+            member,
+            ty: result_ty,
+            resolution,
+            ..
+        } = dot_access
+        else {
+            return None;
+        };
         match resolution {
             DotAccessResolution::EnumVariant { definition, .. } => {
                 self.emit_enum_variant_dot(definition, result_ty, ctx)
             }
             DotAccessResolution::StaticMethod { definition, .. } => {
-                Some(self.emit_static_method_dot(definition, resolution, ctx))
+                Some(self.emit_static_method_dot(dot_access, definition, ctx))
             }
             DotAccessResolution::InstanceMethodValue {
                 is_exported,
@@ -392,14 +401,14 @@ impl Planner<'_> {
     fn append_cross_package_type_args(
         &mut self,
         base_access: GoExpression,
+        dot_access: &Expression,
         expression_ty: &Type,
-        resolution: &DotAccessResolution,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
         if ctx.is_callee() || expression_ty.as_import_namespace().is_none() {
             return base_access;
         }
-        match self.format_value_type_args(resolution.definition(), resolution.instantiation()) {
+        match self.format_value_type_args(dot_access) {
             Some(type_args) => GoExpression::instantiation(base_access, type_args),
             None => base_access,
         }

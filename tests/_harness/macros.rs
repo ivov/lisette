@@ -24,7 +24,7 @@ macro_rules! assert_parse_snapshot {
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {
-            insta::assert_debug_snapshot!(parse_result.ast);
+            insta::assert_snapshot!($crate::_harness::syntax_tree_snapshot(&parse_result.ast));
         });
     };
 }

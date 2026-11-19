@@ -1,6 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{ConstructorPatternResolution, Expression, Pattern};
-use syntax::program::{CallKind, resolved_definition};
+use syntax::program::{CallOperation, resolved_definition};
 use syntax::types::{GO_IMPORT_PREFIX, unqualified_name};
 
 pub fn check_unreachable_partial_err(expression: &Expression, ctx: &NodeCtx<'_>) {
@@ -26,13 +26,18 @@ pub fn check_unreachable_partial_err(expression: &Expression, ctx: &NodeCtx<'_>)
     }
     let Expression::Call {
         expression: callee,
-        call_kind: CallKind::Regular,
         ty,
         ..
     } = scrutinee.unwrap_parens()
     else {
         return;
     };
+    if !matches!(
+        ctx.facts.selections.call_operation(scrutinee),
+        Some(CallOperation::Function | CallOperation::BoundMethod { .. })
+    ) {
+        return;
+    }
     // Lisette functions can construct Err even with a non-nilable value type.
     let Some(callee_id) = resolved_definition(callee).filter(|id| id.starts_with(GO_IMPORT_PREFIX))
     else {

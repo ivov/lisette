@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use diagnostics::{IndexedSource, LisetteDiagnostic};
 use passes::Analysis;
 use syntax::ParseError;
@@ -43,6 +45,15 @@ pub fn format_project_diagnostic_for_snapshot(
 /// Escapes carriage returns, which insta's YAML literal blocks cannot round-trip.
 pub fn snapshot_description(input: &str) -> String {
     input.replace('\r', "\\r")
+}
+
+/// The debug form of a syntax tree without its occurrence IDs, which carry no syntax.
+pub fn syntax_tree_snapshot(tree: &impl Debug) -> String {
+    format!("{tree:#?}")
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("id: ExpressionId("))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub fn format_parse_error_for_snapshot(error: &ParseError, source: &str, filename: &str) -> String {

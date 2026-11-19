@@ -59,7 +59,6 @@ description: |
                                             byte_offset: 29,
                                             byte_length: 11,
                                         },
-                                        call_kind: Unresolved,
                                     },
                                     consequence: Block {
                                         items: [
@@ -114,7 +113,6 @@ description: |
                                         byte_offset: 69,
                                         byte_length: 9,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {

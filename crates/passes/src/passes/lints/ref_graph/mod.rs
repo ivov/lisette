@@ -134,7 +134,7 @@ fn run_ref_lints(
     let files_with_aliases: Vec<_> = files
         .values()
         .filter(|file| !file.is_d_lis())
-        .map(|file| (file, AliasMap::build(file, store)))
+        .map(|file| (file, AliasMap::build(file, store, &facts.selections)))
         .collect();
     collect_items(&files_with_aliases, &package.id, equality_index, &mut graph);
 

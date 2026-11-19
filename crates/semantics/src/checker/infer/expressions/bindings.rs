@@ -108,6 +108,7 @@ impl InferCtx<'_> {
         }
 
         Expression::Const {
+            id: self.fresh_expression_id(),
             binding,
             doc,
             identifier,
@@ -284,6 +285,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &unit_ty, &span);
 
         Expression::Let {
+            id: self.fresh_expression_id(),
             binding: Box::new(new_binding),
             value: new_value.into(),
             mode: new_mode,

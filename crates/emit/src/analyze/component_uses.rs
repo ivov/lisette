@@ -205,12 +205,13 @@ fn binds_payload(pattern: &Pattern) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syntax::ast::Span;
+    use syntax::ast::{ExpressionId, Span};
     use syntax::program::DotAccessResolution;
     use syntax::types::Type;
 
     fn local(id: u32) -> Expression {
         Expression::Identifier {
+            id: ExpressionId::parsed(0, 3),
             value: "value".into(),
             ty: Type::unit(),
             span: Span::dummy(),
@@ -220,6 +221,7 @@ mod tests {
 
     fn component() -> Expression {
         Expression::DotAccess {
+            id: ExpressionId::parsed(0, 2),
             expression: Box::new(local(1)),
             member: "0".into(),
             ty: Type::unit(),
@@ -242,6 +244,7 @@ mod tests {
     #[test]
     fn mutation_rejects_component_lowering_in_either_order() {
         let mutation = Expression::Assignment {
+            id: ExpressionId::parsed(0, 1),
             target: Box::new(local(1)),
             value: Box::new(local(2)),
             compound_operator: None,

@@ -6,7 +6,7 @@ use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::plan::bodies::Statement;
 use crate::plan::values::ValuePlan;
 use syntax::ast::{Expression, UnaryOperator};
-use syntax::program::CallKind;
+use syntax::program::CallOperation;
 
 struct FusedPredicate<'a> {
     producer: FallibleProducer<'a>,
@@ -35,13 +35,18 @@ impl Planner<'_> {
             expression: callee,
             args,
             spread,
-            call_kind,
             ..
         } = expression
         else {
             return None;
         };
-        if !args.is_empty() || spread.is_some() || *call_kind != CallKind::Regular {
+        if !args.is_empty()
+            || spread.is_some()
+            || !matches!(
+                self.facts.call_operation(expression),
+                Some(CallOperation::Function | CallOperation::BoundMethod { .. })
+            )
+        {
             return None;
         }
         let Expression::DotAccess {

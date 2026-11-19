@@ -93,7 +93,6 @@ description: |
                                     byte_offset: 38,
                                     byte_length: 9,
                                 },
-                                call_kind: Unresolved,
                             },
                             index: Identifier {
                                 value: "key",

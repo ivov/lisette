@@ -1,5 +1,6 @@
 use std::iter;
 
+use crate::analyze::facts::EmitFacts;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern, collect_pattern_bindings};
 use syntax::program::{DotAccessResolution, ReceiverCoercion};
@@ -13,10 +14,14 @@ pub(crate) struct ReusableBindings {
 }
 
 impl ReusableBindings {
-    pub(crate) fn of_function(params: &[Binding], body: &Expression) -> Self {
+    pub(crate) fn of_function(
+        params: &[Binding],
+        body: &Expression,
+        facts: &EmitFacts<'_>,
+    ) -> Self {
         let mut hidden = HashMap::default();
         let mut shared = HashSet::default();
-        collect(body, params, false, &mut hidden, &mut shared);
+        collect(body, params, false, facts, &mut hidden, &mut shared);
         hidden.retain(|_, id| !shared.contains(id));
         Self { hidden }
     }
@@ -49,6 +54,7 @@ fn collect(
     expression: &Expression,
     params: &[Binding],
     captured: bool,
+    facts: &EmitFacts<'_>,
     hidden: &mut HashMap<BindingId, BindingId>,
     shared: &mut HashSet<BindingId>,
 ) {
@@ -72,7 +78,7 @@ fn collect(
             captured
         }
         Expression::Lambda { params, body, .. } => {
-            collect(body, params, true, hidden, shared);
+            collect(body, params, true, facts, hidden, shared);
             return;
         }
         Expression::Task { .. } | Expression::Defer { .. } => true,
@@ -93,18 +99,17 @@ fn collect(
             ..
         } if let Expression::DotAccess {
             expression: receiver,
-            resolution,
             ..
         } = callee.unwrap_parens() =>
         {
-            if resolution.receiver_coercion() == Some(ReceiverCoercion::AutoAddress) {
+            if facts.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoAddress) {
                 shared.extend(receiver.root_binding_id());
             }
             for child in iter::once(receiver.as_ref())
                 .chain(args)
                 .chain(spread.as_deref())
             {
-                collect(child, &[], captured, hidden, shared);
+                collect(child, &[], captured, facts, hidden, shared);
             }
             return;
         }
@@ -122,7 +127,7 @@ fn collect(
         _ => captured,
     };
     for child in expression.children() {
-        collect(child, &[], captured, hidden, shared);
+        collect(child, &[], captured, facts, hidden, shared);
     }
 }
 

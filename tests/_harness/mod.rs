@@ -12,7 +12,7 @@ pub mod wrap;
 pub use builders::*;
 pub use emit::{emit_with_go_typedefs, emit_with_sourcemap};
 pub use filesystem::MockFileSystem;
-pub use formatting::snapshot_description;
+pub use formatting::{snapshot_description, syntax_tree_snapshot};
 pub use infer::{InferResult, infer, infer_package, infer_with_go_typedefs};
 use syntax::program::ValueKind;
 

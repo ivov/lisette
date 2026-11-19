@@ -144,7 +144,6 @@ description: |
                             byte_offset: 58,
                             byte_length: 5,
                         },
-                        call_kind: Unresolved,
                     },
                 ],
                 ty: Var {
@@ -248,7 +247,6 @@ description: |
                                 byte_offset: 98,
                                 byte_length: 12,
                             },
-                            call_kind: Unresolved,
                         },
                         consequence: Block {
                             items: [
@@ -289,7 +287,6 @@ description: |
                                         byte_offset: 113,
                                         byte_length: 10,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {
@@ -364,7 +361,6 @@ description: |
                                     byte_offset: 142,
                                     byte_length: 12,
                                 },
-                                call_kind: Unresolved,
                             },
                             arms: [
                                 MatchArm {
@@ -467,7 +463,6 @@ description: |
                                             byte_offset: 189,
                                             byte_length: 10,
                                         },
-                                        call_kind: Unresolved,
                                     },
                                 },
                             ],

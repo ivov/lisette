@@ -138,7 +138,7 @@ impl<'a> Formatter<'a> {
             Expression::Select { arms, span, .. } => self.select(arms, span),
             Expression::Propagate { expression, .. } => self.propagate_(expression),
             Expression::Reference { expression, .. } => self.ref_(expression),
-            Expression::RawGo { text } => Self::raw_go(text),
+            Expression::RawGo { text, .. } => Self::raw_go(text),
 
             Expression::TryBlock { items, span, .. } => self.try_block(items, span),
             Expression::RecoverBlock { items, span, .. } => self.recover_block(items, span),

@@ -1,6 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::checker::scopes::{RecoverBlockContext, TryBlockContext, TryCarrier, TryUsage};
-use syntax::ast::{Expression, Span};
+use syntax::ast::{Expression, ExpressionId, Span};
+use syntax::program::ValueUseKey;
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
@@ -27,11 +28,13 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::recover_cannot_use_question_mark(span));
         }
 
+        let id = self.fresh_expression_id();
         let tried_ty = self.new_type_var();
         let new_expression = self.infer_expression(*expression, &tried_ty);
         if in_recover_block {
             let ty = self.propagate_as_error(expected_ty, span);
             return Expression::Propagate {
+                id,
                 expression: new_expression.into(),
                 ty,
                 span,
@@ -73,16 +76,22 @@ impl InferCtx<'_> {
                     .push(diagnostics::infer::mixed_carriers_in_try_block(span));
             }
 
-            return self.infer_propagate_in_block(
-                new_expression,
+            let ty = self.infer_propagate_in_block(
+                new_expression.id(),
                 &resolved_tried_ty,
                 &try_types,
                 span,
                 expected_ty,
             );
+            return Expression::Propagate {
+                id,
+                expression: new_expression.into(),
+                ty,
+                span,
+            };
         }
 
-        self.infer_propagate_in_function(new_expression, &resolved_tried_ty, span, expected_ty)
+        self.infer_propagate_in_function(id, new_expression, &resolved_tried_ty, span, expected_ty)
     }
 
     fn propagate_as_error(&mut self, expected_ty: &Type, span: Span) -> Type {
@@ -92,18 +101,18 @@ impl InferCtx<'_> {
 
     fn infer_propagate_in_block(
         &mut self,
-        new_expression: Expression,
+        operand: ExpressionId,
         tried_ty: &Type,
         try_types: &TryBlockTypes,
         span: Span,
         expected_ty: &Type,
-    ) -> Expression {
-        let ty = if tried_ty.is_error() {
+    ) -> Type {
+        if tried_ty.is_error() {
             self.propagate_as_error(expected_ty, span)
         } else if tried_ty.is_result() || tried_ty.is_option() {
             let ok_ty = tried_ty.ok_type();
             if tried_ty.is_result() {
-                self.check_propagated_error(&try_types.error, &tried_ty.err_type(), &span);
+                self.check_propagated_error(operand, &try_types.error, &tried_ty.err_type(), &span);
             }
             if ok_ty.resolve_in(&self.env).is_variable() {
                 self.unify(&try_types.ok, &ok_ty, &span);
@@ -112,17 +121,12 @@ impl InferCtx<'_> {
             ok_ty
         } else {
             self.propagate_as_error(expected_ty, span)
-        };
-
-        Expression::Propagate {
-            expression: new_expression.into(),
-            ty,
-            span,
         }
     }
 
     fn infer_propagate_in_function(
         &mut self,
+        id: ExpressionId,
         new_expression: Expression,
         tried_ty: &Type,
         span: Span,
@@ -147,6 +151,7 @@ impl InferCtx<'_> {
 
             if resolved_fn_return.is_result() {
                 self.check_propagated_error(
+                    new_expression.id(),
                     &resolved_fn_return.err_type(),
                     &tried_ty.err_type(),
                     &span,
@@ -188,14 +193,29 @@ impl InferCtx<'_> {
         };
 
         Expression::Propagate {
+            id,
             expression: new_expression.into(),
             ty,
             span,
         }
     }
 
-    fn check_propagated_error(&mut self, declared_err: &Type, operand_err: &Type, span: &Span) {
-        match self.try_unify(declared_err, operand_err, span) {
+    fn check_propagated_error(
+        &mut self,
+        operand: ExpressionId,
+        declared_err: &Type,
+        operand_err: &Type,
+        span: &Span,
+    ) {
+        let (unified, witnesses) =
+            self.selecting_witnesses(|this| this.try_unify(declared_err, operand_err, span));
+        self.record_obligation(
+            ValueUseKey::propagated_error(operand),
+            operand_err.clone(),
+            declared_err.clone(),
+            witnesses,
+        );
+        match unified {
             Ok(()) | Err(UnifyError::AlreadyReported) => {}
             Err(_) => {
                 let declared = declared_err.resolve_in(&self.env);
@@ -227,6 +247,7 @@ impl InferCtx<'_> {
             let block_ty = self.type_result(store, unit_ty, err_ty);
             self.unify(expected_ty, &block_ty, &span);
             return Expression::TryBlock {
+                id: self.fresh_expression_id(),
                 items: vec![],
                 ty: block_ty,
                 try_keyword_span,
@@ -295,6 +316,7 @@ impl InferCtx<'_> {
 
         self.unify(expected_ty, &block_ty, &try_keyword_span);
         Expression::TryBlock {
+            id: self.fresh_expression_id(),
             items: new_items,
             ty: block_ty,
             try_keyword_span,
@@ -321,6 +343,7 @@ impl InferCtx<'_> {
             let block_ty = self.type_result(store, unit_ty, panic_value_ty);
             self.unify(expected_ty, &block_ty, &span);
             return Expression::RecoverBlock {
+                id: self.fresh_expression_id(),
                 items: vec![],
                 ty: block_ty,
                 recover_keyword_span,
@@ -354,6 +377,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &block_ty, &recover_keyword_span);
 
         Expression::RecoverBlock {
+            id: self.fresh_expression_id(),
             items: new_items,
             ty: block_ty,
             recover_keyword_span,

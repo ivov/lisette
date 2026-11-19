@@ -467,6 +467,7 @@ impl<'source> Parser<'source> {
         }
 
         Expression::Function {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,
@@ -505,6 +506,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::TypeAlias {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,

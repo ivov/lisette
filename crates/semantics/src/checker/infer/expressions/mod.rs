@@ -24,7 +24,6 @@ pub mod select;
 pub mod struct_call;
 
 use syntax::ast::{BinaryOperator, CallTypeArguments, Expression, Span};
-use syntax::program::CallKind;
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
@@ -51,15 +50,20 @@ impl InferCtx<'_> {
         expected_ty: &Type,
         is_subexpression: bool,
     ) -> Expression {
-        let inferred = self.infer_expression_kind(expression, expected_ty, is_subexpression);
-        // Poison what a failed expression feeds, so later uses stay silent.
-        if inferred.get_type().resolve_in(&self.env).is_error() {
-            self.unify(expected_ty, &Type::Error, &inferred.get_span());
-        }
+        let (inferred, witnesses) = self.selecting_witnesses(|this| {
+            let inferred = this.infer_expression_kind(expression, expected_ty, is_subexpression);
+            // Poison what a failed expression feeds, so later uses stay silent.
+            if inferred.get_type().resolve_in(&this.env).is_error() {
+                this.unify(expected_ty, &Type::Error, &inferred.get_span());
+            }
+            inferred
+        });
+        self.record_value_use(&inferred, expected_ty, witnesses);
         inferred
     }
 
-    fn infer_expression_kind(
+    /// Infer `expression` in place of the node being inferred, which records its own value use.
+    pub(super) fn infer_expression_kind(
         &mut self,
         expression: Expression,
         expected_ty: &Type,
@@ -74,7 +78,7 @@ impl InferCtx<'_> {
             )
         {
             return self.with_dot_access_base(false, |state| {
-                state.infer_expression_at(expression, expected_ty, is_subexpression)
+                state.infer_expression_kind(expression, expected_ty, is_subexpression)
             });
         }
 
@@ -95,7 +99,7 @@ impl InferCtx<'_> {
                 ..
             } => self.infer_lambda(params, return_annotation, body, span, expected_ty),
 
-            Expression::Unit { ty, span } => self.infer_unit(ty, span, expected_ty),
+            Expression::Unit { ty, span, .. } => self.infer_unit(ty, span, expected_ty),
 
             Expression::Identifier {
                 ref value, span, ..
@@ -163,6 +167,7 @@ impl InferCtx<'_> {
                 receiver_name,
                 generics,
                 span,
+                ..
             } => self.infer_impl_block(annotation, methods, receiver_name, generics, span),
 
             Expression::Interface { .. } => self.infer_interface(expression),
@@ -172,6 +177,7 @@ impl InferCtx<'_> {
                 value,
                 compound_operator,
                 span,
+                ..
             } => self.infer_assignment(target, value, compound_operator, span),
 
             Expression::Return {
@@ -209,7 +215,7 @@ impl InferCtx<'_> {
                 span,
                 ..
             } => match self.lower_pipeline(*left, *right, span) {
-                Ok(lowered) => self.infer_expression_at(lowered, expected_ty, is_subexpression),
+                Ok(lowered) => self.infer_expression_kind(lowered, expected_ty, is_subexpression),
                 Err(rejected) => self.infer_rejected_pipeline(rejected, expected_ty, span),
             },
 
@@ -308,7 +314,9 @@ impl InferCtx<'_> {
                 name_span,
                 alias,
                 span,
+                ..
             } => Expression::PackageImport {
+                id: self.fresh_expression_id(),
                 name,
                 name_span,
                 alias,
@@ -330,9 +338,14 @@ impl InferCtx<'_> {
                 ..
             } => self.infer_cast(expression, target_type, span, expected_ty),
 
-            Expression::Break { value, span } => self.infer_break(value, span, is_subexpression),
-            Expression::Continue { span } => self.infer_continue(span, is_subexpression),
-            Expression::RawGo { text } => Expression::RawGo { text },
+            Expression::Break { value, span, .. } => {
+                self.infer_break(value, span, is_subexpression)
+            }
+            Expression::Continue { span, .. } => self.infer_continue(span, is_subexpression),
+            Expression::RawGo { text, .. } => Expression::RawGo {
+                id: self.fresh_expression_id(),
+                text,
+            },
         }
     }
 
@@ -407,13 +420,13 @@ impl InferCtx<'_> {
 
         match right {
             Expression::Identifier { .. } | Expression::DotAccess { .. } => Ok(Expression::Call {
+                id: self.fresh_expression_id(),
                 expression: Box::new(right),
                 args: vec![left],
                 spread: None,
                 type_arguments: CallTypeArguments::none(),
                 ty: Type::uninferred(),
                 span,
-                call_kind: CallKind::Unresolved,
             }),
             Expression::Call {
                 expression,
@@ -421,7 +434,6 @@ impl InferCtx<'_> {
                 mut spread,
                 type_arguments,
                 ty,
-                call_kind,
                 ..
             } => {
                 let (has_placeholder, repeated) = {
@@ -449,13 +461,13 @@ impl InferCtx<'_> {
                     spread = Some(Box::new(left));
                 }
                 Ok(Expression::Call {
+                    id: self.fresh_expression_id(),
                     expression,
                     args,
                     spread,
                     type_arguments,
                     ty,
                     span,
-                    call_kind,
                 })
             }
             Expression::Propagate {
@@ -498,6 +510,7 @@ impl InferCtx<'_> {
             .collect();
         self.unify(expected_ty, &Type::Error, &span);
         Expression::Tuple {
+            id: self.fresh_expression_id(),
             elements,
             ty: Type::Error,
             span,

@@ -1,11 +1,13 @@
 use super::helpers::{is_bare_identifier, is_zero_literal};
 use crate::passes::walk::NodeCtx;
+use semantics::facts::Selections;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, Literal, Pattern, Span};
-use syntax::program::{CallKind, NativeTypeKind};
+use syntax::program::{CallOperation, NativeTypeKind};
 
 pub fn check_append_to_zero_filled(expression: &Expression, ctx: &NodeCtx) {
-    if let Some(receiver) = growing_append_receiver(expression)
-        && let Some(make) = zero_filled_make_call(receiver.unwrap_parens())
+    let selections = &ctx.facts.selections;
+    if let Some(receiver) = growing_append_receiver(expression, selections)
+        && let Some(make) = zero_filled_make_call(receiver.unwrap_parens(), selections)
     {
         ctx.sink.push(diagnostics::lint::append_to_zero_filled(
             &make.span,
@@ -24,7 +26,7 @@ pub fn check_append_to_zero_filled(expression: &Expression, ctx: &NodeCtx) {
         };
         if let Some(FirstUse::AppendReceiver(append_span)) = items[index + 1..]
             .iter()
-            .find_map(|later| first_use(later, binding_id))
+            .find_map(|later| first_use(later, binding_id, &ctx.facts.selections))
         {
             ctx.sink.push(diagnostics::lint::append_to_zero_filled(
                 &make.span,
@@ -43,10 +45,9 @@ struct MakeCall {
 }
 
 /// `Slice.make(n)` with `n` not a literal zero, which has no zeros to append after.
-fn zero_filled_make_call(expression: &Expression) -> Option<MakeCall> {
+fn zero_filled_make_call(expression: &Expression, selections: &Selections) -> Option<MakeCall> {
     let Expression::Call {
         expression: callee,
-        call_kind: CallKind::NativeConstructor(NativeTypeKind::Slice),
         args,
         span,
         ty,
@@ -55,6 +56,15 @@ fn zero_filled_make_call(expression: &Expression) -> Option<MakeCall> {
     else {
         return None;
     };
+    if !matches!(
+        selections.call_operation(expression),
+        Some(CallOperation::NativeConstructor {
+            kind: NativeTypeKind::Slice,
+            ..
+        })
+    ) {
+        return None;
+    }
     let length_arg = args.first()?;
     if is_zero_literal(length_arg.unwrap_parens()) {
         return None;
@@ -92,7 +102,7 @@ fn zero_filled_make_binding(item: &Expression, ctx: &NodeCtx) -> Option<(Binding
     else {
         return None;
     };
-    let make = zero_filled_make_call(value.unwrap_parens())?;
+    let make = zero_filled_make_call(value.unwrap_parens(), &ctx.facts.selections)?;
     let (id, _) = ctx
         .facts
         .bindings
@@ -108,13 +118,17 @@ enum FirstUse {
 
 /// A reassignment target is not a use, so `x = x.append(1)` classifies by its
 /// right side, and a right side not involving `x` replaces the tracked value.
-fn first_use(expression: &Expression, binding_id: BindingId) -> Option<FirstUse> {
+fn first_use(
+    expression: &Expression,
+    binding_id: BindingId,
+    selections: &Selections,
+) -> Option<FirstUse> {
     if let Expression::Assignment { target, value, .. } = expression
         && is_binding(target, binding_id)
     {
-        return first_use(value, binding_id).or(Some(FirstUse::Other));
+        return first_use(value, binding_id, selections).or(Some(FirstUse::Other));
     }
-    if let Some(receiver) = growing_append_receiver(expression)
+    if let Some(receiver) = growing_append_receiver(expression, selections)
         && is_binding(receiver, binding_id)
     {
         return Some(FirstUse::AppendReceiver(expression.get_span()));
@@ -124,14 +138,14 @@ fn first_use(expression: &Expression, binding_id: BindingId) -> Option<FirstUse>
     }
     if let Some((unconditional, branches)) = branch_parts(expression) {
         for part in unconditional {
-            if let Some(found) = first_use(part, binding_id) {
+            if let Some(found) = first_use(part, binding_id, selections) {
                 return Some(found);
             }
         }
-        return first_use_across_branches(&branches, binding_id);
+        return first_use_across_branches(&branches, binding_id, selections);
     }
     for child in expression.children() {
-        if let Some(found) = first_use(child, binding_id) {
+        if let Some(found) = first_use(child, binding_id, selections) {
             return Some(found);
         }
     }
@@ -173,10 +187,14 @@ fn branch_parts(expression: &Expression) -> Option<(Vec<&Expression>, Vec<&Expre
     }
 }
 
-fn first_use_across_branches(branches: &[&Expression], binding_id: BindingId) -> Option<FirstUse> {
+fn first_use_across_branches(
+    branches: &[&Expression],
+    binding_id: BindingId,
+    selections: &Selections,
+) -> Option<FirstUse> {
     let mut append_span = None;
     for branch in branches {
-        match first_use(branch, binding_id) {
+        match first_use(branch, binding_id, selections) {
             Some(FirstUse::Other) => return Some(FirstUse::Other),
             Some(FirstUse::AppendReceiver(span)) => {
                 append_span.get_or_insert(span);
@@ -189,31 +207,36 @@ fn first_use_across_branches(branches: &[&Expression], binding_id: BindingId) ->
 
 /// The receiver of a `receiver.append(...)` or `Slice.append(receiver, ...)`
 /// call that appends at least one element.
-fn growing_append_receiver(expression: &Expression) -> Option<&Expression> {
+fn growing_append_receiver<'e>(
+    expression: &'e Expression,
+    selections: &Selections,
+) -> Option<&'e Expression> {
     let Expression::Call {
         expression: callee,
         args,
         spread,
-        call_kind,
         ..
     } = expression
     else {
         return None;
     };
-    match call_kind {
-        CallKind::NativeMethod(NativeTypeKind::Slice) => {
-            let Expression::DotAccess {
-                expression: receiver,
-                member,
-                ..
-            } = callee.unwrap_parens()
-            else {
-                return None;
-            };
-            (member == "append" && (!args.is_empty() || spread.is_some()))
-                .then(|| receiver.as_ref())
-        }
-        CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => {
+    if !matches!(
+        selections.call_operation(expression),
+        Some(CallOperation::Native {
+            kind: NativeTypeKind::Slice,
+            ..
+        })
+    ) {
+        return None;
+    }
+    match callee.unwrap_parens() {
+        Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } => (member == "append" && (!args.is_empty() || spread.is_some()))
+            .then(|| receiver.as_ref()),
+        _ => {
             if !is_bare_identifier(callee, "Slice.append") {
                 return None;
             }
@@ -221,7 +244,6 @@ fn growing_append_receiver(expression: &Expression) -> Option<&Expression> {
                 .then(|| args.first())
                 .flatten()
         }
-        _ => None,
     }
 }
 

@@ -95,5 +95,5 @@ mod tests {
         );
     }
 
-    const PINNED: usize = 99;
+    const PINNED: usize = 100;
 }

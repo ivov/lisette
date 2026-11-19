@@ -4,13 +4,16 @@ use super::helpers::{
 };
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
+use semantics::facts::Selections;
 use semantics::store::Store;
 use std::slice;
 use syntax::ast::{Expression, Span};
-use syntax::program::{CallKind, NativeTypeKind};
+use syntax::program::{CallOperation, NativeTypeKind};
 
 pub fn check_manual_find(expression: &Expression, ctx: &NodeCtx) {
-    let Some((span, filter_call, index)) = native_slice_method(expression, "get") else {
+    let Some((span, filter_call, index)) =
+        native_slice_method(expression, "get", &ctx.facts.selections)
+    else {
         return;
     };
 
@@ -18,7 +21,8 @@ pub fn check_manual_find(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let Some((_, receiver, predicate)) = native_slice_method(filter_call.unwrap_parens(), "filter")
+    let Some((_, receiver, predicate)) =
+        native_slice_method(filter_call.unwrap_parens(), "filter", &ctx.facts.selections)
     else {
         return;
     };
@@ -51,15 +55,26 @@ pub fn check_manual_find(expression: &Expression, ctx: &NodeCtx) {
 fn native_slice_method<'a>(
     expression: &'a Expression,
     name: &str,
+    selections: &Selections,
 ) -> Option<(&'a Span, &'a Expression, &'a Expression)> {
     let Expression::Call {
-        call_kind, span, ..
+        expression: callee,
+        span,
+        ..
     } = expression
     else {
         return None;
     };
 
-    if !matches!(call_kind, CallKind::NativeMethod(NativeTypeKind::Slice)) {
+    if !matches!(callee.unwrap_parens(), Expression::DotAccess { .. })
+        || !matches!(
+            selections.call_operation(expression),
+            Some(CallOperation::Native {
+                kind: NativeTypeKind::Slice,
+                ..
+            })
+        )
+    {
         return None;
     }
 

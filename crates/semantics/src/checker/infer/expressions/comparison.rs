@@ -9,7 +9,7 @@ use crate::checker::scopes::Scopes;
 use crate::store::Store;
 use syntax::ast::Generic;
 use syntax::ast::{Annotation, Expression, Span, StructFields};
-use syntax::program::AliasKind;
+use syntax::program::{AliasKind, ElementEquality, EqualityRecipe};
 use syntax::program::{DefinitionBody, Visibility, interface_instances, interface_requirements};
 use syntax::types::{CompoundKind, Type, substitute};
 
@@ -379,6 +379,60 @@ fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
 fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
     let resolved = store.peel_alias(ty);
     resolved.is_unknown() || store.is_interface(&resolved)
+}
+
+/// The equality of two values of `ty` seen from `package`, where a bound in `generics` can give a type parameter an `equals`.
+pub(crate) fn select_equality(
+    store: &Store,
+    ty: &Type,
+    package: &str,
+    generics: &[Generic],
+) -> EqualityRecipe {
+    let peeled = store.peel_alias(ty);
+    let element = |element: Option<Type>| {
+        let element = element?;
+        let recipe = select_equality(store, &element, package, generics);
+        (recipe != EqualityRecipe::Operator).then(|| {
+            Box::new(ElementEquality {
+                ty: element,
+                recipe,
+            })
+        })
+    };
+    if peeled.is_ref() {
+        return EqualityRecipe::Operator;
+    }
+    if peeled.is_slice() {
+        return EqualityRecipe::Slice(element(peeled.inner()));
+    }
+    if peeled.is_map() {
+        let value = peeled
+            .as_compound()
+            .and_then(|(_, arguments)| arguments.get(1).cloned());
+        return EqualityRecipe::Map(element(value));
+    }
+    if let Type::Parameter(name) = &peeled {
+        let declares_equals = generics
+            .iter()
+            .find(|generic| generic.name == *name)
+            .and_then(Generic::resolved_bounds)
+            .is_some_and(|mut bounds| {
+                bounds.any(|bound| {
+                    interface_bound_guarantees_equals(store, &store.peel_alias(bound), name)
+                })
+            });
+        return if declares_equals {
+            EqualityRecipe::Method { owner: None }
+        } else {
+            EqualityRecipe::Operator
+        };
+    }
+    match peeled.get_qualified_id() {
+        Some(id) if type_has_usable_equals(store, &peeled, package) => EqualityRecipe::Method {
+            owner: Some(id.into()),
+        },
+        _ => EqualityRecipe::Operator,
+    }
 }
 
 fn type_has_usable_equals(store: &Store, ty: &Type, current_package: &str) -> bool {

@@ -159,7 +159,7 @@ impl Planner<'_> {
         let (check_setup, check) = self.hoist_propagate_check_var(expression);
         statements.extend(check_setup);
         statements.push(
-            self.build_propagate_failure_check(&check, &fallible, &expression.get_type())
+            self.build_propagate_failure_check(&check, &fallible, expression)
                 .into(),
         );
 
@@ -228,8 +228,9 @@ impl Planner<'_> {
         &mut self,
         check: &GoExpression,
         fallible: &Fallible,
-        expression_ty: &Type,
+        expression: &Expression,
     ) -> LoweredStatement {
+        let expression_ty = &expression.get_type();
         let return_layout = self.value_layout(&self.return_ctx().expect_ty(), SlotOrigin::Lisette);
         let source_layout = self.value_layout(expression_ty, SlotOrigin::Lisette);
         let (setup, values) = if self.returns_tagged_type(expression_ty)
@@ -253,7 +254,8 @@ impl Planner<'_> {
             } else {
                 check.clone()
             };
-            let (failure_setup, values) = self.propagate_failure_values(fallible, err_expr);
+            let (failure_setup, values) =
+                self.propagate_failure_values(expression, fallible, err_expr);
             setup.extend(failure_setup);
             (setup, values)
         };
@@ -278,13 +280,14 @@ impl Planner<'_> {
 
     fn propagate_failure_values(
         &mut self,
+        operand: &Expression,
         fallible: &Fallible,
         err_expr: GoExpression,
     ) -> (Vec<Statement>, Vec<GoExpression>) {
         let mut setup = Vec::new();
         let error = fallible
             .is_result()
-            .then(|| self.convert_error_to_return_context(&mut setup, err_expr, fallible));
+            .then(|| self.convert_error_to_return_context(&mut setup, operand, err_expr, fallible));
         let values = self.failure_return_values(fallible, error);
         (setup, values)
     }
@@ -370,7 +373,8 @@ impl Planner<'_> {
         };
 
         let error = self.wrap_error(&wraps, outcome());
-        let (failure_setup, failure_values) = self.propagate_failure_values(fallible, error);
+        let (failure_setup, failure_values) =
+            self.propagate_failure_values(expression, fallible, error);
         statements.push(
             transition::tag_check_with_initializer(
                 initializer,
@@ -382,7 +386,8 @@ impl Planner<'_> {
         );
         if let Some(guard) = nil_guard {
             let error = self.wrap_error(&wraps, unexpected_nil_error());
-            let (nil_setup, nil_failure) = self.propagate_failure_values(fallible, error);
+            let (nil_setup, nil_failure) =
+                self.propagate_failure_values(expression, fallible, error);
             statements.push(
                 transition::tag_check(guard.is_nil(guarded_value()), nil_setup, nil_failure).into(),
             );
@@ -557,7 +562,8 @@ impl Planner<'_> {
                     )
                 }
             };
-        let (values_setup, failure_values) = self.propagate_failure_values(fallible, error);
+        let (values_setup, failure_values) =
+            self.propagate_failure_values(expression, fallible, error);
         failure_setup.extend(values_setup);
         statements.push(
             transition::tag_check_with_initializer(
@@ -757,7 +763,8 @@ impl Planner<'_> {
         );
         failure_setup.extend(error_setup);
         let error = self.apply_error_mappers(&mut failure_setup, &mappers, error, Some(stability));
-        let (values_setup, failure_values) = self.propagate_failure_values(fallible, error);
+        let (values_setup, failure_values) =
+            self.propagate_failure_values(expression, fallible, error);
         failure_setup.extend(values_setup);
         statements.push(
             transition::tag_check(
@@ -978,7 +985,7 @@ impl Planner<'_> {
 
         let mut statements = Vec::new();
 
-        if is_go_never(expression) {
+        if is_go_never(&self.facts, expression) {
             let (setup, call) = self
                 .lower_call(expression, None, ExpressionContext::value())
                 .into_parts();
@@ -1103,10 +1110,10 @@ impl Planner<'_> {
             }
             Some(shape)
                 if shape.has_flattened_payload()
-                    && let Expression::Tuple { elements, .. } = args[0].unwrap_parens() =>
+                    && let tuple @ Expression::Tuple { .. } = args[0].unwrap_parens() =>
             {
                 let (setup, parts) =
-                    transition::lowered_tuple_literal_values(self, elements, fallible.ok_ty());
+                    transition::lowered_tuple_literal_values(self, tuple, fallible.ok_ty());
                 statements.extend(setup);
                 statements.push(transition::multi_value_return(
                     transition::lowered_ok_values(shape, parts),

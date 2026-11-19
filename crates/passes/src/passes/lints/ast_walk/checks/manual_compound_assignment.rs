@@ -10,6 +10,7 @@ pub fn check_manual_compound_assignment(expression: &Expression, ctx: &NodeCtx) 
         value,
         compound_operator: None,
         span,
+        ..
     } = expression
     else {
         return;

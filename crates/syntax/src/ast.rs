@@ -1,7 +1,7 @@
 use ecow::EcoString;
 
 use crate::lex::rune_codepoint;
-use crate::program::{CallKind, DotAccessResolution};
+use crate::program::DotAccessResolution;
 use crate::types;
 use crate::types::Type;
 use fmt::Formatter;
@@ -1463,12 +1463,41 @@ impl Span {
     }
 }
 
+/// Names one expression occurrence of a program.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExpressionId {
+    file_id: u32,
+    index: u32,
+}
+
+impl ExpressionId {
+    /// The occurrence that the parser numbered `index` in its file.
+    pub fn parsed(file_id: u32, index: u32) -> Self {
+        Self { file_id, index }
+    }
+
+    /// The occurrence that the checker built as its `index`th node of a file.
+    pub fn generated(file_id: u32, index: u32) -> Self {
+        Self {
+            file_id,
+            index: u32::MAX - index,
+        }
+    }
+}
+
+impl fmt::Debug for ExpressionId {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write!(formatter, "ExpressionId({}:{})", self.file_id, self.index)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Literal {
         literal: Literal,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Function {
         doc: Option<String>,
@@ -1483,6 +1512,7 @@ pub enum Expression {
         body: FunctionBody,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Lambda {
         params: Vec<Binding>,
@@ -1490,11 +1520,13 @@ pub enum Expression {
         body: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Block {
         items: Vec<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Let {
         binding: Box<Binding>,
@@ -1502,12 +1534,14 @@ pub enum Expression {
         mode: LetMode,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Identifier {
         value: EcoString,
         ty: Type,
         span: Span,
         resolution: IdentifierResolution,
+        id: ExpressionId,
     },
     Call {
         expression: Box<Expression>,
@@ -1516,7 +1550,7 @@ pub enum Expression {
         type_arguments: CallTypeArguments,
         ty: Type,
         span: Span,
-        call_kind: CallKind,
+        id: ExpressionId,
     },
     If {
         condition: Box<Expression>,
@@ -1524,6 +1558,7 @@ pub enum Expression {
         alternative: Option<Box<Expression>>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     IfLet {
         pattern: Pattern,
@@ -1532,17 +1567,20 @@ pub enum Expression {
         alternative: IfLetAlternative,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Match {
         subject: Box<Expression>,
         arms: Vec<MatchArm>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Tuple {
         elements: Vec<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     StructCall {
         name: EcoString,
@@ -1550,6 +1588,7 @@ pub enum Expression {
         spread: StructSpread,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     DotAccess {
         expression: Box<Expression>,
@@ -1557,34 +1596,40 @@ pub enum Expression {
         ty: Type,
         span: Span,
         resolution: DotAccessResolution,
+        id: ExpressionId,
     },
     Assignment {
         target: Box<Expression>,
         value: Box<Expression>,
         compound_operator: Option<BinaryOperator>,
         span: Span,
+        id: ExpressionId,
     },
     Return {
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Propagate {
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     TryBlock {
         items: Vec<Expression>,
         ty: Type,
         try_keyword_span: Span,
         span: Span,
+        id: ExpressionId,
     },
     RecoverBlock {
         items: Vec<Expression>,
         ty: Type,
         recover_keyword_span: Span,
         span: Span,
+        id: ExpressionId,
     },
     ImplBlock {
         annotation: Annotation,
@@ -1593,6 +1638,7 @@ pub enum Expression {
         generics: Vec<Generic>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Binary {
         operator: BinaryOperator,
@@ -1600,17 +1646,20 @@ pub enum Expression {
         right: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Unary {
         operator: UnaryOperator,
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Paren {
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Const {
         binding: Option<BindingId>,
@@ -1622,6 +1671,7 @@ pub enum Expression {
         visibility: Visibility,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     VariableDeclaration {
         doc: Option<String>,
@@ -1632,38 +1682,46 @@ pub enum Expression {
         visibility: Visibility,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     RawGo {
         text: String,
+        id: ExpressionId,
     },
     Loop {
         body: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     While {
         condition: Box<Expression>,
         body: Box<Expression>,
         span: Span,
+        id: ExpressionId,
     },
     WhileLet {
         pattern: Pattern,
         scrutinee: Box<Expression>,
         body: Box<Expression>,
         span: Span,
+        id: ExpressionId,
     },
     For {
         binding: Box<Binding>,
         iterable: Box<Expression>,
         body: Box<Expression>,
         span: Span,
+        id: ExpressionId,
     },
     Break {
         value: Option<Box<Expression>>,
         span: Span,
+        id: ExpressionId,
     },
     Continue {
         span: Span,
+        id: ExpressionId,
     },
     Enum {
         doc: Option<String>,
@@ -1674,6 +1732,7 @@ pub enum Expression {
         variants: Vec<EnumVariant>,
         visibility: Visibility,
         span: Span,
+        id: ExpressionId,
     },
     Struct {
         doc: Option<String>,
@@ -1684,6 +1743,7 @@ pub enum Expression {
         fields: StructFields,
         visibility: Visibility,
         span: Span,
+        id: ExpressionId,
     },
     TypeAlias {
         doc: Option<String>,
@@ -1695,17 +1755,20 @@ pub enum Expression {
         ty: Type,
         visibility: Visibility,
         span: Span,
+        id: ExpressionId,
     },
     PackageImport {
         name: EcoString,
         name_span: Span,
         alias: Option<ImportAlias>,
         span: Span,
+        id: ExpressionId,
     },
     Reference {
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Interface {
         doc: Option<String>,
@@ -1717,6 +1780,7 @@ pub enum Expression {
         method_signatures: Vec<Expression>,
         visibility: Visibility,
         span: Span,
+        id: ExpressionId,
     },
     IndexedAccess {
         expression: Box<Expression>,
@@ -1724,30 +1788,36 @@ pub enum Expression {
         ty: Type,
         span: Span,
         from_colon_syntax: bool,
+        id: ExpressionId,
     },
     Task {
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Defer {
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Assert {
         expression: Box<Expression>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Select {
         arms: Vec<SelectArm>,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Unit {
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Range {
         start: Option<Box<Expression>>,
@@ -1755,16 +1825,69 @@ pub enum Expression {
         inclusive: bool,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
     Cast {
         expression: Box<Expression>,
         target_type: Annotation,
         ty: Type,
         span: Span,
+        id: ExpressionId,
     },
 }
 
 impl Expression {
+    /// The occurrence that this node is, which names its checked records.
+    pub fn id(&self) -> ExpressionId {
+        match self {
+            Self::Literal { id, .. }
+            | Self::Function { id, .. }
+            | Self::Lambda { id, .. }
+            | Self::Block { id, .. }
+            | Self::Let { id, .. }
+            | Self::Identifier { id, .. }
+            | Self::Call { id, .. }
+            | Self::If { id, .. }
+            | Self::IfLet { id, .. }
+            | Self::Match { id, .. }
+            | Self::Tuple { id, .. }
+            | Self::StructCall { id, .. }
+            | Self::DotAccess { id, .. }
+            | Self::Assignment { id, .. }
+            | Self::Return { id, .. }
+            | Self::Propagate { id, .. }
+            | Self::TryBlock { id, .. }
+            | Self::RecoverBlock { id, .. }
+            | Self::ImplBlock { id, .. }
+            | Self::Binary { id, .. }
+            | Self::Unary { id, .. }
+            | Self::Paren { id, .. }
+            | Self::Const { id, .. }
+            | Self::VariableDeclaration { id, .. }
+            | Self::RawGo { id, .. }
+            | Self::Loop { id, .. }
+            | Self::While { id, .. }
+            | Self::WhileLet { id, .. }
+            | Self::For { id, .. }
+            | Self::Break { id, .. }
+            | Self::Continue { id, .. }
+            | Self::Enum { id, .. }
+            | Self::Struct { id, .. }
+            | Self::TypeAlias { id, .. }
+            | Self::PackageImport { id, .. }
+            | Self::Reference { id, .. }
+            | Self::Interface { id, .. }
+            | Self::IndexedAccess { id, .. }
+            | Self::Task { id, .. }
+            | Self::Defer { id, .. }
+            | Self::Assert { id, .. }
+            | Self::Select { id, .. }
+            | Self::Unit { id, .. }
+            | Self::Range { id, .. }
+            | Self::Cast { id, .. } => *id,
+        }
+    }
+
     pub(crate) fn is_block(&self) -> bool {
         matches!(self, Expression::Block { .. })
     }
@@ -2474,171 +2597,27 @@ impl Expression {
         }
     }
 
-    pub(crate) fn set_public(self) -> Self {
-        match self {
-            Expression::Enum {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                variants,
-                span,
-                ..
-            } => Expression::Enum {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                variants,
-                visibility: Visibility::Public,
-                span,
-            },
+    pub(crate) fn set_public(mut self) -> Self {
+        match &mut self {
             Expression::Struct {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                fields,
-                span,
-                ..
+                fields, visibility, ..
             } => {
-                let fields = match fields {
-                    StructFields::Tuple(fields) => StructFields::Tuple(
-                        fields
-                            .into_iter()
-                            .map(|f| StructFieldDefinition {
-                                visibility: Visibility::Public,
-                                ..f
-                            })
-                            .collect(),
-                    ),
-                    StructFields::Record(fields) => StructFields::Record(fields),
-                };
-                Expression::Struct {
-                    doc,
-                    attributes,
-                    name,
-                    name_span,
-                    generics,
-                    fields,
-                    visibility: Visibility::Public,
-                    span,
+                if let StructFields::Tuple(fields) = fields {
+                    for field in fields {
+                        field.visibility = Visibility::Public;
+                    }
                 }
+                *visibility = Visibility::Public;
             }
-            Expression::Function {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                params,
-                return_annotation,
-                return_type,
-                body,
-                ty,
-                span,
-                ..
-            } => Expression::Function {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                params,
-                return_annotation,
-                return_type,
-                visibility: Visibility::Public,
-                body,
-                ty,
-                span,
-            },
-            Expression::Const {
-                binding,
-                doc,
-                identifier,
-                identifier_span,
-                annotation,
-                expression,
-                ty,
-                span,
-                ..
-            } => Expression::Const {
-                binding,
-                doc,
-                identifier,
-                identifier_span,
-                annotation,
-                expression,
-                visibility: Visibility::Public,
-                ty,
-                span,
-            },
-            Expression::VariableDeclaration {
-                doc,
-                attributes,
-                name,
-                name_span,
-                annotation,
-                ty,
-                span,
-                ..
-            } => Expression::VariableDeclaration {
-                doc,
-                attributes,
-                name,
-                name_span,
-                annotation,
-                visibility: Visibility::Public,
-                ty,
-                span,
-            },
-            Expression::TypeAlias {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                annotation,
-                ty,
-                span,
-                ..
-            } => Expression::TypeAlias {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                annotation,
-                ty,
-                visibility: Visibility::Public,
-                span,
-            },
-            Expression::Interface {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                parents,
-                method_signatures,
-                span,
-                ..
-            } => Expression::Interface {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                parents,
-                method_signatures,
-                visibility: Visibility::Public,
-                span,
-            },
-            expression => expression,
+            Expression::Enum { visibility, .. }
+            | Expression::Function { visibility, .. }
+            | Expression::Const { visibility, .. }
+            | Expression::VariableDeclaration { visibility, .. }
+            | Expression::TypeAlias { visibility, .. }
+            | Expression::Interface { visibility, .. } => *visibility = Visibility::Public,
+            _ => {}
         }
+        self
     }
 
     pub fn has_else(&self) -> bool {

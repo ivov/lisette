@@ -80,7 +80,6 @@ description: |
                                         byte_offset: 36,
                                         byte_length: 5,
                                     },
-                                    call_kind: Unresolved,
                                 },
                                 Unary {
                                     operator: Negative,

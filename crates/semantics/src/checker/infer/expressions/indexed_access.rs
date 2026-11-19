@@ -96,6 +96,7 @@ impl InferCtx<'_> {
         if resolved_collection_ty.is_error() {
             self.unify(expected_ty, &Type::Error, &span);
             return Expression::IndexedAccess {
+                id: self.fresh_expression_id(),
                 expression: collection_expression.into(),
                 index: index_expression.into(),
                 ty: Type::Error,
@@ -109,6 +110,7 @@ impl InferCtx<'_> {
                 collection_expression.get_span(),
             ));
             return Expression::IndexedAccess {
+                id: self.fresh_expression_id(),
                 expression: collection_expression.into(),
                 index: index_expression.into(),
                 ty: Type::Error,
@@ -129,6 +131,7 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::string_not_sliceable(span, receiver));
                 return Expression::IndexedAccess {
+                    id: self.fresh_expression_id(),
                     expression: collection_expression.into(),
                     index: index_expression.into(),
                     ty: Type::Error,
@@ -154,6 +157,7 @@ impl InferCtx<'_> {
                 self.unify(expected_ty, &result_ty, &span);
 
                 return Expression::IndexedAccess {
+                    id: self.fresh_expression_id(),
                     expression: collection_expression.into(),
                     index: index_expression.into(),
                     ty: result_ty,
@@ -176,6 +180,7 @@ impl InferCtx<'_> {
                 let Some(type_params) = resolved_collection_ty.get_type_params() else {
                     self.unify(expected_ty, &Type::Error, &span);
                     return Expression::IndexedAccess {
+                        id: self.fresh_expression_id(),
                         expression: collection_expression.into(),
                         index: index_expression.into(),
                         ty: Type::Error,
@@ -196,6 +201,7 @@ impl InferCtx<'_> {
                     receiver,
                 ));
                 return Expression::IndexedAccess {
+                    id: self.fresh_expression_id(),
                     expression: collection_expression.into(),
                     index: index_expression.into(),
                     ty: Type::Error,
@@ -209,6 +215,7 @@ impl InferCtx<'_> {
                     collection_expression.get_span(),
                 ));
                 return Expression::IndexedAccess {
+                    id: self.fresh_expression_id(),
                     expression: collection_expression.into(),
                     index: index_expression.into(),
                     ty: Type::Error,
@@ -232,6 +239,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &element_ty, &span);
 
         Expression::IndexedAccess {
+            id: self.fresh_expression_id(),
             expression: collection_expression.into(),
             index: index_expression.into(),
             ty: element_ty,
@@ -263,6 +271,7 @@ impl InferCtx<'_> {
         ));
 
         Expression::IndexedAccess {
+            id: self.fresh_expression_id(),
             expression: collection_expression.into(),
             index,
             ty: Type::Error,
@@ -288,6 +297,7 @@ impl InferCtx<'_> {
             self.unify(expected_ty, &Type::Error, &span);
             let inferred_range = self.infer_range_bounds_only(range);
             return Expression::IndexedAccess {
+                id: self.fresh_expression_id(),
                 expression: collection_expression.into(),
                 index: inferred_range.into(),
                 ty: Type::Error,
@@ -303,6 +313,7 @@ impl InferCtx<'_> {
             ));
             let inferred_range = self.infer_range_bounds_only(range);
             return Expression::IndexedAccess {
+                id: self.fresh_expression_id(),
                 expression: collection_expression.into(),
                 index: inferred_range.into(),
                 ty: Type::Error,
@@ -324,6 +335,7 @@ impl InferCtx<'_> {
             self.sink.push(diagnostic);
             let inferred_range = self.infer_range_bounds_only(range);
             return Expression::IndexedAccess {
+                id: self.fresh_expression_id(),
                 expression: collection_expression.into(),
                 index: inferred_range.into(),
                 ty: Type::Error,
@@ -365,6 +377,7 @@ impl InferCtx<'_> {
                 };
 
                 Expression::Range {
+                    id: self.fresh_expression_id(),
                     start: new_start,
                     end: new_end,
                     inclusive,
@@ -374,6 +387,7 @@ impl InferCtx<'_> {
             }
             _ => unreachable!("infer_slice_range_access called with non-range expression"),
         };
+        self.record_value_use(&range_expression, &range_expression.get_type(), Vec::new());
 
         let result_ty = Type::qualified_compound(
             CompoundKind::Slice,
@@ -384,6 +398,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &result_ty, &span);
 
         Expression::IndexedAccess {
+            id: self.fresh_expression_id(),
             expression: collection_expression.into(),
             index: range_expression.into(),
             ty: result_ty,
@@ -406,6 +421,7 @@ impl InferCtx<'_> {
                 let new_end = end.map(|e| Box::new(self.infer_expression(*e, &int_ty)));
 
                 Expression::Range {
+                    id: self.fresh_expression_id(),
                     start: new_start,
                     end: new_end,
                     inclusive,

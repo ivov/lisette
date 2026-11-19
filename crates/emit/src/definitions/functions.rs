@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::ReturnContext;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
+use crate::analyze::facts::EmitFacts;
 use crate::analyze::reusable_bindings::ReusableBindings;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
@@ -29,7 +30,6 @@ use syntax::EcoString;
 use syntax::ast::{
     Binding, Expression, FunctionDefinitionView, Pattern, SelectArm, collect_pattern_bindings,
 };
-use syntax::program::resolved_definition;
 use syntax::types::{Type, build_substitution_map, substitute};
 
 pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
@@ -370,6 +370,7 @@ impl Planner<'_> {
                 .set_reusable_bindings(ReusableBindings::of_function(
                     function_definition.params,
                     body,
+                    &self.facts,
                 ));
         }
 
@@ -624,11 +625,11 @@ impl Planner<'_> {
     }
 }
 
-pub(crate) fn is_go_never(expression: &Expression) -> bool {
+pub(crate) fn is_go_never(facts: &EmitFacts, expression: &Expression) -> bool {
     match expression {
         Expression::Return { .. } => true,
         Expression::Call { expression, .. } => {
-            resolved_definition(expression) == Some("prelude.panic")
+            facts.checked(expression).callee().definition.as_deref() == Some("prelude.panic")
         }
         _ => false,
     }

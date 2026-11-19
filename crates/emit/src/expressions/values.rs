@@ -1,10 +1,9 @@
 use crate::abi::is_closure_literal;
-use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::plan::bodies::AsyncKind;
-use syntax::program::DefinitionBody;
 use syntax::program::NativeOperation;
+use syntax::program::{Adaptation, DefinitionBody};
 
 use crate::abi::bridge::GoResultBridge;
 use crate::abi::callable::CallableReturnAbi;
@@ -25,7 +24,7 @@ use crate::types::go_type::returns_go_void;
 use crate::{Planner, ReturnContext};
 use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;
-use syntax::program::{CallKind, DotAccessResolution};
+use syntax::program::{CallOperation, DotAccessResolution};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -235,7 +234,7 @@ impl Planner<'_> {
                 resolution,
                 ..
             } => {
-                let go_expression = self.emit_identifier(value, resolution, ty, ctx);
+                let go_expression = self.emit_identifier(expression, value, resolution, ty, ctx);
                 let stability = match self
                     .scope
                     .resolve_identifier_with_resolution(value, resolution)
@@ -246,7 +245,7 @@ impl Planner<'_> {
                 ValuePlan::from_identifier_expression(go_expression, stability)
             }
             Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
-            Expression::RawGo { text } => ValuePlan::verbatim(text.clone()),
+            Expression::RawGo { text, .. } => ValuePlan::verbatim(text.clone()),
             Expression::Unit { .. } => ValuePlan::computed(
                 Vec::new(),
                 GoExpression::empty_composite(GoType::new("struct{}")),
@@ -300,20 +299,49 @@ impl Planner<'_> {
         }
     }
 
+    /// Coerce the elements of the tuple literal `tuple` into `slot_types`, which are the slots of the tuple itself when they differ from its own types. The nullable `Option` slots of a lowered return hold their values as lowered.
     pub(crate) fn coerce_elements_to_slots(
         &mut self,
         setup: &mut Vec<Statement>,
-        elements: &[Expression],
+        tuple: &Expression,
         values: Vec<GoExpression>,
         slot_types: &[Type],
+        lowered_return: bool,
     ) -> Vec<GoExpression> {
+        let Expression::Tuple { elements, ty, .. } = tuple else {
+            unreachable!("only a tuple literal has elements to coerce")
+        };
+        let tuple_use = self.facts.checked(tuple).value_use();
+        let placed = match (
+            self.facts.peel_alias(ty),
+            &tuple_use.adaptation,
+            self.facts.peel_alias(&tuple_use.slot),
+        ) {
+            (Type::Tuple(own), Adaptation::Tuple(adaptations), Type::Tuple(slots))
+                if own != slot_types =>
+            {
+                Some((adaptations, slots))
+            }
+            _ => None,
+        };
         let mut coerced_elements = Vec::with_capacity(values.len());
         for (index, (element, value)) in elements.iter().zip(values).enumerate() {
-            let Some(slot) = slot_types.get(index) else {
+            let Some(slot) = slot_types
+                .get(index)
+                .filter(|slot| !(lowered_return && self.facts.is_nullable_option(slot)))
+            else {
                 coerced_elements.push(value);
                 continue;
             };
-            let coercion = self.value_slot_coercion(element, slot);
+            let coercion = match placed
+                .as_ref()
+                .and_then(|(adaptations, slots)| adaptations.get(index).zip(slots.get(index)))
+            {
+                Some((adaptation, semantic)) => {
+                    self.adapted_slot_coercion(element, adaptation, semantic, slot)
+                }
+                None => self.value_slot_coercion(element, slot),
+            };
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             coerced_elements.push(coerced);
@@ -331,12 +359,10 @@ impl Planner<'_> {
         GoExpression::instantiation(callee, GoType::type_arguments(&slots))
     }
 
-    pub(crate) fn plan_tuple_value(
-        &mut self,
-        elements: &[Expression],
-        ty: &Type,
-        in_tail: bool,
-    ) -> ValuePlan {
+    pub(crate) fn plan_tuple_value(&mut self, tuple: &Expression, in_tail: bool) -> ValuePlan {
+        let Expression::Tuple { elements, ty, .. } = tuple else {
+            unreachable!("plan_tuple_value lowers a tuple literal")
+        };
         let inferred_slot_types: Vec<Type> = match ty {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
@@ -364,7 +390,7 @@ impl Planner<'_> {
         let mut setup = sequenced.setup;
 
         let element_expressions =
-            self.coerce_elements_to_slots(&mut setup, elements, sequenced.values, &slot_types);
+            self.coerce_elements_to_slots(&mut setup, tuple, sequenced.values, &slot_types, false);
         let callee = self.make_tuple_callee(&slot_types, element_expressions.len());
         ValuePlan::computed(setup, GoExpression::pure_call(callee, element_expressions))
     }
@@ -376,6 +402,7 @@ impl Planner<'_> {
     /// before the target type is formatted).
     pub(crate) fn plan_cast(
         &mut self,
+        cast: &Expression,
         expression: &Expression,
         ty: &Type,
         ctx: ExpressionContext<'_>,
@@ -386,7 +413,8 @@ impl Planner<'_> {
         if self.facts.is_interface(ty) {
             let inner = self.lower_value(expression, ctx);
             let source_ty = expression.get_type();
-            let coercion = CoercionPlan::internal(self, &source_ty, ty);
+            let adaptation = &self.facts.checked(cast).cast_operand().adaptation;
+            let coercion = CoercionPlan::adapted(self, adaptation, &source_ty, ty, None);
             let mut converted = inner.map_expression(|setup, value| {
                 let (coercion_setup, coerced) = coercion.lower(self, value);
                 setup.extend(coercion_setup);
@@ -607,7 +635,11 @@ impl Planner<'_> {
             expression,
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
-        if needs_iife_for_async(expression, plan.expression()) {
+        if needs_iife_for_async(
+            expression,
+            self.facts.call_operation(expression),
+            plan.expression(),
+        ) {
             self.restore_planning(checkpoint);
             let (mut setup, inner) = self
                 .lower_value(
@@ -745,23 +777,25 @@ fn tail_return_slots(planner: &Planner<'_>, inferred: &[Type]) -> Option<Vec<Typ
     (slots.len() == inferred.len()).then(|| slots.clone())
 }
 
-fn needs_iife_for_async(expression: &Expression, value: &GoExpression) -> bool {
-    let Expression::Call {
-        expression: callee,
-        args,
-        call_kind,
-        ..
-    } = expression.unwrap_parens()
+fn needs_iife_for_async(
+    expression: &Expression,
+    operation: Option<&CallOperation>,
+    value: &GoExpression,
+) -> bool {
+    let (
+        Expression::Call {
+            expression: callee,
+            args,
+            ..
+        },
+        Some(CallOperation::Native { kind, method }),
+    ) = (expression.unwrap_parens(), operation)
     else {
-        return false;
-    };
-    let (CallKind::NativeMethod(kind) | CallKind::NativeMethodIdentifier(kind)) = call_kind else {
         return false;
     };
     let function = callee.unwrap_parens();
     let arity = split_native_receiver(function, args).map_or(0, |(_, arguments)| arguments.len());
     // Capture len/append operands at the async site despite their call syntax.
     !matches!(value.syntax_form(), OperandForm::Call)
-        || !NativeOperation::new(*kind, extract_native_method_name(function))
-            .lowers_to_plain_call(arity)
+        || !NativeOperation::new(*kind, method).lowers_to_plain_call(arity)
 }

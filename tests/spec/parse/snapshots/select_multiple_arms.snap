@@ -162,7 +162,6 @@ description: |
                                         byte_offset: 82,
                                         byte_length: 10,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             Send {
@@ -217,7 +216,6 @@ description: |
                                         byte_offset: 98,
                                         byte_length: 17,
                                     },
-                                    call_kind: Unresolved,
                                 },
                                 body: Call {
                                     expression: Identifier {
@@ -258,7 +256,6 @@ description: |
                                         byte_offset: 119,
                                         byte_length: 13,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             WildCard {
@@ -306,7 +303,6 @@ description: |
                                         byte_offset: 143,
                                         byte_length: 16,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                         ],

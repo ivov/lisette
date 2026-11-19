@@ -9,10 +9,11 @@ use syntax::program::{
     Definition, DefinitionBody, Method, Methods, method_for_type, methods_for_type,
 };
 use syntax::types::{
-    self, CompoundKind, GO_IMPORT_PREFIX, Symbol, Type, build_named_substitution_map,
-    build_substitution_map, substitute,
+    self, CompoundKind, GO_IMPORT_PREFIX, SubstitutionMap, Symbol, Type,
+    build_named_substitution_map, build_substitution_map, substitute,
 };
 
+use crate::checker::resolution::MethodSelection;
 use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
 
@@ -96,14 +97,28 @@ pub(crate) fn selector_receiver<'d>(
 }
 
 /// One promoted or own method, without building the whole promoted set.
-pub(crate) fn promoted_method(store: &Store, outer: &Type, name: &str) -> Option<Method> {
-    match resolve_selector(store, outer, name) {
-        Resolution::Found(ResolvedMember {
-            kind: MemberKind::Method(method),
-            ..
-        }) => Some(method),
-        Resolution::Found(_) | Resolution::Ambiguous { .. } | Resolution::NotFound => None,
-    }
+pub(crate) fn promoted_method(store: &Store, outer: &Type, name: &str) -> Option<MethodSelection> {
+    let Resolution::Found(ResolvedMember {
+        kind: MemberKind::Method(method),
+        declaring_type,
+        declaring_instance,
+        ..
+    }) = resolve_selector(store, outer, name)
+    else {
+        return None;
+    };
+    let owner_arguments = match store.get_definition(&declaring_type).map(|owner| &owner.ty) {
+        Some(Type::Forall { vars, .. }) => build_named_substitution_map(
+            vars,
+            declaring_instance.get_type_params().unwrap_or_default(),
+        ),
+        _ => SubstitutionMap::default(),
+    };
+    Some(MethodSelection {
+        method,
+        bound: None,
+        owner_arguments,
+    })
 }
 
 pub(crate) fn promoted_method_set(store: &Store, outer: &Type) -> Methods {

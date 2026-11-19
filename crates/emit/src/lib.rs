@@ -829,7 +829,7 @@ mod tests {
     #[test]
     fn never_typed_if_operand_has_no_result_slot() {
         use crate::context::expression::ExpressionContext;
-        use syntax::ast::Literal;
+        use syntax::ast::{ExpressionId, Literal};
         use syntax::types::SimpleKind;
 
         let input = EmitInput::default();
@@ -847,7 +847,9 @@ mod tests {
         let mut planner = Planner::new(facts, &mut package, &mut adapters, &mut namespace);
         let span = Span::dummy();
         let diverging = Expression::Loop {
+            id: ExpressionId::parsed(0, 11),
             body: Box::new(Expression::Block {
+                id: ExpressionId::parsed(0, 10),
                 items: vec![],
                 ty: Type::unit(),
                 span,
@@ -856,7 +858,9 @@ mod tests {
             span,
         };
         let expression = Expression::If {
+            id: ExpressionId::parsed(0, 9),
             condition: Box::new(Expression::Literal {
+                id: ExpressionId::parsed(0, 8),
                 literal: Literal::Boolean(true),
                 ty: Type::Simple(SimpleKind::Bool),
                 span,

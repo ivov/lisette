@@ -3,7 +3,7 @@ use std::iter::once;
 use crate::passes::walk::NodeCtx;
 use semantics::store::Store;
 use syntax::ast::Expression;
-use syntax::program::{CallKind, Definition, resolved_definition};
+use syntax::program::{CallOperation, Definition, resolved_definition};
 
 pub fn check_task_argument_call(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Task {
@@ -49,12 +49,12 @@ fn flag_calls(expression: &Expression, ctx: &NodeCtx) {
     }
     if let Expression::Call {
         expression: callee,
-        call_kind,
         span,
         ..
     } = expression
-        && *call_kind != CallKind::Unresolved
-        && !constructs_value(callee, *call_kind, ctx.store)
+        && let Some(operation) = ctx.facts.selections.call_operation(expression)
+        && *operation != CallOperation::Unavailable
+        && !constructs_value(callee, operation, ctx.store)
     {
         ctx.sink.push(diagnostics::lint::task_argument_call(span));
         return;
@@ -64,10 +64,10 @@ fn flag_calls(expression: &Expression, ctx: &NodeCtx) {
     }
 }
 
-fn constructs_value(callee: &Expression, call_kind: CallKind, store: &Store) -> bool {
+fn constructs_value(callee: &Expression, operation: &CallOperation, store: &Store) -> bool {
     matches!(
-        call_kind,
-        CallKind::TupleStructConstructor | CallKind::NativeConstructor(_)
+        operation,
+        CallOperation::TupleStructConstructor | CallOperation::NativeConstructor { .. }
     ) || resolved_definition(callee).is_some_and(|qualified| {
         store
             .get_definition(qualified)

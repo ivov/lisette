@@ -1,8 +1,8 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::program::ConformanceWitness;
 use syntax::program::GoHint;
+use syntax::program::{CallOperation, CheckedExpression, EqualityRecipe};
 
-use syntax::ast::{BindingId, Pattern, RestPattern};
+use syntax::ast::{BindingId, Expression, Pattern, RestPattern};
 use syntax::program::{
     AliasKind, Definition, DefinitionBody, EmitInput, ImportKey, Method, PackageId,
 };
@@ -49,14 +49,20 @@ impl<'a> EmitFacts<'a> {
         self.input.definitions.get(id)
     }
 
-    pub(crate) fn conformance(
-        &self,
-        receiver: &Type,
-        interface: &Type,
-    ) -> Option<&ConformanceWitness> {
-        self.input
-            .conformances
-            .get(receiver, interface, |id| self.definition(id))
+    /// The operation that the checker selected for the call `expression`, or None when it is no call.
+    pub(crate) fn call_operation(&self, expression: &Expression) -> Option<&'a CallOperation> {
+        let Expression::Call {
+            expression: callee, ..
+        } = expression.unwrap_parens()
+        else {
+            return None;
+        };
+        Some(&self.checked(callee).callee().operation)
+    }
+
+    /// A lookup of the records that the checker published for the occurrence `expression`.
+    pub(crate) fn checked<'e>(&self, expression: &'e Expression) -> CheckedExpression<'e, 'a> {
+        self.input.checked_bodies.occurrence(expression)
     }
 
     pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
@@ -230,10 +236,9 @@ impl<'a> EmitFacts<'a> {
             .is_some_and(|definition| definition.is_ufcs_method(method))
     }
 
-    pub(crate) fn usable_equals_from(&self, id: &str) -> bool {
-        self.input
-            .equality_index
-            .usable_from(id, &self.current_package)
+    /// The equality that the synthesized `equals` of `id` tests each field with, in declaration order.
+    pub(crate) fn synthesized_field_equalities(&self, id: &str) -> &'a [EqualityRecipe] {
+        self.input.equality_index.synthesized_fields(id)
     }
 
     pub(crate) fn synthesizes_equals(&self, id: &str) -> bool {

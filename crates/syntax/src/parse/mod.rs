@@ -71,6 +71,7 @@ pub struct Parser<'source> {
     file_id: u32,
     source: &'source str,
     depth: u32,
+    expressions: u32,
 }
 
 /// A recursion frame owns the parser depth it opened and restores the previous
@@ -150,7 +151,13 @@ impl<'source> Parser<'source> {
             file_id,
             source,
             depth: 0,
+            expressions: 0,
         }
+    }
+
+    fn next_expression_id(&mut self) -> ast::ExpressionId {
+        self.expressions += 1;
+        ast::ExpressionId::parsed(self.file_id, self.expressions - 1)
     }
 
     pub fn parse(mut self) -> ParseResult {
@@ -303,6 +310,7 @@ impl<'source> Parser<'source> {
                 let start = self.current_token();
                 self.skip_comments();
                 ast::Expression::Unit {
+                    id: self.next_expression_id(),
                     ty: Type::uninferred(),
                     span: self.span_from_offset(start.byte_offset),
                 }
@@ -382,7 +390,7 @@ impl<'source> Parser<'source> {
                     self.error_misplaced_attribute(attribute.span);
                 }
                 if self.is(RightCurlyBrace) || self.at_eof() {
-                    Self::error_expression(self.span_from_token(self.current_token()))
+                    self.error_expression(self.span_from_token(self.current_token()))
                 } else {
                     self.parse_block_item()
                 }
@@ -1476,11 +1484,12 @@ impl<'source> Parser<'source> {
 
         self.resync_on_error();
 
-        Self::error_expression(span)
+        self.error_expression(span)
     }
 
-    fn error_expression(span: Span) -> ast::Expression {
+    fn error_expression(&mut self, span: Span) -> ast::Expression {
         ast::Expression::Unit {
+            id: self.next_expression_id(),
             ty: Type::Error,
             span,
         }

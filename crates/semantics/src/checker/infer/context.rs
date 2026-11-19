@@ -1,7 +1,9 @@
+use std::cell::Cell;
 use std::ops::{Deref, DerefMut};
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use syntax::ast::{BindingId, Span};
+use syntax::ast::{BindingId, ExpressionId, Span};
+use syntax::program::ValueUseKey;
 use syntax::types::Type;
 
 use crate::checker::type_env::SpeculationOutcome;
@@ -307,6 +309,8 @@ fn ordinal(n: usize) -> String {
 pub(super) struct BranchArm {
     pub(super) ty: Type,
     pub(super) span: Span,
+    /// The value uses that produce this arm's value.
+    pub(super) values: Vec<ValueUseKey>,
 }
 
 #[derive(Clone, Copy)]
@@ -401,6 +405,7 @@ pub struct InferCtx<'a> {
     /// By span, for the diagnostic when the construction misses a writable expectation.
     pub(super) read_only_constructions: FxHashMap<Span, Vec<diagnostics::infer::ReadOnlyComponent>>,
     traversal: TraversalContext,
+    generated_expressions: Cell<u32>,
 }
 
 impl<'a> InferCtx<'a> {
@@ -415,7 +420,19 @@ impl<'a> InferCtx<'a> {
             reported_read_only_writes: FxHashSet::default(),
             read_only_constructions: FxHashMap::default(),
             traversal: TraversalContext::default(),
+            generated_expressions: Cell::new(0),
         }
+    }
+
+    /// A new occurrence for a node that inference builds.
+    pub(crate) fn fresh_expression_id(&self) -> ExpressionId {
+        let index = self.generated_expressions.get();
+        self.generated_expressions.set(index + 1);
+        let file_id = self
+            .cursor
+            .file_id()
+            .expect("inference builds nodes only inside a file");
+        ExpressionId::generated(file_id, index)
     }
 
     pub(super) fn with_loop<T>(
@@ -590,6 +607,20 @@ impl<'a> InferCtx<'a> {
         result
     }
 
+    /// Whether unification accepts a value of type `actual` where `expected` is expected, keeping no binding, fact or diagnostic.
+    pub(crate) fn admits(&mut self, expected: &Type, actual: &Type, span: &Span) -> bool {
+        let speculation = self.env.begin_speculation();
+        let diagnostics = self.sink.checkpoint();
+        let delta = Facts::new(self.facts.allocator());
+        let previous = mem::replace(&mut self.state.facts, delta);
+        let admitted = self.try_unify(expected, actual, span).is_ok();
+        self.state.facts = previous;
+        self.sink.rollback(diagnostics);
+        self.env
+            .end_speculation(speculation, SpeculationOutcome::Rollback);
+        admitted
+    }
+
     /// Runs `f` and discards every unification and diagnostic it produced.
     pub(crate) fn probe<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         self.with_speculation(|this| (f(this), SpeculationOutcome::Rollback))
@@ -606,6 +637,7 @@ impl<'a> InferCtx<'a> {
             reported_read_only_writes,
             read_only_constructions,
             traversal,
+            generated_expressions: _,
         } = self;
         let TaskState {
             env: _,

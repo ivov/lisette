@@ -3,7 +3,6 @@ use crate::calls::dispatch::{
     CallArgShape, all_type_params_inferrable, callee_is_go_builtin, go_builtin_name,
 };
 use syntax::program::GoTypeRecipe;
-use syntax::program::resolved_definition;
 
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
@@ -17,14 +16,13 @@ use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{GoExpressionNode, Operand};
 use crate::plan::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
 use crate::types::go_type::GoType;
-use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
-use syntax::program::resolved_instantiation;
+use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
 struct CallTypeArgsRequest<'e, 'c> {
     function: &'e Expression,
     callee: &'e ResolvedCallee<'c>,
-    type_args: ResolvedCallTypeArguments<'e>,
+    written_type_arguments: usize,
     call_ty: Option<&'e Type>,
     arg_shape: CallArgShape,
     ctx: ExpressionContext<'e>,
@@ -141,7 +139,11 @@ fn classify_fmt_argument(planner: &Planner, expression: &Expression) -> Option<F
             args: arguments,
             spread,
             ..
-        } => match (resolved_definition(callee), arguments.as_slice(), spread) {
+        } => match (
+            planner.facts.checked(callee).callee().definition.as_deref(),
+            arguments.as_slice(),
+            spread,
+        ) {
             (Some("go:fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
             (Some("go:fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
             _ => None,
@@ -243,9 +245,6 @@ impl<'a> Planner<'a> {
         };
         let function = callee.unwrap_parens();
         let spread = spread.as_deref();
-        let resolved_type_args = type_arguments
-            .resolved_types()
-            .expect("emission requires checked call type arguments");
 
         if let Some(plan) =
             self.collapse_errors_new_format_arg(function, args, spread, expression_ctx)
@@ -296,7 +295,7 @@ impl<'a> Planner<'a> {
         let mut type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
             function,
             callee: &call_plan.resolved,
-            type_args: resolved_type_args,
+            written_type_arguments: type_arguments.annotations().len(),
             call_ty,
             arg_shape: CallArgShape {
                 value_count: args.len(),
@@ -304,7 +303,7 @@ impl<'a> Planner<'a> {
             },
             ctx: expression_ctx,
         });
-        let builtin_conversion = callee_is_go_builtin(function)
+        let builtin_conversion = callee_is_go_builtin(&self.facts, function)
             .then(|| go_builtin_conversion(&type_args_string))
             .flatten();
         if builtin_conversion.is_some() {
@@ -323,12 +322,12 @@ impl<'a> Planner<'a> {
                 && self.callee_lowers_to_type_construction(function))
             .then(|| expression_ctx.retired_receiver())
             .flatten(),
-            callee_is_builtin: callee_is_go_builtin(function),
+            callee_is_builtin: callee_is_go_builtin(&self.facts, function),
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: receiver_type_binding(function, &call_plan.resolved),
         };
         let sequenced_args = self.emit_call_args(args, &args_ctx, None);
-        let constant_result = go_builtin_name(function)
+        let constant_result = go_builtin_name(&self.facts, function)
             .filter(|_| builtin_conversion.is_none())
             .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
         let SequencedValues {
@@ -458,7 +457,7 @@ impl<'a> Planner<'a> {
         let CallTypeArgsRequest {
             function,
             callee,
-            type_args,
+            written_type_arguments,
             call_ty,
             arg_shape,
             ctx,
@@ -472,14 +471,18 @@ impl<'a> Planner<'a> {
             if has_value_args && self.collapsed_callee_fully_inferable(callee, arg_shape) {
                 return GoType::default();
             }
-            return resolved_instantiation(function)
-                .and_then(|instantiation| {
-                    self.reconstruct_collapsed_type_args(&recipe, instantiation)
-                })
+            let type_arguments = &self.facts.checked(function).callee().type_arguments;
+            return self
+                .reconstruct_collapsed_type_args(&recipe, type_arguments)
                 .unwrap_or_default();
         }
 
-        let mut type_args_string = self.format_resolved_type_args(type_args);
+        let written = self
+            .facts
+            .checked(function)
+            .callee()
+            .written_type_arguments(written_type_arguments);
+        let mut type_args_string = self.format_type_arg_iter(written);
 
         let slot_ty = ctx.expected_slot_type();
 

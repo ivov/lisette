@@ -1,5 +1,5 @@
 use syntax::ast::{Expression, Literal, Span, UnaryOperator};
-use syntax::program::CallKind;
+use syntax::program::CallOperation;
 use syntax::types::{SimpleKind, Type};
 
 use crate::passes::walk::{ClaimKind, NodeCtx};
@@ -24,7 +24,9 @@ use semantics::store::{ClosedDomain, ClosedMember, DomainValue, Store};
 /// being judged on the magnitude `1` alone.
 pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
     match expression {
-        Expression::Literal { literal, ty, span } => {
+        Expression::Literal {
+            literal, ty, span, ..
+        } => {
             let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };
@@ -44,6 +46,7 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
             expression: inner,
             ty,
             span,
+            ..
         } => {
             let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
@@ -57,12 +60,10 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
             }
         }
 
-        Expression::Call {
-            call_kind: CallKind::TupleStructConstructor,
-            args,
-            ty,
-            ..
-        } => {
+        Expression::Call { args, ty, .. }
+            if ctx.facts.selections.call_operation(expression)
+                == Some(&CallOperation::TupleStructConstructor) =>
+        {
             let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };

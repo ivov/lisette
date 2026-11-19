@@ -183,6 +183,7 @@ impl File {
                     name_span,
                     alias,
                     span,
+                    ..
                 } => Some(FileImport {
                     name: name.clone(),
                     name_span: *name_span,

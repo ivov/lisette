@@ -1,5 +1,6 @@
+use semantics::facts::Selections;
 use syntax::ast::{BinaryOperator, Expression};
-use syntax::program::CallKind;
+use syntax::program::CallOperation;
 
 use crate::passes::walk::NodeCtx;
 
@@ -26,8 +27,8 @@ pub fn check_non_negative_comparison(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let operator = match (
-        is_native_length_call(left.unwrap_parens()),
-        is_native_length_call(right.unwrap_parens()),
+        is_native_length_call(left.unwrap_parens(), &ctx.facts.selections),
+        is_native_length_call(right.unwrap_parens(), &ctx.facts.selections),
     ) {
         (true, false) if is_zero_literal(right.unwrap_parens()) => *operator,
         (false, true) if is_zero_literal(left.unwrap_parens()) => flip_comparison(*operator),
@@ -46,19 +47,17 @@ pub fn check_non_negative_comparison(expression: &Expression, ctx: &NodeCtx) {
     ));
 }
 
-fn is_native_length_call(expression: &Expression) -> bool {
+fn is_native_length_call(expression: &Expression, selections: &Selections) -> bool {
     let Expression::Call {
-        expression: callee,
-        call_kind,
-        ..
+        expression: callee, ..
     } = expression
     else {
         return false;
     };
 
     if !matches!(
-        call_kind,
-        CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_)
+        selections.call_operation(expression),
+        Some(CallOperation::Native { .. })
     ) {
         return false;
     }

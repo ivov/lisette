@@ -18,8 +18,8 @@ use crate::abi::callable::CallableAbi;
 use crate::calls::dispatch::extract_native_method_name;
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::CaptureBoundary;
-use syntax::ast::{Expression, ResolvedCallTypeArguments};
-use syntax::program::{CallKind, NativeTypeKind};
+use syntax::ast::Expression;
+use syntax::program::{CallOperation, NativeTypeKind};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -39,9 +39,7 @@ impl Planner<'_> {
             return None;
         };
         let plan = self.plan_call(value.unwrap_parens())?;
-        let CallableOrigin::Source(
-            CallKind::NativeMethod(kind) | CallKind::NativeMethodIdentifier(kind),
-        ) = &plan.resolved.origin
+        let CallableOrigin::Source(CallOperation::Native { kind, .. }) = plan.resolved.origin
         else {
             return None;
         };
@@ -55,7 +53,7 @@ impl Planner<'_> {
             function,
             args,
             spread: spread.as_deref(),
-            resolved_type_args: type_arguments.resolved_types()?,
+            written_type_arguments: type_arguments.annotations().len(),
             abi: plan.resolved.abi,
             call_ty: Some(ty),
             capture_boundary: CaptureBoundary::SiblingSequence,
@@ -107,7 +105,8 @@ pub(crate) struct NativeCallContext<'a> {
     pub form: NativeCallForm<'a>,
     pub args: &'a [Expression],
     pub spread: Option<&'a Expression>,
-    pub resolved_type_args: ResolvedCallTypeArguments<'a>,
+    /// How many trailing type arguments of the callee the call spells.
+    pub written_type_arguments: usize,
     pub abi: CallableAbi,
     pub call_ty: Option<&'a Type>,
     pub native_type: NativeTypeKind,

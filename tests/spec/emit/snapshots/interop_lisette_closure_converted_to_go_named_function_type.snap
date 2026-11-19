@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import "go:net/http"
+  
+  fn handler(n: int) -> http.Handler {
+    http.HandlerFunc(|w: http.ResponseWriter, r: Ref<http.Request>| {
+      fmt.Println(n)
+    })
+  }
+  
+  fn main() {
+    let _ = handler(1)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func handler(n int) http.Handler {
+	cb := func(_ http.ResponseWriter, _ *http.Request) {
+		fmt.Println(n)
+	}
+	return http.HandlerFunc(func(arg0 http.ResponseWriter, arg1 *http.Request) {
+		cb(arg0, arg1)
+	})
+}
+
+func main() {
+	handler(1)
+}

@@ -449,7 +449,7 @@ impl Planner<'_> {
         );
 
         // A bare `var x T` only where the slot's zero is the value.
-        if is_zero_call(value)
+        if is_zero_call(&self.facts, value)
             && statements.is_empty()
             && coercion_is_identity
             && !needs_explicit_type_declaration(self, value, binding_ty)

@@ -44,7 +44,7 @@ impl<'source> Parser<'source> {
         }
         let span = self.span_from_token(self.current_token());
         self.resync_on_error();
-        Self::error_expression(span)
+        self.error_expression(span)
     }
 
     fn pratt_parse_inner(&mut self, min_prec: u8, context: ExpressionContext) -> ast::Expression {
@@ -75,6 +75,7 @@ impl<'source> Parser<'source> {
                 self.next();
                 let target_type = self.parse_annotation();
                 lhs = ast::Expression::Cast {
+                    id: self.next_expression_id(),
                     expression: lhs.into(),
                     target_type,
                     ty: Type::uninferred(),
@@ -99,6 +100,7 @@ impl<'source> Parser<'source> {
                 let operator = self.parse_binary_operator();
                 let rhs = self.pratt_parse(prec, context);
                 lhs = ast::Expression::Binary {
+                    id: self.next_expression_id(),
                     operator,
                     left: lhs.into(),
                     right: rhs.into(),
@@ -196,6 +198,7 @@ impl<'source> Parser<'source> {
                 let prec = self.prefix_operator_precedence(start.kind);
 
                 ast::Expression::Unary {
+                    id: self.next_expression_id(),
                     operator,
                     expression: self.pratt_parse(prec, context).into(),
                     ty: Type::uninferred(),
@@ -223,6 +226,7 @@ impl<'source> Parser<'source> {
                 }
                 let prec = self.prefix_operator_precedence(start.kind);
                 ast::Expression::Reference {
+                    id: self.next_expression_id(),
                     expression: self.pratt_parse(prec, context).into(),
                     ty: Type::uninferred(),
                     span: self.span_from_offset(start.byte_offset),
@@ -414,6 +418,7 @@ impl<'source> Parser<'source> {
         self.ensure(Identifier);
 
         ast::Expression::DotAccess {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             expression: lhs.into(),
             member: field,

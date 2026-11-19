@@ -146,22 +146,11 @@ impl Planner<'_> {
         fallible.err_ty().cloned()
     }
 
-    pub(crate) fn coerce_value(
-        &mut self,
-        statements: &mut Vec<Statement>,
-        value: GoExpression,
-        from: &Type,
-        to: &Type,
-    ) -> GoExpression {
-        let coercion = CoercionPlan::internal(self, from, to);
-        let (setup, value) = coercion.lower(self, value);
-        statements.extend(setup);
-        value
-    }
-
+    /// The error of the `?` on `operand`, converted to the error slot that the checker recorded for it.
     pub(crate) fn convert_error_to_return_context(
         &mut self,
         statements: &mut Vec<Statement>,
+        operand: &Expression,
         value: GoExpression,
         fallible: &Fallible,
     ) -> GoExpression {
@@ -169,7 +158,15 @@ impl Planner<'_> {
         else {
             return value;
         };
-        self.coerce_value(statements, value, &from, &to)
+        // Emit also lowers a tail call through this path, with no `?` and an unchanged error.
+        if self.facts.peel_alias(&from) == self.facts.peel_alias(&to) {
+            return value;
+        }
+        let adaptation = &self.facts.checked(operand).propagated_error().adaptation;
+        let (setup, value) =
+            CoercionPlan::adapted(self, adaptation, &from, &to, None).lower(self, value);
+        statements.extend(setup);
+        value
     }
 
     pub(crate) fn failure_return_values(

@@ -1,5 +1,8 @@
 use syntax::collections::DenseMap;
-use syntax::program::ConformanceIndex;
+use syntax::program::{
+    CallOperation, CheckedBodiesBuilder, CheckedCallee, ConformanceIndex, ConformanceWitness,
+    EqualityRecipe, ReceiverCoercion, ValueUseKey,
+};
 mod usages;
 pub use usages::{UsageFacts, UsageIndex};
 
@@ -8,7 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use syntax::EcoString;
-use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
+use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Expression, ExpressionId, Span};
 use syntax::program::BindingMutation;
 use syntax::types::Type;
 
@@ -39,6 +42,11 @@ pub struct Facts {
     pub bindings: DenseMap<BindingId, BindingFact>,
     pub usages: UsageFacts,
     pub conformances: ConformanceIndex,
+    pub checked_bodies: CheckedBodiesBuilder,
+    pub selections: Selections,
+
+    /// Value uses of the file under inference, finalized when it is frozen.
+    pub(crate) value_uses: ValueUseObligations,
 
     pub dead_code: Vec<DeadCodeFact>,
     pub overused_references: Vec<OverusedReferenceFact>,
@@ -61,6 +69,54 @@ pub struct Facts {
     /// Span of every inferred function, so lints can attribute errors to
     /// the containing function.
     pub function_spans: Vec<Span>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ValueUseObligations {
+    pub(crate) uses: Vec<ValueUseObligation>,
+    /// The callees that the checker selected.
+    pub(crate) callees: Vec<(ValueUseKey, CheckedCallee)>,
+    /// The method receivers whose reference the checker changed.
+    pub(crate) receivers: Vec<(ValueUseKey, ReceiverCoercion)>,
+    /// Conformances selected since the innermost open value use began.
+    pub(crate) selected_witnesses: Vec<ConformanceWitness>,
+    /// Each `if let` with no `else`, with the unit value it produces when its pattern does not match.
+    pub(crate) implicit_units: Vec<(ExpressionId, ExpressionId)>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ValueUseObligation {
+    pub(crate) key: ValueUseKey,
+    pub(crate) source: Type,
+    pub(crate) slot: Type,
+    /// The conformances that the checker selected while it accepted this value.
+    pub(crate) witnesses: Vec<ConformanceWitness>,
+}
+
+impl ValueUseObligations {
+    fn merge(&mut self, other: Self) {
+        self.uses.extend(other.uses);
+        self.callees.extend(other.callees);
+        self.receivers.extend(other.receivers);
+        self.selected_witnesses.extend(other.selected_witnesses);
+        self.implicit_units.extend(other.implicit_units);
+    }
+
+    pub(crate) fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {
+        for obligation in &mut self.uses {
+            visit(&mut obligation.source);
+            visit(&mut obligation.slot);
+            for witness in &mut obligation.witnesses {
+                witness.visit_types_mut(&mut visit);
+            }
+        }
+        for (_, callee) in &mut self.callees {
+            callee.type_arguments.types_mut().for_each(&mut visit);
+            if let CallOperation::BoundMethod { bound, .. } = &mut callee.operation {
+                visit(bound);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -272,6 +328,9 @@ impl Facts {
             function_spans: Vec::new(),
             usages: UsageFacts::default(),
             conformances: ConformanceIndex::default(),
+            checked_bodies: CheckedBodiesBuilder::default(),
+            selections: Selections::default(),
+            value_uses: ValueUseObligations::default(),
             interface_satisfied_methods: HashMap::default(),
             suggested_names: HashMap::default(),
         }
@@ -455,6 +514,9 @@ impl Facts {
             usages,
             interface_satisfied_methods,
             conformances,
+            checked_bodies,
+            selections,
+            value_uses,
             suggested_names,
         } = other;
 
@@ -475,6 +537,10 @@ impl Facts {
 
         self.usages.merge(usages);
         self.conformances.merge(conformances);
+        self.checked_bodies.merge(checked_bodies);
+        self.selections.operations.extend(selections.operations);
+        self.selections.equalities.extend(selections.equalities);
+        self.value_uses.merge(value_uses);
 
         for (package_id, methods) in interface_satisfied_methods {
             let existing_methods = self
@@ -725,5 +791,32 @@ mod tests {
         assert_eq!(methods["f"].impl_type_names().count(), 2);
         assert_eq!(methods["g"].impl_type_names().count(), 1);
         assert!(a.method_spelling_pinned_by_interface("m", "f", "A"));
+    }
+}
+
+/// The operations and equalities that the checker selected in every file, including a file with errors.
+#[derive(Debug, Clone, Default)]
+pub struct Selections {
+    /// Keyed by the callee of each call.
+    pub(crate) operations: HashMap<ExpressionId, CallOperation>,
+    /// Keyed as `CheckedBodies` keys its equalities.
+    pub(crate) equalities: HashMap<ExpressionId, EqualityRecipe>,
+}
+
+impl Selections {
+    /// The operation that the checker selected for the call `expression`, or None when it is no call.
+    pub fn call_operation(&self, expression: &Expression) -> Option<&CallOperation> {
+        let Expression::Call {
+            expression: callee, ..
+        } = expression.unwrap_parens()
+        else {
+            return None;
+        };
+        self.operations.get(&callee.unwrap_parens().id())
+    }
+
+    /// The equality that the comparison with the occurrence `expression` tests with.
+    pub fn equality(&self, expression: ExpressionId) -> Option<&EqualityRecipe> {
+        self.equalities.get(&expression)
     }
 }

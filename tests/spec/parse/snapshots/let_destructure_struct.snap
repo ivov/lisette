@@ -116,7 +116,6 @@ description: |
                                 byte_offset: 52,
                                 byte_length: 11,
                             },
-                            call_kind: Unresolved,
                         },
                         mode: Plain,
                         ty: Var {

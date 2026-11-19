@@ -20,6 +20,7 @@ impl InferCtx<'_> {
             && self.scopes.lookup_binding_id(value).is_none()
         {
             return Expression::DotAccess {
+                id: self.fresh_expression_id(),
                 expression,
                 member,
                 ty: Type::Error,
@@ -46,6 +47,7 @@ impl InferCtx<'_> {
                     expression.get_span(),
                 ));
                 return Expression::DotAccess {
+                    id: self.fresh_expression_id(),
                     expression,
                     member,
                     ty: expected_ty.clone(),
@@ -97,6 +99,7 @@ impl InferCtx<'_> {
                 ));
             }
             return Expression::DotAccess {
+                id: self.fresh_expression_id(),
                 expression,
                 member,
                 ty: expected_ty.clone(),
@@ -143,14 +146,16 @@ impl InferCtx<'_> {
                 .find(|candidate| self.lookup_type(store, candidate).is_some())?
         };
 
-        Some(self.infer_expression(
+        Some(self.infer_expression_kind(
             Expression::Identifier {
+                id: self.fresh_expression_id(),
                 value: path.into(),
                 ty: Type::uninferred(),
                 span,
                 resolution: IdentifierResolution::Unresolved,
             },
             expected_ty,
+            true,
         ))
     }
 

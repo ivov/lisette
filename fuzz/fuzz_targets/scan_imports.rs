@@ -29,6 +29,7 @@ fuzz_target!(|data: &[u8]| {
                 name_span,
                 alias,
                 span,
+                ..
             } => Some(FileImport {
                 name: name.clone(),
                 name_span: *name_span,
