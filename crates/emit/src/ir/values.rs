@@ -1,16 +1,16 @@
-use crate::context::expression::ExpressionContext;
-use crate::names::go_name::GeneratedPackage;
-use crate::names::packages::PackageUse;
-use crate::plan::bodies::AsyncKind;
-use crate::plan::bodies::{LoweredBlock, Statement};
-use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::{
+use crate::ir::bodies::AsyncKind;
+use crate::ir::bodies::{LoweredBlock, Statement};
+use crate::ir::evaluation::Effects;
+use crate::ir::go_expression::{
     BinaryOp, CallPurity, CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout,
     GoExpressionNode, GoParameter, Operand, Position, SourcePosition, UnaryOp,
 };
-use crate::plan::local::GoIdentifier;
-use crate::plan::verify::verify_final_function_body;
+use crate::ir::local::GoIdentifier;
+use crate::names::go_name::GeneratedPackage;
+use crate::names::packages::PackageUse;
+use crate::passes::verify::verify_final_function_body;
 use crate::render::writer::GoWriter;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use crate::{Planner, written_span};
 use std::fmt::{self, Display, Formatter};

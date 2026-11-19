@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::abi::ReturnSlot;
+use crate::ir::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
 use crate::names::go_name;
-use crate::plan::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
 use crate::types::go_type::GoType;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
 use syntax::program::Definition;

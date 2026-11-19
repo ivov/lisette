@@ -4,20 +4,20 @@ use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge, resolve_
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::abi::transition::{multi_value_return, reencode_return};
 use crate::abi::wrapping::{WrapperTarget, non_nil};
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible as tags;
 use crate::control_flow::fallible::{OPTION_SOME_TAG, prelude_call};
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name::GeneratedPackage;
-use crate::names::packages::PackageUse;
-use crate::patterns::matching::{PreludeVariant, prelude_constructor};
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement,
     Statement, assign, define_many, expression_statement,
 };
-use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::ir::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, ValuePlan};
+use crate::names::go_name::GeneratedPackage;
+use crate::names::packages::PackageUse;
+use crate::patterns::matching::{PreludeVariant, prelude_constructor};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::go_names::ENUM_TAG_FIELD;

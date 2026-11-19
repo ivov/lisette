@@ -3,10 +3,10 @@ use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
 use crate::control_flow::propagation::plain_return;
+use crate::ir::bodies::{LoweredBlock, Statement, assign};
+use crate::ir::go_expression::{FunctionLiteralLayout, GoParameter};
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, Statement, assign};
-use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
-use crate::plan::values::GoExpression;
 
 impl Planner<'_> {
     pub(crate) fn clone_expression(&mut self, value: GoExpression, ty: &Type) -> GoExpression {

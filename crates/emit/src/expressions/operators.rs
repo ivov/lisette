@@ -1,14 +1,14 @@
 use crate::Planner;
 use crate::analyze::facts::EmitFacts;
 use crate::calls::predicates::strip_negations;
-use crate::context::expression::ExpressionContext;
-use crate::names::go_name;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
 };
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::names::go_name;
+use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
 use syntax::program::{DefinitionBody, OperandConversion};
 use syntax::types::{self, ScaledImaginary, Type};

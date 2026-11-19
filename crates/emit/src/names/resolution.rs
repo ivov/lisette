@@ -1,15 +1,14 @@
-use syntax::ast::IdentifierResolution;
-use syntax::types::{Type, unqualified_name};
-
 use crate::Planner;
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::{self, ResolvedName};
 use crate::names::packages::PackageUse;
-use crate::output::imports::rendered_qualifier;
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::render::imports::rendered_qualifier;
 use crate::state::bindings::BindingValue;
+use syntax::ast::IdentifierResolution;
 use syntax::program::{self, Definition};
+use syntax::types::{Type, unqualified_name};
 
 impl Planner<'_> {
     pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
@@ -176,5 +175,35 @@ impl Planner<'_> {
             ResolvedName::foreign(tag_constant, self.package_use_for_package(enum_package))
         };
         resolved.into_expression()
+    }
+}
+
+impl Planner<'_> {
+    pub(crate) fn method_go_name(&self, method: &str, is_public: bool) -> String {
+        if is_public || self.method_needs_export(method) {
+            go_name::snake_to_camel(method)
+        } else {
+            go_name::unexported_method_go_name(method)
+        }
+    }
+
+    pub(crate) fn interface_method_go_name(&self, method: &str, is_public: bool) -> String {
+        let name = self.method_go_name(method, is_public);
+        if self.facts.method_uses_tagged_return(method) {
+            go_name::tagged_twin(&name)
+        } else {
+            name
+        }
+    }
+
+    pub(crate) fn free_function_go_name(&self, name: &str, is_public: bool) -> String {
+        if is_public {
+            go_name::snake_to_camel(name)
+        } else {
+            self.package
+                .escape_remap(name)
+                .map(str::to_string)
+                .unwrap_or_else(|| go_name::escape_reserved(name).into_owned())
+        }
     }
 }

@@ -4,25 +4,25 @@ use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::analyze::facts::EmitFacts;
 use crate::analyze::reusable_bindings::ReusableBindings;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name;
-use crate::names::source_name::SourceName;
-use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::AsyncKind;
-use crate::plan::bodies::{
+use crate::ir::bodies::AsyncKind;
+use crate::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, inherit_line_directives, rename_generated_locals,
 };
-use crate::plan::cleanup::{clean_up, declare_zero_values};
-use crate::plan::declarations::{DeclarationKind, FunctionSignature, GoDeclaration};
-use crate::plan::go_expression::{
+use crate::ir::declarations::{DeclarationKind, FunctionSignature, GoDeclaration};
+use crate::ir::go_expression::{
     FunctionLiteralLayout, GoExpressionNode, GoParameter, verbatim_identifiers,
 };
-use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::values::GoExpression;
-use crate::plan::verify::verify_final_function_body;
-use crate::plan::verify::verify_local_scopes;
-use crate::plan::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
+use crate::ir::local::{GoIdentifier, LocalId};
+use crate::ir::values::GoExpression;
+use crate::ir::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
+use crate::names::go_name;
+use crate::names::source_name::SourceName;
+use crate::passes::cleanup::{clean_up, declare_zero_values};
+use crate::passes::verify::verify_final_function_body;
+use crate::passes::verify::verify_local_scopes;
+use crate::patterns::sites::PatternSubject;
+use crate::state::expression::ExpressionContext;
 use crate::statements::testing::test_context_call;
 use crate::types::go_type::GoType;
 use crate::utils::fresh_receiver_name;

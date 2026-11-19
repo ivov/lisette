@@ -1,4 +1,4 @@
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoopId, LoopKind, LoopTransfer, LoweredBlock, LoweredStatement, Statement,
 };
 

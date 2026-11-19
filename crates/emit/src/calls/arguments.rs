@@ -8,17 +8,17 @@ use crate::Planner;
 use crate::abi::callable::{CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::ValueLayout;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::{SpreadSequenceOptions, takes_prelude_callback};
-use crate::names::generics::extract_type_mapping;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
+use crate::ir::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
+use crate::names::generics::extract_type_mapping;
 use crate::plan::calls::{
     ArgumentPlan, ArgumentSlotBridge, ArgumentValueSource, CallPlan, CallableOrigin,
     FunctionBridge, ResolvedCallee,
 };
-use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::program::{Adaptation, SlotOrigin};

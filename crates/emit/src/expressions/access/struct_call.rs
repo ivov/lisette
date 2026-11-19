@@ -7,17 +7,17 @@ use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::ValueLayout;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout;
 use crate::go_name;
-use crate::names::go_name::GeneratedPackage;
-use crate::patterns::matching::{PreludeVariant, prelude_constructor};
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, discard,
 };
-use crate::plan::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
-use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::ir::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
+use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::names::go_name::GeneratedPackage;
+use crate::patterns::matching::{PreludeVariant, prelude_constructor};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;

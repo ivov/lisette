@@ -1,6 +1,6 @@
+use crate::ir::bodies::{LoweredBlock, LoweredStatement};
+use crate::ir::local::GoIdentifier;
 use crate::names::packages::PackageUse;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
-use crate::plan::local::GoIdentifier;
 use crate::render::Renderer;
 use crate::render::writer::GoWriter;
 use crate::types::go_type::GoTypeShape;
@@ -516,7 +516,7 @@ impl GoExpressionNode {
         self.visit_operands(&mut |operand| visit(operand));
     }
 
-    pub(super) fn visit_children_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+    pub(crate) fn visit_children_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
         self.visit_operands_mut(&mut |operand| visit(operand));
     }
 

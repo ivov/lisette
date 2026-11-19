@@ -3,8 +3,8 @@ use crate::abi::fallible_producer::FallibleProducer;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 
-use crate::plan::bodies::Statement;
-use crate::plan::values::ValuePlan;
+use crate::ir::bodies::Statement;
+use crate::ir::values::ValuePlan;
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::CallOperation;
 

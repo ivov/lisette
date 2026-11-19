@@ -2,9 +2,9 @@ use crate::abi::fallible_producer::ResultFusePlan;
 use std::borrow::Cow;
 use std::slice;
 
+use crate::ir::bodies::GoUses;
+use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::patterns::binding_decls::{has_binding_or_pattern, split_binding_or_patterns};
-use crate::plan::bodies::GoUses;
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 
 use syntax::ast::{Expression, IdentifierResolution, MatchArm, Pattern, Span};
 use syntax::types::Type;
@@ -12,7 +12,13 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::context::expression::ExpressionContext;
+use crate::ir::bodies::{
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
+    Statement, define, discard, expression_statement,
+};
+use crate::ir::go_expression::CompositeLayout;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
@@ -26,14 +32,8 @@ use crate::patterns::matching::{
     ArmBinding, FusedName, PreludeVariant, field_binding, ok_pattern_field, prelude_variant,
     some_pattern_field,
 };
-use crate::plan::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
-    Statement, define, discard, expression_statement,
-};
-use crate::plan::go_expression::CompositeLayout;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
 use crate::statements::testing::{test_context_call, testkit_operand_type};
 
 #[derive(Clone, Copy)]

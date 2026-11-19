@@ -1,8 +1,8 @@
-use crate::plan::go_expression::Position;
-use crate::plan::go_expression::{BinaryOp, Expressions, GoExpressionNode, TreeVisitor};
-use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::values::GoExpression;
-use crate::plan::visit::VisitorMut;
+use crate::ir::go_expression::Position;
+use crate::ir::go_expression::{BinaryOp, Expressions, GoExpressionNode, TreeVisitor};
+use crate::ir::local::{GoIdentifier, LocalId};
+use crate::ir::values::GoExpression;
+use crate::ir::visit::VisitorMut;
 use crate::types::go_type::GoType;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::types::Type;

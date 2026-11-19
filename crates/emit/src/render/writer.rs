@@ -1,4 +1,4 @@
-use crate::plan::go_expression::{Position, SourcePosition};
+use crate::ir::go_expression::{Position, SourcePosition};
 use std::fmt;
 use std::mem;
 

@@ -1,10 +1,10 @@
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     AssignForm, LoopTransfer, LoweredBlock, LoweredStatement, Statement, for_each_statements_mut,
 };
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::values::GoExpression;
-use crate::plan::visit::{VisitorMut, visit_statements_mut};
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::local::{GoIdentifier, LocalId};
+use crate::ir::values::GoExpression;
+use crate::ir::visit::{VisitorMut, visit_statements_mut};
 use rustc_hash::FxHashMap as HashMap;
 use std::fmt::{self, Display, Formatter};
 

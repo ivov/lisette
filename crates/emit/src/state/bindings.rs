@@ -1,5 +1,5 @@
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{GoExpression, Stability};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, Stability};
 use syntax::types::Type;
 
 #[derive(Clone, Debug)]

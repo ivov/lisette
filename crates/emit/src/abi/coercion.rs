@@ -6,11 +6,11 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::control_flow::fallible::prelude_call;
 use crate::definitions::interface_adapter::AdapterPlan;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign,
 };
-use crate::plan::go_expression::CompositeLayout;
-use crate::plan::values::GoExpression;
+use crate::ir::go_expression::CompositeLayout;
+use crate::ir::values::GoExpression;
 use crate::types::go_type::GoType;
 
 use super::layout::{FunctionLayout, ValueLayout};

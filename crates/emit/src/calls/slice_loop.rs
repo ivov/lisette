@@ -1,4 +1,4 @@
-use crate::plan::local::GoIdentifier;
+use crate::ir::local::GoIdentifier;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
@@ -7,15 +7,15 @@ use super::NativeCallContext;
 use super::native::NativeCallResult;
 use crate::Planner;
 use crate::abi::is_closure_literal;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::prelude_call;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, define, directed_first,
 };
-use crate::plan::go_expression::UnaryOp;
+use crate::ir::go_expression::UnaryOp;
+use crate::ir::values::{GoExpression, OperandForm, Stability, ValuePlan};
 use crate::plan::lower::is_conjunction;
-use crate::plan::values::{GoExpression, OperandForm, Stability, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::program::SlotOrigin;
 

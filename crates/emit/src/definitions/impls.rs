@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::expressions::top_items::emit_item_doc;
+use crate::ir::declarations::GoDeclaration;
 use crate::names::go_name;
-use crate::plan::declarations::GoDeclaration;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Visibility};
 use syntax::types::{Type, type_args_match_params};
 

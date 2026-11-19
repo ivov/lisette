@@ -1,16 +1,16 @@
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::ValueLayout;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
-use crate::is_order_sensitive;
-use crate::plan::bodies::with_setup;
-use crate::plan::bodies::{
+use crate::ir::bodies::with_setup;
+use crate::ir::bodies::{
     AssignForm, CompoundKind, LoweredBlock, LoweredStatement, Statement, define,
 };
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::values::{GoExpression, ValuePlan};
+use crate::is_order_sensitive;
 use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;

@@ -5,13 +5,13 @@ use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi,
 use crate::abi::coercion::CoercionPlan;
 use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
+use crate::ir::bodies::{LoweredBlock, Statement, define, directed_first};
+use crate::ir::go_expression::FunctionLiteralLayout;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, Statement, define, directed_first};
-use crate::plan::go_expression::FunctionLiteralLayout;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use syntax::ast::Expression;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;

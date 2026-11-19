@@ -1,12 +1,12 @@
 use std::mem;
 
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     AssignForm, CompoundKind, ElseArm, IfPlan, LoopHeader, LoweredBlock, LoweredStatement,
     SelectArmKind, Statement, SwitchKind,
 };
-use crate::plan::go_expression::{GoExpressionNode, TreeVisitor, verbatim_identifiers};
-use crate::plan::local::GoIdentifier;
-use crate::plan::visit::{VisitorMut, visit_statements_mut};
+use crate::ir::go_expression::{GoExpressionNode, TreeVisitor, verbatim_identifiers};
+use crate::ir::local::GoIdentifier;
+use crate::ir::visit::{VisitorMut, visit_statements_mut};
 use crate::state::scope::ScopeState;
 
 pub(crate) fn reuse_dead_copy_sources(

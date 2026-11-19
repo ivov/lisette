@@ -2,20 +2,20 @@ use crate::Planner;
 use crate::analyze::facts::EmitFacts;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::calls::native::{is_clip_safe_path, slice_growth_call};
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::ConstructorKind;
 use crate::expressions::staging::{LaterStages, SpreadSequenceOptions};
-use crate::patterns::binding_decls::pattern_binds_name;
-use crate::plan::bodies::with_setup;
-use crate::plan::bodies::{
+use crate::ir::bodies::with_setup;
+use crate::ir::bodies::{
     AssignForm, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, directed_first, discard, effect_statement, expression_statement,
 };
-use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::Stability;
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::ir::evaluation::Effects;
+use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::Stability;
+use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::patterns::binding_decls::pattern_binds_name;
+use crate::state::expression::ExpressionContext;
 use crate::statements::assignments::{PlaceOrdering, is_lvalue_chain};
 use crate::types::go_type::GoType;
 use std::slice;

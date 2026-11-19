@@ -2,8 +2,8 @@ use crate::abi::ReturnSlot;
 use crate::abi::is_closure_literal;
 use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::ir::bodies::AsyncKind;
 use crate::names::go_name;
-use crate::plan::bodies::AsyncKind;
 use syntax::program::NativeOperation;
 use syntax::program::{Adaptation, DefinitionBody};
 
@@ -11,15 +11,15 @@ use crate::abi::bridge::GoResultBridge;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::ValueLayout;
-use crate::context::expression::ExpressionContext;
-use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, discard, effect_statement, expression_statement,
 };
+use crate::ir::go_expression::FunctionLiteralLayout;
+use crate::ir::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::calls::{CallPlan, CallableOrigin, FunctionBridge};
-use crate::plan::go_expression::FunctionLiteralLayout;
-use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
 use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
 use crate::statements::assignments::PlaceOrdering;
 use crate::types::go_type::GoType;
 use crate::types::go_type::returns_go_void;

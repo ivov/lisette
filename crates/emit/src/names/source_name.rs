@@ -1,7 +1,7 @@
 use syntax::EcoString;
 
+use crate::ir::local::GoIdentifier;
 use crate::names::go_name;
-use crate::plan::local::GoIdentifier;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SourceName(String);

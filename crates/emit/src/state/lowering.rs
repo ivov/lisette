@@ -1,6 +1,6 @@
 use crate::abi::callable::LoweredReturnAbi;
-use crate::plan::bodies::LoopId;
-use crate::plan::values::GoExpression;
+use crate::ir::bodies::LoopId;
+use crate::ir::values::GoExpression;
 use std::sync::Arc;
 use syntax::types::Type;
 

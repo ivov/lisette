@@ -1,5 +1,5 @@
+use crate::ir::declarations::TypeParameter;
 use crate::names::packages::PackageUse;
-use crate::plan::declarations::TypeParameter;
 use crate::utils::ReceiverGenerics;
 use std::borrow::Cow;
 

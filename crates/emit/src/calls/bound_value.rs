@@ -2,10 +2,10 @@ use crate::Planner;
 use crate::abi::wrapping::{NilGuard, is_nil, non_nil};
 use crate::calls::bounds::BoundsCheckedIndex;
 
-use crate::plan::bodies::{Definition, Statement, define, discard};
-use crate::plan::go_expression::{BinaryOp, UnaryOp};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::ir::bodies::{Definition, Statement, define, discard};
+use crate::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 
 pub(crate) struct BoundValue {

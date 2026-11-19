@@ -2,14 +2,14 @@ use super::NativeCallContext;
 use crate::Planner;
 use crate::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::context::expression::ExpressionContext;
-use crate::patterns::matching::{FusedName, OptionArms, field_binding};
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign, define,
 };
-use crate::plan::local::GoIdentifier;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, ValuePlan};
+use crate::patterns::matching::{FusedName, OptionArms, field_binding};
 use crate::plan::placement::collapse_declared_temp;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, Literal};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;

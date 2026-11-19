@@ -1,13 +1,13 @@
 use crate::OuterBindings;
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
+use crate::ir::bodies::{Definition, LoweredStatement, Statement, assign, define_many};
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, Stability};
 use crate::patterns::decision_tree::{
     Check, PatternBinding, PatternInfo, SubjectRoot, lift_root_assertion, render_condition,
 };
-use crate::plan::bodies::{Definition, LoweredStatement, Statement, assign, define_many};
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{GoExpression, Stability};
 use crate::state::bindings::{BindingValue, InlineExpr};
 use crate::state::scope::ScopeState;
 use crate::types::go_type::GoType;

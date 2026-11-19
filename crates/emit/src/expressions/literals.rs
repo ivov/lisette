@@ -2,11 +2,11 @@ use std::fmt::Write;
 use std::mem::take;
 
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
+use crate::ir::go_expression::{BinaryOp, CompositeLayout};
+use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::go_expression::{BinaryOp, CompositeLayout};
-use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::program::SlotOrigin;

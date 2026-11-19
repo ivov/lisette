@@ -10,19 +10,19 @@ use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
 use crate::abi::layout::ValueLayout;
 use crate::abi::transition::multi_value_return;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name;
-use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement,
     assign, define,
 };
-use crate::plan::calls::{CallPlan, CallableOrigin};
-use crate::plan::go_expression::{
+use crate::ir::go_expression::{
     BinaryOp, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
-use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
+use crate::ir::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
+use crate::names::go_name;
+use crate::names::go_name::GeneratedPackage;
+use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use crate::{Planner, written_span};
 use syntax::EcoString;

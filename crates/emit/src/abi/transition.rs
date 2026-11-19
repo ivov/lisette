@@ -6,18 +6,18 @@ use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::wrapping::WrapperTarget;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name::GeneratedPackage;
-use crate::patterns::matching::{PartialVariant, PreludeVariant, prelude_constructor};
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
 };
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::names::go_name::GeneratedPackage;
+use crate::patterns::matching::{PartialVariant, PreludeVariant, prelude_constructor};
+use crate::state::expression::ExpressionContext;
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::{Adaptation, SlotOrigin};

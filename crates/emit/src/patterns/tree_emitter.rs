@@ -1,15 +1,22 @@
-use crate::plan::go_expression::Position;
+use crate::ir::go_expression::Position;
 use std::iter;
 use syntax::go_names::ENUM_TAG_FIELD;
 
-use crate::plan::bodies::GoUses;
+use crate::ir::bodies::GoUses;
 use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
-use crate::context::expression::ExpressionContext;
+use crate::ir::bodies::{
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, PlacePlan, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
+    direct_first, directed_first,
+};
+use crate::ir::go_expression::{BinaryOp, GoExpressionNode};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::binding_emit::tree_binding_statements;
 use crate::patterns::decision_tree::{
@@ -17,16 +24,9 @@ use crate::patterns::decision_tree::{
     SubjectRoot, SwitchBranch, SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch,
     boolean_literal, compile_match_arms, render_condition, tree_has_unguarded_terminal,
 };
-use crate::plan::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
-    LoweredStatement, PlacePlan, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
-    direct_first, directed_first,
-};
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
-use crate::plan::local::GoIdentifier;
 use crate::plan::placement::unreachable_panic_if_needed;
-use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 
 struct FlatCase<'d> {

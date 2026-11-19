@@ -3,4 +3,3 @@ pub(crate) mod go_name;
 pub(crate) mod packages;
 pub(crate) mod resolution;
 pub(crate) mod source_name;
-pub(crate) mod spelling;

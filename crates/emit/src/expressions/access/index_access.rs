@@ -4,10 +4,10 @@ use syntax::ast::Expression;
 use syntax::program::NativeTypeKind;
 
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::is_order_sensitive;
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 
 impl Planner<'_> {
     pub(crate) fn plan_index_access(

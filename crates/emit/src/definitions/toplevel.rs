@@ -1,10 +1,10 @@
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
+use crate::ir::bodies::{ConstPlan, LoweredStatement};
+use crate::ir::declarations::{DeclarationKind, GoDeclaration};
+use crate::ir::values::GoExpression;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
-use crate::plan::bodies::{ConstPlan, LoweredStatement};
-use crate::plan::declarations::{DeclarationKind, GoDeclaration};
-use crate::plan::values::GoExpression;
+use crate::state::expression::ExpressionContext;
 use syntax::EcoString;
 use syntax::ast::BindingId;
 use syntax::ast::{Expression, Generic};

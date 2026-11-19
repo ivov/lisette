@@ -2,19 +2,19 @@ use std::mem;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::names::go_name;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     AssignForm, CompoundKind, Definition, ElseArm, IfOrigin, IfPlan, LoopKind, LoopTransfer,
     LoweredBlock, LoweredStatement, SelectArmKind, Statement, SwitchKind, for_each_statements_mut,
 };
-use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::{
+use crate::ir::evaluation::Effects;
+use crate::ir::go_expression::{
     BinaryOp, GoExpressionNode, Operand, UnaryOp, verbatim_identifiers,
 };
-use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::source_reuse::reuse_dead_copy_sources;
-use crate::plan::values::GoExpression;
-use crate::plan::visit::{VisitorMut, visit_statements_mut};
+use crate::ir::local::{GoIdentifier, LocalId};
+use crate::ir::values::GoExpression;
+use crate::ir::visit::{VisitorMut, visit_statements_mut};
+use crate::names::go_name;
+use crate::passes::source_reuse::reuse_dead_copy_sources;
 use crate::state::package_state::PackageState;
 use crate::state::scope::{ScopeState, TypeParam};
 use crate::types::go_type::GoType;

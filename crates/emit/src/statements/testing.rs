@@ -1,14 +1,14 @@
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
-use crate::names::go_name::{self, GeneratedPackage};
-use crate::names::packages::PackageUse;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
 };
-use crate::plan::go_expression::{CompositeLayout, UnaryOp};
-use crate::plan::values::CaptureBoundary;
-use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
+use crate::ir::go_expression::{CompositeLayout, UnaryOp};
+use crate::ir::values::CaptureBoundary;
+use crate::ir::values::{GoExpression, OperandForm, ValuePlan};
+use crate::names::go_name::{self, GeneratedPackage};
+use crate::names::packages::PackageUse;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
 use syntax::program::{EqualityRecipe, OperandConversion};

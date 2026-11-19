@@ -7,11 +7,11 @@ use rustc_hash::FxHashSet as HashSet;
 
 use crate::ReturnContext;
 use crate::analyze::reusable_bindings::ReusableBindings;
-use crate::context::lowering::LoopContext;
-use crate::plan::bodies::LoopId;
-use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::values::GoExpression;
+use crate::ir::bodies::LoopId;
+use crate::ir::local::{GoIdentifier, LocalId};
+use crate::ir::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
+use crate::state::lowering::LoopContext;
 use syntax::EcoString;
 use syntax::ast::{BindingId, Expression, IdentifierResolution};
 use syntax::types::Type;

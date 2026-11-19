@@ -1,7 +1,7 @@
 use syntax::ast::Expression;
 use syntax::types::Type;
 
-use crate::plan::values::CaptureBoundary;
+use crate::ir::values::CaptureBoundary;
 use syntax::program::SlotOrigin;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

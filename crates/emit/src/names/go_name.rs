@@ -4,8 +4,8 @@ use syntax::ast::StructFieldDefinition;
 use syntax::go_names::{ENUM_TAG_FIELD, struct_field_go_name};
 use syntax::types::Type;
 
+use crate::ir::values::GoExpression;
 use crate::names::packages::PackageUse;
-use crate::plan::values::GoExpression;
 
 pub(crate) const GO_IMPORT_PREFIX: &str = "go:";
 

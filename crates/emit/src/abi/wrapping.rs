@@ -7,13 +7,13 @@ use crate::control_flow::fallible::{
     PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
 };
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define, define_many,
 };
-use crate::plan::go_expression::{BinaryOp, UnaryOp};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
+use crate::names::go_name::GeneratedPackage;
 use crate::types::go_type::GoType;
 use syntax::types::{GoNilForm, Type};
 

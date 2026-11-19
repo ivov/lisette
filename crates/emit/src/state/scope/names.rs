@@ -2,8 +2,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::go_names::is_go_reserved_word;
 
 use super::ScopeState;
+use crate::ir::local::{GoIdentifier, LocalId};
 use crate::names::go_name;
-use crate::plan::local::{GoIdentifier, LocalId};
 use crate::state::package_state::PackageState;
 
 #[derive(Clone, Default)]

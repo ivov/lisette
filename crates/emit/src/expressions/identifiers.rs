@@ -1,9 +1,9 @@
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
-use crate::context::expression::ExpressionContext;
+use crate::ir::values::GoExpression;
 use crate::names::go_name;
-use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::CallOperation;

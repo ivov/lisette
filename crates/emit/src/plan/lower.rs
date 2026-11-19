@@ -3,20 +3,20 @@ use crate::abi::transition::try_emit_layout_return;
 use crate::analyze::component_uses::component_demand;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::predicates::strip_negations;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::toplevel::ConstPlacement;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan, Statement, directed_first, with_setup,
 };
-use crate::plan::go_expression::{BinaryOp, UnaryOp};
-use crate::plan::local::GoIdentifier;
+use crate::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, ValuePlan};
 use crate::plan::placement::{
     ElidableTail, collapse_declared_temp, requires_temp_var, try_elide_tail_let,
 };
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use std::iter;
 use std::slice;
 use syntax::ast::{

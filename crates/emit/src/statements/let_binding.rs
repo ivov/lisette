@@ -6,21 +6,21 @@ use crate::abi::wrapping::WrapperTarget;
 use crate::analyze::component_uses::ComponentDemand;
 use crate::analyze::component_uses::ValueDemand;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::context::expression::ExpressionContext;
 use crate::escape_local;
+use crate::ir::bodies::{
+    LoweredBlock, LoweredStatement, Statement, assign, define, define_many, effect_statement,
+};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{ConstantKind, GoExpression};
 use crate::names::source_name::SourceName;
 use crate::patterns::decision_tree::collect_pattern_info;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::{
-    LoweredBlock, LoweredStatement, Statement, assign, define, define_many, effect_statement,
-};
-use crate::plan::local::GoIdentifier;
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_zero_call, rebind_trailing_temp,
     rebind_updated_temp, requires_temp_var,
 };
-use crate::plan::values::{ConstantKind, GoExpression};
 use crate::state::bindings::{ComponentKind, TupleBinding};
+use crate::state::expression::ExpressionContext;
 use syntax::EcoString;
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;

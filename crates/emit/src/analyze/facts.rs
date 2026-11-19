@@ -13,9 +13,9 @@ use crate::EnumLayout;
 use crate::SharedEmitContext;
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::catalog::GoSlotDescriptor;
-use crate::context::lowering::LineIndex;
 use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
+use crate::state::lowering::LineIndex;
 
 #[derive(Clone)]
 pub(crate) struct EmitFacts<'a> {

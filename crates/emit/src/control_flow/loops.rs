@@ -1,18 +1,18 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SequenceStage;
+use crate::ir::bodies::GoUses;
+use crate::ir::bodies::{
+    LoopHeader, LoweredBlock, LoweredStatement, Statement, define, discard, with_setup,
+};
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::ConstantKind;
+use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::names::go_name;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::GoUses;
-use crate::plan::bodies::{
-    LoopHeader, LoweredBlock, LoweredStatement, Statement, define, discard, with_setup,
-};
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::ConstantKind;
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::shape::RangeShape;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;

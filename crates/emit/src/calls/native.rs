@@ -2,19 +2,18 @@ use super::{NativeCallContext, NativeCallForm, split_native_receiver};
 use crate::Planner;
 use crate::analyze::facts::EmitFacts;
 use crate::calls::slice_loop::SliceLoopTarget;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::expressions::access::index_access::range_var_bounds;
 use crate::expressions::staging::SpreadSequenceOptions;
+use crate::ir::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
+use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::statements::assignments::lvalues_match;
 use crate::types::go_type::GoType;
-use crate::types::native;
 use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::program::{
     CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
@@ -460,7 +459,7 @@ impl Planner<'_> {
             GeneratedPackage::Prelude,
             format!(
                 "{}{}",
-                native::method_prefix(context.native_type),
+                method_prefix(context.native_type),
                 go_name::snake_to_camel(context.method)
             ),
         );
@@ -934,4 +933,11 @@ fn substring_call(
         GoExpression::generated(GeneratedPackage::Prelude, function),
         arguments,
     )
+}
+
+pub(crate) fn method_prefix(kind: NativeTypeKind) -> &'static str {
+    match kind {
+        NativeTypeKind::String => "String",
+        _ => kind.name(),
+    }
 }

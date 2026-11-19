@@ -1,13 +1,13 @@
 use crate::Planner;
 use crate::control_flow::fallible;
+use crate::ir::values::GoExpression;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
-use crate::plan::values::GoExpression;
 use syntax::ast::{Pattern, RestPattern, StructFieldDefinition, StructFields};
 use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types;
-use syntax::types::{Type, substitute};
+use syntax::types::{Symbol, Type, substitute};
 
 impl Planner<'_> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<SourceName> {
@@ -317,5 +317,20 @@ impl Planner<'_> {
             }
         }
         None
+    }
+}
+
+pub(crate) struct ResolvedNominal<'a> {
+    pub(crate) id: Symbol,
+    pub(crate) definition: &'a Definition,
+}
+
+impl<'a> Planner<'a> {
+    pub(crate) fn resolve_nominal(&self, ty: &Type) -> Option<ResolvedNominal<'a>> {
+        let Type::Nominal { id, .. } = self.facts.strip_and_peel(ty) else {
+            return None;
+        };
+        let definition = self.facts.definition(id.as_str())?;
+        Some(ResolvedNominal { id, definition })
     }
 }

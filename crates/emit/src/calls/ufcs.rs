@@ -4,12 +4,12 @@ use crate::calls::regular::receiver_type_binding;
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
-use crate::plan::bodies::Statement;
+use crate::ir::bodies::Statement;
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
 use syntax::program::ReceiverCoercion;

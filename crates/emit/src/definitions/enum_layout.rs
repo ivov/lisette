@@ -3,18 +3,18 @@ use crate::abi::transition::multi_value_return;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::structs::{StringFormat, format_value};
 use crate::expressions::display_form::DisplayForm;
-use crate::names::go_name::{self, GeneratedPackage};
-use crate::names::packages::PackageUse;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     Definition as GoDefinition, ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock,
     LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan, assign,
 };
-use crate::plan::declarations::{
+use crate::ir::declarations::{
     ConstantDeclaration, DeclarationKind, FunctionSignature, GoDeclaration, TypeParameter,
 };
-use crate::plan::go_expression::{BinaryOp, CompositeLayout, GoParameter};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::ir::go_expression::{BinaryOp, CompositeLayout, GoParameter};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
+use crate::names::go_name::{self, GeneratedPackage};
+use crate::names::packages::PackageUse;
 use crate::types::go_type::GoType;
 use crate::utils::ReceiverGenerics;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};

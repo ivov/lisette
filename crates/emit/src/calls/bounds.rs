@@ -1,9 +1,9 @@
 use super::NativeCallContext;
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
-use crate::plan::bodies::Statement;
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::values::{CaptureBoundary, GoExpression};
+use crate::ir::bodies::Statement;
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::values::{CaptureBoundary, GoExpression};
+use crate::state::expression::ExpressionContext;
 
 pub(crate) struct BoundsCheckedIndex {
     receiver: GoExpression,

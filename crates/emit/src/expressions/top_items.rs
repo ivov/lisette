@@ -1,15 +1,15 @@
 use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
+use crate::ir::bodies::{
+    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, expression_statement,
+};
+use crate::ir::declarations::GoDeclaration;
+use crate::ir::go_expression::{BinaryOp, GoParameter};
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::go_name::{self, testing_qualifier, testkit_qualifier};
 use crate::names::packages::PackageUse;
-use crate::plan::bodies::{
-    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, expression_statement,
-};
-use crate::plan::declarations::GoDeclaration;
-use crate::plan::go_expression::{BinaryOp, GoParameter};
-use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Visibility};
 use syntax::types::Type;

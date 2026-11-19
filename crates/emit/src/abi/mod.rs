@@ -8,9 +8,9 @@ pub(crate) mod transition;
 pub(crate) mod wrapping;
 
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::calls::CallableOrigin;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;

@@ -1,7 +1,7 @@
 use crate::types::go_type::GoTypeKind;
 
-use crate::plan::go_expression::{BinaryOp, CallPurity, GoExpressionNode};
-use crate::plan::values::Stability;
+use crate::ir::go_expression::{BinaryOp, CallPurity, GoExpressionNode};
+use crate::ir::values::Stability;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum EvaluationEffect {

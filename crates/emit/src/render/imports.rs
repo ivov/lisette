@@ -7,7 +7,7 @@ use syntax::program::{File, FileImport, ImportKey};
 
 use crate::names::packages::PackageRequirements;
 
-use super::{ImportGroup, OutputImport};
+use crate::render::output::{ImportGroup, OutputImport};
 
 #[derive(Clone, Default)]
 pub(crate) struct ImportPlan {

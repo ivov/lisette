@@ -1,9 +1,9 @@
 use crate::Planner;
 use crate::abi::layout::ValueLayout;
 use crate::definitions::structs::struct_field_go_name;
+use crate::ir::values::GoExpression;
 use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
-use crate::plan::values::GoExpression;
 use std::borrow::Cow;
 use std::iter::once;
 use std::{fmt::Display, slice};

@@ -1,9 +1,9 @@
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::literals::convert_escape_sequences;
+use crate::ir::bodies::Statement;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::Statement;
-use crate::plan::values::GoExpression;
+use crate::state::expression::ExpressionContext;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 
 pub(crate) struct WrapMessage {

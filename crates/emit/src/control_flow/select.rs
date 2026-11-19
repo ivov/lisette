@@ -1,19 +1,19 @@
 use crate::OuterBindings;
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SequenceStage;
-use crate::patterns::sites::{
-    self, PatternSubject, TypedSubject, is_some_pattern, unwrap_some_pattern,
-};
-use crate::plan::bodies::GoUses;
-use crate::plan::bodies::{
+use crate::ir::bodies::GoUses;
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, SelectArmKind, SelectArmPlan, SelectStatementPlan, Statement, assign, discard,
 };
-use crate::plan::go_expression::{GoExpressionNode, UnaryOp};
-use crate::plan::local::GoIdentifier;
+use crate::ir::go_expression::{GoExpressionNode, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::patterns::sites::{
+    self, PatternSubject, TypedSubject, is_some_pattern, unwrap_some_pattern,
+};
 use crate::plan::placement::unreachable_panic_if_needed;
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::Type;

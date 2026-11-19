@@ -1,13 +1,13 @@
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan,
     LoopTransfer, LoweredBlock, LoweredStatement, SelectArmKind, SelectStatementPlan, Statement,
     SwitchKind, SwitchStatementPlan,
 };
-use crate::plan::go_expression::Position;
-use crate::plan::go_expression::{
+use crate::ir::go_expression::Position;
+use crate::ir::go_expression::{
     CompositeLayout, FunctionLiteralLayout, GoExpressionNode, TreeVisitor,
 };
-use crate::plan::values::GoExpression;
+use crate::ir::values::GoExpression;
 use crate::render::Renderer;
 use crate::render::writer::GoWriter;
 use crate::write_line;

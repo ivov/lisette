@@ -4,19 +4,19 @@ use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::BodyOrigin;
-use crate::names::go_name;
-use crate::names::go_name::GO_IMPORT_PREFIX;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, directed_first,
     expression_statement,
 };
-use crate::plan::declarations::{
+use crate::ir::declarations::{
     DeclarationKind, FieldDeclaration, FunctionSignature, GoDeclaration,
 };
-use crate::plan::go_expression::GoParameter;
-use crate::plan::go_expression::Position;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::ir::go_expression::GoParameter;
+use crate::ir::go_expression::Position;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
+use crate::names::go_name;
+use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::types::go_type::GoType;
 use crate::utils::fresh_receiver_name;
 use ecow::EcoString;

@@ -1,6 +1,6 @@
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
-use crate::plan::go_expression::{GoParameter, Position};
-use crate::plan::values::GoExpression;
+use crate::ir::bodies::{LoweredBlock, LoweredStatement};
+use crate::ir::go_expression::{GoParameter, Position};
+use crate::ir::values::GoExpression;
 use crate::types::go_type::GoType;
 
 #[derive(Clone, Default)]

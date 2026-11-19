@@ -15,8 +15,8 @@ pub(crate) mod wrap_err;
 
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
+use crate::ir::values::CaptureBoundary;
 use crate::plan::calls::CallableOrigin;
-use crate::plan::values::CaptureBoundary;
 use syntax::ast::Expression;
 use syntax::program::{CallOperation, NativeTypeKind};
 use syntax::types::Type;

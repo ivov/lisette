@@ -1,10 +1,8 @@
-pub(crate) mod imports;
-
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
-use self::imports::format_import;
 use crate::expressions::top_items::emit_doc;
+use crate::render::imports::format_import;
 
 #[derive(Clone, Debug)]
 pub struct OutputFile {
