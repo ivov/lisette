@@ -4330,6 +4330,90 @@ fn test() -> time.Duration {
 }
 
 #[test]
+fn numeric_alias_compared_with_wider_number_rejected() {
+    infer(
+        r#"
+type Small = int8
+
+fn test() -> bool {
+  let s: Small = 1
+  let big: int64 = 257
+  s == big
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn numeric_alias_combined_with_wider_number_rejected() {
+    infer(
+        r#"
+type Small = int8
+
+fn test() -> Small {
+  let n: Small = 3
+  let k: int = 2
+  n & k
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn numeric_alias_with_wider_float_rejected() {
+    infer(
+        r#"
+type Ratio = float32
+
+fn test() -> Ratio {
+  let r: Ratio = 1.5
+  let f: float64 = 2.5
+  r + f
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn numeric_alias_with_number_of_same_width_accepted() {
+    infer(
+        r#"
+type Small = int8
+
+type Meters = float64
+
+fn test() -> bool {
+  let s: Small = 1
+  let n: int8 = 2
+  let m: Meters = 2.5
+  let f: float64 = 1.5
+  s < n && m + f > 3.0
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_alias_with_narrower_number_accepted() {
+    infer(
+        r#"
+type Big = int64
+
+fn test() -> Big {
+  let b: Big = 300
+  let n: int8 = 2
+  b * n
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn numeric_alias_chained_ops() {
     infer_with_go_typedefs(
         r#"

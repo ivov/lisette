@@ -4,7 +4,7 @@ use std::mem;
 use syntax::ast::{Expression, FormatStringPart, Literal, MatchArm, SelectArm, Span};
 use syntax::program::{
     Adaptation, CallOperation, CheckedBodiesBuilder, CheckedCallee, CheckedValueUse,
-    ConformanceWitness, DotAccessResolution, InterfaceConversion, NativeOperation,
+    ConformanceWitness, DefinitionBody, DotAccessResolution, InterfaceConversion, NativeOperation,
     ReceiverCoercion, ValueUseKey, interface_requirements, resolved_definition,
     resolved_instantiation,
 };
@@ -59,6 +59,10 @@ impl InferCtx<'_> {
             &operation,
             CallOperation::Native { kind, method } if NativeOperation::new(*kind, method).grows_slice()
         );
+        let binds_receiver = is_instance_method_access(callee)
+            && definition
+                .as_deref()
+                .is_some_and(|definition| declares_receiver(self.store, definition));
         self.facts.value_uses.callees.push((
             ValueUseKey::value(callee),
             CheckedCallee {
@@ -66,6 +70,7 @@ impl InferCtx<'_> {
                 definition,
                 type_arguments,
                 copies_storage,
+                binds_receiver,
                 span: callee.get_span(),
             },
         ));
@@ -150,6 +155,9 @@ impl InferCtx<'_> {
         for (if_let, unit) in mem::take(&mut self.facts.value_uses.implicit_units) {
             bodies.insert_implicit_unit(if_let, unit);
         }
+        for (binary, conversion) in mem::take(&mut self.facts.value_uses.operand_conversions) {
+            bodies.insert_operand_conversion(binary, conversion);
+        }
         let mut equalities = Vec::new();
         for item in items {
             equality::select_equalities(
@@ -202,6 +210,44 @@ pub(crate) fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
     match store.peel_alias(&owner_type) {
         Type::Nominal { id, .. } => id.with_segment(member),
         _ => Symbol::from_raw(definition),
+    }
+}
+
+/// Whether the method `definition` lists its receiver as its first parameter, which interface methods do not.
+fn declares_receiver(store: &Store, definition: &str) -> bool {
+    let Some((owner, member)) = definition.rsplit_once('.') else {
+        return false;
+    };
+    store.get_definition(owner).is_some_and(|declaration| {
+        !matches!(declaration.body, DefinitionBody::Interface { .. })
+            && store.get_method(owner, member).is_some()
+    })
+}
+
+/// The operation that a function value naming the declaration `definition` runs when it is called.
+fn method_value_operation(store: &Store, definition: &str) -> CallOperation {
+    let Some((owner, member)) = definition.rsplit_once('.') else {
+        return CallOperation::Function;
+    };
+    let Some(method) = store.get_method(owner, member) else {
+        return CallOperation::Function;
+    };
+    let takes_receiver = method
+        .ty
+        .unwrap_forall()
+        .get_function_params()
+        .and_then(<[_]>::first)
+        .is_some_and(|receiver| {
+            matches!(receiver.ty.strip_refs(), Type::Nominal { id, .. } if id.as_str() == owner)
+        });
+    if !takes_receiver {
+        CallOperation::Function
+    } else if store.is_ufcs_method(owner, member) {
+        CallOperation::UfcsFunction
+    } else {
+        CallOperation::ReceiverMethod {
+            is_public: method.visibility.is_public(),
+        }
     }
 }
 
@@ -409,14 +455,20 @@ impl Finalizer<'_, '_> {
         {
             return;
         }
+        let definition = resolved_definition(expression)
+            .map(|definition| unaliased_owner(self.store, definition));
         let checked = CheckedCallee {
-            operation: CallOperation::Function,
-            definition: resolved_definition(expression)
-                .map(|definition| unaliased_owner(self.store, definition)),
+            operation: definition
+                .as_deref()
+                .map_or(CallOperation::Function, |definition| {
+                    method_value_operation(self.store, definition)
+                }),
+            definition,
             type_arguments: resolved_instantiation(expression)
                 .cloned()
                 .unwrap_or_default(),
             copies_storage: false,
+            binds_receiver: false,
             span: expression.get_span(),
         };
         self.bodies.insert_callee(key, checked);

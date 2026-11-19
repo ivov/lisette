@@ -10,7 +10,7 @@ use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
-use syntax::program::DefinitionBody;
+use syntax::program::{DefinitionBody, OperandConversion};
 use syntax::types::Type;
 
 struct NumericBinaryEmitInfo {
@@ -54,6 +54,7 @@ impl Planner<'_> {
         operator: &BinaryOperator,
         left_expression: &Expression,
         right_expression: &Expression,
+        conversion: Option<OperandConversion>,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         if matches!(operator, BinaryOperator::Pipeline) {
@@ -63,7 +64,7 @@ impl Planner<'_> {
         let left = BinaryOperand::of(left_expression);
         let right = BinaryOperand::of(right_expression);
 
-        if let Some(casts) = is_casting_needed(&self.facts, operator, &left, &right) {
+        if let Some(casts) = conversion.map(|conversion| operand_casts(conversion, &left, &right)) {
             let left_plan = self.plan_operand(left_expression, ctx);
             let right_plan = self.plan_operand(right_expression, ctx);
             return self.combine_binary(operator, left_plan, right_plan, Some(casts));
@@ -114,8 +115,9 @@ impl Planner<'_> {
         operator: &BinaryOperator,
         left: (&BinaryOperand, ValuePlan),
         right: (&BinaryOperand, ValuePlan),
+        conversion: Option<OperandConversion>,
     ) -> ValuePlan {
-        let casts = is_casting_needed(&self.facts, operator, left.0, right.0);
+        let casts = conversion.map(|conversion| operand_casts(conversion, left.0, right.0));
         self.combine_binary(operator, left.1, right.1, casts)
     }
 
@@ -245,7 +247,8 @@ impl Planner<'_> {
             && let Some(flipped) = flip_comparison(cmp)
             && flip_preserves_nan(&self.facts, cmp, left, right)
         {
-            return self.plan_binary(&flipped, left, right, ctx);
+            let conversion = self.facts.checked(target).operand_conversion();
+            return self.plan_binary(&flipped, left, right, conversion, ctx);
         }
         let (innermost, inner_negated) = strip_negations(expression);
         if let Some(predicate) = self.lower_fused_predicate_value(innermost, !inner_negated) {
@@ -405,42 +408,6 @@ impl Planner<'_> {
     }
 }
 
-fn is_numeric_binary_op(operator: &BinaryOperator) -> bool {
-    use BinaryOperator::*;
-    matches!(
-        operator,
-        Addition
-            | Subtraction
-            | Multiplication
-            | Division
-            | Remainder
-            | BitwiseAnd
-            | BitwiseOr
-            | BitwiseXor
-            | BitwiseAndNot
-            | ShiftLeft
-            | ShiftRight
-            | LessThan
-            | LessThanOrEqual
-            | GreaterThan
-            | GreaterThanOrEqual
-            | Equal
-            | NotEqual
-    )
-}
-
-/// Common underlying numeric type when both operands lower to the same
-/// numeric family; `None` if either operand is non-numeric or the two
-/// numeric families differ.
-fn matching_underlying_numeric(facts: &EmitFacts<'_>, left: &Type, right: &Type) -> Option<Type> {
-    let left_underlying = facts.underlying_numeric_type(left)?;
-    let right_underlying = facts.underlying_numeric_type(right)?;
-    if left_underlying.numeric_family()? != right_underlying.numeric_family()? {
-        return None;
-    }
-    Some(left_underlying)
-}
-
 fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
     if is_literal {
         None
@@ -449,42 +416,21 @@ fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
     }
 }
 
-/// Go requires explicit casts when mixing aliased numeric types with
-/// their underlying types.
-fn is_casting_needed(
-    facts: &EmitFacts<'_>,
-    operator: &BinaryOperator,
+/// The conversion of the operand that the checker recorded, which Go writes out unless that operand is an untyped constant.
+fn operand_casts(
+    conversion: OperandConversion,
     left: &BinaryOperand,
     right: &BinaryOperand,
-) -> Option<NumericBinaryEmitInfo> {
-    if !is_numeric_binary_op(operator)
-        || matches!(
-            operator,
-            BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
-        )
-    {
-        return None;
-    }
-
-    matching_underlying_numeric(facts, &left.ty, &right.ty)?;
-
-    let left_is_aliased = facts.is_aliased_numeric_type(&left.ty);
-    let right_is_aliased = facts.is_aliased_numeric_type(&right.ty);
-
-    if left.ty == right.ty {
-        return None;
-    }
-
-    match (left_is_aliased, right_is_aliased) {
-        (true, false) => Some(NumericBinaryEmitInfo {
-            cast_left_to: None,
-            cast_right_to: cast_unless_literal(right.is_literal, &left.ty),
-        }),
-        (false, true) => Some(NumericBinaryEmitInfo {
+) -> NumericBinaryEmitInfo {
+    match conversion {
+        OperandConversion::Left => NumericBinaryEmitInfo {
             cast_left_to: cast_unless_literal(left.is_literal, &right.ty),
             cast_right_to: None,
-        }),
-        _ => None,
+        },
+        OperandConversion::Right => NumericBinaryEmitInfo {
+            cast_left_to: None,
+            cast_right_to: cast_unless_literal(right.is_literal, &left.ty),
+        },
     }
 }
 

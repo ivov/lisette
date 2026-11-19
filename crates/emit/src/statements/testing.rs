@@ -1,8 +1,7 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::definitions::functions::is_test_context_ty;
 use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
-use crate::names::go_name::GeneratedPackage;
+use crate::names::go_name::{self, GeneratedPackage};
 use crate::names::packages::PackageUse;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
@@ -12,7 +11,7 @@ use crate::plan::values::CaptureBoundary;
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
-use syntax::program::EqualityRecipe;
+use syntax::program::{EqualityRecipe, OperandConversion};
 
 pub(crate) fn testkit_operand_type() -> GoType {
     GoType::named(
@@ -61,7 +60,8 @@ impl Planner<'_> {
         } = operand
             && is_assert_relation(operator)
         {
-            self.lower_relation_assert(operator, left, right, &mut statements)
+            let conversion = self.facts.checked(operand).operand_conversion();
+            self.lower_relation_assert(operator, left, right, conversion, &mut statements)
         } else if let Some(recipe) = self.facts.checked(expression).equality()
             && let Some((recv, arg)) = equals_decomposition(operand)
         {
@@ -111,25 +111,17 @@ impl Planner<'_> {
 
     pub(crate) fn is_test_log_call(&self, expression: &Expression) -> bool {
         let Expression::Call {
-            expression: callee,
-            args,
-            ..
+            expression: callee, ..
         } = expression.unwrap_parens()
         else {
             return false;
         };
-        if args.len() != 1 {
-            return false;
-        }
-        let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = callee.unwrap_parens()
-        else {
-            return false;
-        };
-        member.as_str() == "log" && is_test_context_ty(&receiver.get_type())
+        self.facts
+            .checked(callee)
+            .callee()
+            .definition
+            .as_deref()
+            .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD)
     }
 
     pub(crate) fn lower_test_log_statement(&mut self, expression: &Expression) -> LoweredStatement {
@@ -185,6 +177,7 @@ impl Planner<'_> {
         operator: &BinaryOperator,
         left: &Expression,
         right: &Expression,
+        conversion: Option<OperandConversion>,
         statements: &mut Vec<Statement>,
     ) -> AssertShape {
         let (lhs, rhs) =
@@ -197,6 +190,7 @@ impl Planner<'_> {
                 flipped.as_ref().unwrap_or(operator),
                 (&lhs.operand, lhs.value),
                 (&rhs.operand, rhs.value),
+                conversion,
             )
             .into_parts();
         statements.extend(cond_setup);

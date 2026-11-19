@@ -117,6 +117,8 @@ pub struct CheckedCallee {
     pub type_arguments: SubstitutionMap,
     /// Whether the call must write into storage that no other name sees, as slice growth must.
     pub copies_storage: bool,
+    /// Whether the callee holds the receiver that the first parameter of its declaration takes, as `x.m(a)` does.
+    pub binds_receiver: bool,
     /// Where the callee is written, for diagnostics.
     pub span: Span,
 }
@@ -128,6 +130,11 @@ impl CheckedCallee {
             CallOperation::Native { kind, method } => Some(NativeOperation::new(*kind, method)),
             _ => None,
         }
+    }
+
+    /// The index of the declared parameter that the first argument of the call fills.
+    pub fn receiver_offset(&self) -> usize {
+        usize::from(self.binds_receiver)
     }
 
     /// The type arguments that a call spells, which are the last `written` of the callee.
@@ -179,6 +186,15 @@ pub enum CallOperation {
     Unavailable,
 }
 
+/// The operand of a binary expression that converts to the type of the other operand, as the checker accepted it.
+///
+/// The checker accepts a numeric alias with a plain number of the same numeric family, and the plain operand converts to the alias.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperandConversion {
+    Left,
+    Right,
+}
+
 /// How a program tests two values of one type for equality, as the checker selected it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EqualityRecipe {
@@ -222,6 +238,8 @@ pub struct CheckedBodies {
     equalities: HashMap<ExpressionId, EqualityRecipe>,
     /// The unit value of each `if let` with no `else`, keyed by the `if let`.
     implicit_units: HashMap<ExpressionId, ExpressionId>,
+    /// Keyed by the binary expression whose operand converts.
+    operand_conversions: HashMap<ExpressionId, OperandConversion>,
 }
 
 impl CheckedBodies {
@@ -277,12 +295,22 @@ impl CheckedBodiesBuilder {
         insert_unique(&mut self.records.implicit_units, if_let, unit);
     }
 
+    /// Record that the operand `conversion` of the binary expression `binary` converts to the type of the other operand.
+    pub fn insert_operand_conversion(
+        &mut self,
+        binary: ExpressionId,
+        conversion: OperandConversion,
+    ) {
+        insert_unique(&mut self.records.operand_conversions, binary, conversion);
+    }
+
     pub fn merge(&mut self, other: Self) {
         let CheckedBodies {
             uses,
             callees,
             equalities,
             implicit_units,
+            operand_conversions,
         } = other.records;
         for (key, value_use) in uses {
             self.insert_use(key, value_use);
@@ -295,6 +323,9 @@ impl CheckedBodiesBuilder {
         }
         for (if_let, unit) in implicit_units {
             self.insert_implicit_unit(if_let, unit);
+        }
+        for (binary, conversion) in operand_conversions {
+            self.insert_operand_conversion(binary, conversion);
         }
     }
 
@@ -374,6 +405,14 @@ impl<'a> CheckedExpression<'_, 'a> {
         self.bodies
             .implicit_units
             .get(&self.expression.id())
+            .copied()
+    }
+
+    /// The operand of this binary expression that converts to the type of the other operand, or None when no operand converts.
+    pub fn operand_conversion(&self) -> Option<OperandConversion> {
+        self.bodies
+            .operand_conversions
+            .get(&self.expression.unwrap_parens().id())
             .copied()
     }
 

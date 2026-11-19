@@ -22,7 +22,6 @@ use std::slice;
 use syntax::ast::Pattern;
 use syntax::ast::{Expression, Literal};
 use syntax::program::CallOperation;
-use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
@@ -417,7 +416,7 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
     }
 }
 
-impl Planner<'_> {
+impl<'p> Planner<'p> {
     pub(crate) fn is_unit_call(&self, expression: &Expression) -> bool {
         // `zero<()>()` yields a value rather than running for its effect.
         self.facts.resolves_to_unit(&expression.get_type())
@@ -818,16 +817,14 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn slice_growth_method<'e>(&self, func: &'e Expression) -> Option<(&'e str, &'e Expression)> {
-        if let Expression::DotAccess {
-            expression, member, ..
-        } = func
-            && syntax::program::NativeOperation::new(NativeTypeKind::Slice, member).grows_slice()
-            && self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice)
-        {
-            return Some((member.as_str(), expression));
-        }
-        None
+    fn slice_growth_method<'e>(&self, func: &'e Expression) -> Option<(&'p str, &'e Expression)> {
+        let Expression::DotAccess { expression, .. } = func else {
+            return None;
+        };
+        let operation = self.facts.checked(func).callee().native()?;
+        operation
+            .grows_slice()
+            .then_some((operation.method, expression))
     }
 
     /// The growth arguments, plus their setup and effect as the plan the
