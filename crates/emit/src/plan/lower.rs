@@ -19,7 +19,9 @@ use crate::plan::placement::{
 use crate::plan::values::{GoExpression, ValuePlan};
 use std::iter;
 use std::slice;
-use syntax::ast::{BinaryOperator, Expression, IfLetAlternative, Literal, MatchArm, Pattern, Span};
+use syntax::ast::{
+    BinaryOperator, Expression, ExpressionId, IfLetAlternative, Literal, MatchArm, Pattern, Span,
+};
 use syntax::types::Type;
 
 fn if_let_match_arms(
@@ -27,11 +29,13 @@ fn if_let_match_arms(
     consequence: &Expression,
     alternative: &IfLetAlternative,
     span: Span,
+    implicit_unit: Option<ExpressionId>,
 ) -> Vec<MatchArm> {
     let alternative = alternative
         .expression()
         .cloned()
-        .unwrap_or(Expression::Unit {
+        .unwrap_or_else(|| Expression::Unit {
+            id: implicit_unit.expect("internal error: an `if let` with no `else` has its unit"),
             ty: Type::unit(),
             span,
         });
@@ -241,7 +245,8 @@ impl Planner<'_> {
         };
 
         let Some((last, rest)) =
-            try_elide_tail_let(items, ElidableTail::FallibleBlock).or_else(|| items.split_last())
+            try_elide_tail_let(&self.facts, items, ElidableTail::FallibleBlock)
+                .or_else(|| items.split_last())
         else {
             return LoweredBlock {
                 statements: Vec::new(),
@@ -416,7 +421,9 @@ impl Planner<'_> {
                 span,
                 ..
             } => {
-                let arms = if_let_match_arms(pattern, consequence, alternative, *span);
+                let implicit_unit = self.facts.checked(expression).implicit_unit();
+                let arms =
+                    if_let_match_arms(pattern, consequence, alternative, *span, implicit_unit);
                 let body = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Statement);
                 self.directed_at(expression, LoweredStatement::Body(body))
             }
@@ -687,7 +694,9 @@ impl Planner<'_> {
                 span,
                 ..
             } => {
-                let arms = if_let_match_arms(pattern, consequence, alternative, *span);
+                let implicit_unit = self.facts.checked(expression).implicit_unit();
+                let arms =
+                    if_let_match_arms(pattern, consequence, alternative, *span, implicit_unit);
                 self.lower_match_to_block(scrutinee, &arms, place)
             }
             Expression::Match { subject, arms, .. } => {
@@ -744,8 +753,8 @@ impl Planner<'_> {
             slice::from_ref(expression)
         };
 
-        let Some((last, rest)) =
-            try_elide_tail_let(items, ElidableTail::Branching).or_else(|| items.split_last())
+        let Some((last, rest)) = try_elide_tail_let(&self.facts, items, ElidableTail::Branching)
+            .or_else(|| items.split_last())
         else {
             return LoweredBlock {
                 statements: Vec::new(),

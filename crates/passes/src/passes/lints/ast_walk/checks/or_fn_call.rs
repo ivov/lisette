@@ -1,6 +1,7 @@
 use crate::passes::walk::NodeCtx;
+use semantics::facts::Selections;
 use syntax::ast::Expression;
-use syntax::program::CallKind;
+use syntax::program::CallOperation;
 
 use super::helpers::has_escaping_control_flow;
 
@@ -51,7 +52,7 @@ pub fn check_or_fn_call(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    if !does_real_work(eager_argument) {
+    if !does_real_work(eager_argument, &ctx.facts.selections) {
         return;
     }
 
@@ -72,31 +73,38 @@ pub fn check_or_fn_call(expression: &Expression, ctx: &NodeCtx) {
 
 // Descends through cheap wrappers (arithmetic, field reads, value constructors),
 // but stops at a closure, whose body does not run until invoked.
-fn does_real_work(argument: &Expression) -> bool {
+fn does_real_work(argument: &Expression, selections: &Selections) -> bool {
     match argument.unwrap_parens() {
         Expression::Lambda { .. } => false,
-        Expression::Call {
+        call @ Expression::Call {
             expression: callee,
             args,
-            call_kind,
             ..
         } => {
-            if is_value_constructor(callee, call_kind) {
-                args.iter().any(does_real_work)
+            if is_value_constructor(callee, selections.call_operation(call)) {
+                args.iter().any(|arg| does_real_work(arg, selections))
             } else {
                 true
             }
         }
-        other => other.children().into_iter().any(does_real_work),
+        other => other
+            .children()
+            .into_iter()
+            .any(|child| does_real_work(child, selections)),
     }
 }
 
-fn is_value_constructor(callee: &Expression, call_kind: &CallKind) -> bool {
-    match call_kind {
-        CallKind::TupleStructConstructor => true,
-        // Enum-variant constructors resolve to `Regular`; an unresolved callee
+fn is_value_constructor(callee: &Expression, operation: Option<&CallOperation>) -> bool {
+    match operation {
+        Some(CallOperation::TupleStructConstructor) => true,
+        // Enum-variant constructors resolve to a function; an unresolved callee
         // may still be one, so fall back to the leaf-name shape in both cases.
-        CallKind::Regular | CallKind::Unresolved => is_pascal_case_constructor(callee),
+        None
+        | Some(
+            CallOperation::Function
+            | CallOperation::BoundMethod { .. }
+            | CallOperation::Unavailable,
+        ) => is_pascal_case_constructor(callee),
         _ => false,
     }
 }

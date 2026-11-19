@@ -58,7 +58,6 @@ description: |
                                             byte_offset: 29,
                                             byte_length: 13,
                                         },
-                                        call_kind: Unresolved,
                                     },
                                     consequence: Block {
                                         items: [

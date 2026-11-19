@@ -321,6 +321,9 @@ impl<'a> FreezeFolder<'a> {
         facts.deferred.visit_types_mut(|ty| {
             self.env.resolve_in_place(ty);
         });
+        facts
+            .value_uses
+            .visit_types_mut(|ty| self.freeze_expr_ty(ty));
     }
 
     fn freeze_ty(&self, ty: &mut Type) {

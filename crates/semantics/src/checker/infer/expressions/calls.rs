@@ -1,3 +1,4 @@
+use super::call_effects::CallKind;
 use crate::checker::EnvResolve;
 use crate::facts::GenericCallCheck;
 use crate::facts::SliceMakeCheck;
@@ -5,7 +6,7 @@ use ecow::EcoString;
 use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
-use syntax::program::{CallKind, DefinitionBody, NativeTypeKind};
+use syntax::program::{CallOperation, DefinitionBody, NativeTypeKind, resolved_instantiation};
 use syntax::types::{
     Bound, CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, substitute,
     unqualified_name,
@@ -433,14 +434,20 @@ impl InferCtx<'_> {
             &new_args,
         );
 
+        if let Some(operation) = self.select_call_operation(&callee_expression, call_kind) {
+            let callee_type_arguments =
+                self.call_type_arguments(&callee_expression, &type_arguments, &declared_callee_ty);
+            self.record_callee(&callee_expression, operation, callee_type_arguments);
+        }
+
         Expression::Call {
+            id: self.fresh_expression_id(),
             expression: callee_expression.into(),
             args: new_args,
             spread: new_spread.map(Box::new),
             type_arguments,
             ty: call_ty,
             span,
-            call_kind,
         }
     }
 
@@ -536,14 +543,19 @@ impl InferCtx<'_> {
         let new_spread = call
             .spread
             .map(|s| self.with_value_context(|state| state.infer_expression(*s, &Type::Error)));
+        self.record_callee(
+            &call.expression,
+            CallOperation::Unavailable,
+            SubstitutionMap::default(),
+        );
         Expression::Call {
+            id: self.fresh_expression_id(),
             expression: call.expression,
             args: new_args,
             spread: new_spread.map(Box::new),
             type_arguments: CallTypeArguments::checked_without_types(call.type_args),
             ty: Type::Error,
             span,
-            call_kind: CallKind::Unresolved,
         }
     }
 
@@ -728,20 +740,35 @@ impl InferCtx<'_> {
 
         let callee_ty = Type::function(Vec::new(), Vec::new(), Box::new(array_ty.clone()));
         let callee_expression = Expression::Identifier {
+            id: self.fresh_expression_id(),
             value: "Array.new".into(),
             ty: callee_ty,
             span: callee.get_span(),
             resolution: IdentifierResolution::Unresolved,
         };
 
+        self.record_value_use(
+            &callee_expression,
+            &callee_expression.get_type(),
+            Vec::new(),
+        );
+        self.record_callee(
+            &callee_expression,
+            CallOperation::NativeConstructor {
+                kind: NativeTypeKind::Array,
+                method: "new".into(),
+            },
+            SubstitutionMap::default(),
+        );
+
         Expression::Call {
+            id: self.fresh_expression_id(),
             expression: callee_expression.into(),
             args: new_args,
             spread: None,
             type_arguments: CallTypeArguments::checked_without_types(type_args),
             ty: array_ty,
             span,
-            call_kind: CallKind::NativeConstructor(NativeTypeKind::Array),
         }
     }
 
@@ -812,20 +839,35 @@ impl InferCtx<'_> {
 
         let callee_ty = Type::function(Vec::new(), Vec::new(), Box::new(call_ty.clone()));
         let callee_expression = Expression::Identifier {
+            id: self.fresh_expression_id(),
             value: "Array.from".into(),
             ty: callee_ty,
             span: callee_span,
             resolution: IdentifierResolution::Unresolved,
         };
 
+        self.record_value_use(
+            &callee_expression,
+            &callee_expression.get_type(),
+            Vec::new(),
+        );
+        self.record_callee(
+            &callee_expression,
+            CallOperation::NativeConstructor {
+                kind: NativeTypeKind::Array,
+                method: "from".into(),
+            },
+            SubstitutionMap::default(),
+        );
+
         Expression::Call {
+            id: self.fresh_expression_id(),
             expression: callee_expression.into(),
             args: new_args,
             spread: None,
             type_arguments: CallTypeArguments::checked_without_types(type_args),
             ty: call_ty,
             span,
-            call_kind: CallKind::NativeConstructor(NativeTypeKind::Array),
         }
     }
 
@@ -868,7 +910,7 @@ impl InferCtx<'_> {
 
                 if let Some(method) = self.method_of_type(store, &receiver_ty.strip_refs(), member)
                 {
-                    return method.ty;
+                    return method.method.ty;
                 }
 
                 let stripped = receiver_ty.strip_refs();
@@ -1170,6 +1212,12 @@ impl InferCtx<'_> {
             type_arguments,
             span,
         } = call;
+        if let Some(operation) = self.select_call_operation(&callee_expression, CallKind::Regular) {
+            let callee_type_arguments = resolved_instantiation(&callee_expression)
+                .cloned()
+                .unwrap_or_default();
+            self.record_callee(&callee_expression, operation, callee_type_arguments);
+        }
         if spread.is_some() || args.len() != 1 {
             if let Some(spread_expr) = spread {
                 self.sink
@@ -1191,13 +1239,13 @@ impl InferCtx<'_> {
                 .collect();
             self.unify(expected_ty, &Type::Error, &span);
             return Expression::Call {
+                id: self.fresh_expression_id(),
                 expression: callee_expression.into(),
                 args: new_args,
                 spread: None,
                 type_arguments,
                 ty: Type::Error,
                 span,
-                call_kind: CallKind::Regular,
             };
         }
 
@@ -1207,13 +1255,13 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &named_ty, &span);
 
         Expression::Call {
+            id: self.fresh_expression_id(),
             expression: callee_expression.into(),
             args: vec![new_arg],
             spread: None,
             type_arguments,
             ty: named_ty,
             span,
-            call_kind: CallKind::Regular,
         }
     }
 

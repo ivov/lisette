@@ -244,6 +244,7 @@ impl<'source> Parser<'source> {
             start,
         } = header;
         Expression::Enum {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,
@@ -453,6 +454,7 @@ impl<'source> Parser<'source> {
             start,
         } = header;
         Expression::Struct {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,
@@ -504,6 +506,7 @@ impl<'source> Parser<'source> {
             start,
         } = header;
         Expression::Struct {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,
@@ -655,6 +658,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Const {
+            id: self.next_expression_id(),
             binding: None,
             doc,
             identifier,
@@ -695,6 +699,7 @@ impl<'source> Parser<'source> {
         }
 
         Expression::VariableDeclaration {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,
@@ -710,7 +715,7 @@ impl<'source> Parser<'source> {
         self.parse_expression();
         self.error_var_initializer(self.span_from_token(start));
 
-        Self::error_expression(self.span_from_offset(start.byte_offset))
+        self.error_expression(self.span_from_offset(start.byte_offset))
     }
 
     pub(crate) fn parse_impl_block(&mut self) -> Expression {
@@ -779,6 +784,7 @@ impl<'source> Parser<'source> {
         self.ensure(RightCurlyBrace);
 
         Expression::ImplBlock {
+            id: self.next_expression_id(),
             annotation,
             methods,
             receiver_name,
@@ -871,6 +877,7 @@ impl<'source> Parser<'source> {
         self.ensure(RightCurlyBrace);
 
         Expression::Interface {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,

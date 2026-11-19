@@ -69,13 +69,20 @@ impl InferCtx<'_> {
             }
 
             Pattern::Literal { literal, ty, span } => {
-                let inferred_literal =
-                    self.infer_expression(Expression::Literal { literal, ty, span }, &expected_ty);
+                let inferred_literal = self.infer_expression(
+                    Expression::Literal {
+                        id: self.fresh_expression_id(),
+                        literal,
+                        ty,
+                        span,
+                    },
+                    &expected_ty,
+                );
 
                 match inferred_literal {
-                    Expression::Literal { literal, ty, span } => {
-                        Pattern::Literal { literal, ty, span }
-                    }
+                    Expression::Literal {
+                        literal, ty, span, ..
+                    } => Pattern::Literal { literal, ty, span },
                     _ => unreachable!(),
                 }
             }

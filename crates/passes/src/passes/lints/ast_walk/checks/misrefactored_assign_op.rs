@@ -9,6 +9,7 @@ pub fn check_misrefactored_assign_op(expression: &Expression, ctx: &NodeCtx) {
         value,
         compound_operator: Some(compound),
         span,
+        ..
     } = expression
     else {
         return;

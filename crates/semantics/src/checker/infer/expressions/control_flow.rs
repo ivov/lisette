@@ -1,6 +1,6 @@
+use super::call_effects::CallKind;
 use crate::checker::EnvResolve;
 use syntax::ast::{Expression, Span};
-use syntax::program::CallKind;
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -40,7 +40,7 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::control_flow_in_expression("break", *s));
             }
-            Expression::Continue { span: s } => {
+            Expression::Continue { span: s, .. } => {
                 self.sink
                     .push(diagnostics::infer::control_flow_in_expression(
                         "continue", *s,
@@ -70,6 +70,7 @@ impl InferCtx<'_> {
             self.with_value_context(|s| s.infer_root_expression(*expression, &return_ty));
 
         Expression::Return {
+            id: self.fresh_expression_id(),
             expression: new_expression.into(),
             ty: Type::Never,
             span,
@@ -113,6 +114,7 @@ impl InferCtx<'_> {
         self.check_zero_has_effect(&new_expression, "defer", span);
 
         Expression::Defer {
+            id: self.fresh_expression_id(),
             expression: new_expression.into(),
             ty: Type::unit(),
             span,
@@ -138,6 +140,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &unit_ty, &span);
 
         Expression::Assert {
+            id: self.fresh_expression_id(),
             expression: new_expression.into(),
             ty: unit_ty,
             span,
@@ -155,13 +158,11 @@ impl InferCtx<'_> {
     }
 
     fn check_zero_has_effect(&mut self, expression: &Expression, keyword: &str, span: Span) {
-        if matches!(
-            expression.unwrap_parens(),
-            Expression::Call {
-                call_kind: CallKind::Zero,
-                ..
-            }
-        ) {
+        if let Expression::Call {
+            expression: callee, ..
+        } = expression.unwrap_parens()
+            && self.classify_call(callee) == CallKind::Zero
+        {
             self.sink
                 .push(diagnostics::infer::zero_has_no_effect(keyword, span));
         }
@@ -198,6 +199,7 @@ impl InferCtx<'_> {
         self.check_zero_has_effect(&new_expression, "task", span);
 
         Expression::Task {
+            id: self.fresh_expression_id(),
             expression: new_expression.into(),
             ty: Type::unit(),
             span,

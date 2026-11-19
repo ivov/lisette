@@ -1,15 +1,41 @@
 use super::aliasing::{PlaceKey, render_place};
 use crate::checker::EnvResolve;
 use rustc_hash::FxHashSet;
-use syntax::ast::{Expression, IdentifierResolution, StructFields};
-use syntax::program::resolved_definition;
+use syntax::ast::{CallTypeArguments, Expression, IdentifierResolution, StructFields};
 use syntax::program::{
-    CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ValueKind,
+    CallOperation, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ValueKind,
 };
-use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
+use syntax::program::{resolved_definition, resolved_instantiation};
+use syntax::types::{
+    FunctionParameter, GO_IMPORT_PREFIX, SubstitutionMap, Symbol, Type, peel_to_range_type,
+};
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::value_uses::is_instance_method_access;
 use syntax::program::AliasKind;
+
+/// What a call expression resolved to during type checking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CallKind {
+    /// Regular function or method call
+    Regular,
+    /// Tuple struct constructor (e.g., `Point(1, 2)`)
+    TupleStructConstructor,
+    /// Type assertion (`assert_type`)
+    AssertType,
+    /// Zero value of a type (`zero`)
+    Zero,
+    /// UFCS method call: `receiver.method()` where method is a free function
+    UfcsMethod,
+    /// Native type constructor (e.g., `Channel.new`, `Map.new`, `Slice.new`)
+    NativeConstructor(NativeTypeKind),
+    /// Native type instance method via dot access (e.g., `slice.append(x)`)
+    NativeMethod(NativeTypeKind),
+    /// Native type method via identifier (e.g., `Slice.contains(s, x)`)
+    NativeMethodIdentifier(NativeTypeKind),
+    /// Receiver method in UFCS syntax: `Type.method(receiver, args)`
+    ReceiverMethodUfcs { is_public: bool },
+}
 
 impl InferCtx<'_> {
     pub(super) fn writable_receiver_place(&self, callee: &Expression) -> Option<PlaceKey> {
@@ -25,7 +51,7 @@ impl InferCtx<'_> {
         let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
         let store = self.store;
         let method = self.method_of_type(store, &receiver_ty, member)?;
-        let Type::Function(function) = method.ty.unwrap_forall() else {
+        let Type::Function(function) = method.method.ty.unwrap_forall() else {
             return None;
         };
         if !self
@@ -116,6 +142,77 @@ impl InferCtx<'_> {
             _ => {}
         }
         CallKind::Regular
+    }
+
+    /// The operation that a call with this callee and classification runs, or None when the instance method access that the call names selected it.
+    pub(super) fn select_call_operation(
+        &self,
+        callee: &Expression,
+        call_kind: CallKind,
+    ) -> Option<CallOperation> {
+        let callee = callee.unwrap_parens();
+        let native_method = || match callee {
+            Expression::DotAccess { member, .. } => member.clone(),
+            Expression::Identifier { value, .. } => value
+                .split_once('.')
+                .map_or_else(|| value.clone(), |(_, method)| method.into()),
+            _ => Default::default(),
+        };
+        let local = matches!(
+            callee,
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(_),
+                ..
+            }
+        );
+        let declared_by_go = resolved_definition(callee)
+            .is_some_and(|definition| definition.starts_with(GO_IMPORT_PREFIX));
+        let selected_by_access =
+            || (!is_instance_method_access(callee)).then_some(CallOperation::Function);
+        let operation = match call_kind {
+            _ if local => CallOperation::Function,
+            CallKind::TupleStructConstructor => CallOperation::TupleStructConstructor,
+            _ if declared_by_go => return selected_by_access(),
+            CallKind::AssertType => CallOperation::AssertType,
+            CallKind::Zero => CallOperation::Zero,
+            CallKind::NativeConstructor(kind) => CallOperation::NativeConstructor {
+                kind,
+                method: native_method(),
+            },
+            CallKind::NativeMethod(kind) | CallKind::NativeMethodIdentifier(kind) => {
+                CallOperation::Native {
+                    kind,
+                    method: native_method(),
+                }
+            }
+            CallKind::UfcsMethod => CallOperation::UfcsFunction,
+            CallKind::ReceiverMethodUfcs { is_public } => {
+                CallOperation::ReceiverMethod { is_public }
+            }
+            CallKind::Regular => return selected_by_access(),
+        };
+        Some(operation)
+    }
+
+    /// The instantiation of `callee`, with the explicit type arguments of its call.
+    pub(super) fn call_type_arguments(
+        &self,
+        callee: &Expression,
+        explicit: &CallTypeArguments,
+        declared: &Type,
+    ) -> SubstitutionMap {
+        let mut type_arguments = resolved_instantiation(callee.unwrap_parens())
+            .cloned()
+            .unwrap_or_default();
+        if let Type::Forall { vars, .. } = declared
+            && let Some(explicit) = explicit.resolved_types()
+            && let Some(offset) = vars.len().checked_sub(explicit.len())
+        {
+            for (name, argument) in vars[offset..].iter().zip(explicit.iter()) {
+                type_arguments.insert(name.clone(), argument.clone());
+            }
+        }
+        type_arguments
     }
 
     /// Classify `Type.method(receiver, args)` as `ReceiverMethodUfcs`.

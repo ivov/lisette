@@ -19,7 +19,7 @@ use crate::plan::go_expression::BinaryOp;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
-use syntax::program::SlotOrigin;
+use syntax::program::{Adaptation, SlotOrigin};
 
 /// A bare `return v0, v1, ...` statement leaf.
 pub(crate) fn multi_value_return(values: Vec<GoExpression>) -> Statement {
@@ -147,7 +147,7 @@ pub(crate) fn lowered_payload_values(
     if shape.has_flattened_payload() {
         let mut statements = Vec::new();
         let tuple = planner.stable_source(&mut statements, "tup", payload_expr);
-        let (projection, values) = lowered_tuple_values(planner, &tuple, payload_ty);
+        let (projection, values) = lowered_tuple_values(planner, &tuple, payload_ty, None);
         statements.extend(projection);
         (statements, values)
     } else {
@@ -256,7 +256,7 @@ fn emit_lowered_tuple_return(
     result_value: &GoExpression,
     return_ty: &Type,
 ) -> Vec<Statement> {
-    let (mut statements, fields) = lowered_tuple_values(planner, result_value, return_ty);
+    let (mut statements, fields) = lowered_tuple_values(planner, result_value, return_ty, None);
     statements.push(multi_value_return(fields));
     statements
 }
@@ -267,14 +267,30 @@ fn lowered_tuple_values(
     planner: &mut Planner,
     tuple_value: &GoExpression,
     tuple_ty: &Type,
+    adapted: Option<(&Type, &[Adaptation])>,
 ) -> (Vec<Statement>, Vec<GoExpression>) {
     let slot_tys = tuple_element_types(&planner.facts.peel_alias(tuple_ty));
+    let source_tys =
+        adapted.map(|(source, _)| tuple_element_types(&planner.facts.peel_alias(source)));
     let mut statements = Vec::new();
     let fields = slot_tys
         .iter()
         .enumerate()
         .map(|(i, slot_ty)| {
             let raw = field(tuple_value, TUPLE_FIELDS[i]);
+            let adaptation = adapted.and_then(|(_, adaptations)| adaptations.get(i));
+            if let (Some(adaptation), Some(source_tys)) = (adaptation, &source_tys) {
+                if matches!(adaptation, Adaptation::ImplicitSome { .. })
+                    && planner.facts.is_nullable_option(slot_ty)
+                {
+                    return raw;
+                }
+                let coercion =
+                    CoercionPlan::adapted(planner, adaptation, &source_tys[i], slot_ty, None);
+                let (setup, raw) = coercion.lower(planner, raw);
+                statements.extend(setup);
+                return raw;
+            }
             if planner.facts.is_nullable_option(slot_ty) {
                 let inner = planner.go_type(&slot_ty.ok_type());
                 planner.plan_option_payload_wrap(
@@ -295,16 +311,24 @@ fn lowered_tuple_values(
 /// Lower each element of a tuple literal into its lowered return slot.
 pub(crate) fn lowered_tuple_literal_values(
     planner: &mut Planner,
-    elements: &[Expression],
+    tuple: &Expression,
     tuple_ty: &Type,
 ) -> (Vec<Statement>, Vec<GoExpression>) {
+    let Expression::Tuple { elements, .. } = tuple else {
+        unreachable!("only a tuple literal lowers into return slots")
+    };
     let slot_tys = tuple_element_types(&planner.facts.peel_alias(tuple_ty));
+    let adaptations = match &planner.facts.checked(tuple).value_use().adaptation {
+        Adaptation::Tuple(adaptations) => adaptations.clone(),
+        _ => Vec::new(),
+    };
     let stages: Vec<ValuePlan> = elements
         .iter()
         .enumerate()
         .map(|(i, e)| match slot_tys.get(i) {
             Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
-                lower_nullable_slot_value(planner, e, slot_ty)
+                let adaptation = adaptations.get(i).unwrap_or(&Adaptation::Identity);
+                lower_nullable_slot_value(planner, e, adaptation, slot_ty)
             }
             slot => {
                 let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
@@ -320,7 +344,7 @@ pub(crate) fn lowered_tuple_literal_values(
     let sequenced = planner.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
     let mut statements = sequenced.setup;
     let parts =
-        planner.coerce_elements_to_slots(&mut statements, elements, sequenced.values, &slot_tys);
+        planner.coerce_elements_to_slots(&mut statements, tuple, sequenced.values, &slot_tys, true);
     (statements, parts)
 }
 
@@ -380,6 +404,19 @@ pub(crate) fn try_emit_layout_return(
     let return_ctx = planner.return_ctx();
     let return_ty = return_ctx.ty()?.clone();
     let shape = return_ctx.lowered_shape();
+    if matches!(
+        shape,
+        Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
+    ) {
+        let adaptation = &planner.facts.checked(expression).value_use().adaptation;
+        if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
+            let peeled = planner.facts.peel_alias(&return_ty);
+            let (mut statements, value) =
+                lower_nullable_slot_value(planner, expression, adaptation, &peeled).into_parts();
+            statements.push(plain_return(value));
+            return Some(statements);
+        }
+    }
     let source_ty = expression.get_type();
     if planner.facts.alias_declaration(&source_ty).is_some()
         || planner.facts.alias_declaration(&return_ty).is_some()
@@ -430,7 +467,7 @@ fn emit_lowered_tuple_tail(
     if let Expression::Tuple { elements, .. } = expression
         && elements.len() == arity
     {
-        let (mut statements, parts) = lowered_tuple_literal_values(planner, elements, &return_ty);
+        let (mut statements, parts) = lowered_tuple_literal_values(planner, expression, &return_ty);
         statements.push(multi_value_return(parts));
         return statements;
     }
@@ -463,14 +500,17 @@ fn emit_lowered_tuple_tail(
     let (mut statements, value) = planner
         .lower_value(expression, ExpressionContext::value())
         .into_parts();
-    let tup = planner.hoist_tmp_value_statement(&mut statements, "tup", value);
-    statements.extend(emit_lowered_result_return(
-        planner,
-        GoExpression::identifier(tup),
-        "tup",
-        &return_ty,
-        &LoweredReturnAbi::Tuple { arity },
-    ));
+    let tup =
+        GoExpression::identifier(planner.hoist_tmp_value_statement(&mut statements, "tup", value));
+    let source_ty = expression.get_type();
+    let adaptations = match &planner.facts.checked(expression).value_use().adaptation {
+        Adaptation::Tuple(adaptations) => adaptations.clone(),
+        _ => Vec::new(),
+    };
+    let adapted = (!adaptations.is_empty()).then_some((&source_ty, adaptations.as_slice()));
+    let (projection, fields) = lowered_tuple_values(planner, &tup, &return_ty, adapted);
+    statements.extend(projection);
+    statements.push(multi_value_return(fields));
     statements
 }
 
@@ -537,9 +577,13 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
 fn lower_nullable_slot_value(
     planner: &mut Planner,
     expression: &Expression,
+    adaptation: &Adaptation,
     slot_ty: &Type,
 ) -> ValuePlan {
     use Expression;
+    if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
+        return planner.lower_nullable_payload(expression, &slot_ty.ok_type());
+    }
     if let Expression::Call {
         expression: callee,
         args,

@@ -61,6 +61,7 @@ impl InferCtx<'_> {
         });
 
         Expression::ImplBlock {
+            id: self.fresh_expression_id(),
             annotation,
             ty: impl_ty,
             receiver_name,
@@ -82,6 +83,7 @@ impl InferCtx<'_> {
             parents,
             visibility,
             span,
+            ..
         } = expression
         else {
             unreachable!()
@@ -126,6 +128,7 @@ impl InferCtx<'_> {
         });
 
         Expression::Interface {
+            id: self.fresh_expression_id(),
             doc,
             attributes,
             name,

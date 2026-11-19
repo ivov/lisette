@@ -3,8 +3,9 @@ use super::helpers::{
 };
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
+use semantics::facts::Selections;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, Literal, Pattern, Span};
-use syntax::program::{CallKind, NativeTypeKind};
+use syntax::program::{CallOperation, NativeTypeKind};
 use syntax::types::Type;
 
 pub fn check_manual_extend(expression: &Expression, ctx: &NodeCtx) {
@@ -23,11 +24,13 @@ pub fn check_manual_extend(expression: &Expression, ctx: &NodeCtx) {
     }
 
     for (index, item) in items.iter().enumerate() {
-        let Some(accumulator) = fresh_slice_declaration(item) else {
+        let Some(accumulator) = fresh_slice_declaration(item, &ctx.facts.selections) else {
             continue;
         };
         for later in &items[index + 1..] {
-            if let Some((span, iterable)) = extending_loop(later, &accumulator) {
+            if let Some((span, iterable)) =
+                extending_loop(later, &accumulator, &ctx.facts.selections)
+            {
                 report(span, accumulator.name, iterable, ctx);
                 break;
             }
@@ -47,7 +50,10 @@ struct Accumulator<'a> {
 
 /// A `let mut` slice whose storage is newly allocated and full, so the first
 /// append reallocates rather than writing into another slice's storage.
-fn fresh_slice_declaration<'a>(item: &'a Expression) -> Option<Accumulator<'a>> {
+fn fresh_slice_declaration<'a>(
+    item: &'a Expression,
+    selections: &Selections,
+) -> Option<Accumulator<'a>> {
     let Expression::Let { binding, value, .. } = item else {
         return None;
     };
@@ -68,12 +74,20 @@ fn fresh_slice_declaration<'a>(item: &'a Expression) -> Option<Accumulator<'a>> 
             ty,
             ..
         } => ty.is_slice(),
-        Expression::Call {
+        call @ Expression::Call {
             expression: callee,
-            call_kind: CallKind::NativeConstructor(NativeTypeKind::Slice),
             args,
             ..
-        } => args.is_empty() && is_bare_identifier(callee, "Slice.new"),
+        } => {
+            matches!(
+                selections.call_operation(call),
+                Some(CallOperation::NativeConstructor {
+                    kind: NativeTypeKind::Slice,
+                    ..
+                })
+            ) && args.is_empty()
+                && is_bare_identifier(callee, "Slice.new")
+        }
         _ => false,
     };
     if !is_fresh {
@@ -86,12 +100,17 @@ fn fresh_slice_declaration<'a>(item: &'a Expression) -> Option<Accumulator<'a>> 
 }
 
 /// Matches `for element in iterable { accumulator = accumulator.append(element) }`.
-fn extending_loop<'a>(item: &'a Expression, accumulator: &Accumulator) -> Option<(Span, &'a str)> {
+fn extending_loop<'a>(
+    item: &'a Expression,
+    accumulator: &Accumulator,
+    selections: &Selections,
+) -> Option<(Span, &'a str)> {
     let Expression::For {
         binding,
         iterable,
         body,
         span,
+        ..
     } = item
     else {
         return None;
@@ -122,13 +141,24 @@ fn extending_loop<'a>(item: &'a Expression, accumulator: &Accumulator) -> Option
 
     let value = value.unwrap_parens();
     let Expression::Call {
+        expression: callee,
         spread: None,
-        call_kind: CallKind::NativeMethod(NativeTypeKind::Slice),
         ..
     } = value
     else {
         return None;
     };
+    if !matches!(callee.unwrap_parens(), Expression::DotAccess { .. })
+        || !matches!(
+            selections.call_operation(value),
+            Some(CallOperation::Native {
+                kind: NativeTypeKind::Slice,
+                ..
+            })
+        )
+    {
+        return None;
+    }
     let Some((receiver, [element], _)) = method_call(value, "append") else {
         return None;
     };

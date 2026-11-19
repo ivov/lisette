@@ -3,9 +3,9 @@ use crate::control_flow::fallible;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::plan::values::GoExpression;
-use syntax::ast::{Generic, Pattern, RestPattern, StructFieldDefinition, StructFields};
+use syntax::ast::{Pattern, RestPattern, StructFieldDefinition, StructFields};
 use syntax::go_names;
-use syntax::program::{Definition, DefinitionBody, interface_requirements};
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types;
 use syntax::types::{Type, substitute};
 
@@ -131,40 +131,6 @@ impl Planner<'_> {
         } else {
             GoExpression::selector(base, field)
         }
-    }
-
-    pub(crate) fn type_has_equals(&self, ty: &Type, generics: &[Generic]) -> bool {
-        let peeled = self.facts.peel_alias(ty);
-        if let Type::Parameter(name) = &peeled {
-            return self.generic_param_has_equals_bound(generics, name.as_str());
-        }
-        let Some(id) = peeled.get_qualified_id() else {
-            return false;
-        };
-        self.facts.usable_equals_from(id)
-    }
-
-    fn generic_param_has_equals_bound(&self, generics: &[Generic], param_name: &str) -> bool {
-        let Some(generic) = generics.iter().find(|g| g.name.as_str() == param_name) else {
-            return false;
-        };
-        let Some(bounds) = generic.resolved_bounds() else {
-            return false;
-        };
-        bounds.into_iter().any(|bound| {
-            self.interface_bound_provides_equals(&self.facts.peel_alias(bound), param_name)
-        })
-    }
-
-    fn interface_bound_provides_equals(&self, bound: &Type, param_name: &str) -> bool {
-        interface_requirements(bound, |id| self.facts.definition(id))
-            .into_iter()
-            .any(|requirement| {
-                requirement.name == "equals"
-                    && requirement
-                        .ty
-                        .is_equals_bound_signature(param_name, |ty| self.facts.peel_alias(ty))
-            })
     }
 
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {

@@ -82,7 +82,7 @@ pub fn compile_e2e_suite_test(
     };
 
     let input = EmitInput {
-        conformances: result.conformances,
+        checked_bodies: result.checked_bodies,
         files: FxHashMap::from_iter([(0, file)]),
         definitions: result.definitions,
         entry_package_id: result.package_id,

@@ -283,28 +283,3 @@ impl NativeTypeKind {
         }
     }
 }
-
-/// What a call expression resolved to during type checking.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CallKind {
-    /// The call has not reached semantic classification yet.
-    Unresolved,
-    /// Regular function or method call
-    Regular,
-    /// Tuple struct constructor (e.g., `Point(1, 2)`)
-    TupleStructConstructor,
-    /// Type assertion (`assert_type`)
-    AssertType,
-    /// Zero value of a type (`zero`)
-    Zero,
-    /// UFCS method call: `receiver.method()` where method is a free function
-    UfcsMethod,
-    /// Native type constructor (e.g., `Channel.new`, `Map.new`, `Slice.new`)
-    NativeConstructor(NativeTypeKind),
-    /// Native type instance method via dot access (e.g., `slice.append(x)`)
-    NativeMethod(NativeTypeKind),
-    /// Native type method via identifier (e.g., `Slice.contains(s, x)`)
-    NativeMethodIdentifier(NativeTypeKind),
-    /// Receiver method in UFCS syntax: `Type.method(receiver, args)`
-    ReceiverMethodUfcs { is_public: bool },
-}

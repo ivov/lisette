@@ -2,7 +2,6 @@ use crate::Planner;
 use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::wrapping::NilGuard;
 use crate::calls::bound_value::{BoundValue, LoweredPair, PairValue};
-use crate::calls::dispatch::extract_native_method_name;
 use crate::context::expression::ExpressionContext;
 use crate::names::source_name::SourceName;
 use crate::plan::bodies::{Statement, define, define_many};
@@ -12,7 +11,7 @@ use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
-use syntax::program::CallKind;
+use syntax::program::CallOperation;
 use syntax::program::NativeTypeKind;
 
 /// How an Option-typed scrutinee produces its Go comma-ok pair.
@@ -123,7 +122,7 @@ impl Planner<'_> {
             return None;
         };
         match &plan.resolved.origin {
-            CallableOrigin::Source(CallKind::AssertType) => {
+            CallableOrigin::Source(CallOperation::AssertType) => {
                 let [operand] = args.as_slice() else {
                     return None;
                 };
@@ -138,11 +137,13 @@ impl Planner<'_> {
                     .is_some();
                 (asserts_on_interface && !asserts_function).then_some(CommaOkSource::TypeAssert)
             }
-            CallableOrigin::Source(CallKind::NativeMethod(kind))
-                if matches!(kind, NativeTypeKind::Map)
-                    && extract_native_method_name(function) == "get"
-                    && args.len() == 1
-                    && spread.is_none() =>
+            CallableOrigin::Source(CallOperation::Native {
+                kind: NativeTypeKind::Map,
+                method,
+            }) if method == "get"
+                && matches!(**function, Expression::DotAccess { .. })
+                && args.len() == 1
+                && spread.is_none() =>
             {
                 Some(CommaOkSource::MapIndex)
             }

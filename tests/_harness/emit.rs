@@ -141,7 +141,7 @@ fn plan_inner(
     };
 
     let input = EmitInput {
-        conformances: result.conformances,
+        checked_bodies: result.checked_bodies,
         files: HashMap::from_iter([(0, file)]),
         definitions: result.definitions,
         entry_package_id: result.package_id,

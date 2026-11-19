@@ -10,7 +10,7 @@ use crate::names::go_name;
 use crate::state::scope::TypeParam;
 use crate::types::go_type::GoType;
 use syntax::EcoString;
-use syntax::ast::Generic;
+use syntax::ast::{Expression, Generic};
 use syntax::types::{SubstitutionMap, Type};
 
 fn build_type_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
@@ -34,13 +34,11 @@ pub(crate) fn resolve_field_type(
 }
 
 impl Planner<'_> {
-    pub(crate) fn format_value_type_args(
-        &mut self,
-        definition: Option<&str>,
-        instantiation: Option<&SubstitutionMap>,
-    ) -> Option<GoType> {
-        let declaration = self.callable_declaration(definition?)?;
-        let instantiation = instantiation?;
+    /// Type arguments for the generic definition that `expression` names as a value.
+    pub(crate) fn format_value_type_args(&mut self, expression: &Expression) -> Option<GoType> {
+        let recorded = self.facts.checked(expression).function_value()?;
+        let declaration = self.callable_declaration(recorded.definition.as_deref()?)?;
+        let instantiation = &recorded.type_arguments;
         match declaration.go_type_param_recipe() {
             Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
             None => self.format_generic_instantiation(declaration.ty(), instantiation),

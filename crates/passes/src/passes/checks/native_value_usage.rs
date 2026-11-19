@@ -74,6 +74,7 @@ fn check_one(
         ty,
         span,
         resolution,
+        ..
     } = identifier
     else {
         return;

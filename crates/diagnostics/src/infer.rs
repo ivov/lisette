@@ -5320,3 +5320,10 @@ pub fn reference_aliases_sibling(
             reference_name, read_name
         ))
 }
+
+pub fn unchecked_value_use(reason: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Internal compiler error")
+        .with_infer_code("unchecked_value_use")
+        .with_span_primary_label(&span, reason)
+        .with_help("The checker should have decided how this value goes into its slot. Please report it as a bug")
+}

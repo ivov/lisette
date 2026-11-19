@@ -189,7 +189,6 @@ description: |
                             byte_offset: 68,
                             byte_length: 8,
                         },
-                        call_kind: Unresolved,
                     },
                 ],
                 ty: Var {

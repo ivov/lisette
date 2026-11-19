@@ -20,7 +20,7 @@ use crate::plan::calls::{
 use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
-use syntax::program::SlotOrigin;
+use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
 pub(super) struct CallArgsContext<'plan, 'facts> {
@@ -200,17 +200,31 @@ impl Planner<'_> {
             arg_ctx = arg_ctx.with_retired_receiver(retired);
         }
         let argument = self.lower_composite_value(arg, arg_ctx);
-        let Some(target) = param.map(|param| &param.instantiated) else {
+        let Some(param) = param else {
             return argument;
         };
-        let coercion = CoercionPlan::internal(self, &arg.get_type(), target);
-        if coercion.is_identity() {
+        let coercion = CoercionPlan::checked(self, arg, Some(&param.layout));
+        // A type parameter that the receiver binds needs no conversion for Go to infer it.
+        let receiver_binds = matches!(&param.declared, Some(Type::Parameter(name))
+        if ctx.receiver_binding.as_ref().is_some_and(|(declared, instantiated)| {
+            let mut mapping: HashMap<String, Type> = HashMap::default();
+            extract_type_mapping(declared, instantiated, &mut mapping);
+            mapping.contains_key(name.as_str())
+        }));
+        let inferred = !ctx.callee_pins_type_args
+            && !receiver_binds
+            && self.converts_for_inference(arg, param);
+        if coercion.is_identity() && !inferred {
             return argument;
         }
         argument.map_expression(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            coerced
+            if inferred {
+                GoExpression::conversion(self.go_type(&param.instantiated), coerced)
+            } else {
+                coerced
+            }
         })
     }
 
@@ -363,6 +377,16 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> Option<ArgumentSlotBridge> {
+        // The `Some` that wraps a Go interface value goes into a Lisette `Option` as a direct argument.
+        if matches!(
+            self.facts.checked(argument).value_use().adaptation,
+            Adaptation::ImplicitSome { .. }
+        ) && matches!(
+            parameter.layout.underlying(),
+            ValueLayout::TaggedOption { .. }
+        ) {
+            return None;
+        }
         if let Some(source) = self.raw_go_slot_layout(argument)
             && source.same_representation(&parameter.layout)
         {
@@ -528,4 +552,23 @@ impl Planner<'_> {
 fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Option<&Type>) -> bool {
     let unwrapped = declared_param_ty.map(|p| p.unwrap_forall());
     callee.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function(_)))
+}
+
+impl Planner<'_> {
+    /// Whether `argument` converts to an interface for a bare type parameter, which Go infers from the concrete type unless the call spells the conversion.
+    pub(crate) fn converts_for_inference(
+        &self,
+        argument: &Expression,
+        parameter: &CallableParamAbi,
+    ) -> bool {
+        if !matches!(parameter.declared, Some(Type::Parameter(_))) {
+            return false;
+        }
+        let checked = self.facts.checked(argument.unwrap_parens());
+        let value_use = match argument.unwrap_parens() {
+            Expression::Cast { .. } => checked.cast_operand(),
+            _ => checked.value_use(),
+        };
+        matches!(value_use.adaptation, Adaptation::Interface(_))
+    }
 }

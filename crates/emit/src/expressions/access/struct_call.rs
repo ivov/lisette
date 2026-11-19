@@ -148,7 +148,7 @@ impl Planner<'_> {
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
             value = self.coerce_struct_field(
                 &mut setup,
-                value,
+                (&f.value, value),
                 &source_layout,
                 field_ty.as_ref(),
                 field_layout.as_ref().filter(|_| !literal_slot),
@@ -240,7 +240,7 @@ impl Planner<'_> {
     pub(crate) fn coerce_struct_field(
         &mut self,
         statements: &mut Vec<Statement>,
-        mut value: GoExpression,
+        (value_expression, mut value): (&Expression, GoExpression),
         source_layout: &ValueLayout,
         field_ty: Option<&Type>,
         field_layout: Option<&ValueLayout>,
@@ -259,7 +259,7 @@ impl Planner<'_> {
                 self.function_type_slot_bridge(value_ty, field_ty)
             };
             let coercion = if bridge.is_identity() {
-                CoercionPlan::internal(self, value_ty, field_ty)
+                CoercionPlan::checked(self, value_expression, field_layout)
             } else {
                 bridge
             };

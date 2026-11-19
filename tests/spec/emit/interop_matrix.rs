@@ -3945,3 +3945,22 @@ fn lookup() -> fn(string) -> Option<Ref<flag.Flag>> { flag.Lookup }
         "{go}"
     );
 }
+
+#[test]
+fn interop_lisette_closure_converted_to_go_named_function_type() {
+    let input = r#"
+import "go:fmt"
+import "go:net/http"
+
+fn handler(n: int) -> http.Handler {
+  http.HandlerFunc(|w: http.ResponseWriter, r: Ref<http.Request>| {
+    fmt.Println(n)
+  })
+}
+
+fn main() {
+  let _ = handler(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

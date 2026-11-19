@@ -1,7 +1,8 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{
-    Expression, IdentifierResolution, Span, StructFields, StructKind, tuple_field_name,
+    Expression, ExpressionId, IdentifierResolution, Span, StructFields, StructKind,
+    tuple_field_name,
 };
 use syntax::go_names;
 use syntax::program::{
@@ -16,6 +17,7 @@ use crate::loader;
 use crate::store::Store;
 
 pub(super) struct DotAccessResolutionArgs<'a> {
+    pub(super) id: ExpressionId,
     pub(super) expression: &'a Expression,
     pub(super) expression_ty: &'a Type,
     /// `expression_ty.strip_refs()`, precomputed once per dot-access
@@ -29,6 +31,7 @@ pub(super) struct DotAccessResolutionArgs<'a> {
 impl DotAccessResolutionArgs<'_> {
     pub(super) fn build_dot_access(&self, ty: Type, resolution: DotAccessResolution) -> Expression {
         Expression::DotAccess {
+            id: self.id,
             expression: self.expression.clone().into(),
             member: self.member_name.into(),
             ty,
@@ -76,6 +79,7 @@ impl InferCtx<'_> {
         let deref_ty = resolved_expression_ty.strip_refs();
 
         let args = DotAccessResolutionArgs {
+            id: self.fresh_expression_id(),
             expression: &new_expression,
             expression_ty: &resolved_expression_ty,
             deref_ty,

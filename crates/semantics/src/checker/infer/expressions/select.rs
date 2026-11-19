@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::checker::infer::context::{BranchArm, SelectExhaustivenessCheck};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
-use syntax::program::{ChannelOperation, channel_operation};
+use syntax::program::{ChannelOperation, ValueUseKey, channel_operation};
 use syntax::types::{CompoundKind, Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
@@ -15,6 +15,18 @@ fn select_arm_body_span(pattern: &SelectArm) -> Span {
         SelectArm::MatchReceive {
             receive_expression, ..
         } => receive_expression.get_span(),
+    }
+}
+
+fn select_arm_values(arm: &SelectArm) -> Vec<ValueUseKey> {
+    match arm {
+        SelectArm::Receive { body, .. }
+        | SelectArm::Send { body, .. }
+        | SelectArm::WildCard { body, .. } => vec![ValueUseKey::value(body)],
+        SelectArm::MatchReceive { arms, .. } => arms
+            .iter()
+            .map(|arm| ValueUseKey::value(&arm.expression))
+            .collect(),
     }
 }
 
@@ -44,6 +56,7 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::empty_select(span));
             self.unify(expected_ty, &Type::unit(), &span);
             return Expression::Select {
+                id: self.fresh_expression_id(),
                 arms: vec![],
                 ty: expected_ty.resolve_in(&self.env),
                 span,
@@ -111,6 +124,7 @@ impl InferCtx<'_> {
                         branches.push(BranchArm {
                             ty: arm_target.clone(),
                             span: select_arm_body_span(&new_arm),
+                            values: select_arm_values(&new_arm),
                         });
                     }
 
@@ -143,6 +157,7 @@ impl InferCtx<'_> {
         }
 
         Expression::Select {
+            id: self.fresh_expression_id(),
             arms: new_arms,
             ty: result_ty,
             span,
@@ -324,6 +339,7 @@ impl InferCtx<'_> {
                         branches.push(BranchArm {
                             ty: arm_expected.clone(),
                             span: new_expression.get_span(),
+                            values: vec![ValueUseKey::value(&new_expression)],
                         });
                     }
 

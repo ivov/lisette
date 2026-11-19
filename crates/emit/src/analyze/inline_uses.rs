@@ -240,7 +240,7 @@ impl<'a> Walker<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syntax::ast::{IdentifierResolution, Span};
+    use syntax::ast::{ExpressionId, IdentifierResolution, Span};
     use syntax::types::Type;
 
     fn mark_uses(expression: &mut Expression, selected: &[usize], seen: &mut usize) {
@@ -334,6 +334,7 @@ mod tests {
     #[test]
     fn alternative_ids_share_one_use_count() {
         let local = |id| Expression::Identifier {
+            id: ExpressionId::parsed(0, 5),
             value: "value".into(),
             ty: Type::unit(),
             span: Span::dummy(),
@@ -363,6 +364,7 @@ mod tests {
     #[test]
     fn raw_go_keeps_even_an_unread_binding() {
         let raw = Expression::RawGo {
+            id: ExpressionId::parsed(0, 4),
             text: "use(value)".to_string(),
         };
         assert_eq!(

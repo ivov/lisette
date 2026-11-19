@@ -1,13 +1,14 @@
 use rustc_hash::FxHashMap as HashMap;
+use semantics::facts::Selections;
 use std::borrow::Cow;
 use syntax::ast::{Expression, Literal, Span};
 use syntax::lex::{rune_codepoint, string_bytes};
-use syntax::program::{CallKind, NativeTypeKind};
+use syntax::program::{CallOperation, NativeTypeKind};
 
 use crate::passes::walk::NodeCtx;
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
-    let Some(entries) = map_from_entries(expression) else {
+    let Some(entries) = map_from_entries(expression, &ctx.facts.selections) else {
         return;
     };
 
@@ -37,18 +38,29 @@ enum KeyValue<'a> {
     Text(Cow<'a, [u8]>),
 }
 
-fn map_from_entries(expression: &Expression) -> Option<&[Expression]> {
+fn map_from_entries<'e>(
+    expression: &'e Expression,
+    selections: &Selections,
+) -> Option<&'e [Expression]> {
     let Expression::Call {
         expression: callee,
         args,
         spread: None,
-        call_kind: CallKind::NativeMethodIdentifier(NativeTypeKind::Map),
         ty,
         ..
     } = expression
     else {
         return None;
     };
+    if !matches!(
+        selections.call_operation(expression),
+        Some(CallOperation::Native {
+            kind: NativeTypeKind::Map,
+            ..
+        })
+    ) {
+        return None;
+    }
 
     let Expression::Identifier { value, .. } = callee.unwrap_parens() else {
         return None;

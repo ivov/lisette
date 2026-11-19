@@ -105,7 +105,7 @@ impl InferCtx<'_> {
                     self.sink
                         .push(diagnostics::infer::control_flow_in_expression("break", *s));
                 }
-                Expression::Continue { span: s } => {
+                Expression::Continue { span: s, .. } => {
                     self.sink
                         .push(diagnostics::infer::control_flow_in_expression(
                             "continue", *s,
@@ -119,6 +119,7 @@ impl InferCtx<'_> {
         let new_ty = new_expression.get_type();
 
         Expression::Paren {
+            id: self.fresh_expression_id(),
             expression: new_expression.into(),
             ty: new_ty,
             span,
@@ -145,6 +146,7 @@ impl InferCtx<'_> {
                 self.unify(expected_ty, &unit_ty, &span);
             }
             return Expression::Block {
+                id: self.fresh_expression_id(),
                 items,
                 ty: unit_ty,
                 span,
@@ -162,6 +164,7 @@ impl InferCtx<'_> {
         });
 
         Expression::Block {
+            id: self.fresh_expression_id(),
             items: new_items,
             ty: block_ty,
             span,
@@ -191,6 +194,7 @@ impl InferCtx<'_> {
             ));
             self.unify(expected_ty, &Type::Error, &span);
             return Expression::Reference {
+                id: self.fresh_expression_id(),
                 expression: new_expression.into(),
                 ty: Type::Error,
                 span,
@@ -257,6 +261,7 @@ impl InferCtx<'_> {
         }
 
         Expression::Reference {
+            id: self.fresh_expression_id(),
             expression: new_expression.into(),
             ty: ref_ty,
             span,
@@ -413,6 +418,7 @@ impl InferCtx<'_> {
         };
 
         Expression::Identifier {
+            id: self.fresh_expression_id(),
             value,
             ty: identifier_ty,
             span,
@@ -496,6 +502,7 @@ impl InferCtx<'_> {
                 let new_value =
                     self.with_value_context(|state| state.infer_expression(*value, &inner));
                 return Expression::Assignment {
+                    id: self.fresh_expression_id(),
                     target: new_target.into(),
                     value: new_value.into(),
                     compound_operator,
@@ -560,6 +567,7 @@ impl InferCtx<'_> {
         }
 
         Expression::Assignment {
+            id: self.fresh_expression_id(),
             target: new_target.into(),
             value: new_value.into(),
             compound_operator,
@@ -588,6 +596,7 @@ impl InferCtx<'_> {
         let value_ty = self.new_type_var();
         let new_value = self.with_value_context(|state| state.infer_expression(*value, &value_ty));
         Expression::Assignment {
+            id: self.fresh_expression_id(),
             target: new_target.into(),
             value: new_value.into(),
             compound_operator,
@@ -738,6 +747,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &tuple_ty, &span);
 
         Expression::Tuple {
+            id: self.fresh_expression_id(),
             elements: inferred_elements,
             ty: tuple_ty,
             span,

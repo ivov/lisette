@@ -10,7 +10,7 @@ use crate::ast::{
 };
 use crate::lex::Token;
 use crate::lex::TokenKind::{self, *};
-use crate::program::{CallKind, DotAccessResolution};
+use crate::program::DotAccessResolution;
 use crate::types::Type;
 use std::string;
 
@@ -36,7 +36,7 @@ impl<'source> Parser<'source> {
         }
         let span = self.span_from_token(self.current_token());
         self.resync_on_error();
-        Self::error_expression(span)
+        self.error_expression(span)
     }
 
     pub(super) fn parse_atomic_expression(&mut self, context: ExpressionContext) -> Expression {
@@ -86,7 +86,7 @@ impl<'source> Parser<'source> {
                     "Use `select { let v = ch.receive() => ... }` to receive from a channel",
                 );
                 self.resync_on_error();
-                Self::error_expression(span)
+                self.error_expression(span)
             }
 
             Backtick => self.recover_unexpected_backtick(),
@@ -139,6 +139,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Range {
+            id: self.next_expression_id(),
             start,
             end,
             inclusive,
@@ -249,6 +250,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Literal {
+            id: self.next_expression_id(),
             literal,
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -261,6 +263,7 @@ impl<'source> Parser<'source> {
             self.collect_delimited_expressions(LeftSquareBracket, RightSquareBracket);
 
         Expression::Literal {
+            id: self.next_expression_id(),
             literal: Literal::Slice(expressions),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -290,6 +293,7 @@ impl<'source> Parser<'source> {
         }
 
         Expression::Identifier {
+            id: self.next_expression_id(),
             value: text.into(),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -337,7 +341,7 @@ impl<'source> Parser<'source> {
         self.next();
         self.consume_balanced(open.kind, close);
 
-        Some(Self::error_expression(self.span_from_offset(start_offset)))
+        Some(self.error_expression(self.span_from_offset(start_offset)))
     }
 
     pub(crate) fn parse_struct_call(&mut self, expression: Expression) -> Expression {
@@ -396,6 +400,7 @@ impl<'source> Parser<'source> {
                 self.parse_expression()
             } else {
                 Expression::Identifier {
+                    id: self.next_expression_id(),
                     value: field_name.clone(),
                     ty: Type::uninferred(),
                     span: self.span_from_offset(field_name_token.byte_offset),
@@ -415,6 +420,7 @@ impl<'source> Parser<'source> {
         self.ensure(RightCurlyBrace);
 
         Expression::StructCall {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             name,
             field_assignments,
@@ -445,6 +451,7 @@ impl<'source> Parser<'source> {
                 Some(Box::new(self.parse_expression()))
             };
             Expression::Range {
+                id: self.next_expression_id(),
                 start: lower,
                 end: upper,
                 inclusive: false,
@@ -458,6 +465,7 @@ impl<'source> Parser<'source> {
         self.ensure(RightSquareBracket);
 
         Expression::IndexedAccess {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             expression: expression.into(),
             index: index.into(),
@@ -483,13 +491,13 @@ impl<'source> Parser<'source> {
         let (args, spread) = self.collect_call_args();
 
         Expression::Call {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             expression: expression.into(),
             args,
             spread: spread.map(Box::new),
             type_arguments: CallTypeArguments::unresolved(raw_type_args),
             span: self.span_from_offset(start_offset),
-            call_kind: CallKind::Unresolved,
         }
     }
 
@@ -519,13 +527,13 @@ impl<'source> Parser<'source> {
         }
 
         Expression::Call {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             expression: expression.into(),
             args: vec![],
             spread: None,
             type_arguments: CallTypeArguments::unresolved(raw_type_args),
             span,
-            call_kind: CallKind::Unresolved,
         }
     }
 
@@ -557,9 +565,7 @@ impl<'source> Parser<'source> {
 
         self.consume_balanced(LeftParen, RightParen);
 
-        Some(Self::error_expression(
-            self.span_from_offset(span.byte_offset),
-        ))
+        Some(self.error_expression(self.span_from_offset(span.byte_offset)))
     }
 
     fn classify_go_make(&self) -> Option<GoMakeKind> {
@@ -698,7 +704,7 @@ impl<'source> Parser<'source> {
         let span = self.track_fn_as_lambda_error();
         self.next(); // discard the rejected `fn`, which is itself a recovery anchor
         self.resync_on_error();
-        args.push(Self::error_expression(span));
+        args.push(self.error_expression(span));
         true
     }
 
@@ -713,10 +719,11 @@ impl<'source> Parser<'source> {
         let body = if self.is(LeftCurlyBrace) {
             self.parse_block_expression()
         } else {
-            Self::error_expression(self.span_from_offset(start.byte_offset))
+            self.error_expression(self.span_from_offset(start.byte_offset))
         };
 
         Expression::Lambda {
+            id: self.next_expression_id(),
             params,
             return_annotation,
             body: body.into(),
@@ -812,6 +819,7 @@ impl<'source> Parser<'source> {
 
         match expressions.len() {
             0 => Expression::Unit {
+                id: self.next_expression_id(),
                 ty: Type::uninferred(),
                 span,
             },
@@ -821,6 +829,7 @@ impl<'source> Parser<'source> {
                 }
                 let expression = expressions.into_iter().next().expect("len is 1");
                 Expression::Paren {
+                    id: self.next_expression_id(),
                     ty: Type::uninferred(),
                     expression: expression.into(),
                     span,
@@ -831,6 +840,7 @@ impl<'source> Parser<'source> {
                     self.error_tuple_arity(n, span);
                 }
                 Expression::Tuple {
+                    id: self.next_expression_id(),
                     ty: Type::uninferred(),
                     elements: expressions,
                     span,
@@ -845,6 +855,7 @@ impl<'source> Parser<'source> {
         self.ensure(QuestionMark);
 
         Expression::Propagate {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             expression: expression.into(),
             span: self.span_from_offset(start_offset),
@@ -881,6 +892,7 @@ impl<'source> Parser<'source> {
         let body = self.parse_expression();
 
         Expression::Lambda {
+            id: self.next_expression_id(),
             params,
             return_annotation,
             body: body.into(),
@@ -899,6 +911,7 @@ impl<'source> Parser<'source> {
             self.consume_to_matching_close_brace();
             self.error_map_literal_not_supported(key_span);
             return Expression::Block {
+                id: self.next_expression_id(),
                 ty: Type::uninferred(),
                 items: vec![],
                 span: self.span_from_offset(start.byte_offset),
@@ -908,6 +921,7 @@ impl<'source> Parser<'source> {
         let (items, span) = self.parse_braced_items(start, start);
 
         Expression::Block {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             items,
             span,
@@ -1005,6 +1019,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Function {
+            id: self.next_expression_id(),
             doc,
             attributes,
             name,
@@ -1027,6 +1042,7 @@ impl<'source> Parser<'source> {
 
         if self.advance_if(Star) {
             return Expression::Unary {
+                id: self.next_expression_id(),
                 ty: Type::uninferred(),
                 operator: UnaryOperator::Deref,
                 expression: expression.into(),
@@ -1049,6 +1065,7 @@ impl<'source> Parser<'source> {
             self.ensure(Integer);
 
             return Expression::DotAccess {
+                id: self.next_expression_id(),
                 ty: Type::uninferred(),
                 expression: expression.into(),
                 member: index.to_string().into(),
@@ -1062,6 +1079,7 @@ impl<'source> Parser<'source> {
         self.ensure(Identifier);
 
         Expression::DotAccess {
+            id: self.next_expression_id(),
             ty: Type::uninferred(),
             expression: expression.into(),
             member: field.into(),
@@ -1088,7 +1106,7 @@ impl<'source> Parser<'source> {
                 let span = self.track_fn_as_lambda_error();
                 self.next(); // discard the rejected `fn`, which is itself a recovery anchor
                 self.resync_on_error();
-                expressions.push(Self::error_expression(span));
+                expressions.push(self.error_expression(span));
                 continue;
             }
 
@@ -1174,8 +1192,9 @@ impl<'source> Parser<'source> {
             self.error_missing_initializer(*span);
             let stub_span = self.span_from_offset(start.byte_offset);
             return Expression::Let {
+                id: self.next_expression_id(),
                 binding: Box::new(binding),
-                value: Box::new(Self::error_expression(stub_span)),
+                value: Box::new(self.error_expression(stub_span)),
                 mode: if assert {
                     LetMode::Assert
                 } else {
@@ -1210,7 +1229,7 @@ impl<'source> Parser<'source> {
                     .with_parse_code("expected_expression")
                     .with_help("Add a value to initialize the binding"),
             );
-            Self::error_expression(span)
+            self.error_expression(span)
         } else {
             self.parse_expression()
         };
@@ -1241,6 +1260,7 @@ impl<'source> Parser<'source> {
         };
 
         Expression::Let {
+            id: self.next_expression_id(),
             binding: Box::new(binding),
             value: expression.into(),
             mode,
@@ -1316,7 +1336,7 @@ impl<'source> Parser<'source> {
 
             self.track_coded_error(title, code, label, help);
             self.resync_on_error();
-            return Self::error_expression(self.span_from_offset(start.byte_offset));
+            return self.error_expression(self.span_from_offset(start.byte_offset));
         }
 
         self.next();
@@ -1349,6 +1369,7 @@ impl<'source> Parser<'source> {
         let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
 
         Expression::PackageImport {
+            id: self.next_expression_id(),
             name,
             name_span,
             alias,
@@ -1391,6 +1412,7 @@ impl<'source> Parser<'source> {
             self.next();
             let rhs = self.parse_expression();
             return Expression::Assignment {
+                id: self.next_expression_id(),
                 target: lhs.into(),
                 value: rhs.into(),
                 compound_operator: Some(operator),
@@ -1429,6 +1451,7 @@ impl<'source> Parser<'source> {
         self.ensure(Equal);
 
         Expression::Assignment {
+            id: self.next_expression_id(),
             target: lhs.into(),
             value: self.parse_expression().into(),
             compound_operator: None,
@@ -1504,6 +1527,7 @@ impl<'source> Parser<'source> {
         }
 
         Expression::Literal {
+            id: self.next_expression_id(),
             literal: Literal::FormatString(parts),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -1534,6 +1558,7 @@ impl<'source> Parser<'source> {
         }
 
         Expression::Task {
+            id: self.next_expression_id(),
             expression: Box::new(expression),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -1564,6 +1589,7 @@ impl<'source> Parser<'source> {
         }
 
         Expression::Defer {
+            id: self.next_expression_id(),
             expression: Box::new(expression),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -1584,6 +1610,7 @@ impl<'source> Parser<'source> {
             self.errors.push(error);
             let expression = self.parse_expression();
             return Expression::TryBlock {
+                id: self.next_expression_id(),
                 items: vec![expression],
                 ty: Type::uninferred(),
                 try_keyword_span,
@@ -1596,6 +1623,7 @@ impl<'source> Parser<'source> {
         let (items, span) = self.parse_braced_items(start, brace_token);
 
         Expression::TryBlock {
+            id: self.next_expression_id(),
             items,
             ty: Type::uninferred(),
             try_keyword_span,
@@ -1617,6 +1645,7 @@ impl<'source> Parser<'source> {
             self.errors.push(error);
             let expression = self.parse_expression();
             return Expression::RecoverBlock {
+                id: self.next_expression_id(),
                 items: vec![expression],
                 ty: Type::uninferred(),
                 recover_keyword_span,
@@ -1629,6 +1658,7 @@ impl<'source> Parser<'source> {
         let (items, span) = self.parse_braced_items(start, brace_token);
 
         Expression::RecoverBlock {
+            id: self.next_expression_id(),
             items,
             ty: Type::uninferred(),
             recover_keyword_span,
@@ -1658,6 +1688,7 @@ impl<'source> Parser<'source> {
         self.ensure(RightCurlyBrace);
 
         Expression::Select {
+            id: self.next_expression_id(),
             arms,
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
@@ -1789,6 +1820,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
         self.next();
         Expression::Identifier {
+            id: self.next_expression_id(),
             value: keyword.into(),
             ty: Type::uninferred(),
             span,
@@ -1829,6 +1861,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
         self.next();
         Expression::Literal {
+            id: self.next_expression_id(),
             literal: Literal::String {
                 value: string::String::new(),
                 raw: true,

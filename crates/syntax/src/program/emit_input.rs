@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::ast::{BindingId as AstBindingId, Pattern, RestPattern, Span};
 use crate::types::Symbol;
 
-use super::{Definition, File, FileImport};
+use super::{Definition, EqualityRecipe, File, FileImport};
 
 /// Name spans of imports that no code in their file uses.
 #[derive(Debug, Clone, Default)]
@@ -136,6 +136,7 @@ impl TestIndex {
 #[derive(Debug, Clone, Default)]
 pub struct EqualityIndex {
     by_id: HashMap<String, EqualityInfo>,
+    synthesized_fields: HashMap<String, Vec<EqualityRecipe>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,6 +210,19 @@ impl EqualityIndex {
         )
     }
 
+    /// Record the equality that the synthesized `equals` of `id` tests each field with, in declaration order.
+    pub fn insert_synthesized_fields(&mut self, id: String, fields: Vec<EqualityRecipe>) {
+        self.synthesized_fields.insert(id, fields);
+    }
+
+    /// The equality that the synthesized `equals` of `id` tests each field with, in declaration order, as the checker selected it.
+    pub fn synthesized_fields(&self, id: &str) -> &[EqualityRecipe] {
+        self.synthesized_fields
+            .get(id)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+
     pub fn is_synthesized(&self, id: &str) -> bool {
         matches!(
             self.by_id.get(id),
@@ -239,7 +253,7 @@ impl BindingMutation {
 
 #[derive(Default)]
 pub struct EmitInput {
-    pub conformances: super::ConformanceIndex,
+    pub checked_bodies: super::CheckedBodies,
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
     pub entry_package_id: String,

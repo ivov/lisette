@@ -1,5 +1,6 @@
 use crate::checker::EnvResolve;
 use crate::checker::promotion;
+use crate::checker::resolution::MethodSelection;
 use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
 use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
@@ -288,16 +289,22 @@ impl InferCtx<'_> {
 
         if violations.is_empty() && !(builtin_receiver && requires_methods) {
             if checked_methods.len() == requirements.len() {
-                let receiver = ty.resolve_in(&self.env);
-                let store = self.store;
-                self.facts.conformances.insert(
-                    ConformanceWitness {
-                        receiver,
-                        interface: interface_ty.clone(),
-                        methods: checked_methods,
-                    },
-                    |id| store.get_definition(id),
-                );
+                let witness = ConformanceWitness {
+                    receiver: ty.resolve_in(&self.env),
+                    interface: interface_ty.clone(),
+                    methods: checked_methods,
+                };
+                self.facts
+                    .value_uses
+                    .selected_witnesses
+                    .push(witness.clone());
+                // A type parameter names no one type, so its conformance holds only in this scope.
+                if !matches!(self.conformance_receiver(ty), Type::Parameter(_)) {
+                    let store = self.store;
+                    self.facts
+                        .conformances
+                        .insert(witness, |id| store.get_definition(id));
+                }
             }
             return Ok(());
         }
@@ -608,16 +615,11 @@ impl InferCtx<'_> {
         let Type::Parameter(name) = resolved else {
             return None;
         };
-        let qualified = self.qualify_name(name);
-        self.scopes.bounds_on_param(name).iter().find_map(|bound| {
-            let interface_ty = self.store.peel_alias(bound);
-            interface_ty.get_qualified_id()?;
-            self.store.get_method_for_type(&interface_ty, method)?;
-            Some(ConformanceCandidate::Resolved {
-                depth: 0,
-                owner: qualified.as_eco().clone(),
-                shadowed: false,
-            })
+        self.method_of_type(self.store, resolved, method)?;
+        Some(ConformanceCandidate::Resolved {
+            depth: 0,
+            owner: self.qualify_name(name).as_eco().clone(),
+            shadowed: false,
         })
     }
 
@@ -741,7 +743,32 @@ impl InferCtx<'_> {
                     let selected =
                         promotion::resolve_selector(store, &resolved_receiver, &impl_method_name);
                     let promotion::Resolution::Found(member) = selected else {
-                        if !matches!(resolved_receiver, Type::Parameter(_)) {
+                        if let Type::Parameter(_) = resolved_receiver
+                            && let Some(MethodSelection {
+                                bound: Some(bound),
+                                method,
+                                ..
+                            }) =
+                                self.method_of_type(store, &resolved_receiver, &impl_method_name)
+                            && let Some(bound) = bound.get_qualified_id()
+                        {
+                            check.methods.push(CheckedMethod {
+                                required_interface: interface_qualified_id.clone(),
+                                required_name: method_name.clone(),
+                                selected_definition: Symbol::from(bound)
+                                    .with_segment(&impl_method_name),
+                                selected_name: impl_method_name.clone(),
+                                pointer_receiver: symbol_method
+                                    .unwrap_forall()
+                                    .get_function_params()
+                                    .and_then(|parameters| parameters.first())
+                                    .is_some_and(|receiver| receiver.ty.is_ref()),
+                                signature: symbol_method.clone(),
+                                declared_signature: symbol_method.clone(),
+                                substitutions: Default::default(),
+                                is_exported: method.visibility.is_public(),
+                            });
+                        } else if !matches!(resolved_receiver, Type::Parameter(_)) {
                             check.push_violation(
                                 interface_qualified_id,
                                 requirement.parent_of.as_ref(),

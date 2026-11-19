@@ -1,5 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::program::ConformanceIndex;
+use syntax::program::CheckedBodies;
 
 use diagnostics::LisetteDiagnostic;
 use semantics::checker::TaskState;
@@ -175,7 +175,7 @@ impl CompiledTest {
             errors,
             definitions,
             bindings,
-            conformances,
+            checked_bodies,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -222,7 +222,7 @@ impl CompiledTest {
                 .collect();
 
             let bindings = passes::emit_bindings(&checker.facts);
-            let conformances = checker.facts.conformances;
+            let checked_bodies = checker.facts.checked_bodies.publish();
 
             let equality_index = mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
@@ -240,7 +240,7 @@ impl CompiledTest {
                 errors,
                 definitions,
                 bindings,
-                conformances,
+                checked_bodies,
                 equality_index,
                 go_package_names,
                 go_package_ids,
@@ -254,7 +254,7 @@ impl CompiledTest {
             package_id: TEST_PACKAGE_ID.to_string(),
             unused_imports: UnusedImports::default(),
             bindings,
-            conformances,
+            checked_bodies,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -269,7 +269,7 @@ pub struct InferenceResult {
     pub package_id: String,
     pub unused_imports: UnusedImports,
     pub bindings: EmitBindings,
-    pub conformances: ConformanceIndex,
+    pub checked_bodies: CheckedBodies,
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_package_ids: HashSet<String>,

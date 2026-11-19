@@ -5,24 +5,22 @@ use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use crate::types::go_type::GoType;
-use syntax::ast::IdentifierResolution;
+use syntax::ast::{Expression, IdentifierResolution};
 use syntax::types::FunctionParameter;
-use syntax::types::{SubstitutionMap, Type};
+use syntax::types::Type;
 
 impl Planner<'_> {
     pub(crate) fn emit_identifier(
         &mut self,
+        identifier: &Expression,
         value: &str,
         resolution: &IdentifierResolution,
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
         let binding = match resolution {
-            IdentifierResolution::Definition {
-                name,
-                instantiation,
-            } => {
-                return self.emit_definition_identifier(name, instantiation, ty, ctx);
+            IdentifierResolution::Definition { name, .. } => {
+                return self.emit_definition_identifier(identifier, name, ty, ctx);
             }
             IdentifierResolution::Binding(id) => self.scope.resolve_binding_id(*id),
 
@@ -58,8 +56,8 @@ impl Planner<'_> {
 
     fn emit_definition_identifier(
         &mut self,
+        identifier: &Expression,
         symbol: &str,
-        instantiation: &SubstitutionMap,
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
@@ -100,23 +98,13 @@ impl Planner<'_> {
             return expression;
         }
         let function = self.definition_reference(symbol);
-        match self.value_type_args(symbol, instantiation, ctx) {
+        if ctx.is_callee() {
+            return function;
+        }
+        match self.format_value_type_args(identifier) {
             Some(type_args) => GoExpression::instantiation(function, type_args),
             None => function,
         }
-    }
-
-    /// Type args for a generic definition used as a value.
-    fn value_type_args(
-        &mut self,
-        symbol: &str,
-        instantiation: &SubstitutionMap,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<GoType> {
-        if ctx.is_callee() {
-            return None;
-        }
-        self.format_value_type_args(Some(symbol), Some(instantiation))
     }
 
     /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).

@@ -149,6 +149,7 @@ impl InferCtx<'_> {
         self.facts.add_function_span(span);
 
         Expression::Function {
+            id: self.fresh_expression_id(),
             doc,
             attributes,
             name,
@@ -237,6 +238,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &base_fn_ty, &span);
 
         Expression::Lambda {
+            id: self.fresh_expression_id(),
             params: new_params,
             return_annotation,
             body: new_body.into(),
@@ -268,6 +270,7 @@ impl InferCtx<'_> {
                     return_annotation.get_span(),
                 ));
             return Expression::Block {
+                id: self.fresh_expression_id(),
                 items: vec![],
                 ty: Type::unit(),
                 span: *body_span,

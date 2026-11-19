@@ -1,6 +1,6 @@
 use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, IdentifierResolution, Pattern};
-use syntax::program::{CallKind, DotAccessResolution};
+use syntax::program::{CallOperation, DotAccessResolution};
 use syntax::types::Type;
 
 use super::helpers::lambda_is_annotated;
@@ -25,20 +25,22 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
+    let call = lambda_body(body);
     let Expression::Call {
         expression: callee,
         args,
         spread,
         type_arguments,
-        call_kind,
         ..
-    } = lambda_body(body)
+    } = call
     else {
         return;
     };
 
-    if !matches!(call_kind, CallKind::Regular)
-        || spread.is_some()
+    if !matches!(
+        ctx.facts.selections.call_operation(call),
+        Some(CallOperation::Function | CallOperation::BoundMethod { .. })
+    ) || spread.is_some()
         || !type_arguments.is_empty()
         || args.len() != params.len()
     {

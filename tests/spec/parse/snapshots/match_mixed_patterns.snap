@@ -294,7 +294,6 @@ description: |
                                         byte_offset: 126,
                                         byte_length: 13,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             MatchArm {
@@ -373,7 +372,6 @@ description: |
                                         byte_offset: 165,
                                         byte_length: 18,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             MatchArm {
@@ -475,7 +473,6 @@ description: |
                                         byte_offset: 209,
                                         byte_length: 26,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             MatchArm {
@@ -540,7 +537,6 @@ description: |
                                         byte_offset: 261,
                                         byte_length: 18,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             MatchArm {
@@ -612,7 +608,6 @@ description: |
                                         byte_offset: 305,
                                         byte_length: 19,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             MatchArm {
@@ -677,7 +672,6 @@ description: |
                                         byte_offset: 350,
                                         byte_length: 18,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                             MatchArm {
@@ -734,7 +728,6 @@ description: |
                                         byte_offset: 394,
                                         byte_length: 16,
                                     },
-                                    call_kind: Unresolved,
                                 },
                             },
                         ],

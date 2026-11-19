@@ -260,7 +260,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     Analysis {
         dependencies,
         emit_input: EmitInput {
-            conformances: facts.conformances,
+            checked_bodies: facts.checked_bodies.publish(),
             files,
             definitions,
             entry_package_id: ENTRY_PACKAGE_ID.to_string(),

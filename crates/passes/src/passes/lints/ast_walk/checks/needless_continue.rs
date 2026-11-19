@@ -15,7 +15,7 @@ pub fn check_needless_continue(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Block { items, .. } = body.as_ref() else {
         return;
     };
-    let Some(Expression::Continue { span }) = items.last() else {
+    let Some(Expression::Continue { span, .. }) = items.last() else {
         return;
     };
 

@@ -108,6 +108,7 @@ impl InferCtx<'_> {
         }
 
         Expression::Loop {
+            id: self.fresh_expression_id(),
             body: new_body.into(),
             ty: loop_type,
             span,
@@ -134,6 +135,7 @@ impl InferCtx<'_> {
         });
 
         Expression::While {
+            id: self.fresh_expression_id(),
             condition: new_condition.into(),
             body: new_body.into(),
             span,
@@ -167,6 +169,7 @@ impl InferCtx<'_> {
         });
 
         Expression::WhileLet {
+            id: self.fresh_expression_id(),
             pattern: new_pattern,
             scrutinee: new_scrutinee.into(),
             body: new_body.into(),
@@ -267,6 +270,7 @@ impl InferCtx<'_> {
         });
 
         Expression::For {
+            id: self.fresh_expression_id(),
             binding: Box::new(new_binding),
             iterable: new_iterable.into(),
             body: new_body.into(),
@@ -498,6 +502,7 @@ impl InferCtx<'_> {
         };
 
         Expression::Break {
+            id: self.fresh_expression_id(),
             value: new_value,
             span,
         }
@@ -512,6 +517,9 @@ impl InferCtx<'_> {
         }
         self.check_loop_exit(span, LoopExit::Continue);
 
-        Expression::Continue { span }
+        Expression::Continue {
+            id: self.fresh_expression_id(),
+            span,
+        }
     }
 }

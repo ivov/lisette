@@ -3,7 +3,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::identifiers::method_expression;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
-use syntax::program::DotAccessResolution;
+use syntax::ast::Expression;
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -48,15 +48,15 @@ impl Planner<'_> {
 
     pub(crate) fn emit_static_method_dot(
         &mut self,
+        dot_access: &Expression,
         definition: &str,
-        resolution: &DotAccessResolution,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
         let function = self.definition_reference(definition);
         if ctx.is_callee() {
             return function;
         }
-        let type_args = self.format_value_type_args(Some(definition), resolution.instantiation());
+        let type_args = self.format_value_type_args(dot_access);
         GoExpression::instantiation(function, type_args.unwrap_or_default())
     }
 

@@ -1,8 +1,10 @@
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
+use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
 use crate::Planner;
+use crate::control_flow::fallible::prelude_call;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign,
@@ -19,6 +21,11 @@ pub(crate) enum CoercionPlan {
     WrapAsInterface(AdapterPlan),
     WrapNewtype {
         ty: Type,
+    },
+    /// A Go interface value put into a Lisette `Option` as its `Some`.
+    WrapSome {
+        payload_type: Type,
+        payload: Box<CoercionPlan>,
     },
     Layout(LayoutBridge),
     RebuildArray {
@@ -109,11 +116,104 @@ impl LayoutBridge {
 }
 
 impl CoercionPlan {
+    /// The conversion that the checker recorded for `value` into its slot, which Go lays out as `layout` when Go declares it.
+    pub(crate) fn checked(
+        planner: &Planner<'_>,
+        value: &Expression,
+        layout: Option<&ValueLayout>,
+    ) -> Self {
+        let value_use = planner.facts.checked(value).value_use();
+        let plan = Self::adapted(
+            planner,
+            &value_use.adaptation,
+            &value.get_type(),
+            &value_use.slot,
+            layout,
+        );
+        // A Lisette function in a slot that Go lays out as an interface takes the Go layout of its signature.
+        if plan.is_identity()
+            && let Some(layout) = layout
+            && planner.facts.is_interface_or_unknown(layout.logical_type())
+            && let Some((stored, lisette)) = planner.any_slot_function_layouts(&value.get_type())
+        {
+            return Self::bridge(planner, &lisette, &stored);
+        }
+        plan
+    }
+
+    pub(crate) fn adapted(
+        planner: &Planner<'_>,
+        adaptation: &Adaptation,
+        from: &Type,
+        to: &Type,
+        slot: Option<&ValueLayout>,
+    ) -> Self {
+        match (
+            adaptation,
+            &planner.facts.peel_alias(from),
+            &planner.facts.peel_alias(to),
+        ) {
+            (Adaptation::Interface(conversion), _, _) => planner
+                .interface_adapter(conversion)
+                .map_or_else(|| Self::internal(planner, from, to), Self::WrapAsInterface),
+            (Adaptation::ImplicitSome { payload }, _, option) => {
+                let payload_type = option.ok_type();
+                let payload = Self::adapted(planner, payload, from, &payload_type, None);
+                let layout = slot
+                    .cloned()
+                    .unwrap_or_else(|| planner.value_layout(to, SlotOrigin::Lisette));
+                if matches!(layout.underlying(), ValueLayout::TaggedOption { .. }) {
+                    Self::WrapSome {
+                        payload_type,
+                        payload: Box::new(payload),
+                    }
+                } else {
+                    payload
+                }
+            }
+            (Adaptation::Tuple(elements), Type::Tuple(sources), Type::Tuple(slots)) => {
+                Self::RebuildTuple {
+                    slot_types: slots.clone(),
+                    elements: elements
+                        .iter()
+                        .zip(sources.iter().zip(slots))
+                        .map(|(element, (from, to))| {
+                            Self::adapted_element(planner, element, from, to)
+                        })
+                        .collect(),
+                }
+            }
+            (
+                Adaptation::Array(element),
+                Type::Array {
+                    element: source, ..
+                },
+                Type::Array { element: slot, .. },
+            ) => Self::RebuildArray {
+                array_type: to.clone(),
+                element: Box::new(Self::adapted_element(planner, element, source, slot)),
+            },
+            _ => Self::internal(planner, from, to),
+        }
+    }
+
+    fn adapted_element(
+        planner: &Planner<'_>,
+        adaptation: &Adaptation,
+        from: &Type,
+        to: &Type,
+    ) -> Self {
+        match adaptation {
+            Adaptation::Identity => {
+                widening_element_plan(planner, from, to).unwrap_or(Self::Identity)
+            }
+            _ => Self::adapted(planner, adaptation, from, to, None),
+        }
+    }
+
     pub(crate) fn internal(planner: &Planner<'_>, from: &Type, to: &Type) -> Self {
         if from == to {
             Self::Identity
-        } else if let Some(plan) = planner.needs_adapter(from, to) {
-            Self::WrapAsInterface(plan)
         } else if planner.facts.is_interface_or_unknown(to)
             && let Some((stored, lisette)) = planner.any_slot_function_layouts(from)
         {
@@ -163,6 +263,15 @@ impl CoercionPlan {
             Self::WrapNewtype { ty } => {
                 let type_name = planner.go_type(&ty);
                 GoExpression::conversion(type_name, value)
+            }
+            Self::WrapSome {
+                payload_type,
+                payload,
+            } => {
+                let (payload_setup, payload) = payload.lower(planner, value);
+                statements.extend(payload_setup);
+                let type_arguments = GoType::type_argument(&planner.go_type(&payload_type));
+                prelude_call("MakeOptionSome", type_arguments, vec![payload])
             }
             Self::Layout(bridge) => {
                 planner.plan_layout_bridge(&mut statements, value, &bridge, true)
@@ -635,8 +744,7 @@ fn widening_element_plan(planner: &Planner<'_>, from: &Type, to: &Type) -> Optio
     } else {
         bridge
     };
-    (from != to && (planner.facts.is_interface_or_unknown(to) || !plan.is_identity()))
-        .then_some(plan)
+    (from != to && !plan.is_identity()).then_some(plan)
 }
 
 fn needs_newtype_wrap(planner: &Planner<'_>, from: &Type, to: &Type) -> bool {

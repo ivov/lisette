@@ -12,10 +12,10 @@ use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
-use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
+use syntax::ast::{Expression, Literal};
+use syntax::program::NativeTypeKind;
 use syntax::program::ReceiverCoercion;
 use syntax::program::SlotOrigin;
-use syntax::program::{NativeTypeKind, resolved_instantiation};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -23,7 +23,7 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         callee: &ResolvedCallee<'_>,
-        type_args: ResolvedCallTypeArguments<'_>,
+        written_type_arguments: usize,
         arg_shape: CallArgShape,
     ) -> Option<GoType> {
         let definition_ty = callee.declared_type()?;
@@ -37,45 +37,39 @@ impl Planner<'_> {
         };
 
         let receiver_count = callee.receiver_offset.min(1);
-        if type_args.is_empty()
+        if written_type_arguments == 0
             && all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
         {
             return None;
         }
-        // A method-only parameter missing from the callee type is not unified, so explicit arguments apply.
-        let mut mapping = resolved_instantiation(function)?.clone();
-        let offset = vars.len().checked_sub(type_args.len())?;
-        for (name, argument) in vars[offset..].iter().zip(type_args.iter()) {
-            mapping.insert(name.clone(), argument.clone());
-        }
-        self.format_generic_instantiation(definition_ty, &mapping)
+        let type_arguments = &self.facts.checked(function).callee().type_arguments;
+        self.format_generic_instantiation(definition_ty, type_arguments)
     }
 
     pub(super) fn lower_ufcs_call(
         &mut self,
         function: &Expression,
         args: &[Expression],
-        type_args: ResolvedCallTypeArguments<'_>,
+        written_type_arguments: usize,
         spread: Option<&Expression>,
         call_plan: &CallPlan<'_>,
     ) -> ValuePlan {
         let Expression::DotAccess {
             expression: receiver,
             member,
-            resolution,
             ..
         } = function
         else {
             unreachable!("lower_ufcs_call called on non-DotAccess");
         };
 
-        let mut coercion = resolution.receiver_coercion();
+        let mut coercion = self.facts.checked(receiver).receiver_change();
         let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
         let type_args_string = self
             .ufcs_type_args(
                 function,
                 &call_plan.resolved,
-                type_args,
+                written_type_arguments,
                 CallArgShape {
                     value_count: args.len(),
                     has_spread: spread.is_some(),

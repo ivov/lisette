@@ -3,7 +3,9 @@ use rustc_hash::FxHashSet as HashSet;
 use crate::checker::EnvResolve;
 use crate::zero::{MapZero, NoZero, NoZeroReason};
 use ecow::EcoString;
-use syntax::ast::{Expression, Span, StructFieldAssignment, StructFields, StructSpread};
+use syntax::ast::{
+    Expression, ExpressionId, Span, StructFieldAssignment, StructFields, StructSpread,
+};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
@@ -34,8 +36,9 @@ struct StructLiteral {
 }
 
 impl StructLiteral {
-    fn with_type(self, ty: Type) -> Expression {
+    fn with_type(self, ty: Type, id: ExpressionId) -> Expression {
         Expression::StructCall {
+            id,
             name: self.name,
             field_assignments: self.fields,
             spread: self.spread,
@@ -114,7 +117,7 @@ impl InferCtx<'_> {
                     literal.span,
                 ));
             }
-            return literal.with_type(instantiated_ty);
+            return literal.with_type(instantiated_ty, self.fresh_expression_id());
         }
 
         if let Some(resolved) = self
@@ -134,7 +137,7 @@ impl InferCtx<'_> {
         }
         self.unify(expected_ty, &Type::Error, &literal.span);
         self.infer_unresolved_struct_values(literal)
-            .with_type(Type::Error)
+            .with_type(Type::Error, self.fresh_expression_id())
     }
 
     fn infer_unresolved_struct_values(&mut self, literal: StructLiteral) -> StructLiteral {
@@ -464,6 +467,7 @@ impl InferCtx<'_> {
         );
 
         Expression::StructCall {
+            id: self.fresh_expression_id(),
             name: struct_name,
             field_assignments: new_field_assignments,
             spread: new_spread,
@@ -613,6 +617,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &enum_ty, &span);
 
         Expression::StructCall {
+            id: self.fresh_expression_id(),
             name: variant_name,
             field_assignments: new_field_assignments,
             spread: new_spread,

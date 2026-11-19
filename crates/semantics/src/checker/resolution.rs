@@ -3,6 +3,15 @@ use crate::loader;
 use std::iter;
 use syntax::program::go_import_default_name;
 
+/// A method that member lookup selected for a receiver type.
+pub(crate) struct MethodSelection {
+    pub(crate) method: Method,
+    /// The bound that declares the method, when the receiver is a type parameter.
+    pub(crate) bound: Option<Type>,
+    /// The type arguments of the embed that declares a promoted method, which the method type already substitutes.
+    pub(crate) owner_arguments: SubstitutionMap,
+}
+
 /// Where member lookup reads a type's method set.
 enum MethodSource<'a> {
     Bounds(&'a [Type]),
@@ -394,13 +403,26 @@ impl TaskState {
         }
     }
 
-    pub(super) fn method_of_type(&self, store: &Store, ty: &Type, name: &str) -> Option<Method> {
+    /// The method `name` of `ty`, with the bound or embed that declares it.
+    pub(super) fn method_of_type(
+        &self,
+        store: &Store,
+        ty: &Type,
+        name: &str,
+    ) -> Option<MethodSelection> {
         match self.method_source(store, ty) {
-            MethodSource::Bounds(bounds) => bounds
-                .iter()
-                .rev()
-                .find_map(|bound| store.get_method_for_type(bound, name)),
-            MethodSource::Direct(ty) => store.get_method_for_type(&ty, name),
+            MethodSource::Bounds(bounds) => bounds.iter().rev().find_map(|bound| {
+                Some(MethodSelection {
+                    method: store.get_method_for_type(bound, name)?,
+                    bound: Some(store.peel_alias(bound)),
+                    owner_arguments: SubstitutionMap::default(),
+                })
+            }),
+            MethodSource::Direct(ty) => Some(MethodSelection {
+                method: store.get_method_for_type(&ty, name)?,
+                bound: None,
+                owner_arguments: SubstitutionMap::default(),
+            }),
             MethodSource::Promoted(ty) => promotion::promoted_method(store, &ty, name),
             MethodSource::None => None,
         }

@@ -17,7 +17,7 @@ use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayo
 use coercion::CoercionPlan;
 use layout::{FunctionLayout, ValueLayout};
 use syntax::ast::Expression;
-use syntax::program::SlotOrigin;
+use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
 /// Go spells a tuple payload as one result per element.
@@ -252,14 +252,27 @@ impl Planner<'_> {
         .then_some(slot_origin)
     }
 
-    pub(crate) fn value_slot_coercion(&self, value: &Expression, target_ty: &Type) -> CoercionPlan {
-        let bridge = self.function_slot_bridge(value, target_ty);
+    /// The coercion of `value` into the slot that the checker recorded for it, where Go lays the slot out as `layout`.
+    pub(crate) fn value_slot_coercion(&self, value: &Expression, layout: &Type) -> CoercionPlan {
+        let value_use = self.facts.checked(value).value_use();
+        self.adapted_slot_coercion(value, &value_use.adaptation, &value_use.slot, layout)
+    }
+
+    /// The coercion of `value` into `slot` by `adaptation`, which the checker recorded for `value` or for the tuple that holds it, where Go lays the slot out as `layout`.
+    pub(crate) fn adapted_slot_coercion(
+        &self,
+        value: &Expression,
+        adaptation: &Adaptation,
+        slot: &Type,
+        layout: &Type,
+    ) -> CoercionPlan {
+        let bridge = self.function_slot_bridge(value, layout);
         if bridge.is_identity() {
-            let internal = CoercionPlan::internal(self, &value.get_type(), target_ty);
+            let internal = CoercionPlan::adapted(self, adaptation, &value.get_type(), slot, None);
             if !internal.is_identity() {
                 return internal;
             }
-            let target = self.value_layout(target_ty, SlotOrigin::Lisette);
+            let target = self.value_layout(layout, SlotOrigin::Lisette);
             if matches!(
                 target.underlying(),
                 ValueLayout::TaggedOption { .. }

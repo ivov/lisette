@@ -70,7 +70,7 @@ pub fn run(
             LintMode::Skip => None,
             LintMode::Run => {
                 let (produced_facts, (ast_walk_diagnostics, ref_graph_output)) = rayon::join(
-                    || diagnostic_producers::run_all(store),
+                    || diagnostic_producers::run_all(store, &facts.selections),
                     || {
                         rayon::join(
                             || lints::ast_walk::run(store, facts),

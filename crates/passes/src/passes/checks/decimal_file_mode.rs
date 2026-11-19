@@ -9,6 +9,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         literal: Literal::Integer { value, text: None },
         ty,
         span,
+        ..
     } = expression
         && *value > PERM_MASK
         && ty.get_qualified_id() == Some(FILE_MODE_ID)

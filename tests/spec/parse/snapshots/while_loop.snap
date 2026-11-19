@@ -154,7 +154,6 @@ description: |
                                         byte_offset: 59,
                                         byte_length: 12,
                                     },
-                                    call_kind: Unresolved,
                                 },
                                 Assignment {
                                     target: Identifier {

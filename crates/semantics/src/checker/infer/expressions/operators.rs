@@ -2,6 +2,7 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{BinaryOperator, Constant, Expression, Literal, Span, UnaryOperator};
 use syntax::lex::rune_codepoint;
+use syntax::program::ValueUseKey;
 use syntax::types::{NumericFamily, SimpleKind, Type};
 
 use BinaryOperator::*;
@@ -91,6 +92,7 @@ impl InferCtx<'_> {
                 let operand =
                     this.with_value_context(|this| this.infer_expression(*operand, expected_ty));
                 Expression::Unary {
+                    id: this.fresh_expression_id(),
                     operator,
                     expression: operand.into(),
                     ty: expected_ty.clone(),
@@ -209,6 +211,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &expression_ty, &span);
 
         Expression::Unary {
+            id: self.fresh_expression_id(),
             operator,
             expression: new_expression.into(),
             ty: expression_ty,
@@ -258,6 +261,9 @@ impl InferCtx<'_> {
                     self.new_type_var()
                 };
                 let inferred = self.infer_binary_impl(op, Box::new(current), right, &result_ty, s);
+                if !stack.is_empty() {
+                    self.record_value_use(&inferred, &result_ty, Vec::new());
+                }
                 InferredOperand::new(inferred, result_ty)
             } else {
                 let left_ty = self.new_type_var();
@@ -271,6 +277,9 @@ impl InferCtx<'_> {
                     self.new_type_var()
                 };
                 left = self.infer_binary_with_left(op, left, right, &result_ty, s);
+                if !stack.is_empty() {
+                    self.record_value_use(&left.expression, &result_ty, Vec::new());
+                }
             }
             return left.expression;
         }
@@ -334,6 +343,9 @@ impl InferCtx<'_> {
                 let right = this.with_value_context(|s| s.infer_expression(*right, target_ty));
                 let right = InferredOperand::new(right, target_ty.clone());
                 left = this.finish_binary(op, left, right, result_ty, s);
+                if !stack.is_empty() {
+                    this.record_value_use(&left.expression, result_ty, Vec::new());
+                }
             }
             left.expression
         });
@@ -480,6 +492,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &expression_ty, &span);
 
         let expression = Expression::Binary {
+            id: self.fresh_expression_id(),
             operator,
             left: left.expression.into(),
             right: right.expression.into(),
@@ -972,6 +985,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &range_ty, &span);
 
         Expression::Range {
+            id: self.fresh_expression_id(),
             start: new_start,
             end: new_end,
             inclusive,
@@ -1005,7 +1019,15 @@ impl InferCtx<'_> {
 
         self.check_cast_literal_overflow(&new_expression, &target_ty, span);
 
-        self.check_valid_cast(&source_ty, &target_ty, span);
+        let id = self.fresh_expression_id();
+        let ((), witnesses) =
+            self.selecting_witnesses(|this| this.check_valid_cast(&source_ty, &target_ty, span));
+        self.record_obligation(
+            ValueUseKey::cast_operand(id),
+            source_ty.clone(),
+            target_ty.clone(),
+            witnesses,
+        );
 
         if is_integer_type(&target_ty, &self.env, self.store) {
             if is_float_literal(&new_expression) {
@@ -1028,6 +1050,7 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &result_ty, &span);
 
         Expression::Cast {
+            id,
             expression: new_expression.into(),
             target_type,
             ty: result_ty,

@@ -6,7 +6,6 @@ use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::plan::values::GoExpression;
 use std::iter::once;
 use std::{fmt::Display, slice};
-use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
@@ -496,14 +495,10 @@ impl Planner<'_> {
         self.format_type_arg_iter(parameters)
     }
 
-    pub(crate) fn format_resolved_type_args(
+    pub(crate) fn format_type_arg_iter<'t>(
         &self,
-        parameters: ResolvedCallTypeArguments<'_>,
+        parameters: impl IntoIterator<Item = &'t Type>,
     ) -> GoType {
-        self.format_type_arg_iter(parameters.iter())
-    }
-
-    fn format_type_arg_iter<'t>(&self, parameters: impl IntoIterator<Item = &'t Type>) -> GoType {
         let arguments: Vec<GoType> = parameters
             .into_iter()
             .map(|param| self.go_type(param))
@@ -674,16 +669,16 @@ impl Planner<'_> {
 
     /// Prepend the receiver's generic params to the explicit type args (for
     /// native-method and UFCS call sites).
-    pub(crate) fn format_type_args_with_receiver(
+    pub(crate) fn format_type_args_with_receiver<'t>(
         &self,
         receiver_ty: &Type,
-        type_args: ResolvedCallTypeArguments<'_>,
+        type_args: impl Iterator<Item = &'t Type>,
     ) -> GoType {
         let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
         let arguments: Vec<GoType> = receiver_params
             .iter()
-            .chain(type_args.iter())
             .map(|ty| self.go_type(ty))
+            .chain(type_args.map(|ty| self.go_type(ty)))
             .collect();
         GoType::type_arguments(&arguments)
     }

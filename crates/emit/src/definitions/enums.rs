@@ -89,7 +89,6 @@ impl Planner<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Enum {
-                    generics: sem_generics,
                     variants: sem_variants,
                     ..
                 },
@@ -98,7 +97,6 @@ impl Planner<'_> {
         else {
             return None;
         };
-        let sem_generics = sem_generics.clone();
         let sem_variants = sem_variants.clone();
         let layout = self
             .facts
@@ -113,6 +111,7 @@ impl Planner<'_> {
         let receiver_type = receiver_generics.instantiate(&go_type_name);
         let go_method = self.equals_method_go_name();
 
+        let mut recipes = self.facts.synthesized_field_equalities(enum_id).iter();
         let mut cases: Vec<SwitchCasePlan> = Vec::new();
         for (sem_variant, layout_variant) in sem_variants.iter().zip(layout.variants.iter()) {
             if sem_variant.fields.is_empty() {
@@ -122,7 +121,7 @@ impl Planner<'_> {
                 .fields
                 .iter()
                 .zip(layout_variant.fields.iter())
-                .map(|(sem_field, layout_field)| {
+                .map(|(_, layout_field)| {
                     let field = |base: &GoIdentifier| {
                         let access = GoExpression::selector(
                             GoExpression::identifier(base.clone()),
@@ -135,12 +134,10 @@ impl Planner<'_> {
                         }
                     };
 
-                    self.equality_expression(
-                        field(&receiver),
-                        field(&other),
-                        &sem_field.ty,
-                        &sem_generics,
-                    )
+                    let recipe = recipes
+                        .next()
+                        .expect("internal error: the checker records the equality of every field");
+                    self.equality_expression(field(&receiver), field(&other), recipe)
                 })
                 .collect();
             let value = comparisons

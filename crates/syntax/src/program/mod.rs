@@ -21,8 +21,8 @@ pub use file::{
 };
 pub use package::{Package, PackageId, UninferredExports, is_internal_package_id};
 pub use resolution::{
-    CallKind, ChannelOperation, DotAccessResolution, NativeTypeKind, ReceiverCoercion,
-    channel_operation, prelude_constructor, resolved_definition, resolved_instantiation,
+    ChannelOperation, DotAccessResolution, NativeTypeKind, ReceiverCoercion, channel_operation,
+    prelude_constructor, resolved_definition, resolved_instantiation,
 };
 
 mod native_operation;
@@ -41,3 +41,10 @@ pub use conformance::{CheckedMethod, ConformanceIndex, ConformanceWitness};
 
 mod go_method_policy;
 pub use go_method_policy::GoMethodPolicy;
+
+mod checked;
+pub use checked::{
+    Adaptation, CallOperation, CheckedBodies, CheckedBodiesBuilder, CheckedCallee,
+    CheckedExpression, CheckedValueUse, ElementEquality, EqualityRecipe, InterfaceConversion,
+    ValueUseKey,
+};

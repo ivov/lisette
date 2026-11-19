@@ -29796,3 +29796,79 @@ fn at(xs: Array<int, 3>) -> int {
 "#
     );
 }
+
+#[test]
+fn container_equals_credits_newtype_element_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Inner { v: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.v == other.v
+  }
+}
+
+struct Wrapper(Inner)
+
+impl Wrapper {
+  fn equals(self, other: Wrapper) -> bool {
+    self.0.v == other.0.v
+  }
+}
+
+fn main() {
+  let xs = [Wrapper(Inner { v: 1 })]
+  let _ = xs.equals(xs)
+}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors().is_empty(),
+        "unexpected errors: {:?}",
+        result.errors()
+    );
+    let unused: Vec<usize> = result
+        .lints()
+        .iter()
+        .filter(|lint| lint.code_str() == Some("lint.unused_function"))
+        .filter_map(|lint| lint.first_label_span().map(|(offset, _)| offset))
+        .collect();
+    let inner_equals = source.find("fn equals(self, other: Inner)").unwrap() + "fn ".len();
+    assert_eq!(unused, vec![inner_equals]);
+}
+
+#[test]
+fn slice_contains_credits_element_equals() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Inner { v: int }
+
+impl Inner {
+  fn equals(self, other: Inner) -> bool {
+    self.v == other.v
+  }
+}
+
+fn main() {
+  let xs = [Inner { v: 1 }]
+  let _ = xs.contains(Inner { v: 1 })
+}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors().is_empty(),
+        "unexpected errors: {:?}",
+        result.errors()
+    );
+    assert!(
+        result
+            .lints()
+            .iter()
+            .all(|lint| lint.code_str() != Some("lint.unused_function"))
+    );
+}

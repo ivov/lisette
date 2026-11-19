@@ -8,7 +8,7 @@ use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
-use syntax::program::{CallKind, Definition, Method, Visibility, resolved_definition};
+use syntax::program::{CallOperation, Definition, Method, Visibility, resolved_definition};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl CallPlan<'_> {
 
 #[derive(Debug)]
 pub(crate) struct ResolvedCallee<'a> {
-    pub(crate) origin: CallableOrigin,
+    pub(crate) origin: CallableOrigin<'a>,
     pub(crate) declaration: Option<CallableDeclaration<'a>>,
     pub(crate) instantiated: Type,
     pub(crate) receiver_offset: usize,
@@ -74,11 +74,11 @@ impl<'a> CallableDeclaration<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum CallableOrigin {
+pub(crate) enum CallableOrigin<'a> {
     /// Go interop call; `ResolvedCallee::abi` describes its physical boundary.
     GoInterop,
-    /// Lisette call. Local bindings and unresolved callees are `CallKind::Regular`.
-    Source(CallKind),
+    /// Lisette call, with the operation that the checker selected for it.
+    Source(&'a CallOperation),
 }
 
 #[derive(Debug, Clone)]
@@ -132,7 +132,6 @@ impl<'a> Planner<'a> {
         let Expression::Call {
             expression: callee,
             args,
-            call_kind,
             ty,
             ..
         } = expression
@@ -143,15 +142,16 @@ impl<'a> Planner<'a> {
         let function = callee.unwrap_parens();
         let go_return = self.resolve_go_call_abi(expression);
 
+        let checked = self.facts.checked(function).callee();
         let origin = if self.is_go_callable(function) {
             CallableOrigin::GoInterop
-        } else if self.is_local_binding(function) || *call_kind == CallKind::Unresolved {
-            CallableOrigin::Source(CallKind::Regular)
         } else {
-            CallableOrigin::Source(*call_kind)
+            CallableOrigin::Source(&checked.operation)
         };
+        let definition = checked.definition.as_ref().map(ToString::to_string);
 
-        let resolved = self.resolve_callee(function, origin, go_return.as_ref(), args.len());
+        let resolved =
+            self.resolve_callee(function, origin, definition, go_return.as_ref(), args.len());
         debug_assert!(
             !resolved.abi.result.is_lowered() || {
                 let peeled = self.facts.peel_alias(ty);
@@ -178,17 +178,13 @@ impl<'a> Planner<'a> {
     fn resolve_callee(
         &self,
         function: &Expression,
-        origin: CallableOrigin,
+        origin: CallableOrigin<'a>,
+        id: Option<String>,
         go_return: Option<&LoweredReturnAbi>,
         arg_count: usize,
     ) -> ResolvedCallee<'a> {
         let bound_layout = self.bound_dispatch_layout(function);
-        let origin = if bound_layout.is_some() {
-            CallableOrigin::Source(CallKind::Regular)
-        } else {
-            origin
-        };
-        let (id, declaration) = self.resolve_callee_definition(function);
+        let declaration = id.as_deref().and_then(|id| self.callable_declaration(id));
         let alias_declaration = self.facts.function_alias_declaration(&function.get_type());
         let declared_type = declaration
             .map(CallableDeclaration::ty)
@@ -216,7 +212,10 @@ impl<'a> Planner<'a> {
                 Some(result) => CallableReturnAbi::Lowered(result.clone()),
                 None if matches!(
                     origin,
-                    CallableOrigin::Source(CallKind::NativeConstructor(NativeTypeKind::Array))
+                    CallableOrigin::Source(CallOperation::NativeConstructor {
+                        kind: NativeTypeKind::Array,
+                        ..
+                    })
                 ) =>
                 {
                     // Array.from emits a comma-ok pair even though its callee has
@@ -255,9 +254,7 @@ impl<'a> Planner<'a> {
             || matches!(
                 origin,
                 CallableOrigin::Source(
-                    CallKind::NativeConstructor(_)
-                        | CallKind::NativeMethod(_)
-                        | CallKind::NativeMethodIdentifier(_)
+                    CallOperation::NativeConstructor { .. } | CallOperation::Native { .. }
                 )
             );
 
@@ -289,23 +286,27 @@ impl<'a> Planner<'a> {
         let origin = if self.is_go_callable(expression) {
             CallableOrigin::GoInterop
         } else {
-            CallableOrigin::Source(CallKind::Regular)
+            CallableOrigin::Source(&CallOperation::Function)
         };
-        Some(self.resolve_callee(expression, origin, go_return.as_ref(), params.len()))
+        let (id, _) = self.resolve_callee_definition(expression);
+        Some(self.resolve_callee(expression, origin, id, go_return.as_ref(), params.len()))
     }
 
+    /// The declaration that the callee or function value `function` names, as the checker recorded it.
     pub(crate) fn resolve_callee_definition(
         &self,
         function: &Expression,
     ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
-        let id = resolved_definition(function).map(|id| {
-            if let Some((owner, method)) = id.rsplit_once('.') {
-                let owner = self.peel_alias_id(owner);
-                format!("{owner}.{method}")
-            } else {
-                id.to_string()
-            }
-        });
+        let id = match function.unwrap_parens() {
+            Expression::Identifier { .. } | Expression::DotAccess { .. } => self
+                .facts
+                .checked(function)
+                .callee()
+                .definition
+                .as_ref()
+                .map(ToString::to_string),
+            _ => None,
+        };
         let declaration = id.as_deref().and_then(|id| self.callable_declaration(id));
         (id, declaration)
     }
@@ -422,7 +423,12 @@ impl<'a> Planner<'a> {
                 .facts
                 .classify_go_return_type(return_ty, &requirement.method.go_hints);
         }
-        let qualified_name = resolved_definition(callee)?;
+        let qualified_name = self
+            .facts
+            .checked(callee)
+            .function_value()?
+            .definition
+            .as_deref()?;
         if !qualified_name.starts_with("go:") {
             return None;
         }
@@ -491,7 +497,7 @@ fn build_param_abi(
     declared: Option<&[FunctionParameter]>,
     receiver_offset: usize,
     callee_id: Option<&str>,
-    callable_origin: &CallableOrigin,
+    callable_origin: &CallableOrigin<'_>,
 ) -> Vec<CallableParamAbi> {
     instantiated
         .get_function_params()
