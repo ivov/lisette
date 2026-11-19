@@ -114,9 +114,6 @@ pub(crate) fn is_conjunction(condition: &Expression) -> bool {
 }
 
 impl Planner<'_> {
-    /// Allocate a fresh operand-temp result var and its `var V T` declaration
-    /// as a typed setup leaf. The control-flow that assigns it follows as a
-    /// typed `If`/`Loop`/`Match`/`Select` statement.
     pub(crate) fn operand_temp_declaration(&mut self, ty: &Type) -> (GoIdentifier, Statement) {
         let result_var = self.fresh_local(None);
         let declaration = LoweredStatement::VarDecl {
@@ -129,9 +126,6 @@ impl Planner<'_> {
         (result_var, declaration)
     }
 
-    /// Lower a value-position `if`/`if let`/`match`/`select` to a fresh
-    /// operand-temp variable. Only valid for non-never result types; never-typed
-    /// branches route through `lower_to_operand_temp` as a diverging statement.
     pub(crate) fn plan_branching_as_operand_temp(
         &mut self,
         expression: &Expression,
@@ -156,9 +150,6 @@ impl Planner<'_> {
         ValuePlan::captured(setup, result_var)
     }
 
-    /// Lower a value-position `loop` to a fresh operand-temp variable.
-    /// Declares `var V T`, pushes `V` as the current loop result slot so
-    /// `break value` assigns into it, lowers the loop, then renders.
     pub(crate) fn plan_loop_as_operand_temp(
         &mut self,
         expression: &Expression,
@@ -227,13 +218,11 @@ impl Planner<'_> {
         }
 
         if let Some(ty) = self.return_ctx().ty()
-            && self.facts.peel_alias(ty).is_unit()
+            && self.facts.resolves_to_unit(ty)
         {
-            // A unit body evaluates statements for their effects, even when its
-            // physical signature must carry a value for a generic result slot.
             let mut block = self.lower_block_as_body(body);
             if !block.go_terminates() {
-                block.statements.push(plain_return(self.zero_value(ty)));
+                block.statements.push(plain_return(self.go_zero(ty)));
             }
             return block;
         }
@@ -258,24 +247,23 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
-        // A statement-only tail can leave a value-returning body without a Go
-        // return. Supply its zero result only if lowering has not already closed
-        // the path. Branch arms retain their own terminal handling.
         let is_statement_only = matches!(
             last,
             Expression::Assignment { .. } | Expression::Let { .. } | Expression::Const { .. }
         );
         let is_unit_tail = !is_statement_only
             && !matches!(last, Expression::Return { .. })
-            && last.get_type().is_unit();
+            && self.facts.resolves_to_unit(&last.get_type());
         let mut body = LoweredBlock { statements };
         let return_ctx = self.return_ctx();
         if (is_statement_only || is_unit_tail)
             && !body.go_terminates()
-            && let Some(return_ty) = return_ctx.ty().filter(|ty| !ty.is_unit())
+            && let Some(return_ty) = return_ctx
+                .ty()
+                .filter(|ty| !self.facts.resolves_to_unit(ty))
         {
             let return_ty = return_ty.clone();
-            let zero = self.zero_value(&return_ty);
+            let zero = self.go_zero(&return_ty);
             body.statements.push(plain_return(zero));
         }
 
@@ -318,7 +306,6 @@ impl Planner<'_> {
         self.directed_at(item, LoweredStatement::Body(plan))
     }
 
-    /// Lower a single statement in the enclosing return context.
     pub(crate) fn lower_statement(&mut self, expression: &Expression) -> Statement {
         self.focused(expression.get_span(), |this| {
             this.lower_focused_statement(expression)
@@ -462,7 +449,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower the statement-position fall-through: Task/Defer (async value),
     fn lower_expression_statement(&mut self, expression: &Expression) -> Statement {
         let unwrapped = expression.unwrap_parens();
         let statement = if matches!(
@@ -623,8 +609,6 @@ impl Planner<'_> {
         self.build_source_loop(LoopHeader::Infinite, LoweredBlock { statements })
     }
 
-    /// Shared loop lowering once the header is known. The caller must have an
-    /// active loop context.
     pub(crate) fn lower_loop_with_header(
         &mut self,
         header: LoopHeader,
@@ -650,7 +634,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower a branch arm body in statement position (`PlacePlan::Statement`).
     pub(crate) fn lower_block_as_body(&mut self, expression: &Expression) -> LoweredBlock {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
@@ -665,9 +648,6 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    /// Lower a branching expression (`if`, `if let`, `match`, `select`) into a
-    /// `LoweredBlock` targeting `place`. Centralises the dispatch shared by old
-    /// emit paths that need to render a branching tail/assignment.
     pub(crate) fn lower_branching_to_block(
         &mut self,
         expression: &Expression,
@@ -709,7 +689,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower a branch arm body into the given place.
     pub(crate) fn lower_block_to_place(
         &mut self,
         expression: &Expression,
@@ -724,16 +703,13 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower a branch arm body in assign position. Fallible (`Result`/`Option`)
-    /// targets route through `lower_option_result_assignment`; everything else
-    /// flows through the shared `lower_block_to_var`.
     fn lower_block_to_assign(
         &mut self,
         expression: &Expression,
         local: &GoExpression,
         target_ty: Option<&Type>,
     ) -> LoweredBlock {
-        if expression.get_type().is_result() || expression.get_type().is_option() {
+        if self.facts.is_option_or_result(&expression.get_type()) {
             return LoweredBlock {
                 statements: self.lower_option_result_assignment(local, target_ty, expression),
             };
@@ -743,9 +719,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower a block in return position: non-tail items become statements,
-    /// the tail returns. A tail `let` (`let x = if ...; x`) is elided into the
-    /// surrounding return place; function bodies skip that elision.
     fn lower_block_to_return(&mut self, expression: &Expression) -> LoweredBlock {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
@@ -765,10 +738,6 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    /// Lower a single tail expression in return position to its return
-    /// statements. Shared by branch-arm return lowering and function-body
-    /// lowering; leaf values and lowered-ABI returns become `Return` leaves,
-    /// `if`/`if let`/`match`/`select` tails recurse structurally with a `Return` place.
     fn lower_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
         let mut statements = Vec::new();
         let return_span = last.get_span();
@@ -778,7 +747,7 @@ impl Planner<'_> {
             last
         };
 
-        if last.get_type().is_unit() {
+        if self.facts.resolves_to_unit(&last.get_type()) {
             if !matches!(last, Expression::Unit { .. }) {
                 statements.push(self.lower_statement(last));
             }
@@ -838,9 +807,12 @@ impl Planner<'_> {
             statements
         } else {
             let (mut statements, expression) = self.lower_tail_value(last);
-            let return_ctx = self.return_ctx();
-            let expression =
-                self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression);
+            let expression = if self.tail_tuple_return_slots(last).is_some() {
+                expression
+            } else {
+                let return_ctx = self.return_ctx();
+                self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression)
+            };
             statements.push(plain_return(expression));
             statements
         }
@@ -928,7 +900,6 @@ impl Planner<'_> {
             }
             let (condition_setup, condition) = self.lower_if_condition(condition);
 
-            // Go has no else-if with setup, so the setup and its `if` nest in `} else { ... }`.
             if !condition_setup.is_empty() {
                 let body = self.with_scope(|this| {
                     let then_body =

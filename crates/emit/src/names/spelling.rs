@@ -10,6 +10,15 @@ impl Planner<'_> {
         }
     }
 
+    pub(crate) fn interface_method_go_name(&self, method: &str, is_public: bool) -> String {
+        let name = self.method_go_name(method, is_public);
+        if self.facts.method_uses_tagged_return(method) {
+            go_name::tagged_twin(&name)
+        } else {
+            name
+        }
+    }
+
     pub(crate) fn free_function_go_name(&self, name: &str, is_public: bool) -> String {
         if is_public {
             go_name::snake_to_camel(name)

@@ -4,8 +4,8 @@ use syntax::program::{Definition, DefinitionBody, ValueKind};
 use syntax::types::{Symbol, Type};
 
 use crate::abi::callable::LoweredReturnAbi;
+use crate::abi::go_return_abi;
 use crate::analyze::facts::resolve_to_function_type;
-use crate::classify_go_return_type;
 use crate::names::go_name;
 use syntax::program::SlotOrigin;
 use syntax::types;
@@ -116,7 +116,7 @@ impl GoAbiCatalog {
             )),
             declared_type: (*function.return_type).clone(),
         };
-        let return_abi = classify_go_return_type(definitions, &function.return_type, go_hints);
+        let return_abi = go_return_abi(&function.return_type, go_hints, |id| definitions.get(id));
         self.callables.insert(
             qualified_name.to_string(),
             GoCallableSlots {

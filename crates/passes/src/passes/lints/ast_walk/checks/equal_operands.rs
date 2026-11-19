@@ -50,7 +50,7 @@ fn is_integer_operand(ty: &Type, bitwise: bool, ctx: &NodeCtx<'_>) -> bool {
     if ctx
         .store
         .underlying_simple_kind(ty)
-        .is_some_and(|kind| kind.is_signed_int() || kind.is_unsigned_int())
+        .is_some_and(|kind| kind.is_integer())
     {
         return true;
     }

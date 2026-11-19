@@ -49,10 +49,9 @@ enum RefutableFail<'a> {
 }
 
 pub(crate) enum PatternSubject<'a> {
-    /// Already in a Go variable named by the caller.
-    Existing { var: GoExpression },
-    /// Pattern-site picks: inline the scrutinee identifier when safe, else
-    /// hoist into a fresh temp with the given hint.
+    Existing {
+        var: GoExpression,
+    },
     Expression {
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
@@ -80,7 +79,6 @@ impl<'a> PatternSubject<'a> {
     }
 }
 
-/// A pattern subject and the declaration or discard needed to keep it valid.
 pub(super) enum ResolvedSubject {
     Existing(GoExpression),
     Materialized {
@@ -122,7 +120,6 @@ impl ResolvedSubject {
     }
 }
 
-/// The identifier under a chain of field accesses.
 fn field_path_root(expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
     let mut expression = expression.unwrap_parens();
     while let Expression::DotAccess {
@@ -176,7 +173,6 @@ impl Planner<'_> {
                 .is_none_or(BindingValue::can_reuse_pattern_subject)
     }
 
-    /// A field path such as `t.status` is read where it sits when nothing rebinds its root.
     pub(crate) fn field_path_reads_in_place(
         &self,
         subject: &Expression,
@@ -254,8 +250,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower an irrefutable pattern site (no branching): subject setup +
-    /// declaration, root type assertion, per-field binding leaves.
     pub(crate) fn lower_irrefutable_pattern_site(
         &mut self,
         subject: PatternSubject<'_>,
@@ -341,7 +335,6 @@ impl Planner<'_> {
         statements
     }
 
-    /// Fuse `let Ok(x) = <Go (T, error) call> else { ... }` into a direct error test.
     fn lower_fused_result_let_else(
         &mut self,
         pattern: &Pattern,
@@ -367,7 +360,6 @@ impl Planner<'_> {
         Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
     }
 
-    /// `let Ok(<irrefutable pattern>) = f() else { ... }`
     fn lower_fused_result_let_else_destructure(
         &mut self,
         fuse: ResultFusePlan<'_>,
@@ -398,7 +390,6 @@ impl Planner<'_> {
         let bound = fuse.bind(self, slot, None);
         let value = bound.payload_identifier().cloned();
         let fail_condition = bound.failure_condition();
-        // The else block lowers before the pattern binds its names.
         let mut statements =
             self.finish_fused_let_else(bound.statements, fail_condition, None, else_block);
         if let Some(value) = value.filter(|_| binds) {
@@ -411,8 +402,6 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// Fuse `let Some(x) = <lowered Option source> else { ... }` into a direct
-    /// physical-ABI test.
     fn lower_fused_option_let_else(
         &mut self,
         pattern: &Pattern,
@@ -443,7 +432,6 @@ impl Planner<'_> {
         binding: Option<(FusedName<'_>, GoIdentifier)>,
         else_block: &Expression,
     ) -> Vec<Statement> {
-        // The else block sees the enclosing scope, so it lowers before the binding installs.
         let fail_body = self.lower_block_as_body(else_block);
         statements.push(
             LoweredStatement::If(IfPlan {
@@ -485,8 +473,6 @@ impl Planner<'_> {
         Some((name, go_name))
     }
 
-    /// Resolve a while-let scrutinee to its loop-subject var, returning any
-    /// setup statements (none when the scrutinee is an inlinable identifier).
     fn while_let_subject(
         &mut self,
         pattern: &Pattern,
@@ -529,7 +515,6 @@ impl Planner<'_> {
         let scrutinee_ty = scrutinee.get_type();
         let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
-        // Only a binding or-pattern tests each alternative in turn.
         let alternatives = split_binding_or_patterns(pattern);
         let mut loop_body = subject_setup;
         self.lower_while_let_alternatives(
@@ -552,8 +537,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Fuse `while let Some(x) = <lowered Option source>` into a per-iteration
-    /// physical-ABI test.
     fn lower_fused_option_while_let(
         &mut self,
         pattern: &Pattern,
@@ -916,9 +899,6 @@ impl Planner<'_> {
         })
     }
 
-    /// Lower a refutable site whose checks gate `body` into structured IR. The
-    /// `failure` callback produces the `else` block (run only on the guarded
-    /// path) for the caller's failure continuation; `None` means no `else`.
     fn lower_refutable_arm(
         &mut self,
         subject: TypedSubject,
@@ -998,8 +978,6 @@ pub(crate) fn lower_none_arm_body(
     }
 }
 
-/// Peel `Some(inner)` to expose `inner`; returns the original pattern when
-/// the outer is not `Some(_)`.
 pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
     let pattern = peel_as_binding(pattern);
     some_payload_pattern(pattern).unwrap_or(pattern)
@@ -1024,9 +1002,6 @@ fn peel_as_binding(pattern: &Pattern) -> &Pattern {
 }
 
 impl Planner<'_> {
-    /// Map a `Some(pattern)` payload to a case-variable name and whether the
-    /// payload needs decision-tree destructuring inside the arm body (rather
-    /// than being bound directly by the `case v := <-ch:` header).
     pub(crate) fn classify_receive_var_pattern(
         &mut self,
         pattern: &Pattern,
@@ -1065,9 +1040,6 @@ impl Planner<'_> {
     }
 }
 
-/// Fold the `(condition, body)` pieces plus a terminal `else` block into a
-/// nested if/else-if statement, built from the back. `pieces` must be
-/// non-empty.
 fn assemble_if_else_chain(
     mut pieces: Vec<(GoExpression, LoweredBlock)>,
     terminal: LoweredBlock,

@@ -6,8 +6,6 @@ use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern, collect_patt
 use syntax::program::{DotAccessResolution, ReceiverCoercion};
 use syntax::types::Type;
 
-/// Pairs each `let` with the same-block binding of the same type that it hides,
-/// when no closure or shared storage can see the hidden variable afterwards.
 #[derive(Clone, Default)]
 pub(crate) struct ReusableBindings {
     hidden: HashMap<BindingId, BindingId>,
@@ -113,7 +111,6 @@ fn collect(
             }
             return;
         }
-        // A method value can capture its receiver.
         Expression::DotAccess {
             expression,
             resolution:

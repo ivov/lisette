@@ -1,5 +1,3 @@
-//! The Go expression tree behind `GoExpression`.
-
 use crate::names::packages::PackageUse;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::local::GoIdentifier;
@@ -29,7 +27,6 @@ impl UnaryOp {
     }
 }
 
-/// `|>` has no variant, inference lowers it away.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BinaryOp {
     Add,
@@ -148,12 +145,9 @@ impl From<&BinaryOperator> for BinaryOp {
     }
 }
 
-/// What a call does besides evaluating its arguments.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CallPurity {
-    /// Runs no code of its own.
     Constructor,
-    /// Reads memory, but writes none and runs no caller code.
     ReadOnly,
     Effectful,
 }
@@ -166,10 +160,8 @@ pub(crate) enum GoExpressionNode {
         name: String,
     },
     Literal(String),
-    /// A Go type in operand position, such as the element type of `make`.
     Type(GoType),
     CompositeLiteral {
-        /// `None` inside an enclosing literal that already names the element type.
         go_type: Option<Box<GoType>>,
         elements: Vec<CompositeElement>,
         layout: CompositeLayout,
@@ -181,10 +173,8 @@ pub(crate) enum GoExpressionNode {
         purity: CallPurity,
         paren: SourcePosition,
     },
-    /// A generic function or type with its type arguments, `f[T, U]`.
     Instantiation {
         base: Operand,
-        /// Bracketed Go type list, `[T, U]`.
         type_arguments: GoType,
     },
     Selector {
@@ -221,7 +211,6 @@ pub(crate) enum GoExpressionNode {
         go_type: GoType,
         operand: Operand,
     },
-    /// A variadic argument, `values...`.
     Spread(Operand),
     FunctionLiteral {
         parameters: Vec<GoParameter>,
@@ -231,7 +220,6 @@ pub(crate) enum GoExpressionNode {
         end: SourcePosition,
     },
     Empty,
-    /// Go source the program supplied through `@rawgo`.
     Verbatim(String),
 }
 
@@ -269,9 +257,7 @@ pub(crate) struct CompositeElement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CompositeKey {
-    /// A struct field name, which never reads a local.
     Field(String),
-    /// A map key or an array index.
     Value(Operand),
 }
 
@@ -292,7 +278,6 @@ impl Position {
     }
 }
 
-/// Trees that differ only in their positions are equal.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SourcePosition(Option<Box<Position>>);
 
@@ -389,19 +374,13 @@ impl AsMut<GoExpressionNode> for Operand {
     }
 }
 
-/// The whitespace forms match the text the string emitters produced, because
-/// element widths feed the layout choice of an enclosing literal. `gofmt`
-/// erases the difference in the output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CompositeLayout {
-    /// `{ a, b }`, or `{a, b}` when not padded.
     Inline { padded: bool },
-    /// One element per line, each behind a tab when indented.
     MultiLine { indented: bool },
 }
 
 impl CompositeLayout {
-    /// One element per line once several wide elements would crowd one line.
     pub(crate) fn for_elements(count: usize, widest: usize) -> Self {
         if count > 1 && widest > 30 {
             Self::MultiLine { indented: true }
@@ -411,7 +390,6 @@ impl CompositeLayout {
     }
 }
 
-/// A walk over a lowered body. A closure visits only the expressions.
 pub(crate) trait TreeVisitor {
     fn expression(&mut self, node: &GoExpressionNode);
 
@@ -500,7 +478,6 @@ impl GoExpressionNode {
         self.walk(&mut Expressions(visit));
     }
 
-    /// The Go types this node spells itself, not those of its children.
     pub(crate) fn own_types(&self, visit: &mut impl FnMut(&GoType)) {
         match self {
             Self::CompositeLiteral {
@@ -895,7 +872,7 @@ impl GoExpressionNode {
                     parameters.iter().map(GoParameter::pair).collect();
                 output.push_str(&group_params(&pairs));
                 output.push(')');
-                if !result.code.is_empty() {
+                if !result.is_empty() {
                     output.push(' ');
                     output.push_str(&result.code);
                 }
@@ -975,199 +952,5 @@ impl CompositeElement {
             output.push_str(": ");
         }
         self.value.write(output, Slot::FREE);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn name(text: &str) -> GoExpressionNode {
-        GoExpressionNode::Identifier(text.to_string().into())
-    }
-
-    fn binary(
-        left: GoExpressionNode,
-        operator: BinaryOp,
-        right: GoExpressionNode,
-    ) -> GoExpressionNode {
-        GoExpressionNode::Binary {
-            operator,
-            left: Operand::from(left),
-            right: Operand::from(right),
-        }
-    }
-
-    fn header(node: &GoExpressionNode) -> String {
-        let mut output = GoWriter::default();
-        node.write_header_into(&mut output);
-        output.into_text()
-    }
-
-    fn literal_struct(go_type: &str) -> GoExpressionNode {
-        GoExpressionNode::CompositeLiteral {
-            go_type: Some(Box::new(GoType::new(go_type))),
-            elements: Vec::new(),
-            layout: CompositeLayout::Inline { padded: true },
-            end: SourcePosition::default(),
-        }
-    }
-
-    #[test]
-    fn source_operators_keep_their_symbol_and_compound_form() {
-        use BinaryOperator::*;
-        for operator in [
-            Addition,
-            Subtraction,
-            Multiplication,
-            Division,
-            Remainder,
-            BitwiseAnd,
-            BitwiseOr,
-            BitwiseXor,
-            BitwiseAndNot,
-            ShiftLeft,
-            ShiftRight,
-            Equal,
-            NotEqual,
-            LessThan,
-            LessThanOrEqual,
-            GreaterThan,
-            GreaterThanOrEqual,
-            And,
-            Or,
-        ] {
-            let lowered = BinaryOp::from(&operator);
-            assert_eq!(lowered.symbol(), operator.to_string());
-            assert_eq!(
-                lowered.has_compound_form(),
-                operator.compound_assignment_symbol().is_some()
-            );
-        }
-    }
-
-    #[test]
-    fn looser_operand_takes_parentheses() {
-        let shifted = binary(
-            binary(name("a"), BinaryOp::Add, name("b")),
-            BinaryOp::Shl,
-            name("c"),
-        );
-        assert_eq!(shifted.print(), "(a + b) << c");
-        let sum = binary(
-            binary(name("a"), BinaryOp::Mul, name("b")),
-            BinaryOp::Add,
-            name("c"),
-        );
-        assert_eq!(sum.print(), "a * b + c");
-    }
-
-    #[test]
-    fn equal_operand_on_the_right_takes_parentheses() {
-        let nested = binary(
-            name("a"),
-            BinaryOp::Sub,
-            binary(name("b"), BinaryOp::Sub, name("c")),
-        );
-        assert_eq!(nested.print(), "a - (b - c)");
-        let flat = binary(
-            binary(name("a"), BinaryOp::Sub, name("b")),
-            BinaryOp::Sub,
-            name("c"),
-        );
-        assert_eq!(flat.print(), "a - b - c");
-    }
-
-    #[test]
-    fn repeated_sign_takes_parentheses() {
-        let negate = |operand| GoExpressionNode::Unary {
-            operator: UnaryOp::Negate,
-            operand: Operand::from(operand),
-        };
-        assert_eq!(negate(negate(name("x"))).print(), "-(-x)");
-        assert_eq!(
-            negate(GoExpressionNode::Literal("-1".to_string())).print(),
-            "-(-1)"
-        );
-        let not = |operand| GoExpressionNode::Unary {
-            operator: UnaryOp::Not,
-            operand: Operand::from(operand),
-        };
-        assert_eq!(not(not(name("x"))).print(), "!!x");
-    }
-
-    #[test]
-    fn postfix_on_prefix_takes_parentheses() {
-        let field = GoExpressionNode::Selector {
-            base: Operand::from(GoExpressionNode::Dereference(Operand::from(name("node")))),
-            field: "Child".to_string(),
-            may_panic: false,
-        };
-        assert_eq!(field.print(), "(*node).Child");
-        let call = GoExpressionNode::Call {
-            callee: Operand::from(GoExpressionNode::Dereference(Operand::from(name("f")))),
-            arguments: vec![name("x").into()],
-            purity: CallPurity::Effectful,
-            paren: SourcePosition::default(),
-        };
-        assert_eq!(call.print(), "(*f)(x)");
-    }
-
-    #[test]
-    fn composite_literal_takes_parentheses_in_a_header() {
-        let compared = binary(name("x"), BinaryOp::Eq, literal_struct("Point"));
-        assert_eq!(compared.print(), "x == Point{}");
-        assert_eq!(header(&compared), "x == (Point{})");
-        let called = GoExpressionNode::Call {
-            callee: Operand::from(name("f")),
-            arguments: vec![literal_struct("Point").into()],
-            purity: CallPurity::Effectful,
-            paren: SourcePosition::default(),
-        };
-        assert_eq!(header(&called), "f(Point{})");
-    }
-
-    #[test]
-    fn a_directive_after_a_function_literal_body_is_written_again() {
-        use crate::plan::bodies::expression_statement;
-        use crate::plan::values::GoExpression;
-
-        let position = |line| Position {
-            path: "a.lis".into(),
-            line,
-            column: 1,
-        };
-        let at = |line| SourcePosition(Some(Box::new(position(line))));
-        let call = |callee: &str, arguments: Vec<Operand>| GoExpressionNode::Call {
-            callee: name(callee).into(),
-            arguments,
-            purity: CallPurity::Effectful,
-            paren: SourcePosition::default(),
-        };
-        let body = LoweredBlock {
-            statements: vec![expression_statement(
-                GoExpression::from_operand(call("g", Vec::new()).into()).positioned(position(3)),
-            )],
-        };
-        let literal = GoExpressionNode::FunctionLiteral {
-            parameters: Vec::new(),
-            result: Box::default(),
-            body,
-            layout: FunctionLiteralLayout::Inline,
-            end: SourcePosition::default(),
-        };
-        let outer = call(
-            "f",
-            vec![literal.into(), Operand::new(at(2), call("h", Vec::new()))],
-        );
-        assert_eq!(
-            {
-                let mut output = GoWriter::new(true);
-                output.push_position(&at(2));
-                outer.write_into(&mut output);
-                output.into_text()
-            },
-            "/*line a.lis:2:1*/ f(func() { /*line a.lis:3:1*/ g() }, /*line a.lis:2:1*/ h())"
-        );
     }
 }

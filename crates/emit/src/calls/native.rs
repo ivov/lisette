@@ -15,12 +15,11 @@ use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::go_type::GoType;
 use crate::types::native;
-use crate::types::shape::RangeShape;
 use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::program::{
     CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
 };
-use syntax::types::{CompoundKind, Type, peel_to_range_type};
+use syntax::types::{CompoundKind, Type};
 
 pub(super) struct NativeCallResult {
     pub setup: Vec<Statement>,
@@ -42,7 +41,6 @@ fn clone_slice(receiver: GoExpression) -> GoExpression {
     )
 }
 
-/// `append(receiver, arguments...)` or `slices.Grow(receiver, arguments...)`.
 pub(crate) fn slice_growth_call(
     method: &str,
     receiver: GoExpression,
@@ -52,7 +50,6 @@ pub(crate) fn slice_growth_call(
         .expect("slice growth has an inline rule")
 }
 
-/// `slices.Clip(receiver)`, so a later `append` cannot write through an alias.
 pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
     GoExpression::read_only_call(
         GoExpression::generated(GeneratedPackage::Slices, "Clip"),
@@ -166,7 +163,6 @@ fn build_inline(
             )
         }
         NativeInlineForm::Receiver => receiver.clone(),
-        // A slice type needs no parentheses as a callee, unlike `Conversion`'s general form.
         NativeInlineForm::Conversion(go_type) => GoExpression::call(
             GoExpression::type_name(GoType::slice_of(&GoType::new(go_type))),
             vec![receiver.clone()],
@@ -182,8 +178,6 @@ fn build_inline(
     }
 }
 
-/// Try to inline a native-type method call. `negated` asks for the rule's
-/// negated form (`None` when the rule has none).
 pub(super) fn try_inline_native_method(
     native_type: &NativeTypeKind,
     method: &str,
@@ -191,8 +185,6 @@ pub(super) fn try_inline_native_method(
     arguments: &[GoExpression],
     negated: bool,
 ) -> Option<GoExpression> {
-    // Go's `append` requires at least 2 args, so zero-arg `append` returns
-    // the receiver unchanged.
     if !negated && method == "append" && arguments.is_empty() {
         return Some(receiver.clone());
     }
@@ -251,7 +243,6 @@ fn array_to_slice_receiver<'e>(
     }
 }
 
-/// Whether a rule for `(type, method, arity)` has a negated form.
 fn has_inline_negation(native_type: &NativeTypeKind, method: &str, arity: usize) -> bool {
     NativeOperation::new(*native_type, method)
         .inline_rule(arity)
@@ -271,8 +262,6 @@ impl StagedNativeMethod {
 }
 
 impl Planner<'_> {
-    /// Grow into independent storage even when nothing is added. The receiver
-    /// is staged before any argument effects and is safe to read more than once.
     pub(crate) fn detach_slice_growth(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -294,7 +283,6 @@ impl Planner<'_> {
             }
             "reserve" => {
                 let count = &arguments[0];
-                // A constant expression can be zero; only a literal has a known value here.
                 if let Some(value) = count
                     .as_literal()
                     .and_then(|value| value.parse::<i64>().ok())
@@ -309,7 +297,6 @@ impl Planner<'_> {
             }
             _ => unreachable!("not a slice growth method: {method}"),
         };
-        // Keep argument effects visible to operand ordering, outside the IIFE.
         let shared = self.stable_source(setup, "added", shared);
         self.with_scope(|this| {
             let mut statements = Vec::new();
@@ -418,10 +405,7 @@ impl Planner<'_> {
 
         if matches!(context.native_type, NativeTypeKind::Array)
             && NativeOperation::new(context.native_type, context.method).reads_array_in_place()
-            && matches!(
-                self.facts.strip_and_peel(&receiver_expression.get_type()),
-                Type::Array { .. }
-            )
+            && self.native_kind(&receiver_expression.get_type()) == Some(NativeTypeKind::Array)
         {
             let mut staged = self.stage_native_method(context);
             let index = staged.arguments.first().cloned();
@@ -443,7 +427,7 @@ impl Planner<'_> {
 
         if context.method == "clone" {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
-            if is_cloneable_container(&receiver_ty) {
+            if self.is_clone_container(&receiver_ty) {
                 let staged = self.stage_native_method(context);
                 let body = self.clone_expression(staged.receiver.clone(), &receiver_ty);
                 return staged.finish(body);
@@ -557,7 +541,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn receiver_is_addressable(&self, expression: &Expression) -> bool {
-        if expression.get_type().is_ref() {
+        if self.facts.is_reference(&expression.get_type()) {
             return true;
         }
         match expression.unwrap_parens() {
@@ -579,7 +563,8 @@ impl Planner<'_> {
                 }
                 let origin = base.unwrap_parens();
                 let fresh_value = matches!(origin, Expression::StructCall { .. })
-                    || (matches!(origin, Expression::Call { .. }) && !base.get_type().is_ref());
+                    || (matches!(origin, Expression::Call { .. })
+                        && !self.facts.is_reference(&base.get_type()));
                 !fresh_value && self.receiver_is_addressable(base)
             }
             Expression::IndexedAccess {
@@ -593,7 +578,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Returns `None` when the rule has no direct negated form, without staging.
     pub(super) fn try_emit_negated_native_method(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -615,7 +599,6 @@ impl Planner<'_> {
         Some(inlined)
     }
 
-    /// Stage `to_slice()` as `arr[:]` when the consumer cannot observe the skipped clone.
     fn try_stage_to_slice_view(
         &mut self,
         context: &NativeCallContext,
@@ -639,10 +622,7 @@ impl Planner<'_> {
             self.facts.call_operation(receiver_expression),
             receiver_expression,
         )?;
-        if !matches!(
-            self.facts.strip_and_peel(&array.get_type()),
-            Type::Array { .. }
-        ) {
+        if self.native_kind(&array.get_type()) != Some(NativeTypeKind::Array) {
             return None;
         }
         if matches!(context.method, "contains" | "equals")
@@ -658,7 +638,7 @@ impl Planner<'_> {
 
     fn stage_array_view(&mut self, array: &Expression) -> ValuePlan {
         let mut staged = self.plan_operand(array, ExpressionContext::value());
-        if array.get_type().is_ref() {
+        if self.facts.is_reference(&array.get_type()) {
             staged = staged.dereference();
         }
         if !self.receiver_is_addressable(array) {
@@ -690,7 +670,7 @@ impl Planner<'_> {
                 self.plan_operand(spread, ExpressionContext::value())
             }
         });
-        if is_dot && receiver.get_type().is_ref() {
+        if is_dot && self.facts.is_reference(&receiver.get_type()) {
             let receiver = stages.remove(0).dereference();
             stages.insert(0, receiver);
         }
@@ -705,7 +685,7 @@ impl Planner<'_> {
             stages,
             spread_stage,
             SpreadSequenceOptions {
-                wrap_to_any: false,
+                wrap_to_any: ctx.abi.spread_wraps_to_any(&self.facts, ctx.spread),
                 combine: ctx.abi.variadic_combine(usize::from(is_dot)),
                 boundary: ctx.capture_boundary,
             },
@@ -719,7 +699,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower `m.get(k)` to the native comma-ok index expression `m[k]`.
     pub(super) fn lower_map_index_pair(
         &mut self,
         expression: &Expression,
@@ -764,7 +743,7 @@ impl Planner<'_> {
         capture_boundary: CaptureBoundary,
     ) -> NativeCallResult {
         let arg = &args[0];
-        let is_ref_receiver = receiver_expr.get_type().is_ref();
+        let is_ref_receiver = self.facts.is_reference(&receiver_expr.get_type());
         let deref = |raw: GoExpression| -> GoExpression {
             if is_ref_receiver {
                 GoExpression::dereference(raw)
@@ -808,8 +787,8 @@ impl Planner<'_> {
         }
 
         let arg_ty = arg.get_type();
-        let range_kind = peel_to_range_type(&arg_ty, |id| self.facts.definition(id))
-            .and_then(|ty| RangeShape::of(&ty))
+        let range_kind = self
+            .range_shape(&arg_ty)
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.plan_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");
@@ -831,7 +810,6 @@ impl Planner<'_> {
         self.equality_test(lhs, rhs, recipe, false)
     }
 
-    /// `!=` where equality is an operator, a `!` prefix where it is a call.
     pub(crate) fn inequality_expression(
         &mut self,
         lhs: GoExpression,
@@ -919,7 +897,6 @@ impl Planner<'_> {
         )
     }
 
-    /// The equality that the checker selected for the built-in comparison that `context` calls.
     fn native_equality(&self, context: &NativeCallContext<'_>) -> EqualityRecipe {
         self.facts
             .checked(context.function)
@@ -937,16 +914,6 @@ fn predicate_literal(parameters: Vec<GoParameter>, body: GoExpression) -> GoExpr
             statements: vec![plain_return(body)],
         },
         FunctionLiteralLayout::Inline,
-    )
-}
-
-fn is_cloneable_container(ty: &Type) -> bool {
-    matches!(
-        ty,
-        Type::Compound {
-            kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
-            ..
-        }
     )
 }
 

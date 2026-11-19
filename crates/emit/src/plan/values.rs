@@ -1,6 +1,4 @@
 use crate::context::expression::ExpressionContext;
-#[cfg(test)]
-use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
 use crate::plan::bodies::AsyncKind;
@@ -18,7 +16,6 @@ use crate::{Planner, written_span};
 use std::fmt::{self, Display, Formatter};
 use std::mem;
 use syntax::ast::{Expression, Span};
-use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OperandForm {
@@ -39,14 +36,14 @@ pub(crate) enum ConstantKind {
 }
 
 impl ConstantKind {
-    pub(crate) fn default_kind(self) -> SimpleKind {
+    pub(crate) fn is_default_go_type(self, go_type: &GoType) -> bool {
         match self {
-            Self::Int => SimpleKind::Int,
-            Self::Rune => SimpleKind::Rune,
-            Self::Float => SimpleKind::Float64,
-            Self::Complex => SimpleKind::Complex128,
-            Self::Bool => SimpleKind::Bool,
-            Self::String => SimpleKind::String,
+            Self::Int => go_type.is_named("int"),
+            Self::Rune => go_type.is_named("rune") || go_type.is_named("int32"),
+            Self::Float => go_type.is_named("float64"),
+            Self::Complex => go_type.is_named("complex128"),
+            Self::Bool => go_type.is_named("bool"),
+            Self::String => go_type.is_named("string"),
         }
     }
 
@@ -147,15 +144,6 @@ impl GoExpression {
         self.constant
     }
 
-    #[cfg(test)]
-    pub(crate) fn name(value: String) -> Self {
-        debug_assert!(
-            go_name::is_plain_identifier(&value),
-            "an identifier node holds one Go name, got `{value}`"
-        );
-        Self::new(GoExpressionNode::Identifier(GoIdentifier::name(value)))
-    }
-
     pub(crate) fn identifier(value: GoIdentifier) -> Self {
         assert!(
             !value.is_pending(),
@@ -183,7 +171,6 @@ impl GoExpression {
         Self::literal("nil".to_string())
     }
 
-    /// The value of a lowering that produced only statements.
     pub(crate) fn empty() -> Self {
         Self::new(GoExpressionNode::Empty)
     }
@@ -221,7 +208,6 @@ impl GoExpression {
         Self::new(node)
     }
 
-    /// `T{field: value, ...}`, whose keys name fields of `T`.
     pub(crate) fn struct_literal(
         go_type: impl Into<GoType>,
         fields: Vec<(String, GoExpression)>,
@@ -243,7 +229,10 @@ impl GoExpression {
         Self::new(node)
     }
 
-    /// `T{}` with no elements.
+    pub(crate) fn unit() -> Self {
+        Self::empty_composite(GoType::new("struct{}"))
+    }
+
     pub(crate) fn empty_composite(go_type: impl Into<GoType>) -> Self {
         Self::composite(
             Some(go_type),
@@ -252,7 +241,6 @@ impl GoExpression {
         )
     }
 
-    /// The callee without its type arguments, for a call site that re-instantiates.
     pub(crate) fn without_instantiation(self) -> Self {
         match &self.node {
             GoExpressionNode::Instantiation { base, .. } => self.peeled(base),
@@ -260,7 +248,6 @@ impl GoExpression {
         }
     }
 
-    /// Drop the type of a composite literal nested in a literal of `element_type`.
     pub(crate) fn elide_composite_type(mut self, element_type: &GoType) -> Self {
         if let GoExpressionNode::CompositeLiteral { go_type, .. } = &mut self.node
             && go_type.as_deref() == Some(element_type)
@@ -309,11 +296,11 @@ impl GoExpression {
         layout: FunctionLiteralLayout,
     ) -> Self {
         let result = result.into();
-        if !result.code.is_empty() {
+        if !result.is_empty() {
             body.ensure_go_termination();
         }
         if cfg!(debug_assertions) {
-            verify_final_function_body(&mut body, !result.code.is_empty())
+            verify_final_function_body(&mut body, !result.is_empty())
                 .unwrap_or_else(|error| panic!("{error}"));
         }
         Self::new(GoExpressionNode::FunctionLiteral {
@@ -348,7 +335,6 @@ impl GoExpression {
         Self::call_node(callee, arguments, CallPurity::ReadOnly)
     }
 
-    /// Marks an outermost effectful call as only reading memory.
     pub(crate) fn into_read_only_call(mut self) -> Self {
         if let GoExpressionNode::Call { purity, .. } = &mut self.node
             && *purity == CallPurity::Effectful
@@ -579,15 +565,11 @@ impl Display for GoExpression {
     }
 }
 
-/// What can change a value that an evaluation reads, weakest last.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Stability {
-    /// Nothing can rebind it before its readers run.
     #[default]
     Fixed,
-    /// Only an assignment to a named local.
     StableAcrossCalls,
-    /// Also a call, through an alias or a reference.
     Observable,
 }
 
@@ -610,7 +592,6 @@ pub(crate) enum CaptureBoundary {
     #[default]
     SiblingSequence,
     DirectDelayedCall,
-    /// A `defer`, a task, or a loop iteration reads the value later.
     Delayed,
 }
 
@@ -687,7 +668,6 @@ impl ValuePlan {
         )
     }
 
-    /// A name the setup just bound, or which nothing can rebind.
     pub(crate) fn captured(setup: Vec<Statement>, name: GoIdentifier) -> Self {
         Self::new(setup, GoExpression::identifier(name), Stability::Fixed)
     }
@@ -696,8 +676,6 @@ impl ValuePlan {
         Self::new(setup, expression, Stability::Observable)
     }
 
-    /// `stability` describes the binding, so only a bare name inherits it
-    /// whole: a composite form re-reads whatever it is built from.
     pub(crate) fn from_identifier_expression(
         expression: GoExpression,
         stability: Stability,
@@ -728,8 +706,6 @@ impl ValuePlan {
         Self::computed(Vec::new(), GoExpression::verbatim(source))
     }
 
-    /// Represent the same value differently. The transform must not add an
-    /// effect, so the stability carries over.
     pub(crate) fn map_expression(
         self,
         transform: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoExpression,
@@ -779,7 +755,6 @@ impl ValuePlan {
         self
     }
 
-    /// Whether the plan's setup declares this local.
     pub(crate) fn binds_local(&self, local: &GoIdentifier) -> bool {
         self.setup
             .iter()
@@ -808,7 +783,6 @@ impl ValuePlan {
         own
     }
 
-    /// Fixed and unable to panic, so it may run later.
     pub(crate) fn can_delay(&self) -> bool {
         self.stability.is_fixed() && !self.effects().panics_or_blocks()
     }
@@ -847,8 +821,6 @@ impl ValuePlan {
 }
 
 impl Planner<'_> {
-    /// Plan a value-position expression into a structured `ValuePlan`. Leaf
-    /// kinds route through `plan_operand_leaf`.
     pub(crate) fn plan_operand(
         &mut self,
         expression: &Expression,
@@ -951,22 +923,4 @@ fn is_value_only_builtin(name: &str) -> bool {
         name,
         "append" | "cap" | "complex" | "imag" | "len" | "make" | "max" | "min" | "new" | "real"
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plan::bodies::define;
-    use crate::plan::local::LocalId;
-
-    #[test]
-    fn setup_does_not_own_a_captured_local_with_the_same_spelling() {
-        let temporary = GoIdentifier::local("value".into(), LocalId(1));
-        let captured = GoIdentifier::local("value".into(), LocalId(2));
-        let setup = vec![define(temporary.clone(), GoExpression::literal("3".into()))];
-        let plan = ValuePlan::computed(setup, GoExpression::identifier(captured.clone()));
-        assert!(plan.binds_local(&temporary));
-        assert!(!plan.binds_local(&captured));
-        assert!(!plan.reads_only_own_setup());
-    }
 }

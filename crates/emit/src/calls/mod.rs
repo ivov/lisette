@@ -66,11 +66,8 @@ impl<'p> Planner<'p> {
 
 #[derive(Clone, Copy)]
 pub(super) enum NativeCallForm<'a> {
-    /// `Map.new()`, `Channel.buffered(n)`
     Constructor,
-    /// `xs.append(x)` keeps the receiver in the callee.
     Dot { receiver: &'a Expression },
-    /// `Slice.append(xs, x)` keeps the receiver in the first argument.
     Identifier,
 }
 
@@ -107,7 +104,6 @@ pub(crate) struct NativeCallContext<'a> {
     pub form: NativeCallForm<'a>,
     pub args: &'a [Expression],
     pub spread: Option<&'a Expression>,
-    /// How many trailing type arguments of the callee the call spells.
     pub written_type_arguments: usize,
     pub abi: CallableAbi,
     pub call_ty: Option<&'a Type>,

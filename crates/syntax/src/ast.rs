@@ -1837,6 +1837,16 @@ pub enum Expression {
 }
 
 impl Expression {
+    pub fn imaginary_coefficient(&self) -> Option<f64> {
+        match self {
+            Expression::Literal {
+                literal: Literal::Imaginary(coefficient),
+                ..
+            } => Some(*coefficient),
+            _ => None,
+        }
+    }
+
     /// The occurrence that this node is, which names its checked records.
     pub fn id(&self) -> ExpressionId {
         match self {

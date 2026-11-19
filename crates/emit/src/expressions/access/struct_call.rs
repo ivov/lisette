@@ -1,4 +1,3 @@
-use crate::expressions::access::dot_access::is_from_prelude;
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
@@ -43,7 +42,6 @@ struct EnumCallContext {
     enum_id: String,
     variant_name: String,
     tag_constant: GoExpression,
-    /// Fields that need pointer wrapping (recursive types).
     pointer_fields: HashSet<String>,
 }
 
@@ -60,8 +58,6 @@ impl StructCallField {
 }
 
 impl Planner<'_> {
-    /// Plan a struct/enum-variant construction. Value is the Go struct
-    /// literal or update.
     pub(crate) fn plan_struct_call(
         &mut self,
         name: &str,
@@ -174,8 +170,6 @@ impl Planner<'_> {
         let built_from_fields = !matches!(spread, StructSpread::From(_));
         let value = match spread {
             StructSpread::From(base) => {
-                // Never-typed spread base diverges, emit as statement and
-                // return a zero-value struct literal (dead code follows).
                 if base.get_type().is_never() {
                     setup.push(self.lower_statement(base));
                     GoExpression::empty_composite(ctx.go_type.clone())
@@ -234,9 +228,6 @@ impl Planner<'_> {
         ValuePlan::computed(setup, value)
     }
 
-    /// Apply Go-boundary coercion followed by internal coercion. The Go-boundary
-    /// step targets `field_ty` (falling back to `value_ty` when no declared
-    /// field exists); the internal step targets `field_ty` only.
     pub(crate) fn coerce_struct_field(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -270,8 +261,6 @@ impl Planner<'_> {
         value
     }
 
-    /// Zero-fill unassigned fields. Slices keep Go's nil; on a Go struct only
-    /// maps need one, their nil being the sole zero that panics on write.
     fn append_autofills(
         &mut self,
         field_pairs: &mut Vec<(String, GoExpression)>,
@@ -292,7 +281,7 @@ impl Planner<'_> {
                     None => continue,
                 }
             } else {
-                if field_ty.is_slice() || matches!(field_ty, Type::Parameter(_)) {
+                if matches!(field_ty, Type::Parameter(_)) {
                     continue;
                 }
                 let Some(zero) = self.lisette_zero_expression(&field_ty, true) else {
@@ -305,8 +294,6 @@ impl Planner<'_> {
         }
     }
 
-    /// A fresh Lisette struct leaves a `None` field at its Go zero, which the
-    /// stored `Option` reads back as `None`.
     fn omits_none_field(
         &self,
         field: &StructFieldAssignment,
@@ -322,7 +309,6 @@ impl Planner<'_> {
             && field_ty.is_some_and(|ty| self.facts.peel_alias(ty).is_option())
     }
 
-    /// Empty-map literal in the field's Go type, sound as empty needs no coercion.
     fn go_field_map_zero(
         &mut self,
         owner: &Type,
@@ -336,9 +322,6 @@ impl Planner<'_> {
         Some(GoExpression::empty_composite(layout.go_type(self)))
     }
 
-    /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
-    /// with type substitution applied so generic-typed fields resolve to concrete types.
-    /// `name` is needed only for the variant case (to pick the variant within the enum).
     fn lookup_unspecified_fields(
         &self,
         ty: &Type,
@@ -391,8 +374,6 @@ impl Planner<'_> {
         ))
     }
 
-    /// Zero for `T{..}` on a Go-imported newtype, a named non-struct with
-    /// no fields for the autofill to name.
     fn go_imported_newtype_zero(&mut self, ty: &Type) -> Option<GoExpression> {
         let Type::Nominal { id, .. } = ty else {
             return None;
@@ -405,17 +386,13 @@ impl Planner<'_> {
         self.go_newtype_zero(go_ty, &underlying)
     }
 
-    /// Zero for a Go named non-struct, in a form Go takes as an operand.
     fn go_newtype_zero(&mut self, go_ty: GoType, underlying: &Type) -> Option<GoExpression> {
         let underlying = self.facts.peel_underlying(underlying);
         if underlying.is_map() || matches!(underlying, Type::Array { .. }) {
             return Some(GoExpression::empty_composite(go_ty));
         }
         if underlying.is_slice() {
-            return Some(GoExpression::conversion(
-                go_ty,
-                GoExpression::literal("nil".to_string()),
-            ));
+            return Some(GoExpression::conversion(go_ty, GoExpression::nil()));
         }
         matches!(underlying, Type::Simple(_)).then(|| {
             let inner = self.lisette_zero(&underlying);
@@ -471,7 +448,6 @@ impl Planner<'_> {
     fn lisette_zero_expression(&mut self, ty: &Type, omit_go_zero: bool) -> Option<GoExpression> {
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
         let zero = match (ty, &layout) {
-            // Tagged so `constant_needs_go_type` can type them where a slot needs it.
             (Type::Simple(kind), _) => {
                 if omit_go_zero {
                     return None;
@@ -483,8 +459,7 @@ impl Planner<'_> {
                     SimpleKind::String => {
                         GoExpression::constant("\"\"".to_string(), ConstantKind::String)
                     }
-                    SimpleKind::Unit => GoExpression::empty_composite(GoType::new("struct{}")),
-                    // Go's `0` is an untyped *integer* constant, even for a float slot.
+                    SimpleKind::Unit => GoExpression::unit(),
                     _ => GoExpression::constant("0".to_string(), ConstantKind::Int),
                 };
                 return Some(zero);
@@ -496,9 +471,12 @@ impl Planner<'_> {
                 },
                 ValueLayout::Slice { element, .. },
             ) => {
+                if omit_go_zero {
+                    return None;
+                }
                 let element = element.go_type(self);
                 let go_type = GoType::slice_of(&element);
-                GoExpression::conversion(go_type, GoExpression::literal("nil".to_string()))
+                GoExpression::conversion(go_type, GoExpression::nil())
             }
             (
                 Type::Compound {
@@ -558,7 +536,6 @@ impl Planner<'_> {
                 .first()
                 .map(|a| self.go_type(a))
                 .unwrap_or_else(|| GoType::new("any"));
-            // `None` is the tag Go zero-initializes to.
             let zero = GoExpression::call(
                 GoExpression::instantiation(
                     GoExpression::generated(GeneratedPackage::Prelude, "MakeOptionNone"),
@@ -570,7 +547,7 @@ impl Planner<'_> {
         }
         if go_name::is_go_import(id) {
             if self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some() {
-                return (!omit_go_zero).then(|| GoExpression::literal("nil".to_string()));
+                return (!omit_go_zero).then(GoExpression::nil);
             }
             return Some(self.go_imported_zero(ty, id));
         }
@@ -588,7 +565,7 @@ impl Planner<'_> {
                 .filter_map(|(index, (name, field_ty))| {
                     let zero = self.lisette_zero_expression(&field_ty, !is_tuple)?;
                     let go_name = if is_tuple {
-                        format!("F{}", index)
+                        go_name::tuple_struct_field(index)
                     } else {
                         self.struct_field_go_name(ty, &name, false)
                     };
@@ -611,17 +588,9 @@ impl Planner<'_> {
 
     fn empty_composite_is_go_zero(&self, ty: &Type) -> bool {
         let ty = self.facts.peel_alias(ty);
-        let is_lisette_enum = matches!(&ty, Type::Nominal { id, .. }
-        if !go_name::is_go_import(id.as_str())
-            && matches!(
-                self.facts.definition(id.as_str()).map(|d| &d.body),
-                Some(DefinitionBody::Enum { .. })
-            ));
-        self.is_plain_struct(&ty) || is_lisette_enum
+        self.is_plain_struct(&ty) || self.facts.is_lisette_enum(&ty)
     }
 
-    /// Array zero value, filling per index with `lisette_zero` when Go's own
-    /// `[N]E{}` zero differs from Lisette's (e.g. `Option<T>`).
     pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
         let elem_go = self.go_type(elem);
         let array_type = GoType::array_of(len, &elem_go);
@@ -633,7 +602,6 @@ impl Planner<'_> {
         let index_name = self.scope.helper_local("i", self.package);
         let arr = || GoExpression::identifier(array_name.clone());
         let index = || GoExpression::identifier(index_name.clone());
-        // Go has no syntax to repeat a value across all N slots, so fill each index.
         GoExpression::immediate_call(
             array_type.clone(),
             LoweredBlock {
@@ -663,7 +631,6 @@ impl Planner<'_> {
         )
     }
 
-    /// True when Go's zero for the element already matches Lisette's.
     pub(crate) fn element_go_zero_ok(&self, ty: &Type) -> bool {
         match ty {
             Type::Simple(_) => true,
@@ -685,10 +652,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Address a struct-call field stored behind a compiler-inserted pointer
-    /// (recursive-enum cycle breaker). Such a field is by value, so capture it
-    /// into a temp Go can take the address of. User `Ref<T>` fields are not
-    /// recursive and pass through this untouched.
     fn wrap_recursive_enum_field(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -707,9 +670,8 @@ impl Planner<'_> {
         GoExpression::address_of(GoExpression::identifier(temp))
     }
 
-    /// Analyze a struct call to determine Go type and enum context.
     fn analyze_struct_call<'t>(&mut self, name: &'t str, ty: &'t Type) -> StructCallContext<'t> {
-        let is_prelude = is_from_prelude(ty);
+        let is_prelude = self.facts.is_prelude_nominal(ty);
         let enum_id = self.as_enum(ty);
 
         let go_type = self.compute_struct_call_go_type(name, ty, is_prelude, enum_id.is_some());
@@ -724,7 +686,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Compute the Go type string for a struct call.
     fn compute_struct_call_go_type(
         &mut self,
         name: &str,
@@ -738,9 +699,6 @@ impl Planner<'_> {
             return go;
         }
 
-        // For cross-package struct calls (including type aliases), use the original name
-        // to preserve the alias. E.g., "api.PublicSecret" should emit as "api.PublicSecret"
-        // not as the underlying "internal.Secret".
         if !is_prelude {
             let parts: Vec<&str> = name.split('.').collect();
             let qualified = match (is_enum, parts.as_slice()) {
@@ -760,12 +718,7 @@ impl Planner<'_> {
                     GoType::default()
                 };
                 let canonical = self.canonical_package(package);
-                // `snake_to_camel` would fold `Stat_t` to `StatT`.
-                let member = if go_name::is_go_import(&canonical) {
-                    type_name.to_string()
-                } else {
-                    go_name::snake_to_camel(type_name)
-                };
+                let member = self.type_member_go_name(&canonical, type_name);
                 let package = self.package_use_for_package(&canonical);
                 return GoType::named(&member, type_args.arguments(), Some(package));
             }
@@ -774,8 +727,6 @@ impl Planner<'_> {
         self.go_type(ty)
     }
 
-    /// True when `type_name` (e.g., `StringFlag`) is a non-generic alias in the
-    /// same package as the underlying struct `ty`.
     fn is_non_generic_alias_call(&self, type_name: &str, ty: &Type) -> bool {
         let Type::Nominal { id: struct_id, .. } = ty else {
             return false;
@@ -790,7 +741,6 @@ impl Planner<'_> {
         )
     }
 
-    /// Compute the enum-specific context for a struct call.
     fn compute_enum_call_context(&mut self, name: &str, enum_id: &str) -> EnumCallContext {
         let variant_name = unqualified_name(name).to_string();
 
@@ -819,7 +769,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Resolve the Go field name for a struct call field.
     fn resolve_struct_call_field_name(
         &mut self,
         field_name: &str,
@@ -858,7 +807,6 @@ impl Planner<'_> {
         base_staged: ValuePlan,
         fields: &[(String, GoExpression)],
     ) -> (Vec<Statement>, GoExpression) {
-        // A spread that assigns nothing is its base, whatever shape that has.
         if fields.is_empty() {
             return base_staged.into_parts();
         }
@@ -919,7 +867,6 @@ impl Planner<'_> {
     }
 }
 
-/// `*new(T)`, the zero of a Go named type with no literal form.
 fn dereferenced_new(go_type: GoType) -> GoExpression {
     GoExpression::dereference(GoExpression::call(
         GoExpression::external_name("new".to_string()),
@@ -927,7 +874,6 @@ fn dereferenced_new(go_type: GoType) -> GoExpression {
     ))
 }
 
-/// Whether a Go slot layout is a map, seeing through a named map type.
 fn layout_is_map(layout: &ValueLayout) -> bool {
     match layout {
         ValueLayout::Map { .. } => true,

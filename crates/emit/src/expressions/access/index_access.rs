@@ -1,7 +1,7 @@
+use crate::names::go_name;
 use crate::types::shape::RangeShape;
 use syntax::ast::Expression;
 use syntax::program::NativeTypeKind;
-use syntax::types::peel_to_range_type;
 
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
@@ -10,8 +10,6 @@ use crate::plan::go_expression::BinaryOp;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 
 impl Planner<'_> {
-    /// Plan an index/slice access. Range-literal and range-typed-variable
-    /// slice forms bridge through their string emitters.
     pub(crate) fn plan_index_access(
         &mut self,
         expression: &Expression,
@@ -35,12 +33,8 @@ impl Planner<'_> {
 
         let mut base_staged = self.stage_base_with_deref(expression);
 
-        // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`,
-        // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
-        if let Some(range_kind) = peel_to_range_type(&index_ty, |id| self.facts.definition(id))
-            .and_then(|ty| RangeShape::of(&ty))
-        {
+        if let Some(range_kind) = self.range_shape(&index_ty) {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
             if !base_staged.effects().can_duplicate() {
                 self.pin_staged(&mut base_staged, "base");
@@ -90,7 +84,6 @@ impl Planner<'_> {
         ValuePlan::computed(setup, GoExpression::index(base, index))
     }
 
-    /// Builtin `append` copies the spread elements, so their capacity needs no cap.
     pub(crate) fn plan_copied_spread(&mut self, spread: &Expression) -> ValuePlan {
         if let Expression::IndexedAccess {
             expression, index, ..
@@ -124,9 +117,6 @@ impl Planner<'_> {
         staged
     }
 
-    /// Plan `base[start:end]` (or the three-index form for slices to prevent
-    /// append-through-alias corruption when `cap` is set). Strings use two-index
-    /// slicing because immutability makes the backing array safe to share.
     fn plan_range_slice(
         &mut self,
         expression: &Expression,
@@ -232,13 +222,12 @@ impl Planner<'_> {
     }
 }
 
-/// The `[start:end]` bounds a range-typed value denotes, by range kind.
 pub(crate) fn range_var_bounds(
     range: &GoExpression,
     range_kind: RangeShape,
 ) -> (Option<GoExpression>, Option<GoExpression>) {
-    let start = || GoExpression::selector(range.clone(), "Start".to_string());
-    let end = || GoExpression::selector(range.clone(), "End".to_string());
+    let start = || GoExpression::selector(range.clone(), go_name::RANGE_START_FIELD.to_string());
+    let end = || GoExpression::selector(range.clone(), go_name::RANGE_END_FIELD.to_string());
     let end_inclusive =
         || GoExpression::binary(end(), BinaryOp::Add, GoExpression::literal("1".to_string()));
     match range_kind {
@@ -250,10 +239,6 @@ pub(crate) fn range_var_bounds(
     }
 }
 
-/// Slice expression from a range-typed variable. `needs_cap` adds a
-/// third index that caps capacity at length to block append-through-alias
-/// corruption; range field accesses (`.End`) are pure, so repeating them
-/// in the cap position is safe.
 fn range_var_slice(
     base: GoExpression,
     range: &GoExpression,

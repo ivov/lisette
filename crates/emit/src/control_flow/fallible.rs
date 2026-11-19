@@ -17,6 +17,7 @@ pub(crate) const PARTIAL_OK_FIELD: &str = "OkVal";
 pub(crate) const PARTIAL_ERR_FIELD: &str = "ErrVal";
 
 pub(crate) const RESULT_OK_TAG: &str = "ResultOk";
+pub(crate) const RESULT_ERR_TAG: &str = "ResultErr";
 pub(crate) const OPTION_SOME_TAG: &str = "OptionSome";
 pub(crate) const PARTIAL_OK_TAG: &str = "PartialOk";
 pub(crate) const PARTIAL_ERR_TAG: &str = "PartialErr";
@@ -35,12 +36,12 @@ pub(crate) enum Fallible {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConstructorKind {
-    Success, // Some(x) or Ok(x)
-    Failure, // None or Err(x)
+    Success,
+    Failure,
 }
 
 impl Fallible {
-    pub(crate) fn from_type(ty: &Type) -> Option<Self> {
+    fn from_type(ty: &Type) -> Option<Self> {
         if ty.is_result() {
             let args = ty.get_type_params()?;
             Some(Self::Result {
@@ -82,13 +83,6 @@ impl Fallible {
         match self {
             Self::Result { err_ty, .. } => Some(err_ty),
             Self::Option { .. } => None,
-        }
-    }
-
-    fn struct_name(&self) -> &'static str {
-        match self {
-            Self::Result { .. } => "Result",
-            Self::Option { .. } => "Option",
         }
     }
 
@@ -136,17 +130,20 @@ pub(crate) fn prelude_call(
 }
 
 impl Planner<'_> {
-    pub(crate) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
-        if let Some(ty) = self.return_ctx().ty() {
-            let peeled = self.facts.peel_alias(ty);
-            if peeled.is_result() {
-                return Some(peeled.err_type());
-            }
-        }
-        fallible.err_ty().cloned()
+    pub(crate) fn fallible(&self, ty: &Type) -> Option<Fallible> {
+        Fallible::from_type(&self.facts.peel_alias(ty))
     }
 
-    /// The error of the `?` on `operand`, converted to the error slot that the checker recorded for it.
+    pub(crate) fn return_fallible(&self) -> Option<Fallible> {
+        self.fallible(self.return_ctx().ty()?)
+    }
+
+    pub(crate) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
+        self.return_fallible()
+            .and_then(|returned| returned.err_ty().cloned())
+            .or_else(|| fallible.err_ty().cloned())
+    }
+
     pub(crate) fn convert_error_to_return_context(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -158,7 +155,6 @@ impl Planner<'_> {
         else {
             return value;
         };
-        // Emit also lowers a tail call through this path, with no `?` and an unchanged error.
         if self.facts.peel_alias(&from) == self.facts.peel_alias(&to) {
             return value;
         }
@@ -220,7 +216,6 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
-    /// `[T]` or `[T, E]`, the type arguments of a prelude `Option` or `Result`.
     fn fallible_type_args(&self, ok_ty: &Type, err_ty: Option<&Type>) -> GoType {
         let arguments: Vec<GoType> = [Some(ok_ty), err_ty]
             .into_iter()
@@ -228,15 +223,6 @@ impl Planner<'_> {
             .map(|ty| self.go_type(ty))
             .collect();
         GoType::type_arguments(&arguments)
-    }
-
-    pub(crate) fn fallible_go_type(&self, fallible: &Fallible) -> GoType {
-        let arguments: Vec<_> = [Some(fallible.ok_ty()), fallible.err_ty()]
-            .into_iter()
-            .flatten()
-            .map(|ty| self.go_type(ty))
-            .collect();
-        GoType::prelude(fallible.struct_name(), &arguments)
     }
 
     pub(crate) fn fallible_call(
@@ -257,7 +243,6 @@ impl Planner<'_> {
         self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
     }
 
-    /// A failure typed by the enclosing return type, with the fallible's own types as fallback.
     fn contextual_failure(
         &mut self,
         fallible: &Fallible,

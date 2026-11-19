@@ -1,5 +1,6 @@
 use crate::plan::go_expression::Position;
 use std::iter;
+use syntax::go_names::ENUM_TAG_FIELD;
 
 use crate::plan::bodies::GoUses;
 use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
@@ -136,7 +137,6 @@ enum WalkRole<'a> {
     ChainBody,
     RetryLoop {
         top: bool,
-        /// Ends each non-divergent leaf with `break <label>`.
         break_label: Option<&'a str>,
     },
 }
@@ -339,8 +339,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let guard_ctx = WalkCtx::switch_case(place);
         let chain_ctx = WalkCtx::chain_test(place);
 
-        // Lower each branch body in its own scope, recording whether every
-        // branch diverges so the trailing else decides else/flat structurally.
         let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular_len);
         let mut all_diverge = regular_len > 0;
         for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
@@ -422,8 +420,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let unguarded_exit = root_has_unguarded_terminal || last_arm_is_any_catchall;
         let skip_wrapper = !use_direct_return && unguarded_exit && all_arms_diverge;
 
-        // No `for { ... }` wrapper: walk the tree flat (direct-return or a
-        // diverging-exit fast path).
         if use_direct_return || skip_wrapper {
             let ctx = WalkCtx::retry_loop(place, None);
             self.walk(statements, tree, &ctx);
@@ -439,7 +435,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return;
         }
 
-        // Wrap the tree in a labeled `for { ... }` retry loop.
         let label = self
             .planner
             .scope
@@ -921,8 +916,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
         guard_consumers.push(arm_body);
 
-        // Collect the bindings and the guard `if` into one block so a pre-scope
-        // can wrap them as a single `LoweredStatement::Block`.
         let guard_statements = self.with_optional_scope(needs_pre_scope, |this| {
             let mut guard_statements: Vec<Statement> = Vec::new();
             let guarded = this.with_bindings(
@@ -971,10 +964,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    /// Build the `else` arm for a chain/guard branch. An empty decision yields
-    /// no else; when the preceding branch diverges the decision is flattened
-    /// after the `if` (`ElseArm::Else { inline: true }`) instead of nesting in
-    /// an `else` block.
     fn lower_else_or_flat(
         &mut self,
         decision: &Decision,
@@ -1067,8 +1056,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         fallback: Option<&Decision>,
         place: &PlacePlan,
     ) -> Vec<Statement> {
-        // A default case leaves Go's switch binding at the interface type.
-        // Keep concrete case labels so field projections retain their asserted type.
         let (regular, default) = (branches, fallback);
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
@@ -1101,8 +1088,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .collect();
         let default_block = nested.lower_switch_default(default, place);
 
-        // Keep the `base :=` type-switch binding only when a case references it;
-        // Go rejects an unused `:= base` assignment otherwise.
         let mut used = GoUses::default();
         used.extend_cases(&case_plans);
         if let Some(block) = &default_block {
@@ -1146,8 +1131,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    /// Lower the default arm, dropping it when its body lowers to nothing (Go
-    /// would otherwise emit a bare `default:`).
     fn lower_switch_default(
         &mut self,
         default: Option<&Decision>,
@@ -1390,8 +1373,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements.extend(block.statements);
     }
 
-    /// Lower an arm's guard to the setup statements and the `IfPlan` condition,
-    /// or `None` when the arm has no guard. The caller owns the scope and body.
     fn lower_guard_condition(
         &mut self,
         arm_index: usize,
@@ -1416,8 +1397,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 }
 
-/// The chain's tests as cases, and the leaf that runs when none matches.
-/// A guarded last test keeps its checks.
 fn split_chain_with_catchall_lift<'t>(
     tests: &'t [ChainTest],
     tail: &'t ChainTail,
@@ -1466,7 +1445,9 @@ fn switch_branch_condition(
 
 fn render_switch_expression(rendered_path: GoExpression, kind: &PatternSwitchKind) -> GoExpression {
     match kind {
-        PatternSwitchKind::EnumTag => GoExpression::selector(rendered_path, "Tag".to_string()),
+        PatternSwitchKind::EnumTag => {
+            GoExpression::selector(rendered_path, ENUM_TAG_FIELD.to_string())
+        }
         PatternSwitchKind::Value => rendered_path,
     }
 }
@@ -1539,7 +1520,6 @@ fn group_chain_tests_by_condition(
     groups
 }
 
-/// One non-catchall branch of a pattern chain: its condition and lowered body.
 struct ChainBranch {
     condition: GoExpression,
     body: LoweredBlock,
@@ -1551,8 +1531,6 @@ struct BranchTest {
     else_label: Option<GoExpression>,
 }
 
-/// Assemble pattern-chain branches into a nested `if`/`else if` plan, with
-/// `trailing` as the innermost `else` arm. `branches` must be non-empty.
 fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     let mut branches = branches;
     let head = branches.remove(0);
@@ -1565,8 +1543,6 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     IfPlan::for_match(head.condition, head.body, else_arm)
 }
 
-/// The switch, then an unreachable panic when the place needs a tail return
-/// and the switch is not exhaustive.
 fn switch_statements(
     switch: SwitchStatementPlan,
     place: &PlacePlan,
@@ -1577,7 +1553,6 @@ fn switch_statements(
     statements
 }
 
-/// Compute `ends_with_diverge` of `body_statements`, then move them into `statements`.
 fn capture_diverge(body_statements: Vec<Statement>, statements: &mut Vec<Statement>) -> bool {
     let block = LoweredBlock {
         statements: body_statements,

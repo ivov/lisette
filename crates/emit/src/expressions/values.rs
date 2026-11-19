@@ -1,6 +1,8 @@
+use crate::abi::ReturnSlot;
 use crate::abi::is_closure_literal;
 use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::names::go_name;
 use crate::plan::bodies::AsyncKind;
 use syntax::program::NativeOperation;
 use syntax::program::{Adaptation, DefinitionBody};
@@ -110,18 +112,20 @@ impl Planner<'_> {
                     if !call.is_empty() {
                         setup.push(effect_statement(call));
                     }
-                    GoExpression::empty_composite(GoType::new("struct{}"))
+                    GoExpression::unit()
                 });
         }
         let ty = expression.get_type();
         if let Some(slot) = context.generic_result_slot()
-            && !matches!(
-                expression.unwrap_parens(),
-                Expression::Lambda { .. } | Expression::Function { .. }
-            )
+            && match expression.unwrap_parens() {
+                Expression::Function { .. } => false,
+                Expression::Lambda { .. } => slot
+                    .get_function_ret()
+                    .is_some_and(|return_type| !returns_go_void(return_type)),
+                _ => true,
+            }
             && ty.get_function_ret().is_some_and(Type::is_never)
         {
-            // A Never value can fill a slot with a concrete result type.
             let return_type = slot
                 .get_function_ret()
                 .filter(|return_type| !returns_go_void(return_type));
@@ -129,7 +133,7 @@ impl Planner<'_> {
                 Some(return_type) => (
                     self.value_layout(&Type::Never, SlotOrigin::Lisette),
                     self.value_layout(return_type, SlotOrigin::Lisette),
-                    self.function_expression_return_abi(return_type, context),
+                    self.return_abi(return_type, ReturnSlot::FunctionExpression(context)),
                 ),
                 None => (
                     self.value_layout(&Type::unit(), SlotOrigin::Lisette),
@@ -199,9 +203,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Result ABI the slot expects from a Go function value, or `None` when
-    /// the value is not a function. A forced-tagged slot calls through a
-    /// Lisette-shaped callback, so it wants the tagged ABI, not the lowered one.
     fn go_fn_slot_abi(
         &self,
         expression: &Expression,
@@ -211,16 +212,12 @@ impl Planner<'_> {
         let origin = self.function_type_origin(&expression_ty, ctx.function_slot_origin());
         let fn_ty = self.facts.resolve_to_function_type(&expression_ty)?;
         let f = fn_ty.as_function_type()?;
-        Some(
-            self.function_expression_return_abi(
-                &f.return_type,
-                ctx.with_function_slot_origin(origin),
-            ),
-        )
+        Some(self.return_abi(
+            &f.return_type,
+            ReturnSlot::FunctionExpression(ctx.with_function_slot_origin(origin)),
+        ))
     }
 
-    /// Plan a value-position leaf expression (one `plan_operand` does not lower
-    /// structurally) into a `ValuePlan`.
     pub(crate) fn plan_operand_leaf(
         &mut self,
         expression: &Expression,
@@ -246,10 +243,7 @@ impl Planner<'_> {
             }
             Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             Expression::RawGo { text, .. } => ValuePlan::verbatim(text.clone()),
-            Expression::Unit { .. } => ValuePlan::computed(
-                Vec::new(),
-                GoExpression::empty_composite(GoType::new("struct{}")),
-            ),
+            Expression::Unit { .. } => ValuePlan::computed(Vec::new(), GoExpression::unit()),
             Expression::Lambda {
                 params, body, ty, ..
             } => ValuePlan::computed(Vec::new(), self.emit_lambda(params, body, ty, ctx)),
@@ -283,14 +277,11 @@ impl Planner<'_> {
                     self.build_assignment_plan(target, value, compound_operator.as_ref())
                         .into(),
                 ];
-                ValuePlan::computed(
-                    setup,
-                    GoExpression::empty_composite(GoType::new("struct{}")),
-                )
+                ValuePlan::computed(setup, GoExpression::unit())
             }
             Expression::Assert { .. } => ValuePlan::computed(
                 vec![self.lower_assert_statement(expression).into()],
-                GoExpression::empty_composite(GoType::new("struct{}")),
+                GoExpression::unit(),
             ),
             _ => unreachable!(
                 "unexpected leaf expression in plan_operand: {:?}",
@@ -299,7 +290,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Coerce the elements of the tuple literal `tuple` into `slot_types`, which are the slots of the tuple itself when they differ from its own types. The nullable `Option` slots of a lowered return hold their values as lowered.
     pub(crate) fn coerce_elements_to_slots(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -359,6 +349,21 @@ impl Planner<'_> {
         GoExpression::instantiation(callee, GoType::type_arguments(&slots))
     }
 
+    pub(crate) fn tail_tuple_return_slots(&self, tuple: &Expression) -> Option<Vec<Type>> {
+        let Expression::Tuple {
+            ty: Type::Tuple(inferred),
+            ..
+        } = tuple
+        else {
+            return None;
+        };
+        let return_ctx = self.return_ctx();
+        let Some(Type::Tuple(slots)) = return_ctx.ty() else {
+            return None;
+        };
+        (slots.len() == inferred.len()).then(|| slots.clone())
+    }
+
     pub(crate) fn plan_tuple_value(&mut self, tuple: &Expression, in_tail: bool) -> ValuePlan {
         let Expression::Tuple { elements, ty, .. } = tuple else {
             unreachable!("plan_tuple_value lowers a tuple literal")
@@ -367,7 +372,7 @@ impl Planner<'_> {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
-        let slot_types = match in_tail.then(|| tail_return_slots(self, &inferred_slot_types)) {
+        let slot_types = match in_tail.then(|| self.tail_tuple_return_slots(tuple)) {
             Some(Some(return_slots)) => return_slots,
             _ => inferred_slot_types,
         };
@@ -395,11 +400,6 @@ impl Planner<'_> {
         ValuePlan::computed(setup, GoExpression::pure_call(callee, element_expressions))
     }
 
-    /// Plan a `cast` expression. The interface-target path resolves through
-    /// a coercion (may emit setup); the primitive/named path becomes a
-    /// structured `ValuePlan::Cast { go_type, inner }`. The inner value is
-    /// planned first to preserve the original mutation order (inner emitted
-    /// before the target type is formatted).
     pub(crate) fn plan_cast(
         &mut self,
         cast: &Expression,
@@ -462,7 +462,6 @@ impl Planner<'_> {
             return false;
         }
         let source_ty = expression.get_type();
-        // A function-typed alias emits as a named Go type, so the conversion stands.
         if self.facts.resolve_to_function_type(&source_ty).is_some()
             || self.facts.resolve_to_function_type(ty).is_some()
         {
@@ -488,8 +487,6 @@ impl Planner<'_> {
             .then(|| self.go_type(&source_ty))
     }
 
-    /// Plan a `&inner` reference, hoisting to a temp when the inner is
-    /// Go-unaddressable.
     pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
         if self.is_unit_call(inner) {
             let staged = self.plan_operand(inner.unwrap_parens(), ExpressionContext::value());
@@ -497,11 +494,7 @@ impl Planner<'_> {
                 if !staged_value.is_empty() {
                     setup.push(effect_statement(staged_value));
                 }
-                let tmp = self.hoist_tmp_value_statement(
-                    setup,
-                    "ref",
-                    GoExpression::empty_composite(GoType::new("struct{}")),
-                );
+                let tmp = self.hoist_tmp_value_statement(setup, "ref", GoExpression::unit());
                 GoExpression::address_of(GoExpression::identifier(tmp))
             });
         }
@@ -514,7 +507,6 @@ impl Planner<'_> {
             && (!unaddressable
                 || matches!(inner.unwrap_parens(), Expression::DotAccess { resolution, .. } if resolution.is_field_read()))
         {
-            // References retain storage and its physical function signature.
             if matches!(inner.unwrap_parens(), Expression::Identifier { .. }) {
                 self.plan_operand(inner, ExpressionContext::value())
             } else {
@@ -541,13 +533,14 @@ impl Planner<'_> {
         let mut current = expression;
         while let Expression::DotAccess {
             expression: inner,
-            member,
+            resolution,
             ..
         } = current
         {
-            if member.parse::<usize>().is_ok()
-                && self.is_newtype_struct(&inner.get_type().strip_refs())
-            {
+            if matches!(
+                resolution,
+                DotAccessResolution::TupleStructField { is_newtype: true }
+            ) {
                 return true;
             }
             current = inner;
@@ -573,10 +566,7 @@ impl Planner<'_> {
         }
 
         if stages.is_empty() {
-            return ValuePlan::computed(
-                Vec::new(),
-                GoExpression::empty_composite(GoType::new("struct{}")),
-            );
+            return ValuePlan::computed(Vec::new(), GoExpression::unit());
         }
 
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "range");
@@ -584,14 +574,17 @@ impl Planner<'_> {
         let mut fields = Vec::new();
         if has_start {
             fields.push((
-                "Start".to_string(),
+                go_name::RANGE_START_FIELD.to_string(),
                 values.next().expect("range has a start"),
             ));
             if let Some(end_value) = values.next() {
-                fields.push(("End".to_string(), end_value));
+                fields.push((go_name::RANGE_END_FIELD.to_string(), end_value));
             }
         } else {
-            fields.push(("End".to_string(), values.next().expect("range has an end")));
+            fields.push((
+                go_name::RANGE_END_FIELD.to_string(),
+                values.next().expect("range has an end"),
+            ));
         }
 
         let bounds: Vec<_> = start.iter().chain(end).collect();
@@ -603,7 +596,6 @@ impl Planner<'_> {
         ValuePlan::computed(sequenced.setup, value)
     }
 
-    /// Plan a `Task`/`Defer` operand.
     pub(crate) fn plan_async_wrapper(
         &mut self,
         kind: AsyncKind,
@@ -617,7 +609,6 @@ impl Planner<'_> {
         };
 
         if let Expression::Block { .. } = expression {
-            // The block runs as its own Go function, so `return` leaves it.
             let body = self.with_isolated_function(ReturnContext::Void(Type::unit()), |planner| {
                 planner.lower_block_as_body(expression)
             });
@@ -649,7 +640,7 @@ impl Planner<'_> {
                 .into_parts();
             let mut body_statements = Vec::new();
             if !inner.is_empty() {
-                body_statements.push(if expression.get_type().is_unit() {
+                body_statements.push(if self.facts.resolves_to_unit(&expression.get_type()) {
                     expression_statement(inner)
                 } else {
                     discard(inner)
@@ -737,12 +728,12 @@ impl Planner<'_> {
             .resolve_identifier_with_resolution(value, resolution)
         {
             Some(binding) => binding.as_go_name().is_none(),
-            None => self.ty_is_enum(ty),
+            None => self.facts.is_lisette_enum(ty),
         }
     }
 
     fn dot_access_is_unaddressable(&self, receiver: &Expression, ty: &Type) -> bool {
-        if !self.ty_is_enum(ty) {
+        if !self.facts.is_lisette_enum(ty) {
             return false;
         }
         let Type::Nominal {
@@ -756,25 +747,6 @@ impl Planner<'_> {
             Some(DefinitionBody::Enum { .. } | DefinitionBody::TypeAlias { .. })
         )
     }
-
-    /// Whether `ty` is a nominal type whose definition is an `enum`.
-    fn ty_is_enum(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty else {
-            return false;
-        };
-        matches!(
-            self.facts.definition(id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Enum { .. })
-        )
-    }
-}
-
-fn tail_return_slots(planner: &Planner<'_>, inferred: &[Type]) -> Option<Vec<Type>> {
-    let return_ctx = planner.return_ctx();
-    let Some(Type::Tuple(slots)) = return_ctx.ty() else {
-        return None;
-    };
-    (slots.len() == inferred.len()).then(|| slots.clone())
 }
 
 fn needs_iife_for_async(
@@ -795,7 +767,6 @@ fn needs_iife_for_async(
     };
     let function = callee.unwrap_parens();
     let arity = split_native_receiver(function, args).map_or(0, |(_, arguments)| arguments.len());
-    // Capture len/append operands at the async site despite their call syntax.
     !matches!(value.syntax_form(), OperandForm::Call)
         || !NativeOperation::new(*kind, method).lowers_to_plain_call(arity)
 }

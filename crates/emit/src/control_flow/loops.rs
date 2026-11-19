@@ -1,6 +1,8 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SequenceStage;
+use crate::names::go_name;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::GoUses;
@@ -14,7 +16,7 @@ use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::types::shape::RangeShape;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
-use syntax::types::Type;
+use syntax::types::{self, IterSeqKind, Type};
 
 fn range_header(
     key: Option<&GoIdentifier>,
@@ -30,7 +32,6 @@ fn range_header(
 }
 
 impl Planner<'_> {
-    /// Lower a `for` statement, dispatching on iterable/pattern shape.
     pub(crate) fn lower_for_statement(&mut self, full_expression: &Expression) -> Statement {
         let Expression::For {
             binding,
@@ -72,8 +73,6 @@ impl Planner<'_> {
         Statement { line, kind: plan }
     }
 
-    /// Plan `expr` as an operand, pushing its setup into `prologue` and
-    /// returning the value.
     pub(crate) fn capture_operand_into(
         &mut self,
         prologue: &mut Vec<Statement>,
@@ -85,7 +84,6 @@ impl Planner<'_> {
         value
     }
 
-    /// `for i in stored_range`.
     fn lower_stored_range_for(
         &mut self,
         binding: &Binding,
@@ -96,7 +94,7 @@ impl Planner<'_> {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
             let iterable_ty = iterable.get_type();
-            let range_var = if this.facts.peel_alias(&iterable_ty).is_ref() {
+            let range_var = if this.facts.is_reference(&iterable_ty) {
                 let reference = this.capture_operand_into(&mut prologue, iterable);
                 let range = this.dereference_refs(&iterable_ty, reference);
                 GoExpression::identifier(this.hoist_tmp_value_statement(
@@ -120,7 +118,7 @@ impl Planner<'_> {
                 GoExpression::binary(
                     GoExpression::identifier(loop_var.clone()),
                     operator,
-                    bound("End"),
+                    bound(go_name::RANGE_END_FIELD),
                 )
             };
             let condition = match range_shape {
@@ -133,7 +131,7 @@ impl Planner<'_> {
             };
             let header = LoopHeader::Counted {
                 variable: loop_var,
-                start: bound("Start"),
+                start: bound(go_name::RANGE_START_FIELD),
                 condition,
             };
             let lowered_body = this.lower_block_as_body(body);
@@ -141,7 +139,6 @@ impl Planner<'_> {
         })
     }
 
-    /// `for r in s.runes()`.
     fn lower_runes_for(
         &mut self,
         binding: &Binding,
@@ -158,7 +155,6 @@ impl Planner<'_> {
         })
     }
 
-    /// `for b in s.bytes()`.
     fn lower_bytes_for(
         &mut self,
         binding: &Binding,
@@ -249,9 +245,6 @@ impl Planner<'_> {
         (prologue, header, lowered_body)
     }
 
-    /// `for (k, v) in map`. Simple identifier/wildcard pairs bind directly
-    /// in the `range` header; compound patterns capture into fresh vars and
-    /// destructure inside the body.
     fn lower_map_tuple_for(
         &mut self,
         binding: &Binding,
@@ -289,7 +282,6 @@ impl Planner<'_> {
         (prologue, header, lowered_body)
     }
 
-    /// Simple map-tuple element pair: bind directly in the `range` header.
     fn lower_map_tuple_simple_body(
         &mut self,
         first: &Pattern,
@@ -314,8 +306,6 @@ impl Planner<'_> {
         (header, self.lower_block_as_body(body))
     }
 
-    /// Compound map-tuple element pattern: capture key/value into fresh vars,
-    /// destructure at the top of the body, discard the temp when unused.
     fn lower_map_tuple_compound_body(
         &mut self,
         first: &Pattern,
@@ -357,7 +347,6 @@ impl Planner<'_> {
         let references_value = used.contains_identifier(&value_identifier);
         let references_key = used.contains_identifier(&key_identifier);
 
-        // Discard guards: value first, then key (insertion order matters).
         let mut statements = Vec::new();
         if !references_value {
             statements.push(discard(GoExpression::identifier(value_identifier)));
@@ -403,7 +392,6 @@ impl Planner<'_> {
         (header, LoweredBlock { statements })
     }
 
-    /// `for i in start..end`.
     fn lower_range_for(
         &mut self,
         binding: &Binding,
@@ -497,7 +485,7 @@ impl Planner<'_> {
         {
             return ForShape::StoredRange(range_shape);
         }
-        if let Some((kind, receiver)) = recognize_string_view_loop(binding, iterable) {
+        if let Some((kind, receiver)) = recognize_string_view_loop(&self.facts, binding, iterable) {
             return ForShape::StringView(kind, receiver);
         }
         if let Pattern::Tuple { elements, .. } = &binding.pattern
@@ -523,10 +511,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Extract a loop variable from a pattern, binding the identifier if present.
-    /// `fallback` controls what happens when the pattern is unused or non-identifier:
-    /// - `Some(hint)`: generate a fresh var (needed for C-style loops where `_` is invalid)
-    /// - `None`: use `"_"` (valid in `for range` syntax)
     fn bind_loop_pattern(
         &mut self,
         pattern: &Pattern,
@@ -563,30 +547,13 @@ impl Planner<'_> {
         }) || self.iter_seq_arity(iterable_ty) == Some(2)
     }
 
-    /// Peels one alias at a time, because `iter.Seq` is itself an alias.
     fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
-        let mut current = iterable_ty.strip_refs();
-        for _ in 0..64 {
-            let Type::Nominal {
-                id,
-                params,
-                writable,
-            } = &current
-            else {
-                return None;
-            };
-            match id.as_str() {
-                "go:iter.Seq" => return Some(1),
-                "go:iter.Seq2" => return Some(2),
-                _ => {}
-            }
-            let next = self
-                .facts
-                .definition(id)?
-                .instantiate_alias_target(params, *writable)?;
-            current = next.unwrap_forall().clone();
-        }
-        None
+        let (kind, _) =
+            types::peel_to_iter_seq(&iterable_ty.strip_refs(), |id| self.facts.definition(id))?;
+        Some(match kind {
+            IterSeqKind::Seq => 1,
+            IterSeqKind::Seq2 => 2,
+        })
     }
 }
 
@@ -613,8 +580,8 @@ enum StringViewKind {
     Runes,
 }
 
-/// Recognise `for x in s.bytes()` / `for x in s.runes()` for zero-alloc lowering.
 fn recognize_string_view_loop<'a>(
+    facts: &EmitFacts<'_>,
     binding: &'a Binding,
     iterable: &'a Expression,
 ) -> Option<(StringViewKind, &'a Expression)> {
@@ -645,7 +612,7 @@ fn recognize_string_view_loop<'a>(
         return None;
     };
 
-    if !receiver.get_type().is_string() {
+    if !facts.peel_alias(&receiver.get_type()).is_string() {
         return None;
     }
 

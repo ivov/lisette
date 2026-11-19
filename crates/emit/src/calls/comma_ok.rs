@@ -14,16 +14,9 @@ use syntax::ast::Expression;
 use syntax::program::CallOperation;
 use syntax::program::NativeTypeKind;
 
-/// How an Option-typed scrutinee produces its Go comma-ok pair.
 pub(crate) enum CommaOkSource {
-    /// Call whose lowered ABI is already `(T, bool)`.
-    LoweredCall {
-        /// Nil test the tagged wrap would apply on top of `ok`.
-        nil_guard: Option<NilGuard>,
-    },
-    /// `m.get(k)` lowered as `m[k]`.
+    LoweredCall { nil_guard: Option<NilGuard> },
     MapIndex,
-    /// `assert_type<T>(x)` lowered as `x.(T)`.
     TypeAssert,
 }
 
@@ -44,16 +37,11 @@ impl CommaOkSource {
     }
 }
 
-/// What the caller needs from the pair's value slot.
 pub(crate) enum CommaOkValueSlot {
-    /// Bind this local (already freshened and declared).
     Named(GoIdentifier),
-    /// Allocate a fresh temporary.
     Temp,
     Arm(GoIdentifier),
-    /// No payload use. The value is still captured when the nil guard needs it.
     Unused,
-    /// No payload use, bound as a statement so the status can serve as a value.
     Discarded,
 }
 
@@ -129,7 +117,6 @@ impl Planner<'_> {
                 let operand_ty = operand.get_type();
                 let asserts_on_interface = self.facts.is_interface_or_unknown(&operand_ty)
                     || self.facts.peel_alias(&operand_ty).is_error();
-                // A function asserted out of `any` needs a bridge to its Lisette layout.
                 let asserts_function = self
                     .any_slot_function_layouts(
                         &self.facts.peel_alias(&expression.get_type()).ok_type(),
@@ -166,7 +153,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Bind a recognized pair to its value and ok variables.
     pub(crate) fn bind_comma_ok_pair(
         &mut self,
         expression: &Expression,
@@ -258,7 +244,6 @@ impl Planner<'_> {
         name
     }
 
-    /// Fresh within a Go block; nested blocks may shadow outer statuses.
     pub(crate) fn pair_status(
         &mut self,
         hint: Option<&SourceName>,
@@ -284,7 +269,6 @@ impl Planner<'_> {
         name
     }
 
-    /// Lower the pair-producing Go expression.
     fn lower_comma_ok_pair(
         &mut self,
         expression: &Expression,

@@ -7,10 +7,6 @@ use syntax::ast::{Expression, Generic, Visibility};
 use syntax::program::File;
 
 impl Planner<'_> {
-    /// Derive package constants that Go can represent as `const` declarations.
-    /// This is package-wide because Go package declarations are not ordered:
-    /// a constant's eligibility must not depend on which file or item renders
-    /// first.
     pub(crate) fn derive_package_go_consts(&mut self, files: &[&File]) {
         let candidates: Vec<(String, &Expression)> = files
             .iter()
@@ -47,7 +43,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Record emitted Go names of private functions that differ from their source spelling.
     pub(crate) fn collect_escape_remap(&mut self, files: &[&File]) {
         let entries: Vec<(&str, String)> = files
             .iter()

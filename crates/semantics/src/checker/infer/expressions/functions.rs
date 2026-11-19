@@ -6,16 +6,11 @@ use crate::analysis::ProjectKind;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::context::{Expectation, ExpectationRole, UseContext};
 use crate::checker::registration::test_functions::normalize_test_params;
-use crate::prelude;
 use crate::store::ENTRY_PACKAGE_ID;
 
 impl InferCtx<'_> {
     fn ty_is_test_context(&self, ty: &Type) -> bool {
-        let resolved = ty.resolve_in(&self.env).strip_refs();
-        resolved.get_qualified_id().is_some_and(|id| {
-            id.strip_suffix(".TestContext")
-                .is_some_and(|package| package == prelude::TEST_PRELUDE_PACKAGE_ID)
-        })
+        ty.resolve_in(&self.env).is_test_context()
     }
 
     fn param_provides_test_handle(&self, param: &Binding) -> bool {

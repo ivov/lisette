@@ -1,9 +1,10 @@
+use crate::control_flow::fallible as tags;
+use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::types::Type;
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
-use crate::abi::tuple_element_types;
 use crate::abi::wrapping::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
@@ -21,12 +22,10 @@ use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::{Adaptation, SlotOrigin};
 
-/// A bare `return v0, v1, ...` statement leaf.
 pub(crate) fn multi_value_return(values: Vec<GoExpression>) -> Statement {
     LoweredStatement::Return(values).into()
 }
 
-/// An `if <condition> { <setup...> return <then_values...> }` tag-check leaf (no else).
 pub(crate) fn tag_check(
     condition: GoExpression,
     setup: Vec<Statement>,
@@ -55,7 +54,7 @@ pub(crate) fn tag_check_with_initializer(
 
 fn has_tag(value: &GoExpression, tag: &str) -> GoExpression {
     GoExpression::binary(
-        GoExpression::selector(value.clone(), "Tag".to_string()),
+        GoExpression::selector(value.clone(), ENUM_TAG_FIELD.to_string()),
         BinaryOp::Eq,
         GoExpression::generated(GeneratedPackage::Prelude, tag),
     )
@@ -65,8 +64,6 @@ fn field(value: &GoExpression, field: &str) -> GoExpression {
     GoExpression::selector(value.clone(), field.to_string())
 }
 
-/// The lowered Go-return values for an `Err`-with-payload failure, in the
-/// enclosing function's lowered shape (e.g. `[zero, err]`).
 pub(crate) fn lowered_err_values(
     planner: &mut Planner,
     shape: &LoweredReturnAbi,
@@ -90,9 +87,6 @@ pub(crate) fn lowered_err_values(
     }
 }
 
-/// The lowered Go-return values for a success-constructor payload, in the
-/// enclosing function's lowered shape (e.g. `[ok, nil]`). `payload` holds
-/// the already-lowered payload slots.
 pub(crate) fn lowered_ok_values(
     shape: &LoweredReturnAbi,
     mut payload: Vec<GoExpression>,
@@ -116,8 +110,6 @@ pub(crate) fn lowered_ok_values(
     }
 }
 
-/// The lowered Go-return values for a bare `None`, in an Option-shaped fn's
-/// lowered shape (e.g. `[zero, false]`).
 pub(crate) fn lowered_none_values(
     planner: &mut Planner,
     shape: &LoweredReturnAbi,
@@ -161,23 +153,23 @@ fn lowered_payload_zeros(
     payload_ty: &Type,
 ) -> Vec<GoExpression> {
     if shape.has_flattened_payload() {
-        tuple_element_types(&planner.facts.peel_alias(payload_ty))
+        planner
+            .facts
+            .tuple_element_types(payload_ty)
             .iter()
             .map(|slot_ty| {
                 if planner.facts.is_nullable_option(slot_ty) {
                     GoExpression::nil()
                 } else {
-                    planner.zero_value(slot_ty)
+                    planner.go_zero(slot_ty)
                 }
             })
             .collect()
     } else {
-        vec![planner.zero_value(payload_ty)]
+        vec![planner.go_zero(payload_ty)]
     }
 }
 
-/// Destructure a Lisette tagged value into a lowered Go-tuple return,
-/// as structured tag-check `IfPlan`s and `Return` leaves.
 pub(crate) fn emit_lowered_result_return(
     planner: &mut Planner,
     result_value: GoExpression,
@@ -191,7 +183,7 @@ pub(crate) fn emit_lowered_result_return(
     let arms = match shape {
         LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. } => {
             let (ok_setup, ok_payload) =
-                lowered_payload_values(planner, shape, &ok_ty(), field(p, "OkVal"));
+                lowered_payload_values(planner, shape, &ok_ty(), field(p, tags::RESULT_OK_FIELD));
             vec![
                 tag_check(
                     has_tag(p, RESULT_OK_TAG),
@@ -203,17 +195,17 @@ pub(crate) fn emit_lowered_result_return(
                     planner,
                     shape,
                     return_ty,
-                    field(p, "ErrVal"),
+                    field(p, tags::RESULT_ERR_FIELD),
                 )),
             ]
         }
         LoweredReturnAbi::Partial { .. } => {
             let ok_ty = ok_ty();
             let (ok_setup, ok_payload) =
-                lowered_payload_values(planner, shape, &ok_ty, field(p, "OkVal"));
+                lowered_payload_values(planner, shape, &ok_ty, field(p, tags::PARTIAL_OK_FIELD));
             let (both_setup, mut both_values) =
-                lowered_payload_values(planner, shape, &ok_ty, field(p, "OkVal"));
-            both_values.push(field(p, "ErrVal"));
+                lowered_payload_values(planner, shape, &ok_ty, field(p, tags::PARTIAL_OK_FIELD));
+            both_values.push(field(p, tags::PARTIAL_ERR_FIELD));
             let mut statements = vec![
                 tag_check(
                     has_tag(p, PARTIAL_OK_TAG),
@@ -224,7 +216,12 @@ pub(crate) fn emit_lowered_result_return(
                 tag_check(
                     has_tag(p, PARTIAL_ERR_TAG),
                     Vec::new(),
-                    lowered_err_values(planner, shape, return_ty, field(p, "ErrVal")),
+                    lowered_err_values(
+                        planner,
+                        shape,
+                        return_ty,
+                        field(p, tags::PARTIAL_ERR_FIELD),
+                    ),
                 )
                 .into(),
             ];
@@ -234,7 +231,7 @@ pub(crate) fn emit_lowered_result_return(
         }
         LoweredReturnAbi::Option(_) => {
             let (some_setup, some_payload) =
-                lowered_payload_values(planner, shape, &ok_ty(), field(p, "SomeVal"));
+                lowered_payload_values(planner, shape, &ok_ty(), field(p, tags::OPTION_SOME_FIELD));
             vec![
                 tag_check(
                     has_tag(p, OPTION_SOME_TAG),
@@ -261,17 +258,14 @@ fn emit_lowered_tuple_return(
     statements
 }
 
-/// Project each field of a lowered tuple value, unwrapping any
-/// nullable-Option slot to its bare Go nilable.
 fn lowered_tuple_values(
     planner: &mut Planner,
     tuple_value: &GoExpression,
     tuple_ty: &Type,
     adapted: Option<(&Type, &[Adaptation])>,
 ) -> (Vec<Statement>, Vec<GoExpression>) {
-    let slot_tys = tuple_element_types(&planner.facts.peel_alias(tuple_ty));
-    let source_tys =
-        adapted.map(|(source, _)| tuple_element_types(&planner.facts.peel_alias(source)));
+    let slot_tys = planner.facts.tuple_element_types(tuple_ty);
+    let source_tys = adapted.map(|(source, _)| planner.facts.tuple_element_types(source));
     let mut statements = Vec::new();
     let fields = slot_tys
         .iter()
@@ -308,7 +302,6 @@ fn lowered_tuple_values(
     (statements, fields)
 }
 
-/// Lower each element of a tuple literal into its lowered return slot.
 pub(crate) fn lowered_tuple_literal_values(
     planner: &mut Planner,
     tuple: &Expression,
@@ -317,7 +310,7 @@ pub(crate) fn lowered_tuple_literal_values(
     let Expression::Tuple { elements, .. } = tuple else {
         unreachable!("only a tuple literal lowers into return slots")
     };
-    let slot_tys = tuple_element_types(&planner.facts.peel_alias(tuple_ty));
+    let slot_tys = planner.facts.tuple_element_types(tuple_ty);
     let adaptations = match &planner.facts.checked(tuple).value_use().adaptation {
         Adaptation::Tuple(adaptations) => adaptations.clone(),
         _ => Vec::new(),
@@ -349,7 +342,6 @@ pub(crate) fn lowered_tuple_literal_values(
 }
 
 impl Planner<'_> {
-    /// Wrap a callable's physical Go result into the Lisette-visible value.
     pub(crate) fn lower_abi_to_tagged(
         &mut self,
         raw_value: GoExpression,
@@ -361,7 +353,6 @@ impl Planner<'_> {
         (wrap, outcome.expect("wrapper produced no slot"))
     }
 
-    /// Wrap a callable's physical Go result and return it in each wrapper branch.
     pub(crate) fn lower_abi_to_tagged_return(
         &mut self,
         raw_value: GoExpression,
@@ -375,7 +366,6 @@ impl Planner<'_> {
     }
 }
 
-/// Return the `source` result of `call` in the `target` ABI, through its tagged value.
 pub(crate) fn reencode_return(
     planner: &mut Planner,
     call: GoExpression,
@@ -395,8 +385,6 @@ pub(crate) fn reencode_return(
     }
 }
 
-/// Normalize alias layouts to the callable's result slots, then handle packed
-/// `Partial` and `Tuple` tails. A flattened `Partial` takes the wrapped-return path.
 pub(crate) fn try_emit_layout_return(
     planner: &mut Planner,
     expression: &Expression,
@@ -473,11 +461,8 @@ fn emit_lowered_tuple_tail(
     }
 
     if let Some(plan) = planner.plan_call(expression)
-        && plan.resolved.abi.result == CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity })
+        && planner.unbridged_tuple_arity(&plan, &return_ty) == Some(arity)
         && planner.facts.peel_alias(&expression.get_type()) == planner.facts.peel_alias(&return_ty)
-        && planner
-            .go_result_bridge(&plan.resolved.abi, &return_ty)
-            .is_none_or(|bridge| bridge.is_identity())
         && plan
             .resolved
             .abi
@@ -496,7 +481,6 @@ fn emit_lowered_tuple_tail(
         return statements;
     }
 
-    // Unlike the other tails, a name is copied to `tup` too.
     let (mut statements, value) = planner
         .lower_value(expression, ExpressionContext::value())
         .into_parts();
@@ -540,7 +524,7 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
                     .into_parts();
                 statements.extend(setup);
                 let ok_ty = planner.facts.peel_alias(&return_ty).ok_type();
-                multi_value_return(vec![planner.zero_value(&ok_ty), e])
+                multi_value_return(vec![planner.go_zero(&ok_ty), e])
             }
             PartialVariant::Both => {
                 let stages = args
@@ -572,8 +556,6 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
     statements
 }
 
-/// `Some(x)`/`None` collapse to `x`/`nil`; other Option expressions
-/// project at runtime.
 fn lower_nullable_slot_value(
     planner: &mut Planner,
     expression: &Expression,

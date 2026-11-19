@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type Id<T> = T
+  
+  const ID = 5
+  
+  fn test() -> Id<int> {
+    ID
+  }
+---
+package main
+
+const Id int = 5
+
+func test() int {
+	return Id
+}

@@ -1,0 +1,27 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === geo/geo.go ===
+package geo
+
+type Point_2d struct {
+	X int
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/geo"
+)
+
+func make_() geo.Point_2d {
+	return geo.Point_2d{X: 1}
+}
+
+func main() {
+	fmt.Println(make_().X)
+}

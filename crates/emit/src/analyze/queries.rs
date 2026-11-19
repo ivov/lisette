@@ -90,7 +90,7 @@ impl Planner<'_> {
         let Type::Nominal { id, .. } = ty.strip_refs() else {
             return false;
         };
-        id.starts_with(go_name::PRELUDE_PREFIX)
+        go_name::is_prelude_id(&id)
             || self
                 .facts
                 .package_for_qualified_name(id.as_str())
@@ -101,7 +101,6 @@ impl Planner<'_> {
         self.field_is_public(ty, field) || self.type_uses_exported_members(ty)
     }
 
-    /// `semantic_exported` also covers fields promoted from an embedded struct.
     pub(crate) fn struct_field_go_name(
         &self,
         ty: &Type,
@@ -157,30 +156,22 @@ impl Planner<'_> {
     }
 
     pub(crate) fn is_newtype_struct(&self, ty: &Type) -> bool {
-        let Type::Nominal { params, .. } = ty.strip_refs() else {
-            return false;
-        };
-        if !params.is_empty() {
-            return false;
-        }
-        self.resolve_nominal(ty)
-            .is_some_and(|resolved| resolved.definition.is_newtype())
+        self.get_newtype_underlying(ty).is_some()
     }
 
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
         let resolved = self.resolve_nominal(ty)?;
-        if let DefinitionBody::Struct {
+        if !resolved.definition.is_newtype() {
+            return None;
+        }
+        let DefinitionBody::Struct {
             fields: StructFields::Tuple(fields),
-            generics,
             ..
         } = &resolved.definition.body
-            && fields.len() == 1
-            && generics.is_empty()
-        {
-            return Some(fields[0].ty.clone());
-        }
-
-        None
+        else {
+            return None;
+        };
+        Some(fields[0].ty.clone())
     }
 
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
@@ -200,16 +191,6 @@ impl Planner<'_> {
         let resolved = self.resolve_nominal(ty)?;
         matches!(&resolved.definition.body, DefinitionBody::Enum { .. })
             .then(|| resolved.id.to_string())
-    }
-
-    /// Returns true if the Option wraps a Go interface type (not a pointer).
-    /// These need `IsNilInterface` instead of `!= nil` to catch typed nils.
-    pub(crate) fn is_interface_option(&self, ty: &Type) -> bool {
-        if !ty.is_option() {
-            return false;
-        }
-        let inner = ty.ok_type();
-        self.facts.is_interface(&inner)
     }
 }
 
@@ -242,6 +223,7 @@ impl Planner<'_> {
         variant: &str,
         index: usize,
     ) -> String {
+        let ty = &self.emit_shape_ty(ty);
         if ty.is_option() {
             return match variant {
                 "Some" => fallible::OPTION_SOME_FIELD.to_string(),
@@ -273,11 +255,7 @@ impl Planner<'_> {
             return name;
         }
 
-        if index == 0 {
-            variant.to_string()
-        } else {
-            format!("{}{}", variant, index)
-        }
+        unreachable!("enum `{ty:?}` has no layout for field {index} of `{variant}`")
     }
 
     pub(crate) fn is_enum_field_recursive(&self, ty: &Type, variant: &str, index: usize) -> bool {
@@ -313,7 +291,7 @@ impl Planner<'_> {
                     && let Some(field) = v.fields.iter().nth(index)
                 {
                     let concrete = substitute(&field.ty, &sub_map);
-                    return concrete.is_unit() || concrete.is_never();
+                    return self.facts.resolves_to_unit(&concrete) || concrete.is_never();
                 }
             }
         }

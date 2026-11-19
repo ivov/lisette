@@ -197,6 +197,5 @@ fn boolean_outcome(literal: bool, is_and: bool) -> Outcome {
 }
 
 fn is_integer(ty: &Type) -> bool {
-    ty.as_simple()
-        .is_some_and(|kind| kind.is_signed_int() || kind.is_unsigned_int())
+    ty.as_simple().is_some_and(|kind| kind.is_integer())
 }

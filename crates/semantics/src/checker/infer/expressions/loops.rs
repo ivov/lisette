@@ -4,7 +4,7 @@ use crate::checker::EnvResolve;
 use crate::checker::infer::context::{BindingInference, LoopContext, LoopElementInference};
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, BindingId, Expression, Pattern, Span};
-use syntax::types::{CompoundKind, RangeKind, SimpleKind, Symbol, Type};
+use syntax::types::{self, CompoundKind, IterSeqKind, RangeKind, SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::validation::LoopExit;
@@ -31,11 +31,6 @@ fn span_contains(outer: &Span, inner: &Span) -> bool {
     outer.file_id == inner.file_id
         && outer.byte_offset <= inner.byte_offset
         && inner.end() <= outer.end()
-}
-
-enum IterSeqKind {
-    Seq,
-    Seq2,
 }
 
 #[derive(Clone, Copy)]
@@ -70,17 +65,6 @@ impl IterableKind {
             Type::Simple(_) | Type::Nominal { .. } | Type::ImportNamespace(_) => Self::NotIterable,
             _ => return None,
         })
-    }
-}
-
-fn iter_seq_kind(ty: &Type) -> Option<IterSeqKind> {
-    let Type::Nominal { id, .. } = ty else {
-        return None;
-    };
-    match id.as_str() {
-        "go:iter.Seq" => Some(IterSeqKind::Seq),
-        "go:iter.Seq2" => Some(IterSeqKind::Seq2),
-        _ => None,
     }
 }
 
@@ -335,10 +319,11 @@ impl InferCtx<'_> {
         let resolved_unpeeled = iterable_ty.resolve_in(&self.env).strip_refs();
 
         // Peel one alias at a time, because `iter.Seq` is itself an alias.
-        let (iter_seq, resolved_iterable_ty) = match self.peel_to_iter_seq(&resolved_unpeeled) {
-            Some((kind, seq)) => (Some(kind), seq),
-            None => (None, store.peel_refs_and_aliases(&resolved_unpeeled).0),
-        };
+        let (iter_seq, resolved_iterable_ty) =
+            match types::peel_to_iter_seq(&resolved_unpeeled, |id| store.get_definition(id)) {
+                Some((kind, seq)) => (Some(kind), seq),
+                None => (None, store.peel_refs_and_aliases(&resolved_unpeeled).0),
+            };
 
         let iterable_is_error = resolved_iterable_ty.is_error();
 
@@ -442,33 +427,6 @@ impl InferCtx<'_> {
             IterableKind::Map | IterableKind::EnumeratedSlice | IterableKind::Seq2
         );
         (element_ty, requires_tuple_destructuring)
-    }
-
-    fn peel_to_iter_seq(&self, ty: &Type) -> Option<(IterSeqKind, Type)> {
-        let mut current = ty.clone();
-        let mut seen: Vec<Symbol> = Vec::new();
-        loop {
-            if let Some(kind) = iter_seq_kind(&current) {
-                return Some((kind, current));
-            }
-            let Type::Nominal {
-                id,
-                params,
-                writable,
-            } = &current
-            else {
-                return None;
-            };
-            if seen.contains(id) {
-                return None;
-            }
-            seen.push(id.clone());
-            let next = self
-                .store
-                .get_definition(id)?
-                .instantiate_alias_target(params, *writable)?;
-            current = next.unwrap_forall().clone();
-        }
     }
 
     pub(super) fn infer_break(

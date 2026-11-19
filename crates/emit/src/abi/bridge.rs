@@ -3,8 +3,9 @@ use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi}
 use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::abi::transition::{multi_value_return, reencode_return};
-use crate::abi::wrapping::{WrapperTarget, is_nil_interface, non_nil};
+use crate::abi::wrapping::{WrapperTarget, non_nil};
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::fallible as tags;
 use crate::control_flow::fallible::{OPTION_SOME_TAG, prelude_call};
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
@@ -14,27 +15,26 @@ use crate::plan::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement,
     Statement, assign, define_many, expression_statement,
 };
-use crate::plan::go_expression::{
-    BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter, UnaryOp,
-};
+use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
+use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::SlotOrigin;
 use syntax::types::{CompoundKind, Type};
 
 fn is_some(option: GoExpression) -> GoExpression {
     GoExpression::binary(
-        GoExpression::selector(option, "Tag".to_string()),
+        GoExpression::selector(option, ENUM_TAG_FIELD.to_string()),
         BinaryOp::Eq,
         GoExpression::generated(GeneratedPackage::Prelude, OPTION_SOME_TAG),
     )
 }
 
 fn some_payload(option: GoExpression) -> GoExpression {
-    GoExpression::selector(option, "SomeVal".to_string())
+    GoExpression::selector(option, tags::OPTION_SOME_FIELD.to_string())
 }
 
 impl Planner<'_> {
@@ -208,10 +208,10 @@ impl Planner<'_> {
         let some = prelude_call("MakeOptionSome", type_args.clone(), vec![payload]);
         then_statements.push(assign(slot.clone(), some));
         let none = prelude_call("MakeOptionNone", type_args, Vec::new());
-        let condition = if !pointer && self.is_interface_option(target.logical_type()) {
-            GoExpression::unary(UnaryOp::Not, is_nil_interface(raw))
-        } else {
+        let condition = if pointer {
             non_nil(raw)
+        } else {
+            self.option_nil_guard(target.logical_type()).non_nil(raw)
         };
         LoweredStatement::If(IfPlan::plain(
             condition,
@@ -383,19 +383,34 @@ impl Planner<'_> {
                             .map(|field| (*field, None))
                             .collect(),
                         ValueLayout::TaggedOption { .. } => {
-                            vec![("SomeVal", Some(("OptionSome", BinaryOp::Eq)))]
+                            vec![(
+                                tags::OPTION_SOME_FIELD,
+                                Some((OPTION_SOME_TAG, BinaryOp::Eq)),
+                            )]
                         }
                         ValueLayout::Fallible { fallible_type, .. }
                             if fallible_type.is_partial() =>
                         {
                             vec![
-                                ("OkVal", Some(("PartialErr", BinaryOp::Ne))),
-                                ("ErrVal", Some(("PartialOk", BinaryOp::Ne))),
+                                (
+                                    tags::PARTIAL_OK_FIELD,
+                                    Some((tags::PARTIAL_ERR_TAG, BinaryOp::Ne)),
+                                ),
+                                (
+                                    tags::PARTIAL_ERR_FIELD,
+                                    Some((tags::PARTIAL_OK_TAG, BinaryOp::Ne)),
+                                ),
                             ]
                         }
                         ValueLayout::Fallible { .. } => vec![
-                            ("OkVal", Some(("ResultOk", BinaryOp::Eq))),
-                            ("ErrVal", Some(("ResultErr", BinaryOp::Eq))),
+                            (
+                                tags::RESULT_OK_FIELD,
+                                Some((tags::RESULT_OK_TAG, BinaryOp::Eq)),
+                            ),
+                            (
+                                tags::RESULT_ERR_FIELD,
+                                Some((tags::RESULT_ERR_TAG, BinaryOp::Eq)),
+                            ),
                         ],
                         _ => unreachable!("immutable bridges require a tuple or tagged container"),
                     };
@@ -406,8 +421,8 @@ impl Planner<'_> {
                     );
                     if !matches!(target, ValueLayout::Tuple { .. }) {
                         statements.push(assign(
-                            GoExpression::selector(output.clone(), "Tag".to_string()),
-                            GoExpression::selector(source.clone(), "Tag".to_string()),
+                            GoExpression::selector(output.clone(), ENUM_TAG_FIELD.to_string()),
+                            GoExpression::selector(source.clone(), ENUM_TAG_FIELD.to_string()),
                         ));
                     }
                     for ((field, guard), bridge) in fields.into_iter().zip(elements) {
@@ -427,7 +442,10 @@ impl Planner<'_> {
                                 LoweredStatement::If(IfPlan {
                                     initializer: None,
                                     condition: GoExpression::binary(
-                                        GoExpression::selector(source.clone(), "Tag".to_string()),
+                                        GoExpression::selector(
+                                            source.clone(),
+                                            ENUM_TAG_FIELD.to_string(),
+                                        ),
                                         op,
                                         GoExpression::generated(GeneratedPackage::Prelude, tag),
                                     ),
@@ -725,7 +743,7 @@ impl Planner<'_> {
             .map(|(parameter, (source, target))| {
                 let bridge = resolve_layout_bridge(self, target, source);
                 let argument = self.plan_layout_bridge(statements, parameter, &bridge, true);
-                if is_varargs(source.logical_type()) {
+                if source.logical_type().is_native(CompoundKind::VarArgs) {
                     GoExpression::spread(argument)
                 } else {
                     argument
@@ -751,15 +769,16 @@ impl Planner<'_> {
         {
             return None;
         }
-        let value = resolve_layout_bridge(
-            self,
-            source.result_layout.payload()?,
-            target.result_layout.payload()?,
-        );
-        let error = match (
-            source.result_layout.underlying(),
-            target.result_layout.underlying(),
-        ) {
+        self.payload_result_bridge(&source.result_layout, &target.result_layout)
+    }
+
+    pub(crate) fn payload_result_bridge(
+        &self,
+        source: &ValueLayout,
+        target: &ValueLayout,
+    ) -> Option<GoResultBridge> {
+        let value = resolve_layout_bridge(self, source.payload()?, target.payload()?);
+        let error = match (source.underlying(), target.underlying()) {
             (
                 ValueLayout::Fallible { error: source, .. },
                 ValueLayout::Fallible { error: target, .. },
@@ -784,7 +803,7 @@ impl Planner<'_> {
             statements.push(if source.result_layout.logical_type().is_never() {
                 LoweredStatement::UnreachablePanic.into()
             } else {
-                plain_return(GoExpression::empty_composite(GoType::new("struct{}")))
+                plain_return(GoExpression::unit())
             });
             return;
         }
@@ -886,7 +905,7 @@ impl Planner<'_> {
                         statements.push(if source.result_layout.logical_type().is_never() {
                             LoweredStatement::UnreachablePanic.into()
                         } else {
-                            plain_return(GoExpression::empty_composite(GoType::new("struct{}")))
+                            plain_return(GoExpression::unit())
                         });
                     }
                     return;
@@ -1050,10 +1069,6 @@ fn names(names: &[GoIdentifier]) -> Vec<GoExpression> {
         .iter()
         .map(|name| GoExpression::identifier(name.clone()))
         .collect()
-}
-
-fn is_varargs(ty: &Type) -> bool {
-    matches!(ty.as_compound(), Some((CompoundKind::VarArgs, _)))
 }
 
 #[derive(Debug, Clone)]

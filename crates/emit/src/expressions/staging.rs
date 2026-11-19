@@ -20,11 +20,9 @@ use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
-/// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)`: Go rejects the former.
 #[derive(Clone)]
 pub(crate) struct VariadicCombine {
     pub element_ty: Type,
-    /// EmittedExpr-value index where variadic-feeding args begin.
     pub fixed_count: usize,
 }
 
@@ -34,7 +32,6 @@ pub(crate) struct SpreadSequenceOptions {
     pub(crate) boundary: CaptureBoundary,
 }
 
-/// What later operands run before an operand's expression is read.
 #[derive(Default)]
 pub(crate) struct LaterStages {
     before: Effects,
@@ -98,11 +95,15 @@ fn setup_effects(setup: &[Statement]) -> Effects {
         .unwrap_or_else(Effects::anything)
 }
 
+pub(crate) fn takes_prelude_callback(declared_param: Option<&Type>) -> bool {
+    declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)))
+}
+
 fn prelude_arg_context<'a>(
     declared_param: Option<&Type>,
     param_ty: Option<&'a Type>,
 ) -> (bool, ExpressionContext<'a>) {
-    let suppress = declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
+    let suppress = takes_prelude_callback(declared_param);
     let arg_ctx = ExpressionContext::value()
         .with_forced_tagged_go_function(suppress)
         .with_generic_result_slot(declared_param, param_ty);
@@ -128,8 +129,6 @@ impl Planner<'_> {
         ValuePlan::captured(setup, temp_var)
     }
 
-    /// Pin a staged operand's value into a temp so it evaluates before any
-    /// later sibling.
     pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &'static str) {
         staged.pin(|setup, value| self.hoist_tmp_value_statement(setup, prefix, value));
     }
@@ -144,7 +143,6 @@ impl Planner<'_> {
             && value.expression().constant_kind().is_none()
             && !self.plan_rests_in_stable_name(&value)
         {
-            // Keep the source type when Go would default an untyped shift to int.
             if self.contains_untyped_constant_shift(source) {
                 value = value.conversion(self.go_type(&source.get_type()));
             }
@@ -178,15 +176,9 @@ impl Planner<'_> {
     }
 
     pub(crate) fn is_pure_constructor_callee(&self, callee: &Expression) -> bool {
-        if prelude_constructor(callee).is_some() {
-            return true;
-        }
-        self.resolve_callee_definition(callee)
-            .1
-            .is_some_and(|definition| definition.is_type_definition())
+        prelude_constructor(callee).is_some() || self.callee_lowers_to_type_construction(callee)
     }
 
-    /// No binding id means a top-level definition, which is immutable.
     pub(crate) fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier {
@@ -198,7 +190,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Whether readers can name the value where it sits instead of pinning it.
     pub(crate) fn plan_rests_in_stable_name(&self, plan: &ValuePlan) -> bool {
         if plan.rests_in_fixed_name() {
             return true;
@@ -208,7 +199,6 @@ impl Planner<'_> {
         })
     }
 
-    /// How much of a read's surroundings can change the value it observes.
     pub(crate) fn identifier_read_stability(&self, expression: &Expression) -> Stability {
         if self.is_unmutated_identifier(expression) {
             Stability::Fixed
@@ -245,8 +235,6 @@ impl Planner<'_> {
         stability
     }
 
-    /// Only a binding mutated through an alias can be rebound by a call, so
-    /// reads of alias-free bindings commute with sibling calls.
     pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier {
@@ -267,7 +255,12 @@ impl Planner<'_> {
                 resolution,
                 ..
             } if resolution.is_field_read()
-                && !reads_value_member(resolution, expression, &expression.get_type()) =>
+                && !reads_value_member(
+                    &self.facts,
+                    resolution,
+                    expression,
+                    &expression.get_type(),
+                ) =>
             {
                 Stability::Observable
             }
@@ -325,7 +318,6 @@ impl Planner<'_> {
                 .is_none()
     }
 
-    /// Detect whether a tagged-Go lowering applies. Pure: no emission.
     pub(crate) fn detect_lower_arg_to_tagged(
         &self,
         arg: &Expression,
@@ -334,7 +326,6 @@ impl Planner<'_> {
         if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
             return None;
         }
-        // A Go function value is already wrapped to the tagged ABI here.
         let callee = self.resolve_callable_value(arg)?;
         if matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
@@ -377,8 +368,6 @@ impl Planner<'_> {
             .collect()
     }
 
-    /// Post-staging fix-up for the spread slot: optional `any`-wrap, then
-    /// either `append([]T{leading...}, spread...)...` or plain `value...`.
     fn finalize_spread_stage(
         &mut self,
         values: &mut Vec<GoExpression>,
@@ -412,7 +401,6 @@ impl Planner<'_> {
         values.push(GoExpression::spread(spread));
     }
 
-    /// Sequence value plans while preserving left-to-right evaluation order.
     pub(crate) fn sequence_values(
         &mut self,
         stages: Vec<ValuePlan>,

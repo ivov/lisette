@@ -75,31 +75,24 @@ impl Planner<'_> {
             Type::Nominal { params, .. } if params.is_empty() => {}
             _ => return None,
         }
-        if peeled.as_simple() == Some(kind.default_kind()) {
+        if kind.is_default_go_type(&self.go_type(&peeled)) {
             return None;
         }
         Some(self.go_type(slot_ty))
     }
 
     fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
-        // A list literal builds a slice or a fixed-size array, per its type.
-        let (element_lisette_ty, length) = match ty {
-            Type::Array { length, element } => (element.as_ref().clone(), Some(length)),
-            _ => (
-                ty.get_type_params()
-                    .expect("Slice type must have type args")
-                    .first()
-                    .expect("Slice type must have element type")
-                    .clone(),
-                None,
-            ),
+        let element_lisette_ty = match ty {
+            Type::Array { element, .. } => element.as_ref().clone(),
+            _ => ty
+                .get_type_params()
+                .expect("Slice type must have type args")
+                .first()
+                .expect("Slice type must have element type")
+                .clone(),
         };
         let element_ty = self.go_type(&element_lisette_ty);
-
-        let go_type = match length {
-            Some(length) => GoType::array_of(length, &element_ty),
-            None => GoType::slice_of(&element_ty),
-        };
+        let go_type = self.go_type(ty);
         if elements.is_empty() {
             return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }
@@ -210,12 +203,7 @@ impl Planner<'_> {
             );
         }
 
-        // Solo-expression f-strings round-trip through fmt.Sprint, which skips
-        // the format-string parse. Excluded: a rune, because Sprint on a rune
-        // prints the integer codepoint instead of the character.
-        if let ([FormatStringPart::Expression(solo)], [_]) = (parts, args.as_slice())
-            && self.display_form(solo) != DisplayForm::Char
-        {
+        if !self.format_string_lowers_to_sprintf(parts) {
             return ValuePlan::plain_call(
                 setup,
                 GoExpression::call(
@@ -235,7 +223,6 @@ impl Planner<'_> {
         )
     }
 
-    /// The `fmt` format text and arguments for the parts, given their lowered values in order.
     pub(crate) fn sprintf_pieces(
         &self,
         parts: &[FormatStringPart],
@@ -323,8 +310,6 @@ fn string_constant(text: String) -> GoExpression {
 }
 
 pub(crate) fn emit_raw_string(value: &str) -> String {
-    // Go backtick raw strings cannot contain backticks, and Go discards `\r`
-    // from them, so fall back to double-quoted form in either case.
     if !value.contains('`') && !value.contains('\r') {
         format!("`{}`", value)
     } else {
@@ -363,8 +348,8 @@ pub(crate) fn convert_escape_sequences(s: &str) -> String {
                 lookahead.next();
                 lookahead.peek() == Some(&'{')
             } {
-                chars.next(); // consume 'u'
-                chars.next(); // consume '{'
+                chars.next();
+                chars.next();
                 let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
                 let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
                 if codepoint <= 0xFFFF {

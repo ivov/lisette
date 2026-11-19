@@ -1,11 +1,12 @@
 use super::arguments::CallArgsContext;
+use crate::EmitFacts;
 use crate::calls::dispatch::{
     CallArgShape, all_type_params_inferrable, callee_is_go_builtin, go_builtin_name,
 };
 use syntax::program::GoTypeRecipe;
+use syntax::program::ReceiverCoercion;
 
 use crate::Planner;
-use crate::abi::callable::CallableAbi;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::expressions::staging::SpreadSequenceOptions;
@@ -74,14 +75,14 @@ pub(super) fn receiver_type_binding(
     Some((declared, receiver.get_type().strip_refs()))
 }
 
-/// Arguments cannot change the address a pointer receiver takes of a local.
 fn pointer_receiver_on_value_local(
+    facts: &EmitFacts<'_>,
     callee_expression: &Expression,
     callee: &ResolvedCallee<'_>,
 ) -> bool {
-    let Some((declared, _)) = receiver_type_binding(callee_expression, callee) else {
+    if receiver_type_binding(callee_expression, callee).is_none() {
         return false;
-    };
+    }
     let Expression::DotAccess {
         expression: receiver,
         ..
@@ -89,12 +90,10 @@ fn pointer_receiver_on_value_local(
     else {
         return false;
     };
-    declared.is_ref()
-        && matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
-        && !receiver.get_type().is_ref()
+    matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
+        && facts.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoAddress)
 }
 
-/// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
 fn find_go_string_literal_close(s: &str) -> Option<usize> {
     let bytes = s.as_bytes();
     if bytes.first() != Some(&b'"') {
@@ -167,7 +166,6 @@ impl FmtPrint {
     }
 }
 
-/// The arguments of `callee(...)` when the expression is a call to that name.
 fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Option<&'n [Operand]> {
     let GoExpressionNode::Call {
         callee: called,
@@ -180,9 +178,6 @@ fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Opti
     (fmt_member(called) == Some(callee)).then_some(arguments.as_slice())
 }
 
-/// Collapse redundant fmt wrappers:
-/// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
-/// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
 fn collapse_fmt_print(
     planner: &Planner,
     callee: &GoExpression,
@@ -225,7 +220,6 @@ fn collapse_fmt_print(
 }
 
 impl<'a> Planner<'a> {
-    /// Lower a regular call: typed setup plus the call value text.
     pub(super) fn lower_regular_call(
         &mut self,
         call_expression: &Expression,
@@ -267,11 +261,10 @@ impl<'a> Planner<'a> {
                 stages,
                 spread_stage,
                 SpreadSequenceOptions {
-                    wrap_to_any: spread_needs_any_wrap(
-                        &self.facts,
-                        &call_plan.resolved.abi,
-                        spread,
-                    ),
+                    wrap_to_any: call_plan
+                        .resolved
+                        .abi
+                        .spread_wraps_to_any(&self.facts, spread),
                     combine: call_plan.resolved.abi.variadic_combine(0),
                     boundary: expression_ctx.capture_boundary(),
                 },
@@ -316,7 +309,6 @@ impl<'a> Planner<'a> {
         let args_ctx = CallArgsContext {
             plan: call_plan,
             spread,
-            wrap_spread_to_any: spread_needs_any_wrap(&self.facts, &call_plan.resolved.abi, spread),
             capture_boundary: expression_ctx.capture_boundary(),
             retired_receiver: (args.len() == 1
                 && self.callee_lowers_to_type_construction(function))
@@ -342,7 +334,7 @@ impl<'a> Planner<'a> {
                 effects.union(argument.effects())
             });
         let callee_needs_pin = type_args_string.is_empty()
-            && !pointer_receiver_on_value_local(function, &call_plan.resolved)
+            && !pointer_receiver_on_value_local(&self.facts, function, &call_plan.resolved)
             && LaterStages::sequenced(
                 &args_setup,
                 arguments_effects.with_known_reads(arguments_effects.reads()),
@@ -379,8 +371,6 @@ impl<'a> Planner<'a> {
         }
     }
 
-    /// Emit `errors.New(f"...")` as `fmt.Errorf(...)`: compiler-built format strings
-    /// cannot contain `%w`, and bypassing the callee drops an unused `errors` import.
     fn collapse_errors_new_format_arg(
         &mut self,
         function: &Expression,
@@ -435,10 +425,6 @@ impl<'a> Planner<'a> {
             .map(<[_]>::to_vec)
     }
 
-    /// True when Go can infer every type parameter of a collapsed callee from
-    /// its value parameters. A var present only in the return type, or only in a
-    /// trailing `VarArgs<T>` the call leaves empty, is not inferable, so the
-    /// recipe must be rebuilt.
     fn collapsed_callee_fully_inferable(
         &self,
         callee: &ResolvedCallee<'_>,
@@ -522,28 +508,9 @@ fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
     let Some(Type::Forall { body, .. }) = callee.declared_type() else {
         return false;
     };
-    let Type::Function(declared_fn) = body.as_ref() else {
-        return false;
-    };
-    callee
-        .instantiated
-        .as_function_type()
-        .is_some_and(|instantiated_fn| instantiated_fn.params.len() < declared_fn.params.len())
-}
-
-fn spread_needs_any_wrap(
-    facts: &crate::EmitFacts<'_>,
-    abi: &CallableAbi,
-    spread: Option<&Expression>,
-) -> bool {
-    let (Some(spread), Some(variadic)) = (spread, abi.variadic_param()) else {
-        return false;
-    };
-    facts.resolves_to_unknown(&variadic.instantiated)
-        && spread
-            .get_type()
-            .inner()
-            .is_some_and(|ty| !facts.resolves_to_unknown(&ty))
+    matches!(body.as_ref(), Type::Function(_))
+        && callee.instantiated.as_function_type().is_some()
+        && callee.receiver_offset > 0
 }
 
 fn fmt_member(node: &GoExpressionNode) -> Option<&str> {

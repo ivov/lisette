@@ -1,8 +1,11 @@
+use crate::abi::ReturnSlot;
 use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::types::go_type::ChannelDirection;
+use syntax::types::SimpleKind;
 
 use super::{NativeCallContext, NativeCallForm};
 use crate::EmitFacts;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
 use crate::abi::layout::ValueLayout;
@@ -27,7 +30,7 @@ use syntax::ast::{Expression, Literal, StructFields};
 use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
-use syntax::program::{CallOperation, Definition, DefinitionBody};
+use syntax::program::{CallOperation, DefinitionBody};
 use syntax::types::{CompoundKind, FunctionParameter, Type, build_substitution_map, substitute};
 
 struct TupleStructTarget {
@@ -36,8 +39,6 @@ struct TupleStructTarget {
     owner_type: Type,
 }
 
-/// The duplicate-key check compares integers and runes as separate kinds, so a
-/// Go literal is safe only when numeric keys share one kind and an integer type.
 fn keys_checked_as_go_constants(keys: &[&Expression], key_ty: &Type) -> bool {
     let Some(literals) = keys
         .iter()
@@ -49,9 +50,7 @@ fn keys_checked_as_go_constants(keys: &[&Expression], key_ty: &Type) -> bool {
     else {
         return false;
     };
-    let integer_key = key_ty
-        .as_simple()
-        .is_some_and(|kind| kind.is_signed_int() || kind.is_unsigned_int());
+    let integer_key = key_ty.as_simple().is_some_and(SimpleKind::is_integer);
     literals
         .iter()
         .all(|literal| matches!(literal, Literal::Boolean(_) | Literal::String { .. }))
@@ -64,8 +63,6 @@ fn keys_checked_as_go_constants(keys: &[&Expression], key_ty: &Type) -> bool {
                     .all(|literal| matches!(literal, Literal::Char(_))))
 }
 
-/// The shape of a call's value arguments, used to decide which type parameters
-/// Go can infer. `value_count` excludes any receiver argument.
 #[derive(Clone, Copy)]
 pub(crate) struct CallArgShape {
     pub value_count: usize,
@@ -95,6 +92,7 @@ pub(crate) fn all_type_params_inferrable(
 
 impl Planner<'_> {
     pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
+        let ty = &self.facts.peel_alias(ty);
         let Type::Nominal { id, .. } = ty else {
             return false;
         };
@@ -108,13 +106,11 @@ impl Planner<'_> {
 }
 
 impl<'a> Planner<'a> {
-    /// The element type of a built-in constructor, from its checked type argument.
     fn native_element_type(&mut self, function: &Expression) -> GoType {
         let element = self.facts.checked(function).callee().first_type_argument();
         self.go_type(element)
     }
 
-    /// The key and value types of a map constructor, from its checked type arguments.
     fn map_entry_types(&self, function: &Expression) -> (Type, Type) {
         let mut types = self.facts.checked(function).callee().type_arguments.types();
         match (types.next(), types.next()) {
@@ -254,9 +250,7 @@ impl<'a> Planner<'a> {
         }
     }
 
-    /// Lower `Array.from<T, N>(slice)` to a length-guarded comma-ok pair.
     fn try_lower_array_from(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
-        // A comma-ok context passes no `call_ty`, so fall back to the callee.
         let callee_ty = ctx.function.get_type();
         let returned = callee_ty
             .as_function_type()
@@ -268,6 +262,14 @@ impl<'a> Planner<'a> {
             return None;
         };
         let argument = ctx.args.first()?;
+        let abi = self.return_abi(&option_ty, ReturnSlot::Function);
+        if !matches!(
+            abi,
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }))
+        ) {
+            return None;
+        }
+        let result_list = self.return_go_type(&abi, &option_ty);
 
         let element_go = self.go_type(&element);
         let array_go = GoType::array_of(length, &element_go);
@@ -284,7 +286,7 @@ impl<'a> Planner<'a> {
                     slice_name.clone(),
                     GoType::slice_of(&element_go),
                 )],
-                GoType::result_list(&[array_go.clone(), GoType::new("bool")]),
+                result_list,
                 LoweredBlock {
                     statements: vec![
                         LoweredStatement::If(IfPlan::plain(
@@ -346,7 +348,7 @@ impl<'a> Planner<'a> {
 
         let (key_ty, value_ty) = self.map_entry_types(ctx.function);
         let keys: Vec<_> = pairs.iter().map(|(key, _)| *key).collect();
-        if !keys_checked_as_go_constants(&keys, &key_ty) {
+        if !keys_checked_as_go_constants(&keys, &self.facts.peel_alias(&key_ty)) {
             return None;
         }
         let value_go_ty = self.go_type(&value_ty);
@@ -404,7 +406,6 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::computed(setup, value))
     }
 
-    /// Emit `!is_empty()` as `len(receiver) != 0` using the native `IsEmpty` rule.
     pub(crate) fn try_emit_negated_call(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -448,7 +449,6 @@ impl<'a> Planner<'a> {
         self.try_emit_negated_native_method(setup, &native_ctx)
     }
 
-    /// Lower a call expression to typed setup plus the value text.
     pub(crate) fn lower_call(
         &mut self,
         call_expression: &Expression,
@@ -461,7 +461,6 @@ impl<'a> Planner<'a> {
         self.lower_call_with_plan(call_expression, call_ty, ctx, plan)
     }
 
-    /// Lower a call whose plan the caller already built.
     pub(crate) fn lower_call_with_plan(
         &mut self,
         call_expression: &Expression,
@@ -520,7 +519,6 @@ impl<'a> Planner<'a> {
                 } else {
                     self.lisette_zero(&ty)
                 };
-                // An untyped `0` with nothing to type it would default to `int`.
                 let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {
                     Some(go_type) => GoExpression::conversion(go_type, value),
                     None => value,
@@ -583,7 +581,6 @@ impl<'a> Planner<'a> {
         let result = self.lower_native_method(context);
         let is_constructor = matches!(context.form, NativeCallForm::Constructor);
         let split = context.receiver_and_arguments();
-        // Channel length can change without rebinding the receiver.
         let reads_fixed_length = matches!(context.method, "length" | "capacity")
             && !is_constructor
             && !matches!(
@@ -592,7 +589,7 @@ impl<'a> Planner<'a> {
             )
             && split.is_some_and(|(receiver, _)| {
                 self.is_unmutated_identifier(receiver)
-                    && !self.facts.peel_alias(&receiver.get_type()).is_ref()
+                    && !self.facts.is_reference(&receiver.get_type())
             });
         if let GoExpressionNode::Identifier(name) = result.value.node()
             && result
@@ -656,8 +653,6 @@ impl<'a> Planner<'a> {
         Some(self.format_type_args(&resolved))
     }
 
-    /// Plan a tuple-struct constructor as a struct literal. `None` when this
-    /// is not a tuple struct or should fall through to regular call handling.
     fn try_lower_tuple_struct_call(
         &mut self,
         function: &Expression,
@@ -701,7 +696,7 @@ impl<'a> Planner<'a> {
                 Some(field_ty),
                 field_layouts[i].as_ref(),
             );
-            field_pairs.push((format!("F{}", i), coerced));
+            field_pairs.push((go_name::tuple_struct_field(i), coerced));
         }
 
         let value =
@@ -712,9 +707,6 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::computed(setup, value))
     }
 
-    /// Drill the function's return type into a tuple-struct definition,
-    /// returning per-field types and the Go target type. `None` falls through
-    /// to regular call handling.
     fn resolve_tuple_struct_target(
         &mut self,
         function: &Expression,
@@ -730,22 +722,18 @@ impl<'a> Planner<'a> {
             return None;
         };
 
-        let Some(Definition {
-            body:
-                DefinitionBody::Struct {
-                    fields: StructFields::Tuple(fields),
-                    generics,
-                    ..
-                },
+        let definition = self.facts.definition(id.as_str())?;
+        if definition.is_newtype() {
+            return None;
+        }
+        let DefinitionBody::Struct {
+            fields: StructFields::Tuple(fields),
+            generics,
             ..
-        }) = self.facts.definition(id.as_str())
+        } = &definition.body
         else {
             return None;
         };
-
-        if fields.len() == 1 && generics.is_empty() {
-            return None;
-        }
 
         let field_tys: Vec<Type> = if generics.is_empty() {
             fields.iter().map(|f| f.ty.clone()).collect()
@@ -776,7 +764,6 @@ impl<'a> Planner<'a> {
             .callee()
             .first_type_argument()
             .clone();
-        // `any` holds a function in its direct Go form, so assert that form.
         let function_layouts = self.any_slot_function_layouts(&asserted);
         let target_ty = match &function_layouts {
             Some((stored, _)) => stored.go_type(self),
@@ -816,7 +803,6 @@ impl<'a> Planner<'a> {
         (setup, value)
     }
 
-    /// The `#[go("name")]` override of the declaration that a callee names, if any.
     pub(super) fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
         let symbol = self.facts.checked(function).callee().definition.as_ref()?;
         self.facts.definition(symbol)?.go_name()
@@ -836,6 +822,7 @@ impl<'a> Planner<'a> {
     }
 
     pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<GoType> {
+        let ty = &self.facts.peel_alias(ty);
         if !is_prelude_container_type(ty) {
             return None;
         }

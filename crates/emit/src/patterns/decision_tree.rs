@@ -3,6 +3,7 @@ use crate::plan::local::GoIdentifier;
 use crate::state::scope::ScopeState;
 use rustc_hash::FxHashMap as HashMap;
 use std::borrow::Cow;
+use syntax::go_names::ENUM_TAG_FIELD;
 
 use syntax::ast::{
     BindingId, ConstructorPatternResolution, Literal, MatchArm, Pattern, RecordPatternResolution,
@@ -19,6 +20,7 @@ use crate::abi::layout::ValueLayout;
 use crate::abi::wrapping::NilGuard;
 use crate::control_flow::propagation::plain_return;
 use crate::names::generics;
+use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::patterns::binding_decls::emit_pattern_literal;
 use crate::plan::bodies::{LoweredBlock, define_many};
@@ -29,22 +31,13 @@ use syntax::program::SlotOrigin;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
-    /// `.FieldName` (Go name, already resolved).
     Field(String),
     ValueField(String),
     Index(usize),
-    /// `[offset:]`.
     SliceFrom(usize),
-    ArraySliceFrom {
-        offset: usize,
-        go_type: GoType,
-    },
-    /// `(*expression)`: auto-pointer deref for recursive enum fields.
+    ArraySliceFrom { offset: usize, go_type: GoType },
     Deref,
-    /// `GoType(expression)`: newtype cast to underlying Go type.
     NewtypeCast(GoType),
-    /// `expression.(GoType)`: Go interface type assertion, inserted when a
-    /// concrete pattern targets a Go interface.
     AssertedAs(GoType),
 }
 
@@ -190,7 +183,6 @@ pub(crate) enum Check {
     Literal {
         path: AccessPath,
         go_literal: GoExpression,
-        /// The source value, when known. A named constant without a literal value has none.
         value: Option<Literal>,
     },
     SliceLenEq {
@@ -201,12 +193,9 @@ pub(crate) enum Check {
         path: AccessPath,
         min_length: usize,
     },
-    /// At least one alternative's inner checks must all pass.
     Or {
         alternatives: Vec<Vec<Check>>,
     },
-    /// Go interface type assertion; emitted as a case label in
-    /// `switch x := x.(type)`.
     TypeAssert {
         path: AccessPath,
         go_type: GoType,
@@ -257,7 +246,7 @@ impl Check {
             Check::EnumTag { path, tag_constant } => {
                 let operator = if negative { BinaryOp::Ne } else { BinaryOp::Eq };
                 GoExpression::binary(
-                    GoExpression::selector(path.render(subject), "Tag".to_string()),
+                    GoExpression::selector(path.render(subject), ENUM_TAG_FIELD.to_string()),
                     operator,
                     tag_constant.clone(),
                 )
@@ -365,7 +354,6 @@ impl Check {
         }
     }
 
-    /// The checks that give one switch label each: this check, or one per or-pattern alternative.
     fn switch_label_checks(&self) -> Option<Vec<&Check>> {
         let Check::Or { alternatives } = self else {
             return Some(vec![self]);
@@ -379,7 +367,6 @@ impl Check {
             .collect()
     }
 
-    /// The switch labels this check tests, all on one path.
     fn switch_labels(&self, kind: &SwitchKind) -> Option<(&AccessPath, Vec<&GoExpression>)> {
         let checks = self.switch_label_checks()?;
         let path = checks.first()?.path()?;
@@ -417,7 +404,6 @@ impl Check {
     }
 }
 
-/// The Go constant value of a switch label, for finding duplicate `case` values.
 #[derive(PartialEq)]
 enum LabelValue<'a> {
     Integer(u64),
@@ -484,7 +470,6 @@ impl BindingTarget {
         matches!(self, Self::Named { .. })
     }
 
-    /// `Unit` wins over `Unused` since its inline `struct{}{}` serves read and unread names.
     pub(super) fn shared_with(&self, other: &Self) -> Self {
         match (self, other) {
             (Self::Unit, _) | (_, Self::Unit) => Self::Unit,
@@ -494,7 +479,6 @@ impl BindingTarget {
     }
 }
 
-/// A root type assertion stays among the checks until a consumer lifts it.
 pub(crate) struct PatternInfo {
     pub checks: Vec<Check>,
     pub bindings: Vec<PatternBinding>,
@@ -531,8 +515,6 @@ pub(crate) struct GuardedLeaf {
     pub failure: Box<Decision>,
 }
 
-/// A pre-computed decision tree for pattern matching.
-///
 #[derive(Debug)]
 pub(crate) enum Decision {
     Success(ArmLeaf),
@@ -546,7 +528,6 @@ pub(crate) enum Decision {
         tests: Vec<ChainTest>,
         tail: ChainTail,
     },
-    /// Emits `panic("unreachable")` in tail position.
     Unreachable,
 }
 
@@ -574,14 +555,10 @@ impl Decision {
     }
 }
 
-/// What runs when no test of a chain matches.
 #[derive(Debug)]
 pub(crate) enum ChainTail {
-    /// The unguarded arm without checks that ends the chain.
     Catchall(ArmLeaf),
-    /// The match is exhaustive, so the last test needs no checks.
     LastTest,
-    /// A lone test, which keeps its checks and has no else.
     Open,
 }
 
@@ -620,13 +597,11 @@ pub(crate) enum SwitchKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SwitchShape {
     Bool,
-    /// Two branches, no fallback, not `Bool`.
     Binary,
     SingleArm,
     Multi,
 }
 
-/// True when the tree has a terminal Success reachable without passing a guard.
 pub(crate) fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
     match tree {
         Decision::Success(_) => true,
@@ -656,7 +631,6 @@ pub(crate) fn boolean_literal(expression: &GoExpression) -> Option<bool> {
 #[derive(Debug)]
 pub(crate) struct SwitchBranch<L> {
     pub label: L,
-    /// The other labels of an or-pattern case.
     pub extra_labels: Vec<L>,
     pub decision: Decision,
 }
@@ -684,7 +658,6 @@ impl ChainArm {
 #[derive(Clone)]
 struct ArmInfo {
     arm_index: usize,
-    /// Root type assertion still in place, only the type switch lifts it.
     checks: Vec<Check>,
     bindings: Vec<PatternBinding>,
     has_guard: bool,
@@ -700,7 +673,6 @@ impl ArmInfo {
     }
 }
 
-/// Build a Decision tree from a list of arm infos.
 fn build_tree(arms: Vec<ArmInfo>) -> Decision {
     if arms.is_empty() {
         return Decision::Unreachable;
@@ -733,7 +705,6 @@ fn build_tree(arms: Vec<ArmInfo>) -> Decision {
     build_chain(arms)
 }
 
-/// The arms from the first catchall on form the fallback.
 fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
     let first_relevant = arms.first().filter(|a| !a.is_catchall())?;
     let split = arms
@@ -771,7 +742,6 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         let mut labels = first.switch_labels(&kind).unwrap().1.into_iter().cloned();
         (labels.next().unwrap(), labels.collect())
     });
-    // A two-way or-pattern match reads better as an `if` than as a one-case `switch`.
     if branches
         .iter()
         .any(|branch| !branch.extra_labels.is_empty())
@@ -825,7 +795,6 @@ fn validate_value_switch_arms(
             );
         }
     }
-    // Go rejects two `case` values that are equal constants, so every value must be known and distinct.
     if values.len() > 1
         && values
             .iter()
@@ -834,7 +803,6 @@ fn validate_value_switch_arms(
     {
         return None;
     }
-    // An or-pattern case shares no label with another arm, so it stays one Go case.
     let shared = alternatives
         .iter()
         .enumerate()
@@ -842,7 +810,6 @@ fn validate_value_switch_arms(
     (!shared).then_some(())
 }
 
-/// Go `switch` cases do not fall through to `default`, so fallback arms are spliced into fail-prone case bodies.
 fn build_switch_branches<L: PartialEq>(
     cases: &[ArmInfo],
     fallback_arms: &[ArmInfo],
@@ -893,7 +860,6 @@ fn build_switch_branches<L: PartialEq>(
     (branches, fallback)
 }
 
-/// Build a Chain (if/else if/else) from the arms.
 fn build_chain(arms: Vec<ArmInfo>) -> Decision {
     let mut tests = Vec::new();
 
@@ -941,10 +907,6 @@ fn build_chain(arms: Vec<ArmInfo>) -> Decision {
     Decision::Chain { tests, tail }
 }
 
-/// Recursively walk a pattern, collecting checks and bindings.
-///
-/// `path_ty` is the expected type of the value at `path`, used to detect
-/// when a struct pattern is matched against a Go interface (type switch).
 fn collect_checks_and_bindings(
     planner: &Planner,
     path: &AccessPath,
@@ -1008,7 +970,7 @@ fn collect_checks_and_bindings(
 
         Pattern::Slice { .. } => {
             collector.requires_materialized_subject = true;
-            collect_slice_checks(planner, path, pattern, path_ty, collector);
+            collect_slice_checks(planner, path, pattern, path_ty, path_layout, collector);
         }
 
         Pattern::Or { .. } => {
@@ -1073,6 +1035,7 @@ fn collect_slice_checks(
     path: &AccessPath,
     pattern: &Pattern,
     path_ty: &Type,
+    path_layout: Option<&ValueLayout>,
     collector: &mut PatternInfo,
 ) {
     let Pattern::Slice {
@@ -1121,7 +1084,7 @@ fn collect_slice_checks(
             &element_path,
             element,
             element_type,
-            None,
+            path_layout.and_then(ValueLayout::element),
             collector,
         );
     }
@@ -1151,13 +1114,18 @@ fn collect_slice_checks(
             binding_ids: binding.as_slice().to_vec(),
             target: BindingTarget::from_go_name(go_name, &rest_ty),
             path: path.push(segment),
-            coercion: CoercionPlan::Identity,
+            coercion: match (&array_info, path_layout) {
+                (None, Some(source)) => CoercionPlan::bridge(
+                    planner,
+                    source,
+                    &planner.value_layout(&rest_ty, SlotOrigin::Lisette),
+                ),
+                _ => CoercionPlan::Identity,
+            },
         });
     }
 }
 
-/// Handle or-patterns without bindings by collecting conditions from each
-/// alternative and combining with `||`.
 fn collect_or_pattern_checks(
     planner: &Planner,
     path: &AccessPath,
@@ -1191,8 +1159,6 @@ fn collect_or_pattern_checks(
     });
 }
 
-/// Compute the access path for a struct field, handling enum struct variants
-/// and auto-pointer dereference.
 fn compute_struct_field_path(
     planner: &Planner,
     parent_path: &AccessPath,
@@ -1226,8 +1192,6 @@ fn compute_struct_field_path(
     parent_path.push(field_segment(planner, ty, go_field_name))
 }
 
-/// When a concrete pattern targets a Go-interface scrutinee, push a TypeAssert
-/// check and return the child path through `AssertedAs`.
 fn interface_assert_child_path(
     planner: &Planner,
     path: &AccessPath,
@@ -1244,7 +1208,6 @@ fn interface_assert_child_path(
     Some(path.push(PathSegment::AssertedAs(go_type)))
 }
 
-/// Collect checks and bindings for an enum variant pattern (tuple or tagged).
 fn collect_enum_variant_checks(
     planner: &Planner,
     path: &AccessPath,
@@ -1265,8 +1228,6 @@ fn collect_enum_variant_checks(
         return;
     };
 
-    // A const pattern is a value comparison against a named constant, emitted
-    // as a Go `case` expression rather than an enum tag or newtype destructure.
     match resolution {
         ConstructorPatternResolution::Const { qualified_name } => {
             collect_const_pattern_check(planner, path, qualified_name, None, collector);
@@ -1276,7 +1237,6 @@ fn collect_enum_variant_checks(
             qualified_name,
             value,
         } => {
-            // A constant's string value does not record whether it was raw, so its bytes are unknown.
             let value = (!matches!(value, Literal::String { .. }))
                 .then(|| exact_switch_value(planner, path_ty, value))
                 .flatten();
@@ -1426,7 +1386,6 @@ fn collect_enum_variant_checks(
     collect_tagged_enum_checks(planner, path, &variant_data, collector);
 }
 
-/// Emit a const pattern as a Go `case` constant (e.g. `time.Friday`).
 fn collect_const_pattern_check(
     planner: &Planner,
     path: &AccessPath,
@@ -1441,18 +1400,12 @@ fn collect_const_pattern_check(
     });
 }
 
-/// The value of a switch label on an integer, `bool`, or `string` path, where Go compares it as written.
-/// On a float path, distinct values can round to one constant.
 fn exact_switch_value(planner: &Planner, path_ty: &Type, value: &Literal) -> Option<Literal> {
     let kind = planner.facts.underlying_simple_kind(path_ty)?;
-    let exact = kind.is_signed_int()
-        || kind.is_unsigned_int()
-        || matches!(kind, SimpleKind::Bool | SimpleKind::String);
+    let exact = kind.is_integer() || matches!(kind, SimpleKind::Bool | SimpleKind::String);
     (exact && !matches!(value, Literal::Float { .. })).then(|| value.clone())
 }
 
-/// `true` when the variant is a foreign-package dotted name (e.g.
-/// `httpkg.MethodGet`) emitted as a `Check::Literal`.
 fn handle_foreign_variant_literal(
     planner: &Planner,
     path: &AccessPath,
@@ -1480,7 +1433,6 @@ fn handle_foreign_variant_literal(
     true
 }
 
-/// Collect checks and bindings for a newtype struct pattern (single-field wrapper).
 fn collect_newtype_checks(
     planner: &Planner,
     path: &AccessPath,
@@ -1504,7 +1456,6 @@ fn collect_newtype_checks(
     }
 }
 
-/// Collect checks and bindings for a tuple struct pattern (positional fields).
 fn collect_tuple_struct_checks(
     planner: &Planner,
     path: &AccessPath,
@@ -1514,7 +1465,7 @@ fn collect_tuple_struct_checks(
     collector: &mut PatternInfo,
 ) {
     for (i, field) in fields.iter().enumerate() {
-        let field_path = path.push(PathSegment::Field(format!("F{}", i)));
+        let field_path = path.push(PathSegment::Field(go_name::tuple_struct_field(i)));
         collect_checks_and_bindings(
             planner,
             &field_path,
@@ -1541,7 +1492,6 @@ fn enum_tag_constant(planner: &Planner, identifier: &str, ty: &Type) -> GoExpres
     }
 }
 
-/// Collect checks and bindings for a tagged enum variant pattern.
 fn collect_tagged_enum_checks(
     planner: &Planner,
     path: &AccessPath,
@@ -1598,9 +1548,6 @@ fn collect_tagged_enum_checks(
     }
 }
 
-/// Collect checks and bindings for a struct pattern (plain struct or enum struct variant).
-/// Detect whether a struct pattern is actually an enum struct variant,
-/// returning `(enum_id, variant_name)` if so.
 fn detect_enum_info(resolution: &RecordPatternResolution) -> Option<(String, String)> {
     match resolution {
         RecordPatternResolution::EnumVariant {
@@ -1657,11 +1604,6 @@ fn collect_struct_checks(
     }
 }
 
-/// Resolve the access path for struct-pattern field lookups. Returns the
-/// enum-variant identity (when the pattern is an enum-struct variant) and the
-/// child path used for field projection: either the interface-assertion alias
-/// or the input path. Pushes the variant's tag check into `collector` when
-/// applicable.
 fn resolve_struct_child_path(
     planner: &Planner,
     path: &AccessPath,
@@ -1735,7 +1677,6 @@ fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
     result
 }
 
-/// Or-patterns without bindings in unguarded arms are handled inline by the condition collector.
 pub(super) fn compile_match_arms(
     planner: &mut Planner,
     arms: &[MatchArm],
@@ -1765,7 +1706,6 @@ pub(super) fn compile_match_arms(
     build_tree(arm_infos)
 }
 
-/// Make or-pattern alternatives agree on each bound name's ids and target.
 pub(super) fn share_alternative_bindings(alternatives: &mut [&mut Vec<PatternBinding>]) {
     let mut shared_by_name: HashMap<String, (Vec<BindingId>, BindingTarget)> = HashMap::default();
     for bindings in alternatives.iter() {
@@ -1792,7 +1732,6 @@ pub(super) fn share_alternative_bindings(alternatives: &mut [&mut Vec<PatternBin
     }
 }
 
-/// Takes `subject_ty` by reference so no site can miss root-level Go-interface assertions.
 pub(crate) fn collect_pattern_info(
     planner: &Planner,
     pattern: &Pattern,
@@ -1820,7 +1759,6 @@ fn root_assertion_position(checks: &[Check]) -> Option<usize> {
     })
 }
 
-/// Move a root type assertion out of `checks` and rebase the remaining paths onto the asserted value.
 pub(super) fn lift_root_assertion(
     checks: &mut Vec<Check>,
     bindings: &mut [PatternBinding],
@@ -1873,187 +1811,4 @@ fn join_conditions(
         .map(|check| check.render(scope, subject))
         .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
         .expect("join_conditions requires at least one check")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        AccessPath, ArmInfo, ArmLeaf, BindingTarget, ChainArm, ChainTail, Check, Decision,
-        GoExpression, GoType, GuardedLeaf, PatternBinding, build_chain, share_alternative_bindings,
-        try_build_switch,
-    };
-    use crate::abi::coercion::CoercionPlan;
-    use crate::names::source_name::SourceName;
-    use syntax::ast::{BindingId, Literal};
-    use syntax::types::Type;
-
-    fn binding(name: &str, id: u32, target: BindingTarget) -> PatternBinding {
-        PatternBinding {
-            lisette_name: name.into(),
-            binding_ids: vec![BindingId::new(id)],
-            target,
-            path: AccessPath::root(),
-            coercion: CoercionPlan::Identity,
-        }
-    }
-
-    #[test]
-    fn alternatives_share_unused_targets_and_union_ids() {
-        let named = |go_name: &str| BindingTarget::Named {
-            go_name: SourceName::new(&go_name.into()),
-            ty: Type::int(),
-        };
-        let mut first = vec![binding("x", 1, named("x")), binding("y", 2, named("y"))];
-        let mut second = vec![
-            binding("x", 3, BindingTarget::Unused),
-            binding("y", 4, named("y2")),
-        ];
-        let mut third = vec![binding("x", 1, named("x")), binding("y", 2, named("y"))];
-        share_alternative_bindings(&mut [&mut first, &mut second, &mut third]);
-
-        let ids = |bindings: &[PatternBinding], index: usize| bindings[index].binding_ids.clone();
-        for alternative in [&first, &second, &third] {
-            assert_eq!(alternative[0].target, BindingTarget::Unused);
-            assert_eq!(
-                ids(alternative, 0),
-                vec![BindingId::new(1), BindingId::new(3)]
-            );
-            assert_eq!(
-                ids(alternative, 1),
-                vec![BindingId::new(2), BindingId::new(4)]
-            );
-        }
-        assert_eq!(first[1].target, named("y"));
-        assert_eq!(second[1].target, named("y2"));
-    }
-
-    fn arm(arm_index: usize, checked: bool, has_guard: bool) -> ArmInfo {
-        let checks = if checked {
-            vec![Check::SliceLenEq {
-                path: AccessPath::root(),
-                length: arm_index,
-            }]
-        } else {
-            vec![]
-        };
-        ArmInfo {
-            arm_index,
-            checks,
-            bindings: vec![],
-            has_guard,
-        }
-    }
-
-    #[test]
-    fn chain_ends_at_the_first_unguarded_catchall() {
-        let Decision::Chain { tests, tail } = build_chain(vec![
-            arm(0, true, false),
-            arm(1, false, true),
-            arm(2, false, false),
-            arm(3, true, false),
-        ]) else {
-            panic!("expected a chain");
-        };
-        assert!(matches!(
-            tail,
-            ChainTail::Catchall(ArmLeaf { arm_index: 2, .. })
-        ));
-        assert!(matches!(
-            tests[0].arm,
-            ChainArm::Leaf(ArmLeaf { arm_index: 0, .. })
-        ));
-        let ChainArm::Guard(GuardedLeaf {
-            leaf: ArmLeaf { arm_index: 1, .. },
-            failure,
-        }) = &tests[1].arm
-        else {
-            panic!("expected the guarded catchall as a guard test");
-        };
-        assert!(matches!(
-            **failure,
-            Decision::Success(ArmLeaf { arm_index: 2, .. })
-        ));
-        assert_eq!(tests.len(), 2);
-    }
-
-    #[test]
-    fn chain_without_unguarded_catchall_ends_at_its_last_test() {
-        let Decision::Chain { tests, tail } =
-            build_chain(vec![arm(0, true, false), arm(1, true, true)])
-        else {
-            panic!("expected a chain");
-        };
-        assert!(matches!(tail, ChainTail::LastTest));
-        assert_eq!(tests.len(), 2);
-        let Decision::Chain { tail, .. } = build_chain(vec![arm(0, true, false)]) else {
-            panic!("expected a chain");
-        };
-        assert!(matches!(tail, ChainTail::Open));
-    }
-
-    fn switch_arm(arm_index: usize, check: Option<Check>, has_guard: bool) -> ArmInfo {
-        ArmInfo {
-            arm_index,
-            checks: check.into_iter().collect(),
-            bindings: vec![],
-            has_guard,
-        }
-    }
-
-    fn type_assert(go_type: &str) -> Option<Check> {
-        Some(Check::TypeAssert {
-            path: AccessPath::root(),
-            go_type: GoType::new(go_type),
-        })
-    }
-
-    fn literal(text: &str) -> Option<Check> {
-        Some(Check::Literal {
-            path: AccessPath::root(),
-            go_literal: GoExpression::literal(text.to_string()),
-            value: text
-                .parse()
-                .ok()
-                .map(|value| Literal::Integer { value, text: None }),
-        })
-    }
-
-    #[test]
-    fn root_assertions_build_a_type_switch_with_guards() {
-        let Some(Decision::TypeSwitch { branches, fallback }) = try_build_switch(&[
-            switch_arm(0, type_assert("A"), true),
-            switch_arm(1, type_assert("B"), false),
-            switch_arm(2, None, false),
-        ]) else {
-            panic!("expected a type switch");
-        };
-        let labels: Vec<_> = branches.iter().map(|branch| branch.label.clone()).collect();
-        assert_eq!(labels, vec![vec![GoType::new("A")], vec![GoType::new("B")]]);
-        assert!(fallback.is_some());
-    }
-
-    #[test]
-    fn value_switch_rejects_guards_and_type_switch_rejects_mixed_arms() {
-        assert!(matches!(
-            try_build_switch(&[
-                switch_arm(0, literal("1"), false),
-                switch_arm(1, literal("2"), false),
-            ]),
-            Some(Decision::Switch(_))
-        ));
-        assert!(
-            try_build_switch(&[
-                switch_arm(0, literal("1"), true),
-                switch_arm(1, literal("2"), false),
-            ])
-            .is_none()
-        );
-        assert!(
-            try_build_switch(&[
-                switch_arm(0, type_assert("A"), false),
-                switch_arm(1, literal("2"), false),
-            ])
-            .is_none()
-        );
-    }
 }

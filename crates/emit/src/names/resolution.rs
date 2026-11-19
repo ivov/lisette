@@ -12,7 +12,6 @@ use crate::state::bindings::BindingValue;
 use syntax::program::{self, Definition};
 
 impl Planner<'_> {
-    /// A name the checker did not resolve to a definition.
     pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
         go_name::resolve(name).into_expression()
     }
@@ -38,7 +37,6 @@ impl Planner<'_> {
             }
             return expression;
         }
-        // Prelude functions re-expose the Go builtins under the same name.
         if package == go_name::PRELUDE_PACKAGE {
             return GoExpression::external_name(name.to_string());
         }
@@ -56,17 +54,22 @@ impl Planner<'_> {
             };
             return GoExpression::external_name(go_name);
         }
-        let member = if go_name::is_go_import(package) {
-            name.to_string()
-        } else if is_const {
-            go_name::screaming_snake_to_camel(name)
-        } else {
-            go_name::snake_to_camel(name)
-        };
-        GoExpression::qualified(self.package_use_for_package(package), member)
+        GoExpression::qualified(
+            self.package_use_for_package(package),
+            self.package_member_go_name(package, name),
+        )
     }
 
-    /// The Go local an identifier reads, keeping a source binding's `LocalId`.
+    pub(crate) fn package_member_go_name(&self, package: &str, member: &str) -> String {
+        if go_name::is_go_import(package) {
+            member.to_string()
+        } else if self.facts.is_const(&format!("{package}.{member}")) {
+            go_name::screaming_snake_to_camel(member)
+        } else {
+            go_name::snake_to_camel(member)
+        }
+    }
+
     pub(crate) fn reference_go_identifier(
         &self,
         lisette_name: &str,
@@ -97,7 +100,6 @@ impl Planner<'_> {
             .to_string()
     }
 
-    /// The qualifier is the one the import renders: sanitized default names, aliases as written.
     pub(crate) fn package_use_for_package(&self, package: &str) -> PackageUse {
         if package == go_name::TEST_PRELUDE_PACKAGE {
             return PackageUse::generated(go_name::GeneratedPackage::TestKit);
@@ -160,14 +162,14 @@ impl Planner<'_> {
     pub(crate) fn resolve_variant(&self, identifier: &str, enum_id: &str) -> GoExpression {
         let enum_name = unqualified_name(enum_id);
         let variant_name = unqualified_name(identifier);
-        if enum_id.starts_with(go_name::PRELUDE_PREFIX) {
-            return ResolvedName::stdlib(format!("{enum_name}{variant_name}")).into_expression();
+        let tag_constant = go_name::enum_tag_constant(enum_name, variant_name);
+        if go_name::is_prelude_id(enum_id) {
+            return ResolvedName::stdlib(tag_constant).into_expression();
         }
         let enum_package = self
             .facts
             .package_for_qualified_name(enum_id)
             .unwrap_or(enum_id);
-        let tag_constant = go_name::enum_tag_constant(enum_name, variant_name);
         let resolved = if self.facts.is_current_package(enum_package) {
             ResolvedName::local(tag_constant)
         } else {

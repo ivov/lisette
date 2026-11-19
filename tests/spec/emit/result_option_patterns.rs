@@ -5829,3 +5829,32 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn propagate_lisette_ref_result_has_no_nil_check() {
+    let input = r#"
+struct Point { x: int }
+
+fn f() -> Result<Ref<Point>, error> {
+  Ok(&Point { x: 1 })
+}
+
+fn g() -> Result<int, error> {
+  let p = f()?
+  Ok(p.x)
+}
+
+fn h() -> int {
+  match f() {
+    Ok(p) => p.x,
+    Err(_) => 0,
+  }
+}
+
+fn main() {
+  let _ = g()
+  let _ = h()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

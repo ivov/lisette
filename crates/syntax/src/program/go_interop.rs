@@ -66,6 +66,7 @@ pub fn go_return_contract<'a>(
     hints: &[GoHint],
     lookup: impl Fn(&str) -> Option<&'a Definition>,
 ) -> GoReturnContract {
+    let ty = &types::peel_alias(ty, &lookup);
     if ty.is_partial() {
         return GoReturnContract::Partial;
     }

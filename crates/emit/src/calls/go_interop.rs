@@ -6,7 +6,6 @@ use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::ValueLayout;
-use crate::abi::tuple_element_types;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
@@ -87,9 +86,11 @@ impl Planner<'_> {
             LoweredReturnAbi::BareError
             | LoweredReturnAbi::Result { .. }
             | LoweredReturnAbi::Partial { .. }
-            | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                self.payload_result_bridge(abi, result_ty)
-            }
+            | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => self
+                .payload_result_bridge(
+                    &abi.return_layout,
+                    &self.value_layout(result_ty, SlotOrigin::Lisette),
+                ),
         }
     }
 
@@ -238,7 +239,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let temps = self.create_temp_vars("ret", arity);
         statements.push(define_many(temps.clone(), call));
-        let slot_tys = tuple_element_types(result_ty);
+        let slot_tys = self.facts.tuple_element_types(result_ty);
         let values: Vec<GoExpression> = temps
             .into_iter()
             .enumerate()
@@ -291,19 +292,15 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn payload_result_bridge(&self, abi: &CallableAbi, result_ty: &Type) -> Option<GoResultBridge> {
-        let source = abi.return_layout.payload()?;
-        let target = self.value_layout(result_ty, SlotOrigin::Lisette);
-        let value = resolve_layout_bridge(self, source, target.payload()?);
-        let error = match (abi.return_layout.underlying(), target.underlying()) {
-            (
-                ValueLayout::Fallible { error: source, .. },
-                ValueLayout::Fallible { error: target, .. },
-            ) => resolve_layout_bridge(self, source, target),
-            _ => LayoutBridge::Identity,
+    pub(crate) fn unbridged_tuple_arity(&self, plan: &CallPlan<'_>, ty: &Type) -> Option<usize> {
+        let CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }) =
+            plan.resolved.abi.result
+        else {
+            return None;
         };
-        let bridge = GoResultBridge::Payload { value, error };
-        (!bridge.is_identity()).then_some(bridge)
+        self.go_result_bridge(&plan.resolved.abi, ty)
+            .is_none_or(|bridge| bridge.is_identity())
+            .then_some(arity)
     }
 
     pub(crate) fn emit_go_call_discarded(
@@ -385,7 +382,7 @@ impl LoweredCall<'_> {
     }
 
     pub(crate) fn has_tuple_payload(&self, planner: &Planner<'_>) -> bool {
-        matches!(planner.facts.peel_alias(&self.ok_ty), Type::Tuple(_))
+        planner.facts.has_tuple_payload(&self.call.get_type())
     }
 }
 
@@ -414,7 +411,12 @@ impl Planner<'_> {
         let ty = call.get_type();
         let ok_ty = self.facts.peel_alias(&ty).ok_type();
         let nil_guard = match &shape {
-            LoweredReturnAbi::Result { .. } => self.result_nil_guard(&ok_ty),
+            LoweredReturnAbi::Result { .. }
+                if matches!(plan.resolved.origin, CallableOrigin::GoInterop) =>
+            {
+                self.result_nil_guard(&ok_ty)
+            }
+            LoweredReturnAbi::Result { .. } => None,
             LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
                 Some(NilGuard::Sentinel(*value))
             }

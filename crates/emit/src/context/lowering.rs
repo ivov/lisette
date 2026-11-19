@@ -38,7 +38,6 @@ impl LineIndex {
     }
 }
 
-/// Shape of the enclosing function body's return values.
 #[derive(Clone, Debug, Default)]
 pub(crate) enum ReturnContext {
     #[default]

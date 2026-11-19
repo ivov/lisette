@@ -1,5 +1,3 @@
-//! Let a copy `y := x` write to `x` itself when nothing reads `x` afterwards.
-
 use std::mem;
 
 use crate::plan::bodies::{
@@ -44,7 +42,6 @@ fn reuse_in_statement(statement: &mut LoweredStatement, scope: &ScopeState) {
     match statement {
         LoweredStatement::If(plan) => reuse_in_if(plan, &[], scope),
         LoweredStatement::Loop(plan) => {
-            // Range variables are fresh in each iteration, counted variables are not.
             let mut per_iteration: Vec<GoIdentifier> = Vec::new();
             match &mut plan.header {
                 LoopHeader::Infinite => {}
@@ -164,7 +161,6 @@ fn reuse_in_if(plan: &mut IfPlan, declared: &[GoIdentifier], scope: &ScopeState)
             body,
             inline: false,
         } => reuse_in_list(&mut body.statements, &declared, scope),
-        // An inline else shares the enclosing list's scope.
         ElseArm::Else { body, inline: true } => {
             for statement in &mut body.statements {
                 reuse_in_statement(&mut statement.kind, scope);
@@ -322,7 +318,6 @@ fn reuse_copy_source(
     if !copy_keeps_no_name_of_its_own(&copy, &source, scope) {
         return false;
     }
-    // A loop can run this list again and read `source` once more.
     let declared_here = parameters.iter().any(|name| name.refers_to_same(&source))
         || flat[..index]
             .iter()

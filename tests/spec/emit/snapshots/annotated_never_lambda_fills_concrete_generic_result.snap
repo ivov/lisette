@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn take(o: Option<string>) -> string { o.unwrap_or("none") }
+  
+  fn test() -> string {
+    let b: Option<string> = None.map(|_x: int| -> Never { panic("no") })
+    take(b)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func take(o lisette.Option[string]) string {
+	return o.UnwrapOr("none")
+}
+
+func test() string {
+	cb := func(_ int) struct{} {
+		panic("no")
+	}
+	b := lisette.OptionMap(lisette.MakeOptionNone[int](), func(arg0 int) string {
+		cb(arg0)
+		panic("unreachable")
+	})
+	return take(b)
+}

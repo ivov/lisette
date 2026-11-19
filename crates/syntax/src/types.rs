@@ -1008,6 +1008,45 @@ impl Type {
     pub fn unit() -> Type {
         Self::simple(SimpleKind::Unit)
     }
+
+    pub fn test_context() -> Type {
+        Type::Nominal {
+            id: Symbol::from_raw(TEST_CONTEXT_ID),
+            params: vec![],
+            writable: false,
+        }
+    }
+
+    pub fn is_test_context(&self) -> bool {
+        self.strip_refs().get_qualified_id() == Some(TEST_CONTEXT_ID)
+    }
+}
+
+pub const TEST_CONTEXT_ID: &str = "**test_prelude.TestContext";
+
+#[derive(Clone, Copy)]
+pub enum ScaledImaginary {
+    FloatLeft(f64),
+    FloatRight(f64),
+}
+
+pub fn scaled_imaginary(
+    left_coefficient: Option<f64>,
+    left_ty: &Type,
+    right_coefficient: Option<f64>,
+    right_ty: &Type,
+) -> Option<ScaledImaginary> {
+    if let Some(coefficient) = right_coefficient
+        && left_ty.is_float()
+    {
+        Some(ScaledImaginary::FloatLeft(coefficient))
+    } else if let Some(coefficient) = left_coefficient
+        && right_ty.is_float()
+    {
+        Some(ScaledImaginary::FloatRight(coefficient))
+    } else {
+        None
+    }
 }
 
 impl Type {
@@ -1298,6 +1337,10 @@ impl SimpleKind {
             Complex128 => 128,
             Bool | String | Unit => return None,
         })
+    }
+
+    pub fn is_integer(self) -> bool {
+        self.is_signed_int() || self.is_unsigned_int()
     }
 
     pub fn is_unsigned_int(self) -> bool {
@@ -1837,6 +1880,41 @@ impl Type {
 
 /// Resolve transparent aliases from their canonical definition targets. The
 /// cycle guard defends against invalid external definitions and recovery types.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum IterSeqKind {
+    Seq,
+    Seq2,
+}
+
+pub fn peel_to_iter_seq<'d, F>(ty: &Type, lookup: F) -> Option<(IterSeqKind, Type)>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let mut current = ty.clone();
+    let mut seen: Vec<Symbol> = Vec::new();
+    loop {
+        let Type::Nominal {
+            id,
+            params,
+            writable,
+        } = &current
+        else {
+            return None;
+        };
+        match id.as_str() {
+            "go:iter.Seq" => return Some((IterSeqKind::Seq, current)),
+            "go:iter.Seq2" => return Some((IterSeqKind::Seq2, current)),
+            _ => {}
+        }
+        if seen.contains(id) {
+            return None;
+        }
+        seen.push(id.clone());
+        let next = lookup(id.as_str())?.instantiate_alias_target(params, *writable)?;
+        current = next.unwrap_forall().clone();
+    }
+}
+
 pub fn peel_alias<'d, F>(ty: &Type, lookup: F) -> Type
 where
     F: Fn(&str) -> Option<&'d Definition>,
@@ -2208,17 +2286,38 @@ where
 
 /// True when the Go representation carries `nil`, so an `Option` over it
 /// encodes `None` as `nil` instead of a tag.
-pub fn is_nilable_go_type<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Definition>) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GoNilForm {
+    Never,
+    Pointer,
+    Interface,
+}
+
+pub fn go_nil_form<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Definition>) -> GoNilForm {
     let core = peel_underlying(ty, &lookup);
     if let Type::Nominal { id, .. } = &core {
-        return matches!(lookup(id.as_str()), Some(d) if matches!(d.body, DefinitionBody::Interface { .. }));
+        return if matches!(lookup(id.as_str()), Some(d) if matches!(d.body, DefinitionBody::Interface { .. }))
+        {
+            GoNilForm::Interface
+        } else {
+            GoNilForm::Never
+        };
     }
-    core.is_ref()
+    let pointer = core.is_ref()
         || matches!(core, Type::Function(_))
         || core.is_map()
         || core.is_channel()
         || core.is_native(CompoundKind::Sender)
-        || core.is_receiver()
+        || core.is_receiver();
+    if pointer {
+        GoNilForm::Pointer
+    } else {
+        GoNilForm::Never
+    }
+}
+
+pub fn is_nilable_go_type<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Definition>) -> bool {
+    go_nil_form(ty, lookup) != GoNilForm::Never
 }
 
 /// Whether a Go `Partial` value can be nil, which makes the bare `Err` reachable.

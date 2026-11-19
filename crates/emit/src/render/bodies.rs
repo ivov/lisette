@@ -42,8 +42,6 @@ impl Renderer {
         output.push_str("}\n");
     }
 
-    /// Render a `switch` statement: the value/type-switch header, each
-    /// `case`/`default:` plus body, and the closing brace.
     fn render_switch(&self, output: &mut GoWriter, plan: &SwitchStatementPlan) {
         match &plan.kind {
             SwitchKind::Conditional => output.push_str("switch {\n"),

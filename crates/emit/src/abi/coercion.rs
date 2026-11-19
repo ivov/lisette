@@ -22,7 +22,6 @@ pub(crate) enum CoercionPlan {
     WrapNewtype {
         ty: Type,
     },
-    /// A Go interface value put into a Lisette `Option` as its `Some`.
     WrapSome {
         payload_type: Type,
         payload: Box<CoercionPlan>,
@@ -116,7 +115,6 @@ impl LayoutBridge {
 }
 
 impl CoercionPlan {
-    /// The conversion that the checker recorded for `value` into its slot, which Go lays out as `layout` when Go declares it.
     pub(crate) fn checked(
         planner: &Planner<'_>,
         value: &Expression,
@@ -130,7 +128,6 @@ impl CoercionPlan {
             &value_use.slot,
             layout,
         );
-        // A Lisette function in a slot that Go lays out as an interface takes the Go layout of its signature.
         if plan.is_identity()
             && let Some(layout) = layout
             && planner.facts.is_interface_or_unknown(layout.logical_type())
@@ -401,8 +398,6 @@ pub(crate) fn resolve_layout_bridge(
     ) = (source.underlying(), target.underlying())
         && source_layout.same_representation(target_layout)
     {
-        // Go assigns an unnamed function to the same underlying signature.
-        // Two defined function types require an explicit conversion.
         if source.function_name().is_none() || target.function_name().is_none() {
             return LayoutBridge::Identity;
         }
@@ -591,8 +586,6 @@ pub(crate) fn resolve_layout_bridge(
             ) = (source_pointee.underlying(), target_pointee.underlying())
                 && source.same_representation(target_layout)
             {
-                // A pointer conversion changes only the named function type,
-                // keeping both references attached to the same mutable slot.
                 return LayoutBridge::Conversion {
                     target: Box::new(target.clone()),
                 };

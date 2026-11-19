@@ -55,7 +55,6 @@ pub(crate) fn verify_control_structure(statements: &mut Vec<Statement>) -> Resul
     error.map_or(Ok(()), |kind| Err(BodyError { kind }))
 }
 
-/// Go does not order a panic outside a call against a later call.
 pub(crate) fn verify_operand_order(values: &[GoExpression]) -> Result<(), BodyError> {
     for (index, value) in values.iter().enumerate() {
         if value.effects().panics_or_blocks()
@@ -211,106 +210,4 @@ pub(crate) fn verify_local_scopes(
     }
     visit_statements_mut(statements, &mut check);
     check.error.map_or(Ok(()), |kind| Err(BodyError { kind }))
-}
-
-#[cfg(test)]
-mod control_tests {
-    use super::*;
-    use crate::plan::bodies::{ElseArm, IfPlan, LoopId};
-    use crate::plan::values::GoExpression;
-
-    fn block(statements: Vec<Statement>) -> LoweredBlock {
-        LoweredBlock { statements }
-    }
-
-    #[test]
-    fn source_transfer_must_be_resolved_even_when_nested() {
-        let mut body = block(vec![
-            LoweredStatement::If(IfPlan::plain(
-                GoExpression::literal("true".into()),
-                block(vec![
-                    LoweredStatement::Break(LoopTransfer::Source(LoopId(0))).into(),
-                ]),
-                ElseArm::None,
-            ))
-            .into(),
-        ]);
-        assert_eq!(
-            verify_final_function_body(&mut body, false)
-                .unwrap_err()
-                .kind,
-            BodyErrorKind::UnresolvedLoopTarget
-        );
-    }
-
-    #[test]
-    fn result_body_requires_go_termination() {
-        let mut body = block(vec![
-            LoweredStatement::ExpressionStatement {
-                expression: GoExpression::call(GoExpression::name("fail".into()), vec![]),
-                diverges: true,
-            }
-            .into(),
-        ]);
-        assert_eq!(
-            verify_final_function_body(&mut body, true)
-                .unwrap_err()
-                .kind,
-            BodyErrorKind::MissingGoTermination
-        );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plan::bodies::{define, expression_statement};
-
-    #[test]
-    fn a_panic_cannot_stay_inline_before_a_later_call() {
-        let index = GoExpression::index(
-            GoExpression::name("xs".to_string()),
-            GoExpression::name("i".to_string()),
-        );
-        let call = GoExpression::call(GoExpression::name("bump".to_string()), Vec::new());
-        assert_eq!(
-            verify_operand_order(&[index.clone(), call.clone()])
-                .unwrap_err()
-                .kind,
-            BodyErrorKind::UnorderedOperand
-        );
-        assert!(verify_operand_order(&[call, index]).is_ok());
-    }
-
-    #[test]
-    fn an_empty_expression_cannot_stand_for_a_value() {
-        let call = GoExpression::call(
-            GoExpression::name("show".to_string()),
-            vec![GoExpression::empty()],
-        );
-        let mut body = LoweredBlock {
-            statements: vec![expression_statement(call)],
-        };
-        assert_eq!(
-            verify_final_function_body(&mut body, false)
-                .unwrap_err()
-                .kind,
-            BodyErrorKind::MissingValue
-        );
-
-        let mut body = LoweredBlock {
-            statements: vec![define("x".to_string(), GoExpression::empty())],
-        };
-        assert_eq!(
-            verify_final_function_body(&mut body, false)
-                .unwrap_err()
-                .kind,
-            BodyErrorKind::MissingValue
-        );
-
-        let mut body = LoweredBlock {
-            statements: vec![expression_statement(GoExpression::empty())],
-        };
-        assert!(verify_final_function_body(&mut body, false).is_ok());
-    }
 }

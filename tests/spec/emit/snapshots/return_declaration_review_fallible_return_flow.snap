@@ -106,41 +106,37 @@ func main() {
 		panic("missing result")
 	}
 	check(r(2).UnwrapOr(0) == 2)
-	raw := makeO(1)
-	option := lisette.OptionFromNilable[F[lisette.Option[int]]](raw, raw == nil)
-	if option.Tag != lisette.OptionSome {
+	o := makeO(1)
+	if o == nil {
 		panic("missing option")
 	}
-	o := option.SomeVal
 	check(o(3).UnwrapOr(0) == 3)
 	tr, err2 := tryR(1)
 	if err2 != nil {
 		panic("missing try result")
 	}
 	check(tr(4).UnwrapOr(0) == 4)
-	raw2 := tryO(1)
-	option2 := lisette.OptionFromNilable[F[lisette.Option[int]]](raw2, raw2 == nil)
-	if option2.Tag != lisette.OptionSome {
+	to := tryO(1)
+	if to == nil {
 		panic("missing try option")
 	}
-	to := option2.SomeVal
 	check(to(5).UnwrapOr(0) == 5)
 	subject := lisette.ResultFromPair[F[lisette.Option[int]]](makeR(0))
 	if subject.Tag != lisette.ResultErr {
 		panic("expected result failure")
 	}
-	raw3 := makeO(0)
-	option3 := lisette.OptionFromNilable[F[lisette.Option[int]]](raw3, raw3 == nil)
-	if option3.Tag != lisette.OptionNone {
+	raw := makeO(0)
+	option := lisette.OptionFromNilable[F[lisette.Option[int]]](raw, raw == nil)
+	if option.Tag != lisette.OptionNone {
 		panic("expected option failure")
 	}
 	subject2 := lisette.ResultFromPair[F[lisette.Option[int]]](tryR(0))
 	if subject2.Tag != lisette.ResultErr {
 		panic("expected try result failure")
 	}
-	raw4 := tryO(0)
-	option4 := lisette.OptionFromNilable[F[lisette.Option[int]]](raw4, raw4 == nil)
-	if option4.Tag != lisette.OptionNone {
+	raw2 := tryO(0)
+	option2 := lisette.OptionFromNilable[F[lisette.Option[int]]](raw2, raw2 == nil)
+	if option2.Tag != lisette.OptionNone {
 		panic("expected try option failure")
 	}
 }

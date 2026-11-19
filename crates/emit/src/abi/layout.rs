@@ -4,8 +4,9 @@ use syntax::program::{GoOptionRepresentation, go_option_representation};
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
+use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use crate::abi::{is_prelude_container_type, tuple_element_types};
+use crate::abi::is_prelude_container_type;
 use crate::types::go_type::GoType;
 
 use syntax::program::SlotOrigin;
@@ -14,7 +15,6 @@ use syntax::program::SlotOrigin;
 pub(crate) struct FunctionLayout {
     pub(crate) parameters: Vec<ValueLayout>,
     pub(crate) result_layout: Box<ValueLayout>,
-    /// One layout per Go result ahead of the status slot.
     pub(crate) results: Vec<ValueLayout>,
     pub(crate) return_abi: CallableReturnAbi,
 }
@@ -157,6 +157,13 @@ impl ValueLayout {
             | Self::TaggedOption { payload, .. }
             | Self::NullableOption { payload, .. }
             | Self::PointerOption { payload, .. } => Some(payload),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn element(&self) -> Option<&Self> {
+        match self.underlying() {
+            Self::Slice { element, .. } | Self::Array { element, .. } => Some(element),
             _ => None,
         }
     }
@@ -341,8 +348,6 @@ impl ValueLayout {
 }
 
 impl Planner<'_> {
-    /// A prelude method uses the type arguments of its receiver's stored Go
-    /// representation. Adapting the receiver itself would copy mutable storage.
     pub(crate) fn prelude_receiver_method_layouts(
         &self,
         expression: &Expression,
@@ -568,8 +573,6 @@ impl Planner<'_> {
         declaration: Option<&Type>,
         abi: &CallableReturnAbi,
     ) -> ValueLayout {
-        // Lowered signatures render the alias's expanded result slots. Stored
-        // aliases still use the physical slots of their own declaration.
         let resolved = abi.lowered().map(|_| self.facts.peel_alias(ty));
         let declared = abi
             .lowered()
@@ -612,8 +615,6 @@ impl Planner<'_> {
         }
         let mut layout = self.value_layout_with_hint(ty, origin, Some(declaration));
         let declaration = self.facts.peel_alias(declaration);
-        // Immutable containers preserve each declared function slot. Reference and
-        // collection storage requires a shared representation, not a copied bridge.
         match &mut layout {
             ValueLayout::TaggedOption {
                 option_type: ty,
@@ -711,7 +712,7 @@ impl Planner<'_> {
         declaration: Option<&Type>,
     ) -> Vec<ValueLayout> {
         let declared = declaration
-            .map(|ty| tuple_element_types(&self.facts.peel_alias(ty)))
+            .map(|ty| self.facts.tuple_element_types(ty))
             .unwrap_or_default();
         tuple
             .tuple_elements()
@@ -958,8 +959,10 @@ impl Planner<'_> {
                         .unwrap_or(Type::Never);
                     let declared_result =
                         declared_function.as_ref().and_then(Type::get_function_ret);
-                    let return_abi =
-                        self.slot_return_abi(physical_return.unwrap_or(&result_type), origin);
+                    let return_abi = self.return_abi(
+                        physical_return.unwrap_or(&result_type),
+                        ReturnSlot::FunctionValue(origin),
+                    );
                     let result = self.callable_result_layout(
                         &result_type,
                         origin.nested(),

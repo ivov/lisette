@@ -29,7 +29,6 @@ pub(crate) fn strip_negations(expression: &Expression) -> (&Expression, bool) {
 }
 
 impl<'p> Planner<'p> {
-    /// `call().is_ok()` and its siblings on a call whose Go result can be tested directly.
     fn fused_predicate<'a>(&self, expression: &'a Expression) -> Option<FusedPredicate<'a>>
     where
         'p: 'a,

@@ -188,7 +188,7 @@ impl Planner<'_> {
                     let plan = if let Some(operation) = &operation {
                         let channel = operation.channel();
                         let plan = self.lower_value(channel, ExpressionContext::value());
-                        if channel.get_type().is_ref() {
+                        if self.facts.is_reference(&channel.get_type()) {
                             plan.map_expression(|_, value| cancel_deref_of_address(value))
                         } else { plan }
                     } else { self.lower_channel_operand(send_expression) };
@@ -278,7 +278,7 @@ impl Planner<'_> {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some(ChannelOperation::Receive { channel }) = channel_operation(unwrapped) {
             let plan = self.lower_value(channel, ExpressionContext::value());
-            if channel.get_type().is_ref() {
+            if self.facts.is_reference(&channel.get_type()) {
                 return plan.map_expression(|_, value| cancel_deref_of_address(value));
             }
             return plan;
@@ -299,9 +299,6 @@ impl Planner<'_> {
         ok_var: &GoIdentifier,
         ctx: &SelectReceiveContext,
     ) -> Vec<Statement> {
-        // Decide scaffolding on rendered emptiness, not `is_empty`: some lowered
-        // statements (e.g. a discard `let _`) render to empty text even when the
-        // IR is structurally non-empty.
         let body_block = self.lower_block_to_place(ctx.body, ctx.place);
         let body_empty = body_block.renders_empty();
         let else_block = retry_closed_channel(ctx.channel);
@@ -320,7 +317,6 @@ impl Planner<'_> {
         vec![LoweredStatement::If(plan).into()]
     }
 
-    /// `case v, ok := <-ch:` plus an `if ok { ... } else { ... }` body.
     fn lower_ok_guard<F>(
         &mut self,
         prepare_receiver: F,
@@ -388,7 +384,6 @@ impl Planner<'_> {
         }
     }
 
-    /// `case x, ok := <-ch:` with an `if ok` guard or `if !ok { break }`.
     fn lower_receive_arm_with_ok_check(
         &mut self,
         effective_pattern: &Pattern,
@@ -433,7 +428,6 @@ impl Planner<'_> {
         self.lower_ok_guard(|_| receiver_var, Some(effective_pattern), ctx)
     }
 
-    /// Plain receive: `case v := <-ch:` then the arm body.
     fn lower_receive_arm_simple(
         &mut self,
         effective_pattern: &Pattern,
@@ -480,7 +474,6 @@ impl Planner<'_> {
         })
     }
 
-    /// `case ch <- v:` or a bare `case <-ch:` plus the arm body.
     fn lower_send_arm(
         &mut self,
         operation: &PreparedChannelOperation,
@@ -559,8 +552,6 @@ impl Planner<'_> {
         })
     }
 
-    /// Lower the Some arm body (with payload destructure) so the caller can
-    /// wrap it in `if ok` alongside the None arm. `None` if it renders empty.
     fn lower_receive_some_arm(
         &mut self,
         some_arm: &MatchArm,
@@ -589,7 +580,6 @@ impl Planner<'_> {
     }
 }
 
-/// Disable a closed channel before retrying the remaining select arms.
 fn retry_closed_channel(channel: &GoExpression) -> LoweredBlock {
     LoweredBlock {
         statements: vec![
@@ -599,7 +589,6 @@ fn retry_closed_channel(channel: &GoExpression) -> LoweredBlock {
     }
 }
 
-/// `*&x` is `x`. Any other pointer gets dereferenced.
 fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
     match channel.node() {
         GoExpressionNode::AddressOf(inner) => channel.peeled(inner),
@@ -607,8 +596,6 @@ fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
     }
 }
 
-/// `if ok { Some } else { None }`, collapsing to `if ok`/`if !ok`/`None`
-/// when one or both arms are empty.
 fn build_receive_arms_plan(
     ok_var: &GoIdentifier,
     some: Option<LoweredBlock>,

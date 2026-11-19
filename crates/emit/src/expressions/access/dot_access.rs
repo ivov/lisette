@@ -1,5 +1,5 @@
 use crate::state::bindings::BindingValue;
-use syntax::ast::{Expression, StructFieldDefinition};
+use syntax::ast::Expression;
 use syntax::parse;
 use syntax::program::GoHint;
 use syntax::program::{
@@ -38,7 +38,6 @@ impl Planner<'_> {
         self.plan_dot_access_with(dot_access, ctx, true)
     }
 
-    /// Read a nullable Go field as its raw Go value, without the `Option` wrap.
     pub(crate) fn plan_raw_nullable_field(&mut self, dot_access: &Expression) -> ValuePlan {
         self.plan_dot_access_with(
             dot_access.unwrap_parens(),
@@ -116,7 +115,7 @@ impl Planner<'_> {
             && self.package_member_is_fixed(package, member)
         {
             Stability::Fixed
-        } else if reads_value_member(resolution, expression, &expression_ty) {
+        } else if reads_value_member(&self.facts, resolution, expression, &expression_ty) {
             base_plan.stability()
         } else {
             Stability::Observable
@@ -157,11 +156,9 @@ impl Planner<'_> {
             field = go_name::tagged_twin(&field);
         }
 
-        let value_field =
-            resolution.is_field_read() && self.field_read_cannot_panic(&expression_ty);
         let selector = match package {
             Some(package) => GoExpression::qualified(package, field),
-            None if value_field => GoExpression::value_field(base, field),
+            None if resolution.is_field_read() => self.field_access(base, &expression_ty, field),
             None => GoExpression::selector(base, field),
         };
         if wrap_nullable
@@ -219,17 +216,9 @@ impl Planner<'_> {
             DotAccessResolution::StaticMethod { definition, .. } => {
                 Some(self.emit_static_method_dot(dot_access, definition, ctx))
             }
-            DotAccessResolution::InstanceMethodValue {
-                is_exported,
-                is_pointer_receiver,
-                ..
-            } => self.emit_instance_method_value_dot(
-                member,
-                result_ty,
-                *is_exported,
-                *is_pointer_receiver,
-                tagged_twin,
-            ),
+            DotAccessResolution::InstanceMethodValue { is_exported, .. } => {
+                self.emit_instance_method_value_dot(member, result_ty, *is_exported, tagged_twin)
+            }
             _ => None,
         }
     }
@@ -251,10 +240,6 @@ impl Planner<'_> {
         tuple.names.get(index).cloned()
     }
 
-    /// Tuple-shape members: plain tuple slots emit as `.F{index}` (or the
-    /// `TUPLE_FIELDS` name); tuple-struct slots additionally try a newtype
-    /// cast when the struct has a single field and no generics.
-    /// The Go name of `member` on `expression`, for a read or a write.
     pub(crate) fn dot_member_go_name(
         &self,
         expression: &Expression,
@@ -262,11 +247,16 @@ impl Planner<'_> {
         member: &str,
         resolution: &DotAccessResolution,
     ) -> String {
+        if let Some(package) = expression_ty.as_import_namespace() {
+            return self.package_member_go_name(package, member);
+        }
         let canonical_ty = self.facts.strip_and_peel(expression_ty);
+        if let DotAccessResolution::StructField { is_exported, .. } = resolution {
+            return self.struct_field_go_name(&canonical_ty, member, *is_exported);
+        }
         let is_exported = self.resolve_is_exported(expression, &canonical_ty, member, resolution);
         let embedded = self.embedded_field(expression_ty, member);
-        self.try_resolve_cross_package_const(expression_ty, member)
-            .unwrap_or_else(|| go_field_name(&canonical_ty, member, is_exported, embedded))
+        go_name::member_go_name(&canonical_ty, member, is_exported, embedded)
     }
 
     pub(crate) fn try_emit_tuple_member_dot(
@@ -290,14 +280,16 @@ impl Planner<'_> {
                 if *is_newtype && let Some(cast) = self.try_emit_newtype_cast(expression_ty, base) {
                     return Some(cast);
                 }
-                Some(self.field_access(base.clone(), expression_ty, format!("F{}", index)))
+                Some(self.field_access(
+                    base.clone(),
+                    expression_ty,
+                    go_name::tuple_struct_field(index),
+                ))
             }
             _ => None,
         }
     }
 
-    /// Whether the Go member name must be capitalized. Adds emit-side checks
-    /// on top of semantic `is_exported` (`#[json]`, interface methods).
     fn resolve_is_exported(
         &self,
         expression: &Expression,
@@ -306,9 +298,6 @@ impl Planner<'_> {
         resolution: &DotAccessResolution,
     ) -> bool {
         match resolution {
-            DotAccessResolution::StructField { is_exported, .. } => {
-                *is_exported || self.struct_field_is_exported(expression_ty, member)
-            }
             DotAccessResolution::InstanceMethod { is_exported, .. } => {
                 *is_exported || self.method_needs_export(member)
             }
@@ -354,9 +343,6 @@ impl Planner<'_> {
         Some(self.option_nil_guard(result_ty))
     }
 
-    /// Accessing a nullable field on a Go-imported type: capture the raw
-    /// access into a temp and wrap in the Some/None nullable shape expected
-    /// downstream. Returns `None` when no wrapping is needed.
     fn plan_nullable_field_access(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -382,7 +368,6 @@ impl Planner<'_> {
             && target.return_abi == CallableReturnAbi::Void
             && source.same_parameter_representation(target)
         {
-            // A direct Go call can discard a generic unit result without a wrapper.
             return None;
         }
         let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
@@ -395,9 +380,6 @@ impl Planner<'_> {
         Some(coerced)
     }
 
-    /// When accessing a cross-package generic member by value (not as a callee),
-    /// append the type args of the instantiation the checker recorded.
-    /// Callee-position accesses skip this because the call site re-instantiates.
     fn append_cross_package_type_args(
         &mut self,
         base_access: GoExpression,
@@ -414,9 +396,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit `.0` on a newtype as a Go conversion to the field type, `int(n)`.
-    /// Peels type aliases, so `.0` through `type Alias = New` also converts.
-    /// Returns None when the type is not a newtype.
     fn try_emit_newtype_cast(
         &mut self,
         expression_ty: &Type,
@@ -432,7 +411,6 @@ impl Planner<'_> {
         Some(GoExpression::conversion(go_type, operand))
     }
 
-    /// Compute whether a dot access context requires exported (capitalized) Go names.
     fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
         let is_import_namespace_identifier = matches!(
             expression,
@@ -477,7 +455,6 @@ impl Planner<'_> {
         })
     }
 
-    /// Go follows only one pointer in a selector.
     pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
         let peeled = self.facts.peel_alias(ty);
         peeled.is_ref()
@@ -486,19 +463,16 @@ impl Planner<'_> {
                 .is_some_and(|inner| self.facts.peel_alias(&inner).is_ref())
     }
 
-    /// A Go method with a value receiver takes its receiver as is, so a call result needs no temp.
     fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
         let receiver_ty = self.facts.peel_alias(&receiver_ty.strip_refs());
         receiver_ty
             .get_qualified_id()
-            .filter(|owner| owner.starts_with("go:"))
+            .filter(|owner| go_name::is_go_import(owner))
             .and_then(|owner| self.facts.method(owner, method))
             .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
     }
 
-    /// A Go constant above `MaxInt64` has no Go default type, so Go needs the declared type.
     fn go_constant_exceeds_int(&self, package: &str, member: &str, ty: &Type) -> bool {
-        // Only an unsigned constant can hold a value above `MaxInt64`.
         if !ty.is_unsigned_int() || !go_name::is_go_import(package) {
             return false;
         }
@@ -524,63 +498,4 @@ impl Planner<'_> {
                 matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
             })
     }
-
-    fn try_resolve_cross_package_const(
-        &self,
-        expression_ty: &Type,
-        member: &str,
-    ) -> Option<String> {
-        let package = expression_ty.as_import_namespace()?;
-        if go_name::is_go_import(package) {
-            return None;
-        }
-        let qualified_name = format!("{}.{}", package, member);
-        let definition = self.facts.definition(qualified_name.as_str())?;
-        if !definition.visibility.is_public() {
-            return None;
-        }
-        if !matches!(definition.body, DefinitionBody::Value { .. }) {
-            return None;
-        }
-        let ty = &definition.ty;
-        let is_function = matches!(ty, Type::Function(_))
-            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)));
-        if is_function {
-            return None;
-        }
-        Some(go_name::screaming_snake_to_camel(member))
-    }
-}
-
-/// Pick the Go-side name for a struct field or method. Exported members on
-/// prelude types follow snake_case → camelCase (matching the stdlib
-/// convention); exported members elsewhere get first-letter capitalization;
-/// non-exported members become lower camelCase, embedded fields keep their
-/// type's name.
-fn go_field_name(
-    expression_ty: &Type,
-    member: &str,
-    is_exported: bool,
-    embedded: Option<&StructFieldDefinition>,
-) -> String {
-    if expression_ty
-        .as_import_namespace()
-        .is_some_and(go_name::is_go_import)
-    {
-        return member.to_string();
-    }
-
-    go_name::member_go_name(expression_ty, member, is_exported, embedded)
-}
-
-/// Whether the type resolves to a prelude-package declaration. Shared with
-/// the struct-call path, which also uses prelude-ness to decide field
-/// naming and type formatting.
-pub(super) fn is_from_prelude(ty: &Type) -> bool {
-    let Type::Nominal { id, .. } = ty.strip_refs() else {
-        return false;
-    };
-    // Only return true if the type actually comes from the prelude package.
-    // User-defined types with the same name should NOT be treated as prelude types.
-    id.starts_with(go_name::PRELUDE_PREFIX)
 }

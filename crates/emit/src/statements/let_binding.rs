@@ -1,15 +1,13 @@
 use crate::OuterBindings;
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
-use crate::abi::tuple_element_types;
+use crate::abi::callable::LoweredReturnAbi;
+use crate::abi::coercion::CoercionPlan;
 use crate::abi::wrapping::WrapperTarget;
 use crate::analyze::component_uses::ComponentDemand;
 use crate::analyze::component_uses::ValueDemand;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::Fallible;
 use crate::escape_local;
-use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::patterns::decision_tree::collect_pattern_info;
 use crate::patterns::sites::PatternSubject;
@@ -21,9 +19,8 @@ use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_zero_call, rebind_trailing_temp,
     rebind_updated_temp, requires_temp_var,
 };
-use crate::plan::values::GoExpression;
+use crate::plan::values::{ConstantKind, GoExpression};
 use crate::state::bindings::{ComponentKind, TupleBinding};
-use crate::types::go_type::GoType;
 use syntax::EcoString;
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
@@ -39,16 +36,17 @@ pub(crate) struct LetSpec<'a> {
     mutable: bool,
 }
 
+fn widens_to_interface(planner: &Planner, value: &Expression, binding_ty: &Type) -> bool {
+    planner.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type()
+}
+
 pub(crate) fn needs_explicit_type_declaration(
     planner: &Planner,
     value: &Expression,
     binding_ty: &Type,
 ) -> bool {
-    if planner.facts.is_interface_or_unknown(binding_ty) {
-        let value_ty = value.get_type();
-        if *binding_ty != value_ty {
-            return true;
-        }
+    if widens_to_interface(planner, value, binding_ty) {
+        return true;
     }
     if planner.is_function_alias(binding_ty) {
         let value_ty = value.get_type();
@@ -59,9 +57,25 @@ pub(crate) fn needs_explicit_type_declaration(
     false
 }
 
-/// Pick the Go type for a `let` binding's `var X T` temp.
-fn resolve_let_temp_declaration_ty(value: &Expression, binding_ty: &Type) -> Type {
-    if binding_ty.is_unit() || binding_ty.is_variable() || binding_ty.is_placeholder() {
+impl Planner<'_> {
+    pub(crate) fn declaration_needs_go_type(
+        &mut self,
+        value: &Expression,
+        constant: Option<ConstantKind>,
+        coercion: &CoercionPlan,
+        ty: &Type,
+    ) -> bool {
+        (coercion.is_identity() && self.constant_needs_go_type(constant, ty).is_some())
+            || needs_explicit_type_declaration(self, value, ty)
+    }
+}
+
+fn resolve_let_temp_declaration_ty(
+    planner: &Planner,
+    value: &Expression,
+    binding_ty: &Type,
+) -> Type {
+    if planner.facts.has_no_go_value(binding_ty) {
         return value.get_type();
     }
     binding_ty.clone()
@@ -86,8 +100,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower a `let identifier = value` binding to statements; `raw_go_name ==
-    /// None` is unused.
     fn lower_let_value(
         &mut self,
         let_spec: LetSpec,
@@ -168,7 +180,6 @@ impl Planner<'_> {
             ..
         } = let_spec;
         let peeled = self.facts.peel_alias(binding_ty);
-        // These types have their own binding lowerings, which write into a new name.
         if peeled.is_unit()
             || peeled.is_result()
             || peeled.is_option()
@@ -236,10 +247,7 @@ impl Planner<'_> {
             ComponentKind::Option
         } else if !ty.is_result() {
             return None;
-        } else if matches!(
-            self.facts.peel_alias(&ty.err_type()),
-            Type::Nominal { id, .. } if id.as_str() == go_name::PRELUDE_ERROR_ID
-        ) {
+        } else if self.facts.is_prelude_error(&ty.err_type()) {
             ComponentKind::ErrorResult
         } else {
             ComponentKind::OtherResult
@@ -261,6 +269,11 @@ impl Planner<'_> {
         Some(statements)
     }
 
+    fn tuple_call_arity(&self, value: &Expression) -> Option<usize> {
+        let plan = self.plan_call(value)?;
+        self.unbridged_tuple_arity(&plan, &value.get_type())
+    }
+
     fn lower_tuple_components(
         &mut self,
         let_spec: LetSpec,
@@ -273,26 +286,15 @@ impl Planner<'_> {
             value,
             ..
         } = let_spec;
-        let elements = tuple_element_types(ty);
+        let elements = self.facts.tuple_element_types(ty);
         if elements.len() < 2 {
             return None;
         }
         let read_indices = demand.read_indices;
         let needs_whole_value = demand.value == ValueDemand::Whole;
-        let plan = self.plan_call(value)?;
-        if !matches!(
-            plan.resolved.abi.result,
-            CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }) if arity == elements.len()
-        ) {
+        if self.tuple_call_arity(value) != Some(elements.len()) {
             return None;
         }
-        if self
-            .go_result_bridge(&plan.resolved.abi, &value.get_type())
-            .is_some_and(|bridge| !bridge.is_identity())
-        {
-            return None;
-        }
-        // Go rejects a name that no later line reads, so an unread element gets `_`.
         let is_read = |index: usize| needs_whole_value || read_indices.contains(&index);
         if !(0..elements.len()).any(is_read) {
             return None;
@@ -315,8 +317,6 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// `let x = expr?`. Adds a leading `var x T` when the binding widens to
-    /// an interface.
     fn lower_let_propagate(
         &mut self,
         let_spec: LetSpec,
@@ -342,10 +342,8 @@ impl Planner<'_> {
         };
         let go_identifier = self.choose_let_go_name(identifier, ids, raw_go_name, false);
         let local = go_identifier.clone();
-        let widens_to_interface =
-            self.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type();
         let mut statements = Vec::new();
-        if widens_to_interface {
+        if widens_to_interface(self, value, binding_ty) {
             let var_ty = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
@@ -363,8 +361,6 @@ impl Planner<'_> {
         statements
     }
 
-    /// `let x = foo()` where `foo()` returns unit: run the call as a
-    /// statement, then declare the binding as `struct{}{}`.
     fn lower_let_unit_call(
         &mut self,
         let_spec: LetSpec,
@@ -395,8 +391,7 @@ impl Planner<'_> {
             self.try_declare(&go_identifier);
             go_identifier
         };
-        let unit = GoExpression::empty_composite(GoType::new("struct{}"));
-        // An `Unknown` or interface binding keeps its type for later assignments.
+        let unit = GoExpression::unit();
         if needs_explicit_type_declaration(self, value, binding_ty) {
             let go_type = self.go_type(binding_ty);
             statements.push(
@@ -435,8 +430,7 @@ impl Planner<'_> {
         let (mut statements, plan_value) = plan.into_parts();
         let coercion = self.value_slot_coercion(value, binding_ty);
         let coercion_is_identity = coercion.is_identity();
-        let constant_needs_type =
-            coercion_is_identity && self.constant_needs_go_type(constant, binding_ty).is_some();
+        let typed = self.declaration_needs_go_type(value, constant, &coercion, binding_ty);
         let (coercion_setup, value_expression) = coercion.lower(self, plan_value);
         statements.extend(coercion_setup);
 
@@ -448,7 +442,6 @@ impl Planner<'_> {
             OuterBindings::MayShadow,
         );
 
-        // A bare `var x T` only where the slot's zero is the value.
         if is_zero_call(&self.facts, value)
             && statements.is_empty()
             && coercion_is_identity
@@ -466,7 +459,7 @@ impl Planner<'_> {
             return statements;
         }
 
-        if constant_needs_type || needs_explicit_type_declaration(self, value, binding_ty) {
+        if typed {
             let var_ty = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
@@ -478,7 +471,6 @@ impl Planner<'_> {
             );
             return statements;
         }
-        // A temp no source binding answers to has no other reader to break.
         if let Some(name) = value_expression.as_identifier()
             && !self.scope.has_binding_for_local(name)
             && (rebind_trailing_temp(&mut statements, &go_identifier, name)
@@ -490,8 +482,6 @@ impl Planner<'_> {
         statements
     }
 
-    /// Route a slot-style ABI wrapper into the let's Go name, removing the
-    /// `name := result_N` alias.
     fn try_lower_let_into_wrapper_slot(
         &mut self,
         let_spec: LetSpec,
@@ -522,8 +512,6 @@ impl Planner<'_> {
         let target = WrapperTarget::Slot(&local);
         let statements =
             self.lower_abi_wrapped_call_to(value, &plan.resolved.abi, binding_ty, target)?;
-        // `push_wrapper_slot` / `push_simple_wrapper_value` already declared
-        // `go_identifier`; only the binding from the user-name still needs setup.
         self.scope
             .bind_identifier(identifier, binding_id.as_slice(), local);
         Some(statements)
@@ -573,7 +561,7 @@ impl Planner<'_> {
             return None;
         }
         let return_ctx = self.return_ctx();
-        let resolved_ty = resolve_let_temp_declaration_ty(value, binding_ty);
+        let resolved_ty = resolve_let_temp_declaration_ty(self, value, binding_ty);
         let peeled_resolved = self.facts.peel_alias(&resolved_ty);
         let peeled_binding = self.facts.peel_alias(binding_ty);
         let needs_context = |ty: &Type| ty.is_variable() || ty.is_placeholder();
@@ -587,7 +575,7 @@ impl Planner<'_> {
             if !needs_context(&peeled_binding) && !needs_context(&peeled_binding.ok_type()) {
                 self.go_type(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
-                if Fallible::from_type(&ctx_ty).is_some() {
+                if self.fallible(&ctx_ty).is_some() {
                     self.go_type(&ctx_ty)
                 } else {
                     self.go_type(&resolved_ty)
@@ -616,7 +604,6 @@ struct LetPlanner<'a, 'e> {
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
     fn build(mut self) -> LoweredBlock {
-        // Declare the binding so unreachable code still typechecks.
         if self.value.get_type().is_never() {
             let mut statements = Vec::new();
             if let Pattern::Identifier {
@@ -721,7 +708,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .planner
             .lower_value(source, ExpressionContext::value())
             .into_parts();
-        let receiver = if source.get_type().is_ref() {
+        let receiver = if self.planner.facts.is_reference(&source.get_type()) {
             GoExpression::dereference(receiver)
         } else {
             receiver
@@ -783,7 +770,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         if !pair_of_names {
             return None;
         }
-        let slot_types = tuple_element_types(&self.planner.facts.peel_alias(&self.binding.ty));
+        let slot_types = self.planner.facts.tuple_element_types(&self.binding.ty);
         let directional = [NativeTypeKind::Sender, NativeTypeKind::Receiver];
         (slot_types.len() == directional.len()
             && slot_types.iter().zip(directional).all(|(slot_ty, kind)| {
@@ -801,19 +788,13 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         {
             return false;
         }
-        let slots_read_in_place = tuple_element_types(&self.planner.facts.peel_alias(&value_ty))
+        let slots_read_in_place = self
+            .planner
+            .facts
+            .tuple_element_types(&value_ty)
             .iter()
             .all(|slot_ty| !self.planner.facts.is_nullable_option(slot_ty));
-        slots_read_in_place
-            && self.planner.plan_call(self.value).is_some_and(|plan| {
-                matches!(
-                    plan.resolved.abi.result.lowered(),
-                    Some(LoweredReturnAbi::Tuple { .. })
-                ) && self
-                    .planner
-                    .go_result_bridge(&plan.resolved.abi, &value_ty)
-                    .is_none_or(|bridge| bridge.is_identity())
-            })
+        slots_read_in_place && self.planner.tuple_call_arity(self.value).is_some()
     }
 
     fn lower_simple_identifier(
@@ -864,7 +845,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     }
 
     fn lower_multi_value_call(&mut self, elements: &[Pattern]) -> LoweredBlock {
-        // Bind after lowering the initializer so it sees the previous bindings.
         let planned: Vec<Option<(&str, Option<BindingId>, GoIdentifier)>> = elements
             .iter()
             .map(|pattern| {

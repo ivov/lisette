@@ -101,7 +101,6 @@ impl Planner<'_> {
             },
             ElseArm::None,
         ));
-        // The block exists only to scope the temps.
         if statements.is_empty() {
             return test;
         }
@@ -264,7 +263,6 @@ impl Planner<'_> {
     ) -> (AssertOperand, AssertOperand) {
         let left_plan = self.lower_value(left, ExpressionContext::value());
         let right_plan = self.lower_value(right, ExpressionContext::value());
-        // The failure report reads both operands again.
         let names_inline = left_plan.setup().is_empty()
             && right_plan.setup().is_empty()
             && left_plan.effects().can_duplicate()
@@ -321,7 +319,6 @@ impl Planner<'_> {
         };
         let (_, value) = plan.into_parts();
         let name = self.fresh_declared(hint);
-        // An untyped integer can overflow if `:=` infers `int`.
         let constant_needs_type = self
             .constant_needs_go_type(constant, &expression.get_type())
             .is_some();
@@ -347,7 +344,6 @@ impl Planner<'_> {
     }
 }
 
-/// The receiver and argument of `receiver.equals(argument)`.
 fn equals_decomposition(operand: &Expression) -> Option<(&Expression, &Expression)> {
     let Expression::Call {
         expression: callee,
@@ -383,7 +379,6 @@ struct AssertOperand {
     value: ValuePlan,
 }
 
-// Bare literals are not valid Go method receivers.
 #[derive(Clone, Copy)]
 enum LiteralInlining {
     Allowed,

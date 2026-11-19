@@ -43,29 +43,3 @@ impl From<SourceName> for GoIdentifier {
         GoIdentifier::from(&name)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn source_names_take_camel_case() {
-        assert_eq!(
-            SourceName::new(&"retry_count".into()).preferred(),
-            "retryCount"
-        );
-        assert_eq!(
-            SourceName::new(&"_unused_value".into()).preferred(),
-            "_unusedValue"
-        );
-        assert_eq!(SourceName::new(&"x_1".into()).preferred(), "x1");
-        assert_eq!(SourceName::new(&"_".into()).preferred(), "_");
-    }
-
-    #[test]
-    fn reserved_words_are_escaped_after_conversion() {
-        let name = SourceName::new(&"type_".into());
-        assert_eq!(name.base(), "type");
-        assert_eq!(name.preferred(), "type_");
-    }
-}

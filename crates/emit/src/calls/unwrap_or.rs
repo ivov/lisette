@@ -10,12 +10,10 @@ use crate::plan::bodies::{
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::collapse_declared_temp;
 use crate::plan::values::{GoExpression, ValuePlan};
-use crate::statements::let_binding::needs_explicit_type_declaration;
 use syntax::ast::{BinaryOperator, Expression, Literal};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
-/// `call.unwrap_or(default)`, `call.map_or(default, |v| ..)`, or `call.map(|v| ..).unwrap_or(default)`.
 struct DefaultedCall<'a> {
     producer: FallibleProducer<'a>,
     map: Option<MapLambda<'a>>,
@@ -27,7 +25,6 @@ pub(crate) struct MapLambda<'a> {
     pub(crate) body: &'a Expression,
 }
 
-/// A statement that would leave the lambda if its body ran inline.
 fn escapes_lambda(expression: &Expression) -> bool {
     match expression {
         Expression::Return { .. }
@@ -54,7 +51,6 @@ fn is_literal_default(default: &Expression) -> bool {
     }
 }
 
-/// Reads and constants only, so the default can run before the bounds test.
 fn runs_no_code(expression: &Expression) -> bool {
     match expression {
         Expression::Literal {
@@ -158,7 +154,6 @@ impl<'p> Planner<'p> {
         } else {
             return None;
         };
-        // map_or evaluates its default before the mapper; map(...).unwrap_or(...) after.
         if map.is_some() && !is_literal_default(default) {
             return None;
         }
@@ -211,7 +206,6 @@ impl<'p> Planner<'p> {
         Some(self.lower_map_index_pair(subject))
     }
 
-    /// `x, ok := call` then `if !ok { x = default }`, with `x` as `slot` names it.
     fn lower_default_into_slot(
         &mut self,
         producer: FallibleProducer<'_>,
@@ -261,7 +255,6 @@ impl<'p> Planner<'p> {
         (statements, value)
     }
 
-    /// `x := default` then `if i >= 0 && i < len(xs) { x = xs[i] }`.
     fn lower_defaulted_index_into_slot(
         &mut self,
         call: &NativeCallContext<'_>,
@@ -280,11 +273,12 @@ impl<'p> Planner<'p> {
             ExpressionContext::value().with_function_slot_origin(origin),
         );
         let coercion = self.value_slot_coercion(default, ty);
-        let typed = (coercion.is_identity()
-            && self
-                .constant_needs_go_type(plan.expression().constant_kind(), ty)
-                .is_some())
-            || needs_explicit_type_declaration(self, default, ty);
+        let typed = self.declaration_needs_go_type(
+            default,
+            plan.expression().constant_kind(),
+            &coercion,
+            ty,
+        );
         let (setup, default) = plan.into_parts();
         statements.extend(setup);
         let (coercion_setup, default) = coercion.lower(self, default);
@@ -342,7 +336,6 @@ impl<'p> Planner<'p> {
         )
     }
 
-    /// `let x = call.unwrap_or(default)` writes straight into `x`.
     pub(crate) fn lower_defaulted_call_into(
         &mut self,
         value: &Expression,

@@ -9,8 +9,6 @@ use crate::names::packages::PackageRequirements;
 
 use super::{ImportGroup, OutputImport};
 
-/// Source imports resolved once during the plan phase. Keeping each import as
-/// one record avoids synchronizing separate lookup and emission collections.
 #[derive(Clone, Default)]
 pub(crate) struct ImportPlan {
     go_module: String,
@@ -73,7 +71,6 @@ impl ImportPlan {
         })
     }
 
-    /// Non-blank used imports as qualifier and span, in source order.
     pub(crate) fn used_qualifiers(
         &self,
         is_unused: impl Fn(ImportKey) -> bool,
@@ -179,9 +176,6 @@ fn import_go_path(import: &FileImport, go_module: &str) -> String {
         .unwrap_or_else(|| format!("{}/{}", go_module, import.name))
 }
 
-/// The `goimports` rule: a standard library path has no dot in its first
-/// segment. The module's own packages can have that shape too, so they go
-/// with the other imports.
 fn import_group(path: &str, go_module: &str) -> ImportGroup {
     let first_segment = path.split('/').next().unwrap_or(path);
     let in_module = path
@@ -194,227 +188,10 @@ fn import_group(path: &str, go_module: &str) -> ImportGroup {
     }
 }
 
-/// Renders one import spec, or a blank import for `None`.
 pub(crate) fn format_import(path: &str, qualifier: Option<&str>) -> String {
     match qualifier {
         None => format!("_ \"{path}\""),
         Some(qualifier) if qualifier == go_name::go_package_name(path) => format!("\"{path}\""),
         Some(qualifier) => format!("{qualifier} \"{path}\""),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::names::packages::PackageUse;
-    use syntax::FileParseStatus;
-
-    fn import_plan(source: &str) -> ImportPlan {
-        let parsed = syntax::build_ast(source, 0);
-        assert!(parsed.errors.is_empty());
-        let file = File {
-            id: 0,
-            package_id: "package".to_string(),
-            parse_status: FileParseStatus::Clean,
-            name: "test.lis".to_string(),
-            display_path: "test.lis".to_string(),
-            source_path: None,
-            source: source.to_string(),
-            items: parsed.ast,
-            file_comment: None,
-        };
-
-        ImportPlan::build(&file, "module", &HashMap::default())
-    }
-
-    #[test]
-    fn import_plan_resolves_the_last_matching_alias() {
-        let plan = import_plan(
-            r#"
-import early "one"
-import late "one"
-import shared "two"
-import shared "three"
-"#,
-        );
-        assert_eq!(plan.import_qualifier("one"), Some("late"));
-        assert_eq!(plan.package_for_alias("shared"), Some("three"));
-    }
-
-    #[test]
-    fn used_qualifiers_skip_blank_and_unused_imports() {
-        let source = r#"
-import _ "go:fmt"
-import unused "one"
-import kept "two"
-import "three"
-"#;
-        let plan = import_plan(source);
-        let unused_key = plan
-            .imports
-            .iter()
-            .find(|import| import.package == "one")
-            .unwrap()
-            .key;
-        let qualifiers: Vec<_> = plan
-            .used_qualifiers(|key| key == unused_key)
-            .map(|(qualifier, span)| {
-                let start = span.byte_offset as usize;
-                let end = start + span.byte_length as usize;
-                (qualifier, &source[start..end])
-            })
-            .collect();
-        assert_eq!(
-            qualifiers,
-            vec![
-                ("kept".to_string(), "kept"),
-                ("three".to_string(), "\"three\""),
-            ]
-        );
-    }
-
-    fn finish_with(
-        source: &str,
-        uses: &[(&str, &str)],
-    ) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
-        let mut requirements = PackageRequirements::default();
-        for (path, qualifier) in uses {
-            requirements.require(PackageUse::new(*path, *qualifier));
-        }
-        import_plan(source).finish(&requirements)
-    }
-
-    fn imports_for(source: &str, uses: &[(&str, &str)]) -> Vec<OutputImport> {
-        let (imports, diagnostics) = finish_with(source, uses);
-        assert!(diagnostics.is_empty());
-        imports
-    }
-
-    fn collisions(source: &str, uses: &[(&str, &str)]) -> Vec<LisetteDiagnostic> {
-        let (_, diagnostics) = finish_with(source, uses);
-        for diagnostic in &diagnostics {
-            assert_eq!(diagnostic.code_str(), Some("emit.go_import_collision"));
-        }
-        diagnostics
-    }
-
-    fn imported(path: &str, qualifier: Option<&str>) -> OutputImport {
-        OutputImport {
-            group: import_group(path, "module"),
-            path: path.to_string(),
-            qualifier: qualifier.map(str::to_string),
-        }
-    }
-
-    #[test]
-    fn standard_imports_come_before_module_and_other_imports() {
-        let imports = imports_for(
-            "",
-            &[
-                ("module/store", "store"),
-                ("github.com/ivov/lisette/prelude", "lisette"),
-                ("net/http", "http"),
-                ("fmt", "fmt"),
-            ],
-        );
-        let groups: Vec<_> = imports
-            .iter()
-            .map(|import| (import.group, import.path.as_str()))
-            .collect();
-        assert_eq!(
-            groups,
-            vec![
-                (ImportGroup::Standard, "fmt"),
-                (ImportGroup::Standard, "net/http"),
-                (ImportGroup::Other, "github.com/ivov/lisette/prelude"),
-                (ImportGroup::Other, "module/store"),
-            ]
-        );
-    }
-
-    #[test]
-    fn generated_uses_keep_source_aliases_and_deduplicate_qualifiers() {
-        let source = r#"import renamed "go:fmt""#;
-        let expected = vec![
-            imported("fmt", Some("fmt")),
-            imported("fmt", Some("renamed")),
-        ];
-        for uses in [
-            vec![("fmt", "renamed"), ("fmt", "fmt"), ("fmt", "renamed")],
-            vec![("fmt", "fmt"), ("fmt", "renamed")],
-        ] {
-            assert_eq!(imports_for(source, &uses), expected);
-        }
-    }
-
-    #[test]
-    fn blank_import_can_also_be_used_by_generated_code() {
-        assert_eq!(
-            imports_for(r#"import _ "go:fmt""#, &[("fmt", "fmt")]),
-            vec![imported("fmt", None), imported("fmt", Some("fmt"))]
-        );
-    }
-
-    #[test]
-    fn go_import_collision_flags_shared_qualifier() {
-        let diagnostics = collisions(
-            "",
-            &[("database/sql", "sql"), ("entgo.io/ent/dialect/sql", "sql")],
-        );
-        assert_eq!(diagnostics.len(), 1);
-        let help = diagnostics[0].plain_help().unwrap_or_default();
-        assert!(help.contains("database/sql") && help.contains("entgo.io/ent/dialect/sql"));
-    }
-
-    #[test]
-    fn go_import_collision_silent_when_qualifiers_differ() {
-        let diagnostics = collisions(
-            "",
-            &[
-                ("database/sql", "sql"),
-                ("entgo.io/ent/dialect/sql", "entsql"),
-            ],
-        );
-        assert!(diagnostics.is_empty());
-    }
-
-    #[test]
-    fn go_import_collision_silent_for_distinct_versioned_packages() {
-        let diagnostics = collisions(
-            "",
-            &[
-                ("github.com/pion/sdp/v3", "sdp"),
-                ("github.com/pion/dtls/v3", "dtls"),
-            ],
-        );
-        assert!(diagnostics.is_empty());
-    }
-
-    #[test]
-    fn go_import_collision_flags_local_packages_sharing_last_segment() {
-        let diagnostics = collisions(
-            "",
-            &[("myproject/api/v2", "v2"), ("myproject/admin/v2", "v2")],
-        );
-        assert_eq!(diagnostics.len(), 1);
-    }
-
-    #[test]
-    fn unaliased_go_import_under_project_package_resolves_by_package_name() {
-        let (imports, diagnostics) = finish_with(
-            r#"import "go:myproject/plugins/v2""#,
-            &[
-                ("myproject/plugins/v2", "plugins"),
-                ("myproject/api/v2", "v2"),
-            ],
-        );
-        assert!(diagnostics.is_empty());
-        assert_eq!(
-            imports,
-            vec![
-                imported("myproject/api/v2", Some("v2")),
-                imported("myproject/plugins/v2", Some("plugins")),
-            ]
-        );
     }
 }

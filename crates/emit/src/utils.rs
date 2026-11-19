@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::names::go_name;
 use crate::types::go_type::GoType;
 use std::fmt;
@@ -55,9 +56,9 @@ impl Display for ReceiverGenerics {
     }
 }
 impl ReceiverGenerics {
-    pub(crate) fn instantiate(&self, name: &str) -> GoType {
+    pub(crate) fn receiver_type(&self, type_name: &str) -> GoType {
         GoType::named(
-            name,
+            &go_name::escape_type_name(type_name),
             &self.0.iter().map(GoType::new).collect::<Vec<_>>(),
             None,
         )
@@ -83,7 +84,6 @@ pub(crate) fn synthesized_local_name(
     })
 }
 
-/// Group consecutive parameters with the same Go type: `a int, b int` → `a, b int`.
 pub(crate) fn group_params(params: &[(String, String)]) -> String {
     if params.is_empty() {
         return String::new();
@@ -130,9 +130,10 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
 }
 
 pub(crate) fn reads_value_member(
+    facts: &EmitFacts,
     resolution: &DotAccessResolution,
     base: &Expression,
     base_ty: &Type,
 ) -> bool {
-    resolution.is_field_read() && base.deref_inner().is_none() && !base_ty.is_ref()
+    resolution.is_field_read() && base.deref_inner().is_none() && !facts.is_reference(base_ty)
 }

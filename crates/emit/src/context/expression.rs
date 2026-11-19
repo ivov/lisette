@@ -4,7 +4,6 @@ use syntax::types::Type;
 use crate::plan::values::CaptureBoundary;
 use syntax::program::SlotOrigin;
 
-/// Whether the expression is being emitted as the callee of a call.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum CalleeRole {
     #[default]

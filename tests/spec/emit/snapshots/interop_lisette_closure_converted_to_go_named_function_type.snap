@@ -23,11 +23,8 @@ import (
 )
 
 func handler(n int) http.Handler {
-	cb := func(_ http.ResponseWriter, _ *http.Request) {
+	return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		fmt.Println(n)
-	}
-	return http.HandlerFunc(func(arg0 http.ResponseWriter, arg1 *http.Request) {
-		cb(arg0, arg1)
 	})
 }
 

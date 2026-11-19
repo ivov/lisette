@@ -15,7 +15,6 @@ pub struct OutputFile {
     pub(crate) file_comment: Option<String>,
 }
 
-/// Sorted by group, then path: the order the import block renders.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct OutputImport {
     pub group: ImportGroup,
@@ -23,7 +22,6 @@ pub struct OutputImport {
     pub qualifier: Option<String>,
 }
 
-/// The standard library first, then a blank line, then the other imports.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ImportGroup {
     Standard,

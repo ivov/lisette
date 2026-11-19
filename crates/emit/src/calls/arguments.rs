@@ -1,4 +1,6 @@
+use crate::abi::ReturnSlot;
 use crate::abi::is_closure_literal;
+use crate::abi::wrapping::NilGuard;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
 
@@ -7,9 +9,8 @@ use crate::abi::callable::{CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::ValueLayout;
 use crate::context::expression::ExpressionContext;
-use crate::expressions::staging::SpreadSequenceOptions;
+use crate::expressions::staging::{SpreadSequenceOptions, takes_prelude_callback};
 use crate::names::generics::extract_type_mapping;
-use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
@@ -26,7 +27,6 @@ use syntax::types::Type;
 pub(super) struct CallArgsContext<'plan, 'facts> {
     pub(super) plan: &'plan CallPlan<'facts>,
     pub(super) spread: Option<&'plan Expression>,
-    pub(super) wrap_spread_to_any: bool,
     pub(super) capture_boundary: CaptureBoundary,
     pub(super) retired_receiver: Option<&'plan Expression>,
     pub(super) callee_is_builtin: bool,
@@ -34,8 +34,17 @@ pub(super) struct CallArgsContext<'plan, 'facts> {
     pub(super) receiver_binding: Option<(Type, Type)>,
 }
 
+impl CallArgsContext<'_, '_> {
+    fn receiver_bound_parameters(&self) -> HashSet<String> {
+        let mut mapping: HashMap<String, Type> = HashMap::default();
+        if let Some((declared, instantiated)) = &self.receiver_binding {
+            extract_type_mapping(declared, instantiated, &mut mapping);
+        }
+        mapping.into_keys().collect()
+    }
+}
+
 impl Planner<'_> {
-    /// Lower and sequence a call's arguments, `leading` stage first.
     pub(super) fn emit_call_args(
         &mut self,
         args: &[Expression],
@@ -60,7 +69,11 @@ impl Planner<'_> {
             stages,
             spread_stage,
             SpreadSequenceOptions {
-                wrap_to_any: ctx.wrap_spread_to_any,
+                wrap_to_any: ctx
+                    .plan
+                    .resolved
+                    .abi
+                    .spread_wraps_to_any(&self.facts, ctx.spread),
                 combine: ctx.plan.resolved.abi.variadic_combine(extra_leading),
                 boundary: ctx.capture_boundary,
             },
@@ -101,8 +114,6 @@ impl Planner<'_> {
         {
             return ArgumentPlan::Bridge(Box::new(bridge.into_argument(argument.get_type())));
         }
-        // Prelude callbacks return tagged values even when their instantiated
-        // result could use a nullable or multi-value ABI in a Lisette function.
         if would_suppress_tagged_go(callee, declared_param_ty) {
             return match self.detect_lower_arg_to_tagged(argument, effective_param_ty) {
                 Some(adapter) => {
@@ -142,12 +153,7 @@ impl Planner<'_> {
                 })
             })
             .collect();
-        let mut bound: HashSet<String> = HashSet::default();
-        if let Some((declared, instantiated)) = &ctx.receiver_binding {
-            let mut mapping: HashMap<String, Type> = HashMap::default();
-            extract_type_mapping(declared, instantiated, &mut mapping);
-            bound.extend(mapping.into_keys());
-        }
+        let mut bound = ctx.receiver_bound_parameters();
         for (stage, slot) in stages.iter().zip(&slots) {
             if stage.expression().constant_kind().is_some() {
                 continue;
@@ -204,13 +210,8 @@ impl Planner<'_> {
             return argument;
         };
         let coercion = CoercionPlan::checked(self, arg, Some(&param.layout));
-        // A type parameter that the receiver binds needs no conversion for Go to infer it.
         let receiver_binds = matches!(&param.declared, Some(Type::Parameter(name))
-        if ctx.receiver_binding.as_ref().is_some_and(|(declared, instantiated)| {
-            let mut mapping: HashMap<String, Type> = HashMap::default();
-            extract_type_mapping(declared, instantiated, &mut mapping);
-            mapping.contains_key(name.as_str())
-        }));
+            if ctx.receiver_bound_parameters().contains(name.as_str()));
         let inferred = !ctx.callee_pins_type_args
             && !receiver_binds
             && self.converts_for_inference(arg, param);
@@ -333,27 +334,23 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: Option<&CallableParamAbi>,
     ) -> Option<FunctionBridge> {
-        // Closures already return values in the form expected by the parameter.
         if is_closure_literal(argument) {
             return None;
         }
         let parameter = parameter?;
         let param_fn_ty = self
             .facts
-            .resolve_to_function_type(parameter.instantiated.unwrap_forall())
-            .filter(|fn_ty| {
-                let Type::Function(f) = fn_ty else {
-                    return false;
-                };
-                f.return_type.is_result()
-                    || f.return_type.is_option()
-                    || f.return_type.tuple_arity().is_some_and(|a| a >= 2)
-            })?;
+            .resolve_to_function_type(parameter.instantiated.unwrap_forall())?;
 
         let Type::Function(param_f) = &param_fn_ty else {
             return None;
         };
-        let target = self.classify_slot_emission(&param_f.return_type, parameter.origin)?;
+        let CallableReturnAbi::Lowered(target) = self.return_abi(
+            &param_f.return_type,
+            ReturnSlot::FunctionValue(parameter.origin),
+        ) else {
+            return None;
+        };
         let source = self
             .resolve_callable_value(argument)?
             .abi
@@ -377,7 +374,6 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> Option<ArgumentSlotBridge> {
-        // The `Some` that wraps a Go interface value goes into a Lisette `Option` as a direct argument.
         if matches!(
             self.facts.checked(argument).value_use().adaptation,
             Adaptation::ImplicitSome { .. }
@@ -406,8 +402,6 @@ impl Planner<'_> {
         }
         let source = physical_source
             .clone()
-            // Slot bridges lower their source in a Lisette value context;
-            // only direct arguments emit a closure into the Go slot itself.
             .unwrap_or_else(|| self.emitted_value_layout(argument, ExpressionContext::value()));
         let target = parameter.layout.clone();
         let bridge = resolve_layout_bridge(self, &source, &target);
@@ -427,14 +421,6 @@ impl Planner<'_> {
         argument: &Expression,
         plan: &ArgumentSlotBridge,
     ) -> ValuePlan {
-        if prelude_constructor(argument) == Some(PreludeVariant::None)
-            && matches!(
-                plan.target,
-                ValueLayout::NullableOption { .. } | ValueLayout::PointerOption { .. }
-            )
-        {
-            return ValuePlan::literal("nil".to_string());
-        }
         if let Some(literal) = self.lower_option_literal_into_layout(argument, &plan.target) {
             return literal;
         }
@@ -465,7 +451,6 @@ impl Planner<'_> {
         })
     }
 
-    /// A Go field or var that passes to a Go slot unchanged.
     fn raw_go_slot_layout(&self, expression: &Expression) -> Option<ValueLayout> {
         let Expression::DotAccess {
             expression: base,
@@ -487,11 +472,13 @@ impl Planner<'_> {
         let ValueLayout::NullableOption { payload, .. } = raw.underlying() else {
             return None;
         };
-        let passes_unchanged = !self.is_interface_option(ty)
-            && self
-                .value_layout(ty, SlotOrigin::Lisette)
-                .payload()
-                .is_some_and(|lisette| lisette.same_representation(payload));
+        let passes_unchanged = !matches!(
+            self.nullable_option_nil_guard(ty),
+            Some(NilGuard::Interface)
+        ) && self
+            .value_layout(ty, SlotOrigin::Lisette)
+            .payload()
+            .is_some_and(|lisette| lisette.same_representation(payload));
         passes_unchanged.then_some(raw)
     }
 
@@ -550,12 +537,10 @@ impl Planner<'_> {
 }
 
 fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Option<&Type>) -> bool {
-    let unwrapped = declared_param_ty.map(|p| p.unwrap_forall());
-    callee.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function(_)))
+    callee.is_prelude_dispatch && takes_prelude_callback(declared_param_ty)
 }
 
 impl Planner<'_> {
-    /// Whether `argument` converts to an interface for a bare type parameter, which Go infers from the concrete type unless the call spells the conversion.
     pub(crate) fn converts_for_inference(
         &self,
         argument: &Expression,

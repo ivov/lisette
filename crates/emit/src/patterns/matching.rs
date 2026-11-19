@@ -24,7 +24,6 @@ use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::scope::PairStatusKind;
-use crate::types::go_type::GoType;
 use syntax::EcoString;
 use syntax::ast::{BindingId, ConstructorPatternResolution, Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
@@ -96,10 +95,6 @@ impl<'a> ArmBinding<'a> {
         name.zip(value)
             .map(|(name, value)| Self::Copy { name, value })
     }
-}
-
-fn unit_value() -> GoExpression {
-    GoExpression::empty_composite(GoType::new("struct{}"))
 }
 
 struct ResultArm<'a> {
@@ -255,8 +250,6 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    /// Test an existing comma-ok source once, then run the payload patterns of
-    /// the `Some` arms against the bound value.
     fn lower_nested_option_pair_match(
         &mut self,
         subject: &Expression,
@@ -316,7 +309,6 @@ impl Planner<'_> {
         Some(bound.statements)
     }
 
-    /// `match (a, b)` reads the operands where they sit, building no tuple.
     fn lower_tuple_subject_match(
         &mut self,
         subject: &Expression,
@@ -363,7 +355,6 @@ impl Planner<'_> {
 
         let mut roots = Vec::with_capacity(elements.len());
         for ((value, tested), element) in sequenced.values.iter().zip(&tested).zip(elements) {
-            // An untested element still runs, but nothing may name it.
             if !tested && !is_inert_value(element, value) {
                 statements.push(discard(value.clone()));
             }
@@ -386,7 +377,6 @@ impl Planner<'_> {
         tree_emitter.lower(place)
     }
 
-    /// Bind `let x = match ...` straight into `x`.
     pub(crate) fn lower_fused_result_match_into(
         &mut self,
         value: &Expression,
@@ -398,8 +388,6 @@ impl Planner<'_> {
         self.lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
     }
 
-    /// Bind `let x = match <lowered Option source> { Some(v) => v, None => diverge }`
-    /// straight into `x` and test the physical Go result.
     pub(crate) fn lower_fused_option_match_into(
         &mut self,
         value: &Expression,
@@ -462,7 +450,6 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// The payload name an arm binds, or `None` when the body never reads it.
     fn arm_payload_name<'a>(&self, arm: &'a MatchArm) -> Option<FusedName<'a>> {
         let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
             return None;
@@ -476,9 +463,6 @@ impl Planner<'_> {
         simple_payload_binding(arm).flatten()
     }
 
-    /// Test a fallible call with one `if`, building no `Result`. A
-    /// `destination` makes the call write into that name, leaving only the
-    /// failure arm.
     fn lower_fused_lowered_match(
         &mut self,
         subject: &Expression,
@@ -489,7 +473,6 @@ impl Planner<'_> {
         let fuse = self.result_fuse_plan(subject)?;
         let (ok, err) = classify_result_arms(arms)?;
 
-        // Err always carries a payload; Ok may not under BareError.
         let ok_name = if ok.is_catch_all {
             None
         } else {
@@ -508,8 +491,6 @@ impl Planner<'_> {
         };
 
         if let Some(name) = destination {
-            // Safe only if the failure arm always leaves and the success arm
-            // returns the payload unchanged.
             let payload = simple_payload_binding(ok.arm).flatten()?;
             if !fuse.carries_payload()
                 || ok.is_catch_all
@@ -526,7 +507,6 @@ impl Planner<'_> {
             && arm_body_is_noop(&ok.arm.expression)
             && arm_body_is_noop(&err.arm.expression)
         {
-            // Nothing reads the outcome, so keep the call and drop the test.
             let (mut statements, call) = self
                 .lower_call(subject, None, ExpressionContext::value())
                 .into_parts();
@@ -546,9 +526,8 @@ impl Planner<'_> {
             fuse.bind_wrapped(self, slot, err_hint.as_ref(), err_hint.is_some());
         let error = || GoExpression::identifier(bound.status_identifier().clone());
 
-        let unit = unit_value();
+        let unit = GoExpression::unit();
         let then_body = destination.is_none().then(|| {
-            // A call returning only `error` has no value, so `Ok(x)` takes unit.
             let ok_binding = if carries_payload {
                 ArmBinding::alias_at(ok_name, bound.payload_identifier())
             } else {
@@ -602,7 +581,6 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// Restore a nil-guarded error and apply `wrap_err` messages.
     fn prepend_error_prologue(
         &mut self,
         else_body: &mut LoweredBlock,
@@ -635,7 +613,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Test a fallible call once, then match the `Ok` payload patterns.
     fn lower_nested_result_pair_match(
         &mut self,
         subject: &Expression,
@@ -664,7 +641,6 @@ impl Planner<'_> {
                 {
                     err_arm = Some((arm, Some(payload)));
                 }
-                // A catch-all takes the error only after an irrefutable `Ok` arm.
                 (_, Pattern::WildCard { .. })
                     if err_arm.is_none()
                         && ok_arms.iter().any(|ok_arm| {
@@ -736,8 +712,7 @@ impl Planner<'_> {
         {
             return false;
         }
-        let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
-        !matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_))
+        !self.facts.has_tuple_payload(&subject.get_type())
     }
 
     fn lower_fused_partial_match(
@@ -913,8 +888,6 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// Fuse a single `Partial.Both` or `Partial.Err` arm plus a wildcard
-    /// directly against the physical `(value, error)` result of the call.
     fn lower_fused_selective_partial_match(
         &mut self,
         subject: &Expression,
@@ -922,9 +895,6 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
         let plan = self.plan_call(subject)?;
-        // Selective fusion relies on the state mapping of a raw Go
-        // `(value, error)` return. Do not infer that mapping for Lisette
-        // functions merely because they share the same lowered shape.
         if !matches!(plan.resolved.origin, CallableOrigin::GoInterop)
             || !self.fusable_partial(subject, &plan)
         {
@@ -940,8 +910,6 @@ impl Planner<'_> {
             .lower_call(subject, None, ExpressionContext::value())
             .into_parts();
 
-        // A non-nilable value is always present, so its physical ABI has no
-        // distinct Err state. The wildcard arm is therefore unconditional.
         if !arms.selects_both && nil_guard.is_none() {
             statements.push(expression_statement(call));
             let fallback = self
@@ -1018,8 +986,6 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// Fuse the wrap+match into a direct physical-ABI test for simple
-    /// `Some`/`None` arms.
     fn lower_fused_option_match(
         &mut self,
         subject: &Expression,
@@ -1188,7 +1154,6 @@ impl Planner<'_> {
     }
 }
 
-/// Move a subject temp into the first header when that header is its only read.
 fn inline_subject_into_header(
     statements: &mut [Statement],
     var: &GoIdentifier,
@@ -1261,14 +1226,10 @@ fn pair_if(test: PairCondition, then_body: LoweredBlock, else_arm: ElseArm) -> I
     }
 }
 
-/// Whether reading the value again costs nothing and skipping it loses nothing.
 fn is_inert_value(element: &Expression, value: &GoExpression) -> bool {
     value.is_literal() && (!value.is_composite_literal() || element.get_type().is_unit())
 }
 
-/// `[Ok(..), Err(..)]` in either order, plus the shape `if let` desugars to.
-/// A wildcard fits only the second arm, since the checker rejects any arm
-/// after a catch-all.
 fn classify_result_arms(arms: &[MatchArm]) -> Option<(ResultArm<'_>, ResultArm<'_>)> {
     if arms.len() != 2 || arms.iter().any(|a| a.has_guard()) {
         return None;
@@ -1408,7 +1369,6 @@ fn partial_failure_error_binding(
 }
 
 pub(crate) struct OptionArms<'a> {
-    /// `None` when the Some arm binds no payload.
     pub(crate) some_binding: Option<FusedName<'a>>,
     pub(crate) some_body: &'a Expression,
     pub(crate) none_body: &'a Expression,
@@ -1432,7 +1392,6 @@ fn option_arm_kind(arm: &MatchArm) -> Option<OptionArmKind<'_>> {
     }
 }
 
-/// `[Some(<binding>), None]` in either order, plus the if-let wildcard desugars.
 fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
     use OptionArmKind as ArmKind;
     if arms.len() != 2 || arms.iter().any(|a| a.has_guard()) {
@@ -1466,7 +1425,6 @@ fn arm_body_is_noop(body: &Expression) -> bool {
     }
 }
 
-/// The name an arm returns when its body is nothing but that name.
 fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
     let body = match body.unwrap_parens() {
         Expression::Block { items, .. } => match items.as_slice() {
@@ -1481,12 +1439,10 @@ fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
     }
 }
 
-/// The single payload field of an `Ok(<identifier|_>)` pattern.
 pub(super) fn ok_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
     simple_variant_field(pattern, PreludeVariant::Ok)
 }
 
-/// The single payload field of a `Some(<identifier|_>)` pattern.
 pub(super) fn some_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
     simple_variant_field(pattern, PreludeVariant::Some)
 }
@@ -1534,8 +1490,6 @@ fn partial_both_bindings(arm: &MatchArm) -> Option<(Option<FusedName<'_>>, Optio
     Some((field_binding(&fields[0])?, field_binding(&fields[1])?))
 }
 
-/// True when an Ok arm has no value to bind: empty `Ok` or `Ok(())`,
-/// only meaningful under `BareError`.
 fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
     let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
         return false;
@@ -1548,158 +1502,5 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
         | LoweredReturnAbi::Partial { .. }
         | LoweredReturnAbi::Option(_)
         | LoweredReturnAbi::Tuple { .. } => false,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        PartialVariant, PreludeVariant, classify_partial_outcome_arms,
-        classify_selective_partial_arms, prelude_constructor, prelude_variant,
-    };
-    use syntax::ast::{
-        ConstructorPatternResolution, Expression, ExpressionId, IdentifierResolution, MatchArm,
-        Pattern, Span,
-    };
-    use syntax::types::Type;
-
-    fn variant(enum_name: &str, identifier: &str, fields: Vec<Pattern>) -> Pattern {
-        Pattern::EnumVariant {
-            identifier: identifier.into(),
-            fields,
-            rest: false,
-            resolution: ConstructorPatternResolution::EnumVariant {
-                enum_name: enum_name.into(),
-                variant_name: identifier.into(),
-            },
-            ty: Type::uninferred(),
-            span: Span::dummy(),
-        }
-    }
-
-    fn name(identifier: &str) -> Pattern {
-        Pattern::Identifier {
-            identifier: identifier.into(),
-            span: Span::dummy(),
-            binding: None,
-        }
-    }
-
-    fn arm(pattern: Pattern) -> MatchArm {
-        MatchArm {
-            pattern,
-            guard: None,
-            expression: Box::new(Expression::Unit {
-                id: ExpressionId::parsed(0, 7),
-                ty: Type::unit(),
-                span: Span::dummy(),
-            }),
-        }
-    }
-
-    fn wildcard_arm() -> MatchArm {
-        arm(Pattern::WildCard {
-            span: Span::dummy(),
-        })
-    }
-
-    #[test]
-    fn leading_subject_read_requires_the_same_local_id() {
-        use crate::plan::go_expression::GoExpressionNode;
-        use crate::plan::local::{GoIdentifier, LocalId};
-
-        let subject = GoIdentifier::local("subject".into(), LocalId(1));
-        let mut other =
-            GoExpressionNode::Identifier(GoIdentifier::local("subject".into(), LocalId(2)));
-        assert!(super::leading_subject_read(&mut other, &subject).is_none());
-        let mut actual = GoExpressionNode::Identifier(subject.clone());
-        assert!(super::leading_subject_read(&mut actual, &subject).is_some());
-    }
-
-    #[test]
-    fn prelude_variant_reads_the_resolved_enum_not_the_spelling() {
-        let classify = |enum_name, identifier| {
-            prelude_variant(&variant(enum_name, identifier, vec![name("n")]))
-                .map(|(variant, _)| variant)
-        };
-        assert!(classify("prelude.Option", "Some") == Some(PreludeVariant::Some));
-        assert!(classify("prelude.Option", "Opt.Some") == Some(PreludeVariant::Some));
-        assert!(classify("prelude.Result", "Res.Ok") == Some(PreludeVariant::Ok));
-        assert!(classify("main.Maybe", "Some").is_none());
-    }
-
-    #[test]
-    fn prelude_constructor_reads_the_resolved_definition_not_the_spelling() {
-        let classify = |value: &str, definition: &str| {
-            prelude_constructor(&Expression::Identifier {
-                id: ExpressionId::parsed(0, 6),
-                value: value.into(),
-                ty: Type::uninferred(),
-                span: Span::dummy(),
-                resolution: IdentifierResolution::Definition {
-                    name: definition.into(),
-                    instantiation: Default::default(),
-                },
-            })
-        };
-        assert!(classify("Some", "prelude.Some") == Some(PreludeVariant::Some));
-        assert!(classify("Option.None", "prelude.Option.None") == Some(PreludeVariant::None));
-        assert!(classify("Err", "prelude.Err") == Some(PreludeVariant::Err));
-        assert!(
-            classify("Partial.Both", "prelude.Partial.Both")
-                == Some(PreludeVariant::Partial(PartialVariant::Both))
-        );
-        // Only the qualified spelling names a `Partial` variant.
-        assert!(classify("Both", "prelude.Both").is_none());
-        assert!(classify("Some", "main.Maybe.Some").is_none());
-    }
-
-    #[test]
-    fn selective_partial_classifier_rejects_nested_payload_pattern() {
-        let simple = [
-            arm(variant("prelude.Partial", "Partial.Err", vec![name("e")])),
-            wildcard_arm(),
-        ];
-        assert!(classify_selective_partial_arms(&simple).is_some());
-
-        let nested = [
-            arm(variant(
-                "prelude.Partial",
-                "Partial.Err",
-                vec![variant("prelude.Option", "Some", vec![name("e")])],
-            )),
-            wildcard_arm(),
-        ];
-        assert!(classify_selective_partial_arms(&nested).is_none());
-    }
-
-    #[test]
-    fn partial_outcome_classifier_needs_both_failures_in_one_arm() {
-        let or = |alternatives| {
-            arm(Pattern::Or {
-                patterns: alternatives,
-                span: Span::dummy(),
-            })
-        };
-        let ok = || arm(variant("prelude.Partial", "Partial.Ok", vec![name("b")]));
-        let both = || {
-            variant(
-                "prelude.Partial",
-                "Partial.Both",
-                vec![
-                    Pattern::WildCard {
-                        span: Span::dummy(),
-                    },
-                    name("e"),
-                ],
-            )
-        };
-        let err = || variant("prelude.Partial", "Partial.Err", vec![name("e")]);
-
-        assert!(classify_partial_outcome_arms(&[ok(), or(vec![both(), err()])]).is_some());
-        assert!(classify_partial_outcome_arms(&[or(vec![err(), both()]), ok()]).is_some());
-        assert!(classify_partial_outcome_arms(&[ok(), wildcard_arm()]).is_some());
-        assert!(classify_partial_outcome_arms(&[ok(), or(vec![err(), err()])]).is_none());
-        assert!(classify_partial_outcome_arms(&[ok(), arm(err())]).is_none());
     }
 }

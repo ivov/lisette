@@ -1,11 +1,11 @@
 use crate::Planner;
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::ReturnSlot;
 use crate::names::go_name;
 use crate::plan::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
 use crate::types::go_type::GoType;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
 use syntax::program::Definition;
-use syntax::types::unqualified_name;
+use syntax::types::{Type, unqualified_name};
 
 impl Planner<'_> {
     pub(crate) fn emit_interface(
@@ -53,7 +53,6 @@ impl Planner<'_> {
         })
     }
 
-    /// Emit one interface method signature.
     fn emit_interface_method(
         &mut self,
         interface_name: &str,
@@ -75,7 +74,6 @@ impl Planner<'_> {
             .expect("interface method must have return type")
             .clone();
         let qualified_id = self.facts.qualified_current(interface_name);
-        // Looked up by source name: a sealed method is keyed differently.
         let method = self
             .facts
             .definition(&qualified_id)
@@ -86,26 +84,20 @@ impl Planner<'_> {
                     .find(|method| method.source_name == *func.name)
             })
             .expect("interface method must be registered");
-        let return_abi = self.interface_method_return_abi(func.name, method);
-        let return_type = if return_abi.is_lowered() {
-            self.callable_return_go_type(&return_abi, &raw_return_ty)
-        } else {
-            self.go_type(&raw_return_ty)
-        };
+        let return_abi = self.return_abi(
+            method.ty.get_function_ret().unwrap_or(&Type::Never),
+            ReturnSlot::InterfaceMethod {
+                name: func.name,
+                method,
+            },
+        );
 
-        let mut method_name = self.method_go_name(func.name, is_public);
-        if self.facts.method_uses_tagged_return(func.name) {
-            method_name = go_name::tagged_twin(&method_name);
-        }
+        let method_name = self.interface_method_go_name(func.name, is_public);
 
         InterfaceMethod {
             name: method_name,
             parameters: arguments,
-            result: if return_abi == CallableReturnAbi::Void {
-                GoType::default()
-            } else {
-                return_type
-            },
+            result: self.return_go_type(&return_abi, &raw_return_ty),
         }
     }
 }

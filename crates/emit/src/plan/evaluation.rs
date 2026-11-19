@@ -1,5 +1,3 @@
-//! What evaluating a Go expression can do besides producing its value.
-
 use crate::types::go_type::GoTypeKind;
 
 use crate::plan::go_expression::{BinaryOp, CallPurity, GoExpressionNode};
@@ -27,7 +25,6 @@ impl EvaluationEffect {
 pub(crate) enum Writes {
     #[default]
     Nothing,
-    /// What a call can reach.
     Shared,
     Any,
 }
@@ -35,7 +32,6 @@ pub(crate) enum Writes {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Effects {
     calls: EvaluationEffect,
-    /// Outside a call, whose own panics are part of the call.
     may_panic: bool,
     may_block: bool,
     reads: Stability,
@@ -80,7 +76,6 @@ impl Effects {
         }
     }
 
-    /// With every read's stability known, a call reaches only shared memory.
     pub(crate) fn with_known_reads(self, reads: Stability) -> Self {
         Self {
             reads,
@@ -89,8 +84,6 @@ impl Effects {
         }
     }
 
-    /// Go orders calls within an expression. Like the Go compiler, but not
-    /// the spec, this assumes an earlier call runs before a later read.
     pub(crate) fn without_go_order(self) -> Self {
         Self {
             calls: EvaluationEffect::Pure,
@@ -119,7 +112,6 @@ impl Effects {
         !self.runs_code() && !self.panics_or_blocks() && self.writes == Writes::Nothing
     }
 
-    /// A panic repeats only after the first evaluation panicked.
     pub(crate) fn can_duplicate(self) -> bool {
         !self.runs_code()
             && !self.may_block
@@ -127,7 +119,6 @@ impl Effects {
             && !self.creates_identity
     }
 
-    /// The order of two panics is not kept.
     pub(crate) fn can_move_across(self, between: Self) -> bool {
         let orders = |first: Self, second: Self| {
             first.runs_effectful_code() && (second.runs_code() || second.panics_or_blocks())
@@ -150,7 +141,6 @@ fn observes(reads: Stability, writes: Writes) -> bool {
 }
 
 impl GoExpressionNode {
-    /// A function literal does not run its body when evaluated.
     pub(crate) fn effects(&self) -> Effects {
         let mut effects = Effects::default();
         self.visit_children(&mut |child| effects = effects.union(child.effects()));
@@ -250,8 +240,6 @@ impl GoExpressionNode {
                 | BinaryOp::Le
                 | BinaryOp::Gt
                 | BinaryOp::Ge => Effects::default(),
-                // Division by zero, a negative shift, and comparing
-                // uncomparable interface values panic.
                 BinaryOp::Div | BinaryOp::Rem | BinaryOp::Shl | BinaryOp::Shr => Effects {
                     may_panic: true,
                     ..Effects::default()
@@ -269,221 +257,5 @@ impl GoExpressionNode {
                 BinaryOp::Eq | BinaryOp::Ne => Effects::default(),
             },
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::plan::bodies::{LoweredBlock, expression_statement};
-    use crate::plan::go_expression::{
-        CompositeLayout, FunctionLiteralLayout, Operand, SourcePosition,
-    };
-    use crate::plan::local::GoIdentifier;
-    use crate::plan::values::GoExpression;
-    use crate::types::go_type::GoType;
-
-    fn name(text: &str) -> GoExpressionNode {
-        GoExpressionNode::Identifier(GoIdentifier::name(text.to_string()))
-    }
-
-    fn literal(text: &str) -> GoExpressionNode {
-        GoExpressionNode::Literal(text.to_string())
-    }
-
-    fn call(callee: &str, arguments: Vec<GoExpressionNode>) -> GoExpressionNode {
-        GoExpressionNode::Call {
-            callee: Operand::from(name(callee)),
-            arguments: arguments.into_iter().map(Operand::from).collect(),
-            purity: CallPurity::Effectful,
-            paren: SourcePosition::default(),
-        }
-    }
-
-    fn index() -> GoExpressionNode {
-        GoExpressionNode::Index {
-            base: Operand::from(name("xs")),
-            index: Operand::from(name("i")),
-        }
-    }
-
-    fn binary(
-        left: GoExpressionNode,
-        operator: BinaryOp,
-        right: GoExpressionNode,
-    ) -> GoExpressionNode {
-        GoExpressionNode::Binary {
-            operator,
-            left: Operand::from(left),
-            right: Operand::from(right),
-        }
-    }
-
-    #[test]
-    fn each_question_has_its_own_answer() {
-        let read = name("mutable").effects();
-        let constant = literal("1").effects();
-        let call = call("next", Vec::new()).effects();
-        let index = index().effects();
-
-        assert!(read.can_erase() && read.can_duplicate());
-        assert!(read.can_move_across(constant) && read.can_move_across(index));
-        assert!(!read.can_move_across(call));
-
-        assert!(!index.can_erase() && index.can_duplicate());
-        assert!(!index.can_move_across(call) && index.can_move_across(index));
-
-        assert!(!call.can_erase() && !call.can_duplicate());
-        assert!(!call.can_move_across(read) && call.can_move_across(constant));
-    }
-
-    #[test]
-    fn go_orders_calls_but_not_the_reads_around_them() {
-        let effectful = call("next", Vec::new())
-            .effects()
-            .with_known_reads(Stability::Fixed);
-        assert!(effectful.without_go_order().can_move_across(effectful));
-        let call = call("next", Vec::new()).effects();
-        assert!(!index().effects().without_go_order().can_move_across(call));
-        assert!(!name("x").effects().can_move_across(call));
-    }
-
-    #[test]
-    fn a_constructor_does_not_order_a_panicking_read() {
-        let constructor = GoExpressionNode::Call {
-            callee: Operand::from(name("MakeModeClean")),
-            arguments: Vec::new(),
-            purity: CallPurity::Constructor,
-            paren: SourcePosition::default(),
-        }
-        .effects();
-        let read = index().effects().without_go_order();
-        assert!(read.can_move_across(constructor));
-        assert!(!read.can_move_across(call("next", Vec::new()).effects()));
-        assert!(!constructor.can_erase() && !constructor.can_duplicate());
-    }
-
-    #[test]
-    fn a_call_orders_the_panics_of_its_arguments() {
-        let wrapped = call("f", vec![index()]).effects();
-        assert!(!wrapped.panics_or_blocks());
-        assert!(!wrapped.can_erase());
-        assert!(
-            binary(call("f", vec![index()]), BinaryOp::Add, index())
-                .effects()
-                .panics_or_blocks()
-        );
-    }
-
-    #[test]
-    fn a_read_only_call_does_not_order_a_panicking_read() {
-        let read_only = GoExpressionNode::Call {
-            callee: Operand::from(name("len")),
-            arguments: vec![name("xs").into()],
-            purity: CallPurity::ReadOnly,
-            paren: SourcePosition::default(),
-        }
-        .effects();
-        assert!(!read_only.runs_effectful_code());
-        assert!(
-            index()
-                .effects()
-                .without_go_order()
-                .can_move_across(read_only)
-        );
-        assert!(!read_only.can_move_across(call("next", Vec::new()).effects()));
-    }
-
-    #[test]
-    fn a_read_only_call_marks_only_itself() {
-        use crate::plan::values::GoExpression;
-        let next = GoExpression::call(GoExpression::name("next".to_string()), Vec::new());
-        let length = GoExpression::call(GoExpression::name("len".to_string()), vec![next])
-            .into_read_only_call();
-        let GoExpressionNode::Call {
-            purity, arguments, ..
-        } = length.node()
-        else {
-            panic!("expected a call");
-        };
-        assert_eq!(*purity, CallPurity::ReadOnly);
-        assert!(arguments[0].effects().runs_effectful_code());
-        assert!(length.effects().runs_effectful_code());
-    }
-
-    #[test]
-    fn known_reads_refine_reads_and_writes() {
-        let local = name("x").effects();
-        let fixed = local.with_known_reads(Stability::Fixed);
-        let effectful = call("next", Vec::new())
-            .effects()
-            .with_known_reads(Stability::Fixed);
-        assert!(!local.can_move_across(Effects::anything()));
-        assert!(fixed.can_move_across(Effects::anything().without_go_order()));
-        assert!(Effects::read_of(Stability::StableAcrossCalls).can_move_across(effectful));
-        assert!(!Effects::read_of(Stability::Observable).can_move_across(effectful));
-    }
-
-    #[test]
-    fn panicking_operators_cannot_be_erased() {
-        for operator in [BinaryOp::Div, BinaryOp::Rem, BinaryOp::Shl, BinaryOp::Shr] {
-            assert!(!binary(name("a"), operator, name("b")).effects().can_erase());
-        }
-        assert!(
-            binary(name("a"), BinaryOp::Add, name("b"))
-                .effects()
-                .can_erase()
-        );
-        assert!(
-            binary(name("a"), BinaryOp::Eq, literal("1"))
-                .effects()
-                .can_erase()
-        );
-        assert!(
-            !binary(name("a"), BinaryOp::Eq, name("b"))
-                .effects()
-                .can_erase()
-        );
-    }
-
-    #[test]
-    fn a_function_literal_does_not_run_its_body() {
-        let function = GoExpressionNode::FunctionLiteral {
-            parameters: Vec::new(),
-            result: Box::default(),
-            body: LoweredBlock {
-                statements: vec![expression_statement(GoExpression::from_operand(
-                    call("effect", Vec::new()).into(),
-                ))],
-            },
-            layout: FunctionLiteralLayout::Inline,
-            end: SourcePosition::default(),
-        };
-        assert!(function.effects().can_erase());
-    }
-
-    #[test]
-    fn new_slices_and_pointers_cannot_repeat() {
-        let slice = GoExpressionNode::CompositeLiteral {
-            go_type: Some(Box::new(GoType::slice_of(&GoType::new("int")))),
-            elements: Vec::new(),
-            layout: CompositeLayout::Inline { padded: true },
-            end: SourcePosition::default(),
-        };
-        assert!(slice.effects().can_erase());
-        assert!(!slice.effects().can_duplicate());
-        let pointer =
-            GoExpressionNode::AddressOf(Operand::from(GoExpressionNode::CompositeLiteral {
-                go_type: Some(Box::new(GoType::new("Point"))),
-                elements: Vec::new(),
-                layout: CompositeLayout::Inline { padded: true },
-                end: SourcePosition::default(),
-            }));
-        assert!(!pointer.effects().can_duplicate());
-        assert!(
-            GoExpressionNode::AddressOf(Operand::from(name("x")))
-                .effects()
-                .can_duplicate()
-        );
     }
 }

@@ -3,7 +3,7 @@ use crate::store::Store;
 use syntax::ast::{BinaryOperator, Constant, Expression, Literal, Span, UnaryOperator};
 use syntax::lex::rune_codepoint;
 use syntax::program::{OperandConversion, ValueUseKey};
-use syntax::types::{NumericFamily, SimpleKind, Type};
+use syntax::types::{self, NumericFamily, ScaledImaginary, SimpleKind, Type};
 
 use BinaryOperator::*;
 use UnaryOperator::*;
@@ -471,12 +471,12 @@ impl InferCtx<'_> {
                     left: BinaryOperand {
                         ty: &left.ty,
                         span: left.expression.get_span(),
-                        imaginary_coefficient: imaginary_coefficient(&left.expression),
+                        imaginary_coefficient: left.expression.imaginary_coefficient(),
                     },
                     right: BinaryOperand {
                         ty: &right.ty,
                         span: right.expression.get_span(),
-                        imaginary_coefficient: imaginary_coefficient(&right.expression),
+                        imaginary_coefficient: right.expression.imaginary_coefficient(),
                     },
                 },
                 span,
@@ -1415,16 +1415,6 @@ fn is_literal_arithmetic_operator(operator: BinaryOperator) -> bool {
     matches!(operator, Addition | Subtraction | Multiplication | Division)
 }
 
-fn imaginary_coefficient(expression: &Expression) -> Option<f64> {
-    match expression {
-        Expression::Literal {
-            literal: Literal::Imaginary(coefficient),
-            ..
-        } => Some(*coefficient),
-        _ => None,
-    }
-}
-
 /// `x * 2i` with a float `x` emits as `complex(0, x * 2)`.
 fn scaled_imaginary(
     operator: &BinaryOperator,
@@ -1435,16 +1425,14 @@ fn scaled_imaginary(
     if !matches!(operator, Multiplication) {
         return None;
     }
-    if let Some(coefficient) = operands.right.imaginary_coefficient
-        && resolved_left.is_float()
-    {
-        Some((resolved_left.clone(), coefficient))
-    } else if let Some(coefficient) = operands.left.imaginary_coefficient
-        && resolved_right.is_float()
-    {
-        Some((resolved_right.clone(), coefficient))
-    } else {
-        None
+    match types::scaled_imaginary(
+        operands.left.imaginary_coefficient,
+        resolved_left,
+        operands.right.imaginary_coefficient,
+        resolved_right,
+    )? {
+        ScaledImaginary::FloatLeft(coefficient) => Some((resolved_left.clone(), coefficient)),
+        ScaledImaginary::FloatRight(coefficient) => Some((resolved_right.clone(), coefficient)),
     }
 }
 

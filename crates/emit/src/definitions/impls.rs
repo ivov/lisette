@@ -36,7 +36,6 @@ impl Planner<'_> {
             .collect()
     }
 
-    /// Emit one impl method as a receiver method or a UFCS free function.
     fn emit_impl_method(
         &mut self,
         method: &Expression,
@@ -52,15 +51,10 @@ impl Planner<'_> {
 
         let is_public = matches!(visibility, Visibility::Public);
 
-        let has_self = self
-            .facts
-            .method(&context.qualified_type, function.name)
-            .is_some();
-        let is_ufcs = self
-            .facts
-            .is_ufcs_method(&context.qualified_type, function.name);
         let should_export = is_public || self.method_needs_export(function.name);
-        let is_free_function = !has_self || is_ufcs;
+        let is_free_function = !self
+            .facts
+            .emits_go_method(&context.qualified_type, function.name);
 
         let (go_name, mut declarations) = if is_free_function {
             let free_name = go_name::associated_function_go_name(
@@ -97,7 +91,6 @@ impl Planner<'_> {
         Some(declarations)
     }
 
-    /// Whether the impl declares exactly the receiver's generics, in order.
     fn impl_generics_match_receiver(&self, ctx: &ImplContext<'_>) -> bool {
         self.facts
             .definition(&ctx.qualified_type)

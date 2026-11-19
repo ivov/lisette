@@ -2,7 +2,6 @@ use crate::plan::go_expression::{Position, SourcePosition};
 use std::fmt;
 use std::mem;
 
-/// Writes a `/*line*/` directive only where a token needs a different line.
 #[derive(Default)]
 pub(crate) struct GoWriter {
     text: String,
@@ -80,7 +79,6 @@ impl GoWriter {
         self.line.clone()
     }
 
-    /// The next token on the line returns to the literal's start, unless the literal has an end.
     pub(crate) fn close_literal(&mut self, end: &SourcePosition, start: Option<Position>) {
         if !self.directives {
             return;
@@ -138,7 +136,6 @@ impl GoWriter {
             .then_some(start)
     }
 
-    /// gofmt moves a `/*line*/` directive at the start of a line onto a line of its own.
     fn push_directive_line(&mut self, position: &Position, start: usize) {
         let indentation = self.text.split_off(start);
         let previous = self.text[..start - 1].rfind('\n').map_or(0, |at| at + 1);

@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  interface Fetcher { fn fetch() -> Partial<int, string> }
+  struct Source {}
+  impl Source {
+    fn fetch(self) -> Partial<int, string> { Partial.Both(0, "x") }
+  }
+  fn run<T: Fetcher>(t: T) -> bool { t.fetch().is_both() }
+  fn main() {
+    if !run(Source {}) { panic("lost") }
+    let f: Fetcher = Source {}
+    if !f.fetch().is_both() { panic("lost") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Fetcher interface {
+	fetch() lisette.Partial[int, string]
+}
+
+type Source struct{}
+
+func (s Source) fetch() lisette.Partial[int, string] {
+	return lisette.MakePartialBoth(0, "x")
+}
+
+func run[T Fetcher](t T) bool {
+	return t.fetch().IsBoth()
+}
+
+func main() {
+	if !run(Source{}) {
+		panic("lost")
+	}
+	var f Fetcher = Source{}
+	if !f.fetch().IsBoth() {
+		panic("lost")
+	}
+}

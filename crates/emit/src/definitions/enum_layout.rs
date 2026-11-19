@@ -32,7 +32,6 @@ pub(crate) struct EnumLayout {
     pub(crate) enum_name: String,
     pub(crate) variants: Vec<VariantLayout>,
     pub(crate) generics: Vec<Generic>,
-    /// Index of the `#[default]` variant, which takes tag `0`.
     default_variant: Option<usize>,
 }
 
@@ -45,11 +44,29 @@ pub(crate) struct VariantLayout {
     doc: Option<String>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum JsonPayload {
+    Object,
+    Value,
+    Array,
+}
+
+impl VariantLayout {
+    fn json_payload(&self) -> JsonPayload {
+        if self.is_struct_variant {
+            JsonPayload::Object
+        } else if self.fields.len() == 1 {
+            JsonPayload::Value
+        } else {
+            JsonPayload::Array
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct FieldLayout {
     pub(crate) source_name: String,
     pub(crate) go_name: String,
-    /// Declared payload type, rendered by each declaring file.
     pub(crate) ty: Type,
     kind: FieldKind,
 }
@@ -105,7 +122,6 @@ impl EnumLayout {
         }
     }
 
-    /// Declaration order, except that the marked variant takes `0`.
     fn tag_values(&self) -> Vec<usize> {
         let Some(default_index) = self.default_variant.filter(|index| *index != 0) else {
             return (0..self.variants.len()).collect();
@@ -202,7 +218,7 @@ impl EnumLayout {
         generics: Vec<TypeParameter>,
         doc: &str,
     ) -> Vec<GoDeclaration> {
-        let tag = GoType::new(format!("{}Tag", self.enum_name));
+        let tag = GoType::new(go_name::enum_tag_type(&self.enum_name));
         let mut declarations = vec![GoDeclaration::new(DeclarationKind::Type {
             name: tag.code.clone(),
             parameters: Vec::new(),
@@ -233,7 +249,7 @@ impl EnumLayout {
                     .collect(),
             )));
         }
-        let mut fields = vec![("Tag".to_string(), tag)];
+        let mut fields = vec![(ENUM_TAG_FIELD.to_string(), tag)];
         for variant in &self.variants {
             for field in &variant.fields {
                 let ty = planner.go_type(&field.ty);
@@ -328,14 +344,14 @@ impl EnumLayout {
             GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
             vec![
                 string(&format!("{}(%d)", self.enum_name)),
-                member(&receiver, "Tag"),
+                member(&receiver, ENUM_TAG_FIELD),
             ],
         ))];
-        let subject = member(&receiver, "Tag");
+        let subject = member(&receiver, ENUM_TAG_FIELD);
         GoDeclaration::function(
             Some(GoParameter::new(
                 receiver,
-                generics.instantiate(&go_name::escape_type_name(&self.enum_name)),
+                generics.receiver_type(&self.enum_name),
             )),
             format.method(),
             Vec::new(),
@@ -358,7 +374,7 @@ impl EnumLayout {
                     GoExpression::struct_literal(
                         ty.clone(),
                         vec![(
-                            "Tag".to_string(),
+                            ENUM_TAG_FIELD.to_string(),
                             GoExpression::external_name(variant.tag_constant.clone()),
                         )],
                         CompositeLayout::Inline { padded: false },
@@ -392,7 +408,7 @@ impl EnumLayout {
     ) -> Vec<GoDeclaration> {
         let receiver_name = synthesized_receiver_name(&self.enum_name, generics);
         let receiver = planner.scope.new_local_identifier(&receiver_name);
-        let receiver_type = generics.instantiate(&go_name::escape_type_name(&self.enum_name));
+        let receiver_type = generics.receiver_type(&self.enum_name);
         let cases = self
             .variants
             .iter()
@@ -400,7 +416,7 @@ impl EnumLayout {
                 let payload = if variant.fields.is_empty() {
                     string(&variant.name)
                 } else {
-                    let inner = if variant.is_struct_variant {
+                    let inner = if variant.json_payload() == JsonPayload::Object {
                         map(variant
                             .fields
                             .iter()
@@ -411,7 +427,7 @@ impl EnumLayout {
                                 )
                             })
                             .collect())
-                    } else if variant.fields.len() == 1 {
+                    } else if variant.json_payload() == JsonPayload::Value {
                         member(&receiver, &variant.fields[0].go_name)
                     } else {
                         GoExpression::composite(
@@ -441,7 +457,7 @@ impl EnumLayout {
                 GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
                 vec![
                     string(&format!("unknown {} tag: %d", self.enum_name)),
-                    member(&receiver, "Tag"),
+                    member(&receiver, ENUM_TAG_FIELD),
                 ],
             ),
         ])];
@@ -452,7 +468,7 @@ impl EnumLayout {
             Vec::new(),
             GoType::result_list(&[GoType::slice_of(&GoType::new("byte")), GoType::new("error")]),
             LoweredBlock {
-                statements: vec![switch(member(&receiver, "Tag"), cases, default)],
+                statements: vec![switch(member(&receiver, ENUM_TAG_FIELD), cases, default)],
             },
         );
         let fresh = |planner: &mut Planner, base: &str| {
@@ -504,7 +520,7 @@ impl EnumLayout {
                         string(&variant.name),
                         vec![
                             assign(
-                                member(&receiver, "Tag"),
+                                member(&receiver, ENUM_TAG_FIELD),
                                 GoExpression::external_name(variant.tag_constant.clone()),
                             ),
                             plain_return(GoExpression::nil()),
@@ -552,10 +568,10 @@ impl EnumLayout {
                 .iter()
                 .map(|variant| {
                     let mut body = vec![assign(
-                        member(&receiver, "Tag"),
+                        member(&receiver, ENUM_TAG_FIELD),
                         GoExpression::external_name(variant.tag_constant.clone()),
                     )];
-                    if variant.is_struct_variant {
+                    if variant.json_payload() == JsonPayload::Object {
                         body.push(variable(
                             &inner,
                             GoType::map_of(&GoType::new("string"), &raw),
@@ -592,7 +608,7 @@ impl EnumLayout {
                             body.push(LoweredStatement::If(plan).into());
                         }
                         body.push(plain_return(GoExpression::nil()));
-                    } else if variant.fields.len() == 1 {
+                    } else if variant.json_payload() == JsonPayload::Value {
                         body.push(plain_return(unmarshal(
                             GoExpression::identifier(val.clone()),
                             member(&receiver, &variant.fields[0].go_name),

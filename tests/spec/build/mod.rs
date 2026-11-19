@@ -10814,3 +10814,55 @@ fn main() {
     let lower = emit_with("zork", "quux");
     assert_eq!(lower, upper.replace("Zork", "zork").replace("Quux", "quux"));
 }
+
+#[test]
+fn cross_package_struct_literal_keeps_declared_type_name() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("geo", "geo.lis", "pub struct Point_2d { pub x: int }");
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "geo"
+import "go:fmt"
+
+fn make() -> geo.Point_2d {
+  geo.Point_2d { x: 1 }
+}
+
+fn main() {
+  fmt.Println(make().x)
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn cross_package_function_const_reads_go_variable() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "lib",
+        "lib.lis",
+        r#"
+pub fn double(x: int) -> int { x * 2 }
+pub const HANDLER: fn(int) -> int = double
+"#,
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "lib"
+
+const A: fn(int) -> int = lib.HANDLER
+
+fn main() {
+  let b = lib.HANDLER
+  fmt.Println(A(1), b(2))
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

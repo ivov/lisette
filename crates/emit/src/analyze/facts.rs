@@ -1,5 +1,4 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::program::GoHint;
 use syntax::program::{CallOperation, CheckedExpression, EqualityRecipe};
 
 use syntax::ast::{BindingId, Expression, Pattern, RestPattern};
@@ -14,9 +13,9 @@ use crate::EnumLayout;
 use crate::SharedEmitContext;
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::catalog::GoSlotDescriptor;
-use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
 use crate::names::go_name;
+use crate::names::go_name::PRELUDE_ERROR_ID;
 
 #[derive(Clone)]
 pub(crate) struct EmitFacts<'a> {
@@ -49,7 +48,6 @@ impl<'a> EmitFacts<'a> {
         self.input.definitions.get(id)
     }
 
-    /// The operation that the checker selected for the call `expression`, or None when it is no call.
     pub(crate) fn call_operation(&self, expression: &Expression) -> Option<&'a CallOperation> {
         let Expression::Call {
             expression: callee, ..
@@ -60,7 +58,6 @@ impl<'a> EmitFacts<'a> {
         Some(&self.checked(callee).callee().operation)
     }
 
-    /// A lookup of the records that the checker published for the occurrence `expression`.
     pub(crate) fn checked<'e>(&self, expression: &'e Expression) -> CheckedExpression<'e, 'a> {
         self.input.checked_bodies.occurrence(expression)
     }
@@ -74,16 +71,13 @@ impl<'a> EmitFacts<'a> {
             .is_some_and(Definition::is_const)
     }
 
-    pub(crate) fn classify_go_return_type(
-        &self,
-        return_ty: &Type,
-        go_hints: &[GoHint],
-    ) -> Option<LoweredReturnAbi> {
-        classify_go_return_type(&self.input.definitions, return_ty, go_hints)
-    }
-
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
         peel_alias(&self.input.definitions, ty)
+    }
+
+    pub(crate) fn alias_emits_nothing(&self, name: &str) -> bool {
+        self.type_parameter_alias_index(&self.qualified_current(name))
+            .is_some()
     }
 
     pub(crate) fn type_parameter_alias_index(&self, id: &str) -> Option<usize> {
@@ -138,6 +132,51 @@ impl<'a> EmitFacts<'a> {
         types::resolves_to_unit(ty, |id| self.definition(id))
     }
 
+    pub(crate) fn is_prelude_error(&self, ty: &Type) -> bool {
+        matches!(self.peel_alias(ty), Type::Nominal { id, .. } if id.as_str() == PRELUDE_ERROR_ID)
+    }
+
+    pub(crate) fn has_no_go_value(&self, ty: &Type) -> bool {
+        self.resolves_to_unit(ty) || ty.is_variable() || ty.is_placeholder()
+    }
+
+    pub(crate) fn is_lisette_enum(&self, ty: &Type) -> bool {
+        matches!(self.peel_alias(ty), Type::Nominal { id, .. }
+        if !go_name::is_go_import(id.as_str())
+            && matches!(
+                self.definition(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Enum { .. })
+            ))
+    }
+
+    pub(crate) fn is_reference(&self, ty: &Type) -> bool {
+        self.peel_alias(ty).is_ref()
+    }
+
+    pub(crate) fn is_option_or_result(&self, ty: &Type) -> bool {
+        let ty = self.peel_alias(ty);
+        ty.is_option() || ty.is_result()
+    }
+
+    pub(crate) fn has_tuple_payload(&self, ty: &Type) -> bool {
+        matches!(
+            self.peel_alias(&self.peel_alias(ty).ok_type()),
+            Type::Tuple(_)
+        )
+    }
+
+    pub(crate) fn tuple_element_types(&self, ty: &Type) -> Vec<Type> {
+        match self.peel_alias(ty) {
+            Type::Tuple(elements) => elements,
+            Type::Nominal { params, .. } => params,
+            _ => Vec::new(),
+        }
+    }
+
+    pub(crate) fn is_prelude_nominal(&self, ty: &Type) -> bool {
+        matches!(self.strip_and_peel(ty), Type::Nominal { id, .. } if go_name::is_prelude_id(&id))
+    }
+
     pub(crate) fn strip_and_peel(&self, ty: &Type) -> Type {
         self.peel_alias(&ty.strip_refs())
     }
@@ -158,6 +197,14 @@ impl<'a> EmitFacts<'a> {
         is_nilable_go_type(&self.input.definitions, ty)
     }
 
+    pub(crate) fn go_nil_form(&self, ty: &Type) -> types::GoNilForm {
+        types::go_nil_form(ty, |id| self.input.definitions.get(id))
+    }
+
+    pub(crate) fn underlying(&self, ty: &Type) -> Type {
+        types::peel_underlying(ty, |id| self.input.definitions.get(id))
+    }
+
     pub(crate) fn partial_ok_is_nilable(&self, ty: &Type) -> bool {
         types::partial_ok_is_nilable(ty, |id| self.input.definitions.get(id))
     }
@@ -170,7 +217,6 @@ impl<'a> EmitFacts<'a> {
         resolve_to_function_type(&self.input.definitions, ty)
     }
 
-    /// Named Go function types keep the slots of their generic declaration.
     pub(crate) fn function_alias_declaration(&self, ty: &Type) -> Option<Type> {
         self.resolve_to_function_type(self.alias_declaration(ty)?)
     }
@@ -223,12 +269,16 @@ impl<'a> EmitFacts<'a> {
         self.input.bindings.is_alias_mutated(id)
     }
 
-    pub(crate) fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
+    fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
         self.definition(qualified_type)
             .is_some_and(|definition| definition.is_ufcs_method(method))
     }
 
-    /// The equality that the synthesized `equals` of `id` tests each field with, in declaration order.
+    pub(crate) fn emits_go_method(&self, qualified_type: &str, method: &str) -> bool {
+        self.method(qualified_type, method).is_some()
+            && !self.is_ufcs_method(qualified_type, method)
+    }
+
     pub(crate) fn synthesized_field_equalities(&self, id: &str) -> &'a [EqualityRecipe] {
         self.input.equality_index.synthesized_fields(id)
     }
@@ -317,7 +367,7 @@ impl<'a> EmitFacts<'a> {
             .then(|| {
                 let enum_name = types::unqualified_name(enum_id);
                 let make_function = go_name::enum_make_function(enum_name, variant_name);
-                if enum_id.starts_with(go_name::PRELUDE_PREFIX) {
+                if go_name::is_prelude_id(enum_id) {
                     format!("{}{}", go_name::PRELUDE_PREFIX, make_function)
                 } else {
                     make_function
@@ -403,6 +453,7 @@ impl<'a> EmitFacts<'a> {
 }
 
 pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
+    let ty = peel_alias(definitions, ty);
     ty.is_option() && is_nilable_go_type(definitions, &ty.ok_type())
 }
 

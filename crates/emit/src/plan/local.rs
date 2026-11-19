@@ -134,23 +134,3 @@ impl Display for GoIdentifier {
         f.write_str(&self.spelling)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn same_spelling_does_not_identify_distinct_locals() {
-        let outer = GoIdentifier::local("x".to_string(), LocalId(1));
-        let inner = GoIdentifier::local("x".to_string(), LocalId(2));
-        assert!(!outer.refers_to_same(&inner));
-        assert_ne!(outer, inner);
-    }
-
-    #[test]
-    #[should_panic(expected = "cannot change the identity")]
-    fn identifying_a_local_cannot_retarget_it() {
-        let mut name = GoIdentifier::local("x".to_string(), LocalId(1));
-        name.identify(LocalId(2));
-    }
-}

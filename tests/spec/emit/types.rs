@@ -7949,3 +7949,65 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn option_alias_and_newtype_over_interface_use_interface_nil_check() {
+    let input = r#"
+import "go:fmt"
+import "go:io"
+import "go:strings"
+
+type MaybeReader = Option<io.Reader>
+
+fn plain(r: io.Reader) -> Option<io.Reader> {
+  Some(r)
+}
+
+fn aliased(r: io.Reader) -> MaybeReader {
+  Some(r)
+}
+
+struct W(io.Reader)
+
+fn wrapped(r: io.Reader) -> Option<W> {
+  Some(W(r))
+}
+
+fn main() {
+  let r: io.Reader = strings.NewReader("x")
+  let a = plain(r)
+  let b = aliased(r)
+  let c = wrapped(r)
+  fmt.Println(a.is_some(), b.is_some(), c.is_some())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn type_parameter_alias_reserves_no_go_name() {
+    let input = r#"
+type Id<T> = T
+
+const ID = 5
+
+fn test() -> Id<int> {
+  ID
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_literal_with_aliased_int_keys_matches_int_keys() {
+    let input = r#"
+type K = int
+
+fn test() -> (Map<int, string>, Map<K, string>) {
+  let a: Map<int, string> = Map.from([(1, "a"), (2, "b")])
+  let b: Map<K, string> = Map.from([(1, "a"), (2, "b")])
+  (a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

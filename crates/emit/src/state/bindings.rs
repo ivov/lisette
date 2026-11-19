@@ -5,7 +5,6 @@ use syntax::types::Type;
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr {
     expression: GoExpression,
-    /// The binding may be immutable while its subject is not.
     stability: Stability,
 }
 
@@ -52,9 +51,7 @@ pub(crate) struct ComponentBinding {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ComponentKind {
     Option,
-    /// A `Result` whose error is the prelude `error`.
     ErrorResult,
-    /// A `Result` with another error type, which no prelude constructor rebuilds.
     OtherResult,
 }
 
@@ -63,7 +60,6 @@ impl ComponentKind {
         matches!(self, Self::ErrorResult | Self::OtherResult)
     }
 
-    /// The prelude function that rebuilds the whole value from its components.
     pub(crate) fn whole_value_constructor(self) -> Option<&'static str> {
         match self {
             Self::Option => Some("OptionFromCommaOk"),

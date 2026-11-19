@@ -12,7 +12,6 @@ pub(crate) struct WrapMessage {
 }
 
 impl Planner<'_> {
-    /// The call under a chain of `.wrap_err(message)`, with the messages inner to outer.
     pub(crate) fn peel_wrap_err<'a>(
         &self,
         expression: &'a Expression,
@@ -40,7 +39,6 @@ impl Planner<'_> {
             .then_some((receiver, message))
     }
 
-    /// Messages, including custom String calls, must run even on success.
     pub(crate) fn prepare_wrap_messages(
         &mut self,
         messages: &[&Expression],

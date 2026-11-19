@@ -13,9 +13,10 @@ use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::LoweredCall;
 use crate::calls::unwrap_or::{MapLambda, map_lambda};
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::fallible as tags;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
-use crate::names::go_name::{GeneratedPackage, PRELUDE_ERROR_ID};
+use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{FusedName, PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign,
@@ -26,8 +27,8 @@ use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, Stability};
 use crate::state::bindings::InlineExpr;
 use crate::state::scope::PairStatusKind;
-use crate::types::go_type::GoType;
 use syntax::ast::Expression;
+use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::DotAccessResolution;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
@@ -36,16 +37,12 @@ pub(crate) fn plain_return(value: GoExpression) -> Statement {
     LoweredStatement::Return(vec![value]).into()
 }
 
-/// What `r?; Ok(())` at the end of a body returns in place of both items.
 #[derive(Clone, Copy)]
 pub(crate) enum ForwardedTail<'a> {
-    /// A Go call with a bare `error` result.
     ErrorCall(&'a Expression),
-    /// A tagged `Result<(), E>`.
     TaggedResult(&'a Expression),
 }
 
-/// The `f` of `map_err(f)` when the error it builds can wait for the failure branch.
 pub(crate) enum ErrorMapper<'a> {
     Lambda(MapLambda<'a>),
     Function(&'a Expression),
@@ -60,7 +57,6 @@ impl ErrorMapper<'_> {
     }
 }
 
-/// A Go function name, perhaps qualified or instantiated, as opposed to an adapter literal.
 fn names_function(node: &GoExpressionNode) -> bool {
     match node {
         GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => true,
@@ -106,7 +102,6 @@ impl Planner<'_> {
         )
     }
 
-    /// Statement-position `inner?` (discards the ok value).
     pub(crate) fn lower_propagate_statement(&mut self, inner: &Expression) -> Vec<Statement> {
         self.lower_propagate_to(inner, PropagateTarget::Discard).0
     }
@@ -126,12 +121,12 @@ impl Planner<'_> {
         target: PropagateTarget<'_>,
     ) -> (Vec<Statement>, Option<GoExpression>) {
         let expression_ty = self.facts.peel_alias(&expression.get_type());
-        let fallible = Fallible::from_type(&expression_ty)
+        let fallible = self
+            .fallible(&expression_ty)
             .expect("lower_propagate called on non-Result/Option type");
 
         let mut statements = Vec::new();
 
-        // `Err(...)?` / `None?` literal already emits its own return.
         if !matches!(target, PropagateTarget::Value)
             && let Some(head) = self.try_lower_error_constructor(expression, &fallible)
         {
@@ -179,9 +174,6 @@ impl Planner<'_> {
         (statements, value)
     }
 
-    /// `Err(...)?` and `None?` already emitted `return ...`. Declare the
-    /// binding with a zero value so any dead code below that references it
-    /// stays well-typed in Go.
     fn declare_zero_for_dead_path(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -189,11 +181,10 @@ impl Planner<'_> {
         fallible: &Fallible,
     ) {
         let inner_ty = fallible.ok_ty();
-        let zero = self.zero_value(inner_ty);
+        let zero = self.go_zero(inner_ty);
         if self.is_declared(var_name.spelling()) {
             statements.push(assign(GoExpression::identifier(var_name.clone()), zero));
         } else {
-            // Declared so the dead-path binding stays in scope for later references.
             let go_ty = self.go_type(inner_ty);
             statements.push(
                 LoweredStatement::VarDecl {
@@ -223,7 +214,6 @@ impl Planner<'_> {
         }
     }
 
-    /// The `if check.Tag != <success> { return <failure> }` failure guard.
     fn build_propagate_failure_check(
         &mut self,
         check: &GoExpression,
@@ -242,7 +232,8 @@ impl Planner<'_> {
         } else {
             let mut setup = Vec::new();
             let err_expr = if fallible.is_result() {
-                let error = GoExpression::value_field(check.clone(), "ErrVal".to_string());
+                let error =
+                    GoExpression::value_field(check.clone(), tags::RESULT_ERR_FIELD.to_string());
                 let ValueLayout::Fallible { error: source, .. } = source_layout.underlying() else {
                     unreachable!("Result propagation requires an error layout")
                 };
@@ -261,7 +252,7 @@ impl Planner<'_> {
         };
         transition::tag_check(
             GoExpression::binary(
-                GoExpression::value_field(check.clone(), "Tag".to_string()),
+                GoExpression::value_field(check.clone(), ENUM_TAG_FIELD.to_string()),
                 BinaryOp::Ne,
                 GoExpression::generated(GeneratedPackage::Prelude, fallible.success_tag()),
             ),
@@ -292,8 +283,6 @@ impl Planner<'_> {
         (setup, values)
     }
 
-    /// Fuse `call()?` on a lowered-ABI callee into a direct failure check
-    /// (`if err != nil`), skipping the tagged round trip.
     fn try_lower_fused_propagate(
         &mut self,
         expression: &Expression,
@@ -341,7 +330,6 @@ impl Planner<'_> {
         let opens_if = value_var.is_none() && message_setup.is_empty();
         let outcome_var = match fallible.err_ty() {
             Some(error_ty) if !opens_if => {
-                // With no wrap messages, the left side has a new value name.
                 let name = message_setup
                     .is_empty()
                     .then(|| self.scope.spent_error(error_ty))
@@ -402,13 +390,11 @@ impl Planner<'_> {
                 _ => val,
             }
         });
-        let ok_value =
-            ok_value.unwrap_or_else(|| GoExpression::empty_composite(GoType::new("struct{}")));
+        let ok_value = ok_value.unwrap_or_else(GoExpression::unit);
         let value = self.propagated_value(&mut statements, target, named, Some(ok_value));
         Some((statements, value))
     }
 
-    /// Fuse `source?` on a native Option source into its Go test.
     fn try_lower_fused_option_propagate(
         &mut self,
         expression: &Expression,
@@ -445,8 +431,6 @@ impl Planner<'_> {
         Some((statements, value))
     }
 
-    /// Fuse `call.map_err(|e| ..)?`, `source.ok_or(error)?` and
-    /// `source.ok_or_else(|| ..)?` into the source's Go test.
     fn try_lower_mapped_error_propagate(
         &mut self,
         expression: &Expression,
@@ -579,7 +563,6 @@ impl Planner<'_> {
         Some((statements, value))
     }
 
-    /// `call.map_err(f)`, perhaps chained, on a call whose Go result can be tested in place.
     fn map_err_call<'a>(
         &self,
         expression: &'a Expression,
@@ -588,7 +571,6 @@ impl Planner<'_> {
         Some((self.result_fuse_plan(receiver)?, mappers))
     }
 
-    /// The source under `source.map_err(f).map_err(g)`, with the mappers in the order they run.
     fn error_mapper_chain<'a>(
         &self,
         expression: &'a Expression,
@@ -609,7 +591,6 @@ impl Planner<'_> {
         Some((source, mappers))
     }
 
-    /// A mapper that can run in the failure branch alone: a plain lambda or a safe name.
     fn error_mapper<'a>(&self, function: &'a Expression) -> Option<ErrorMapper<'a>> {
         if let Some(lambda) = map_lambda(function) {
             return Some(ErrorMapper::Lambda(lambda));
@@ -629,7 +610,6 @@ impl Planner<'_> {
             .then_some(ErrorMapper::Function(function))
     }
 
-    /// Run `mappers` on `error` in turn, with their setup in `setup`.
     fn apply_error_mappers(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -684,7 +664,6 @@ impl Planner<'_> {
         error
     }
 
-    /// Bind a lambda parameter to `error` in place when that is sound, else through a local.
     fn bind_mapped_error(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -717,7 +696,6 @@ impl Planner<'_> {
         self.scope.bind_identifier(param.name, ids, name);
     }
 
-    /// Test `source.map_err(f)?` on a tagged `Result` in place, so `f` runs on failure only.
     fn try_lower_tagged_map_err_propagate(
         &mut self,
         expression: &Expression,
@@ -759,7 +737,7 @@ impl Planner<'_> {
         let error_target = self.value_layout(error_layout.logical_type(), SlotOrigin::Lisette);
         let (error_setup, error) = CoercionPlan::bridge(self, error_layout, &error_target).lower(
             self,
-            GoExpression::value_field(check.clone(), "ErrVal".to_string()),
+            GoExpression::value_field(check.clone(), tags::RESULT_ERR_FIELD.to_string()),
         );
         failure_setup.extend(error_setup);
         let error = self.apply_error_mappers(&mut failure_setup, &mappers, error, Some(stability));
@@ -769,7 +747,7 @@ impl Planner<'_> {
         statements.push(
             transition::tag_check(
                 GoExpression::binary(
-                    GoExpression::value_field(check.clone(), "Tag".to_string()),
+                    GoExpression::value_field(check.clone(), ENUM_TAG_FIELD.to_string()),
                     BinaryOp::Ne,
                     GoExpression::generated(GeneratedPackage::Prelude, fallible.success_tag()),
                 ),
@@ -794,7 +772,6 @@ impl Planner<'_> {
         Some((statements, value))
     }
 
-    /// `r?; Ok(())` at the end of a body returns `r` itself, when `r` has the shape of the return.
     pub(crate) fn forwarded_tail<'a>(
         &self,
         check: &'a Expression,
@@ -830,23 +807,26 @@ impl Planner<'_> {
         }
     }
 
-    /// The call returns as is, unless a concrete error type would turn nil into non-nil.
     fn forwarded_error_call<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
-        if !self.is_error_interface(&self.facts.peel_alias(self.return_ctx().ty()?).err_type()) {
+        if !self
+            .facts
+            .is_prelude_error(self.return_fallible()?.err_ty()?)
+        {
             return None;
         }
         let lowered = self.lowered_call(inner)?;
         if lowered.shape != LoweredReturnAbi::BareError
             || !lowered.wraps.is_empty()
             || lowered.is_bridged()
-            || !self.is_error_interface(&self.facts.peel_alias(&lowered.call.get_type()).err_type())
+            || !self
+                .facts
+                .is_prelude_error(&self.facts.peel_alias(&lowered.call.get_type()).err_type())
         {
             return None;
         }
         Some(lowered.call)
     }
 
-    /// A tagged `Result<(), E>` returns as is when it has the return type of the function.
     fn forwarded_tagged_result<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
         let return_ty = self.facts.peel_alias(self.return_ctx().ty()?);
         let inner_ty = self.facts.peel_alias(&inner.get_type());
@@ -856,19 +836,8 @@ impl Planner<'_> {
             .then_some(inner)
     }
 
-    fn is_error_interface(&self, ty: &Type) -> bool {
-        matches!(
-            self.facts.peel_alias(ty),
-            Type::Nominal { id, .. } if id.as_str() == PRELUDE_ERROR_ID
-        )
-    }
-
     fn returns_fallible(&self) -> bool {
-        let return_ctx = self.return_ctx();
-        return_ctx.lowered_shape().is_some()
-            || return_ctx
-                .ty()
-                .is_some_and(|ty| Fallible::from_type(ty).is_some())
+        self.return_ctx().lowered_shape().is_some() || self.return_fallible().is_some()
     }
 
     fn declare_propagate_target<'a>(
@@ -882,7 +851,6 @@ impl Planner<'_> {
         Some(name)
     }
 
-    /// The `?` value for `target`. A bound target is assigned unless `named` already holds it.
     fn propagated_value(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -915,7 +883,6 @@ impl Planner<'_> {
     pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> LoweredBlock {
         let return_ctx = self.return_ctx();
         if self.facts.peel_alias(&expression.get_type()).is_never() {
-            // A Go call that never returns has no value, so it cannot follow `return`.
             let mut statements = vec![self.lower_statement(expression)];
             if !matches!(return_ctx, ReturnContext::Void(_)) {
                 statements.push(LoweredStatement::UnreachablePanic.into());
@@ -924,10 +891,8 @@ impl Planner<'_> {
         }
         let is_unit = return_ctx
             .ty()
-            .is_some_and(|ty| self.facts.peel_alias(ty).is_unit());
+            .is_some_and(|ty| self.facts.resolves_to_unit(ty));
         if is_unit {
-            // Unit expressions still run for their effects. The enclosing
-            // physical signature decides whether `return` carries unit data.
             let is_pure = matches!(
                 expression,
                 Expression::Unit { .. }
@@ -941,7 +906,7 @@ impl Planner<'_> {
             statements.push(if matches!(return_ctx, ReturnContext::Void(_)) {
                 LoweredStatement::Return(Vec::new()).into()
             } else {
-                plain_return(GoExpression::empty_composite(GoType::new("struct{}")))
+                plain_return(GoExpression::unit())
             });
             return LoweredBlock { statements };
         }
@@ -962,12 +927,6 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    /// Lower a Result/Option-wrapped return into structured statement IR.
-    ///
-    /// Returns `None` only when the return type is NOT Result/Option
-    /// (`Fallible::from_type` returns `None`); the caller then emits a plain
-    /// return. Once a Result/Option return type is identified this is
-    /// exhaustive: every path yields the wrapped-return statements.
     pub(crate) fn lower_wrapped_return(
         &mut self,
         expression: &Expression,
@@ -977,11 +936,11 @@ impl Planner<'_> {
 
         let return_ty = return_ctx
             .ty()
-            .filter(|ty| Fallible::from_type(ty).is_some())
-            .cloned()
+            .map(|ty| self.facts.peel_alias(ty))
+            .filter(|ty| self.fallible(ty).is_some())
             .unwrap_or(expression_ty);
 
-        let fallible = Fallible::from_type(&return_ty)?;
+        let fallible = self.fallible(&return_ty)?;
 
         let mut statements = Vec::new();
 
@@ -1001,7 +960,6 @@ impl Planner<'_> {
         }
 
         if fallible.classify_constructor(expression) == Some(ConstructorKind::Failure) {
-            // Only `None` reaches here, since `Err` always has a payload.
             statements.extend(self.lower_failure_constructor_return(&[], &fallible, &[]));
             return Some(statements);
         }
@@ -1045,9 +1003,6 @@ impl Planner<'_> {
         transition::emit_lowered_result_return(self, value, "v", return_ty, &shape)
     }
 
-    /// Lower a return for a call whose result is wrapped in the function's
-    /// Result/Option return type. Success/Failure constructors collapse
-    /// directly; other calls return the call expression.
     fn lower_wrapped_call_return(
         &mut self,
         expression: &Expression,
@@ -1102,10 +1057,7 @@ impl Planner<'_> {
             }
             Some(shape) if args.is_empty() => {
                 statements.push(transition::multi_value_return(
-                    transition::lowered_ok_values(
-                        shape,
-                        vec![GoExpression::empty_composite(GoType::new("struct{}"))],
-                    ),
+                    transition::lowered_ok_values(shape, vec![GoExpression::unit()]),
                 ));
             }
             Some(shape)
@@ -1164,7 +1116,6 @@ impl Planner<'_> {
         statements
     }
 
-    /// Tail return for a non-constructor call.
     fn lower_wrapped_passthrough_return(
         &mut self,
         expression: &Expression,
@@ -1183,7 +1134,8 @@ impl Planner<'_> {
         {
             let (setup, value) = self.lower_propagate(expression);
             statements.extend(setup);
-            let fallible = Fallible::from_type(&self.facts.peel_alias(return_ty))
+            let fallible = self
+                .fallible(return_ty)
                 .expect("an Option return has a fallible type");
             statements.extend(self.success_return(&fallible, value));
             return statements;
@@ -1200,7 +1152,8 @@ impl Planner<'_> {
         {
             let (setup, value) = self.lower_propagate(expression);
             statements.extend(setup);
-            let fallible = Fallible::from_type(&self.facts.peel_alias(return_ty))
+            let fallible = self
+                .fallible(return_ty)
                 .expect("a lowered Result shape has a fallible return type");
             statements.extend(self.success_return(&fallible, value));
             return statements;
@@ -1283,7 +1236,6 @@ impl Planner<'_> {
         statements
     }
 
-    /// True when the callee already has the enclosing shape, so a tail return forwards it.
     fn callee_matches_lowered_shape(
         &self,
         call_expression: &Expression,

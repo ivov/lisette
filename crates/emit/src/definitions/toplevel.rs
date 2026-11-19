@@ -5,11 +5,9 @@ use crate::names::source_name::SourceName;
 use crate::plan::bodies::{ConstPlan, LoweredStatement};
 use crate::plan::declarations::{DeclarationKind, GoDeclaration};
 use crate::plan::values::GoExpression;
-use crate::types::go_type::GoType;
 use syntax::EcoString;
 use syntax::ast::BindingId;
 use syntax::ast::{Expression, Generic};
-use syntax::program::SlotOrigin;
 use syntax::types::{SimpleKind, Type};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -33,21 +31,7 @@ impl Planner<'_> {
             .facts
             .definition(&self.facts.qualified_current(name))
             .and_then(|definition| definition.instantiate_alias_target(&params, false));
-        let function_target = declared_target
-            .as_ref()
-            .and_then(|target| self.facts.resolve_to_function_type(target));
-        let is_fn_alias = function_target.is_some();
-        let underlying = function_target
-            .as_ref()
-            .or(declared_target.as_ref())
-            .unwrap_or(ty);
-        let underlying_type = if is_fn_alias {
-            let target = declared_target.as_ref().unwrap_or(ty);
-            let layout = self.value_layout(target, SlotOrigin::Lisette);
-            layout.go_type(self)
-        } else {
-            self.go_type(underlying)
-        };
+        let underlying_type = self.go_type(declared_target.as_ref().unwrap_or(ty));
 
         let generics = self.plan_generics(
             &generics
@@ -90,16 +74,13 @@ impl Planner<'_> {
             self.fresh_declared_source(&name)
         };
         let is_const = self.is_go_constant_expression(expression);
-        // An untyped string or bool constant also assigns to named types.
         let go_type = (!is_const
             || !matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
         .then(|| self.go_type(ty));
 
-        // `is_go_constant_expression` admits only literals, identifiers, and
-        // constexpr unary/binary, none of which carry setup statements.
         let raw_value = self.lower_value(expression, ExpressionContext::value());
         let value = if raw_value.is_empty() {
-            GoExpression::empty_composite(GoType::new("struct{}"))
+            GoExpression::unit()
         } else {
             raw_value.into_parts().1
         };

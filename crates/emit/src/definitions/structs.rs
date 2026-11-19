@@ -117,7 +117,10 @@ impl Planner<'_> {
 
     fn stringer_kind_of(&self, id: &str, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
         let definition = self.facts.definition(id)?;
-        if definition_declares_string(definition, |m| self.facts.is_ufcs_method(id, m)) {
+        if ["string", ENUM_STRINGER_METHOD]
+            .iter()
+            .any(|method| self.facts.emits_go_method(id, method))
+        {
             return Some(StringerKind::Foreign);
         }
         if matches!(definition.body, DefinitionBody::Interface { .. }) {
@@ -174,8 +177,9 @@ impl Planner<'_> {
         generics: &[Generic],
         attributes: &[Attribute],
     ) -> Vec<GoDeclaration> {
-        let underlying =
-            (fields.len() == 1 && parameters.is_empty()).then(|| self.go_type(&fields[0].ty));
+        let underlying = self
+            .is_newtype_definition(name)
+            .then(|| self.go_type(&fields[0].ty));
         let go_name = go_name::escape_type_name(name).into_owned();
         let definition = match &underlying {
             Some(underlying) => DeclarationKind::Type {
@@ -191,7 +195,7 @@ impl Planner<'_> {
                     .enumerate()
                     .map(|(index, field)| FieldDeclaration {
                         documentation: Default::default(),
-                        name: Some(format!("F{index}")),
+                        name: Some(go_name::tuple_struct_field(index)),
                         ty: self.go_type(&field.ty),
                         tag: None,
                     })
@@ -257,9 +261,6 @@ impl Planner<'_> {
         )
     }
 
-    /// Whether the user already supplies `(String, GoString)` via real receiver
-    /// methods (UFCS-emitted free functions do not satisfy Go interfaces, so
-    /// they don't count). Drives which stringers the compiler synthesizes.
     pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
         let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
@@ -285,7 +286,7 @@ impl Planner<'_> {
                     .ty
                     .is_stringer_signature(|ty| self.facts.peel_alias(ty))
             })
-            && !self.facts.is_ufcs_method(&qualified, method_name)
+            && self.facts.emits_go_method(&qualified, method_name)
     }
 
     pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
@@ -302,6 +303,13 @@ impl Planner<'_> {
     pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {
         let qualified = self.facts.qualified_current(name);
         self.facts.synthesizes_equals(qualified.as_str())
+    }
+
+    pub(crate) fn is_newtype_definition(&self, name: &str) -> bool {
+        let qualified = self.facts.qualified_current(name);
+        self.facts
+            .definition(qualified.as_str())
+            .is_some_and(Definition::is_newtype)
     }
 
     fn is_pointer_backed_newtype(&self, name: &str) -> bool {
@@ -355,7 +363,7 @@ impl Planner<'_> {
             .into_iter()
             .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
             .unwrap_or_else(|| GoExpression::literal("true".to_string()));
-        let receiver_type = receiver_generics.instantiate(&go_name::escape_type_name(name));
+        let receiver_type = receiver_generics.receiver_type(name);
         GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
             self.equals_method_go_name(),
@@ -368,7 +376,6 @@ impl Planner<'_> {
         )
     }
 
-    /// The Go methods emit adds to the struct `name`, in emission order.
     pub(crate) fn struct_synthesized_methods(
         &self,
         name: &str,
@@ -402,7 +409,6 @@ impl Planner<'_> {
         methods
     }
 
-    /// The Go methods emit adds to the enum `name`, in emission order.
     pub(crate) fn enum_synthesized_methods(
         &self,
         name: &str,
@@ -449,10 +455,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Single stringer to synthesize for structs: `String` by default,
-    /// `GoString` when the user already supplies `String`, none when both
-    /// exist. Enums use [`Self::stringer_overrides`] directly, since they
-    /// synthesize both a bare `String` and a qualified `GoString`.
     pub(crate) fn stringer_method_name(
         &self,
         name: &str,
@@ -503,13 +505,10 @@ pub(crate) enum StructShape {
     Tuple,
 }
 
-/// A Go method that emit adds to a Lisette struct or enum.
 #[derive(Clone, Copy)]
 pub(crate) enum SynthesizedMethod {
     Format(StringFormat<'static>),
-    /// A struct `String` that hides the one an embedded field synthesizes.
     StringerShadow,
-    /// An enum's `MarshalJSON` and `UnmarshalJSON`.
     Json,
     ToString,
     Equals,
@@ -574,10 +573,7 @@ fn string_method(
     value: GoExpression,
 ) -> GoDeclaration {
     GoDeclaration::function(
-        Some(GoParameter::new(
-            receiver,
-            generics.instantiate(&go_name::escape_type_name(name)),
-        )),
+        Some(GoParameter::new(receiver, generics.receiver_type(name))),
         method.to_string(),
         Vec::new(),
         Vec::new(),
@@ -611,7 +607,7 @@ impl Planner<'_> {
         let value = GoExpression::call(
             GoExpression::selector(
                 GoExpression::identifier(receiver.clone()),
-                "String".to_string(),
+                ENUM_STRINGER_METHOD.to_string(),
             ),
             vec![],
         );
@@ -683,15 +679,6 @@ fn type_methods(definition: &Definition) -> Option<&Methods> {
     }
 }
 
-fn definition_declares_string(definition: &Definition, is_ufcs: impl Fn(&str) -> bool) -> bool {
-    let Some(methods) = type_methods(definition) else {
-        return false;
-    };
-    ["string", ENUM_STRINGER_METHOD]
-        .iter()
-        .any(|method| methods.contains_key(*method) && !is_ufcs(method))
-}
-
 fn emit_struct_shadow_stringer_method(
     planner: &mut Planner,
     name: &str,
@@ -715,7 +702,7 @@ fn emit_struct_shadow_stringer_method(
         name,
         generics,
         receiver,
-        "String",
+        ENUM_STRINGER_METHOD,
         format_value(&text, arguments),
     )
 }
@@ -737,7 +724,7 @@ fn emit_tuple_struct_format_method(
             let receiver = GoExpression::identifier(receiver.clone());
             let value = match underlying {
                 Some(ty) => GoExpression::conversion(ty.clone(), receiver),
-                None => GoExpression::selector(receiver, format!("F{index}")),
+                None => GoExpression::selector(receiver, go_name::tuple_struct_field(index)),
             };
             format.format_argument(value, *field)
         })

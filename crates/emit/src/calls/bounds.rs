@@ -52,7 +52,6 @@ impl BoundsCheckedIndex {
 }
 
 impl Planner<'_> {
-    /// `xs.get(i)` as a bounds test and a direct index, each operand evaluated once.
     pub(crate) fn lower_bounds_checked_index(
         &mut self,
         call: &NativeCallContext<'_>,
@@ -77,7 +76,7 @@ impl Planner<'_> {
         let mut values = sequenced.values;
         let index = values.pop().expect("index operand");
         let mut receiver = values.pop().expect("receiver operand");
-        if source.get_type().is_ref() {
+        if self.facts.is_reference(&source.get_type()) {
             receiver = GoExpression::dereference(receiver);
         }
         (setup, BoundsCheckedIndex { receiver, index })

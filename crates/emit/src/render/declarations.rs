@@ -2,7 +2,7 @@ use crate::plan::bodies::{LoweredBlock, for_each_statements_mut};
 use crate::plan::declarations::{DeclarationKind, Documentation, GoDeclaration, TypeParameter};
 use crate::plan::go_expression::Position;
 use crate::render::{Renderer, writer::GoWriter};
-use crate::types::go_type::GoTypeShape;
+use crate::types::go_type::{GoType, GoTypeShape};
 use crate::utils::group_params;
 use std::fmt::Write;
 
@@ -78,17 +78,7 @@ impl Renderer {
                 write!(output, "type {name}").unwrap();
                 generics(&mut output, parameters);
                 output.push_str(" ");
-                if let GoTypeShape::Struct(fields) = underlying.shape.as_ref()
-                    && !fields.is_empty()
-                {
-                    output.push_str("struct {\n");
-                    for (name, ty) in fields {
-                        writeln!(output, "{name} {}", ty.code).unwrap();
-                    }
-                    output.push('}');
-                } else {
-                    output.push_str(&underlying.code);
-                }
+                write_underlying(&mut output, underlying);
             }
             DeclarationKind::Alias {
                 name,
@@ -98,17 +88,7 @@ impl Renderer {
                 write!(output, "type {name}").unwrap();
                 generics(&mut output, parameters);
                 output.push_str(" = ");
-                if let GoTypeShape::Struct(fields) = underlying.shape.as_ref()
-                    && !fields.is_empty()
-                {
-                    output.push_str("struct {\n");
-                    for (name, ty) in fields {
-                        writeln!(output, "{name} {}", ty.code).unwrap();
-                    }
-                    output.push('}');
-                } else {
-                    output.push_str(&underlying.code);
-                }
+                write_underlying(&mut output, underlying);
             }
             DeclarationKind::Struct {
                 name,
@@ -217,5 +197,19 @@ impl Renderer {
             }
         }
         output.into_text()
+    }
+}
+
+fn write_underlying(output: &mut GoWriter, underlying: &GoType) {
+    if let GoTypeShape::Struct(fields) = underlying.shape.as_ref()
+        && !fields.is_empty()
+    {
+        output.push_str("struct {\n");
+        for (name, ty) in fields {
+            writeln!(output, "{name} {}", ty.code).unwrap();
+        }
+        output.push('}');
+    } else {
+        output.push_str(&underlying.code);
     }
 }

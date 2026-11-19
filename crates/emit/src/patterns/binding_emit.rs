@@ -35,13 +35,10 @@ impl AssertedPattern {
     }
 }
 
-/// True when a downstream consumer will reference the asserted value.
 fn requires_asserted_subject(checks: &[Check], bindings: &[PatternBinding]) -> bool {
     !checks.is_empty() || bindings.iter().any(|b| b.target.is_named())
 }
 
-/// Hoist a root type assertion as `asserted := subject.(T)` for irrefutable
-/// destructure paths (the pattern compiler has already verified the type).
 pub(crate) fn apply_root_assertion(
     planner: &mut Planner,
     statements: &mut Vec<Statement>,
@@ -72,7 +69,6 @@ pub(crate) fn apply_root_assertion(
     }
 }
 
-/// Hoist a root type assertion as comma-ok for refutable contexts (while-let,
 pub(crate) fn apply_refutable_root_assertion(
     planner: &mut Planner,
     statements: &mut Vec<Statement>,
@@ -115,8 +111,6 @@ pub(crate) fn apply_refutable_root_assertion(
             (effective, Some(GoExpression::identifier(ok)))
         }
         multiple => {
-            // No-binding interface or-pattern (`A | B`): no single asserted
-            // form is possible across types.
             let oks = multiple
                 .iter()
                 .map(|t| {
@@ -140,7 +134,6 @@ pub(crate) fn apply_refutable_root_assertion(
     }
 }
 
-/// Push one `name := subject.path` per binding. Inlined bindings produce no statement.
 pub(crate) fn tree_binding_statements(
     planner: &mut Planner,
     statements: &mut Vec<Statement>,
@@ -183,7 +176,7 @@ pub(crate) fn tree_binding_statements(
 }
 
 pub(crate) fn bind_inline_unit(planner: &mut Planner, binding: &PatternBinding) {
-    let unit = GoExpression::empty_composite(GoType::new("struct{}"));
+    let unit = GoExpression::unit();
     planner.scope.bind_inline_expr(
         &binding.lisette_name,
         &binding.binding_ids,
@@ -211,7 +204,6 @@ pub(crate) fn with_tree_bindings<R>(
     })
 }
 
-/// Push `name = subject.path` leaves for or-pattern alternatives.
 pub(crate) fn tree_assignment_statements(
     planner: &mut Planner,
     statements: &mut Vec<Statement>,

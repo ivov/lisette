@@ -13,7 +13,6 @@ pub(crate) mod verify;
 pub(crate) mod visit;
 
 use crate::Planner;
-use crate::names::go_name;
 use crate::output::imports::ImportPlan;
 use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashSet as HashSet;
@@ -32,7 +31,6 @@ pub(crate) struct FilePlan<'a> {
 }
 
 impl Planner<'_> {
-    /// Resolve package-wide names and collisions before any item is rendered.
     pub(crate) fn build_package_plan<'f>(&mut self, files: &[&'f File]) -> PackagePlan<'f> {
         let file_plans: Vec<_> = files
             .iter()
@@ -54,7 +52,6 @@ impl Planner<'_> {
             .collect();
         let qualifier_names: HashSet<String> =
             import_qualifiers.iter().map(|(q, _)| q.clone()).collect();
-        // The escape remap numbers names, so every other package-block name must be known first.
         self.package
             .record_package_block_names(self.collect_fixed_names(files), qualifier_names.clone());
         self.collect_escape_remap(files);
@@ -70,8 +67,7 @@ impl Planner<'_> {
         let package_name = if self.facts.is_entry_package(package_id) {
             self.facts.entry_package_name().to_string()
         } else {
-            let raw = package_id.rsplit('/').next().unwrap_or(package_id);
-            go_name::sanitize_package_name(raw).into_owned()
+            crate::root_package_name(package_id)
         };
 
         PackagePlan {

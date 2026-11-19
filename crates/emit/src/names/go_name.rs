@@ -19,6 +19,22 @@ pub(crate) const PRELUDE_PREFIX: &str = "prelude.";
 
 pub(crate) const PRELUDE_ERROR_ID: &str = "prelude.error";
 
+pub(crate) const RANGE_START_FIELD: &str = "Start";
+
+pub(crate) const RANGE_END_FIELD: &str = "End";
+
+pub(crate) fn tuple_struct_field(index: usize) -> String {
+    format!("F{index}")
+}
+
+pub(crate) fn enum_tag_type(enum_name: &str) -> String {
+    format!("{enum_name}Tag")
+}
+
+pub(crate) fn is_prelude_id(id: &str) -> bool {
+    id.starts_with(PRELUDE_PREFIX)
+}
+
 pub(crate) const GO_STDLIB_PKG: &str = "lisette";
 
 pub(crate) const ADAPTER_TYPE_PREFIX: &str = "_lisAdapter_";
@@ -49,9 +65,6 @@ pub(crate) use syntax::go_names::{
 };
 pub(crate) use syntax::types::unqualified_name;
 
-/// Convert a Lisette identifier to its exported Go form: snake_case becomes
-/// PascalCase (`user_id` → `UserId`), already-Pascal names pass through, and
-/// the result is escaped if it collides with a Go keyword.
 pub(crate) fn make_exported(name: &str) -> String {
     escape_keyword(&snake_to_camel(name)).into_owned()
 }
@@ -65,7 +78,6 @@ pub(crate) fn exported_member(owner: &Type, member: &str) -> String {
     make_exported(member)
 }
 
-/// The Go spelling of a struct member at a use site.
 pub(crate) fn member_go_name(
     owner: &Type,
     member: &str,
@@ -81,7 +93,6 @@ pub(crate) fn member_go_name(
     }
 }
 
-/// A source name never spells a trailing `_` that keyword escaping did not add.
 pub(crate) fn tagged_twin(go_name: &str) -> String {
     format!("{go_name}_")
 }
@@ -216,13 +227,6 @@ impl ResolvedName {
     }
 }
 
-/// Convert a qualified Lisette name to its Go equivalent.
-///
-/// # Examples
-/// - `"prelude.Option"` → `"lisette.Option"` (Prelude package)
-/// - `"prelude.Slice.filter"` → `"lisette.SliceFilter"` (Prelude package)
-/// - `"mypackage.foo"` → `"mypackage_foo"` (no package)
-/// - `"range"` → `"range_"` (Go keyword escaped)
 pub(crate) fn resolve(name: &str) -> ResolvedName {
     if let Some(rest) = name.strip_prefix(PRELUDE_PREFIX) {
         let go_name: String = rest.split('.').map(snake_to_camel).collect();
@@ -234,7 +238,7 @@ pub(crate) fn resolve(name: &str) -> ResolvedName {
 
 pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {
     if variant_name == ENUM_TAG_FIELD {
-        return format!("{enum_name}Tag_");
+        return format!("{}_", enum_tag_type(enum_name));
     }
     let constant = format!("{enum_name}{variant_name}");
     if is_go_reserved_word(&constant) {
@@ -248,7 +252,6 @@ pub(crate) fn enum_make_function(enum_name: &str, variant_name: &str) -> String 
     format!("Make{}{}", escape_type_name(enum_name), variant_name)
 }
 
-/// Go builtins re-exposed by the Lisette prelude under the same name.
 const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
 
 pub(crate) fn is_prelude_go_builtin(qualified_name: &str) -> bool {

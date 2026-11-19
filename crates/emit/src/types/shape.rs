@@ -5,8 +5,6 @@ use syntax::types::Type;
 use crate::Planner;
 
 impl Planner<'_> {
-    /// Normalize a type for emit decisions by walking aliases and reference
-    /// wrappers to a fixed point. Only peels real type aliases (not newtypes).
     pub(crate) fn emit_shape_ty(&self, ty: &Type) -> Type {
         let mut current = ty.clone();
         loop {
@@ -19,20 +17,19 @@ impl Planner<'_> {
         }
     }
 
-    /// Unlike `NativeTypeKind::from_type`, arrays are excluded.
-    pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeTypeKind> {
+    pub(crate) fn native_kind(&self, ty: &Type) -> Option<NativeTypeKind> {
         NativeTypeKind::from_type(&self.emit_shape_ty(ty))
+    }
+
+    pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeTypeKind> {
+        self.native_kind(ty)
             .filter(|kind| *kind != NativeTypeKind::Array)
     }
 
-    /// True when `ty` resolves to the given native kind after alias peeling.
     pub(crate) fn is_native_shape(&self, ty: &Type, kind: NativeTypeKind) -> bool {
         self.native_shape(ty).is_some_and(|shape| shape == kind)
     }
 
-    /// Classify a type as one of the prelude range structs after alias
-    /// peeling. Unrelated types named `Range` (Go imports, local types) do
-    /// not match.
     pub(crate) fn range_shape(&self, ty: &Type) -> Option<RangeShape> {
         RangeShape::of(&self.emit_shape_ty(ty))
     }

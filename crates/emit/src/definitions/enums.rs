@@ -13,6 +13,7 @@ use crate::types::go_type::GoType;
 use crate::utils::ReceiverGenerics;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
+use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
@@ -107,8 +108,7 @@ impl Planner<'_> {
         let other = synthesized_local_name("other", &receiver, receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
-        let go_type_name = go_name::escape_type_name(name);
-        let receiver_type = receiver_generics.instantiate(&go_type_name);
+        let receiver_type = receiver_generics.receiver_type(name);
         let go_method = self.equals_method_go_name();
 
         let mut recipes = self.facts.synthesized_field_equalities(enum_id).iter();
@@ -157,10 +157,12 @@ impl Planner<'_> {
 
         let left = GoExpression::selector(
             GoExpression::identifier(receiver.clone()),
-            "Tag".to_string(),
+            ENUM_TAG_FIELD.to_string(),
         );
-        let right =
-            GoExpression::selector(GoExpression::identifier(other.clone()), "Tag".to_string());
+        let right = GoExpression::selector(
+            GoExpression::identifier(other.clone()),
+            ENUM_TAG_FIELD.to_string(),
+        );
         let statements = if cases.is_empty() {
             vec![plain_return(GoExpression::binary(
                 left,
@@ -209,7 +211,7 @@ impl Planner<'_> {
             .get_variant(variant_name)
             .expect("variant exists in layout");
         let mut fields = vec![(
-            "Tag".to_string(),
+            ENUM_TAG_FIELD.to_string(),
             GoExpression::external_name(variant.tag_constant.clone()),
         )];
         let mut parameters = Vec::new();

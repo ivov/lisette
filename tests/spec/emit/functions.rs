@@ -5386,3 +5386,42 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn spread_into_unknown_varargs_of_method() {
+    let input = r#"
+import "go:fmt"
+
+struct Box<T> { value: T }
+
+impl<T> Box<T> {
+  fn log2(self, args: VarArgs<Unknown>) {
+    fmt.Println(args...)
+  }
+}
+
+fn main() {
+  let bx = Box { value: 1 }
+  let xs = [1, 2]
+  bx.log2(xs...)
+  Box.log2(bx, xs...)
+  let mut ys: Slice<Unknown> = []
+  ys = ys.append(xs...)
+  fmt.Println(ys.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn annotated_never_lambda_fills_concrete_generic_result() {
+    let input = r#"
+fn take(o: Option<string>) -> string { o.unwrap_or("none") }
+
+fn test() -> string {
+  let b: Option<string> = None.map(|_x: int| -> Never { panic("no") })
+  take(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

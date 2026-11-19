@@ -1,5 +1,6 @@
 use crate::Planner;
-use crate::definitions::functions::is_test_context_ty;
+use crate::abi::ReturnSlot;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::names::go_name::GeneratedPackage;
 use crate::names::go_name::{self, testing_qualifier, testkit_qualifier};
 use crate::names::packages::PackageUse;
@@ -11,7 +12,7 @@ use crate::plan::go_expression::{BinaryOp, GoParameter};
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Visibility};
-use syntax::types::{Symbol, Type};
+use syntax::types::Type;
 
 impl Planner<'_> {
     pub(crate) fn emit_top_item(&mut self, item: &Expression) -> Vec<GoDeclaration> {
@@ -84,11 +85,7 @@ impl Planner<'_> {
                 ty,
                 ..
             } => {
-                if self
-                    .facts
-                    .type_parameter_alias_index(&self.facts.qualified_current(name))
-                    .is_some()
-                {
+                if self.facts.alias_emits_nothing(name) {
                     return Vec::new();
                 }
                 let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
@@ -192,7 +189,10 @@ impl Planner<'_> {
             GoExpression::external_name(callee),
             vec![testkit("New", vec![handle_value.clone()])],
         );
-        if function.return_type.is_result() {
+        if matches!(
+            self.return_abi(function.return_type, ReturnSlot::Function),
+            CallableReturnAbi::Lowered(LoweredReturnAbi::BareError)
+        ) {
             let error_name = self.scope.new_local_identifier("err".to_string());
             let error = GoExpression::identifier(error_name.clone());
             let mut arguments = vec![handle_value];
@@ -203,11 +203,7 @@ impl Planner<'_> {
                 testkit("ErrOperand", vec![error.clone()]),
             ]);
             let mut check = IfPlan::plain(
-                GoExpression::binary(
-                    error,
-                    BinaryOp::Ne,
-                    GoExpression::literal("nil".to_string()),
-                ),
+                GoExpression::binary(error, BinaryOp::Ne, GoExpression::nil()),
                 LoweredBlock {
                     statements: vec![expression_statement(testkit("Fail", arguments))],
                 },
@@ -244,7 +240,7 @@ impl Planner<'_> {
         function: FunctionDefinitionView<'_>,
     ) -> Option<Vec<Binding>> {
         let has_usable_handle = function.params.iter().any(|param| {
-            is_test_context_ty(&param.ty) && self.go_name_for_binding(&param.pattern).is_some()
+            param.ty.is_test_context() && self.go_name_for_binding(&param.pattern).is_some()
         });
         if has_usable_handle {
             return None;
@@ -256,11 +252,7 @@ impl Planner<'_> {
                 binding: None,
             },
             annotation: None,
-            ty: Type::Nominal {
-                id: Symbol::from_parts(go_name::TEST_PRELUDE_PACKAGE, "TestContext"),
-                params: vec![],
-                writable: false,
-            },
+            ty: Type::test_context(),
             mut_span: None,
         }])
     }

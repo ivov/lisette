@@ -177,14 +177,9 @@ impl InferCtx<'_> {
         );
 
         let (method_ty, instantiation) = self.instantiate(method_ty);
-        let Type::Function(f) = &method_ty else {
+        let Type::Function(_) = &method_ty else {
             return None;
         };
-        let is_pointer_receiver = f
-            .params
-            .first()
-            .is_some_and(|param| param.ty.resolve_in(&self.env).is_ref());
-
         let is_exported =
             self.promoted_method_is_exported(&member.declaring_type, args.member_name);
         if !is_exported {
@@ -197,7 +192,6 @@ impl InferCtx<'_> {
             method_ty,
             DotAccessResolution::InstanceMethodValue {
                 is_exported,
-                is_pointer_receiver,
                 definition: Some(resolved_definition),
                 instantiation,
             },
@@ -347,12 +341,10 @@ impl InferCtx<'_> {
 
         self.unify_member_expectation(args, method_ty);
 
-        let is_pointer_receiver = matches!(method_ty, Type::Function(f) if !f.params.is_empty() && f.params[0].ty.resolve_in(&self.env).is_ref());
         Some(args.build_dot_access(
             method_ty.clone(),
             DotAccessResolution::InstanceMethodValue {
                 is_exported,
-                is_pointer_receiver,
                 definition: resolved_definition,
                 instantiation: instantiation.clone(),
             },

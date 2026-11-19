@@ -78,7 +78,6 @@ impl TagConfig {
 }
 
 impl StructuredTag {
-    /// Apply options shared by struct-level and field-level tag attributes.
     fn apply_common_arg(&mut self, arg: &AttributeArg) -> bool {
         match arg {
             AttributeArg::Flag(flag) => match flag.as_str() {

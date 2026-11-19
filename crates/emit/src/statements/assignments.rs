@@ -83,9 +83,6 @@ impl Planner<'_> {
             .go_place_layout(target)
             .or_else(|| self.go_physical_expression_layout(target));
 
-        // `target = value`. Stage RHS first (so the target capture knows
-        // whether RHS produced setup), capture the target, then fold RHS
-        // setup + coercion setup into the value plan in emission order.
         let literal_slot = go_field_slot
             .as_ref()
             .and_then(|layout| self.lower_option_literal_into_layout(value, layout));
@@ -127,7 +124,6 @@ impl Planner<'_> {
         )
     }
 
-    /// The Go layout of a Go field, or of an element indexed out of one.
     fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
         match target.unwrap_parens() {
             Expression::DotAccess {
@@ -144,12 +140,10 @@ impl Planner<'_> {
                 ty,
             ),
             Expression::IndexedAccess { expression, .. } => {
-                match self.go_place_layout(expression)?.underlying() {
-                    ValueLayout::Slice { element, .. } | ValueLayout::Array { element, .. } => {
-                        Some(element.as_ref().clone())
-                    }
+                let layout = self.go_place_layout(expression)?;
+                match layout.underlying() {
                     ValueLayout::Map { value, .. } => Some(value.as_ref().clone()),
-                    _ => None,
+                    _ => layout.element().cloned(),
                 }
             }
             _ => None,
@@ -176,8 +170,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Build a compound assignment plan (`+=`, `-=`, `++`, etc.), staging the
-    /// right-hand side and capturing the target in evaluation order.
     fn build_compound_assignment_plan(
         &mut self,
         target: &Expression,
@@ -412,9 +404,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit `*X` lvalue form, capturing the pointee into a temp if it's a
-    /// call (Go requires an addressable operand for deref-assignment) or when
-    /// RHS setup could reassign the pointer before the write executes.
     fn emit_deref_lvalue(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -453,8 +442,6 @@ fn reads_through_reference(base: &Expression) -> bool {
     matches!(base.unwrap_parens(), Expression::Identifier { .. }) && base.get_type().is_ref()
 }
 
-/// Recognize compound assignment: either `x += y` syntax (caller supplies
-/// `compound_operator`) or the desugared `x = x + y` pattern.
 fn detect_compound_assignment<'a>(
     target: &Expression,
     value: &'a Expression,
@@ -488,10 +475,6 @@ fn is_literal_one(expression: &Expression) -> bool {
     )
 }
 
-/// Check if two lvalue expressions refer to the same location.
-/// Used to detect `x = x + y` → `x += y` patterns.
-/// Compares by binding_id for identifiers, recursively for DotAccess/Deref.
-/// Deliberately skips IndexedAccess (side-effect hazard from index evaluation).
 pub(crate) fn lvalues_match(a: &Expression, b: &Expression) -> bool {
     let a = a.unwrap_parens();
     let b = b.unwrap_parens();

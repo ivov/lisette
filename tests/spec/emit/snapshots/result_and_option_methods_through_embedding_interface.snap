@@ -1,0 +1,69 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:io"
+  
+  interface Base {
+    fn load() -> Result<int, error>
+    fn find() -> Option<int>
+  }
+  interface Child { embed Base }
+  struct Source {}
+  impl Source {
+    fn load(self) -> Result<int, error> { Err(io.EOF) }
+    fn find(self) -> Option<int> { Some(1) }
+  }
+  fn main() {
+    let c: Child = Source {}
+    if c.load().is_ok() { panic("lost") }
+    if c.find().is_none() { panic("lost") }
+    let f = c.load
+    let _ = f()
+  }
+---
+package main
+
+import (
+	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Base interface {
+	load() (int, error)
+	find() (int, bool)
+}
+
+type Child interface {
+	Base
+}
+
+type Source struct{}
+
+func (s Source) load() (int, error) {
+	return 0, io.EOF
+}
+
+func (s Source) find() (int, bool) {
+	return 1, true
+}
+
+func main() {
+	var c Child = Source{}
+	if _, err := c.load(); err == nil {
+		panic("lost")
+	}
+	if _, ok := c.find(); !ok {
+		panic("lost")
+	}
+	cb := c.load
+	var adapted func() lisette.Result[int, error]
+	if cb != nil {
+		adapted = func() lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](cb())
+		}
+	}
+	f := adapted
+	f()
+}

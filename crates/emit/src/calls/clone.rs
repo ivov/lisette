@@ -80,33 +80,32 @@ impl Planner<'_> {
                 break;
             };
             let field_place = GoExpression::selector(place.clone(), field.to_string());
-            let peeled = self.facts.peel_alias(elem);
-            match &peeled {
-                Type::Compound {
-                    kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
-                    ..
-                } => {
-                    let clone = self.clone_expression(field_place.clone(), elem);
-                    statements.push(assign(field_place, clone));
-                }
-                Type::Tuple(inner) if self.needs_clone(elem) => {
-                    statements.extend(self.tuple_clone_statements(&field_place, inner))
-                }
-                _ => {}
+            if self.is_clone_container(elem) {
+                let clone = self.clone_expression(field_place.clone(), elem);
+                statements.push(assign(field_place, clone));
+            } else if let Type::Tuple(inner) = self.facts.peel_alias(elem)
+                && self.needs_clone(elem)
+            {
+                statements.extend(self.tuple_clone_statements(&field_place, &inner))
             }
         }
         statements
     }
 
-    fn needs_clone(&self, ty: &Type) -> bool {
-        let peeled = self.facts.peel_alias(ty);
-        match &peeled {
+    pub(crate) fn is_clone_container(&self, ty: &Type) -> bool {
+        matches!(
+            self.facts.peel_alias(ty),
             Type::Compound {
                 kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
                 ..
-            } => true,
+            }
+        )
+    }
+
+    fn needs_clone(&self, ty: &Type) -> bool {
+        match self.facts.peel_alias(ty) {
             Type::Tuple(elems) => elems.iter().any(|e| self.needs_clone(e)),
-            _ => false,
+            _ => self.is_clone_container(ty),
         }
     }
 }

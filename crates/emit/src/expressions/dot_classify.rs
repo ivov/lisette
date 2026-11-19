@@ -1,13 +1,11 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::expressions::identifiers::method_expression;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    /// Constructor reference or unit variant call, e.g. `shapes.ShapeKind.CircleKind`.
     pub(crate) fn emit_enum_variant_dot(
         &mut self,
         definition: &str,
@@ -16,7 +14,7 @@ impl Planner<'_> {
     ) -> Option<GoExpression> {
         let make_fn_name = self.facts.variant_make_function(definition)?;
         let enum_package = self.facts.package_for_qualified_name(definition)?;
-        let make_fn = if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
+        let make_fn = if go_name::is_prelude_id(&make_fn_name) {
             go_name::resolve(&make_fn_name).into_expression()
         } else if self.facts.is_current_package(enum_package) {
             GoExpression::external_name(make_fn_name)
@@ -36,7 +34,7 @@ impl Planner<'_> {
                 Some(GoExpression::instantiation(make_fn, type_args))
             }
             Type::Nominal { params, .. } => {
-                let type_args = self.format_type_args(params);
+                let type_args = self.variant_value_type_args(params, ctx);
                 Some(GoExpression::pure_call(
                     GoExpression::instantiation(make_fn, type_args),
                     Vec::new(),
@@ -60,31 +58,18 @@ impl Planner<'_> {
         GoExpression::instantiation(function, type_args.unwrap_or_default())
     }
 
-    /// Instance method used as a value (e.g. `lib.Point.area` callback →
-    /// `lib.Point.Area` Go method expression).
     pub(crate) fn emit_instance_method_value_dot(
         &mut self,
         member: &str,
         result_ty: &Type,
         is_exported: bool,
-        is_pointer_receiver: bool,
         tagged_twin: bool,
     ) -> Option<GoExpression> {
-        let receiver = result_ty
-            .as_function_type()?
-            .params
-            .first()?
-            .ty
-            .strip_refs();
-        let receiver_type = self.go_type(&receiver);
+        let receiver_param = &result_ty.as_function_type()?.params.first()?.ty;
         let mut go_method = self.method_go_name(member, is_exported);
         if tagged_twin {
             go_method = go_name::tagged_twin(&go_method);
         }
-        Some(method_expression(
-            receiver_type,
-            is_pointer_receiver,
-            go_method,
-        ))
+        Some(self.method_expression(receiver_param, go_method))
     }
 }

@@ -8,8 +8,8 @@ use crate::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
 use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::fallible::prelude_call;
 use crate::control_flow::fallible_blocks::TryBlockPairPlan;
-use crate::names::go_name::GeneratedPackage;
 use crate::names::source_name::SourceName;
 use crate::plan::bodies::{Statement, define};
 use crate::plan::local::GoIdentifier;
@@ -287,11 +287,9 @@ impl<'p> Planner<'p> {
             .whole_value_constructor()
             .expect("component binding has no whole-value constructor");
         let payload_go_type = self.go_type(&components.payload_type);
-        GoExpression::call(
-            GoExpression::instantiation(
-                GoExpression::generated(GeneratedPackage::Prelude, constructor),
-                GoType::type_argument(&payload_go_type),
-            ),
+        prelude_call(
+            constructor,
+            GoType::type_argument(&payload_go_type),
             vec![
                 GoExpression::identifier(components.value.clone()),
                 GoExpression::identifier(components.status.clone()),
@@ -355,14 +353,10 @@ impl<'p> Planner<'p> {
         if !lowered.is_result() || lowered.is_bridged() {
             return None;
         }
-        let nil_guard = if lowered.from_go {
-            if lowered.has_tuple_payload(self) {
-                return None;
-            }
-            lowered.nil_guard
-        } else {
-            None
-        };
+        if lowered.from_go && lowered.has_tuple_payload(self) {
+            return None;
+        }
+        let nil_guard = lowered.nil_guard;
         Some(ResultFusePlan {
             subject: lowered.call,
             shape: lowered.shape,

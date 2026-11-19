@@ -30,7 +30,6 @@ enum BoundSource {
     },
 }
 
-/// A bound two-result expression and the rule that distinguishes success.
 pub(super) struct LoweredPair {
     pub(super) value: PairValue,
     pub(super) status: GoIdentifier,
@@ -157,7 +156,6 @@ impl BoundValue {
         }
     }
 
-    /// The payload expression, valid once the some-condition holds.
     pub(crate) fn payload(&self) -> Option<GoExpression> {
         match &self.source {
             BoundSource::Index { index, .. } => Some(index.element()),
@@ -208,7 +206,6 @@ impl BoundValue {
         !matches!(self.source, BoundSource::Index { .. })
     }
 
-    /// The statement that reads a late payload into its requested name.
     pub(crate) fn late_binding(&self) -> Option<Statement> {
         let BoundSource::Index {
             index,

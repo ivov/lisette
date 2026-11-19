@@ -65,12 +65,7 @@ impl Planner<'_> {
         if let Some(make_function) = self.facts.variant_make_function(symbol) {
             match ty {
                 Type::Nominal { params, .. } => {
-                    let type_args = match ctx.expected_slot_type() {
-                        Some(t) => self
-                            .prelude_container_type_args(t)
-                            .unwrap_or_else(|| self.format_type_args(params)),
-                        None => self.format_type_args(params),
-                    };
+                    let type_args = self.variant_value_type_args(params, ctx);
                     return GoExpression::pure_call(
                         GoExpression::instantiation(
                             self.resolve_go_name(&make_function),
@@ -108,8 +103,16 @@ impl Planner<'_> {
         }
     }
 
-    /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).
-    /// Omits them only for a direct call whose parameters support inference.
+    pub(super) fn variant_value_type_args(
+        &mut self,
+        params: &[Type],
+        ctx: ExpressionContext<'_>,
+    ) -> GoType {
+        ctx.expected_slot_type()
+            .and_then(|t| self.prelude_container_type_args(t))
+            .unwrap_or_else(|| self.format_type_args(params))
+    }
+
     pub(super) fn constructor_fn_type_args(
         &mut self,
         fn_params: &[FunctionParameter],
@@ -132,7 +135,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Go method-expression syntax for an instance method of a type.
     fn try_emit_method_expression(
         &mut self,
         identifier: &Expression,
@@ -149,25 +151,20 @@ impl Planner<'_> {
         if self.definition_selects_tagged_twin(symbol) {
             go_method = go_name::tagged_twin(&go_method);
         }
-        let receiver_type = self.go_type(&first.ty.strip_refs());
-        Some(method_expression(
-            receiver_type,
-            first.ty.is_ref(),
-            go_method,
-        ))
+        Some(self.method_expression(&first.ty, go_method))
     }
-}
 
-/// Go method expression on a type, `T.method` or `(*T).method`.
-pub(crate) fn method_expression(
-    receiver_type: GoType,
-    pointer_receiver: bool,
-    go_method: String,
-) -> GoExpression {
-    let receiver = if pointer_receiver {
-        GoType::pointer_to(&receiver_type).parenthesized()
-    } else {
-        receiver_type
-    };
-    GoExpression::selector(GoExpression::type_name(receiver), go_method)
+    pub(crate) fn method_expression(
+        &self,
+        receiver_param: &Type,
+        go_method: String,
+    ) -> GoExpression {
+        let receiver_type = self.go_type(&receiver_param.strip_refs());
+        let receiver = if receiver_param.is_ref() {
+            GoType::pointer_to(&receiver_type).parenthesized()
+        } else {
+            receiver_type
+        };
+        GoExpression::selector(GoExpression::type_name(receiver), go_method)
+    }
 }

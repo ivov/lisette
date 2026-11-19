@@ -9,9 +9,7 @@ pub(crate) struct PackageState {
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
     go_const_bindings: HashSet<String>,
-    /// Go names the package's own items declare at package scope.
     declared_names: HashSet<String>,
-    /// Qualifiers the package's imports bind in the Go package block.
     import_qualifiers: HashSet<String>,
 }
 
@@ -55,7 +53,6 @@ impl PackageState {
         self.declared_names.contains(go_name)
     }
 
-    /// Names declared in the Go package block, which no local may take.
     pub(crate) fn is_package_block_name(&self, go_name: &str) -> bool {
         self.declared_names.contains(go_name) || self.import_qualifiers.contains(go_name)
     }

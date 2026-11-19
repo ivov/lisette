@@ -1,10 +1,8 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
-use syntax::ast::{Binding, Generic};
-use syntax::ast::{
-    EnumVariant, Expression, Pattern, Span, StructFields, VariantFields, Visibility,
-};
+use syntax::ast::Generic;
+use syntax::ast::{EnumVariant, Expression, Span, StructFields, VariantFields, Visibility};
 use syntax::attributes;
 use syntax::go_names;
 use syntax::program::File;
@@ -185,6 +183,9 @@ impl Planner<'_> {
         else {
             return;
         };
+        if self.facts.alias_emits_nothing(name) {
+            return;
+        }
         let go = go_name::escape_type_name(name).into_owned();
         self.check_reserved_prefix(&go, name_span, diagnostics);
         self.check_reserved_qualifier(&go, name_span, diagnostics);
@@ -203,7 +204,6 @@ impl Planner<'_> {
             name_span,
             fields,
             attributes,
-            generics,
             ..
         } = item
         else {
@@ -226,13 +226,11 @@ impl Planner<'_> {
                 }
             }
             StructFields::Tuple(fields) => {
-                // A single-field tuple with no generics is a newtype (a Go
-                // scalar type, no struct fields); empty tuples have none.
-                let is_newtype = fields.len() == 1 && generics.is_empty();
+                let is_newtype = self.is_newtype_definition(name);
                 if !fields.is_empty() && !is_newtype {
                     for (index, field) in fields.iter().enumerate() {
                         members
-                            .entry(format!("F{}", index))
+                            .entry(go_name::tuple_struct_field(index))
                             .or_default()
                             .push(field.name_span);
                     }
@@ -292,7 +290,7 @@ impl Planner<'_> {
             .or_default()
             .push(*name_span);
         package_block
-            .entry(format!("{}Tag", name))
+            .entry(go_name::enum_tag_type(name))
             .or_default()
             .push(*name_span);
         for variant in variants {
@@ -321,11 +319,6 @@ impl Planner<'_> {
         self.collect_enum_payload_fields(name, variants, members, diagnostics);
     }
 
-    /// Record enum payload-field Go names in the type's selector namespace.
-    /// Names are coalesced across variants (each distinct Go name once, which is
-    /// intentional, not a collision). Within a single struct variant, two fields
-    /// landing on the same Go name would assign one struct field twice, so each
-    /// variant's own fields are additionally grouped and reported.
     fn collect_enum_payload_fields(
         &self,
         name: &str,
@@ -392,7 +385,7 @@ impl Planner<'_> {
                 ..
             } = signature
             {
-                let method_go = self.method_go_name(method_name, is_public);
+                let method_go = self.interface_method_go_name(method_name, is_public);
                 methods.entry(method_go).or_default().push(*method_span);
             }
         }
@@ -420,14 +413,13 @@ impl Planner<'_> {
                 name,
                 name_span,
                 visibility,
-                params,
                 ..
             } = method
             else {
                 continue;
             };
             let is_public = matches!(visibility, Visibility::Public);
-            let go = if impl_method_is_receiver_method(self, &qualified_type, name, params) {
+            let go = if self.facts.emits_go_method(&qualified_type, name) {
                 let method_go = self.method_go_name(name, is_public);
                 self.check_reserved_prefix(name, name_span, diagnostics);
                 self.check_reserved_prefix(&method_go, name_span, diagnostics);
@@ -482,14 +474,13 @@ impl Planner<'_> {
                     for method in methods {
                         let Expression::Function {
                             name,
-                            params,
                             generics: method_generics,
                             ..
                         } = method
                         else {
                             continue;
                         };
-                        if impl_method_is_receiver_method(self, &qualified_type, name, params) {
+                        if self.facts.emits_go_method(&qualified_type, name) {
                             self.check_reserved_qualifier_generics(
                                 method_generics,
                                 &mut diagnostics,
@@ -515,7 +506,6 @@ impl Planner<'_> {
         package_block: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
-        // A sibling-file declaration gets a `_pkg` alias, so only the import's own file collides.
         for (qualifier, span) in import_qualifiers {
             self.check_reserved_prefix(qualifier, span, diagnostics);
             if let Some(spans) = package_block.get_mut(qualifier)
@@ -579,18 +569,6 @@ impl Planner<'_> {
         emitted.retain(|go, _| method_names.contains(go));
         report_collisions(emitted, out);
     }
-}
-
-fn impl_method_is_receiver_method(
-    planner: &Planner,
-    qualified_type: &str,
-    name: &str,
-    params: &[Binding],
-) -> bool {
-    let has_self = params.first().is_some_and(|binding| {
-        matches!(&binding.pattern, Pattern::Identifier { identifier, .. } if identifier == "self")
-    });
-    has_self && !planner.facts.is_ufcs_method(qualified_type, name)
 }
 
 fn report_collisions(map: SpanMap, diagnostics: &mut Vec<LisetteDiagnostic>) {
