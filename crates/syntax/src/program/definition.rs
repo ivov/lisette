@@ -9,7 +9,8 @@ use crate::ast::{
 };
 use crate::types;
 use crate::types::{
-    FunctionParameter, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
+    FunctionParameter, Symbol, Type, build_substitution_map, peel_alias, substitute,
+    type_args_match_params, unqualified_name,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -219,6 +220,16 @@ impl Definition {
         )
     }
 
+    pub fn newtype_field(&self) -> Option<&Type> {
+        match &self.body {
+            DefinitionBody::Struct {
+                fields: StructFields::Tuple(fields),
+                ..
+            } if self.is_newtype() => Some(&fields[0].ty),
+            _ => None,
+        }
+    }
+
     pub fn is_pointer_backed_newtype<'d, F>(&self, lookup: F) -> bool
     where
         F: Fn(&str) -> Option<&'d Definition>,
@@ -229,7 +240,7 @@ impl Definition {
                 DefinitionBody::Struct {
                     fields: StructFields::Tuple(fields),
                     ..
-                } if types::peel_alias(&fields[0].ty, lookup).is_ref()
+                } if peel_alias(&fields[0].ty, lookup).is_ref()
             )
     }
 
@@ -636,7 +647,7 @@ where
     ) where
         F: Copy + Fn(&str) -> Option<&'d Definition>,
     {
-        let resolved = types::peel_alias(interface_ty, lookup);
+        let resolved = peel_alias(interface_ty, lookup);
         let Type::Nominal { id, params, .. } = &resolved else {
             return;
         };
@@ -679,6 +690,84 @@ where
         &mut instances,
     );
     instances
+}
+
+pub struct ConstructorField<'d> {
+    pub name: &'d EcoString,
+    pub declared_ty: &'d Type,
+    pub ty: Type,
+}
+
+pub struct ConstructorFields<'d> {
+    pub definition: &'d Definition,
+    pub generics: &'d [Generic],
+    pub type_args: Vec<Type>,
+    pub fields: Vec<ConstructorField<'d>>,
+}
+
+pub fn constructor_fields<'d, F>(
+    owner: &str,
+    variant: Option<&str>,
+    ty: &Type,
+    lookup: F,
+) -> Option<ConstructorFields<'d>>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let definition = lookup(owner)?;
+    let type_args = match peel_alias(ty, &lookup) {
+        Type::Nominal { params, .. } => params,
+        _ => Vec::new(),
+    };
+    let (generics, declared): (&'d [Generic], Vec<(&'d EcoString, &'d Type)>) =
+        match (&definition.body, variant) {
+            (
+                DefinitionBody::Struct {
+                    generics, fields, ..
+                },
+                _,
+            ) => (
+                generics,
+                fields
+                    .iter()
+                    .map(|field| (&field.name, &field.ty))
+                    .collect(),
+            ),
+            (
+                DefinitionBody::Enum {
+                    generics, variants, ..
+                },
+                Some(variant),
+            ) => {
+                let variant = variants
+                    .iter()
+                    .find(|candidate| candidate.name == unqualified_name(variant))?;
+                (
+                    generics,
+                    variant
+                        .fields
+                        .iter()
+                        .map(|field| (&field.name, &field.ty))
+                        .collect(),
+                )
+            }
+            _ => return None,
+        };
+    let map = build_substitution_map(generics, &type_args);
+    let fields = declared
+        .into_iter()
+        .map(|(name, declared_ty)| ConstructorField {
+            name,
+            declared_ty,
+            ty: substitute(declared_ty, &map),
+        })
+        .collect();
+    Some(ConstructorFields {
+        definition,
+        generics,
+        type_args,
+        fields,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -787,7 +876,7 @@ where
             .unwrap_or_default();
 
         if lookup(&qualified_name).is_some_and(Definition::is_transparent_type_alias) {
-            let underlying = types::peel_alias(&stripped, lookup);
+            let underlying = peel_alias(&stripped, lookup);
             if underlying != stripped {
                 for (name, method) in collect(&underlying, trait_bounds, lookup, visited) {
                     methods.insert_if_absent(name, method);
@@ -879,7 +968,7 @@ where
             .cloned();
 
         if lookup(&qualified_name).is_some_and(Definition::is_transparent_type_alias) {
-            let underlying = types::peel_alias(&stripped, lookup);
+            let underlying = peel_alias(&stripped, lookup);
             if underlying != stripped {
                 let inherited = collect(&underlying, trait_bounds, lookup, visited, wanted);
                 return own.or(inherited);
@@ -923,7 +1012,7 @@ where
         }
 
         if lookup(&qualified_name).is_some_and(Definition::is_transparent_type_alias) {
-            let underlying = types::peel_alias(&stripped, lookup);
+            let underlying = peel_alias(&stripped, lookup);
             if underlying != stripped {
                 return collect(&underlying, lookup, visited);
             }

@@ -61,7 +61,6 @@ impl Planner<'_> {
         };
 
         let mut coercion = self.facts.checked(receiver).receiver_change();
-        let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
         let type_args_string = self
             .ufcs_type_args(
                 function,
@@ -77,8 +76,11 @@ impl Planner<'_> {
         let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
         if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
         {
-            let source = self.value_layout(&receiver.get_type().strip_refs(), SlotOrigin::Lisette);
-            let target = self.value_layout(&receiver_ty, SlotOrigin::Lisette);
+            let source = self.value_layout(
+                &self.facts.without_references(&receiver.get_type()),
+                SlotOrigin::Lisette,
+            );
+            let target = self.receiver_layout(&receiver.get_type());
             let bridge = CoercionPlan::bridge(self, &source, &target);
             if !bridge.is_identity() {
                 receiver_stage = receiver_stage.map_expression(|setup, value| {
@@ -107,7 +109,7 @@ impl Planner<'_> {
             callee_is_builtin: false,
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: (!call_plan.resolved.is_prelude_dispatch)
-                .then(|| receiver_type_binding(function, &call_plan.resolved))
+                .then(|| receiver_type_binding(&self.facts, function, &call_plan.resolved))
                 .flatten(),
         };
         let (setup, receiver_arg, emitted_args) =
@@ -118,7 +120,7 @@ impl Planner<'_> {
 
         let callee = self.build_ufcs_qualified_call(
             &call_plan.resolved,
-            &receiver_ty,
+            &receiver.get_type(),
             member,
             type_args_string,
         );
@@ -175,18 +177,16 @@ impl Planner<'_> {
         member: &str,
         type_args_string: GoType,
     ) -> GoExpression {
-        let Type::Nominal {
-            id: qualified_name, ..
-        } = receiver_ty
-        else {
-            unreachable!("UFCS receiver must be a constructor type");
-        };
+        let qualified_name = self
+            .facts
+            .receiver_nominal_id(receiver_ty)
+            .unwrap_or_else(|| unreachable!("UFCS receiver must be a constructor type"));
         let is_public = callee
             .declaration
             .map(|declaration| declaration.visibility().is_public())
             .unwrap_or(false);
 
-        let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public);
+        let qualified_method_name = self.qualify_method_call(&qualified_name, member, is_public);
         GoExpression::instantiation(qualified_method_name, type_args_string)
     }
 

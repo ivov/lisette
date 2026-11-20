@@ -1,4 +1,3 @@
-use crate::EmitFacts;
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::{Adaptation, SlotOrigin};
@@ -146,16 +145,14 @@ impl CoercionPlan {
         to: &Type,
         slot: Option<&ValueLayout>,
     ) -> Self {
-        match (
-            adaptation,
-            &planner.facts.peel_alias(from),
-            &planner.facts.peel_alias(to),
-        ) {
-            (Adaptation::Interface(conversion), _, _) => planner
+        let facts = &planner.facts;
+        match adaptation {
+            Adaptation::Interface(conversion) => planner
                 .interface_adapter(conversion)
                 .map_or_else(|| Self::internal(planner, from, to), Self::WrapAsInterface),
-            (Adaptation::ImplicitSome { payload }, _, option) => {
-                let payload_type = option.ok_type();
+            Adaptation::Newtype => Self::WrapNewtype { ty: to.clone() },
+            Adaptation::ImplicitSome { payload } => {
+                let payload_type = facts.ok_payload(to);
                 let payload = Self::adapted(planner, payload, from, &payload_type, None);
                 let layout = slot
                     .cloned()
@@ -169,27 +166,27 @@ impl CoercionPlan {
                     payload
                 }
             }
-            (Adaptation::Tuple(elements), Type::Tuple(sources), Type::Tuple(slots)) => {
-                Self::RebuildTuple {
-                    slot_types: slots.clone(),
-                    elements: elements
-                        .iter()
-                        .zip(sources.iter().zip(slots))
-                        .map(|(element, (from, to))| {
-                            Self::adapted_element(planner, element, from, to)
-                        })
-                        .collect(),
+            Adaptation::Tuple(elements) => {
+                match (facts.tuple_elements(from), facts.tuple_elements(to)) {
+                    (Some(sources), Some(slots)) => Self::RebuildTuple {
+                        elements: elements
+                            .iter()
+                            .zip(sources.iter().zip(&slots))
+                            .map(|(element, (from, to))| {
+                                Self::adapted_element(planner, element, from, to)
+                            })
+                            .collect(),
+                        slot_types: slots,
+                    },
+                    _ => Self::internal(planner, from, to),
                 }
             }
-            (
-                Adaptation::Array(element),
-                Type::Array {
-                    element: source, ..
+            Adaptation::Array(element) => match (facts.array_parts(from), facts.array_parts(to)) {
+                (Some((_, source)), Some((_, slot))) => Self::RebuildArray {
+                    array_type: to.clone(),
+                    element: Box::new(Self::adapted_element(planner, element, &source, &slot)),
                 },
-                Type::Array { element: slot, .. },
-            ) => Self::RebuildArray {
-                array_type: to.clone(),
-                element: Box::new(Self::adapted_element(planner, element, source, slot)),
+                _ => Self::internal(planner, from, to),
             },
             _ => Self::internal(planner, from, to),
         }
@@ -216,8 +213,6 @@ impl CoercionPlan {
             && let Some((stored, lisette)) = planner.any_slot_function_layouts(from)
         {
             Self::bridge(planner, &lisette, &stored)
-        } else if planner.facts.needs_newtype_wrap(from, to) {
-            Self::WrapNewtype { ty: to.clone() }
         } else if let Some(rebuild) = planner.aggregate_rebuild(from, to) {
             rebuild
         } else {
@@ -674,44 +669,42 @@ impl Planner<'_> {
     }
 
     fn aggregate_rebuild(&self, from: &Type, to: &Type) -> Option<CoercionPlan> {
-        match (&self.facts.peel_alias(from), &self.facts.peel_alias(to)) {
-            (
-                Type::Array {
-                    length: from_length,
-                    element: from_element,
-                },
-                Type::Array {
-                    length: to_length,
-                    element: to_element,
-                },
-            ) if from_length == to_length => {
-                let element = self.widening_element_plan(from_element, to_element)?;
-                Some(CoercionPlan::RebuildArray {
-                    array_type: to.clone(),
-                    element: Box::new(element),
-                })
+        if let (Some((from_length, from_element)), Some((to_length, to_element))) =
+            (self.facts.array_parts(from), self.facts.array_parts(to))
+        {
+            if from_length != to_length {
+                return None;
             }
-            (Type::Tuple(from_elements), Type::Tuple(to_elements))
-                if from_elements.len() == to_elements.len() =>
-            {
-                let elements: Vec<Option<CoercionPlan>> = from_elements
-                    .iter()
-                    .zip(to_elements)
-                    .map(|(from, to)| self.widening_element_plan(from, to))
-                    .collect();
-                if elements.iter().all(Option::is_none) {
-                    return None;
-                }
-                Some(CoercionPlan::RebuildTuple {
-                    slot_types: to_elements.clone(),
-                    elements: elements
-                        .into_iter()
-                        .map(|element| element.unwrap_or(CoercionPlan::Identity))
-                        .collect(),
-                })
-            }
-            _ => None,
+            let element = self.widening_element_plan(&from_element, &to_element)?;
+            return Some(CoercionPlan::RebuildArray {
+                array_type: to.clone(),
+                element: Box::new(element),
+            });
         }
+        let (Some(from_elements), Some(to_elements)) = (
+            self.facts.tuple_elements(from),
+            self.facts.tuple_elements(to),
+        ) else {
+            return None;
+        };
+        if from_elements.len() != to_elements.len() {
+            return None;
+        }
+        let elements: Vec<Option<CoercionPlan>> = from_elements
+            .iter()
+            .zip(&to_elements)
+            .map(|(from, to)| self.widening_element_plan(from, to))
+            .collect();
+        if elements.iter().all(Option::is_none) {
+            return None;
+        }
+        Some(CoercionPlan::RebuildTuple {
+            elements: elements
+                .into_iter()
+                .map(|element| element.unwrap_or(CoercionPlan::Identity))
+                .collect(),
+            slot_types: to_elements,
+        })
     }
 
     fn widening_element_plan(&self, from: &Type, to: &Type) -> Option<CoercionPlan> {
@@ -722,17 +715,5 @@ impl Planner<'_> {
             bridge
         };
         (from != to && !plan.is_identity()).then_some(plan)
-    }
-}
-
-impl EmitFacts<'_> {
-    fn needs_newtype_wrap(&self, from: &Type, to: &Type) -> bool {
-        if from == to {
-            return false;
-        }
-        let Some(underlying) = self.newtype_underlying(to) else {
-            return false;
-        };
-        underlying == *from
     }
 }

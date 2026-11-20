@@ -361,7 +361,7 @@ impl Planner<'_> {
         if has_binding_or_pattern(payload) {
             return None;
         }
-        let payload_ty = self.facts.peel_alias(&scrutinee.get_type()).ok_type();
+        let payload_ty = self.facts.ok_payload(&scrutinee.get_type());
         let info = self.collect_pattern_info(payload, &payload_ty);
         if !info.is_irrefutable() {
             return None;

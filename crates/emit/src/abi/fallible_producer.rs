@@ -7,6 +7,7 @@ use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
 use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
+use crate::control_flow::fallible::Fallible;
 use crate::control_flow::fallible::prelude_call;
 use crate::control_flow::fallible_blocks::TryBlockPairPlan;
 use crate::ir::bodies::{Statement, define};
@@ -304,10 +305,10 @@ impl<'p> Planner<'p> {
     where
         'p: 'a,
     {
-        let ty = self.facts.peel_alias(&subject.get_type());
-        if ty.is_option() {
+        let fallible = self.facts.fallible(&subject.get_type());
+        if matches!(fallible, Some(Fallible::Option { .. })) {
             self.option_fuse_plan(subject).map(FallibleProducer::Option)
-        } else if ty.is_result() {
+        } else if matches!(fallible, Some(Fallible::Result { .. })) {
             self.result_fuse_plan(subject).map(FallibleProducer::Result)
         } else {
             None
@@ -371,10 +372,10 @@ impl<'p> Planner<'p> {
             Expression::Literal {
                 literal: Literal::Integer { value, .. },
                 ..
-            } => match self.facts.strip_and_peel(&receiver.get_type()) {
-                Type::Array { length, .. } => *value < length,
-                _ => true,
-            },
+            } => self
+                .facts
+                .array_length_behind_refs(&receiver.get_type())
+                .is_none_or(|length| *value < length),
             other => !self.is_go_constant_expression(other),
         }
     }

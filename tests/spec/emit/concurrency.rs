@@ -1871,3 +1871,31 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn channel_split_through_reference_and_alias_dereferences_once() {
+    let input = r#"
+import "go:fmt"
+
+type Pipe = Ref<Channel<int>>
+
+fn send(ch: Ref<Channel<int>>) {
+  let (tx, rx) = ch.split()
+  tx.send(1)
+  fmt.Println(rx.receive())
+}
+
+fn send2(ch: Pipe) {
+  let (tx, rx) = ch.split()
+  tx.send(2)
+  fmt.Println(rx.receive())
+}
+
+fn main() {
+  let ch = Channel.buffered<int>(1)
+  send(&ch)
+  send2(&ch)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

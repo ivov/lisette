@@ -1,21 +1,67 @@
 use rustc_hash::FxHashMap as HashMap;
 use std::mem;
 
-use syntax::ast::{Expression, FormatStringPart, Literal, MatchArm, SelectArm, Span};
+use syntax::ast::{Expression, ExpressionId, FormatStringPart, Literal, MatchArm, SelectArm, Span};
 use syntax::program::{
     Adaptation, CallOperation, CheckedBodiesBuilder, CheckedCallee, CheckedValueUse,
-    ConformanceWitness, DefinitionBody, DotAccessResolution, InterfaceConversion, NativeOperation,
-    ReceiverCoercion, ValueUseKey, interface_requirements, resolved_definition,
-    resolved_instantiation,
+    ConformanceWitness, Definition, DefinitionBody, DotAccessResolution, FieldKey, FieldSelection,
+    InterfaceConversion, InterfaceRequirement, NativeOperation, ReceiverCoercion, ValueUseKey,
+    constructor_fields, interface_requirements, resolved_definition, resolved_instantiation,
 };
-use syntax::types::{CompoundKind, SubstitutionMap, Symbol, Type};
+use syntax::types::{CompoundKind, SubstitutionMap, Symbol, Type, build_substitution_map};
 
+use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::equality;
 use crate::facts::ValueUseObligation;
 use crate::store::Store;
 
 impl InferCtx<'_> {
+    pub(crate) fn record_field_selection(
+        &mut self,
+        key: FieldKey,
+        declared_ty: &Type,
+        instance: &Type,
+    ) {
+        let Type::Nominal { id, params, .. } = self.store.peel_alias(&instance.strip_refs()) else {
+            return;
+        };
+        let generics = self
+            .store
+            .get_definition(&id)
+            .and_then(|definition| definition.body.generics())
+            .unwrap_or_default();
+        let substitutions = build_substitution_map(generics, &params);
+        self.facts.value_uses.field_selections.push((
+            key,
+            FieldSelection {
+                owner: id,
+                declared_ty: declared_ty.clone(),
+                substitutions,
+            },
+        ));
+    }
+
+    pub(crate) fn record_positional_fields(&mut self, call: ExpressionId, instance: &Type) {
+        let instance = instance.resolve_in(&self.env);
+        let store = self.store;
+        let Type::Nominal { id, .. } = store.peel_alias(&instance.strip_refs()) else {
+            return;
+        };
+        let Some(constructor) =
+            constructor_fields(&id, None, &instance, |id| store.get_definition(id))
+        else {
+            return;
+        };
+        for (index, field) in constructor.fields.iter().enumerate() {
+            self.record_field_selection(
+                FieldKey::Positional(call, index),
+                field.declared_ty,
+                &instance,
+            );
+        }
+    }
+
     pub(super) fn record_value_use(
         &mut self,
         expression: &Expression,
@@ -52,6 +98,16 @@ impl InferCtx<'_> {
         operation: CallOperation,
         type_arguments: SubstitutionMap,
     ) {
+        self.record_method_callee(callee, operation, type_arguments, None);
+    }
+
+    pub(super) fn record_method_callee(
+        &mut self,
+        callee: &Expression,
+        operation: CallOperation,
+        type_arguments: SubstitutionMap,
+        interface_method: Option<Box<InterfaceRequirement>>,
+    ) {
         let callee = callee.unwrap_parens();
         let definition =
             resolved_definition(callee).map(|definition| unaliased_owner(self.store, definition));
@@ -71,6 +127,7 @@ impl InferCtx<'_> {
                 type_arguments,
                 copies_storage,
                 binds_receiver,
+                interface_method,
                 span: callee.get_span(),
             },
         ));
@@ -132,6 +189,7 @@ impl InferCtx<'_> {
             bodies: CheckedBodiesBuilder::default(),
             failures: Vec::new(),
             loop_slots: Vec::new(),
+            failure_slots: Vec::new(),
             delegated_witnesses: Vec::new(),
             delegations: Vec::new(),
             discards_next: false,
@@ -157,6 +215,12 @@ impl InferCtx<'_> {
         }
         for (binary, conversion) in mem::take(&mut self.facts.value_uses.operand_conversions) {
             bodies.insert_operand_conversion(binary, conversion);
+        }
+        for (literal, record) in mem::take(&mut self.facts.value_uses.struct_literals) {
+            bodies.insert_struct_literal(literal, record);
+        }
+        for (key, selection) in mem::take(&mut self.facts.value_uses.field_selections) {
+            bodies.insert_field_selection(key, selection);
         }
         let mut equalities = Vec::new();
         for item in items {
@@ -199,6 +263,14 @@ impl InferCtx<'_> {
 
 /// `definition` with an aliased owner type replaced by the type it names.
 pub(crate) fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
+    if let Some(Definition {
+        body: DefinitionBody::TypeAlias { .. },
+        ..
+    }) = store.get_definition(definition)
+        && let Some(id) = store.peel_alias_name(definition)
+    {
+        return id;
+    }
     let Some((owner, member)) = definition.rsplit_once('.') else {
         return Symbol::from_raw(definition);
     };
@@ -261,6 +333,7 @@ struct Finalizer<'f, 's> {
     bodies: CheckedBodiesBuilder,
     failures: Vec<(Span, &'static str)>,
     loop_slots: Vec<Option<LoopSlot>>,
+    failure_slots: Vec<Type>,
     /// The conformances that enclosing delegating constructs selected for the value they produce.
     delegated_witnesses: Vec<ConformanceWitness>,
     /// For each enclosing delegating construct, whether a value it produces converts.
@@ -398,6 +471,27 @@ impl Finalizer<'_, '_> {
         }
     }
 
+    fn in_failure_slot(&mut self, slot: Option<Type>, walk: impl FnOnce(&mut Self)) {
+        let pushed = slot.is_some();
+        self.failure_slots.extend(slot);
+        walk(self);
+        if pushed {
+            self.failure_slots.pop();
+        }
+    }
+
+    fn function_body(&mut self, function: &Expression, body: &Expression) {
+        let failure_slot = function
+            .get_type()
+            .unwrap_forall()
+            .get_function_ret()
+            .cloned()
+            .unwrap_or(Type::Error);
+        self.in_failure_slot(Some(failure_slot), |finalizer| {
+            finalizer.in_loop(None, |finalizer| finalizer.value_use(body, None));
+        });
+    }
+
     /// Walk a loop body, where a `break` value goes into `slot`.
     fn in_loop(&mut self, slot: Option<LoopSlot>, walk: impl FnOnce(&mut Self)) {
         self.loop_slots.push(slot);
@@ -469,6 +563,7 @@ impl Finalizer<'_, '_> {
                 .unwrap_or_default(),
             copies_storage: false,
             binds_receiver: false,
+            interface_method: None,
             span: expression.get_span(),
         };
         self.bodies.insert_callee(key, checked);
@@ -554,27 +649,36 @@ impl Finalizer<'_, '_> {
             },
             Expression::Function { body, .. } => {
                 if let Some(body) = body.definition() {
-                    self.in_loop(None, |finalizer| finalizer.value_use(body, None));
+                    self.function_body(expression, body);
                 }
             }
-            Expression::Lambda { body, .. } => {
-                self.in_loop(None, |finalizer| finalizer.value_use(body, None));
-            }
+            Expression::Lambda { body, .. } => self.function_body(expression, body),
             Expression::Block { items, .. }
             | Expression::TryBlock { items, .. }
             | Expression::RecoverBlock { items, .. } => {
                 let delegates = matches!(expression, Expression::Block { .. });
-                if let Some((last, rest)) = items.split_last() {
-                    for item in rest {
-                        self.discarded_use(item);
-                    }
-                    if is_statement(last) {
-                        // The statement-tail check rejects a statement where the block must produce a value.
-                        self.discarded_use(last);
-                    } else {
-                        self.value_use(last, delegates.then(|| slot.clone()));
+                if !delegates {
+                    let block_ty = self.store.peel_alias(&expression.get_type());
+                    let needs_context = |ty: &Type| ty.is_variable() || ty.is_placeholder();
+                    if needs_context(&block_ty) || needs_context(&block_ty.ok_type()) {
+                        self.fail(expression.get_span(), "this block has no checked ok type");
                     }
                 }
+                let failure_slot = matches!(expression, Expression::TryBlock { .. })
+                    .then(|| expression.get_type());
+                self.in_failure_slot(failure_slot, |finalizer| {
+                    if let Some((last, rest)) = items.split_last() {
+                        for item in rest {
+                            finalizer.discarded_use(item);
+                        }
+                        if is_statement(last) {
+                            // The statement-tail check rejects a statement where the block must produce a value.
+                            finalizer.discarded_use(last);
+                        } else {
+                            finalizer.value_use(last, delegates.then(|| slot.clone()));
+                        }
+                    }
+                });
             }
             Expression::Let { value, mode, .. } => {
                 self.value_use(value, None);
@@ -645,7 +749,13 @@ impl Finalizer<'_, '_> {
                 ..
             } => {
                 self.value_use(operand, None);
-                if self.store.peel_alias(&operand.get_type()).is_result() {
+                let operand_ty = self.store.peel_alias(&operand.get_type());
+                if let Some(failure_slot) = self.failure_slots.last()
+                    && self.store.peel_alias(failure_slot).demoted() == operand_ty.demoted()
+                {
+                    self.bodies.insert_forwarded_failure(operand.id());
+                }
+                if operand_ty.is_result() {
                     self.special_use(
                         ValueUseKey::propagated_error(operand.id()),
                         *span,
@@ -837,6 +947,11 @@ impl Finalizer<'_, '_> {
         if source == slot {
             return Adaptation::Identity;
         }
+        if let Type::Nominal { id, .. } = &slot
+            && store.get_definition(id).and_then(Definition::newtype_field) == Some(written_source)
+        {
+            return Adaptation::Newtype;
+        }
         match (&source, &slot) {
             (Type::Tuple(sources), Type::Tuple(slots)) if sources.len() == slots.len() => {
                 let elements: Vec<Adaptation> = sources
@@ -896,11 +1011,13 @@ impl Finalizer<'_, '_> {
                 if witness.is_none() && self.needs_witness(&source, &slot) {
                     self.fail(span, "this interface conversion has no checked conformance");
                 }
-                Adaptation::Interface(InterfaceConversion {
+                Adaptation::Interface(Box::new(InterfaceConversion {
                     source: written_source.clone(),
                     target: written_slot.clone(),
+                    source_shape: store.receiver_shape(written_source),
+                    target_interface: store.is_interface(&slot).then(|| slot.clone()),
                     witness,
-                })
+                }))
             }
             _ if self.context.admits(written_slot, written_source, &span) => Adaptation::Identity,
             // The cast operation converts its operand to the cast type.

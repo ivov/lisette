@@ -30,7 +30,6 @@ use syntax::ast::Expression;
 use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::DotAccessResolution;
 use syntax::program::SlotOrigin;
-use syntax::types::Type;
 
 pub(crate) fn plain_return(value: GoExpression) -> Statement {
     LoweredStatement::Return(vec![value]).into()
@@ -118,10 +117,9 @@ impl Planner<'_> {
         expression: &Expression,
         target: PropagateTarget<'_>,
     ) -> (Vec<Statement>, Option<GoExpression>) {
-        let expression_ty = self.facts.peel_alias(&expression.get_type());
         let fallible = self
             .facts
-            .fallible(&expression_ty)
+            .fallible(&expression.get_type())
             .expect("plan_propagate called on non-Result/Option type");
 
         let mut statements = Vec::new();
@@ -221,7 +219,7 @@ impl Planner<'_> {
         let expression_ty = &expression.get_type();
         let return_layout = self.value_layout(&self.return_ctx().expect_ty(), SlotOrigin::Lisette);
         let source_layout = self.value_layout(expression_ty, SlotOrigin::Lisette);
-        let (setup, values) = if self.returns_tagged_type(expression_ty)
+        let (setup, values) = if self.returns_tagged_type(expression)
             && source_layout
                 .underlying()
                 .same_representation(return_layout.underlying())
@@ -259,12 +257,11 @@ impl Planner<'_> {
         )
     }
 
-    fn returns_tagged_type(&self, ty: &Type) -> bool {
+    fn returns_tagged_type(&self, operand: &Expression) -> bool {
         let return_ctx = self.return_ctx();
         return_ctx.lowered_shape().is_none()
-            && return_ctx.ty().is_some_and(|return_ty| {
-                self.facts.peel_alias(return_ty).demoted() == self.facts.peel_alias(ty).demoted()
-            })
+            && return_ctx.ty().is_some()
+            && self.facts.checked(operand).forwards_failure()
     }
 
     fn propagate_failure_values(
@@ -452,10 +449,12 @@ impl Planner<'_> {
                 return None;
             }
             Mapped::MapErr(fuse, mappers)
-        } else if let Some((receiver, [error])) = self.prelude_method_call(expression, "ok_or") {
+        } else if let Some((receiver, [error])) =
+            self.prelude_method_call(expression, "Option", "ok_or")
+        {
             Mapped::OkOr(self.option_fuse_plan(receiver)?, error)
         } else if let Some((receiver, [function])) =
-            self.prelude_method_call(expression, "ok_or_else")
+            self.prelude_method_call(expression, "Option", "ok_or_else")
         {
             let map = map_lambda(function)?;
             Mapped::OkOrElse(self.option_fuse_plan(receiver)?, map)
@@ -588,7 +587,9 @@ impl Planner<'_> {
     ) -> Option<(&'a Expression, Vec<ErrorMapper<'a>>)> {
         let mut mappers = Vec::new();
         let mut source = expression;
-        while let Some((receiver, [function])) = self.prelude_method_call(source, "map_err") {
+        while let Some((receiver, [function])) =
+            self.prelude_method_call(source, "Result", "map_err")
+        {
             let Some(mapper) = self.error_mapper(function) else {
                 break;
             };
@@ -718,9 +719,6 @@ impl Planner<'_> {
         }
         let (receiver, mappers) = self.error_mapper_chain(expression)?;
         let receiver_ty = receiver.get_type();
-        if !self.facts.peel_alias(&receiver_ty).is_result() {
-            return None;
-        }
         let plan = self.plan_operand(receiver, ExpressionContext::value());
         let local = matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
             && plan.effects().can_duplicate();
@@ -831,7 +829,7 @@ impl Planner<'_> {
             || lowered.is_bridged()
             || !self
                 .facts
-                .is_prelude_error(&self.facts.peel_alias(&lowered.call.get_type()).err_type())
+                .is_prelude_error(&self.facts.err_payload(&lowered.call.get_type()))
         {
             return None;
         }
@@ -839,12 +837,13 @@ impl Planner<'_> {
     }
 
     fn forwarded_tagged_result<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
-        let return_ty = self.facts.peel_alias(self.return_ctx().ty()?);
-        let inner_ty = self.facts.peel_alias(&inner.get_type());
-        (return_ty.is_result()
-            && self.facts.peel_alias(&return_ty.ok_type()).is_unit()
-            && return_ty == inner_ty)
-            .then_some(inner)
+        let return_ty = self.return_ctx().ty()?.clone();
+        (self.facts.is_result(&return_ty)
+            && self
+                .facts
+                .resolves_to_unit(&self.facts.ok_payload(&return_ty))
+            && self.facts.checked(inner).forwards_failure())
+        .then_some(inner)
     }
 
     fn returns_fallible(&self) -> bool {

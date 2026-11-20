@@ -8,12 +8,13 @@ use crate::ir::bodies::{
 };
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, ValuePlan};
+use crate::names::go_name;
 use crate::patterns::matching::{FusedName, OptionArms, field_binding};
 use crate::plan::placement::collapse_declared_temp;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, Literal};
 use syntax::program::SlotOrigin;
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 struct DefaultedCall<'a> {
     producer: FallibleProducer<'a>,
@@ -72,15 +73,17 @@ fn runs_no_code(expression: &Expression) -> bool {
     }
 }
 
-fn is_go_zero_literal(default: &Expression, ty: &Type) -> bool {
+fn is_go_zero_literal(default: &Expression, kind: SimpleKind) -> bool {
     let Expression::Literal { literal, .. } = default.unwrap_parens() else {
         return false;
     };
     match literal {
-        Literal::Integer { value, .. } => *value == 0 && ty.is_numeric(),
-        Literal::Float { value, .. } => *value == 0.0 && value.is_sign_positive() && ty.is_float(),
-        Literal::Boolean(value) => !value && ty.is_boolean(),
-        Literal::String { value, .. } => value.is_empty() && ty.is_string(),
+        Literal::Integer { value, .. } => *value == 0 && kind.is_arithmetic(),
+        Literal::Float { value, .. } => {
+            *value == 0.0 && value.is_sign_positive() && kind.is_float()
+        }
+        Literal::Boolean(value) => !value && kind == SimpleKind::Bool,
+        Literal::String { value, .. } => value.is_empty() && kind == SimpleKind::String,
         _ => false,
     }
 }
@@ -104,6 +107,7 @@ impl<'p> Planner<'p> {
     pub(crate) fn prelude_method_call<'a>(
         &self,
         expression: &'a Expression,
+        owner: &str,
         method: &str,
     ) -> Option<(&'a Expression, &'a [Expression])> {
         let Expression::Call {
@@ -120,51 +124,62 @@ impl<'p> Planner<'p> {
         }
         let Expression::DotAccess {
             expression: receiver,
-            member,
             ..
         } = callee.unwrap_parens()
         else {
             return None;
         };
-        if member != method
-            || !self
-                .plan_call(expression.unwrap_parens())?
-                .resolved
-                .is_prelude_dispatch
-        {
-            return None;
-        }
-        Some((receiver, args))
+        let definition = self
+            .facts
+            .checked(callee)
+            .function_value()?
+            .definition
+            .as_deref()?;
+        let selected = definition
+            .strip_prefix(go_name::PRELUDE_PREFIX)?
+            .split_once('.')?;
+        (selected == (owner, method)).then_some((receiver, args.as_slice()))
+    }
+
+    fn fallible_method_call<'a>(
+        &self,
+        expression: &'a Expression,
+        method: &str,
+    ) -> Option<(&'static str, &'a Expression, &'a [Expression])> {
+        ["Option", "Result"].into_iter().find_map(|owner| {
+            self.prelude_method_call(expression, owner, method)
+                .map(|(receiver, args)| (owner, receiver, args))
+        })
     }
 
     fn defaulted_call<'a>(&self, expression: &'a Expression) -> Option<DefaultedCall<'a>>
     where
         'p: 'a,
     {
-        let (receiver, map, default) = if let Some((receiver, [default])) =
-            self.prelude_method_call(expression, "unwrap_or")
+        let (owner, receiver, map, default) = if let Some((owner, receiver, [default])) =
+            self.fallible_method_call(expression, "unwrap_or")
         {
-            match self.prelude_method_call(receiver, "map") {
-                Some((inner, [function])) => (inner, Some(map_lambda(function)?), default),
-                _ => (receiver, None, default),
+            match self.prelude_method_call(receiver, owner, "map") {
+                Some((inner, [function])) => (owner, inner, Some(map_lambda(function)?), default),
+                _ => (owner, receiver, None, default),
             }
-        } else if let Some((receiver, [default, function])) =
-            self.prelude_method_call(expression, "map_or")
+        } else if let Some((owner, receiver, [default, function])) =
+            self.fallible_method_call(expression, "map_or")
         {
-            (receiver, Some(map_lambda(function)?), default)
+            (owner, receiver, Some(map_lambda(function)?), default)
         } else {
             return None;
         };
         if map.is_some() && !is_literal_default(default) {
             return None;
         }
-        let receiver_ty = self.facts.peel_alias(&receiver.get_type());
-        if (receiver_ty.is_option() || receiver_ty.is_result())
-            && self.facts.resolves_to_unit(&receiver_ty.ok_type())
+        if self
+            .facts
+            .resolves_to_unit(&self.facts.ok_payload(&receiver.get_type()))
         {
             return None;
         }
-        let producer = if receiver_ty.is_option() {
+        let producer = if owner == "Option" {
             let producer = self.option_fuse_plan(receiver)?;
             if matches!(producer, OptionFusePlan::Index { .. })
                 && map.is_none()
@@ -173,7 +188,7 @@ impl<'p> Planner<'p> {
                 return None;
             }
             FallibleProducer::Option(producer)
-        } else if receiver_ty.is_result() && map.is_none() {
+        } else if map.is_none() {
             let producer = self.result_fuse_plan(receiver)?;
             if !producer.carries_payload() {
                 return None;
@@ -200,7 +215,10 @@ impl<'p> Planner<'p> {
         };
         if call.map.is_some()
             || !source.is_map_index()
-            || !is_go_zero_literal(call.default, &self.facts.peel_alias(ty))
+            || !self
+                .facts
+                .simple_kind(ty)
+                .is_some_and(|kind| is_go_zero_literal(call.default, kind))
         {
             return None;
         }

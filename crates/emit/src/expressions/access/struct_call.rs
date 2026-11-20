@@ -2,7 +2,7 @@ use crate::EmitFacts;
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
@@ -23,10 +23,8 @@ use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
-use syntax::program::AliasKind;
 use syntax::program::SlotOrigin;
-use syntax::types;
-use syntax::types::SubstitutionMap;
+use syntax::program::{AliasKind, CheckedExpression, FieldSelection};
 
 struct SpreadInput<'a> {
     base: &'a Expression,
@@ -35,8 +33,8 @@ struct SpreadInput<'a> {
 }
 
 struct StructCallContext<'a> {
-    name: &'a str,
     ty: &'a Type,
+    checked: CheckedExpression<'a, 'a>,
     go_type: GoType,
     enum_ctx: Option<EnumCallContext>,
 }
@@ -68,14 +66,19 @@ impl StructCallField {
 }
 
 impl Planner<'_> {
-    pub(crate) fn plan_struct_call(
-        &mut self,
-        name: &str,
-        field_assignments: &[StructFieldAssignment],
-        spread: &StructSpread,
-        ty: &Type,
-    ) -> ValuePlan {
-        let ctx = self.analyze_struct_call(name, ty);
+    pub(crate) fn plan_struct_call(&mut self, expression: &Expression) -> ValuePlan {
+        let Expression::StructCall {
+            name,
+            field_assignments,
+            spread,
+            ty,
+            ..
+        } = expression
+        else {
+            unreachable!("plan_struct_call called with a non-StructCall expression")
+        };
+        let checked = self.facts.checked(expression);
+        let ctx = self.analyze_struct_call(name, ty, checked);
 
         let is_go_struct = self.facts.is_go_abi_type(ty);
         let PlannedStructFields {
@@ -87,15 +90,13 @@ impl Planner<'_> {
 
         let built_from_fields = !matches!(spread, StructSpread::From(_));
         let value = match spread {
-            StructSpread::From(base) => {
-                self.plan_struct_spread(&mut setup, base, fields, &ctx, field_assignments)
-            }
+            StructSpread::From(base) => self.plan_struct_spread(&mut setup, base, fields, &ctx),
             StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
                 Some(zero) => zero,
                 None => {
                     let mut field_pairs =
                         fields.into_iter().map(StructCallField::into_pair).collect();
-                    self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
+                    self.append_autofills(&mut field_pairs, &ctx, is_go_struct);
                     plan_struct_literal(&ctx.go_type, field_pairs)
                 }
             },
@@ -127,26 +128,23 @@ impl Planner<'_> {
         ctx: &StructCallContext<'_>,
     ) -> PlannedStructFields {
         let is_go_struct = self.facts.is_go_abi_type(ty);
-        let variant = ctx.enum_ctx.as_ref().map(|ctx| ctx.variant_name.as_str());
 
-        let kept_fields: Vec<(&StructFieldAssignment, Option<Type>, Option<ValueLayout>)> =
+        let kept_fields: Vec<(&StructFieldAssignment, Type, Option<ValueLayout>)> =
             field_assignments
                 .iter()
                 .filter_map(|f| {
-                    let field_ty = self.lookup_field_ty(ty, variant, &f.name);
+                    let field_ty = self.facts.checked(&f.value).value_use().slot.clone();
                     if self
                         .facts
-                        .omits_none_field(f, field_ty.as_ref(), ctx, spread, is_go_struct)
+                        .omits_none_field(f, &field_ty, ctx, spread, is_go_struct)
                     {
                         return None;
                     }
-                    let value_ty = f.value.get_type();
                     let layout = self.field_slot_layout(
                         ty,
-                        None,
-                        variant,
+                        Some(ctx.checked.literal_field(&f.name)),
                         &f.name,
-                        field_ty.as_ref().unwrap_or(&value_ty),
+                        &field_ty,
                     );
                     Some((f, field_ty, layout))
                 })
@@ -163,12 +161,9 @@ impl Planner<'_> {
                     *literal_slot = true;
                     return (literal, layout.clone());
                 }
-                let declared = self
-                    .facts
-                    .declared_field_ty(ty, variant, &f.name)
-                    .map(|(declared, _)| declared);
+                let declared = &ctx.checked.literal_field(&f.name).declared_ty;
                 let field_ctx = ExpressionContext::value()
-                    .with_generic_result_slot(declared.as_ref(), field_ty.as_ref());
+                    .with_generic_result_slot(Some(declared), Some(field_ty));
                 let source_layout = self.emitted_value_layout(&f.value, field_ctx);
                 (
                     self.plan_composite_value(&f.value, field_ctx),
@@ -210,7 +205,7 @@ impl Planner<'_> {
                 &mut setup,
                 (&f.value, value),
                 &source_layout,
-                field_ty.as_ref(),
+                Some(&field_ty),
                 field_layout.as_ref().filter(|_| !literal_slot),
             );
             fields.push(StructCallField {
@@ -234,7 +229,6 @@ impl Planner<'_> {
         base: &Expression,
         fields: Vec<StructCallField>,
         ctx: &StructCallContext<'_>,
-        field_assignments: &[StructFieldAssignment],
     ) -> GoExpression {
         if base.get_type().is_never() {
             setup.push(self.lower_statement(base));
@@ -250,7 +244,6 @@ impl Planner<'_> {
                     field_pairs,
                 },
                 ctx,
-                field_assignments,
             )
         } else {
             let field_pairs = if base_staged.setup().is_empty() && base_staged.can_delay() {
@@ -300,22 +293,13 @@ impl Planner<'_> {
     fn append_autofills(
         &mut self,
         field_pairs: &mut Vec<(String, GoExpression)>,
-        field_assignments: &[StructFieldAssignment],
         ctx: &StructCallContext<'_>,
         is_go_struct: bool,
     ) {
-        let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
-        let Some(unspecified) = self.facts.lookup_unspecified_fields(
-            ctx.ty,
-            ctx.name,
-            ctx.enum_ctx.as_ref(),
-            &assigned,
-        ) else {
-            return;
-        };
-        for (field_name, field_ty) in unspecified {
+        for (field_name, field_ty) in &ctx.checked.struct_literal().unset_fields {
             let zero = if is_go_struct {
-                match self.go_field_map_zero(ctx.ty, &field_name, &field_ty) {
+                let selection = ctx.checked.literal_field(field_name);
+                match self.go_field_map_zero(ctx.ty, selection, field_name, field_ty) {
                     Some(zero) => zero,
                     None => continue,
                 }
@@ -323,12 +307,12 @@ impl Planner<'_> {
                 if matches!(field_ty, Type::Parameter(_)) {
                     continue;
                 }
-                let Some(zero) = self.lisette_zero_expression(&field_ty, true) else {
+                let Some(zero) = self.lisette_zero_expression(field_ty, true) else {
                     continue;
                 };
                 zero
             };
-            let go_field_name = self.resolve_struct_call_field_name(&field_name, ctx);
+            let go_field_name = self.resolve_struct_call_field_name(field_name, ctx);
             field_pairs.push((go_field_name, zero));
         }
     }
@@ -336,10 +320,11 @@ impl Planner<'_> {
     fn go_field_map_zero(
         &mut self,
         owner: &Type,
+        selection: &FieldSelection,
         field: &str,
         field_ty: &Type,
     ) -> Option<GoExpression> {
-        let layout = self.field_slot_layout(owner, None, None, field, field_ty)?;
+        let layout = self.field_slot_layout(owner, Some(selection), field, field_ty)?;
         if !layout_is_map(&layout) {
             return None;
         }
@@ -356,20 +341,6 @@ impl Planner<'_> {
         let underlying = self.facts.newtype_underlying(ty)?;
         let go_ty = self.go_type(ty);
         self.go_newtype_zero(go_ty, &underlying)
-    }
-
-    fn go_newtype_zero(&mut self, go_ty: GoType, underlying: &Type) -> Option<GoExpression> {
-        let underlying = self.facts.peel_underlying(underlying);
-        if underlying.is_map() || matches!(underlying, Type::Array { .. }) {
-            return Some(GoExpression::empty_composite(go_ty));
-        }
-        if underlying.is_slice() {
-            return Some(GoExpression::conversion(go_ty, GoExpression::nil()));
-        }
-        matches!(underlying, Type::Simple(_)).then(|| {
-            let inner = self.lisette_zero(&underlying);
-            GoExpression::conversion(go_ty, inner)
-        })
     }
 
     fn go_imported_zero(&mut self, ty: &Type, id: &str) -> GoExpression {
@@ -397,14 +368,11 @@ impl Planner<'_> {
         if !is_struct && !is_opaque {
             return dereferenced_new(go_ty);
         }
-        if is_struct
-            && let Some(fields) =
-                self.facts
-                    .lookup_unspecified_fields(ty, "", None, &HashSet::default())
-        {
+        if is_struct && let Some(fields) = self.facts.struct_fields(ty) {
             let mut pairs: Vec<(String, GoExpression)> = Vec::new();
-            for (name, field_ty) in fields {
-                let Some(zero) = self.go_field_map_zero(ty, &name, &field_ty) else {
+            for (name, selection) in fields {
+                let field_ty = selection.field_ty();
+                let Some(zero) = self.go_field_map_zero(ty, &selection, &name, &field_ty) else {
                     continue;
                 };
                 pairs.push((self.struct_field_go_name(ty, &name, false), zero));
@@ -530,16 +498,14 @@ impl Planner<'_> {
             let inner = self.lisette_zero(&underlying);
             return Some(GoExpression::conversion(go_ty, inner));
         }
-        if let Some(fields) =
-            self.facts
-                .lookup_unspecified_fields(ty, "", None, &HashSet::default())
-        {
+        if let Some(fields) = self.facts.struct_fields(ty) {
             let is_tuple = self.facts.is_tuple_struct_type(ty);
             let pairs: Vec<(String, GoExpression)> = fields
                 .into_iter()
                 .enumerate()
-                .filter(|(_, (_, field_ty))| !field_ty.is_slice())
-                .filter_map(|(index, (name, field_ty))| {
+                .map(|(index, (name, selection))| (index, name, selection.field_ty()))
+                .filter(|(_, _, field_ty)| !field_ty.is_slice())
+                .filter_map(|(index, name, field_ty)| {
                     let zero = self.lisette_zero_expression(&field_ty, !is_tuple)?;
                     let go_name = if is_tuple {
                         go_name::tuple_struct_field(index)
@@ -637,17 +603,24 @@ impl Planner<'_> {
         GoExpression::address_of(GoExpression::identifier(temp))
     }
 
-    fn analyze_struct_call<'t>(&mut self, name: &'t str, ty: &'t Type) -> StructCallContext<'t> {
+    fn analyze_struct_call<'t>(
+        &mut self,
+        name: &'t str,
+        ty: &'t Type,
+        checked: CheckedExpression<'t, 't>,
+    ) -> StructCallContext<'t> {
+        let via_alias = checked.struct_literal().via_alias;
         let is_prelude = self.facts.is_prelude_nominal(ty);
         let enum_id = self.facts.as_enum(ty);
 
-        let go_type = self.compute_struct_call_go_type(name, ty, is_prelude, enum_id.is_some());
+        let go_type =
+            self.compute_struct_call_go_type(name, ty, via_alias, is_prelude, enum_id.is_some());
 
         let enum_ctx = enum_id.map(|id| self.compute_enum_call_context(name, &id));
 
         StructCallContext {
-            name,
             ty,
+            checked,
             go_type,
             enum_ctx,
         }
@@ -657,6 +630,7 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         ty: &Type,
+        via_alias: bool,
         is_prelude: bool,
         is_enum: bool,
     ) -> GoType {
@@ -677,7 +651,7 @@ impl Planner<'_> {
             if let Some((package, type_name)) = qualified
                 && !self.facts.is_current_package(package)
             {
-                let type_args = if self.facts.is_non_generic_alias_call(type_name, ty) {
+                let type_args = if via_alias {
                     GoType::default()
                 } else if let Type::Nominal { params, .. } = ty {
                     self.format_type_args(params)
@@ -785,18 +759,13 @@ impl Planner<'_> {
         &mut self,
         input: SpreadInput<'_>,
         ctx: &StructCallContext<'_>,
-        field_assignments: &[StructFieldAssignment],
     ) -> (Vec<Statement>, GoExpression) {
         let SpreadInput {
             base,
             base_staged,
             mut field_pairs,
         } = input;
-        let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
-        let carried = self
-            .facts
-            .lookup_unspecified_fields(ctx.ty, ctx.name, ctx.enum_ctx.as_ref(), &assigned)
-            .unwrap_or_default();
+        let carried = &ctx.checked.struct_literal().unset_fields;
 
         let (mut statements, base_value) = base_staged.into_parts();
 
@@ -815,7 +784,7 @@ impl Planner<'_> {
             base_value
         };
         for (field_name, _) in carried {
-            let slot = self.resolve_struct_call_field_name(&field_name, ctx);
+            let slot = self.resolve_struct_call_field_name(field_name, ctx);
             field_pairs.push((slot.clone(), GoExpression::selector(source.clone(), slot)));
         }
         (statements, plan_struct_literal(&ctx.go_type, field_pairs))
@@ -837,47 +806,6 @@ fn layout_is_map(layout: &ValueLayout) -> bool {
     }
 }
 
-fn forall_substitution(definition_ty: &Type, params: &[Type]) -> SubstitutionMap {
-    if let Type::Forall { vars, .. } = definition_ty
-        && !vars.is_empty()
-        && vars.len() == params.len()
-    {
-        generics_substitution(vars.iter().cloned(), params)
-    } else {
-        SubstitutionMap::default()
-    }
-}
-
-fn generics_substitution(
-    vars: impl Iterator<Item = ecow::EcoString>,
-    params: &[Type],
-) -> SubstitutionMap {
-    let mut map = SubstitutionMap::default();
-    for (var, param) in vars.zip(params.iter()) {
-        map.insert(var, param.clone());
-    }
-    map
-}
-
-fn apply_substitution(ty: &Type, map: &SubstitutionMap) -> Type {
-    if map.is_empty() {
-        ty.clone()
-    } else {
-        types::substitute(ty, map)
-    }
-}
-
-fn unspecified_pairs<'a>(
-    fields: impl Iterator<Item = (&'a ecow::EcoString, &'a Type)>,
-    assigned: &HashSet<&str>,
-    map: &SubstitutionMap,
-) -> Vec<(ecow::EcoString, Type)> {
-    fields
-        .filter(|(name, _)| !assigned.contains(name.as_str()))
-        .map(|(name, ty)| (name.clone(), apply_substitution(ty, map)))
-        .collect()
-}
-
 pub(crate) fn plan_struct_literal(
     ty: &GoType,
     fields: Vec<(String, GoExpression)>,
@@ -894,7 +822,7 @@ impl EmitFacts<'_> {
     fn omits_none_field(
         &self,
         field: &StructFieldAssignment,
-        field_ty: Option<&Type>,
+        field_ty: &Type,
         ctx: &StructCallContext<'_>,
         spread: &StructSpread,
         is_go_struct: bool,
@@ -903,77 +831,6 @@ impl EmitFacts<'_> {
             && ctx.enum_ctx.is_none()
             && matches!(spread, StructSpread::None | StructSpread::Autofill { .. })
             && prelude_constructor(&field.value) == Some(PreludeVariant::None)
-            && field_ty.is_some_and(|ty| self.peel_alias(ty).is_option())
-    }
-
-    fn lookup_unspecified_fields(
-        &self,
-        ty: &Type,
-        name: &str,
-        enum_ctx: Option<&EnumCallContext>,
-        assigned: &HashSet<&str>,
-    ) -> Option<Vec<(ecow::EcoString, Type)>> {
-        let params = match ty.strip_refs() {
-            Type::Nominal { params, .. } => params,
-            _ => Vec::new(),
-        };
-
-        if let Some(enum_ctx) = enum_ctx {
-            let Some(Definition {
-                body:
-                    DefinitionBody::Enum {
-                        variants, generics, ..
-                    },
-                ..
-            }) = self.definition(enum_ctx.enum_id.as_str())
-            else {
-                return None;
-            };
-            let variant_name = unqualified_name(name);
-            let variant = variants.iter().find(|v| v.name == variant_name)?;
-            let map = generics_substitution(generics.iter().map(|g| g.name.clone()), &params);
-            return Some(unspecified_pairs(
-                variant.fields.iter().map(|f| (&f.name, &f.ty)),
-                assigned,
-                &map,
-            ));
-        }
-
-        let Type::Nominal { id, .. } = ty.strip_refs() else {
-            return None;
-        };
-        let Some(Definition {
-            ty: definition_ty,
-            body: DefinitionBody::Struct { fields, .. },
-            ..
-        }) = self.definition(id.as_str())
-        else {
-            return None;
-        };
-        let map = forall_substitution(definition_ty, &params);
-        Some(unspecified_pairs(
-            fields.iter().map(|f| (&f.name, &f.ty)),
-            assigned,
-            &map,
-        ))
-    }
-
-    fn is_non_generic_alias_call(&self, type_name: &str, ty: &Type) -> bool {
-        let Type::Nominal { id: struct_id, .. } = ty else {
-            return false;
-        };
-        let Some(package) = self.package_for_qualified_name(struct_id) else {
-            return false;
-        };
-        let alias_id = format!("{}.{}", package, type_name);
-        matches!(
-            self.definition(&alias_id).map(|d| &d.body),
-            Some(DefinitionBody::TypeAlias { generics, .. }) if generics.is_empty()
-        )
-    }
-
-    fn empty_composite_is_go_zero(&self, ty: &Type) -> bool {
-        let ty = self.peel_alias(ty);
-        self.is_plain_struct(&ty) || self.is_lisette_enum(&ty)
+            && self.is_option(field_ty)
     }
 }

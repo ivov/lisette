@@ -13,8 +13,8 @@ use crate::state::bindings::BindingValue;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
+use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
-use syntax::types::Type;
 
 #[derive(Clone, Copy)]
 pub(crate) struct PlaceOrdering<'a> {
@@ -130,12 +130,10 @@ impl Planner<'_> {
                 expression,
                 member,
                 ty,
-                resolution,
                 ..
             } => self.field_slot_layout(
                 &expression.get_type(),
-                resolution.declaring_type(),
-                None,
+                self.facts.checked(target).field_selection(),
                 member,
                 ty,
             ),
@@ -314,7 +312,7 @@ impl Planner<'_> {
                 expression: pointee,
                 ..
             } => self.plan_deref_lvalue(setup, pointee, ordering),
-            Expression::Call { .. } if expression.get_type().is_ref() => {
+            Expression::Call { .. } if self.facts.is_reference(&expression.get_type()) => {
                 let (call_setup, call) = self
                     .plan_composite_value(expression, ExpressionContext::value())
                     .into_parts();
@@ -376,7 +374,7 @@ impl Planner<'_> {
         base: &Expression,
         expression: GoExpression,
     ) -> GoExpression {
-        let pinned = if !matches!(self.facts.shape_ty(&base.get_type()), Type::Array { .. }) {
+        let pinned = if self.facts.native_kind(&base.get_type()) != Some(NativeTypeKind::Array) {
             expression
         } else if let GoExpressionNode::Dereference(pointer) = expression.node() {
             expression.peeled(pointer)

@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Counter {
+    n: int,
+  }
+  
+  type CounterRef = mut Ref<Counter>
+  
+  fn pick(c: CounterRef) -> CounterRef {
+    c
+  }
+  
+  fn main() {
+    let mut c = Counter { n: 1 }
+    pick(&c).n = 5
+    fmt.Println(c.n)
+  }
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	n int
+}
+
+type CounterRef = *Counter
+
+func pick(c CounterRef) CounterRef {
+	return c
+}
+
+func main() {
+	c := Counter{n: 1}
+	ref := pick(&c)
+	ref.n = 5
+	fmt.Println(c.n)
+}

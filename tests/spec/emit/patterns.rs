@@ -2320,3 +2320,62 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn struct_variant_pattern_through_generic_enum() {
+    let input = r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+fn area(s: Shape<int>) -> int {
+  match s {
+    Shape.Rect { w: 0, h: _ } => 0,
+    Shape.Rect { w, h } => w * h,
+    Shape.Dot(_) => 1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_variant_pattern_through_generic_alias() {
+    let input = r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+type Two<A> = Shape<A>
+
+fn area(s: Two<int>) -> int {
+  match s {
+    Two.Rect { w: 0, h: _ } => 0,
+    Two.Rect { w, h } => w * h,
+    Two.Dot(_) => 1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_variant_pattern_with_nested_generic_payload() {
+    let input = r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+fn width(s: Shape<Option<int>>) -> int {
+  match s {
+    Shape.Rect { w: Some(w), h: _ } => w,
+    Shape.Rect { w: None, h: _ } => 0,
+    Shape.Dot(_) => 1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

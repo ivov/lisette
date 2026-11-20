@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  type Span = RangeInclusive<int>
+  type Tail = RangeFrom<int>
+  
+  fn main() {
+    let items = [1, 2, 3, 4, 5]
+    let s: Span = 1..=3
+    let t: Tail = 2..
+    let word = "hello"
+    fmt.Println(items[s], items[t], word.substring(s), word.substring(t))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Span = lisette.RangeInclusive[int]
+
+type Tail = lisette.RangeFrom[int]
+
+func main() {
+	items := []int{1, 2, 3, 4, 5}
+	s := lisette.RangeInclusive[int]{
+		Start: 1,
+		End:   3,
+	}
+	t := lisette.RangeFrom[int]{Start: 2}
+	word := "hello"
+	arg := items[s.Start : s.End+1 : s.End+1]
+	fmt.Println(arg, items[t.Start:len(items):len(items)], lisette.Substring(word, s.Start, s.End+1), lisette.SubstringFrom(word, t.Start))
+}

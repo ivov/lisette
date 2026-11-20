@@ -1,6 +1,6 @@
 use crate::EmitFacts;
 use syntax::ast::Expression;
-use syntax::program::DotAccessResolution;
+use syntax::program::{DotAccessResolution, FieldSelection};
 use syntax::program::{GoOptionRepresentation, go_option_representation};
 use syntax::types::{CompoundKind, Symbol, Type};
 
@@ -383,7 +383,7 @@ impl Planner<'_> {
         let mut target = callee.abi.function_layout(self);
         let instantiated = callee.instantiated.as_function_type()?;
         let canonical_receiver = self.value_layout(
-            &self.facts.strip_and_peel(&receiver.get_type()),
+            &self.facts.receiver_shape(&receiver.get_type()),
             SlotOrigin::Lisette,
         );
         let canonical_slots = match canonical_receiver.underlying() {
@@ -504,8 +504,7 @@ impl Planner<'_> {
     pub(crate) fn field_slot_layout(
         &self,
         owner_type: &Type,
-        declaring_type: Option<&Symbol>,
-        variant: Option<&str>,
+        selection: Option<&FieldSelection>,
         field: &str,
         value_type: &Type,
     ) -> Option<ValueLayout> {
@@ -521,11 +520,8 @@ impl Planner<'_> {
         {
             return Some(layout);
         }
-        let owner = match declaring_type {
-            Some(declaring) => declaring.clone(),
-            None => self.facts.resolve_nominal(owner_type)?.id,
-        };
-        if let Some(slot) = self.facts.go_field(owner.as_str(), field) {
+        let selection = selection?;
+        if let Some(slot) = self.facts.go_field(selection.owner.as_str(), field) {
             return Some(self.value_layout_with_declaration(
                 value_type,
                 slot.origin,
@@ -533,11 +529,10 @@ impl Planner<'_> {
             ));
         }
         let function_type = self.facts.resolve_to_function_type(value_type);
-        let (declared, _) = self.facts.declared_field_ty(owner_type, variant, field)?;
         let declaration = self
             .facts
             .function_alias_declaration(value_type)
-            .unwrap_or(declared);
+            .unwrap_or_else(|| selection.declared_ty.clone());
         let layout = self.value_layout_with_declaration(
             function_type.as_ref().unwrap_or(value_type),
             self.function_type_origin(value_type, SlotOrigin::Lisette),
@@ -586,6 +581,32 @@ impl Planner<'_> {
         } else {
             layout
         }
+    }
+
+    pub(crate) fn receiver_layout(&self, ty: &Type) -> ValueLayout {
+        self.value_layout(&self.facts.receiver_shape(ty), SlotOrigin::Lisette)
+    }
+
+    pub(crate) fn interface_result_layout(
+        &self,
+        go_method: Option<&str>,
+        return_type: &Type,
+    ) -> ValueLayout {
+        match go_method.and_then(|id| self.facts.go_callable_return_slot(id)) {
+            Some(slot) => {
+                self.target_layout_with_declaration(return_type, slot.origin, &slot.declared_type)
+            }
+            None => self.value_layout(&self.facts.peel_alias(return_type), SlotOrigin::Lisette),
+        }
+    }
+
+    pub(crate) fn target_layout_with_declaration(
+        &self,
+        ty: &Type,
+        origin: SlotOrigin,
+        declaration: &Type,
+    ) -> ValueLayout {
+        self.value_layout_with_declaration(&self.facts.peel_alias(ty), origin, declaration)
     }
 
     pub(crate) fn value_layout_with_declaration(

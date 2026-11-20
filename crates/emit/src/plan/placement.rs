@@ -455,11 +455,11 @@ impl<'p> Planner<'p> {
         target_ty: Option<&Type>,
         expression: &Expression,
     ) -> Vec<Statement> {
-        let ty = target_ty
+        let written_ty = target_ty
             .filter(|t| self.facts.is_option_or_result(t))
-            .map(|t| self.facts.peel_alias(t))
-            .unwrap_or_else(|| self.facts.peel_alias(&expression.get_type()));
-        let Some(fallible) = self.facts.fallible(&ty) else {
+            .cloned()
+            .unwrap_or_else(|| expression.get_type());
+        let Some(fallible) = self.facts.fallible(&written_ty) else {
             return self.lower_plain_assign(target, expression);
         };
 
@@ -855,14 +855,6 @@ impl<'p> Planner<'p> {
 }
 
 impl<'a> EmitFacts<'a> {
-    pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
-        let peeled = self.peel_alias(ty);
-        !self.is_function_alias(ty)
-            && !self.is_interface_or_unknown(&peeled)
-            && !(matches!(peeled, Type::Nominal { .. })
-                && self.underlying_simple_kind(&peeled).is_some())
-    }
-
     fn slice_growth_method<'e>(&self, func: &'e Expression) -> Option<(&'a str, &'e Expression)> {
         let Expression::DotAccess { expression, .. } = func else {
             return None;
@@ -927,7 +919,7 @@ impl<'a> EmitFacts<'a> {
         let Pattern::Identifier { identifier, .. } = &binding.pattern else {
             return None;
         };
-        if identifier != tail_name || self.checked(last).value_use().adaptation.converts() {
+        if identifier != tail_name || self.converts(last) {
             return None;
         }
         if !elidable.accepts(value.as_ref()) {

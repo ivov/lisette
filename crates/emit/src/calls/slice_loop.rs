@@ -1,4 +1,3 @@
-use crate::EmitFacts;
 use crate::ir::local::GoIdentifier;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
@@ -682,12 +681,6 @@ impl Planner<'_> {
             .first_type_argument(ty)
             .expect("slice and option results carry a type argument");
         self.go_type(&argument)
-    }
-}
-
-impl EmitFacts<'_> {
-    fn first_type_argument(&self, ty: &Type) -> Option<Type> {
-        self.strip_and_peel(ty).get_type_params()?.first().cloned()
     }
 }
 

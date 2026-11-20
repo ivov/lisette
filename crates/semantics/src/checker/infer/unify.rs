@@ -416,6 +416,16 @@ impl InferCtx<'_> {
         };
 
         if symbol1 != symbol2 {
+            let aliases_interface = |ty: &Type| {
+                self.is_transparent_alias(ty) && store.is_interface(&store.peel_alias(ty))
+            };
+            if (aliases_interface(t1) || aliases_interface(t2))
+                && self
+                    .try_unify(&store.peel_alias(t1), &store.peel_alias(t2), span)
+                    .is_ok()
+            {
+                return Ok(());
+            }
             if store.get_interface(symbol2).is_none()
                 && !store.is_nominal_defined_type(symbol1.as_str())
                 && let Some(underlying) = store.underlying_type(t1)

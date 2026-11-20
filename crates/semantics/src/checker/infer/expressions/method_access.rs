@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::checker::EnvResolve;
 use syntax::ast::{BindingId, Expression, Span};
 use syntax::program::{
-    CallOperation, Definition, DefinitionBody, DotAccessResolution, ReceiverCoercion,
+    CallOperation, Definition, DefinitionBody, DotAccessResolution, InterfaceRequirement,
+    ReceiverCoercion, interface_requirements,
 };
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
@@ -119,19 +120,40 @@ impl InferCtx<'_> {
                 instantiation: instantiation.clone(),
             },
         );
-        let operation = match selected.bound {
-            Some(bound) => CallOperation::BoundMethod {
-                bound,
-                method: arguments.member_name.into(),
-            },
-            None => CallOperation::Function,
+        let (operation, interface_method) = match selected.bound {
+            Some(bound) => {
+                let requirement = self
+                    .interface_requirement(&bound, arguments.member_name)
+                    .expect("internal error: a bound method has a requirement in its bound");
+                (
+                    CallOperation::BoundMethod {
+                        bound,
+                        requirement: Box::new(requirement),
+                    },
+                    None,
+                )
+            }
+            None => {
+                let interface_method = store
+                    .is_interface(&store.peel_alias(&arguments.deref_ty))
+                    .then(|| self.interface_requirement(&arguments.deref_ty, arguments.member_name))
+                    .flatten()
+                    .map(Box::new);
+                (CallOperation::Function, interface_method)
+            }
         };
         let mut type_arguments = selected.owner_arguments;
         for (name, argument) in instantiation.iter() {
             type_arguments.insert(name.clone(), argument.clone());
         }
-        self.record_callee(&dot_access, operation, type_arguments);
+        self.record_method_callee(&dot_access, operation, type_arguments, interface_method);
         Some(dot_access)
+    }
+
+    fn interface_requirement(&self, interface: &Type, name: &str) -> Option<InterfaceRequirement> {
+        interface_requirements(interface, |id| self.store.get_definition(id))
+            .into_iter()
+            .rfind(|requirement| requirement.name == name)
     }
 
     /// The binding whose reference a writing method writes through, leaving

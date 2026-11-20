@@ -2,8 +2,9 @@ use std::mem::take;
 use std::sync::Arc;
 use syntax::collections::DenseMap;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 
+use syntax::EcoString;
 use syntax::ast::{EnumVariant, Literal, StructFieldDefinition};
 use syntax::ast::{Expression, StructKind};
 use syntax::program::{
@@ -19,7 +20,7 @@ pub const ENTRY_FILE_ID: u32 = 0;
 
 pub struct PackageMetadataMut<'a> {
     pub definitions: &'a mut DenseMap<Symbol, Definition>,
-    pub unsupported_go_symbols: &'a mut HashMap<syntax::EcoString, String>,
+    pub unsupported_go_symbols: &'a mut HashMap<EcoString, String>,
     pub uninferred_exports: &'a mut Option<UninferredExports>,
 }
 
@@ -332,6 +333,39 @@ impl Store {
         types::peel_alias(ty, |id| self.get_definition(id))
     }
 
+    pub fn receiver_generic_context(&self, receiver_ty: &Type) -> Vec<(EcoString, Vec<Type>)> {
+        let stripped = receiver_ty.strip_refs();
+        let Type::Nominal { id, params, .. } = &stripped else {
+            return Vec::new();
+        };
+        let Some(generics) = self
+            .get_definition(id)
+            .and_then(|definition| definition.body.generics())
+        else {
+            return Vec::new();
+        };
+        let substitution = types::build_substitution_map(generics, params);
+        generics
+            .iter()
+            .zip(params)
+            .filter_map(|(generic, param)| {
+                let Type::Parameter(name) = param else {
+                    return None;
+                };
+                let bounds = generic
+                    .resolved_bounds()
+                    .expect("generic bounds must be resolved before the impl block")
+                    .map(|bound| types::substitute(bound, &substitution))
+                    .collect();
+                Some((name.clone(), bounds))
+            })
+            .collect()
+    }
+
+    pub fn receiver_shape(&self, ty: &Type) -> Type {
+        types::receiver_shape(ty, |id| self.get_definition(id))
+    }
+
     pub fn peeled(&self, ty: &Type) -> AliasPeeled {
         types::peel_alias_view(ty, |id| self.get_definition(id))
     }
@@ -526,29 +560,23 @@ impl Store {
     }
 
     pub fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        let resolved = self.peel_alias(ty);
-        if matches!(resolved, Type::Function(_)) {
-            return Some(resolved);
-        }
-        self.underlying_type(ty)
-            .filter(|underlying| matches!(underlying, Type::Function(_)))
+        types::resolve_to_function_type(ty, |id| self.get_definition(id))
     }
 
     pub fn peel_refs_and_aliases(&self, ty: &Type) -> (Type, bool) {
-        let mut current = self.peel_alias(ty);
-        let mut behind_ref = false;
-        let mut seen = HashSet::default();
-        while current.is_ref() {
-            behind_ref = true;
-            let stripped = current.strip_refs();
-            if let Type::Nominal { id, .. } = stripped.unwrap_forall()
-                && !seen.insert(id.clone())
-            {
-                return (stripped, behind_ref);
-            }
-            current = self.peel_alias(&stripped);
-        }
-        (current, behind_ref)
+        (self.receiver_shape(ty), self.is_reference(ty))
+    }
+
+    pub fn is_reference(&self, ty: &Type) -> bool {
+        types::is_reference(ty, |id| self.get_definition(id))
+    }
+
+    pub fn points_to_ref(&self, ty: &Type) -> bool {
+        types::points_to_ref(ty, |id| self.get_definition(id))
+    }
+
+    pub fn is_option_or_result(&self, ty: &Type) -> bool {
+        types::is_option_or_result(ty, |id| self.get_definition(id))
     }
 
     /// The definition that a type names, after following aliases.

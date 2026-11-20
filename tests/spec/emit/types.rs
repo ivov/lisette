@@ -1411,6 +1411,23 @@ fn test() -> Option<int> {
 }
 
 #[test]
+fn struct_variant_through_alias_of_generic_enum() {
+    let input = r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+type IntShape = Shape<int>
+
+fn test() -> IntShape {
+  IntShape.Rect { w: 2, h: 3 }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn generic_enum_with_constrained_impl_make_functions() {
     let input = r#"
 interface Displayable {
@@ -8007,6 +8024,81 @@ fn test() -> (Map<int, string>, Map<K, string>) {
   let a: Map<int, string> = Map.from([(1, "a"), (2, "b")])
   let b: Map<K, string> = Map.from([(1, "a"), (2, "b")])
   (a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_struct_call_through_generic_alias() {
+    let input = r#"
+struct Pair<T>(T, T)
+
+type Same<A> = Pair<A>
+
+fn make() -> Same<int> {
+  Same(3, 4)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn stored_ranges_through_aliases_slice_and_substring() {
+    let input = r#"
+import "go:fmt"
+
+type Span = RangeInclusive<int>
+type Tail = RangeFrom<int>
+
+fn main() {
+  let items = [1, 2, 3, 4, 5]
+  let s: Span = 1..=3
+  let t: Tail = 2..
+  let word = "hello"
+  fmt.Println(items[s], items[t], word.substring(s), word.substring(t))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_through_alias_of_reference_views_the_array() {
+    let input = r#"
+import "go:fmt"
+
+type Grid = Array<int, 3>
+type GridRef = Ref<Grid>
+
+fn main() {
+  let g: Grid = [1, 2, 3]
+  let r: GridRef = &g
+  let s = r.to_slice()
+  fmt.Println(g.to_slice().contains(2), r.to_slice().length(), r.to_slice().contains(5), s)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn field_write_through_call_returning_alias_of_reference() {
+    let input = r#"
+import "go:fmt"
+
+struct Counter {
+  n: int,
+}
+
+type CounterRef = mut Ref<Counter>
+
+fn pick(c: CounterRef) -> CounterRef {
+  c
+}
+
+fn main() {
+  let mut c = Counter { n: 1 }
+  pick(&c).n = 5
+  fmt.Println(c.n)
 }
 "#;
     assert_emit_snapshot!(input);

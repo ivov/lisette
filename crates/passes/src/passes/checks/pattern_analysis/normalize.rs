@@ -1,11 +1,11 @@
 use semantics::store::Store;
 use std::slice;
 use syntax::ast::{
-    ConstructorPatternResolution, EnumVariant, Generic, Literal, MatchArm, Pattern,
-    RecordPatternResolution, SequencePatternResolution, StructFieldPattern, expand_or_patterns,
+    ConstructorPatternResolution, Literal, MatchArm, Pattern, RecordPatternResolution,
+    SequencePatternResolution, StructFieldPattern, expand_or_patterns,
 };
-use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Type, build_substitution_map, substitute, unqualified_name};
+use syntax::program::{DefinitionBody, constructor_fields};
+use syntax::types::{Type, unqualified_name};
 
 use super::NormalizedPattern::Wildcard;
 use super::inhabitance::{InhabitanceCache, is_inhabited, is_variant_inhabited};
@@ -22,13 +22,6 @@ fn make_type_key(name: &str, type_args: &[Type]) -> TypeName {
             .collect::<Vec<_>>()
             .join(", ");
         format!("{}<{}>", name, args).into()
-    }
-}
-
-fn pattern_type_args(ctx: &NormalizationContext, ty: &Type) -> Vec<Type> {
-    match ctx.store.peel_alias(ty) {
-        Type::Nominal { params, .. } => params,
-        _ => vec![],
     }
 }
 
@@ -206,30 +199,18 @@ fn normalize_enum_variant_pattern(
             enum_name,
             variant_name,
         } => {
-            let type_args = pattern_type_args(ctx, ty);
-            let enum_def = ctx.store.get_definition(enum_name);
-            let field_types = match enum_def.map(|definition| &definition.body) {
-                Some(DefinitionBody::Struct {
-                    fields, generics, ..
-                }) => substituted_field_types(
-                    generics,
-                    fields.iter().map(|field| &field.ty),
-                    &type_args,
-                ),
-                Some(DefinitionBody::Enum {
-                    variants, generics, ..
-                }) => {
-                    let Some(variant) = find_variant(variants, variant_name) else {
-                        return Wildcard;
-                    };
-                    substituted_field_types(
-                        generics,
-                        variant.fields.iter().map(|field| &field.ty),
-                        &type_args,
-                    )
-                }
-                _ => return Wildcard,
+            let Some(constructor) = constructor_fields(enum_name, Some(variant_name), ty, |id| {
+                ctx.store.get_definition(id)
+            }) else {
+                return Wildcard;
             };
+            let type_args = constructor.type_args;
+            let enum_body = &constructor.definition.body;
+            let field_types: Vec<Type> = constructor
+                .fields
+                .into_iter()
+                .map(|field| field.ty)
+                .collect();
             let patterns: Vec<NormalizedPattern> = fields
                 .iter()
                 .enumerate()
@@ -244,14 +225,10 @@ fn normalize_enum_variant_pattern(
                 patterns.resize(field_types.len(), Wildcard);
             }
 
-            if let Some(Definition {
-                body:
-                    DefinitionBody::Struct {
-                        fields: struct_fields,
-                        ..
-                    },
+            if let DefinitionBody::Struct {
+                fields: struct_fields,
                 ..
-            }) = enum_def
+            } = enum_body
             {
                 let arity = struct_fields.len();
                 let mut args = patterns.clone();
@@ -266,11 +243,10 @@ fn normalize_enum_variant_pattern(
             }
 
             let type_name = make_type_key(enum_name, &type_args);
-            let enum_body = enum_def.map(|d| &d.body);
 
             // Tuple struct / newtype tags are the bare type name (like record
             // structs); enum variants are `Type.Variant`.
-            let is_struct_def = matches!(enum_body, Some(DefinitionBody::Struct { .. }));
+            let is_struct_def = matches!(enum_body, DefinitionBody::Struct { .. });
             let tag = if is_struct_def {
                 enum_name.to_string()
             } else {
@@ -278,9 +254,9 @@ fn normalize_enum_variant_pattern(
             };
 
             register_union(unions, &type_name, || match enum_body {
-                Some(DefinitionBody::Enum {
+                DefinitionBody::Enum {
                     variants, generics, ..
-                }) => variants
+                } => variants
                     .iter()
                     .filter(|v| is_variant_inhabited(v, &type_args, generics, ctx.store, cache))
                     .map(|v| Constructor {
@@ -288,11 +264,11 @@ fn normalize_enum_variant_pattern(
                         arity: v.fields.len(),
                     })
                     .collect(),
-                Some(DefinitionBody::Struct {
+                DefinitionBody::Struct {
                     fields: struct_fields,
                     generics,
                     ..
-                }) if super::inhabitance::is_struct_inhabited(
+                } if super::inhabitance::is_struct_inhabited(
                     struct_fields,
                     &type_args,
                     generics,
@@ -332,28 +308,21 @@ fn normalize_record_pattern(
             enum_name,
             variant_name,
         } => {
-            let type_args = pattern_type_args(ctx, ty);
-            let Some(Definition {
-                body:
-                    DefinitionBody::Enum {
-                        variants, generics, ..
-                    },
-                ..
-            }) = ctx.store.get_definition(enum_name)
-            else {
+            let Some(constructor) = constructor_fields(enum_name, Some(variant_name), ty, |id| {
+                ctx.store.get_definition(id)
+            }) else {
                 return Wildcard;
             };
-            let Some(variant) = find_variant(variants, variant_name) else {
+            let DefinitionBody::Enum { variants, .. } = &constructor.definition.body else {
                 return Wildcard;
             };
-            let field_types =
-                substituted_field_types(generics, variant.fields.iter().map(|f| &f.ty), &type_args);
-            let patterns = variant
+            let generics = constructor.generics;
+            let type_args = constructor.type_args;
+            let patterns = constructor
                 .fields
-                .iter()
-                .zip(field_types)
-                .map(|(f, field_type)| {
-                    field_pattern_or_wildcard(fields, &f.name, field_type, unions, ctx, cache)
+                .into_iter()
+                .map(|field| {
+                    field_pattern_or_wildcard(fields, field.name, field.ty, unions, ctx, cache)
                 })
                 .collect();
 
@@ -380,26 +349,25 @@ fn normalize_record_pattern(
         }
 
         RecordPatternResolution::Struct { struct_name } => {
-            let type_args = pattern_type_args(ctx, ty);
-            let Some(Definition {
-                body:
-                    DefinitionBody::Struct {
-                        fields: struct_fields,
-                        generics,
-                        ..
-                    },
-                ..
-            }) = ctx.store.get_definition(struct_name)
+            let Some(constructor) =
+                constructor_fields(struct_name, None, ty, |id| ctx.store.get_definition(id))
             else {
                 return Wildcard;
             };
-            let field_types =
-                substituted_field_types(generics, struct_fields.iter().map(|f| &f.ty), &type_args);
-            let patterns: Vec<NormalizedPattern> = struct_fields
-                .iter()
-                .zip(field_types)
-                .map(|(f, field_type)| {
-                    field_pattern_or_wildcard(fields, &f.name, field_type, unions, ctx, cache)
+            let DefinitionBody::Struct {
+                fields: struct_fields,
+                ..
+            } = &constructor.definition.body
+            else {
+                return Wildcard;
+            };
+            let generics = constructor.generics;
+            let type_args = constructor.type_args;
+            let patterns: Vec<NormalizedPattern> = constructor
+                .fields
+                .into_iter()
+                .map(|field| {
+                    field_pattern_or_wildcard(fields, field.name, field.ty, unions, ctx, cache)
                 })
                 .collect();
 
@@ -460,23 +428,6 @@ fn field_pattern_or_wildcard(
             }
         })
         .unwrap_or(Wildcard)
-}
-
-fn substituted_field_types<'a>(
-    generics: &[Generic],
-    field_types: impl Iterator<Item = &'a Type>,
-    type_args: &[Type],
-) -> Vec<Type> {
-    let substitution = build_substitution_map(generics, type_args);
-    field_types
-        .map(|ty| substitute(ty, &substitution))
-        .collect()
-}
-
-fn find_variant<'a>(variants: &'a [EnumVariant], variant_name: &str) -> Option<&'a EnumVariant> {
-    variants
-        .iter()
-        .find(|variant| variant.name == unqualified_name(variant_name))
 }
 
 fn register_union(

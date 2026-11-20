@@ -3,6 +3,7 @@ use crate::Planner;
 use crate::expressions::top_items::item_doc_text;
 use crate::ir::declarations::GoDeclaration;
 use crate::names::go_name;
+use syntax::EcoString;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Visibility};
 use syntax::types::{Type, type_args_match_params};
 
@@ -10,6 +11,7 @@ struct ImplContext<'a> {
     receiver_name: &'a str,
     ty: &'a Type,
     generics: &'a [Generic],
+    receiver_generics: &'a [(EcoString, Vec<Type>)],
     qualified_type: String,
 }
 
@@ -20,11 +22,13 @@ impl Planner<'_> {
         ty: &Type,
         methods: &[Expression],
         generics: &[Generic],
+        receiver_generics: &[(EcoString, Vec<Type>)],
     ) -> Vec<GoDeclaration> {
         let ctx = ImplContext {
             receiver_name,
             ty,
             generics,
+            receiver_generics,
             qualified_type: self.facts.qualified_current(receiver_name),
         };
 
@@ -67,7 +71,7 @@ impl Planner<'_> {
             let mut combined_generics = context.generics.to_vec();
             combined_generics.extend(function.generics.iter().cloned());
             let (generics, owner) = if self.facts.impl_generics_match_receiver(context) {
-                (function.generics, Some(context.ty))
+                (function.generics, Some(context.receiver_generics))
             } else {
                 (combined_generics.as_slice(), None)
             };
@@ -80,7 +84,12 @@ impl Planner<'_> {
             (free_name.to_string(), declarations)
         } else {
             let go_name = self.pick_go_function_name(function, true, should_export);
-            let declarations = self.emit_function(function, Some(context.ty), &go_name, None);
+            let declarations = self.emit_function(
+                function,
+                Some(context.ty),
+                &go_name,
+                Some(context.receiver_generics),
+            );
             (go_name, declarations)
         };
 

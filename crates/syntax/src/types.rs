@@ -205,6 +205,45 @@ impl RangeKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IterableKind {
+    String,
+    Slice,
+    EnumeratedSlice,
+    Channel,
+    Array,
+    Map,
+    Seq,
+    Seq2,
+    Range(RangeKind),
+    NotIterable,
+}
+
+impl IterableKind {
+    pub fn of(ty: &Type) -> Option<Self> {
+        if let Some(range) = RangeKind::of(ty) {
+            return Some(Self::Range(range));
+        }
+        Some(match ty {
+            Type::Simple(SimpleKind::String) => Self::String,
+            Type::Array { .. } => Self::Array,
+            Type::Compound { kind, .. } => match kind {
+                CompoundKind::Slice => Self::Slice,
+                CompoundKind::EnumeratedSlice => Self::EnumeratedSlice,
+                CompoundKind::Channel | CompoundKind::Receiver => Self::Channel,
+                CompoundKind::Map => Self::Map,
+                _ => Self::NotIterable,
+            },
+            Type::Simple(_) | Type::Nominal { .. } | Type::ImportNamespace(_) => Self::NotIterable,
+            _ => return None,
+        })
+    }
+
+    pub fn yields_key_value(self) -> bool {
+        matches!(self, Self::Map | Self::EnumeratedSlice | Self::Seq2)
+    }
+}
+
 pub fn peel_to_range_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
 where
     F: Fn(&str) -> Option<&'d Definition>,
@@ -1941,6 +1980,24 @@ where
     current
 }
 
+pub fn receiver_shape<'d, F>(ty: &Type, lookup: F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let mut current = peel_alias(ty, &lookup);
+    let mut seen: HashSet<Symbol> = HashSet::default();
+    while current.is_ref() {
+        let stripped = current.strip_refs();
+        if let Type::Nominal { id, .. } = stripped.unwrap_forall()
+            && !seen.insert(id.clone())
+        {
+            return stripped;
+        }
+        current = peel_alias(&stripped, &lookup);
+    }
+    current
+}
+
 /// Return the immediate underlying type of a nominal occurrence, instantiated
 /// with that occurrence's type arguments.
 pub fn underlying_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
@@ -1999,6 +2056,124 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     peel_alias(ty, lookup).is_unit()
+}
+
+pub const PRELUDE_ERROR_ID: &str = "prelude.error";
+
+pub fn is_reference<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).is_ref()
+}
+
+pub fn points_to_ref<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let peeled = peel_alias(ty, &lookup);
+    peeled.is_ref()
+        && peeled
+            .inner()
+            .is_some_and(|inner| peel_alias(&inner, &lookup).is_ref())
+}
+
+pub fn is_option<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).is_option()
+}
+
+pub fn is_partial<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).is_partial()
+}
+
+pub fn is_tuple<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    matches!(peel_alias(ty, lookup), Type::Tuple(_))
+}
+
+pub fn ok_payload<'d, F>(ty: &Type, lookup: F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).ok_type()
+}
+
+pub fn err_payload<'d, F>(ty: &Type, lookup: F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).err_type()
+}
+
+pub fn is_option_or_result<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let peeled = peel_alias(ty, lookup);
+    peeled.is_option() || peeled.is_result()
+}
+
+pub fn tuple_element_types<'d, F>(ty: &Type, lookup: F) -> Vec<Type>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    match peel_alias(ty, lookup) {
+        Type::Tuple(elements) => elements,
+        Type::Nominal { params, .. } => params,
+        _ => Vec::new(),
+    }
+}
+
+pub fn is_prelude_error<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    matches!(peel_alias(ty, lookup), Type::Nominal { id, .. } if id.as_str() == PRELUDE_ERROR_ID)
+}
+
+pub fn as_interface<'d, F>(ty: &Type, lookup: F) -> Option<Symbol>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let Type::Nominal { id, .. } = peel_alias(ty, &lookup) else {
+        return None;
+    };
+    matches!(
+        lookup(id.as_str()).map(|definition| &definition.body),
+        Some(DefinitionBody::Interface { .. })
+    )
+    .then_some(id)
+}
+
+pub fn is_lisette_enum<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    matches!(peel_alias(ty, &lookup), Type::Nominal { id, .. }
+    if !id.starts_with(GO_IMPORT_PREFIX)
+        && matches!(
+            lookup(id.as_str()).map(|definition| &definition.body),
+            Some(DefinitionBody::Enum { .. })
+        ))
+}
+
+pub fn resolve_to_function_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let resolved = peel_alias(ty, &lookup);
+    if matches!(resolved, Type::Function(_)) {
+        return Some(resolved);
+    }
+    underlying_type(ty, &lookup).filter(|underlying| matches!(underlying, Type::Function(_)))
 }
 
 pub fn contains_unknown<'d, F>(ty: &Type, lookup: F) -> bool
@@ -2186,6 +2361,13 @@ where
         } if declares_writable_components(id.as_str(), lookup) => pointee.clone().make_writable(),
         _ => pointee.clone(),
     }
+}
+
+pub fn simple_kind<'d, F>(ty: &Type, lookup: F) -> Option<SimpleKind>
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).as_simple()
 }
 
 pub fn underlying_simple_kind<'d, F>(ty: &Type, lookup: F) -> Option<SimpleKind>

@@ -17,7 +17,7 @@ pub(crate) fn check_is_non_addressable(
             let inner = expression.unwrap_parens();
             let is_non_addressable_origin = matches!(inner, Expression::StructCall { .. })
                 || (matches!(inner, Expression::Call { .. })
-                    && !expression.get_type().resolve_in(env).is_ref());
+                    && !store.is_reference(&expression.get_type().resolve_in(env)));
             if is_non_addressable_origin {
                 Some("field access on non-addressable value")
             } else {
@@ -78,7 +78,7 @@ pub(crate) fn check_non_addressable_assignment_target(
         target if let Some(kind) = restricted_package_value(target, store) => Some(kind),
         Expression::DotAccess { expression, .. } => {
             if matches!(expression.unwrap_parens(), Expression::Call { .. })
-                && expression.get_type().resolve_in(env).is_ref()
+                && store.is_reference(&expression.get_type().resolve_in(env))
             {
                 None
             } else {

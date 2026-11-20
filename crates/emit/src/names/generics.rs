@@ -13,25 +13,6 @@ use syntax::EcoString;
 use syntax::ast::{Expression, Generic};
 use syntax::types::{SubstitutionMap, Type};
 
-fn build_type_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
-    generics
-        .iter()
-        .map(|generic| generic.name.clone())
-        .zip(type_args.iter().cloned())
-        .collect()
-}
-
-pub(crate) use syntax::types::substitute;
-
-pub(crate) fn resolve_field_type(
-    generics: &[Generic],
-    type_args: &[Type],
-    field_ty: &Type,
-) -> Type {
-    let type_map = build_type_map(generics, type_args);
-    substitute(field_ty, &type_map)
-}
-
 impl Planner<'_> {
     pub(crate) fn format_value_type_args(&mut self, expression: &Expression) -> Option<GoType> {
         let recorded = self.facts.checked(expression).function_value()?;

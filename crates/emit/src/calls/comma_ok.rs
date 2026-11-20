@@ -115,12 +115,10 @@ impl Planner<'_> {
                     return None;
                 };
                 let operand_ty = operand.get_type();
-                let asserts_on_interface = self.facts.is_interface_or_unknown(&operand_ty)
-                    || self.facts.peel_alias(&operand_ty).is_error();
+                let asserts_on_interface =
+                    self.facts.is_interface_or_unknown(&operand_ty) || operand_ty.is_error();
                 let asserts_function = self
-                    .any_slot_function_layouts(
-                        &self.facts.peel_alias(&expression.get_type()).ok_type(),
-                    )
+                    .any_slot_function_layouts(&self.facts.ok_payload(&expression.get_type()))
                     .is_some();
                 (asserts_on_interface && !asserts_function).then_some(CommaOkSource::TypeAssert)
             }
@@ -286,7 +284,7 @@ impl Planner<'_> {
                 let (setup, operand) = self
                     .plan_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
-                let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
+                let target_ty = self.facts.ok_payload(&expression.get_type());
                 let target = self.go_type(&target_ty);
                 (setup, GoExpression::type_assertion(operand, target))
             }

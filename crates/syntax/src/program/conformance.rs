@@ -1,6 +1,6 @@
-use super::Definition;
+use super::{Definition, InterfaceRequirement};
 use crate::EcoString;
-use crate::types::{SubstitutionMap, Symbol, Type};
+use crate::types::{Symbol, Type};
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::mem;
@@ -84,9 +84,10 @@ pub struct CheckedMethod {
     pub required_name: EcoString,
     pub selected_definition: Symbol,
     pub selected_name: EcoString,
+    pub selected_requirement: Option<InterfaceRequirement>,
     pub signature: Type,
     pub declared_signature: Type,
-    pub substitutions: SubstitutionMap,
+    pub instantiated_declared_signature: Type,
     pub pointer_receiver: bool,
     pub is_exported: bool,
 }
@@ -97,14 +98,25 @@ pub struct ConformanceWitness {
     pub methods: Vec<CheckedMethod>,
 }
 impl ConformanceWitness {
+    pub fn method_for(&self, requirement: &InterfaceRequirement) -> &CheckedMethod {
+        self.methods
+            .iter()
+            .find(|method| {
+                method.required_interface == requirement.declaring_interface
+                    && method.required_name == requirement.name
+            })
+            .expect("internal error: a checked conformance selects every required method")
+    }
+
     pub fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {
         visit(&mut self.receiver);
         visit(&mut self.interface);
         for method in &mut self.methods {
             visit(&mut method.signature);
             visit(&mut method.declared_signature);
-            for ty in method.substitutions.types_mut() {
-                visit(ty);
+            visit(&mut method.instantiated_declared_signature);
+            if let Some(requirement) = &mut method.selected_requirement {
+                visit(&mut requirement.ty);
             }
         }
     }

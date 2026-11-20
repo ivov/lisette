@@ -867,13 +867,7 @@ impl Planner<'_> {
             } => self.plan_unary(operator, expression, ctx),
             Expression::Tuple { .. } => self.plan_tuple_value(expression, false),
             Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
-            Expression::StructCall {
-                name,
-                field_assignments,
-                spread,
-                ty,
-                ..
-            } => self.plan_struct_call(name, field_assignments, spread, ty),
+            Expression::StructCall { .. } => self.plan_struct_call(expression),
             Expression::Reference {
                 expression: inner,
                 ty,

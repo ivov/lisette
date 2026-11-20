@@ -15,7 +15,7 @@ use syntax::types::Type;
 impl Planner<'_> {
     pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> LoweredBlock {
         let return_ctx = self.return_ctx();
-        if self.facts.peel_alias(&expression.get_type()).is_never() {
+        if self.facts.is_never(&expression.get_type()) {
             let mut statements = vec![self.lower_statement(expression)];
             if !matches!(return_ctx, ReturnContext::Void(_)) {
                 statements.push(LoweredStatement::UnreachablePanic.into());
@@ -64,16 +64,13 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> Option<Vec<Statement>> {
-        let expression_ty = self.facts.peel_alias(&expression.get_type());
         let return_ctx = self.return_ctx();
-
-        let return_ty = return_ctx
+        let written_ty = return_ctx
             .ty()
-            .map(|ty| self.facts.peel_alias(ty))
             .filter(|ty| self.facts.fallible(ty).is_some())
-            .unwrap_or(expression_ty);
-
-        let fallible = self.facts.fallible(&return_ty)?;
+            .cloned()
+            .unwrap_or_else(|| expression.get_type());
+        let fallible = self.facts.fallible(&written_ty)?;
 
         let mut statements = Vec::new();
 
@@ -98,7 +95,7 @@ impl Planner<'_> {
         }
 
         if matches!(expression, Expression::Call { .. }) {
-            statements.extend(self.lower_wrapped_call_return(expression, &fallible, &return_ty));
+            statements.extend(self.lower_wrapped_call_return(expression, &fallible, &written_ty));
             return Some(statements);
         }
 
@@ -117,7 +114,7 @@ impl Planner<'_> {
         {
             let (setup, value) = self.plan_propagate(inner);
             statements.extend(setup);
-            statements.extend(self.wrapped_value_return(value, &return_ty));
+            statements.extend(self.wrapped_value_return(value, &written_ty));
             return Some(statements);
         }
 
@@ -125,7 +122,7 @@ impl Planner<'_> {
             .plan_value(expression, ExpressionContext::value())
             .into_parts();
         statements.extend(setup);
-        statements.extend(self.wrapped_value_return(value, &return_ty));
+        statements.extend(self.wrapped_value_return(value, &written_ty));
         Some(statements)
     }
 
@@ -269,8 +266,7 @@ impl Planner<'_> {
         let lowered = lowered.as_ref();
         let mut statements = Vec::new();
         if let Some(LoweredReturnAbi::Option(_)) = lowered
-            && self.facts.peel_alias(return_ty).demoted()
-                == self.facts.peel_alias(&expression.get_type()).demoted()
+            && !self.facts.converts(expression)
             && matches!(
                 self.option_fuse_plan(expression),
                 Some(OptionFusePlan::Found { .. })

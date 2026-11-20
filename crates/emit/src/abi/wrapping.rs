@@ -278,8 +278,7 @@ impl Planner<'_> {
         match self.facts.nil_guard(ok_ty)? {
             NilGuard::Pointer => self
                 .facts
-                .underlying(ok_ty)
-                .is_ref()
+                .is_reference_underneath(ok_ty)
                 .then_some(NilGuard::Pointer),
             NilGuard::Interface => {
                 (!self.facts.is_prelude_error(ok_ty)).then_some(NilGuard::Interface)
@@ -697,11 +696,10 @@ impl EmitFacts<'_> {
     }
 
     pub(crate) fn nullable_option_nil_guard(&self, option_ty: &Type) -> Option<NilGuard> {
-        let option_ty = self.peel_alias(option_ty);
-        if !option_ty.is_option() {
+        if !self.is_option(option_ty) {
             return None;
         }
-        self.nil_guard(&option_ty.ok_type())
+        self.nil_guard(&self.ok_payload(option_ty))
     }
 
     pub(crate) fn option_nil_guard(&self, option_ty: &Type) -> NilGuard {

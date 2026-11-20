@@ -13,8 +13,8 @@ use syntax::program::{
     DefinitionBody, InterfaceRequirement, Methods, interface_declares_any_method,
     interface_requirements,
 };
-use syntax::types::method_receiver_substitution;
 use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
+use syntax::types::{method_receiver_substitution, substitute};
 
 use crate::checker::infer::InferCtx;
 use syntax::go_names;
@@ -109,11 +109,7 @@ impl InferCtx<'_> {
         if resolved.contains_error() || bound.contains_error() {
             return;
         }
-        let methods = if resolved.is_ref()
-            && resolved
-                .inner()
-                .is_some_and(|inner| store.peel_alias(&inner).is_ref())
-        {
+        let methods = if store.points_to_ref(&resolved) {
             Methods::default()
         } else {
             self.get_all_methods(store, &resolved)
@@ -550,7 +546,7 @@ impl InferCtx<'_> {
         interface_ty: &Type,
     ) -> bool {
         let store = self.store;
-        if !store.peel_alias(ty).is_ref() {
+        if !store.is_reference(ty) {
             return false;
         }
         let interface_ty = store.peel_alias(interface_ty);
@@ -647,6 +643,8 @@ impl InferCtx<'_> {
         let ty = check.receiver;
         let span = check.span;
         let resolved_receiver = self.conformance_receiver(ty);
+        let receiver_requirements =
+            interface_requirements(&resolved_receiver, |id| self.store.get_definition(id));
         let receiver_id = match &resolved_receiver {
             Type::Nominal { id, .. } => Some(id.clone()),
             _ => None,
@@ -750,14 +748,17 @@ impl InferCtx<'_> {
                                 ..
                             }) =
                                 self.method_of_type(store, &resolved_receiver, &impl_method_name)
-                            && let Some(bound) = bound.get_qualified_id()
+                            && let Some(bound_id) = bound.get_qualified_id()
                         {
+                            let selected_requirement =
+                                bound_requirement(store, &bound, &impl_method_name);
                             check.methods.push(CheckedMethod {
                                 required_interface: interface_qualified_id.clone(),
                                 required_name: method_name.clone(),
-                                selected_definition: Symbol::from(bound)
+                                selected_definition: Symbol::from(bound_id)
                                     .with_segment(&impl_method_name),
                                 selected_name: impl_method_name.clone(),
+                                selected_requirement,
                                 pointer_receiver: symbol_method
                                     .unwrap_forall()
                                     .get_function_params()
@@ -765,7 +766,9 @@ impl InferCtx<'_> {
                                     .is_some_and(|receiver| receiver.ty.is_ref()),
                                 signature: symbol_method.clone(),
                                 declared_signature: symbol_method.clone(),
-                                substitutions: Default::default(),
+                                instantiated_declared_signature: symbol_method
+                                    .unwrap_forall()
+                                    .clone(),
                                 is_exported: method.visibility.is_public(),
                             });
                         } else if !matches!(resolved_receiver, Type::Parameter(_)) {
@@ -799,11 +802,18 @@ impl InferCtx<'_> {
                             method_receiver_substitution(&receiver.ty, &declaring_instance)
                         })
                         .unwrap_or_default();
+                    let instantiated_declared_signature =
+                        substitute(declared_signature.unwrap_forall(), &substitutions);
+                    let selected_requirement = receiver_requirements
+                        .iter()
+                        .find(|candidate| candidate.name == impl_method_name)
+                        .cloned();
                     check.methods.push(CheckedMethod {
                         required_interface: interface_qualified_id.clone(),
                         required_name: method_name.clone(),
                         selected_definition: owner.with_segment(&impl_method_name),
                         selected_name: impl_method_name.clone(),
+                        selected_requirement,
                         pointer_receiver: symbol_method
                             .unwrap_forall()
                             .get_function_params()
@@ -811,7 +821,7 @@ impl InferCtx<'_> {
                             .is_some_and(|receiver| receiver.ty.is_ref()),
                         signature: symbol_method.clone(),
                         declared_signature,
-                        substitutions,
+                        instantiated_declared_signature,
                         is_exported,
                     });
                 }
@@ -1217,4 +1227,10 @@ fn without_function_bounds(ty: &Type) -> Type {
         ),
         ty => ty,
     }
+}
+
+fn bound_requirement(store: &Store, bound: &Type, name: &str) -> Option<InterfaceRequirement> {
+    interface_requirements(bound, |id| store.get_definition(id))
+        .into_iter()
+        .find(|candidate| candidate.name == name)
 }

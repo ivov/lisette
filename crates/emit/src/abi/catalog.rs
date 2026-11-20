@@ -5,7 +5,6 @@ use syntax::types::{Symbol, Type};
 
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::go_return_abi;
-use crate::analyze::facts::resolve_to_function_type;
 use crate::names::go_name;
 use syntax::program::SlotOrigin;
 use syntax::types;
@@ -163,7 +162,7 @@ impl GoAbiCatalog {
         else {
             return;
         };
-        if resolve_to_function_type(definitions, &definition.ty).is_some() {
+        if types::resolve_to_function_type(&definition.ty, |id| definitions.get(id)).is_some() {
             return;
         }
         self.variables.insert(

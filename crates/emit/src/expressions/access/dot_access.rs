@@ -12,7 +12,6 @@ use crate::state::bindings::BindingValue;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::Expression;
 use syntax::parse;
-use syntax::program::GoHint;
 use syntax::program::SlotOrigin;
 use syntax::program::{
     ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
@@ -158,7 +157,11 @@ impl Planner<'_> {
         let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) else {
             return base;
         };
-        let receiver_type = self.facts.strip_and_peel(expression_ty);
+        let receiver_type = self
+            .facts
+            .type_parameter_behind_refs(expression_ty)
+            .map(Type::Parameter)
+            .expect("a dispatched bound has a type parameter receiver");
         let adapter = self
             .dynamic_interface_adapter(&receiver_type, &bound, None)
             .expect("a dispatched bound has an adapter");
@@ -222,7 +225,7 @@ impl Planner<'_> {
         if let Some(package) = expression_ty.as_import_namespace() {
             return self.facts.package_member_go_name(package, member);
         }
-        let canonical_ty = self.facts.strip_and_peel(expression_ty);
+        let canonical_ty = self.member_owner_type(expression_ty);
         if let DotAccessResolution::StructField { is_exported, .. } = resolution {
             return self.struct_field_go_name(&canonical_ty, member, *is_exported);
         }
@@ -282,8 +285,7 @@ impl Planner<'_> {
                 {
                     return true;
                 }
-                !self.facts.has_field(expression_ty, member)
-                    && self.facts.method_needs_export(member)
+                self.facts.method_needs_export(member)
             }
         }
     }
@@ -293,7 +295,6 @@ impl Planner<'_> {
             expression,
             member,
             ty: result_ty,
-            resolution,
             ..
         } = subject.unwrap_parens()
         else {
@@ -302,8 +303,7 @@ impl Planner<'_> {
         let expression_ty = expression.get_type();
         let source_layout = self.field_slot_layout(
             &expression_ty,
-            resolution.declaring_type(),
-            None,
+            self.facts.checked(subject).field_selection(),
             member,
             result_ty,
         )?;
@@ -330,17 +330,19 @@ impl Planner<'_> {
             expression,
             member,
             ty: result_ty,
-            resolution,
             ..
         } = dot_access
         else {
             unreachable!("a nullable field access reads a DotAccess expression");
         };
         let expression_ty = &expression.get_type();
-        let declaring_type = resolution.declaring_type();
         let callee = ctx.is_callee();
-        let source_layout =
-            self.field_slot_layout(expression_ty, declaring_type, None, member, result_ty)?;
+        let source_layout = self.field_slot_layout(
+            expression_ty,
+            self.facts.checked(dot_access).field_selection(),
+            member,
+            result_ty,
+        )?;
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
         if callee
             && let (
@@ -542,23 +544,6 @@ impl EmitFacts<'_> {
             *coercion != ReceiverCoercion::AutoAddress
                 || !self.has_go_value_receiver(&receiver.get_type(), member)
         })
-    }
-
-    pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
-        let peeled = self.peel_alias(ty);
-        peeled.is_ref()
-            && peeled
-                .inner()
-                .is_some_and(|inner| self.peel_alias(&inner).is_ref())
-    }
-
-    fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
-        let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
-        receiver_ty
-            .get_qualified_id()
-            .filter(|owner| go_name::is_go_import(owner))
-            .and_then(|owner| self.method(owner, method))
-            .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
     }
 
     fn go_constant_exceeds_int(&self, package: &str, member: &str, ty: &Type) -> bool {

@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  interface Base {
+    fn name() -> string
+  }
+  
+  interface Named {
+    embed Base
+    fn tag() -> Option<int>
+  }
+  
+  fn show<T: Named>(t: T) -> string { t.name() }
+  
+  fn tag_of<T: Named>(t: T) -> Option<int> { t.tag() }
+---
+package main
+
+type Base interface {
+	name() string
+}
+
+type Named interface {
+	Base
+	tag() (int, bool)
+}
+
+func show[T Named](t T) string {
+	return t.name()
+}
+
+func tagOf[T Named](t T) (int, bool) {
+	return t.tag()
+}

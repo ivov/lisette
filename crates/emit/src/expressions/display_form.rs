@@ -22,11 +22,10 @@ impl DisplayForm {
         if is_raw_function_type(ty) {
             return DisplayForm::Function;
         }
-        let peeled = types::peel_alias(ty, &definition);
-        if peeled.is_unit() {
+        if types::resolves_to_unit(ty, &definition) {
             return DisplayForm::Unit;
         }
-        match peeled.as_simple() {
+        match types::simple_kind(ty, &definition) {
             Some(SimpleKind::Rune) => DisplayForm::Char,
             Some(SimpleKind::String) => DisplayForm::String,
             Some(SimpleKind::Bool) => DisplayForm::Bool,

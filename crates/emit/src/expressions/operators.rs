@@ -10,7 +10,7 @@ use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use crate::names::go_name;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
-use syntax::program::{DefinitionBody, OperandConversion};
+use syntax::program::{DefinitionBody, DotAccessResolution, OperandConversion};
 use syntax::types::{self, ScaledImaginary, Type};
 
 struct NumericBinaryEmitInfo {
@@ -258,11 +258,9 @@ impl Planner<'_> {
             Expression::Identifier {
                 value, resolution, ..
             } => self.identifier_is_const(value, resolution),
-            Expression::DotAccess {
-                expression: package,
-                member,
-                ..
-            } => self.facts.imported_member_is_const(package, member),
+            Expression::DotAccess { resolution, .. } => {
+                self.facts.imported_member_is_const(resolution)
+            }
             Expression::Paren { expression, .. } => self.is_go_constant_expression(expression),
             Expression::Unary {
                 operator: UnaryOperator::Negative | UnaryOperator::Not | UnaryOperator::BitwiseNot,
@@ -416,21 +414,21 @@ fn fold_read(
 }
 
 impl EmitFacts<'_> {
-    fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
-        let package = package.unwrap_parens();
-        let Expression::Identifier { value, .. } = package else {
+    fn imported_member_is_const(&self, resolution: &DotAccessResolution) -> bool {
+        let (DotAccessResolution::PackageMember {
+            definition: Some(definition),
+            ..
+        }
+        | DotAccessResolution::StaticMethod { definition, .. }) = resolution
+        else {
             return false;
         };
-        let package = package.get_type();
-        let package = package.as_import_namespace().unwrap_or(value);
-        let qualified = format!("{package}.{member}");
-        let definition = self
-            .definition(&qualified)
-            .or_else(|| self.definition(&self.qualified_current_member(value, member)));
-        match definition {
-            Some(definition) if !matches!(definition.body, DefinitionBody::Value { .. }) => false,
-            Some(_) if package.starts_with(go_name::GO_IMPORT_PREFIX) => self.is_const(&qualified),
-            Some(definition) => !matches!(definition.ty.unwrap_forall(), Type::Function(_)),
+        match self.definition(definition) {
+            Some(found) if !matches!(found.body, DefinitionBody::Value { .. }) => false,
+            Some(_) if definition.starts_with(go_name::GO_IMPORT_PREFIX) => {
+                self.is_const(definition)
+            }
+            Some(found) => !matches!(found.ty.unwrap_forall(), Type::Function(_)),
             None => false,
         }
     }

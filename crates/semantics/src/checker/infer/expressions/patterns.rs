@@ -7,7 +7,7 @@ use syntax::ast::{
     SequencePatternResolution, Span, StructFieldPattern, collect_pattern_bindings,
     expand_or_patterns,
 };
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{Definition, DefinitionBody, FieldKey, constructor_fields};
 use syntax::types::{CompoundKind, Type, substitute, unqualified_name};
 
 use crate::checker::EnvResolve;
@@ -581,6 +581,14 @@ impl InferCtx<'_> {
             _ => return self.rejected_pattern(span),
         };
 
+        if let ConstructorPatternResolution::EnumVariant {
+            enum_name,
+            variant_name,
+        } = &resolution
+        {
+            self.record_variant_pattern_fields(span, enum_name, variant_name, &pattern_ty);
+        }
+
         Pattern::EnumVariant {
             identifier,
             fields: new_fields,
@@ -588,6 +596,31 @@ impl InferCtx<'_> {
             resolution,
             ty: pattern_ty,
             span,
+        }
+    }
+
+    fn record_variant_pattern_fields(
+        &mut self,
+        span: Span,
+        enum_name: &str,
+        variant_name: &str,
+        pattern_ty: &Type,
+    ) {
+        let instance = pattern_ty.resolve_in(&self.env);
+        let store = self.store;
+        let Some(constructor) =
+            constructor_fields(enum_name, Some(variant_name), &instance, |id| {
+                store.get_definition(id)
+            })
+        else {
+            return;
+        };
+        for (index, field) in constructor.fields.iter().enumerate() {
+            self.record_field_selection(
+                FieldKey::PatternPosition(span, index),
+                field.declared_ty,
+                &instance,
+            );
         }
     }
 
@@ -1052,6 +1085,11 @@ impl InferCtx<'_> {
                     ));
                 }
                 this.facts.add_usage(field.name_span, definition.name_span);
+                this.record_field_selection(
+                    FieldKey::Pattern(field.name_span),
+                    &definition.ty,
+                    &struct_ty,
+                );
                 Some(if scrutinee_is_error {
                     Type::Error
                 } else {
@@ -1381,6 +1419,11 @@ impl InferCtx<'_> {
                     .iter()
                     .find(|declared| declared.name == field.name)?;
                 this.facts.add_usage(field.name_span, definition.name_span);
+                this.record_field_selection(
+                    FieldKey::Pattern(field.name_span),
+                    &definition.ty,
+                    &pattern_ty,
+                );
                 Some(substitute(
                     &this.granted_component_type(&definition.ty, &unify_expected),
                     &map,

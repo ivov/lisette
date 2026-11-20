@@ -17,8 +17,6 @@ pub(crate) const PRELUDE_PACKAGE: &str = "prelude";
 
 pub(crate) const PRELUDE_PREFIX: &str = "prelude.";
 
-pub(crate) const PRELUDE_ERROR_ID: &str = "prelude.error";
-
 pub(crate) const RANGE_START_FIELD: &str = "Start";
 
 pub(crate) const RANGE_END_FIELD: &str = "End";
@@ -70,7 +68,6 @@ fn make_exported(name: &str) -> String {
 }
 
 pub(crate) fn exported_member(owner: &Type, member: &str) -> String {
-    let owner = owner.strip_refs();
     if owner.get_qualified_id().is_some_and(is_go_import) && member.starts_with(char::is_uppercase)
     {
         return member.to_string();

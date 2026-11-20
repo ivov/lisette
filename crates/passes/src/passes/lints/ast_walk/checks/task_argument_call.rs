@@ -67,7 +67,7 @@ fn flag_calls(expression: &Expression, ctx: &NodeCtx) {
 fn constructs_value(callee: &Expression, operation: &CallOperation, store: &Store) -> bool {
     matches!(
         operation,
-        CallOperation::TupleStructConstructor | CallOperation::NativeConstructor { .. }
+        CallOperation::TupleStructConstructor { .. } | CallOperation::NativeConstructor { .. }
     ) || resolved_definition(callee).is_some_and(|qualified| {
         store
             .get_definition(qualified)

@@ -1,4 +1,3 @@
-use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::transition;
@@ -42,7 +41,7 @@ pub(crate) enum ConstructorKind {
 }
 
 impl Fallible {
-    fn from_type(ty: &Type) -> Option<Self> {
+    pub(crate) fn from_type(ty: &Type) -> Option<Self> {
         if ty.is_result() {
             let args = ty.get_type_params()?;
             Some(Self::Result {
@@ -152,10 +151,13 @@ impl Planner<'_> {
         else {
             return value;
         };
-        if self.facts.peel_alias(&from) == self.facts.peel_alias(&to) {
+        let Some(recorded) = self.facts.checked(operand).propagated_error() else {
+            return value;
+        };
+        let adaptation = &recorded.adaptation;
+        if !adaptation.converts() {
             return value;
         }
-        let adaptation = &self.facts.checked(operand).propagated_error().adaptation;
         let (setup, value) =
             CoercionPlan::adapted(self, adaptation, &from, &to, None).lower(self, value);
         statements.extend(setup);
@@ -238,7 +240,7 @@ impl Planner<'_> {
         error: Option<GoExpression>,
     ) -> GoExpression {
         let ok_ty = match self.return_ctx().ty() {
-            Some(ty) => self.facts.peel_alias(ty).ok_type(),
+            Some(ty) => self.facts.ok_payload(ty),
             None => fallible.ok_ty().clone(),
         };
         let err_ty = fallible.is_result().then(|| {
@@ -248,11 +250,5 @@ impl Planner<'_> {
         let type_args = self.fallible_type_args(&ok_ty, err_ty.as_ref());
         let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
         prelude_call(fallible.err_constructor(), type_args, arguments)
-    }
-}
-
-impl EmitFacts<'_> {
-    pub(crate) fn fallible(&self, ty: &Type) -> Option<Fallible> {
-        Fallible::from_type(&self.peel_alias(ty))
     }
 }

@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  type Nums = Slice<int>
+  type NumsRef = Ref<Nums>
+  fn test(r: NumsRef, other: Nums) -> bool {
+    r.equals(other)
+  }
+---
+package main
+
+import "slices"
+
+type Nums = []int
+
+type NumsRef = *Nums
+
+func test(r NumsRef, other Nums) bool {
+	return slices.Equal(*r, other)
+}

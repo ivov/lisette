@@ -1,6 +1,7 @@
 #![deny(clippy::too_many_lines)]
 
 mod abi;
+#[allow(clippy::disallowed_methods)]
 mod analyze;
 pub(crate) mod calls;
 pub(crate) mod control_flow;
@@ -14,6 +15,7 @@ mod plan;
 mod render;
 mod state;
 pub(crate) mod statements;
+#[allow(clippy::disallowed_methods)]
 pub(crate) mod types;
 
 pub(crate) use analyze::facts::EmitFacts;

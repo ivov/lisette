@@ -1,21 +1,23 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::program::{CallOperation, CheckedExpression, EqualityRecipe};
+use syntax::program::{CallOperation, CheckedExpression, EqualityRecipe, FieldSelection};
 
-use syntax::ast::{BindingId, Expression, Pattern, RestPattern};
+use ecow::EcoString;
+use syntax::ast::{BindingId, Expression, Pattern, RestPattern, Span};
 use syntax::program::{
     AliasKind, Definition, DefinitionBody, EmitInput, ImportKey, Method, PackageId,
 };
 use syntax::types;
-use syntax::types::SimpleKind;
+use syntax::types::{CompoundKind, SimpleKind};
 use syntax::types::{Symbol, Type};
 
 use crate::EnumLayout;
 use crate::SharedEmitContext;
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::catalog::GoSlotDescriptor;
+use crate::abi::is_prelude_container_type;
 use crate::names::go_name;
-use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::state::lowering::LineIndex;
+use crate::types::go_type::returns_go_void;
 
 #[derive(Clone)]
 pub(crate) struct EmitFacts<'a> {
@@ -60,6 +62,16 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn checked<'e>(&self, expression: &'e Expression) -> CheckedExpression<'e, 'a> {
         self.input.checked_bodies.occurrence(expression)
+    }
+
+    pub(crate) fn pattern_field(&self, name_span: Span) -> &'a FieldSelection {
+        self.input.checked_bodies.pattern_field(name_span)
+    }
+
+    pub(crate) fn variant_pattern_fields(&self, pattern_span: Span) -> Vec<&'a FieldSelection> {
+        self.input
+            .checked_bodies
+            .variant_pattern_fields(pattern_span)
     }
 
     pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
@@ -116,10 +128,6 @@ impl<'a> EmitFacts<'a> {
         types::underlying_type(ty, |id| self.definition(id))
     }
 
-    pub(crate) fn peel_underlying(&self, ty: &Type) -> Type {
-        types::peel_underlying(ty, |id| self.definition(id))
-    }
-
     pub(crate) fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
         types::underlying_simple_kind(ty, |id| self.definition(id))
     }
@@ -133,7 +141,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_prelude_error(&self, ty: &Type) -> bool {
-        matches!(self.peel_alias(ty), Type::Nominal { id, .. } if id.as_str() == PRELUDE_ERROR_ID)
+        types::is_prelude_error(ty, |id| self.definition(id))
     }
 
     pub(crate) fn has_no_go_value(&self, ty: &Type) -> bool {
@@ -141,21 +149,141 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_lisette_enum(&self, ty: &Type) -> bool {
-        matches!(self.peel_alias(ty), Type::Nominal { id, .. }
-        if !go_name::is_go_import(id.as_str())
-            && matches!(
-                self.definition(id.as_str()).map(|d| &d.body),
-                Some(DefinitionBody::Enum { .. })
-            ))
+        types::is_lisette_enum(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn converts(&self, expression: &Expression) -> bool {
+        self.checked(expression).value_use().adaptation.converts()
     }
 
     pub(crate) fn is_reference(&self, ty: &Type) -> bool {
-        self.peel_alias(ty).is_ref()
+        types::is_reference(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
+        types::points_to_ref(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn is_option(&self, ty: &Type) -> bool {
+        types::is_option(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn is_partial(&self, ty: &Type) -> bool {
+        types::is_partial(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn is_tuple(&self, ty: &Type) -> bool {
+        types::is_tuple(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn ok_payload(&self, ty: &Type) -> Type {
+        types::ok_payload(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn err_payload(&self, ty: &Type) -> Type {
+        types::err_payload(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn is_never(&self, ty: &Type) -> bool {
+        self.peel_alias(ty).is_never()
+    }
+
+    pub(crate) fn is_result(&self, ty: &Type) -> bool {
+        self.peel_alias(ty).is_result()
+    }
+
+    pub(crate) fn simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
+        types::simple_kind(ty, |id| self.definition(id))
+    }
+
+    pub(crate) fn without_references(&self, ty: &Type) -> Type {
+        ty.strip_refs()
+    }
+
+    pub(crate) fn compound_parts(&self, ty: &Type) -> Option<(CompoundKind, Vec<Type>)> {
+        match self.peel_alias(ty) {
+            Type::Compound { kind, args, .. } => Some((kind, args)),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn same_type(&self, left: &Type, right: &Type) -> bool {
+        self.peel_alias(left) == self.peel_alias(right)
+    }
+
+    pub(crate) fn returns_go_void(&self, ty: &Type) -> bool {
+        returns_go_void(&self.peel_alias(ty))
+    }
+
+    pub(crate) fn is_reference_underneath(&self, ty: &Type) -> bool {
+        self.underlying(ty).is_ref()
+    }
+
+    pub(crate) fn array_length_behind_refs(&self, ty: &Type) -> Option<u64> {
+        match self.receiver_shape(ty) {
+            Type::Array { length, .. } => Some(length),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn tuple_elements(&self, ty: &Type) -> Option<Vec<Type>> {
+        match self.peel_alias(ty) {
+            Type::Tuple(elements) => Some(elements),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn clone_container(&self, ty: &Type) -> Option<Type> {
+        let shape = self.receiver_shape(ty);
+        self.is_clone_container(&shape).then_some(shape)
+    }
+
+    pub(crate) fn array_parts(&self, ty: &Type) -> Option<(u64, Type)> {
+        match self.peel_alias(ty) {
+            Type::Array { length, element } => Some((length, *element)),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn prelude_container_arguments(&self, ty: &Type) -> Option<Vec<Type>> {
+        match self.peel_alias(ty) {
+            peeled @ Type::Nominal { .. } if is_prelude_container_type(&peeled) => {
+                peeled.get_type_params().map(<[Type]>::to_vec)
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_lowered_result_type(&self, ty: &Type) -> bool {
+        self.prelude_container_arguments(ty).is_some()
+            || self
+                .tuple_elements(ty)
+                .is_some_and(|elements| elements.len() >= 2)
+    }
+
+    pub(crate) fn tuple_behind_refs(&self, ty: &Type) -> Option<Vec<Type>> {
+        match self.receiver_shape(ty) {
+            Type::Tuple(elements) => Some(elements),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn receiver_nominal_id(&self, ty: &Type) -> Option<Symbol> {
+        match self.receiver_shape(ty) {
+            Type::Nominal { id, .. } => Some(id),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn type_parameter_behind_refs(&self, ty: &Type) -> Option<EcoString> {
+        match ty.strip_refs() {
+            Type::Parameter(name) => Some(name),
+            _ => None,
+        }
     }
 
     pub(crate) fn is_option_or_result(&self, ty: &Type) -> bool {
-        let ty = self.peel_alias(ty);
-        ty.is_option() || ty.is_result()
+        types::is_option_or_result(ty, |id| self.definition(id))
     }
 
     pub(crate) fn has_tuple_payload(&self, ty: &Type) -> bool {
@@ -166,27 +294,23 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn tuple_element_types(&self, ty: &Type) -> Vec<Type> {
-        match self.peel_alias(ty) {
-            Type::Tuple(elements) => elements,
-            Type::Nominal { params, .. } => params,
-            _ => Vec::new(),
-        }
+        types::tuple_element_types(ty, |id| self.definition(id))
     }
 
     pub(crate) fn is_prelude_nominal(&self, ty: &Type) -> bool {
-        matches!(self.strip_and_peel(ty), Type::Nominal { id, .. } if go_name::is_prelude_id(&id))
+        matches!(self.receiver_shape(ty), Type::Nominal { id, .. } if go_name::is_prelude_id(&id))
     }
 
-    pub(crate) fn strip_and_peel(&self, ty: &Type) -> Type {
-        self.peel_alias(&ty.strip_refs())
+    pub(crate) fn receiver_shape(&self, ty: &Type) -> Type {
+        types::receiver_shape(ty, |id| self.definition(id))
     }
 
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        as_interface(&self.input.definitions, ty)
+        types::as_interface(ty, |id| self.definition(id)).map(|id| id.to_string())
     }
 
     pub(crate) fn is_interface(&self, ty: &Type) -> bool {
-        as_interface(&self.input.definitions, ty).is_some()
+        self.as_interface(ty).is_some()
     }
 
     pub(crate) fn is_interface_or_unknown(&self, ty: &Type) -> bool {
@@ -214,7 +338,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        resolve_to_function_type(&self.input.definitions, ty)
+        types::resolve_to_function_type(ty, |id| self.definition(id))
     }
 
     pub(crate) fn function_alias_declaration(&self, ty: &Type) -> Option<Type> {
@@ -313,10 +437,6 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn qualified_current(&self, name: &str) -> String {
         format!("{}.{}", self.current_package, name)
-    }
-
-    pub(crate) fn qualified_current_member(&self, ty: &str, member: &str) -> String {
-        format!("{}.{}.{}", self.current_package, ty, member)
     }
 
     pub(crate) fn go_module(&self) -> &str {
@@ -459,29 +579,6 @@ pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: 
 
 fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
     types::is_nilable_go_type(ty, |id| definitions.get(id))
-}
-
-fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<String> {
-    let Type::Nominal { id, .. } = peel_alias(definitions, ty) else {
-        return None;
-    };
-    matches!(
-        definitions.get(id.as_str()).map(|d| &d.body),
-        Some(DefinitionBody::Interface { .. })
-    )
-    .then(|| id.to_string())
-}
-
-pub(crate) fn resolve_to_function_type(
-    definitions: &HashMap<Symbol, Definition>,
-    ty: &Type,
-) -> Option<Type> {
-    let resolved = peel_alias(definitions, ty);
-    if matches!(resolved, Type::Function(_)) {
-        return Some(resolved);
-    }
-    types::underlying_type(ty, |id| definitions.get(id))
-        .filter(|underlying| matches!(underlying, Type::Function(_)))
 }
 
 fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {

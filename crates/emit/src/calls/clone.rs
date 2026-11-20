@@ -1,4 +1,3 @@
-use crate::EmitFacts;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::{CompoundKind, Type};
 
@@ -11,28 +10,23 @@ use crate::names::go_name::GeneratedPackage;
 
 impl Planner<'_> {
     pub(crate) fn clone_expression(&mut self, value: GoExpression, ty: &Type) -> GoExpression {
-        let peeled = self.facts.peel_alias(ty);
         let prelude = |name: &str| GoExpression::generated(GeneratedPackage::Prelude, name);
-        let (function, closure) = match &peeled {
-            Type::Compound {
-                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
-                args,
-                ..
-            } => match args.first().and_then(|elem| self.element_clone(elem)) {
-                Some(clone) => (prelude("SliceCloneFunc"), Some(clone)),
-                None => (
-                    GoExpression::generated(GeneratedPackage::Slices, "Clone"),
-                    None,
-                ),
-            },
-            Type::Compound {
-                kind: CompoundKind::Map,
-                args,
-                ..
-            } => match args.get(1).and_then(|v| self.element_clone(v)) {
-                Some(clone) => (prelude("MapCloneFunc"), Some(clone)),
-                None => (prelude("MapClone"), None),
-            },
+        let (function, closure) = match self.facts.compound_parts(ty) {
+            Some((CompoundKind::Slice | CompoundKind::EnumeratedSlice, args)) => {
+                match args.first().and_then(|elem| self.element_clone(elem)) {
+                    Some(clone) => (prelude("SliceCloneFunc"), Some(clone)),
+                    None => (
+                        GoExpression::generated(GeneratedPackage::Slices, "Clone"),
+                        None,
+                    ),
+                }
+            }
+            Some((CompoundKind::Map, args)) => {
+                match args.get(1).and_then(|v| self.element_clone(v)) {
+                    Some(clone) => (prelude("MapCloneFunc"), Some(clone)),
+                    None => (prelude("MapClone"), None),
+                }
+            }
             _ => return value,
         };
         let mut arguments = vec![value];
@@ -44,14 +38,13 @@ impl Planner<'_> {
         if !self.needs_clone(ty) {
             return None;
         }
-        let peeled = self.facts.peel_alias(ty);
         let go_ty = self.go_type(ty);
         let var = self.fresh_local(Some("e"));
         let parameters = vec![GoParameter::new(var.clone(), go_ty.clone())];
         let element = GoExpression::identifier(var);
-        match &peeled {
-            Type::Tuple(elems) => {
-                let mut statements = self.tuple_clone_statements(&element, elems);
+        match self.facts.tuple_elements(ty) {
+            Some(elems) => {
+                let mut statements = self.tuple_clone_statements(&element, &elems);
                 statements.push(plain_return(element));
                 Some(GoExpression::function_literal(
                     parameters.clone(),
@@ -84,7 +77,7 @@ impl Planner<'_> {
             if self.facts.is_clone_container(elem) {
                 let clone = self.clone_expression(field_place.clone(), elem);
                 statements.push(assign(field_place, clone));
-            } else if let Type::Tuple(inner) = self.facts.peel_alias(elem)
+            } else if let Some(inner) = self.facts.tuple_elements(elem)
                 && self.needs_clone(elem)
             {
                 statements.extend(self.tuple_clone_statements(&field_place, &inner))
@@ -94,21 +87,9 @@ impl Planner<'_> {
     }
 
     fn needs_clone(&self, ty: &Type) -> bool {
-        match self.facts.peel_alias(ty) {
-            Type::Tuple(elems) => elems.iter().any(|e| self.needs_clone(e)),
-            _ => self.facts.is_clone_container(ty),
+        match self.facts.tuple_elements(ty) {
+            Some(elems) => elems.iter().any(|e| self.needs_clone(e)),
+            None => self.facts.is_clone_container(ty),
         }
-    }
-}
-
-impl EmitFacts<'_> {
-    pub(crate) fn is_clone_container(&self, ty: &Type) -> bool {
-        matches!(
-            self.peel_alias(ty),
-            Type::Compound {
-                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
-                ..
-            }
-        )
     }
 }

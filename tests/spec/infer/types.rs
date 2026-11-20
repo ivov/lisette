@@ -12030,3 +12030,84 @@ fn invalid_alias_impls_do_not_add_type_cycle_diagnostics() {
         );
     }
 }
+
+#[test]
+fn struct_variant_through_alias_of_generic_enum_accepted() {
+    infer(
+        r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+type IntShape = Shape<int>
+
+fn test() -> IntShape {
+  IntShape.Rect { w: 2, h: 3 }
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn struct_variant_through_alias_of_generic_enum_checks_field_types() {
+    infer(
+        r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+type IntShape = Shape<int>
+
+fn test() -> IntShape {
+  IntShape.Rect { w: "a", h: 3 }
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn struct_variant_through_generic_alias_accepted() {
+    infer(
+        r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+type Two<A> = Shape<A>
+
+fn test() -> Two<string> {
+  let s: Two<float64> = Two.Rect { w: 1.5, h: 2.0 }
+  let _ = s
+  Two.Rect { w: "a", h: "b" }
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn struct_variant_pattern_through_alias_of_generic_enum_accepted() {
+    infer(
+        r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+type IntShape = Shape<int>
+
+fn area(s: IntShape) -> int {
+  match s {
+    IntShape.Rect { w, h } => w * h,
+    IntShape.Dot(n) => n,
+  }
+}
+"#,
+    )
+    .assert_no_errors();
+}

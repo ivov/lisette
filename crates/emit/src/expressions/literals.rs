@@ -74,13 +74,8 @@ impl Planner<'_> {
         if self.facts.is_interface_or_unknown(slot_ty) {
             return None;
         }
-        let peeled = self.facts.peel_alias(slot_ty);
-        match &peeled {
-            Type::Simple(_) => {}
-            Type::Nominal { params, .. } if params.is_empty() => {}
-            _ => return None,
-        }
-        if kind.is_default_go_type(&self.go_type(&peeled)) {
+        let peeled = self.plain_literal_go_type(slot_ty)?;
+        if kind.is_default_go_type(&peeled) {
             return None;
         }
         Some(self.go_type(slot_ty))

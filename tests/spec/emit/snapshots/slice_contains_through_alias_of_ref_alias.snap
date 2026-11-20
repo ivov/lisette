@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  type Nums = Slice<int>
+  type NumsRef = Ref<Nums>
+  fn test(r: NumsRef) -> bool {
+    r.contains(2)
+  }
+---
+package main
+
+import "slices"
+
+type Nums = []int
+
+type NumsRef = *Nums
+
+func test(r NumsRef) bool {
+	return slices.Contains(*r, 2)
+}

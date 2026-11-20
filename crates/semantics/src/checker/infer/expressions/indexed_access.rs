@@ -1,6 +1,6 @@
 use crate::checker::EnvResolve;
 use syntax::ast::{Expression, Span};
-use syntax::types::{AliasPeeled, CompoundKind, SimpleKind, Type, peel_to_range_type};
+use syntax::types::{AliasPeeled, CompoundKind, RangeKind, SimpleKind, Type, peel_to_range_type};
 
 use crate::checker::infer::InferCtx;
 
@@ -140,6 +140,11 @@ impl InferCtx<'_> {
                 };
             }
             (Some(peeled), IndexKind::Slice) => {
+                if let Some(kind) = RangeKind::of(&peeled) {
+                    self.facts
+                        .checked_bodies
+                        .insert_range_kind(index_expression.id(), kind);
+                }
                 if let Some(bound_ty) = peeled.get_type_params().and_then(|p| p.first()) {
                     let int_ty = Type::int();
                     self.unify(&int_ty, bound_ty, &span);

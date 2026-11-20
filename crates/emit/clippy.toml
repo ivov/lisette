@@ -1,0 +1,14 @@
+too-many-arguments-threshold = 6
+excessive-nesting-threshold = 6
+too-many-lines-threshold = 100
+absolute-paths-max-segments = 2
+absolute-paths-allowed-crates = ["diagnostics"]
+disallowed-methods = [
+  { path = "lisette_syntax::types::peel_alias", reason = "reduce types through an EmitFacts query" },
+  { path = "lisette_syntax::types::Type::strip_refs", reason = "reduce types through an EmitFacts query" },
+  { path = "lisette_syntax::types::receiver_shape", reason = "reduce types through an EmitFacts query" },
+  { path = "lisette_emit::analyze::facts::EmitFacts::peel_alias", reason = "reduce types through an EmitFacts query" },
+  { path = "lisette_emit::analyze::facts::EmitFacts::receiver_shape", reason = "reduce types through an EmitFacts query" },
+  { path = "lisette_syntax::types::peel_underlying", reason = "reduce types through an EmitFacts query" },
+  { path = "lisette_emit::analyze::facts::EmitFacts::underlying", reason = "reduce types through an EmitFacts query" },
+]

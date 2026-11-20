@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  type Pipe = Ref<Channel<int>>
+  
+  fn send(ch: Ref<Channel<int>>) {
+    let (tx, rx) = ch.split()
+    tx.send(1)
+    fmt.Println(rx.receive())
+  }
+  
+  fn send2(ch: Pipe) {
+    let (tx, rx) = ch.split()
+    tx.send(2)
+    fmt.Println(rx.receive())
+  }
+  
+  fn main() {
+    let ch = Channel.buffered<int>(1)
+    send(&ch)
+    send2(&ch)
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Pipe = *chan int
+
+func send(ch *chan int) {
+	ch2 := *ch
+	var tx chan<- int = ch2
+	var rx <-chan int = ch2
+	lisette.SenderSend(tx, 1)
+	fmt.Println(lisette.ReceiverReceive(rx))
+}
+
+func send2(ch Pipe) {
+	ch2 := *ch
+	var tx chan<- int = ch2
+	var rx <-chan int = ch2
+	lisette.SenderSend(tx, 2)
+	fmt.Println(lisette.ReceiverReceive(rx))
+}
+
+func main() {
+	ch := make(chan int, 1)
+	send(&ch)
+	send2(&ch)
+}

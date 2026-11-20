@@ -5425,3 +5425,61 @@ fn test() -> string {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn bound_method_returning_option_uses_interface_method_result() {
+    let input = r#"
+interface Base {
+  fn name() -> string
+}
+
+interface Named {
+  embed Base
+  fn tag() -> Option<int>
+}
+
+fn show<T: Named>(t: T) -> string { t.name() }
+
+fn tag_of<T: Named>(t: T) -> Option<int> { t.tag() }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tagged_method_value_through_alias_receiver_selects_twin() {
+    let input = r#"
+import "go:fmt"
+
+interface Getter<T> {
+  fn get() -> T
+}
+
+struct Box {
+  n: int,
+}
+
+type Crate = Box
+
+impl Box {
+  fn get(self) -> Result<int, error> {
+    Ok(self.n)
+  }
+}
+
+fn use_getter<G: Getter<Result<int, error>>>(g: G) -> Result<int, error> {
+  g.get()
+}
+
+fn take(f: fn() -> Result<int, error>) -> Result<int, error> {
+  f()
+}
+
+fn main() {
+  let b: Crate = Box { n: 1 }
+  let _ = use_getter(b)
+  let g = b.get
+  fmt.Println(take(g))
+}
+"#;
+    assert_emit_snapshot!(input);
+}

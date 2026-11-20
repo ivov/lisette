@@ -1,4 +1,5 @@
 mod build;
+mod checked_records;
 mod emit;
 mod format;
 mod graph;
@@ -9,3 +10,4 @@ mod parse;
 mod pattern_analysis;
 mod representation;
 mod type_name_guard;
+mod type_reductions;

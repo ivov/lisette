@@ -51,6 +51,7 @@ fn go_builtin_conversion(type_args: &GoType) -> Option<GoType> {
 }
 
 pub(super) fn receiver_type_binding(
+    facts: &EmitFacts<'_>,
     callee_expression: &Expression,
     callee: &ResolvedCallee<'_>,
 ) -> Option<(Type, Type)> {
@@ -71,7 +72,7 @@ pub(super) fn receiver_type_binding(
         .first()?
         .ty
         .clone();
-    Some((declared, receiver.get_type().strip_refs()))
+    Some((declared, facts.without_references(&receiver.get_type())))
 }
 
 fn find_go_string_literal_close(s: &str) -> Option<usize> {
@@ -201,7 +202,7 @@ impl<'a> Planner<'a> {
             .flatten(),
             callee_is_builtin: self.facts.callee_is_go_builtin(function),
             callee_pins_type_args: !type_args_string.is_empty(),
-            receiver_binding: receiver_type_binding(function, &call_plan.resolved),
+            receiver_binding: receiver_type_binding(&self.facts, function, &call_plan.resolved),
         };
         let sequenced_args = self.plan_call_args(args, &args_ctx, None);
         let constant_result = self
@@ -543,7 +544,7 @@ impl EmitFacts<'_> {
         callee_expression: &Expression,
         callee: &ResolvedCallee<'_>,
     ) -> bool {
-        if receiver_type_binding(callee_expression, callee).is_none() {
+        if receiver_type_binding(self, callee_expression, callee).is_none() {
             return false;
         }
         let Expression::DotAccess {

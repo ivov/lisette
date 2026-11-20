@@ -62,9 +62,8 @@ impl Planner<'_> {
         items: &'e [Expression],
         ty: &Type,
     ) -> Option<TryBlockPairPlan<'e>> {
-        let effective_ty = self.facts.peel_alias(ty);
-        let fallible = self.facts.fallible(&effective_ty)?;
-        let body_ctx = self.return_context_for_type(effective_ty.clone());
+        let fallible = self.facts.fallible(ty)?;
+        let body_ctx = self.return_context_for_type(ty.clone());
         let shape = body_ctx.lowered_shape()?;
         let kind = match shape {
             LoweredReturnAbi::Result {
@@ -77,7 +76,7 @@ impl Planner<'_> {
         };
         Some(TryBlockPairPlan {
             items,
-            effective_ty,
+            effective_ty: ty.clone(),
             fallible,
             body_ctx,
             shape,
@@ -92,19 +91,18 @@ impl Planner<'_> {
         target_ty: &Type,
         result_var: GoIdentifier,
     ) -> ValuePlan {
-        let effective_ty = self.facts.peel_alias(ty);
         let fallible = self
             .facts
-            .fallible(&effective_ty)
+            .fallible(ty)
             .expect("`try` block must have Result or Option type");
 
         self.declare(result_var.spelling());
-        let full_ty = self.go_type(&effective_ty);
-        let source = self.value_layout(&effective_ty, SlotOrigin::Lisette);
+        let full_ty = self.go_type(ty);
+        let source = self.value_layout(ty, SlotOrigin::Lisette);
         let target = self.value_layout(target_ty, SlotOrigin::Lisette);
         let coercion = CoercionPlan::bridge(self, &source, &target);
 
-        let body_ctx = ReturnContext::Tagged(effective_ty);
+        let body_ctx = ReturnContext::Tagged(ty.clone());
         let body = self
             .with_isolated_function(body_ctx, |planner| planner.lower_try_body(items, &fallible));
 
@@ -122,15 +120,15 @@ impl Planner<'_> {
 
     pub(crate) fn try_lower_try_tail_in_place(
         &mut self,
-        items: &[Expression],
-        ty: &Type,
+        block: &Expression,
     ) -> Option<Vec<Statement>> {
-        let return_ty = self.facts.peel_alias(self.return_ctx().ty()?);
-        let effective_ty = self.facts.peel_alias(ty);
-        if return_ty.demoted() != effective_ty.demoted() {
+        let Expression::TryBlock { items, ty, .. } = block else {
+            return None;
+        };
+        if self.return_ctx().ty().is_none() || self.facts.converts(block) {
             return None;
         }
-        let fallible = self.facts.fallible(&effective_ty)?;
+        let fallible = self.facts.fallible(ty)?;
         Some(self.with_binding_frame(|planner| planner.lower_try_items(items, &fallible)))
     }
 
@@ -236,10 +234,9 @@ impl Planner<'_> {
     }
 
     pub(crate) fn plan_recover_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
-        let effective_ty = self.facts.peel_alias(ty);
         let fallible = self
             .facts
-            .fallible(&effective_ty)
+            .fallible(ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
         let result_var = self.fresh_declared("recoverResult");

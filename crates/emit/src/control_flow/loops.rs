@@ -15,8 +15,8 @@ use crate::patterns::sites::PatternSubject;
 use crate::state::expression::ExpressionContext;
 use crate::types::shape::RangeShape;
 use syntax::ast::{Binding, Expression, Pattern};
-use syntax::program::NativeTypeKind;
-use syntax::types::{self, IterSeqKind, Type};
+use syntax::program::{CallOperation, NativeTypeKind};
+use syntax::types::{IterableKind, Type};
 
 fn range_header(
     key: Option<&GoIdentifier>,
@@ -44,7 +44,8 @@ impl Planner<'_> {
         };
         let iterable = iterable.as_ref();
         let body = body.as_ref();
-        let shape = self.facts.classify_for(binding, iterable);
+        let kind = self.facts.checked(full_expression).iterable_kind();
+        let shape = self.facts.classify_for(binding, iterable, kind);
 
         let line = self.facts.source_position(&full_expression.get_span());
         let plan = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
@@ -517,57 +518,30 @@ enum StringViewKind {
 }
 
 impl EmitFacts<'_> {
-    fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
-        let mut current = self.peel_alias(ty);
-        while current.is_ref() {
-            value = GoExpression::dereference(value);
-            let pointee = current.inner().expect("Ref<T> must have inner");
-            current = self.peel_alias(&pointee);
-        }
-        value
-    }
-
-    fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
-        let (kind, _) =
-            types::peel_to_iter_seq(&iterable_ty.strip_refs(), |id| self.definition(id))?;
-        Some(match kind {
-            IterSeqKind::Seq => 1,
-            IterSeqKind::Seq2 => 2,
-        })
-    }
-
-    fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
-        self.native_shape(iterable_ty).is_some_and(|shape| {
-            matches!(shape, NativeTypeKind::Map | NativeTypeKind::EnumeratedSlice)
-        }) || self.iter_seq_arity(iterable_ty) == Some(2)
-    }
-
-    fn classify_for<'a>(&self, binding: &'a Binding, iterable: &'a Expression) -> ForShape<'a> {
+    fn classify_for<'a>(
+        &self,
+        binding: &'a Binding,
+        iterable: &'a Expression,
+        kind: IterableKind,
+    ) -> ForShape<'a> {
         if matches!(iterable, Expression::Range { .. }) {
             return ForShape::Range;
         }
-        let iterable_ty = iterable.get_type();
-        if let Some(range_shape) = self.range_shape(&iterable_ty)
-            && matches!(
-                range_shape,
-                RangeShape::Range | RangeShape::RangeInclusive | RangeShape::RangeFrom
-            )
+        if let IterableKind::Range(range) = kind
+            && range.has_start()
         {
-            return ForShape::StoredRange(range_shape);
+            return ForShape::StoredRange(range);
         }
         if let Some((kind, receiver)) = self.recognize_string_view_loop(binding, iterable) {
             return ForShape::StringView(kind, receiver);
         }
         if let Pattern::Tuple { elements, .. } = &binding.pattern
             && elements.len() == 2
-            && self.is_map_tuple_iterable(&iterable_ty)
+            && kind.yields_key_value()
         {
             return ForShape::MapTuple;
         }
-        let is_channel = self.native_shape(&iterable_ty).is_some_and(|shape| {
-            matches!(shape, NativeTypeKind::Channel | NativeTypeKind::Receiver)
-        });
-        let yields = if is_channel || self.iter_seq_arity(&iterable_ty) == Some(1) {
+        let yields = if matches!(kind, IterableKind::Channel | IterableKind::Seq) {
             RangeYield::Single
         } else {
             RangeYield::Pair
@@ -606,18 +580,21 @@ impl EmitFacts<'_> {
 
         let Expression::DotAccess {
             expression: receiver,
-            member,
             ..
         } = expression.as_ref()
         else {
             return None;
         };
 
-        if !self.peel_alias(&receiver.get_type()).is_string() {
+        let CallOperation::Native {
+            kind: NativeTypeKind::String,
+            method,
+        } = &self.checked(expression).function_value()?.operation
+        else {
             return None;
-        }
+        };
 
-        match member.as_str() {
+        match method.as_str() {
             "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
             "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
             _ => None,
