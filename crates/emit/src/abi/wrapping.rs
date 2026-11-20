@@ -9,7 +9,8 @@ use crate::control_flow::fallible::{
 };
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define, define_many,
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, declare, define,
+    define_many,
 };
 use crate::ir::go_expression::{BinaryOp, UnaryOp};
 use crate::ir::local::GoIdentifier;
@@ -108,25 +109,11 @@ impl Planner<'_> {
         match target {
             WrapperTarget::FreshSlot => {
                 let variable = self.fresh_declared(name_hint);
-                statements.push(
-                    LoweredStatement::VarDecl {
-                        name: variable.clone(),
-                        go_type: type_str.clone(),
-                        value: None,
-                    }
-                    .into(),
-                );
+                statements.push(declare(variable.clone(), type_str.clone()));
                 (ResolvedSink::Slot(variable.clone()), Some(variable))
             }
             WrapperTarget::Slot(name) => {
-                statements.push(
-                    LoweredStatement::VarDecl {
-                        name: name.clone(),
-                        go_type: type_str.clone(),
-                        value: None,
-                    }
-                    .into(),
-                );
+                statements.push(declare(name.clone(), type_str.clone()));
                 self.declare(name.spelling());
                 let owned = name.clone();
                 (ResolvedSink::Slot(owned.clone()), Some(owned))

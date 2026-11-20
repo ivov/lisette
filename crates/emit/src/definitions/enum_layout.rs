@@ -5,7 +5,7 @@ use crate::definitions::structs::{StringFormat, format_value};
 use crate::expressions::display_form::DisplayForm;
 use crate::ir::bodies::{
     Definition as GoDefinition, ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock,
-    LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan, assign,
+    LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan, assign, declare,
 };
 use crate::ir::declarations::{
     ConstantDeclaration, DeclarationKind, FunctionSignature, GoDeclaration, TypeParameter,
@@ -551,7 +551,7 @@ impl EnumLayout {
         only_unit_variants: bool,
         body: &mut Vec<Statement>,
     ) {
-        body.push(variable(&names.name, GoType::new("string")));
+        body.push(declare(names.name.clone(), GoType::new("string")));
         let cases = empty
             .iter()
             .map(|variant| {
@@ -600,8 +600,8 @@ impl EnumLayout {
         payload: &[&VariantLayout],
         body: &mut Vec<Statement>,
     ) {
-        body.push(variable(
-            &names.obj,
+        body.push(declare(
+            names.obj.clone(),
             GoType::map_of(&GoType::new("string"), &json_raw_message()),
         ));
         body.push(planner.json_guard(
@@ -647,8 +647,8 @@ impl EnumLayout {
             GoExpression::external_name(variant.tag_constant.clone()),
         )];
         if variant.json_payload() == JsonPayload::Object {
-            body.push(variable(
-                &names.inner,
+            body.push(declare(
+                names.inner.clone(),
                 GoType::map_of(&GoType::new("string"), &json_raw_message()),
             ));
             body.push(planner.json_guard(
@@ -687,7 +687,10 @@ impl EnumLayout {
                 member(&names.receiver, &variant.fields[0].go_name),
             )));
         } else {
-            body.push(variable(&names.arr, GoType::slice_of(&json_raw_message())));
+            body.push(declare(
+                names.arr.clone(),
+                GoType::slice_of(&json_raw_message()),
+            ));
             body.push(planner.json_guard(
                 GoExpression::identifier(names.val.clone()),
                 GoExpression::identifier(names.arr.clone()),
@@ -781,14 +784,6 @@ fn map(fields: Vec<(String, GoExpression)>) -> GoExpression {
             .collect(),
         CompositeLayout::Inline { padded: false },
     )
-}
-fn variable(name: &GoIdentifier, go_type: GoType) -> Statement {
-    LoweredStatement::VarDecl {
-        name: name.clone(),
-        go_type,
-        value: None,
-    }
-    .into()
 }
 fn case(label: GoExpression, body: Vec<Statement>) -> SwitchCasePlan {
     SwitchCasePlan {

@@ -13,7 +13,8 @@ use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout;
 use crate::go_name;
 use crate::ir::bodies::{
-    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, discard,
+    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, declare,
+    discard,
 };
 use crate::ir::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
 use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
@@ -548,12 +549,7 @@ impl Planner<'_> {
             array_type.clone(),
             LoweredBlock {
                 statements: vec![
-                    LoweredStatement::VarDecl {
-                        name: array_name.clone(),
-                        go_type: array_type,
-                        value: None,
-                    }
-                    .into(),
+                    declare(array_name.clone(), array_type),
                     LoweredStatement::Loop(LoopPlan {
                         kind: LoopKind::Generated { label: None },
                         header: LoopHeader::Range {

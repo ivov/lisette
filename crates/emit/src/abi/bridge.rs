@@ -9,7 +9,7 @@ use crate::control_flow::fallible::{OPTION_SOME_TAG, prelude_call};
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement,
-    Statement, assign, define_many, expression_statement,
+    Statement, assign, declare, define_many, expression_statement,
 };
 use crate::ir::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter};
 use crate::ir::local::GoIdentifier;
@@ -146,14 +146,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         let option = self.stable_source(statements, "opt", option_value);
         let slot = self.fresh_declared(if address { "ptr" } else { "unwrap" });
-        statements.push(
-            LoweredStatement::VarDecl {
-                name: slot.clone(),
-                go_type: slot_ty.clone(),
-                value: None,
-            }
-            .into(),
-        );
+        statements.push(declare(slot.clone(), slot_ty.clone()));
         let body = self.project_some_into(
             GoExpression::identifier(slot.clone()),
             option.clone(),
@@ -348,14 +341,7 @@ impl Planner<'_> {
         let source = self.stable_source(statements, "raw", value);
         let output = self.fresh_declared("adapted");
         let go_type = target.go_type(self);
-        statements.push(
-            LoweredStatement::VarDecl {
-                name: output.clone(),
-                go_type,
-                value: None,
-            }
-            .into(),
-        );
+        statements.push(declare(output.clone(), go_type));
         let mut body = Vec::new();
         let inner = if pointer {
             GoExpression::dereference(source.clone())
@@ -391,14 +377,7 @@ impl Planner<'_> {
         let source = self.stable_source(statements, "src", value);
         let go_type = target.go_type(self);
         let output = self.fresh_declared("adapted");
-        statements.push(
-            LoweredStatement::VarDecl {
-                name: output.clone(),
-                go_type,
-                value: None,
-            }
-            .into(),
-        );
+        statements.push(declare(output.clone(), go_type));
         let output = GoExpression::identifier(output);
         let fields = immutable_bridge_fields(target);
         assert_eq!(
@@ -459,14 +438,7 @@ impl Planner<'_> {
         let option_type = target.go_type(self);
         let option_type_string = option_type;
         let option = self.fresh_declared("option");
-        statements.push(
-            LoweredStatement::VarDecl {
-                name: option.clone(),
-                go_type: option_type_string,
-                value: None,
-            }
-            .into(),
-        );
+        statements.push(declare(option.clone(), option_type_string));
         statements.push(
             self.wrap_nilable_into(
                 GoExpression::identifier(option.clone()),
@@ -511,14 +483,7 @@ impl Planner<'_> {
         let target_type = target_layout.go_type(self);
         let output = if matches!(target_layout, ValueLayout::Array { .. }) {
             let output = self.fresh_declared(output_hint);
-            statements.push(
-                LoweredStatement::VarDecl {
-                    name: output.clone(),
-                    go_type: target_type,
-                    value: None,
-                }
-                .into(),
-            );
+            statements.push(declare(output.clone(), target_type));
             output
         } else {
             let make = GoExpression::call(
@@ -687,14 +652,7 @@ impl Planner<'_> {
         }
         let adapted = self.fresh_declared("adapted");
         let go_type = target.go_type(self);
-        statements.push(
-            LoweredStatement::VarDecl {
-                name: adapted.clone(),
-                go_type,
-                value: None,
-            }
-            .into(),
-        );
+        statements.push(declare(adapted.clone(), go_type));
         statements.push(
             LoweredStatement::If(IfPlan::plain(
                 non_nil(callee),

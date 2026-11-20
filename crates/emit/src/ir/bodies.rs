@@ -11,6 +11,15 @@ pub(crate) fn define(name: impl Into<GoIdentifier>, value: GoExpression) -> Stat
     LoweredStatement::Define(Definition::single(name, value)).into()
 }
 
+pub(crate) fn declare(name: impl Into<GoIdentifier>, go_type: GoType) -> Statement {
+    LoweredStatement::VarDecl {
+        name: name.into(),
+        go_type,
+        value: None,
+    }
+    .into()
+}
+
 pub(crate) fn define_many<T: Into<GoIdentifier>>(names: Vec<T>, value: GoExpression) -> Statement {
     LoweredStatement::Define(Definition {
         names: names.into_iter().map(Into::into).collect(),

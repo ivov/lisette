@@ -204,3 +204,12 @@ pub(crate) fn extract_type_mapping(
         _ => {}
     }
 }
+
+pub(crate) fn generic_bounds(generic: &Generic) -> (EcoString, Vec<Type>) {
+    let bounds = generic
+        .resolved_bounds()
+        .expect("generic bounds are resolved before emission")
+        .cloned()
+        .collect();
+    (generic.name.clone(), bounds)
+}

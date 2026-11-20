@@ -8,7 +8,7 @@ use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::toplevel::ConstPlacement;
 use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
-    LoweredStatement, PlacePlan, Statement, directed_first, with_setup,
+    LoweredStatement, PlacePlan, Statement, declare, directed_first, with_setup,
 };
 use crate::ir::go_expression::{BinaryOp, UnaryOp};
 use crate::ir::local::GoIdentifier;
@@ -114,12 +114,7 @@ pub(crate) fn is_conjunction(condition: &Expression) -> bool {
 impl Planner<'_> {
     pub(crate) fn operand_temp_declaration(&mut self, ty: &Type) -> (GoIdentifier, Statement) {
         let result_var = self.fresh_local(None);
-        let declaration = LoweredStatement::VarDecl {
-            name: result_var.clone(),
-            go_type: self.go_type(ty),
-            value: None,
-        }
-        .into();
+        let declaration = declare(result_var.clone(), self.go_type(ty));
         self.declare(&result_var);
         (result_var, declaration)
     }

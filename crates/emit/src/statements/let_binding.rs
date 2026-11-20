@@ -9,7 +9,8 @@ use crate::analyze::component_uses::ValueDemand;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::escape_local;
 use crate::ir::bodies::{
-    LoweredBlock, LoweredStatement, Statement, assign, define, define_many, effect_statement,
+    LoweredBlock, LoweredStatement, Statement, assign, declare, define, define_many,
+    effect_statement,
 };
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{ConstantKind, GoExpression};
@@ -311,14 +312,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         if self.facts.widens_to_interface(value, binding_ty) {
             let var_ty = self.go_type(binding_ty);
-            statements.push(
-                LoweredStatement::VarDecl {
-                    name: local.clone(),
-                    go_type: var_ty,
-                    value: None,
-                }
-                .into(),
-            );
+            statements.push(declare(local.clone(), var_ty));
             self.declare(&go_identifier);
         }
         statements.extend(self.lower_propagate_binding(inner, &local));
@@ -419,14 +413,7 @@ impl Planner<'_> {
                 .needs_explicit_type_declaration(value, binding_ty)
         {
             let var_ty = self.go_type(binding_ty);
-            statements.push(
-                LoweredStatement::VarDecl {
-                    name: go_identifier,
-                    go_type: var_ty,
-                    value: None,
-                }
-                .into(),
-            );
+            statements.push(declare(go_identifier, var_ty));
             return statements;
         }
 
@@ -613,14 +600,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     OuterBindings::MayShadow,
                 );
                 let var_ty = self.planner.go_type(&self.binding.ty);
-                statements.push(
-                    LoweredStatement::VarDecl {
-                        name: go_identifier,
-                        go_type: var_ty,
-                        value: None,
-                    }
-                    .into(),
-                );
+                statements.push(declare(go_identifier, var_ty));
             }
             statements.push(self.planner.lower_statement(self.value));
             return LoweredBlock { statements };

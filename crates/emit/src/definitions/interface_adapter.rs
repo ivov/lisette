@@ -258,17 +258,7 @@ impl Planner<'_> {
                 },
             )
         } else {
-            self.facts.return_abi(
-                requirement
-                    .method
-                    .ty
-                    .get_function_ret()
-                    .unwrap_or(&Type::Never),
-                ReturnSlot::InterfaceMethod {
-                    name: &requirement.name,
-                    method: &requirement.method,
-                },
-            )
+            self.facts.requirement_return_abi(requirement)
         };
         Some(self.function_layout(parameters, &result, abi, Some(&declared.return_type)))
     }
@@ -591,13 +581,7 @@ impl Planner<'_> {
                 CallableReturnAbi::Lowered,
             )
         } else if let Some(source) = source_requirement {
-            self.facts.return_abi(
-                source.method.ty.get_function_ret().unwrap_or(&Type::Never),
-                ReturnSlot::InterfaceMethod {
-                    name: &source.name,
-                    method: &source.method,
-                },
-            )
+            self.facts.requirement_return_abi(source)
         } else if self.facts.requirement_uses_tagged_twin(requirement) {
             CallableReturnAbi::Value
         } else {
@@ -633,17 +617,7 @@ impl Planner<'_> {
                     || CallableReturnAbi::unlowered(interface_return),
                     CallableReturnAbi::Lowered,
                 ),
-            None => self.facts.return_abi(
-                requirement
-                    .method
-                    .ty
-                    .get_function_ret()
-                    .unwrap_or(&Type::Never),
-                ReturnSlot::InterfaceMethod {
-                    name: &requirement.name,
-                    method: &requirement.method,
-                },
-            ),
+            None => self.facts.requirement_return_abi(requirement),
         };
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
         let target = if abi_matches_type(&interface_abi, &peeled_return) {
@@ -962,6 +936,20 @@ fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
 }
 
 impl EmitFacts<'_> {
+    fn requirement_return_abi(&self, requirement: &InterfaceRequirement) -> CallableReturnAbi {
+        self.return_abi(
+            requirement
+                .method
+                .ty
+                .get_function_ret()
+                .unwrap_or(&Type::Never),
+            ReturnSlot::InterfaceMethod {
+                name: &requirement.name,
+                method: &requirement.method,
+            },
+        )
+    }
+
     pub(crate) fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
         !go_name::is_go_import(&requirement.declaring_interface)
             && self.method_uses_tagged_return(&requirement.name)

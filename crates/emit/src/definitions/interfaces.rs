@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::ir::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
+use crate::names::generics::generic_bounds;
 use crate::names::go_name;
 use crate::types::go_type::GoType;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
@@ -27,21 +28,8 @@ impl Planner<'_> {
         let filtered = strip_self_referential_bounds(generics, name);
         GoDeclaration::new(DeclarationKind::Interface {
             name: name_go,
-            parameters: self.plan_generics(
-                &filtered
-                    .iter()
-                    .map(|generic| {
-                        (
-                            generic.name.clone(),
-                            generic
-                                .resolved_bounds()
-                                .expect("generic bounds are resolved before emission")
-                                .cloned()
-                                .collect(),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            ),
+            parameters: self
+                .plan_generics(&filtered.iter().map(generic_bounds).collect::<Vec<_>>()),
             parents: parents
                 .iter()
                 .map(|parent| self.go_type(&parent.ty))

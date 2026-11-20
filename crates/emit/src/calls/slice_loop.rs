@@ -11,7 +11,7 @@ use crate::abi::is_closure_literal;
 use crate::control_flow::fallible::prelude_call;
 use crate::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, assign, define, directed_first,
+    PlacePlan, Statement, assign, declare, define, directed_first,
 };
 use crate::ir::go_expression::UnaryOp;
 use crate::ir::values::{GoExpression, OperandForm, Stability, ValuePlan};
@@ -506,12 +506,10 @@ impl Planner<'_> {
                     ),
                 )
             }
-            PlannedLoop::Filter { result } => LoweredStatement::VarDecl {
-                name: result.clone(),
-                go_type: GoType::slice_of(&self.first_type_argument_go_type(result_ty)),
-                value: None,
-            }
-            .into(),
+            PlannedLoop::Filter { result } => declare(
+                result.clone(),
+                GoType::slice_of(&self.first_type_argument_go_type(result_ty)),
+            ),
             PlannedLoop::Fold {
                 result,
                 init,
@@ -539,14 +537,7 @@ impl Planner<'_> {
             PlannedLoop::FindInto(sink) => {
                 if let Some(value) = sink.value {
                     let go_type = self.go_type(element_ty);
-                    setup.push(
-                        LoweredStatement::VarDecl {
-                            name: value.clone(),
-                            go_type,
-                            value: None,
-                        }
-                        .into(),
-                    );
+                    setup.push(declare(value.clone(), go_type));
                 }
                 define(
                     sink.flag.clone(),

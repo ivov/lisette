@@ -8,7 +8,7 @@ use crate::Planner;
 use crate::control_flow::fallible::prelude_call;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::ir::bodies::{
-    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign,
+    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, declare,
 };
 use crate::ir::go_expression::CompositeLayout;
 use crate::ir::values::GoExpression;
@@ -314,14 +314,7 @@ impl Planner<'_> {
         let source = self.stable_source(statements, "src", value);
         let go_type = self.go_type(array_type);
         let output = self.fresh_declared("boxed");
-        statements.push(
-            LoweredStatement::VarDecl {
-                name: output.clone(),
-                go_type,
-                value: None,
-            }
-            .into(),
-        );
+        statements.push(declare(output.clone(), go_type));
 
         let index = self.fresh_declared("i");
         let element_read =

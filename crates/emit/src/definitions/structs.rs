@@ -12,6 +12,7 @@ use crate::ir::go_expression::BinaryOp;
 use crate::ir::go_expression::GoParameter;
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
+use crate::names::generics::generic_bounds;
 use crate::names::go_name::{self, GeneratedPackage};
 use crate::names::receiver::ReceiverGenerics;
 use crate::names::receiver::{synthesized_local_name, synthesized_receiver_name};
@@ -34,21 +35,8 @@ impl Planner<'_> {
         fields: &StructFields,
         attributes: &[Attribute],
     ) -> Vec<GoDeclaration> {
-        let parameters = self.plan_generics(
-            &generics
-                .iter()
-                .map(|generic| {
-                    (
-                        generic.name.clone(),
-                        generic
-                            .resolved_bounds()
-                            .expect("generic bounds are resolved before emission")
-                            .cloned()
-                            .collect(),
-                    )
-                })
-                .collect::<Vec<_>>(),
-        );
+        let parameters =
+            self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
         let StructFields::Record(fields) = fields else {
             let StructFields::Tuple(fields) = fields else {
                 unreachable!();

@@ -3,7 +3,8 @@ use crate::Planner;
 use crate::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::ir::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign, define,
+    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign,
+    declare, define,
 };
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, ValuePlan};
@@ -360,14 +361,7 @@ impl<'p> Planner<'p> {
         let FallibleProducer::Option(producer) = call.producer else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
-        let mut statements = vec![
-            LoweredStatement::VarDecl {
-                name: go_name.clone(),
-                go_type: self.go_type(&ty),
-                value: None,
-            }
-            .into(),
-        ];
+        let mut statements = vec![declare(go_name.clone(), self.go_type(&ty))];
         statements.extend(self.lower_mapped_default_into(
             producer,
             map,

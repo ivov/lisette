@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::ir::bodies::{ConstPlan, LoweredStatement};
 use crate::ir::declarations::{DeclarationKind, GoDeclaration};
 use crate::ir::values::GoExpression;
+use crate::names::generics::generic_bounds;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::state::expression::ExpressionContext;
@@ -33,21 +34,7 @@ impl Planner<'_> {
             .and_then(|definition| definition.instantiate_alias_target(&params, false));
         let underlying_type = self.go_type(declared_target.as_ref().unwrap_or(ty));
 
-        let generics = self.plan_generics(
-            &generics
-                .iter()
-                .map(|generic| {
-                    (
-                        generic.name.clone(),
-                        generic
-                            .resolved_bounds()
-                            .expect("generic bounds are resolved before emission")
-                            .cloned()
-                            .collect(),
-                    )
-                })
-                .collect::<Vec<_>>(),
-        );
+        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
 
         GoDeclaration::new(DeclarationKind::Alias {
             name: go_name::escape_type_name(name).into_owned(),

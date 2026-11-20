@@ -14,7 +14,7 @@ use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
-    Statement, define, discard, expression_statement,
+    Statement, declare, define, discard, expression_statement,
 };
 use crate::ir::go_expression::CompositeLayout;
 use crate::ir::local::GoIdentifier;
@@ -786,14 +786,7 @@ impl Planner<'_> {
                 self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, go_name)
             };
             let go_type = self.go_type(ty);
-            statements.push(
-                LoweredStatement::VarDecl {
-                    name: go_name,
-                    go_type,
-                    value: None,
-                }
-                .into(),
-            );
+            statements.push(declare(go_name, go_type));
         }
     }
 

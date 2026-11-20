@@ -16,6 +16,7 @@ use crate::ir::go_expression::{
 use crate::ir::local::{GoIdentifier, LocalId};
 use crate::ir::values::GoExpression;
 use crate::ir::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
+use crate::names::generics::generic_bounds;
 use crate::names::go_name;
 use crate::names::receiver::fresh_receiver_name;
 use crate::names::source_name::SourceName;
@@ -312,14 +313,7 @@ impl Planner<'_> {
         } else {
             0
         };
-        generic_context.extend(function_definition.generics.iter().map(|generic| {
-            let bounds = generic
-                .resolved_bounds()
-                .expect("generic bounds must be resolved before emission")
-                .cloned()
-                .collect();
-            (generic.name.clone(), bounds)
-        }));
+        generic_context.extend(function_definition.generics.iter().map(generic_bounds));
         let signature_generics = generic_context[signature_generics_start..].to_vec();
         let position = self.facts.source_position(&function_definition.name_span);
         let return_ctx = if receiver_ty.is_some() {
