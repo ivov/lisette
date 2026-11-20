@@ -1,6 +1,6 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
+use crate::expressions::{BinaryOperand, flip_comparison};
 use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
 };
@@ -168,7 +168,7 @@ impl Planner<'_> {
         let (lhs, rhs) =
             self.stage_assert_operands(left, right, LiteralInlining::Allowed, statements);
         let flipped = flip_comparison(operator)
-            .filter(|_| flip_preserves_nan(&self.facts, operator, left, right));
+            .filter(|_| self.facts.flip_preserves_nan(operator, left, right));
         let operands = paired_operands(lhs.value.expression(), rhs.value.expression());
         let (cond_setup, condition) = self
             .plan_lowered_binary(

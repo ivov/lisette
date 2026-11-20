@@ -45,27 +45,6 @@ fn calls_a_function(operation: Option<&CallOperation>) -> bool {
     )
 }
 
-fn is_side_effect_free_discard(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    match expression {
-        Expression::Unit { .. } => true,
-        _ if is_zero_call(facts, expression) => true,
-        Expression::Literal { literal, .. } => matches!(
-            literal,
-            Literal::Integer { .. }
-                | Literal::Float { .. }
-                | Literal::Imaginary(_)
-                | Literal::Boolean(_)
-                | Literal::String { .. }
-                | Literal::Char(_)
-        ),
-        _ => false,
-    }
-}
-
-pub(crate) fn is_zero_call(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    matches!(facts.call_operation(expression), Some(CallOperation::Zero))
-}
-
 pub(crate) fn simple_assign(target: &GoExpression, value: ValuePlan) -> LoweredStatement {
     let (setup, value) = value.into_parts();
     with_setup(
@@ -303,52 +282,6 @@ impl ElidableTail {
     }
 }
 
-pub(crate) fn try_elide_tail_let<'i>(
-    facts: &EmitFacts<'_>,
-    items: &'i [Expression],
-    elidable: ElidableTail,
-) -> Option<(&'i Expression, &'i [Expression])> {
-    if items.len() < 2 {
-        return None;
-    }
-    let last = items.last()?;
-    let Expression::Identifier {
-        value: tail_name,
-        resolution,
-        ..
-    } = last
-    else {
-        return None;
-    };
-    let penultimate = &items[items.len() - 2];
-    let Expression::Let {
-        binding,
-        value,
-        mode,
-        ..
-    } = penultimate
-    else {
-        return None;
-    };
-    if mode.else_block().is_some() || binding.is_mutable() {
-        return None;
-    }
-    let Pattern::Identifier { identifier, .. } = &binding.pattern else {
-        return None;
-    };
-    if identifier != tail_name || facts.checked(last).value_use().adaptation.converts() {
-        return None;
-    }
-    if !elidable.accepts(value.as_ref()) {
-        return None;
-    }
-    let rest = &items[..items.len() - 2];
-    if region_blocks_inline(rest.iter(), resolution.binding_id()) {
-        return None;
-    }
-    Some((value.as_ref(), rest))
-}
-
 pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -> bool {
     use syntax::ast::SelectArm;
     match expression {
@@ -405,7 +338,7 @@ impl<'p> Planner<'p> {
     pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<Statement> {
         let unwrapped = value.unwrap_parens();
 
-        if is_side_effect_free_discard(&self.facts, unwrapped) {
+        if self.facts.is_side_effect_free_discard(unwrapped) {
             return Vec::new();
         }
 
@@ -893,5 +826,72 @@ impl<'a> EmitFacts<'a> {
         operation
             .grows_slice()
             .then_some((operation.method, expression))
+    }
+
+    fn is_side_effect_free_discard(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Unit { .. } => true,
+            _ if self.is_zero_call(expression) => true,
+            Expression::Literal { literal, .. } => matches!(
+                literal,
+                Literal::Integer { .. }
+                    | Literal::Float { .. }
+                    | Literal::Imaginary(_)
+                    | Literal::Boolean(_)
+                    | Literal::String { .. }
+                    | Literal::Char(_)
+            ),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_zero_call(&self, expression: &Expression) -> bool {
+        matches!(self.call_operation(expression), Some(CallOperation::Zero))
+    }
+
+    pub(crate) fn try_elide_tail_let<'i>(
+        &self,
+        items: &'i [Expression],
+        elidable: ElidableTail,
+    ) -> Option<(&'i Expression, &'i [Expression])> {
+        if items.len() < 2 {
+            return None;
+        }
+        let last = items.last()?;
+        let Expression::Identifier {
+            value: tail_name,
+            resolution,
+            ..
+        } = last
+        else {
+            return None;
+        };
+        let penultimate = &items[items.len() - 2];
+        let Expression::Let {
+            binding,
+            value,
+            mode,
+            ..
+        } = penultimate
+        else {
+            return None;
+        };
+        if mode.else_block().is_some() || binding.is_mutable() {
+            return None;
+        }
+        let Pattern::Identifier { identifier, .. } = &binding.pattern else {
+            return None;
+        };
+        if identifier != tail_name || self.checked(last).value_use().adaptation.converts() {
+            return None;
+        }
+        if !elidable.accepts(value.as_ref()) {
+            return None;
+        }
+        let rest = &items[..items.len() - 2];
+        if region_blocks_inline(rest.iter(), resolution.binding_id()) {
+            return None;
+        }
+        Some((value.as_ref(), rest))
     }
 }

@@ -6,7 +6,6 @@ use crate::abi::fallible_producer::OptionFusePlan;
 use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
-use crate::definitions::functions::is_go_never;
 use crate::ir::bodies::{LoweredBlock, LoweredStatement, PlacePlan, Statement};
 use crate::ir::values::GoExpression;
 use crate::state::expression::ExpressionContext;
@@ -45,7 +44,7 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
-        if let Some(statements) = transition::try_lower_layout_return(self, expression) {
+        if let Some(statements) = self.try_lower_layout_return(expression) {
             return LoweredBlock { statements };
         }
 
@@ -78,7 +77,7 @@ impl Planner<'_> {
 
         let mut statements = Vec::new();
 
-        if is_go_never(&self.facts, expression) {
+        if self.facts.is_go_never(expression) {
             let (setup, call) = self
                 .plan_call_expression(expression, None, ExpressionContext::value())
                 .into_parts();
@@ -134,7 +133,7 @@ impl Planner<'_> {
         let Some(shape) = self.return_ctx().lowered_shape() else {
             return vec![plain_return(value)];
         };
-        transition::lower_result_return(self, value, "v", return_ty, &shape)
+        self.lower_result_return(value, "v", return_ty, &shape)
     }
 
     fn lower_wrapped_call_return(
@@ -198,8 +197,7 @@ impl Planner<'_> {
                 if shape.has_flattened_payload()
                     && let tuple @ Expression::Tuple { .. } = args[0].unwrap_parens() =>
             {
-                let (setup, parts) =
-                    transition::lowered_tuple_literal_values(self, tuple, fallible.ok_ty());
+                let (setup, parts) = self.lowered_tuple_literal_values(tuple, fallible.ok_ty());
                 statements.extend(setup);
                 statements.push(transition::multi_value_return(
                     transition::lowered_ok_values(shape, parts),
@@ -329,9 +327,7 @@ impl Planner<'_> {
                     .plan_go_abi_wrapped_call(expression, &plan.resolved.abi, return_ty)
                     .into_parts();
                 statements.extend(setup);
-                statements.extend(transition::lower_result_return(
-                    self, result_var, "res", return_ty, shape,
-                ));
+                statements.extend(self.lower_result_return(result_var, "res", return_ty, shape));
             } else {
                 let abi = plan.resolved.abi.clone();
                 if self.go_result_bridge(&abi, return_ty).is_none() {
@@ -359,9 +355,7 @@ impl Planner<'_> {
                 .plan_value(expression, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
-            statements.extend(transition::lower_result_return(
-                self, value, "v", return_ty, shape,
-            ));
+            statements.extend(self.lower_result_return(value, "v", return_ty, shape));
             return statements;
         }
         let (setup, call) = self

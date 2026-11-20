@@ -208,7 +208,7 @@ impl Planner<'_> {
     ) -> GoDeclaration {
         let layout = self.facts.enum_layout(enum_id).expect("enum layout exists");
         let variant = layout
-            .get_variant(variant_name)
+            .variant(variant_name)
             .expect("variant exists in layout");
         let mut fields = vec![(
             ENUM_TAG_FIELD.to_string(),

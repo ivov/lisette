@@ -1,6 +1,5 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::transition::try_lower_layout_return;
 use crate::analyze::component_uses::component_demand;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::predicates::strip_negations;
@@ -14,9 +13,7 @@ use crate::ir::bodies::{
 use crate::ir::go_expression::{BinaryOp, UnaryOp};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, ValuePlan};
-use crate::plan::placement::{
-    ElidableTail, collapse_declared_temp, requires_temp_var, try_elide_tail_let,
-};
+use crate::plan::placement::{ElidableTail, collapse_declared_temp, requires_temp_var};
 use crate::state::expression::ExpressionContext;
 use std::iter;
 use std::slice;
@@ -234,9 +231,10 @@ impl Planner<'_> {
             slice::from_ref(body)
         };
 
-        let Some((last, rest)) =
-            try_elide_tail_let(&self.facts, items, ElidableTail::FallibleBlock)
-                .or_else(|| items.split_last())
+        let Some((last, rest)) = self
+            .facts
+            .try_elide_tail_let(items, ElidableTail::FallibleBlock)
+            .or_else(|| items.split_last())
         else {
             return LoweredBlock {
                 statements: Vec::new(),
@@ -730,7 +728,9 @@ impl Planner<'_> {
             slice::from_ref(expression)
         };
 
-        let Some((last, rest)) = try_elide_tail_let(&self.facts, items, ElidableTail::Branching)
+        let Some((last, rest)) = self
+            .facts
+            .try_elide_tail_let(items, ElidableTail::Branching)
             .or_else(|| items.split_last())
         else {
             return LoweredBlock {
@@ -782,7 +782,7 @@ impl Planner<'_> {
                 statements.extend(directed_first(line, inlined));
             }
             _ => {
-                let tail = if let Some(tail) = try_lower_layout_return(self, last) {
+                let tail = if let Some(tail) = self.try_lower_layout_return(last) {
                     tail
                 } else if let Some(wrapped) = self.try_lower_wrapped_return(last) {
                     wrapped

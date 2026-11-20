@@ -194,12 +194,12 @@ impl EnumLayout {
         }
     }
 
-    pub(crate) fn get_variant(&self, name: &str) -> Option<&VariantLayout> {
+    pub(crate) fn variant(&self, name: &str) -> Option<&VariantLayout> {
         self.variants.iter().find(|variant| variant.name == name)
     }
 
     pub(crate) fn struct_field_name(&self, variant_name: &str, field_name: &str) -> Option<String> {
-        let variant = self.get_variant(variant_name)?;
+        let variant = self.variant(variant_name)?;
         variant
             .fields
             .iter()
@@ -208,7 +208,7 @@ impl EnumLayout {
     }
 
     pub(crate) fn tuple_field_name(&self, variant_name: &str, index: usize) -> Option<String> {
-        let variant = self.get_variant(variant_name)?;
+        let variant = self.variant(variant_name)?;
         variant.fields.get(index).map(|f| f.go_name.clone())
     }
 
@@ -534,8 +534,7 @@ impl EnumLayout {
                 vec![unknown(GoExpression::identifier(name.clone()))],
             );
             if payload.is_empty() {
-                body.push(json_guard(
-                    planner,
+                body.push(planner.json_guard(
                     GoExpression::identifier(data.clone()),
                     GoExpression::identifier(name.clone()),
                     Some(vec![invalid(format!(
@@ -546,8 +545,7 @@ impl EnumLayout {
                 ));
                 body.push(choice);
             } else {
-                body.push(json_guard(
-                    planner,
+                body.push(planner.json_guard(
                     GoExpression::identifier(data.clone()),
                     GoExpression::identifier(name.clone()),
                     Some(vec![choice]),
@@ -557,8 +555,7 @@ impl EnumLayout {
         }
         if !payload.is_empty() {
             body.push(variable(&obj, GoType::map_of(&GoType::new("string"), &raw)));
-            body.push(json_guard(
-                planner,
+            body.push(planner.json_guard(
                 GoExpression::identifier(data.clone()),
                 GoExpression::identifier(obj.clone()),
                 Some(vec![invalid(format!("invalid {} JSON", self.enum_name))]),
@@ -576,8 +573,7 @@ impl EnumLayout {
                             &inner,
                             GoType::map_of(&GoType::new("string"), &raw),
                         ));
-                        body.push(json_guard(
-                            planner,
+                        body.push(planner.json_guard(
                             GoExpression::identifier(val.clone()),
                             GoExpression::identifier(inner.clone()),
                             None,
@@ -588,8 +584,7 @@ impl EnumLayout {
                             let mut plan = IfPlan::plain(
                                 GoExpression::identifier(ok.clone()),
                                 LoweredBlock {
-                                    statements: vec![json_guard(
-                                        planner,
+                                    statements: vec![planner.json_guard(
                                         GoExpression::identifier(v.clone()),
                                         member(&receiver, &field.go_name),
                                         None,
@@ -615,8 +610,7 @@ impl EnumLayout {
                         )));
                     } else {
                         body.push(variable(&arr, GoType::slice_of(&raw)));
-                        body.push(json_guard(
-                            planner,
+                        body.push(planner.json_guard(
                             GoExpression::identifier(val.clone()),
                             GoExpression::identifier(arr.clone()),
                             None,
@@ -650,7 +644,7 @@ impl EnumLayout {
                             ))
                             .into(),
                         );
-                        body.extend(unmarshal_tuple_fields(planner, variant, &arr, &receiver));
+                        body.extend(planner.unmarshal_tuple_fields(variant, &arr, &receiver));
                     }
                     case(string(&variant.name), body)
                 })
@@ -747,28 +741,6 @@ fn unmarshal(value: GoExpression, target: GoExpression) -> GoExpression {
         vec![value, GoExpression::address_of(target)],
     )
 }
-fn json_guard(
-    planner: &mut Planner,
-    value: GoExpression,
-    target: GoExpression,
-    body: Option<Vec<Statement>>,
-    success: bool,
-) -> Statement {
-    let error = planner.scope.new_local_identifier("err");
-    let body = body.unwrap_or_else(|| vec![plain_return(GoExpression::identifier(error.clone()))]);
-    let condition = GoExpression::binary(
-        GoExpression::identifier(error.clone()),
-        if success { BinaryOp::Eq } else { BinaryOp::Ne },
-        GoExpression::nil(),
-    );
-    let mut plan = IfPlan::plain(condition, LoweredBlock { statements: body }, ElseArm::None);
-    plan.initializer = Some(GoDefinition {
-        names: vec![error],
-        value: unmarshal(value, target),
-    });
-    LoweredStatement::If(plan).into()
-}
-
 fn comment_line(line: &str) -> String {
     if line.is_empty() {
         "//".to_string()
@@ -777,27 +749,52 @@ fn comment_line(line: &str) -> String {
     }
 }
 
-fn unmarshal_tuple_fields(
-    planner: &mut Planner,
-    variant: &VariantLayout,
-    array: &GoIdentifier,
-    receiver: &GoIdentifier,
-) -> Vec<Statement> {
-    variant
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(index, field)| {
-            let value = GoExpression::index(
-                GoExpression::identifier(array.clone()),
-                GoExpression::literal(index.to_string()),
-            );
-            let target = member(receiver, &field.go_name);
-            if index + 1 == variant.fields.len() {
-                plain_return(unmarshal(value, target))
-            } else {
-                json_guard(planner, value, target, None, false)
-            }
-        })
-        .collect()
+impl Planner<'_> {
+    fn json_guard(
+        &mut self,
+        value: GoExpression,
+        target: GoExpression,
+        body: Option<Vec<Statement>>,
+        success: bool,
+    ) -> Statement {
+        let error = self.scope.new_local_identifier("err");
+        let body =
+            body.unwrap_or_else(|| vec![plain_return(GoExpression::identifier(error.clone()))]);
+        let condition = GoExpression::binary(
+            GoExpression::identifier(error.clone()),
+            if success { BinaryOp::Eq } else { BinaryOp::Ne },
+            GoExpression::nil(),
+        );
+        let mut plan = IfPlan::plain(condition, LoweredBlock { statements: body }, ElseArm::None);
+        plan.initializer = Some(GoDefinition {
+            names: vec![error],
+            value: unmarshal(value, target),
+        });
+        LoweredStatement::If(plan).into()
+    }
+
+    fn unmarshal_tuple_fields(
+        &mut self,
+        variant: &VariantLayout,
+        array: &GoIdentifier,
+        receiver: &GoIdentifier,
+    ) -> Vec<Statement> {
+        variant
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                let value = GoExpression::index(
+                    GoExpression::identifier(array.clone()),
+                    GoExpression::literal(index.to_string()),
+                );
+                let target = member(receiver, &field.go_name);
+                if index + 1 == variant.fields.len() {
+                    plain_return(unmarshal(value, target))
+                } else {
+                    self.json_guard(value, target, None, false)
+                }
+            })
+            .collect()
+    }
 }

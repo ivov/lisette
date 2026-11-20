@@ -67,18 +67,6 @@ pub(crate) fn is_clip_safe_path(value: &GoExpression) -> bool {
     is_path(value.node())
 }
 
-fn growth_detach_applies(
-    facts: &EmitFacts<'_>,
-    context: &NativeCallContext,
-    receiver: &Expression,
-) -> bool {
-    facts.checked(context.function).callee().copies_storage
-        && !is_fresh_slice_value(facts.call_operation(receiver), receiver)
-        && !context
-            .retired_receiver
-            .is_some_and(|target| retired_covers_receiver(target, receiver))
-}
-
 fn is_fresh_slice_value(operation: Option<&CallOperation>, receiver: &Expression) -> bool {
     if let Expression::Literal {
         literal: Literal::Slice(_),
@@ -436,7 +424,10 @@ impl Planner<'_> {
         }
 
         let mut staged = self.stage_native_method(context);
-        if growth_detach_applies(&self.facts, context, receiver_expression) {
+        if self
+            .facts
+            .growth_detach_applies(context, receiver_expression)
+        {
             let detached = self.detach_slice_growth(
                 &mut staged.setup,
                 context.method,
@@ -677,7 +668,7 @@ impl Planner<'_> {
             let receiver = stages.remove(0).dereference();
             stages.insert(0, receiver);
         }
-        if growth_detach_applies(&self.facts, ctx, receiver)
+        if self.facts.growth_detach_applies(ctx, receiver)
             && (!arguments.is_empty() || ctx.spread.is_some())
             && !is_clip_safe_path(stages[0].expression())
         {
@@ -945,5 +936,13 @@ impl EmitFacts<'_> {
             .equality()
             .expect("internal error: a built-in comparison has a selected equality")
             .clone()
+    }
+
+    fn growth_detach_applies(&self, context: &NativeCallContext, receiver: &Expression) -> bool {
+        self.checked(context.function).callee().copies_storage
+            && !is_fresh_slice_value(self.call_operation(receiver), receiver)
+            && !context
+                .retired_receiver
+                .is_some_and(|target| retired_covers_receiver(target, receiver))
     }
 }

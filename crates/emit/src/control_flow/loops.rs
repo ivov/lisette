@@ -516,49 +516,6 @@ enum StringViewKind {
     Runes,
 }
 
-fn recognize_string_view_loop<'a>(
-    facts: &EmitFacts<'_>,
-    binding: &'a Binding,
-    iterable: &'a Expression,
-) -> Option<(StringViewKind, &'a Expression)> {
-    if !matches!(
-        &binding.pattern,
-        Pattern::Identifier { .. } | Pattern::WildCard { .. }
-    ) {
-        return None;
-    }
-
-    let Expression::Call {
-        expression, args, ..
-    } = iterable
-    else {
-        return None;
-    };
-
-    if !args.is_empty() {
-        return None;
-    }
-
-    let Expression::DotAccess {
-        expression: receiver,
-        member,
-        ..
-    } = expression.as_ref()
-    else {
-        return None;
-    };
-
-    if !facts.peel_alias(&receiver.get_type()).is_string() {
-        return None;
-    }
-
-    match member.as_str() {
-        "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
-        "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
-        _ => None,
-    }
-}
-
 impl EmitFacts<'_> {
     fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
         let mut current = self.peel_alias(ty);
@@ -598,7 +555,7 @@ impl EmitFacts<'_> {
         {
             return ForShape::StoredRange(range_shape);
         }
-        if let Some((kind, receiver)) = recognize_string_view_loop(self, binding, iterable) {
+        if let Some((kind, receiver)) = self.recognize_string_view_loop(binding, iterable) {
             return ForShape::StringView(kind, receiver);
         }
         if let Pattern::Tuple { elements, .. } = &binding.pattern
@@ -621,6 +578,49 @@ impl EmitFacts<'_> {
                 &binding.pattern,
                 Pattern::Identifier { .. } | Pattern::WildCard { .. }
             ),
+        }
+    }
+
+    fn recognize_string_view_loop<'a>(
+        &self,
+        binding: &'a Binding,
+        iterable: &'a Expression,
+    ) -> Option<(StringViewKind, &'a Expression)> {
+        if !matches!(
+            &binding.pattern,
+            Pattern::Identifier { .. } | Pattern::WildCard { .. }
+        ) {
+            return None;
+        }
+
+        let Expression::Call {
+            expression, args, ..
+        } = iterable
+        else {
+            return None;
+        };
+
+        if !args.is_empty() {
+            return None;
+        }
+
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = expression.as_ref()
+        else {
+            return None;
+        };
+
+        if !self.peel_alias(&receiver.get_type()).is_string() {
+            return None;
+        }
+
+        match member.as_str() {
+            "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
+            "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
+            _ => None,
         }
     }
 }

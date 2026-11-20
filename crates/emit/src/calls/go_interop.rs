@@ -4,7 +4,7 @@ use crate::abi::wrapping::{NilGuard, WrapperTarget};
 
 use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
+use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::ValueLayout;
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::{Statement, assign, define_many};
@@ -132,7 +132,7 @@ impl Planner<'_> {
         source
             .iter()
             .zip(target)
-            .map(|(source, target)| resolve_layout_bridge(self, source, target))
+            .map(|(source, target)| self.resolve_layout_bridge(source, target))
             .collect()
     }
 

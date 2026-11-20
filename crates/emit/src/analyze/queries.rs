@@ -98,15 +98,6 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
         || matches!(expression.unwrap_parens(), Expression::Identifier { .. }))
 }
 
-pub(crate) fn reads_value_member(
-    facts: &EmitFacts,
-    resolution: &DotAccessResolution,
-    base: &Expression,
-    base_ty: &Type,
-) -> bool {
-    resolution.is_field_read() && base.deref_inner().is_none() && !facts.is_reference(base_ty)
-}
-
 impl<'a> EmitFacts<'a> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<SourceName> {
         let name = match pattern {
@@ -164,20 +155,10 @@ impl<'a> EmitFacts<'a> {
             .struct_field_name(variant_name, field_name)
     }
 
-    fn enum_tuple_field_name(
-        &self,
-        enum_id: &str,
-        variant_name: &str,
-        field_index: usize,
-    ) -> Option<String> {
-        self.enum_layout(enum_id)?
-            .tuple_field_name(variant_name, field_index)
-    }
-
     pub(crate) fn is_enum_field_recursive(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
             && let Some(layout) = self.enum_layout(id.as_ref())
-            && let Some(variant_layout) = layout.get_variant(variant)
+            && let Some(variant_layout) = layout.variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
         {
             return field.is_recursive();
@@ -214,7 +195,7 @@ impl<'a> EmitFacts<'a> {
         false
     }
 
-    pub(crate) fn get_enum_struct_field_index(
+    pub(crate) fn enum_struct_field_index(
         &self,
         ty: &Type,
         variant: &str,
@@ -293,7 +274,7 @@ impl<'a> EmitFacts<'a> {
         })
     }
 
-    pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
+    pub(crate) fn newtype_underlying(&self, ty: &Type) -> Option<Type> {
         let resolved = self.resolve_nominal(ty)?;
         if !resolved.definition.is_newtype() {
             return None;
@@ -314,12 +295,7 @@ impl<'a> EmitFacts<'a> {
             .then(|| resolved.id.to_string())
     }
 
-    pub(crate) fn get_enum_tuple_field_name(
-        &self,
-        ty: &Type,
-        variant: &str,
-        index: usize,
-    ) -> String {
+    pub(crate) fn enum_tuple_field_name(&self, ty: &Type, variant: &str, index: usize) -> String {
         let ty = &self.emit_shape_ty(ty);
         if ty.is_option() {
             return match variant {
@@ -347,7 +323,8 @@ impl<'a> EmitFacts<'a> {
         }
 
         if let Type::Nominal { id, .. } = ty
-            && let Some(name) = self.enum_tuple_field_name(id, variant, index)
+            && let Some(layout) = self.enum_layout(id)
+            && let Some(name) = layout.tuple_field_name(variant, index)
         {
             return name;
         }
@@ -356,6 +333,15 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_newtype_struct(&self, ty: &Type) -> bool {
-        self.get_newtype_underlying(ty).is_some()
+        self.newtype_underlying(ty).is_some()
+    }
+
+    pub(crate) fn reads_value_member(
+        &self,
+        resolution: &DotAccessResolution,
+        base: &Expression,
+        base_ty: &Type,
+    ) -> bool {
+        resolution.is_field_read() && base.deref_inner().is_none() && !self.is_reference(base_ty)
     }
 }

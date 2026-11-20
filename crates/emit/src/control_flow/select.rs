@@ -523,8 +523,8 @@ impl Planner<'_> {
                 needs_receiver_destructure,
                 place,
             );
-            let none_block = this
-                .capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place));
+            let none_block =
+                this.capture_scoped_block(|this| this.lower_none_arm_body(match_arms, place));
             let Some(arms_plan) = build_receive_arms_plan(&ok_var, some_block, none_block) else {
                 return SelectArmKind::Receive {
                     receive_vars: Vec::new(),

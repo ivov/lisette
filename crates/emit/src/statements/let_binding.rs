@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::OuterBindings;
 use crate::Planner;
 use crate::abi::callable::LoweredReturnAbi;
@@ -13,11 +14,10 @@ use crate::ir::bodies::{
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{ConstantKind, GoExpression};
 use crate::names::source_name::SourceName;
-use crate::patterns::decision_tree::collect_pattern_info;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::placement::{
-    collapse_declared_temp, expression_contains_binding, is_zero_call, rebind_trailing_temp,
-    rebind_updated_temp, requires_temp_var,
+    collapse_declared_temp, expression_contains_binding, rebind_trailing_temp, rebind_updated_temp,
+    requires_temp_var,
 };
 use crate::state::bindings::{ComponentKind, TupleBinding};
 use crate::state::expression::ExpressionContext;
@@ -36,27 +36,6 @@ pub(crate) struct LetSpec<'a> {
     mutable: bool,
 }
 
-fn widens_to_interface(planner: &Planner, value: &Expression, binding_ty: &Type) -> bool {
-    planner.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type()
-}
-
-pub(crate) fn needs_explicit_type_declaration(
-    planner: &Planner,
-    value: &Expression,
-    binding_ty: &Type,
-) -> bool {
-    if widens_to_interface(planner, value, binding_ty) {
-        return true;
-    }
-    if planner.facts.is_function_alias(binding_ty) {
-        let value_ty = value.get_type();
-        if matches!(value_ty.unwrap_forall(), Type::Function(_)) {
-            return true;
-        }
-    }
-    false
-}
-
 impl Planner<'_> {
     pub(crate) fn declaration_needs_go_type(
         &mut self,
@@ -66,7 +45,7 @@ impl Planner<'_> {
         ty: &Type,
     ) -> bool {
         (coercion.is_identity() && self.constant_needs_go_type(constant, ty).is_some())
-            || needs_explicit_type_declaration(self, value, ty)
+            || self.facts.needs_explicit_type_declaration(value, ty)
     }
 
     fn choose_let_go_name(
@@ -330,7 +309,7 @@ impl Planner<'_> {
         let go_identifier = self.choose_let_go_name(identifier, ids, raw_go_name, false);
         let local = go_identifier.clone();
         let mut statements = Vec::new();
-        if widens_to_interface(self, value, binding_ty) {
+        if self.facts.widens_to_interface(value, binding_ty) {
             let var_ty = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
@@ -379,7 +358,10 @@ impl Planner<'_> {
             go_identifier
         };
         let unit = GoExpression::unit();
-        if needs_explicit_type_declaration(self, value, binding_ty) {
+        if self
+            .facts
+            .needs_explicit_type_declaration(value, binding_ty)
+        {
             let go_type = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
@@ -429,10 +411,12 @@ impl Planner<'_> {
             OuterBindings::MayShadow,
         );
 
-        if is_zero_call(&self.facts, value)
+        if self.facts.is_zero_call(value)
             && statements.is_empty()
             && coercion_is_identity
-            && !needs_explicit_type_declaration(self, value, binding_ty)
+            && !self
+                .facts
+                .needs_explicit_type_declaration(value, binding_ty)
         {
             let var_ty = self.go_type(binding_ty);
             statements.push(
@@ -548,7 +532,9 @@ impl Planner<'_> {
             return None;
         }
         let return_ctx = self.return_ctx();
-        let resolved_ty = resolve_let_temp_declaration_ty(self, value, binding_ty);
+        let resolved_ty = self
+            .facts
+            .resolve_let_temp_declaration_ty(value, binding_ty);
         let peeled_resolved = self.facts.peel_alias(&resolved_ty);
         let peeled_binding = self.facts.peel_alias(binding_ty);
         let needs_context = |ty: &Type| ty.is_variable() || ty.is_placeholder();
@@ -596,17 +582,6 @@ impl Planner<'_> {
         }
         .build()
     }
-}
-
-fn resolve_let_temp_declaration_ty(
-    planner: &Planner,
-    value: &Expression,
-    binding_ty: &Type,
-) -> Type {
-    if planner.facts.has_no_go_value(binding_ty) {
-        return value.get_type();
-    }
-    binding_ty.clone()
 }
 
 struct LetPlanner<'a, 'e> {
@@ -800,7 +775,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
     fn can_use_multi_value_optimization(&self) -> bool {
         let value_ty = self.value.get_type();
-        if collect_pattern_info(self.planner, &self.binding.pattern, &value_ty)
+        if self
+            .planner
+            .collect_pattern_info(&self.binding.pattern, &value_ty)
             .bindings
             .iter()
             .any(|binding| !binding.coercion.is_identity())
@@ -922,5 +899,35 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .into()
         });
         LoweredBlock { statements }
+    }
+}
+
+impl EmitFacts<'_> {
+    fn widens_to_interface(&self, value: &Expression, binding_ty: &Type) -> bool {
+        self.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type()
+    }
+
+    fn resolve_let_temp_declaration_ty(&self, value: &Expression, binding_ty: &Type) -> Type {
+        if self.has_no_go_value(binding_ty) {
+            return value.get_type();
+        }
+        binding_ty.clone()
+    }
+
+    pub(crate) fn needs_explicit_type_declaration(
+        &self,
+        value: &Expression,
+        binding_ty: &Type,
+    ) -> bool {
+        if self.widens_to_interface(value, binding_ty) {
+            return true;
+        }
+        if self.is_function_alias(binding_ty) {
+            let value_ty = value.get_type();
+            if matches!(value_ty.unwrap_forall(), Type::Function(_)) {
+                return true;
+            }
+        }
+        false
     }
 }

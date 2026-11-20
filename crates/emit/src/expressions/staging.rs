@@ -3,7 +3,6 @@ use crate::Planner;
 use crate::abi::callable::CallableAbi;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::layout::ValueLayout;
-use crate::analyze::queries::reads_value_member;
 use crate::ir::bodies::direct_first;
 use crate::ir::bodies::{Definition, LoweredStatement, Statement};
 use crate::ir::evaluation::Effects;
@@ -214,8 +213,7 @@ impl Planner<'_> {
                 resolution,
                 ..
             } if resolution.is_field_read()
-                && !reads_value_member(
-                    &self.facts,
+                && !self.facts.reads_value_member(
                     resolution,
                     expression,
                     &expression.get_type(),

@@ -323,7 +323,7 @@ impl Planner<'_> {
         if !go_name::is_go_import(id.as_str()) {
             return None;
         }
-        let underlying = self.facts.get_newtype_underlying(ty)?;
+        let underlying = self.facts.newtype_underlying(ty)?;
         let go_ty = self.go_type(ty);
         self.go_newtype_zero(go_ty, &underlying)
     }
@@ -346,7 +346,7 @@ impl Planner<'_> {
         let go_ty = self.go_type(ty);
         let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
         if is_newtype {
-            if let Some(underlying) = self.facts.get_newtype_underlying(ty)
+            if let Some(underlying) = self.facts.newtype_underlying(ty)
                 && let Some(zero) = self.go_newtype_zero(go_ty.clone(), &underlying)
             {
                 return zero;
@@ -495,7 +495,7 @@ impl Planner<'_> {
             }
             return Some(self.go_imported_zero(ty, id));
         }
-        if let Some(underlying) = self.facts.get_newtype_underlying(ty) {
+        if let Some(underlying) = self.facts.newtype_underlying(ty) {
             let go_ty = self.go_type(ty);
             let inner = self.lisette_zero(&underlying);
             return Some(GoExpression::conversion(go_ty, inner));
@@ -675,7 +675,7 @@ impl Planner<'_> {
         let tag_constant = self.resolve_variant(name, enum_id);
 
         let pointer_fields = if let Some(layout) = self.facts.enum_layout(enum_id) {
-            if let Some(variant) = layout.get_variant(&variant_name) {
+            if let Some(variant) = layout.variant(&variant_name) {
                 variant
                     .fields
                     .iter()

@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::ir::local::GoIdentifier;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::state::scope::ScopeState;
@@ -30,7 +31,6 @@ use crate::types::go_type::GoType;
 use syntax::program::SlotOrigin;
 
 mod checks;
-use checks::collect_checks_and_bindings;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
@@ -161,14 +161,6 @@ impl AccessPath {
                     | PathSegment::AssertedAs(_)
             )
         })
-    }
-}
-
-fn field_segment(planner: &Planner<'_>, receiver_ty: &Type, name: String) -> PathSegment {
-    if planner.facts.field_read_cannot_panic(receiver_ty) {
-        PathSegment::ValueField(name)
-    } else {
-        PathSegment::Field(name)
     }
 }
 
@@ -948,35 +940,6 @@ fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
     result
 }
 
-pub(super) fn compile_match_arms(
-    planner: &mut Planner,
-    arms: &[MatchArm],
-    subject_ty: &Type,
-) -> Decision {
-    let mut arm_infos = Vec::new();
-    for (arm_index, arm) in arms.iter().enumerate() {
-        let split = |pattern: &Pattern| arm.has_guard() || pattern_has_bindings(pattern);
-        for expansion in expand_or_patterns(&arm.pattern, &split) {
-            let info = collect_pattern_info(planner, &expansion.pattern, subject_ty);
-            arm_infos.push(ArmInfo {
-                arm_index,
-                checks: info.checks,
-                bindings: info.bindings,
-                has_guard: arm.has_guard(),
-            });
-        }
-    }
-
-    let mut arm_infos = expand_interface_or_checks(arm_infos);
-
-    for alternatives in arm_infos.chunk_by_mut(|a, b| a.arm_index == b.arm_index) {
-        let mut bindings: Vec<_> = alternatives.iter_mut().map(|a| &mut a.bindings).collect();
-        share_alternative_bindings(&mut bindings);
-    }
-
-    build_tree(arm_infos)
-}
-
 pub(super) fn share_alternative_bindings(alternatives: &mut [&mut Vec<PatternBinding>]) {
     let mut shared_by_name: HashMap<String, (Vec<BindingId>, BindingTarget)> = HashMap::default();
     for bindings in alternatives.iter() {
@@ -1001,23 +964,6 @@ pub(super) fn share_alternative_bindings(alternatives: &mut [&mut Vec<PatternBin
             binding.binding_ids = ids.clone();
         }
     }
-}
-
-pub(crate) fn collect_pattern_info(
-    planner: &Planner,
-    pattern: &Pattern,
-    subject_ty: &Type,
-) -> PatternInfo {
-    let mut info = PatternInfo::new();
-    collect_checks_and_bindings(
-        planner,
-        &AccessPath::root(),
-        pattern,
-        subject_ty,
-        Some(&planner.value_layout(subject_ty, SlotOrigin::Lisette)),
-        &mut info,
-    );
-    info
 }
 
 fn root_assertion_position(checks: &[Check]) -> Option<usize> {
@@ -1082,4 +1028,53 @@ fn join_conditions(
         .map(|check| check.render(scope, subject))
         .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
         .expect("join_conditions requires at least one check")
+}
+
+impl Planner<'_> {
+    pub(super) fn compile_match_arms(&mut self, arms: &[MatchArm], subject_ty: &Type) -> Decision {
+        let mut arm_infos = Vec::new();
+        for (arm_index, arm) in arms.iter().enumerate() {
+            let split = |pattern: &Pattern| arm.has_guard() || pattern_has_bindings(pattern);
+            for expansion in expand_or_patterns(&arm.pattern, &split) {
+                let info = self.collect_pattern_info(&expansion.pattern, subject_ty);
+                arm_infos.push(ArmInfo {
+                    arm_index,
+                    checks: info.checks,
+                    bindings: info.bindings,
+                    has_guard: arm.has_guard(),
+                });
+            }
+        }
+
+        let mut arm_infos = expand_interface_or_checks(arm_infos);
+
+        for alternatives in arm_infos.chunk_by_mut(|a, b| a.arm_index == b.arm_index) {
+            let mut bindings: Vec<_> = alternatives.iter_mut().map(|a| &mut a.bindings).collect();
+            share_alternative_bindings(&mut bindings);
+        }
+
+        build_tree(arm_infos)
+    }
+
+    pub(crate) fn collect_pattern_info(&self, pattern: &Pattern, subject_ty: &Type) -> PatternInfo {
+        let mut info = PatternInfo::new();
+        self.collect_checks_and_bindings(
+            &AccessPath::root(),
+            pattern,
+            subject_ty,
+            Some(&self.value_layout(subject_ty, SlotOrigin::Lisette)),
+            &mut info,
+        );
+        info
+    }
+}
+
+impl EmitFacts<'_> {
+    fn field_segment(&self, receiver_ty: &Type, name: String) -> PathSegment {
+        if self.field_read_cannot_panic(receiver_ty) {
+            PathSegment::ValueField(name)
+        } else {
+            PathSegment::Field(name)
+        }
+    }
 }

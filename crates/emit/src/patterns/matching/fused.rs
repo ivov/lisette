@@ -259,11 +259,7 @@ impl Planner<'_> {
                             if has_binding_or_pattern(&ok_arm.pattern) {
                                 return false;
                             }
-                            let info = decision_tree::collect_pattern_info(
-                                self,
-                                &ok_arm.pattern,
-                                &payload_ty,
-                            );
+                            let info = self.collect_pattern_info(&ok_arm.pattern, &payload_ty);
                             info.is_irrefutable()
                         }) =>
                 {

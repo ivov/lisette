@@ -1,8 +1,8 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge, resolve_layout_bridge};
+use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
-use crate::abi::transition::{multi_value_return, reencode_return};
+use crate::abi::transition::multi_value_return;
 use crate::abi::wrapping::{WrapperTarget, non_nil};
 use crate::control_flow::fallible as tags;
 use crate::control_flow::fallible::{OPTION_SOME_TAG, prelude_call};
@@ -744,7 +744,7 @@ impl Planner<'_> {
             .into_iter()
             .zip(source.parameters.iter().zip(&target.parameters))
             .map(|(parameter, (source, target))| {
-                let bridge = resolve_layout_bridge(self, target, source);
+                let bridge = self.resolve_layout_bridge(target, source);
                 let argument = self.plan_layout_bridge(statements, parameter, &bridge, true);
                 if source.logical_type().is_native(CompoundKind::VarArgs) {
                     GoExpression::spread(argument)
@@ -780,12 +780,12 @@ impl Planner<'_> {
         source: &ValueLayout,
         target: &ValueLayout,
     ) -> Option<GoResultBridge> {
-        let value = resolve_layout_bridge(self, source.payload()?, target.payload()?);
+        let value = self.resolve_layout_bridge(source.payload()?, target.payload()?);
         let error = match (source.underlying(), target.underlying()) {
             (
                 ValueLayout::Fallible { error: source, .. },
                 ValueLayout::Fallible { error: target, .. },
-            ) => resolve_layout_bridge(self, source, target),
+            ) => self.resolve_layout_bridge(source, target),
             _ => LayoutBridge::Identity,
         };
         let bridge = GoResultBridge::Payload { value, error };
@@ -822,7 +822,7 @@ impl Planner<'_> {
                 .results
                 .iter()
                 .zip(target_slots)
-                .map(|(source, target)| resolve_layout_bridge(self, source, target))
+                .map(|(source, target)| self.resolve_layout_bridge(source, target))
                 .collect();
             let (body, _) = self.plan_abi_wrapping(
                 call,
@@ -843,7 +843,7 @@ impl Planner<'_> {
                 option_type: source.result_layout.logical_type().clone(),
                 payload: Box::new(source.results[0].clone()),
             };
-            let bridge = resolve_layout_bridge(self, &source, &target.results[0]);
+            let bridge = self.resolve_layout_bridge(&source, &target.results[0]);
             let raw = self.hoist_tmp_value_statement(statements, "raw", call);
             let raw = GoExpression::identifier(raw);
             let value = self.plan_layout_bridge(statements, raw, &bridge, false);
@@ -868,8 +868,7 @@ impl Planner<'_> {
                 let intermediate =
                     self.function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
                 if !intermediate.same_result_representation(target) {
-                    let body = reencode_return(
-                        self,
+                    let body = self.reencode_return(
                         call,
                         &source.return_abi,
                         &intermediate.return_abi,
@@ -891,8 +890,7 @@ impl Planner<'_> {
                     return;
                 }
             }
-            statements.extend(reencode_return(
-                self,
+            statements.extend(self.reencode_return(
                 call,
                 &source.return_abi,
                 &target.return_abi,
@@ -917,7 +915,7 @@ impl Planner<'_> {
                     statements.push(expression_statement(call));
                     return;
                 }
-                let bridge = resolve_layout_bridge(self, &source.results[0], &target.results[0]);
+                let bridge = self.resolve_layout_bridge(&source.results[0], &target.results[0]);
                 let value = self.plan_layout_bridge(statements, call, &bridge, true);
                 statements.push(plain_return(value));
             }
@@ -983,7 +981,7 @@ impl Planner<'_> {
                     ))
                     .into(),
                 );
-                let bridge = resolve_layout_bridge(self, &source.results[0], &target.results[0]);
+                let bridge = self.resolve_layout_bridge(&source.results[0], &target.results[0]);
                 let value = self.plan_layout_bridge(
                     statements,
                     GoExpression::identifier(raw),
@@ -1002,7 +1000,7 @@ impl Planner<'_> {
                     .into_iter()
                     .zip(source.results.iter().zip(&target.results))
                     .map(|(value, (source, target))| {
-                        let bridge = resolve_layout_bridge(self, source, target);
+                        let bridge = self.resolve_layout_bridge(source, target);
                         self.plan_layout_bridge(statements, value, &bridge, true)
                     })
                     .collect::<Vec<_>>();
@@ -1021,7 +1019,7 @@ impl Planner<'_> {
     ) -> Vec<GoExpression> {
         let source_flat = values.len() > 1;
         if !source_flat && !target_flat {
-            let bridge = resolve_layout_bridge(self, &source[0], &target[0]);
+            let bridge = self.resolve_layout_bridge(&source[0], &target[0]);
             let [value] = <[GoExpression; 1]>::try_from(values)
                 .unwrap_or_else(|_| unreachable!("a packed payload is one value"));
             return vec![self.plan_layout_bridge(statements, value, &bridge, true)];
@@ -1050,7 +1048,7 @@ impl Planner<'_> {
             .into_iter()
             .zip(source_slots.iter().zip(target_slots))
             .map(|(value, (source, target))| {
-                let bridge = resolve_layout_bridge(self, source, target);
+                let bridge = self.resolve_layout_bridge(source, target);
                 self.plan_layout_bridge(statements, value, &bridge, true)
             })
             .collect();

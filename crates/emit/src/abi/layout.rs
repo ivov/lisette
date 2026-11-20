@@ -975,9 +975,9 @@ impl Planner<'_> {
                         ),
                     };
                 }
-                if let Some(underlying) = self.facts.get_newtype_underlying(&ty) {
+                if let Some(underlying) = self.facts.newtype_underlying(&ty) {
                     let declared_underlying =
-                        declaration.and_then(|ty| self.facts.get_newtype_underlying(ty));
+                        declaration.and_then(|ty| self.facts.newtype_underlying(ty));
                     return ValueLayout::Named {
                         named_type: ty,
                         underlying: Box::new(self.value_layout_with_hint(

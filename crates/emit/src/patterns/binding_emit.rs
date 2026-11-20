@@ -39,192 +39,195 @@ fn requires_asserted_subject(checks: &[Check], bindings: &[PatternBinding]) -> b
     !checks.is_empty() || bindings.iter().any(|b| b.target.is_named())
 }
 
-pub(crate) fn apply_root_assertion(
-    planner: &mut Planner,
-    statements: &mut Vec<Statement>,
-    info: PatternInfo,
-    subject: &GoExpression,
-) -> AssertedPattern {
-    let PatternInfo {
-        mut checks,
-        mut bindings,
-        ..
-    } = info;
-    let subject = match lift_root_assertion(&mut checks, &mut bindings) {
-        Some(go_types) if requires_asserted_subject(&checks, &bindings) => {
-            let [go_type] = go_types.as_slice() else {
-                unreachable!("multi-type root assertions only reach match destructure paths")
-            };
-            let expression = GoExpression::type_assertion(subject.clone(), go_type.clone());
-            let var = planner.hoist_tmp_value_statement(statements, "asserted", expression);
-            GoExpression::identifier(var)
-        }
-        _ => subject.clone(),
-    };
-    AssertedPattern {
-        subject,
-        ok_test: None,
-        checks,
-        bindings,
-    }
-}
-
-pub(crate) fn apply_refutable_root_assertion(
-    planner: &mut Planner,
-    statements: &mut Vec<Statement>,
-    info: PatternInfo,
-    subject: &GoExpression,
-) -> AssertedPattern {
-    let PatternInfo {
-        mut checks,
-        mut bindings,
-        ..
-    } = info;
-    let Some(go_types) = lift_root_assertion(&mut checks, &mut bindings) else {
-        return AssertedPattern {
-            subject: subject.clone(),
+impl Planner<'_> {
+    pub(crate) fn apply_root_assertion(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        info: PatternInfo,
+        subject: &GoExpression,
+    ) -> AssertedPattern {
+        let PatternInfo {
+            mut checks,
+            mut bindings,
+            ..
+        } = info;
+        let subject = match lift_root_assertion(&mut checks, &mut bindings) {
+            Some(go_types) if requires_asserted_subject(&checks, &bindings) => {
+                let [go_type] = go_types.as_slice() else {
+                    unreachable!("multi-type root assertions only reach match destructure paths")
+                };
+                let expression = GoExpression::type_assertion(subject.clone(), go_type.clone());
+                let var = self.hoist_tmp_value_statement(statements, "asserted", expression);
+                GoExpression::identifier(var)
+            }
+            _ => subject.clone(),
+        };
+        AssertedPattern {
+            subject,
             ok_test: None,
             checks,
             bindings,
-        };
-    };
-    let needs_asserted = requires_asserted_subject(&checks, &bindings);
-    let assertion_of =
-        |go_type: &GoType| GoExpression::type_assertion(subject.clone(), go_type.clone());
-    let (subject, ok_test) = match go_types.as_slice() {
-        [go_type] => {
-            let asserted_lhs = if needs_asserted {
-                planner.fresh_declared("asserted")
-            } else {
-                GoIdentifier::external("_".to_string())
-            };
-            let ok = planner.fresh_declared("ok");
-            statements.push(define_many(
-                vec![asserted_lhs.clone(), ok.clone()],
-                assertion_of(go_type),
-            ));
-            let effective = if needs_asserted {
-                GoExpression::identifier(asserted_lhs)
-            } else {
-                subject.clone()
-            };
-            (effective, Some(GoExpression::identifier(ok)))
         }
-        multiple => {
-            let oks = multiple
-                .iter()
-                .map(|t| {
-                    let ok = planner.fresh_declared("ok");
-                    statements.push(define_many(
-                        vec![GoIdentifier::external("_".to_string()), ok.clone()],
-                        assertion_of(t),
-                    ));
-                    GoExpression::identifier(ok)
-                })
-                .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
-                .expect("a multi-type assertion names at least one type");
-            (subject.clone(), Some(oks))
-        }
-    };
-    AssertedPattern {
-        subject,
-        ok_test,
-        checks,
-        bindings,
     }
-}
 
-pub(crate) fn tree_binding_statements(
-    planner: &mut Planner,
-    statements: &mut Vec<Statement>,
-    bindings: &[PatternBinding],
-    subject: SubjectRoot<'_>,
-    consumers: &[&Expression],
-) {
-    for binding in bindings {
-        let Some(go_name) = binding.target.go_name() else {
-            bind_inline_unit(planner, binding);
-            continue;
+    pub(crate) fn apply_refutable_root_assertion(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        info: PatternInfo,
+        subject: &GoExpression,
+    ) -> AssertedPattern {
+        let PatternInfo {
+            mut checks,
+            mut bindings,
+            ..
+        } = info;
+        let Some(go_types) = lift_root_assertion(&mut checks, &mut bindings) else {
+            return AssertedPattern {
+                subject: subject.clone(),
+                ok_test: None,
+                checks,
+                bindings,
+            };
         };
+        let needs_asserted = requires_asserted_subject(&checks, &bindings);
+        let assertion_of =
+            |go_type: &GoType| GoExpression::type_assertion(subject.clone(), go_type.clone());
+        let (subject, ok_test) = match go_types.as_slice() {
+            [go_type] => {
+                let asserted_lhs = if needs_asserted {
+                    self.fresh_declared("asserted")
+                } else {
+                    GoIdentifier::external("_".to_string())
+                };
+                let ok = self.fresh_declared("ok");
+                statements.push(define_many(
+                    vec![asserted_lhs.clone(), ok.clone()],
+                    assertion_of(go_type),
+                ));
+                let effective = if needs_asserted {
+                    GoExpression::identifier(asserted_lhs)
+                } else {
+                    subject.clone()
+                };
+                (effective, Some(GoExpression::identifier(ok)))
+            }
+            multiple => {
+                let oks = multiple
+                    .iter()
+                    .map(|t| {
+                        let ok = self.fresh_declared("ok");
+                        statements.push(define_many(
+                            vec![GoIdentifier::external("_".to_string()), ok.clone()],
+                            assertion_of(t),
+                        ));
+                        GoExpression::identifier(ok)
+                    })
+                    .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
+                    .expect("a multi-type assertion names at least one type");
+                (subject.clone(), Some(oks))
+            }
+        };
+        AssertedPattern {
+            subject,
+            ok_test,
+            checks,
+            bindings,
+        }
+    }
 
-        let access_expression = binding.path.render(subject);
+    pub(crate) fn tree_binding_statements(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        bindings: &[PatternBinding],
+        subject: SubjectRoot<'_>,
+        consumers: &[&Expression],
+    ) {
+        for binding in bindings {
+            let Some(go_name) = binding.target.go_name() else {
+                self.bind_inline_unit(binding);
+                continue;
+            };
 
-        if binding.coercion.is_identity()
-            && analyze_inline_candidate_ids(&binding.binding_ids, consumers)
-                == InlineDecision::Inline
-        {
-            let composable = binding.path.render(subject);
-            let stability = planner.path_read_stability(&composable);
-            planner.scope.bind_inline_expr(
+            let access_expression = binding.path.render(subject);
+
+            if binding.coercion.is_identity()
+                && analyze_inline_candidate_ids(&binding.binding_ids, consumers)
+                    == InlineDecision::Inline
+            {
+                let composable = binding.path.render(subject);
+                let stability = self.path_read_stability(&composable);
+                self.scope.bind_inline_expr(
+                    &binding.lisette_name,
+                    &binding.binding_ids,
+                    InlineExpr::new(composable, stability),
+                );
+                continue;
+            }
+            let (setup, access_expression) =
+                binding.coercion.clone().lower(self, access_expression);
+            statements.extend(setup);
+            let name = self.claim_block_binding(
                 &binding.lisette_name,
                 &binding.binding_ids,
-                InlineExpr::new(composable, stability),
+                go_name,
+                OuterBindings::StayVisible,
             );
-            continue;
+            statements
+                .push(LoweredStatement::Define(Definition::single(name, access_expression)).into());
         }
-        let (setup, access_expression) = binding.coercion.clone().lower(planner, access_expression);
-        statements.extend(setup);
-        let name = planner.claim_block_binding(
+    }
+
+    pub(crate) fn bind_inline_unit(&mut self, binding: &PatternBinding) {
+        let unit = GoExpression::unit();
+        self.scope.bind_inline_expr(
             &binding.lisette_name,
             &binding.binding_ids,
-            go_name,
-            OuterBindings::StayVisible,
+            InlineExpr::new(unit, Stability::Fixed),
         );
-        statements
-            .push(LoweredStatement::Define(Definition::single(name, access_expression)).into());
     }
-}
 
-pub(crate) fn bind_inline_unit(planner: &mut Planner, binding: &PatternBinding) {
-    let unit = GoExpression::unit();
-    planner.scope.bind_inline_expr(
-        &binding.lisette_name,
-        &binding.binding_ids,
-        InlineExpr::new(unit, Stability::Fixed),
-    );
-}
+    pub(crate) fn with_tree_bindings<R>(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        bindings: &[PatternBinding],
+        subject: &GoExpression,
+        body: &Expression,
+        f: impl FnOnce(&mut Planner, &mut Vec<Statement>) -> R,
+    ) -> R {
+        self.with_binding_frame(|planner| {
+            planner.tree_binding_statements(
+                statements,
+                bindings,
+                SubjectRoot::Var(subject),
+                &[body],
+            );
+            f(planner, statements)
+        })
+    }
 
-pub(crate) fn with_tree_bindings<R>(
-    planner: &mut Planner,
-    statements: &mut Vec<Statement>,
-    bindings: &[PatternBinding],
-    subject: &GoExpression,
-    body: &Expression,
-    f: impl FnOnce(&mut Planner, &mut Vec<Statement>) -> R,
-) -> R {
-    planner.with_binding_frame(|planner| {
-        tree_binding_statements(
-            planner,
-            statements,
-            bindings,
-            SubjectRoot::Var(subject),
-            &[body],
-        );
-        f(planner, statements)
-    })
-}
+    pub(crate) fn tree_assignment_statements(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        bindings: &[PatternBinding],
+        subject: &GoExpression,
+    ) {
+        for binding in bindings {
+            if !binding.target.is_named() {
+                continue;
+            }
 
-pub(crate) fn tree_assignment_statements(
-    planner: &mut Planner,
-    statements: &mut Vec<Statement>,
-    bindings: &[PatternBinding],
-    subject: &GoExpression,
-) {
-    for binding in bindings {
-        if !binding.target.is_named() {
-            continue;
+            let name = binding
+                .binding_ids
+                .iter()
+                .find_map(|id| self.scope.resolve_binding_id(*id))
+                .and_then(BindingValue::as_go_identifier)
+                .expect("a named alternative binding is registered")
+                .clone();
+            let access_expression = binding.path.render(SubjectRoot::Var(subject));
+            let (setup, access_expression) =
+                binding.coercion.clone().lower(self, access_expression);
+            statements.extend(setup);
+            statements.push(assign(GoExpression::identifier(name), access_expression));
         }
-
-        let name = binding
-            .binding_ids
-            .iter()
-            .find_map(|id| planner.scope.resolve_binding_id(*id))
-            .and_then(BindingValue::as_go_identifier)
-            .expect("a named alternative binding is registered")
-            .clone();
-        let access_expression = binding.path.render(SubjectRoot::Var(subject));
-        let (setup, access_expression) = binding.coercion.clone().lower(planner, access_expression);
-        statements.extend(setup);
-        statements.push(assign(GoExpression::identifier(name), access_expression));
     }
 }

@@ -4,7 +4,6 @@ use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::ValueLayout;
 use crate::abi::wrapping::NilGuard;
-use crate::analyze::queries::reads_value_member;
 use crate::ir::bodies::Statement;
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, Stability, ValuePlan};
@@ -117,7 +116,10 @@ impl Planner<'_> {
             && self.facts.package_member_is_fixed(package, member)
         {
             Stability::Fixed
-        } else if reads_value_member(&self.facts, resolution, expression, &expression_ty) {
+        } else if self
+            .facts
+            .reads_value_member(resolution, expression, &expression_ty)
+        {
             base_plan.stability()
         } else {
             Stability::Observable
@@ -410,7 +412,7 @@ impl Planner<'_> {
         expression_ty: &Type,
         base: &GoExpression,
     ) -> Option<GoExpression> {
-        let field_ty = self.facts.get_newtype_underlying(expression_ty)?;
+        let field_ty = self.facts.newtype_underlying(expression_ty)?;
         let go_type = self.go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
             GoExpression::dereference(base.clone())

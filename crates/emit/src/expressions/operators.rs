@@ -230,7 +230,7 @@ impl Planner<'_> {
             ..
         } = target
             && let Some(flipped) = flip_comparison(cmp)
-            && flip_preserves_nan(&self.facts, cmp, left, right)
+            && self.facts.flip_preserves_nan(cmp, left, right)
         {
             let conversion = self.facts.checked(target).operand_conversion();
             return self.plan_binary(&flipped, left, right, conversion, ctx);
@@ -319,22 +319,6 @@ impl Planner<'_> {
             _ => false,
         }
     }
-}
-
-pub(crate) fn flip_preserves_nan(
-    facts: &EmitFacts<'_>,
-    operator: &BinaryOperator,
-    left: &Expression,
-    right: &Expression,
-) -> bool {
-    matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
-        || (is_non_float(facts, left) && is_non_float(facts, right))
-}
-
-fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    facts
-        .underlying_simple_kind(&expression.get_type())
-        .is_some_and(|kind| !kind.is_float())
 }
 
 pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
@@ -449,5 +433,20 @@ impl EmitFacts<'_> {
             Some(definition) => !matches!(definition.ty.unwrap_forall(), Type::Function(_)),
             None => false,
         }
+    }
+
+    pub(crate) fn flip_preserves_nan(
+        &self,
+        operator: &BinaryOperator,
+        left: &Expression,
+        right: &Expression,
+    ) -> bool {
+        matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
+            || (self.is_non_float(left) && self.is_non_float(right))
+    }
+
+    fn is_non_float(&self, expression: &Expression) -> bool {
+        self.underlying_simple_kind(&expression.get_type())
+            .is_some_and(|kind| !kind.is_float())
     }
 }

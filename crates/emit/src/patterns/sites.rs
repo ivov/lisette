@@ -21,10 +21,7 @@ use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
-use crate::patterns::binding_emit::{
-    self, AssertedPattern, apply_refutable_root_assertion, apply_root_assertion,
-    tree_assignment_statements, tree_binding_statements, with_tree_bindings,
-};
+use crate::patterns::binding_emit::AssertedPattern;
 use crate::patterns::decision_tree::{
     self, BindingTarget, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
@@ -150,14 +147,6 @@ fn field_path_go_root(expression: &GoExpression) -> Option<&GoIdentifier> {
     }
 }
 
-fn loop_break(planner: &Planner) -> LoweredStatement {
-    LoweredStatement::Break(
-        planner
-            .current_loop_id()
-            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
-    )
-}
-
 impl Planner<'_> {
     pub(crate) fn can_reuse_subject_identifier(
         &self,
@@ -258,12 +247,11 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(&mut statements, subject);
-        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
+        let info = self.collect_pattern_info(pattern, subject_ty);
 
         let mut body = Vec::new();
-        let asserted = apply_root_assertion(self, &mut body, info, &resolved.var());
-        tree_binding_statements(
-            self,
+        let asserted = self.apply_root_assertion(&mut body, info, &resolved.var());
+        self.tree_binding_statements(
             &mut body,
             &asserted.bindings,
             SubjectRoot::Var(&asserted.subject),
@@ -374,7 +362,7 @@ impl Planner<'_> {
             return None;
         }
         let payload_ty = self.facts.peel_alias(&scrutinee.get_type()).ok_type();
-        let info = decision_tree::collect_pattern_info(self, payload, &payload_ty);
+        let info = self.collect_pattern_info(payload, &payload_ty);
         if !info.is_irrefutable() {
             return None;
         }
@@ -561,7 +549,7 @@ impl Planner<'_> {
                 initializer: none_condition.initializer,
                 condition: none_condition.condition,
                 then_body: LoweredBlock {
-                    statements: vec![loop_break(self).into()],
+                    statements: vec![self.loop_break().into()],
                 },
                 else_arm: ElseArm::None,
                 else_if_line: None,
@@ -643,10 +631,10 @@ impl Planner<'_> {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
+        let info = self.collect_pattern_info(pattern, subject_ty);
 
         let mut statements = Vec::new();
-        let mut asserted = apply_refutable_root_assertion(self, &mut statements, info, subject_var);
+        let mut asserted = self.apply_refutable_root_assertion(&mut statements, info, subject_var);
 
         if subject_is_fixed {
             asserted.checks.retain(|check| {
@@ -656,8 +644,7 @@ impl Planner<'_> {
         }
 
         if asserted.is_irrefutable() {
-            tree_binding_statements(
-                self,
+            self.tree_binding_statements(
                 &mut statements,
                 &asserted.bindings,
                 SubjectRoot::Var(&asserted.subject),
@@ -700,8 +687,7 @@ impl Planner<'_> {
         statements
             .push(LoweredStatement::If(IfPlan::plain(guard, fail_body, ElseArm::None)).into());
 
-        tree_binding_statements(
-            self,
+        self.tree_binding_statements(
             &mut statements,
             &bindings,
             SubjectRoot::Var(&effective_subject),
@@ -727,7 +713,7 @@ impl Planner<'_> {
         let mut infos: Vec<_> = alternatives
             .iter()
             .flat_map(split_binding_or_patterns)
-            .map(|alt| decision_tree::collect_pattern_info(self, &alt, subject_ty))
+            .map(|alt| self.collect_pattern_info(&alt, subject_ty))
             .collect();
         let mut bindings: Vec<_> = infos.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);
@@ -749,8 +735,7 @@ impl Planner<'_> {
         let mut pieces = Vec::new();
         for alternative in alternatives {
             let mut assigns = Vec::new();
-            tree_assignment_statements(
-                self,
+            self.tree_assignment_statements(
                 &mut assigns,
                 &alternative.bindings,
                 &alternative.subject,
@@ -788,7 +773,7 @@ impl Planner<'_> {
                     continue;
                 }
                 BindingTarget::Unit => {
-                    binding_emit::bind_inline_unit(self, binding);
+                    self.bind_inline_unit(binding);
                     continue;
                 }
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
@@ -820,7 +805,7 @@ impl Planner<'_> {
     ) -> Vec<AssertedPattern> {
         infos
             .into_iter()
-            .map(|info| apply_refutable_root_assertion(self, statements, info, subject))
+            .map(|info| self.apply_refutable_root_assertion(statements, info, subject))
             .collect()
     }
 
@@ -837,7 +822,7 @@ impl Planner<'_> {
         } = subject;
         let mut alternatives: Vec<_> = patterns
             .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
+            .map(|alt| self.collect_pattern_info(alt, subject_ty))
             .collect();
         let mut bindings: Vec<_> = alternatives.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);
@@ -848,8 +833,7 @@ impl Planner<'_> {
         for alternative in alternatives {
             let branch = self.with_scope(|this| {
                 let mut branch = Vec::new();
-                with_tree_bindings(
-                    this,
+                this.with_tree_bindings(
                     &mut branch,
                     &alternative.bindings,
                     &alternative.subject,
@@ -868,7 +852,7 @@ impl Planner<'_> {
         }
 
         let terminal = LoweredBlock {
-            statements: vec![loop_break(self).into()],
+            statements: vec![self.loop_break().into()],
         };
         statements.push(assemble_if_else_chain(pieces, terminal).into());
     }
@@ -895,7 +879,7 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> Vec<Statement> {
         self.lower_refutable_arm(subject, pattern, some_body, place, |this| {
-            Some(lower_none_arm_body(this, match_arms, place))
+            Some(this.lower_none_arm_body(match_arms, place))
         })
     }
 
@@ -911,13 +895,12 @@ impl Planner<'_> {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
+        let info = self.collect_pattern_info(pattern, subject_ty);
         let mut statements = Vec::new();
-        let asserted = apply_refutable_root_assertion(self, &mut statements, info, subject_var);
+        let asserted = self.apply_refutable_root_assertion(&mut statements, info, subject_var);
 
         if asserted.is_irrefutable() {
-            with_tree_bindings(
-                self,
+            self.with_tree_bindings(
                 &mut statements,
                 &asserted.bindings,
                 &asserted.subject,
@@ -931,8 +914,7 @@ impl Planner<'_> {
         }
         let condition = asserted.condition(&mut self.scope);
         let mut then_body = Vec::new();
-        with_tree_bindings(
-            self,
+        self.with_tree_bindings(
             &mut then_body,
             &asserted.bindings,
             &asserted.subject,
@@ -995,23 +977,30 @@ impl Planner<'_> {
             }
         }
     }
-}
 
-pub(crate) fn lower_none_arm_body(
-    planner: &mut Planner,
-    match_arms: &[MatchArm],
-    place: &PlacePlan,
-) -> LoweredBlock {
-    for match_arm in match_arms {
-        if matches!(
-            prelude_variant(&match_arm.pattern),
-            Some((PreludeVariant::None, _))
-        ) {
-            return planner.lower_block_to_place(&match_arm.expression, place);
-        }
+    fn loop_break(&self) -> LoweredStatement {
+        LoweredStatement::Break(
+            self.current_loop_id()
+                .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
+        )
     }
-    LoweredBlock {
-        statements: Vec::new(),
+
+    pub(crate) fn lower_none_arm_body(
+        &mut self,
+        match_arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> LoweredBlock {
+        for match_arm in match_arms {
+            if matches!(
+                prelude_variant(&match_arm.pattern),
+                Some((PreludeVariant::None, _))
+            ) {
+                return self.lower_block_to_place(&match_arm.expression, place);
+            }
+        }
+        LoweredBlock {
+            statements: Vec::new(),
+        }
     }
 }
 

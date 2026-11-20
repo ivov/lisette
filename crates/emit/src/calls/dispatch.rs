@@ -823,21 +823,7 @@ fn extract_receiver_ufcs_method(function: &Expression) -> String {
     String::new()
 }
 
-pub(super) fn callee_is_go_builtin(facts: &EmitFacts, callee: &Expression) -> bool {
-    go_builtin_name(facts, callee).is_some()
-}
-
-pub(super) fn go_builtin_name<'a>(facts: &EmitFacts<'a>, callee: &Expression) -> Option<&'a str> {
-    facts
-        .checked(callee)
-        .callee()
-        .definition
-        .as_deref()
-        .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
-        .and_then(|qualified| qualified.strip_prefix("prelude."))
-}
-
-impl EmitFacts<'_> {
+impl<'a> EmitFacts<'a> {
     fn map_entry_types(&self, function: &Expression) -> (Type, Type) {
         let mut types = self.checked(function).callee().type_arguments.types();
         match (types.next(), types.next()) {
@@ -852,15 +838,28 @@ impl EmitFacts<'_> {
             return false;
         };
         !go_name::is_go_import(id.as_str())
-            && self.get_newtype_underlying(ty).is_none()
+            && self.newtype_underlying(ty).is_none()
             && matches!(
                 self.definition(id.as_str()).map(|d| &d.body),
                 Some(DefinitionBody::Struct { .. })
             )
     }
 
-    pub(super) fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
+    pub(super) fn callee_go_name(&self, function: &Expression) -> Option<&str> {
         let symbol = self.checked(function).callee().definition.as_ref()?;
         self.definition(symbol)?.go_name()
+    }
+
+    pub(super) fn callee_is_go_builtin(&self, callee: &Expression) -> bool {
+        self.go_builtin_name(callee).is_some()
+    }
+
+    pub(super) fn go_builtin_name(&self, callee: &Expression) -> Option<&'a str> {
+        self.checked(callee)
+            .callee()
+            .definition
+            .as_deref()
+            .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
+            .and_then(|qualified| qualified.strip_prefix("prelude."))
     }
 }

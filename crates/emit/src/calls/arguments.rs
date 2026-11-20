@@ -7,7 +7,7 @@ use syntax::EcoString;
 
 use crate::Planner;
 use crate::abi::callable::{CallableParamAbi, CallableReturnAbi};
-use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
+use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::ValueLayout;
 use crate::expressions::staging::{SpreadSequenceOptions, takes_prelude_callback};
 use crate::ir::bodies::{
@@ -261,7 +261,7 @@ impl Planner<'_> {
         let LayoutBridge::Function {
             source: source_layout,
             target: target_layout,
-        } = resolve_layout_bridge(self, &element, &parameter.layout)
+        } = self.resolve_layout_bridge(&element, &parameter.layout)
         else {
             return None;
         };
@@ -405,7 +405,7 @@ impl Planner<'_> {
             .clone()
             .unwrap_or_else(|| self.emitted_value_layout(argument, ExpressionContext::value()));
         let target = parameter.layout.clone();
-        let bridge = resolve_layout_bridge(self, &source, &target);
+        let bridge = self.resolve_layout_bridge(&source, &target);
         (physical_source.is_some() || !bridge.is_identity()).then_some(ArgumentSlotBridge {
             target,
             bridge,

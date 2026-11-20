@@ -600,16 +600,6 @@ impl Planner<'_> {
     }
 }
 
-pub(crate) fn is_go_never(facts: &EmitFacts, expression: &Expression) -> bool {
-    match expression {
-        Expression::Return { .. } => true,
-        Expression::Call { expression, .. } => {
-            facts.checked(expression).callee().definition.as_deref() == Some("prelude.panic")
-        }
-        _ => false,
-    }
-}
-
 fn collect_binder_names(expression: &Expression, out: &mut Vec<SourceName>) {
     match expression {
         Expression::Let { binding, .. } => push_binder_names(&binding.pattern, out),
@@ -653,4 +643,16 @@ fn push_binder_names(pattern: &Pattern, out: &mut Vec<SourceName>) {
             .into_iter()
             .map(|(name, _)| SourceName::new(&name.into())),
     );
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_go_never(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Return { .. } => true,
+            Expression::Call { expression, .. } => {
+                self.checked(expression).callee().definition.as_deref() == Some("prelude.panic")
+            }
+            _ => false,
+        }
+    }
 }

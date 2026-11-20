@@ -67,15 +67,13 @@ impl Planner<'_> {
         })];
         for method in self.struct_synthesized_methods(name, attributes, StructShape::Record) {
             result.push(match method {
-                SynthesizedMethod::Format(format) => emit_struct_format_method(
-                    self,
+                SynthesizedMethod::Format(format) => self.emit_struct_format_method(
                     name,
                     &receiver_generics,
                     &stringer_fields,
                     format,
                 ),
-                SynthesizedMethod::StringerShadow => emit_struct_shadow_stringer_method(
-                    self,
+                SynthesizedMethod::StringerShadow => self.emit_struct_shadow_stringer_method(
                     name,
                     &receiver_generics,
                     &stringer_fields,
@@ -200,8 +198,7 @@ impl Planner<'_> {
             .collect::<Vec<_>>();
         for method in self.struct_synthesized_methods(name, attributes, StructShape::Tuple) {
             result.push(match method {
-                SynthesizedMethod::Format(format) => emit_tuple_struct_format_method(
-                    self,
+                SynthesizedMethod::Format(format) => self.emit_tuple_struct_format_method(
                     name,
                     &receiver_generics,
                     &formats,
@@ -349,6 +346,118 @@ impl Planner<'_> {
         );
         string_method(name, generics, receiver, method, value)
     }
+
+    fn emit_struct_format_method(
+        &mut self,
+        name: &str,
+        generics: &ReceiverGenerics,
+        fields: &[StringerField],
+        format: StringFormat<'_>,
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let parts = fields
+            .iter()
+            .map(|field| format!("{}: {}", field.source_name, format.verb(field.format)))
+            .collect::<Vec<_>>();
+        let arguments = fields
+            .iter()
+            .filter_map(|field| {
+                format.format_argument(
+                    GoExpression::selector(
+                        GoExpression::identifier(receiver.clone()),
+                        field.go_name.clone(),
+                    ),
+                    field.format,
+                )
+            })
+            .collect();
+        let text = if fields.is_empty() {
+            name.to_string()
+        } else {
+            format!("{name} {{ {} }}", parts.join(", "))
+        };
+        string_method(
+            name,
+            generics,
+            receiver,
+            format.method(),
+            format_value(&text, arguments),
+        )
+    }
+
+    fn emit_struct_shadow_stringer_method(
+        &mut self,
+        name: &str,
+        generics: &ReceiverGenerics,
+        fields: &[StringerField],
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let text = format!("{{{}}}", vec!["%v"; fields.len()].join(" "));
+        let arguments = fields
+            .iter()
+            .map(|field| {
+                GoExpression::selector(
+                    GoExpression::identifier(receiver.clone()),
+                    field.go_name.clone(),
+                )
+            })
+            .collect();
+        string_method(
+            name,
+            generics,
+            receiver,
+            ENUM_STRINGER_METHOD,
+            format_value(&text, arguments),
+        )
+    }
+
+    fn emit_tuple_struct_format_method(
+        &mut self,
+        name: &str,
+        generics: &ReceiverGenerics,
+        fields: &[DisplayForm],
+        underlying: Option<&GoType>,
+        format: StringFormat<'_>,
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let arguments = fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let receiver = GoExpression::identifier(receiver.clone());
+                let value = match underlying {
+                    Some(ty) => GoExpression::conversion(ty.clone(), receiver),
+                    None => GoExpression::selector(receiver, go_name::tuple_struct_field(index)),
+                };
+                format.format_argument(value, *field)
+            })
+            .collect();
+        let text = if fields.is_empty() {
+            name.to_string()
+        } else {
+            format!(
+                "{name}({})",
+                fields
+                    .iter()
+                    .map(|field| format.verb(*field))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        string_method(
+            name,
+            generics,
+            receiver,
+            format.method(),
+            format_value(&text, arguments),
+        )
+    }
 }
 
 pub(crate) fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
@@ -474,46 +583,6 @@ pub(crate) fn format_value(text: &str, mut arguments: Vec<GoExpression>) -> GoEx
         arguments,
     )
 }
-fn emit_struct_format_method(
-    planner: &mut Planner,
-    name: &str,
-    generics: &ReceiverGenerics,
-    fields: &[StringerField],
-    format: StringFormat<'_>,
-) -> GoDeclaration {
-    let receiver = planner
-        .scope
-        .new_local_identifier(synthesized_receiver_name(name, generics));
-    let parts = fields
-        .iter()
-        .map(|field| format!("{}: {}", field.source_name, format.verb(field.format)))
-        .collect::<Vec<_>>();
-    let arguments = fields
-        .iter()
-        .filter_map(|field| {
-            format.format_argument(
-                GoExpression::selector(
-                    GoExpression::identifier(receiver.clone()),
-                    field.go_name.clone(),
-                ),
-                field.format,
-            )
-        })
-        .collect();
-    let text = if fields.is_empty() {
-        name.to_string()
-    } else {
-        format!("{name} {{ {} }}", parts.join(", "))
-    };
-    string_method(
-        name,
-        generics,
-        receiver,
-        format.method(),
-        format_value(&text, arguments),
-    )
-}
-
 #[derive(Clone, Copy, PartialEq)]
 enum StringerKind {
     Synthesized,
@@ -537,77 +606,6 @@ fn type_methods(definition: &Definition) -> Option<&Methods> {
         | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
         _ => None,
     }
-}
-
-fn emit_struct_shadow_stringer_method(
-    planner: &mut Planner,
-    name: &str,
-    generics: &ReceiverGenerics,
-    fields: &[StringerField],
-) -> GoDeclaration {
-    let receiver = planner
-        .scope
-        .new_local_identifier(synthesized_receiver_name(name, generics));
-    let text = format!("{{{}}}", vec!["%v"; fields.len()].join(" "));
-    let arguments = fields
-        .iter()
-        .map(|field| {
-            GoExpression::selector(
-                GoExpression::identifier(receiver.clone()),
-                field.go_name.clone(),
-            )
-        })
-        .collect();
-    string_method(
-        name,
-        generics,
-        receiver,
-        ENUM_STRINGER_METHOD,
-        format_value(&text, arguments),
-    )
-}
-fn emit_tuple_struct_format_method(
-    planner: &mut Planner,
-    name: &str,
-    generics: &ReceiverGenerics,
-    fields: &[DisplayForm],
-    underlying: Option<&GoType>,
-    format: StringFormat<'_>,
-) -> GoDeclaration {
-    let receiver = planner
-        .scope
-        .new_local_identifier(synthesized_receiver_name(name, generics));
-    let arguments = fields
-        .iter()
-        .enumerate()
-        .filter_map(|(index, field)| {
-            let receiver = GoExpression::identifier(receiver.clone());
-            let value = match underlying {
-                Some(ty) => GoExpression::conversion(ty.clone(), receiver),
-                None => GoExpression::selector(receiver, go_name::tuple_struct_field(index)),
-            };
-            format.format_argument(value, *field)
-        })
-        .collect();
-    let text = if fields.is_empty() {
-        name.to_string()
-    } else {
-        format!(
-            "{name}({})",
-            fields
-                .iter()
-                .map(|field| format.verb(*field))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    };
-    string_method(
-        name,
-        generics,
-        receiver,
-        format.method(),
-        format_value(&text, arguments),
-    )
 }
 
 impl EmitFacts<'_> {

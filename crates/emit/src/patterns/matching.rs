@@ -330,7 +330,7 @@ impl Planner<'_> {
             if pattern_has_bindings(&arm.pattern) {
                 return None;
             }
-            let info = decision_tree::collect_pattern_info(self, &arm.pattern, &subject_ty);
+            let info = self.collect_pattern_info(&arm.pattern, &subject_ty);
             if info.has_root_assertion() || info.requires_materialized_subject {
                 return None;
             }

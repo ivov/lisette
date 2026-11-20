@@ -18,11 +18,10 @@ use crate::ir::go_expression::{BinaryOp, GoExpressionNode};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
-use crate::patterns::binding_emit::tree_binding_statements;
 use crate::patterns::decision_tree::{
     AccessPath, ArmLeaf, ChainArm, ChainTail, ChainTest, Decision, GuardedLeaf, PatternBinding,
     SubjectRoot, SwitchBranch, SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch,
-    boolean_literal, compile_match_arms, render_condition, tree_has_unguarded_terminal,
+    boolean_literal, render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::state::bindings::InlineExpr;
@@ -229,7 +228,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 
     pub(crate) fn lower(mut self, place: &PlacePlan) -> LoweredBlock {
-        let tree = compile_match_arms(self.planner, self.arms, &self.subject_ty);
+        let tree = self.planner.compile_match_arms(self.arms, &self.subject_ty);
 
         let mut statements: Vec<Statement> = Vec::new();
         match &tree {
@@ -1347,8 +1346,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         self.with_binding_frame(|this| {
             if !bindings.is_empty() {
                 let start = statements.len();
-                tree_binding_statements(
-                    this.planner,
+                this.planner.tree_binding_statements(
                     statements,
                     bindings,
                     this.subject.root(),

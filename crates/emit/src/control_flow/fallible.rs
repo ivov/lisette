@@ -172,9 +172,9 @@ impl Planner<'_> {
             let return_ty = return_ctx.expect_ty();
             return match error {
                 Some(error) if fallible.is_result() => {
-                    transition::lowered_err_values(self, &shape, &return_ty, error)
+                    self.lowered_err_values(&shape, &return_ty, error)
                 }
-                _ => transition::lowered_none_values(self, &shape, &return_ty),
+                _ => self.lowered_none_values(&shape, &return_ty),
             };
         }
         vec![self.contextual_failure(fallible, error)]
@@ -204,7 +204,7 @@ impl Planner<'_> {
             return vec![plain_return(success)];
         };
         let (mut statements, payload) =
-            transition::lowered_payload_values(self, &shape, fallible.ok_ty(), value);
+            self.lowered_payload_values(&shape, fallible.ok_ty(), value);
         statements.push(transition::multi_value_return(
             transition::lowered_ok_values(&shape, payload),
         ));
