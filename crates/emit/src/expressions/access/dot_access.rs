@@ -466,7 +466,7 @@ impl Planner<'_> {
         })
     }
 
-    pub(crate) fn try_plan_enum_variant_dot(
+    fn try_plan_enum_variant_dot(
         &mut self,
         definition: &str,
         result_ty: &Type,
@@ -504,7 +504,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn plan_static_method_dot(
+    fn plan_static_method_dot(
         &mut self,
         dot_access: &Expression,
         definition: &str,
@@ -518,7 +518,7 @@ impl Planner<'_> {
         GoExpression::instantiation(function, type_args.unwrap_or_default())
     }
 
-    pub(crate) fn try_plan_instance_method_value_dot(
+    fn try_plan_instance_method_value_dot(
         &mut self,
         member: &str,
         result_ty: &Type,

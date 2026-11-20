@@ -18,6 +18,7 @@ use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::program::{
     CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
 };
+use syntax::program::{NativeInlineForm, NativeInlinePackage, NativeOperation};
 use syntax::types::{CompoundKind, Type};
 
 pub(super) struct NativeCallResult {
@@ -30,8 +31,6 @@ impl NativeCallResult {
         Self { setup, value }
     }
 }
-
-use syntax::program::{NativeInlineForm, NativeInlinePackage, NativeOperation};
 
 fn clone_slice(receiver: GoExpression) -> GoExpression {
     GoExpression::call(
@@ -49,7 +48,7 @@ pub(crate) fn slice_growth_call(
         .expect("slice growth has an inline rule")
 }
 
-pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
+fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
     GoExpression::read_only_call(
         GoExpression::generated(GeneratedPackage::Slices, "Clip"),
         vec![receiver],
@@ -923,7 +922,7 @@ fn substring_call(
     )
 }
 
-pub(crate) fn method_prefix(kind: NativeTypeKind) -> &'static str {
+fn method_prefix(kind: NativeTypeKind) -> &'static str {
     match kind {
         NativeTypeKind::String => "String",
         _ => kind.name(),

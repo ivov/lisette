@@ -25,7 +25,7 @@ use syntax::program::MethodOrigin;
 use syntax::program::{Definition, DefinitionBody, Methods, interface_requirements};
 use syntax::types::Type;
 
-pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
+const DEBUG_STRING_METHOD: &str = "DebugString";
 
 impl Planner<'_> {
     pub(crate) fn emit_struct_definition(
@@ -80,7 +80,7 @@ impl Planner<'_> {
         result
     }
 
-    pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
+    fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
         let id = self.facts.qualified_current(name);
         let Some(definition) = self.facts.definition(&id) else {
             return false;
@@ -448,7 +448,7 @@ impl Planner<'_> {
     }
 }
 
-pub(crate) fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
+fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "display")
 }
 
@@ -619,13 +619,13 @@ impl EmitFacts<'_> {
             && self.emits_go_method(&qualified, method_name)
     }
 
-    pub(crate) fn should_synthesize_to_string(&self, name: &str) -> bool {
+    fn should_synthesize_to_string(&self, name: &str) -> bool {
         let qualified = self.qualified_current(name);
         self.method(&qualified, "to_string")
             .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
     }
 
-    pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {
+    fn should_synthesize_equals(&self, name: &str) -> bool {
         let qualified = self.qualified_current(name);
         self.synthesizes_equals(qualified.as_str())
     }
@@ -644,7 +644,7 @@ impl EmitFacts<'_> {
             })
     }
 
-    pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
+    fn stringer_overrides(&self, name: &str) -> (bool, bool) {
         let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
         let has_go_stringer =
@@ -652,13 +652,13 @@ impl EmitFacts<'_> {
         (has_stringer, has_go_stringer)
     }
 
-    pub(crate) fn debug_string_override(&self, name: &str) -> bool {
+    fn debug_string_override(&self, name: &str) -> bool {
         (self.method_needs_export("debug_string")
             && self.has_stringer_signature(name, "debug_string"))
             || self.has_stringer_signature(name, DEBUG_STRING_METHOD)
     }
 
-    pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
+    fn synthesizes_debug_string(&self, name: &str) -> bool {
         self.tests_enabled() && !self.debug_string_override(name)
     }
 
@@ -670,11 +670,7 @@ impl EmitFacts<'_> {
         self.method_go_name("equals", false)
     }
 
-    pub(crate) fn stringer_method_name(
-        &self,
-        name: &str,
-        attributes: &[Attribute],
-    ) -> Option<&'static str> {
+    fn stringer_method_name(&self, name: &str, attributes: &[Attribute]) -> Option<&'static str> {
         if !should_synthesize_stringer(attributes) {
             return None;
         }

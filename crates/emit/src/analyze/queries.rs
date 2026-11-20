@@ -54,7 +54,7 @@ impl Planner<'_> {
                 .is_some_and(|m| self.facts.is_foreign_package(m))
     }
 
-    pub(crate) fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {
+    fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {
         self.field_is_public(ty, field) || self.type_uses_exported_members(ty)
     }
 

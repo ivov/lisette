@@ -783,7 +783,7 @@ impl<'a> Planner<'a> {
         (setup, value)
     }
 
-    pub(crate) fn is_local_binding(&self, function: &Expression) -> bool {
+    fn is_local_binding(&self, function: &Expression) -> bool {
         if let Expression::Identifier {
             value, resolution, ..
         } = function

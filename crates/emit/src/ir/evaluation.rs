@@ -12,11 +12,11 @@ pub(crate) enum EvaluationEffect {
 }
 
 impl EvaluationEffect {
-    pub(crate) fn has_call(self) -> bool {
+    fn has_call(self) -> bool {
         !matches!(self, EvaluationEffect::Pure)
     }
 
-    pub(crate) fn has_effectful_call(self) -> bool {
+    fn has_effectful_call(self) -> bool {
         matches!(self, EvaluationEffect::EffectfulCall)
     }
 }

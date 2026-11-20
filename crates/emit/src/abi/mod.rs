@@ -1,4 +1,3 @@
-use crate::EmitFacts;
 pub(crate) mod bridge;
 pub(crate) mod callable;
 pub(crate) mod catalog;
@@ -8,6 +7,7 @@ pub(crate) mod layout;
 pub(crate) mod transition;
 pub(crate) mod wrapping;
 
+use crate::EmitFacts;
 use crate::Planner;
 use crate::names::go_name;
 use crate::plan::calls::CallableOrigin;

@@ -35,7 +35,7 @@ pub(crate) fn is_prelude_id(id: &str) -> bool {
     id.starts_with(PRELUDE_PREFIX)
 }
 
-pub(crate) const GO_STDLIB_PKG: &str = "lisette";
+const GO_STDLIB_PKG: &str = "lisette";
 
 pub(crate) const ADAPTER_TYPE_PREFIX: &str = "_lisAdapter_";
 
@@ -65,7 +65,7 @@ pub(crate) use syntax::go_names::{
 };
 pub(crate) use syntax::types::unqualified_name;
 
-pub(crate) fn make_exported(name: &str) -> String {
+fn make_exported(name: &str) -> String {
     escape_keyword(&snake_to_camel(name)).into_owned()
 }
 

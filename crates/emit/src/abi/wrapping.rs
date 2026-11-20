@@ -27,7 +27,7 @@ pub(crate) fn non_nil_condition(value: GoExpression) -> GoExpression {
     GoExpression::binary(value, BinaryOp::Ne, GoExpression::nil())
 }
 
-pub(crate) fn nil_interface_condition(value: GoExpression) -> GoExpression {
+fn nil_interface_condition(value: GoExpression) -> GoExpression {
     GoExpression::call(
         GoExpression::generated(GeneratedPackage::Prelude, "IsNilInterface"),
         vec![value],

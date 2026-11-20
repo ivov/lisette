@@ -1,5 +1,3 @@
-use crate::ir::declarations::{DeclarationKind, GoDeclaration};
-use crate::types::go_type::GoType;
 mod abi;
 mod analyze;
 pub(crate) mod calls;
@@ -38,6 +36,7 @@ use abi::callable::CallableReturnAbi;
 use abi::catalog::GoAbiCatalog;
 use diagnostics::LisetteDiagnostic;
 use ir::bodies::{LoopId, LoweredBlock, LoweredStatement, Statement, define};
+use ir::declarations::{DeclarationKind, GoDeclaration};
 use ir::go_expression::{GoExpressionNode, Position, TreeVisitor};
 use ir::local::GoIdentifier;
 use ir::values::GoExpression;
@@ -54,6 +53,7 @@ use syntax::ast::{BindingId, Expression, Span};
 use syntax::program;
 use syntax::program::{Definition, DefinitionBody, EmitInput, File, GoMethodPolicy};
 use syntax::types::{Symbol, Type};
+use types::go_type::GoType;
 use types::go_type::is_prelude_type;
 
 #[derive(Clone, Debug)]
@@ -174,7 +174,7 @@ impl<'a> Planner<'a> {
         self.namespace.absorb(requirements);
     }
 
-    pub(crate) fn collect_declaration_imports(&mut self, declaration: &GoDeclaration) {
+    fn collect_declaration_imports(&mut self, declaration: &GoDeclaration) {
         let mut types: Vec<&GoType> = Vec::new();
         let generics = match &declaration.kind {
             DeclarationKind::Type {

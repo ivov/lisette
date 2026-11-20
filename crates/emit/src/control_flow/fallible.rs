@@ -228,11 +228,7 @@ impl Planner<'_> {
         prelude_call(constructor, type_args, arguments)
     }
 
-    pub(crate) fn fallible_success(
-        &mut self,
-        fallible: &Fallible,
-        value: GoExpression,
-    ) -> GoExpression {
+    fn fallible_success(&mut self, fallible: &Fallible, value: GoExpression) -> GoExpression {
         self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
     }
 

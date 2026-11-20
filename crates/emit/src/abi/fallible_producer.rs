@@ -265,7 +265,7 @@ impl FallibleProducer<'_> {
         }
     }
 
-    pub(crate) fn supports_components(&self) -> bool {
+    fn supports_components(&self) -> bool {
         match self {
             Self::Result(producer) => {
                 !producer.has_nil_guard() && !producer.wraps_error() && producer.carries_payload()

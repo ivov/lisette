@@ -171,10 +171,7 @@ impl Planner<'_> {
             .filter(|(bound, _)| self.facts.bound_needs_dispatch(bound))
     }
 
-    pub(crate) fn bound_requirement(
-        &self,
-        expression: &Expression,
-    ) -> Option<(Type, InterfaceRequirement)> {
+    fn bound_requirement(&self, expression: &Expression) -> Option<(Type, InterfaceRequirement)> {
         let Expression::DotAccess {
             expression: receiver,
             ..
@@ -930,7 +927,7 @@ impl EmitFacts<'_> {
         )
     }
 
-    pub(crate) fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
+    fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
         !go_name::is_go_import(&requirement.declaring_interface)
             && self.method_uses_tagged_return(&requirement.name)
     }

@@ -45,7 +45,7 @@ fn calls_a_function(operation: Option<&CallOperation>) -> bool {
     )
 }
 
-pub(crate) fn simple_assign(target: &GoExpression, value: ValuePlan) -> LoweredStatement {
+fn simple_assign(target: &GoExpression, value: ValuePlan) -> LoweredStatement {
     let (setup, value) = value.into_parts();
     with_setup(
         setup,

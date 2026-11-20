@@ -579,7 +579,7 @@ impl Stability {
         matches!(self, Stability::Fixed)
     }
 
-    pub(crate) fn is_observable(self) -> bool {
+    fn is_observable(self) -> bool {
         !self.is_fixed()
     }
 

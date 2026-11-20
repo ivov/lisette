@@ -57,7 +57,7 @@ impl Planner<'_> {
         self.sequence_indexed_access(expression, base_staged, index, "base")
     }
 
-    pub(crate) fn sequence_indexed_access(
+    fn sequence_indexed_access(
         &mut self,
         base: &Expression,
         mut base_staged: ValuePlan,
@@ -108,7 +108,7 @@ impl Planner<'_> {
         self.plan_operand(spread, ExpressionContext::value())
     }
 
-    pub(crate) fn stage_base_with_deref(&mut self, expression: &Expression) -> ValuePlan {
+    fn stage_base_with_deref(&mut self, expression: &Expression) -> ValuePlan {
         let Some(inner) = expression.deref_inner() else {
             return self.plan_operand(expression, ExpressionContext::value());
         };

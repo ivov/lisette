@@ -468,7 +468,7 @@ impl EmitFacts<'_> {
         }
     }
 
-    pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
+    fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier {
                 resolution: IdentifierResolution::Binding(id),

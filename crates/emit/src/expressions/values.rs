@@ -165,7 +165,7 @@ impl Planner<'_> {
         self.plan_value(expression, context)
     }
 
-    pub(crate) fn plan_call_value(
+    fn plan_call_value(
         &mut self,
         expression: &Expression,
         result_type: &Type,

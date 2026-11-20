@@ -248,11 +248,7 @@ impl Planner<'_> {
         })
     }
 
-    pub(crate) fn lambda_return_info(
-        &mut self,
-        ty: &Type,
-        ctx: ExpressionContext<'_>,
-    ) -> LambdaReturnInfo {
+    fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
         let Type::Function(function) = ty else {
             return LambdaReturnInfo {
                 signature: None,

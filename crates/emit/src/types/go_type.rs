@@ -178,7 +178,7 @@ impl GoType {
         base
     }
 
-    pub(crate) fn merge(&mut self, other: &GoType) {
+    fn merge(&mut self, other: &GoType) {
         self.requirements.extend(&other.requirements);
     }
 

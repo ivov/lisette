@@ -356,7 +356,7 @@ impl<'a> EmitFacts<'a> {
         self.shared.globals.enum_layouts.get(enum_id)
     }
 
-    pub(crate) fn make_function_name(&self, enum_id: &str, variant_name: &str) -> Option<String> {
+    fn make_function_name(&self, enum_id: &str, variant_name: &str) -> Option<String> {
         let definition = self.definition(enum_id)?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;

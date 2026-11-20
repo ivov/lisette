@@ -894,11 +894,7 @@ impl EmitFacts<'_> {
         binding_ty.clone()
     }
 
-    pub(crate) fn needs_explicit_type_declaration(
-        &self,
-        value: &Expression,
-        binding_ty: &Type,
-    ) -> bool {
+    fn needs_explicit_type_declaration(&self, value: &Expression, binding_ty: &Type) -> bool {
         if self.widens_to_interface(value, binding_ty) {
             return true;
         }

@@ -65,7 +65,7 @@ fn field(value: &GoExpression, field: &str) -> GoExpression {
 }
 
 impl Planner<'_> {
-    pub(crate) fn plan_abi_to_tagged(
+    fn plan_abi_to_tagged(
         &mut self,
         raw_value: GoExpression,
         abi: &CallableReturnAbi,

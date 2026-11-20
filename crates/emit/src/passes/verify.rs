@@ -32,7 +32,7 @@ impl Display for BodyError {
     }
 }
 
-pub(crate) fn verify_control_structure(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
+fn verify_control_structure(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
     let mut error = None;
     for_each_statements_mut(statements, &mut |list| {
         for statement in list.iter() {

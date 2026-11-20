@@ -73,7 +73,7 @@ impl Planner<'_> {
         Statement { line, kind: plan }
     }
 
-    pub(crate) fn capture_operand_into(
+    fn capture_operand_into(
         &mut self,
         prologue: &mut Vec<Statement>,
         expr: &Expression,
