@@ -76,16 +76,16 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let break_ty = self.new_type_var();
+        let breaks = body.contains_break();
+        if breaks && !expected_ty.is_ignored() && !expected_ty.resolve_in(&self.env).is_variable() {
+            self.unify(&break_ty, expected_ty, &span);
+        }
 
         let new_body = self.with_loop(LoopContext::Value(break_ty.clone()), |this| {
             this.infer_expression(*body, &Type::ignored())
         });
 
-        let loop_type = if new_body.contains_break() {
-            break_ty.clone()
-        } else {
-            Type::Never
-        };
+        let loop_type = if breaks { break_ty } else { Type::Never };
 
         if !expected_ty.is_ignored() {
             self.unify(expected_ty, &loop_type, &span);

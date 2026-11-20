@@ -1186,6 +1186,94 @@ fn test() {
 }
 
 #[test]
+fn break_value_widens_to_loop_slot() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn unit() {}
+
+fn returned() -> Array<error, 1> {
+  let booms: Array<Boom, 1> = [Boom {}]
+  loop {
+    break booms
+  }
+}
+
+fn test() -> (Unknown, Option<int>) {
+  let concrete = (Boom {}, 1)
+  let booms: Array<Boom, 1> = [Boom {}]
+  let in_block: (error, int) = {
+    loop {
+      break concrete
+    }
+  }
+  let mut reassigned: Array<error, 1> = [Boom {}]
+  reassigned = loop {
+    break booms
+  }
+  let element: ((error, int), int) = ({ loop { break concrete } }, 2)
+  let from_block: (error, int) = loop {
+    break { concrete }
+  }
+  let from_paren: Array<error, 1> = loop {
+    break ({ booms })
+  }
+  let payload: Option<Array<error, 1>> = loop {
+    break Some(booms)
+  }
+  let callback: Unknown = loop {
+    break { unit }
+  }
+  let fallible = loop {
+    break Some(1)
+  }
+  let _ = in_block
+  let _ = reassigned
+  let _ = element
+  let _ = from_block
+  let _ = from_paren
+  let _ = payload
+  let _ = returned()
+  (callback, fallible)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn break_stores_unit_in_unknown_slot() {
+    let input = r#"
+fn unit() {}
+
+fn test(c: bool) -> (Unknown, Unknown, Unknown, Unknown, Unknown) {
+  let bare: Unknown = loop {
+    break
+  }
+  let empty: Unknown = loop {
+    break {}
+  }
+  let paren: Unknown = loop {
+    break ({ () })
+  }
+  let no_else: Unknown = loop {
+    break if c { unit() }
+  }
+  let arms: Unknown = loop {
+    break if c {} else { () }
+  }
+  (bare, empty, paren, no_else, arms)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_of_concrete_widens_to_interface_elements_in_let_block_value() {
     let input = r#"
 struct Boom {}

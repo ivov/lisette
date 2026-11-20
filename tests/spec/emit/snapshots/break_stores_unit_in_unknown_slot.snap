@@ -1,0 +1,64 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  fn unit() {}
+  
+  fn test(c: bool) -> (Unknown, Unknown, Unknown, Unknown, Unknown) {
+    let bare: Unknown = loop {
+      break
+    }
+    let empty: Unknown = loop {
+      break {}
+    }
+    let paren: Unknown = loop {
+      break ({ () })
+    }
+    let no_else: Unknown = loop {
+      break if c { unit() }
+    }
+    let arms: Unknown = loop {
+      break if c {} else { () }
+    }
+    (bare, empty, paren, no_else, arms)
+  }
+---
+package main
+
+func unit() {}
+
+func test(c bool) (any, any, any, any, any) {
+	var bare any
+	for {
+		bare = struct{}{}
+		break
+	}
+	var empty any
+	for {
+		empty = struct{}{}
+		break
+	}
+	var paren any
+	for {
+		paren = struct{}{}
+		break
+	}
+	var noElse any
+	for {
+		if c {
+			unit()
+		}
+		noElse = struct{}{}
+		break
+	}
+	var arms any
+	for {
+		if c {
+			arms = struct{}{}
+		} else {
+			arms = struct{}{}
+		}
+		break
+	}
+	return bare, empty, paren, noElse, arms
+}
