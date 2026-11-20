@@ -849,6 +849,20 @@ fn test(s: Slice<int>) -> fn(int) -> int {
 }
 
 #[test]
+fn slice_loops_on_a_reference_to_a_slice_dereference_the_receiver() {
+    let input = r#"
+fn test(r: Ref<Slice<int>>) -> (Slice<int>, Slice<int>, int, Option<int>) {
+  let doubled = r.map(|x| x * 2)
+  let big = r.filter(|x| x > 1)
+  let total = r.fold(0, |acc, x| acc + x)
+  let first = r.find(|x| x > 1)
+  (doubled, big, total, first)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_fold_spawning_lambda_keeps_the_helper() {
     let input = r#"
 import "go:fmt"

@@ -2,6 +2,7 @@ use crate::EmitFacts;
 use crate::ir::local::GoIdentifier;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
+use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
 
 use super::NativeCallContext;
@@ -276,6 +277,9 @@ impl Planner<'_> {
         }
 
         let mut source_staged = self.plan_operand(receiver, ExpressionContext::value());
+        if self.facts.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoDeref) {
+            source_staged = source_staged.dereference();
+        }
         if kind == SliceLoop::Map && !source_staged.effects().can_duplicate() {
             self.pin_staged(&mut source_staged, "src");
         }
