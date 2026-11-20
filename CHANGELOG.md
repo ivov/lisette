@@ -2,6 +2,32 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.13.2](https://github.com/ivov/lisette/compare/lisette-v0.13.1...lisette-v0.13.2) - 2026-11-20
+
+### Features
+
+- feat: nested or-patterns [#1709](https://github.com/ivov/lisette/pull/1709) [`1ba9eac`](https://github.com/ivov/lisette/commit/1ba9eace60bf3476fcf51bdfff2bd591ac32e8b6)
+
+### Fixes
+
+- fix: convert `break` values to type of enclosing `loop` [#1717](https://github.com/ivov/lisette/pull/1717) [`6e10fda`](https://github.com/ivov/lisette/commit/6e10fda11de3821c10532d7a8829d8073dcd8033)
+- fix: reject `.d.lis` files in project packages [#1707](https://github.com/ivov/lisette/pull/1707) [`d608699`](https://github.com/ivov/lisette/commit/d608699a02211c9af02cab39c0591fcc675bb810)
+- fix: reject casts of fractional float constants to integers [#1706](https://github.com/ivov/lisette/pull/1706) [`938ebd4`](https://github.com/ivov/lisette/commit/938ebd4784b01981496331917411a9d2b7c5b505)
+- fix: emit no value for `return` of a `Never` call [#1705](https://github.com/ivov/lisette/pull/1705) [`9f9452e`](https://github.com/ivov/lisette/commit/9f9452e830bc91f069dbc412e55073985fac9bdc)
+- fix: skip sibling files for a script in LSP [#1703](https://github.com/ivov/lisette/pull/1703) [`185a02b`](https://github.com/ivov/lisette/commit/185a02bf7552c702ad3a4fb083a2ff1a0147c4a2)
+- fix: derive `mut` on `dst` params from writes [#1702](https://github.com/ivov/lisette/pull/1702) [`05a6e6b`](https://github.com/ivov/lisette/commit/05a6e6be6573c19d578a28b64e276bfa17cadc05)
+
+### Internals
+
+- refactor: remove fact derivation from emit [#1718](https://github.com/ivov/lisette/pull/1718) [`47da55f`](https://github.com/ivov/lisette/commit/47da55fa305dac01749b51bd1a00108fd24b976c)
+- refactor: tidy emit crate [#1716](https://github.com/ivov/lisette/pull/1716) [`d71b5ad`](https://github.com/ivov/lisette/commit/d71b5ad929e696e9180ba0a5f8f2586bf4234f49)
+- refactor: record remaining emit choices in checker [#1714](https://github.com/ivov/lisette/pull/1714) [`56e626b`](https://github.com/ivov/lisette/commit/56e626b58f0000977724ceaac1d1f291ade98ce7)
+- refactor: record implicit conversions and method choices in checker [#1713](https://github.com/ivov/lisette/pull/1713) [`42c3e11`](https://github.com/ivov/lisette/commit/42c3e11446bf9b123e14dc6aa728f1e1a1c8ed3b)
+- chore: update `infer` fuzz target [#1712](https://github.com/ivov/lisette/pull/1712) [`f3f4f0b`](https://github.com/ivov/lisette/commit/f3f4f0b00a512a8d4a2a6cd9c04eeb1e4f6b3358)
+- refactor: record checker results for emit [#1710](https://github.com/ivov/lisette/pull/1710) [`16ead62`](https://github.com/ivov/lisette/commit/16ead620f3e875ac09459c531262f7e9554874f5)
+- refactor: deduplicate logic across checker and emit [#1708](https://github.com/ivov/lisette/pull/1708) [`0b499bb`](https://github.com/ivov/lisette/commit/0b499bb0d7db0d62f4f8948663e5cbbac81997b8)
+
+
 ## [0.13.1](https://github.com/ivov/lisette/compare/lisette-v0.13.0...lisette-v0.13.1) - 2026-11-15
 
 ### Features
