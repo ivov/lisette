@@ -64,29 +64,6 @@ fn field(value: &GoExpression, field: &str) -> GoExpression {
     GoExpression::selector(value.clone(), field.to_string())
 }
 
-pub(crate) fn lowered_ok_values(
-    shape: &LoweredReturnAbi,
-    mut payload: Vec<GoExpression>,
-) -> Vec<GoExpression> {
-    match shape {
-        LoweredReturnAbi::BareError => vec![GoExpression::nil()],
-        LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
-            payload.push(GoExpression::nil());
-            payload
-        }
-        LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-            payload.push(GoExpression::literal("true".to_string()));
-            payload
-        }
-        LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
-            payload
-        }
-        LoweredReturnAbi::Tuple { .. } => {
-            unreachable!("a tuple return has its own emission path")
-        }
-    }
-}
-
 impl Planner<'_> {
     pub(crate) fn plan_abi_to_tagged(
         &mut self,
@@ -211,7 +188,7 @@ impl Planner<'_> {
                     tag_check(
                         has_tag(p, RESULT_OK_TAG),
                         ok_setup,
-                        lowered_ok_values(shape, ok_payload),
+                        shape.ok_values(ok_payload),
                     )
                     .into(),
                     multi_value_return(self.lowered_err_values(
@@ -232,7 +209,7 @@ impl Planner<'_> {
                     tag_check(
                         has_tag(p, PARTIAL_OK_TAG),
                         ok_setup,
-                        lowered_ok_values(shape, ok_payload),
+                        shape.ok_values(ok_payload),
                     )
                     .into(),
                     tag_check(
@@ -257,7 +234,7 @@ impl Planner<'_> {
                     tag_check(
                         has_tag(p, OPTION_SOME_TAG),
                         some_setup,
-                        lowered_ok_values(shape, some_payload),
+                        shape.ok_values(some_payload),
                     )
                     .into(),
                     multi_value_return(self.lowered_none_values(shape, return_ty)),

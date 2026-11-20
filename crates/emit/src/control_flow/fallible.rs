@@ -205,9 +205,7 @@ impl Planner<'_> {
         };
         let (mut statements, payload) =
             self.lowered_payload_values(&shape, fallible.ok_ty(), value);
-        statements.push(transition::multi_value_return(
-            transition::lowered_ok_values(&shape, payload),
-        ));
+        statements.push(transition::multi_value_return(shape.ok_values(payload)));
         statements
     }
 

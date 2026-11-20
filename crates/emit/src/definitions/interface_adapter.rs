@@ -702,7 +702,7 @@ impl Planner<'_> {
         let base_name = self
             .adapter_registry
             .register(cacheable.then_some(key), |index| {
-                let mut name = adapter_type_name(&plan, index);
+                let mut name = plan.type_name(index);
                 while scope.is_go_name_declared(&name) {
                     name.push('_');
                 }
@@ -882,26 +882,6 @@ enum MethodReceiver<'a> {
     Itself(&'a Type),
 }
 
-fn adapter_type_name(plan: &AdapterPlan, index: usize) -> String {
-    let concrete_name = plan
-        .concrete_id
-        .rsplit('.')
-        .next()
-        .unwrap_or(plan.concrete_id.as_str());
-    let go_path = plan
-        .interface_id
-        .strip_prefix(GO_IMPORT_PREFIX)
-        .unwrap_or(plan.interface_id.as_str());
-    let iface_name = unqualified_name(go_path);
-    format!(
-        "{}{}_{}_{}",
-        go_name::ADAPTER_TYPE_PREFIX,
-        concrete_name,
-        iface_name,
-        index
-    )
-}
-
 fn adapter_uses_type_parameter(
     concrete_ty: &Type,
     methods: &[AdapterMethod],
@@ -1066,5 +1046,27 @@ impl EmitFacts<'_> {
                         )
                     })
             })
+    }
+}
+
+impl AdapterPlan {
+    fn type_name(&self, index: usize) -> String {
+        let concrete_name = self
+            .concrete_id
+            .rsplit('.')
+            .next()
+            .unwrap_or(self.concrete_id.as_str());
+        let go_path = self
+            .interface_id
+            .strip_prefix(GO_IMPORT_PREFIX)
+            .unwrap_or(self.interface_id.as_str());
+        let iface_name = unqualified_name(go_path);
+        format!(
+            "{}{}_{}_{}",
+            go_name::ADAPTER_TYPE_PREFIX,
+            concrete_name,
+            iface_name,
+            index
+        )
     }
 }

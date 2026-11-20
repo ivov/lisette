@@ -58,17 +58,6 @@ fn element_index(segments: &[PathSegment]) -> usize {
         .expect("a tuple-element subject only resolves tuple fields")
 }
 
-fn checked_tuple_element(path: &AccessPath, arity: usize) -> Option<usize> {
-    let Some(PathSegment::Field(field) | PathSegment::ValueField(field)) = path.segments.first()
-    else {
-        return None;
-    };
-    TUPLE_FIELDS
-        .iter()
-        .take(arity)
-        .position(|tuple_field| tuple_field == field)
-}
-
 #[derive(Clone, Copy)]
 pub(crate) enum SubjectRoot<'a> {
     Var(&'a GoExpression),
@@ -161,6 +150,18 @@ impl AccessPath {
                     | PathSegment::AssertedAs(_)
             )
         })
+    }
+
+    fn checked_tuple_element(&self, arity: usize) -> Option<usize> {
+        let Some(PathSegment::Field(field) | PathSegment::ValueField(field)) =
+            self.segments.first()
+        else {
+            return None;
+        };
+        TUPLE_FIELDS
+            .iter()
+            .take(arity)
+            .position(|tuple_field| tuple_field == field)
     }
 }
 
@@ -410,7 +411,7 @@ pub(crate) fn tested_tuple_elements(checks: &[Check], arity: usize) -> Option<Ve
     let mut tested = vec![false; arity];
     for check in checks {
         if let Some(path) = check.path() {
-            tested[checked_tuple_element(path, arity)?] = true;
+            tested[path.checked_tuple_element(arity)?] = true;
             continue;
         }
         let Check::Or { alternatives } = check else {
@@ -548,6 +549,25 @@ impl Decision {
             Decision::Unreachable => None,
         }
     }
+
+    pub(crate) fn has_unguarded_terminal(&self) -> bool {
+        match self {
+            Decision::Success(_) => true,
+            Decision::Guard(guard) => guard.failure.has_unguarded_terminal(),
+            Decision::Chain { tests, tail } => {
+                matches!(tail, ChainTail::Catchall(_))
+                    || tests.last().is_some_and(|t| match &t.arm {
+                        ChainArm::Leaf(_) => true,
+                        ChainArm::Guard(guard) => guard.failure.has_unguarded_terminal(),
+                    })
+            }
+            Decision::Switch(ValueSwitch { fallback, .. })
+            | Decision::TypeSwitch { fallback, .. } => fallback
+                .as_deref()
+                .is_none_or(Decision::has_unguarded_terminal),
+            Decision::Unreachable => false,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -595,24 +615,6 @@ pub(crate) enum SwitchShape {
     Binary,
     SingleArm,
     Multi,
-}
-
-pub(crate) fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
-    match tree {
-        Decision::Success(_) => true,
-        Decision::Guard(guard) => tree_has_unguarded_terminal(&guard.failure),
-        Decision::Chain { tests, tail } => {
-            matches!(tail, ChainTail::Catchall(_))
-                || tests.last().is_some_and(|t| match &t.arm {
-                    ChainArm::Leaf(_) => true,
-                    ChainArm::Guard(guard) => tree_has_unguarded_terminal(&guard.failure),
-                })
-        }
-        Decision::Switch(ValueSwitch { fallback, .. }) | Decision::TypeSwitch { fallback, .. } => {
-            fallback.as_deref().is_none_or(tree_has_unguarded_terminal)
-        }
-        Decision::Unreachable => false,
-    }
 }
 
 pub(crate) fn boolean_literal(expression: &GoExpression) -> Option<bool> {
@@ -665,6 +667,19 @@ impl ArmInfo {
 
     fn has_root_assertion(&self) -> bool {
         root_assertion_position(&self.checks).is_some()
+    }
+
+    fn is_interface_or_with_extras(&self) -> bool {
+        if self.checks.len() != 1 {
+            return false;
+        }
+        let Check::Or { alternatives } = &self.checks[0] else {
+            return false;
+        };
+        alternatives
+            .iter()
+            .all(|alt| matches!(alt.first(), Some(Check::TypeAssert { .. })))
+            && alternatives.iter().any(|alt| alt.len() > 1)
     }
 }
 
@@ -902,26 +917,13 @@ fn build_chain(arms: Vec<ArmInfo>) -> Decision {
     Decision::Chain { tests, tail }
 }
 
-fn arm_is_interface_or_with_extras(arm: &ArmInfo) -> bool {
-    if arm.checks.len() != 1 {
-        return false;
-    }
-    let Check::Or { alternatives } = &arm.checks[0] else {
-        return false;
-    };
-    alternatives
-        .iter()
-        .all(|alt| matches!(alt.first(), Some(Check::TypeAssert { .. })))
-        && alternatives.iter().any(|alt| alt.len() > 1)
-}
-
 fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
-    if !arm_infos.iter().any(arm_is_interface_or_with_extras) {
+    if !arm_infos.iter().any(ArmInfo::is_interface_or_with_extras) {
         return arm_infos;
     }
     let mut result = Vec::with_capacity(arm_infos.len());
     for arm in arm_infos {
-        if arm_is_interface_or_with_extras(&arm) {
+        if arm.is_interface_or_with_extras() {
             let Check::Or { alternatives } = &arm.checks[0] else {
                 unreachable!()
             };

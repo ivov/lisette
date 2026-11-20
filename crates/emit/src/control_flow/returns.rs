@@ -185,12 +185,12 @@ impl Planner<'_> {
                     statements.extend(setup);
                 }
                 statements.push(transition::multi_value_return(
-                    transition::lowered_ok_values(&LoweredReturnAbi::BareError, Vec::new()),
+                    LoweredReturnAbi::BareError.ok_values(Vec::new()),
                 ));
             }
             Some(shape) if args.is_empty() => {
                 statements.push(transition::multi_value_return(
-                    transition::lowered_ok_values(shape, vec![GoExpression::unit()]),
+                    shape.ok_values(vec![GoExpression::unit()]),
                 ));
             }
             Some(shape)
@@ -199,9 +199,7 @@ impl Planner<'_> {
             {
                 let (setup, parts) = self.lowered_tuple_literal_values(tuple, fallible.ok_ty());
                 statements.extend(setup);
-                statements.push(transition::multi_value_return(
-                    transition::lowered_ok_values(shape, parts),
-                ));
+                statements.push(transition::multi_value_return(shape.ok_values(parts)));
             }
             _ => {
                 let (setup, value) = self

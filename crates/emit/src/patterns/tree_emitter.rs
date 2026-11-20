@@ -21,7 +21,7 @@ use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catch
 use crate::patterns::decision_tree::{
     AccessPath, ArmLeaf, ChainArm, ChainTail, ChainTest, Decision, GuardedLeaf, PatternBinding,
     SubjectRoot, SwitchBranch, SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch,
-    boolean_literal, render_condition, tree_has_unguarded_terminal,
+    boolean_literal, render_condition,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::state::bindings::InlineExpr;
@@ -410,7 +410,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .arms
             .iter()
             .all(|arm| arm.expression.diverges().is_some());
-        let root_has_unguarded_terminal = tree_has_unguarded_terminal(tree);
+        let root_has_unguarded_terminal = tree.has_unguarded_terminal();
         let last_arm_is_any_catchall = self
             .arms
             .last()

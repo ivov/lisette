@@ -1,3 +1,4 @@
+use crate::ir::values::GoExpression;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -109,6 +110,26 @@ impl LoweredReturnAbi {
     fn same_logical_contract(&self, other: &Self) -> bool {
         self.clone().with_payload(PayloadLayout::Packed)
             == other.clone().with_payload(PayloadLayout::Packed)
+    }
+
+    pub(crate) fn ok_values(&self, mut payload: Vec<GoExpression>) -> Vec<GoExpression> {
+        match self {
+            LoweredReturnAbi::BareError => vec![GoExpression::nil()],
+            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
+                payload.push(GoExpression::nil());
+                payload
+            }
+            LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+                payload.push(GoExpression::literal("true".to_string()));
+                payload
+            }
+            LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
+                payload
+            }
+            LoweredReturnAbi::Tuple { .. } => {
+                unreachable!("a tuple return has its own emission path")
+            }
+        }
     }
 }
 

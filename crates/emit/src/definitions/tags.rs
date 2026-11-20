@@ -75,6 +75,18 @@ impl TagConfig {
             }
         }
     }
+
+    fn sort_key(&self) -> (u8, &str) {
+        if matches!(&self.value, TagValue::Raw(_)) {
+            return (3, &self.key);
+        }
+
+        match self.key.as_str() {
+            "json" => (0, ""),
+            "db" => (1, ""),
+            _ => (2, &self.key),
+        }
+    }
 }
 
 impl StructuredTag {
@@ -270,7 +282,7 @@ pub(super) fn format_tag_string(
     }
 
     let mut sorted_configs: Vec<&TagConfig> = configs.iter().collect();
-    sorted_configs.sort_by_key(|config| tag_sort_key(config));
+    sorted_configs.sort_by_key(|config| config.sort_key());
 
     let parts: Vec<String> = sorted_configs
         .iter()
@@ -281,18 +293,6 @@ pub(super) fn format_tag_string(
         None
     } else {
         Some(format!("`{}`", parts.join(" ")))
-    }
-}
-
-fn tag_sort_key(config: &TagConfig) -> (u8, &str) {
-    if matches!(&config.value, TagValue::Raw(_)) {
-        return (3, &config.key);
-    }
-
-    match config.key.as_str() {
-        "json" => (0, ""),
-        "db" => (1, ""),
-        _ => (2, &config.key),
     }
 }
 
