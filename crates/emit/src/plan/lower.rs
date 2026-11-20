@@ -152,7 +152,8 @@ impl Planner<'_> {
             unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
-        let plan = self.with_loop(GoExpression::identifier(result_var.clone()), None, |this| {
+        let result = GoExpression::identifier(result_var.clone());
+        let plan = self.with_loop(result, Some(ty.clone()), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
         ValuePlan::captured(
@@ -364,7 +365,19 @@ impl Planner<'_> {
             } => LoweredStatement::Loop(self.lower_while(condition, body)),
             Expression::Continue { .. } => LoweredStatement::Continue(self.current_loop_transfer()),
             Expression::Break { value: None, .. } => {
-                LoweredStatement::Break(self.current_loop_transfer())
+                let transfer = LoweredStatement::Break(self.current_loop_transfer());
+                let wide_result = self
+                    .current_loop()
+                    .filter(|loop_context| self.widens_unit(loop_context.result_ty.as_ref()))
+                    .map(|loop_context| loop_context.result.clone());
+                match wide_result {
+                    Some(result) => {
+                        let mut statements = self.lower_unit_into(None, &result);
+                        statements.push(transfer.into());
+                        LoweredStatement::Body(LoweredBlock { statements })
+                    }
+                    None => transfer,
+                }
             }
             Expression::Break {
                 value: Some(value), ..

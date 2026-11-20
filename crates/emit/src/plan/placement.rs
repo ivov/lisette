@@ -418,6 +418,7 @@ impl<'p> Planner<'p> {
         target: &GoExpression,
         target_ty: Option<&Type>,
     ) -> Vec<Statement> {
+        let expression = expression.unwrap_parens();
         if self.facts.is_option_or_result(&expression.get_type()) {
             return self.lower_option_result_assignment(target, target_ty, expression);
         }
@@ -478,21 +479,33 @@ impl<'p> Planner<'p> {
                 let (constructor_name, constructor_arg) = match kind {
                     Some(ConstructorKind::Success) => (
                         fallible.ok_constructor(),
-                        Some(args.first().expect("success constructor has an argument")),
+                        Some((
+                            args.first().expect("success constructor has an argument"),
+                            fallible.ok_ty().clone(),
+                        )),
                     ),
-                    Some(ConstructorKind::Failure) if fallible.is_result() => (
+                    Some(ConstructorKind::Failure) if let Some(err_ty) = fallible.err_ty() => (
                         fallible.err_constructor(),
-                        Some(args.first().expect("failure constructor has an argument")),
+                        Some((
+                            args.first().expect("failure constructor has an argument"),
+                            err_ty.clone(),
+                        )),
                     ),
                     Some(ConstructorKind::Failure) => (fallible.err_constructor(), None),
                     None => {
                         return directed_first(line, self.lower_plain_assign(target, expression));
                     }
                 };
-                if let Some(constructor_arg) = constructor_arg {
+                if let Some((constructor_arg, payload_ty)) = constructor_arg {
                     let argument =
                         self.plan_composite_value(constructor_arg, ExpressionContext::value());
-                    let (arg_setup, argument) = argument.into_parts();
+                    let (mut arg_setup, argument) = argument.into_parts();
+                    let argument = self.apply_type_coercion(
+                        &mut arg_setup,
+                        Some(&payload_ty),
+                        constructor_arg,
+                        argument,
+                    );
                     let call = self.fallible_call(&fallible, constructor_name, vec![argument]);
                     let value = ValuePlan::plain_call(arg_setup, call);
                     vec![simple_assign(target, value).into()]
@@ -533,6 +546,9 @@ impl<'p> Planner<'p> {
 
         self.with_block_scope(is_block, has_go_braces, |this| {
             let Some((last, rest)) = items.split_last() else {
+                if this.widens_unit(target_ty) {
+                    return this.lower_unit_into(None, target);
+                }
                 return Vec::new();
             };
             this.with_assign_target(target, |this| {
@@ -564,12 +580,32 @@ impl<'p> Planner<'p> {
         }
     }
 
+    pub(crate) fn widens_unit(&self, target_ty: Option<&Type>) -> bool {
+        target_ty.is_some_and(|ty| !self.facts.resolves_to_unit(ty))
+    }
+
+    pub(crate) fn lower_unit_into(
+        &mut self,
+        effect: Option<&Expression>,
+        target: &GoExpression,
+    ) -> Vec<Statement> {
+        let mut statements = Vec::new();
+        if let Some(effect) = effect.map(|effect| self.lower_statement(effect))
+            && !renders_nothing(&effect)
+        {
+            statements.push(effect);
+        }
+        statements.push(assign(target.clone(), GoExpression::unit()));
+        statements
+    }
+
     fn lower_assign_tail(
         &mut self,
         last: &Expression,
         target: &GoExpression,
         target_ty: Option<&Type>,
     ) -> Vec<Statement> {
+        let last = last.unwrap_parens();
         if matches!(
             last,
             Expression::Return { .. }
@@ -585,6 +621,9 @@ impl<'p> Planner<'p> {
         }
         if last.get_type().is_never() {
             return vec![self.lower_statement(last)];
+        }
+        if self.facts.resolves_to_unit(&last.get_type()) && self.widens_unit(target_ty) {
+            return self.lower_unit_into(Some(last), target);
         }
         if matches!(last, Expression::Block { .. }) {
             return self.lower_assign(last, target, target_ty);
@@ -775,6 +814,15 @@ impl<'p> Planner<'p> {
     }
 
     pub(crate) fn build_break_value_plan(&mut self, val: &Expression) -> LoweredBlock {
+        let loop_target = self.current_loop().and_then(|loop_context| {
+            let result_ty = loop_context.result_ty.clone()?;
+            Some((loop_context.result.clone(), result_ty))
+        });
+        if let Some((target, result_ty)) = loop_target {
+            let mut statements = self.lower_assign(val, &target, Some(&result_ty));
+            statements.push(LoweredStatement::Break(self.current_loop_transfer()).into());
+            return LoweredBlock { statements };
+        }
         let (mut statements, value) = self
             .plan_value(val, ExpressionContext::value())
             .into_parts();
@@ -890,5 +938,15 @@ impl<'a> EmitFacts<'a> {
             return None;
         }
         Some((value.as_ref(), rest))
+    }
+}
+
+fn renders_nothing(statement: &Statement) -> bool {
+    match &statement.kind {
+        LoweredStatement::Block(block) | LoweredStatement::Body(block) => {
+            block.statements.iter().all(renders_nothing)
+        }
+        LoweredStatement::ExpressionStatement { expression, .. } => expression.is_empty(),
+        _ => false,
     }
 }
