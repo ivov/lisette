@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:io"
+  
+  struct Source {}
+  impl Source {
+    fn fetch<T>(self, x: T) -> Partial<int, error> { Partial.Both(0, io.EOF) }
+  }
+  fn main() {
+    let s = Source {}
+    if !s.fetch(1).is_both() { panic("lost") }
+    if !Source.fetch(s, "a").is_both() { panic("lost") }
+  }
+---
+package main
+
+import (
+	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Source struct{}
+
+func sourceFetch[T any](_ Source, _ T) lisette.Partial[int, error] {
+	return lisette.MakePartialBoth[int, error](0, io.EOF)
+}
+
+func main() {
+	s := Source{}
+	if !sourceFetch(s, 1).IsBoth() {
+		panic("lost")
+	}
+	if !sourceFetch(s, "a").IsBoth() {
+		panic("lost")
+	}
+}

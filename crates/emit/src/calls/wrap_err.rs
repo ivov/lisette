@@ -1,9 +1,9 @@
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::literals::convert_escape_sequences;
+use crate::ir::bodies::Statement;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::Statement;
-use crate::plan::values::GoExpression;
+use crate::state::expression::ExpressionContext;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 
 pub(crate) struct WrapMessage {
@@ -12,7 +12,6 @@ pub(crate) struct WrapMessage {
 }
 
 impl Planner<'_> {
-    /// The call under a chain of `.wrap_err(message)`, with the messages inner to outer.
     pub(crate) fn peel_wrap_err<'a>(
         &self,
         expression: &'a Expression,
@@ -40,7 +39,6 @@ impl Planner<'_> {
             .then_some((receiver, message))
     }
 
-    /// Messages, including custom String calls, must run even on success.
     pub(crate) fn prepare_wrap_messages(
         &mut self,
         messages: &[&Expression],
@@ -74,17 +72,17 @@ impl Planner<'_> {
                     let mut values = Vec::new();
                     for part in parts {
                         if let FormatStringPart::Expression(expression) = part {
-                            let value = self.lower_format_operand(expression);
+                            let value = self.plan_format_operand(expression);
                             let (part_setup, value) =
                                 self.eager_operand(expression, value, "fmtarg").into_parts();
                             setup.extend(part_setup);
                             values.push(value);
                         }
                     }
-                    self.sprintf_pieces(parts, values, true)
+                    self.facts.sprintf_pieces(parts, values, true)
                 }
                 _ => {
-                    let value = self.lower_composite_value(message, ExpressionContext::value());
+                    let value = self.plan_composite_value(message, ExpressionContext::value());
                     let (message_setup, value) =
                         self.eager_operand(message, value, "msg").into_parts();
                     setup.extend(message_setup);

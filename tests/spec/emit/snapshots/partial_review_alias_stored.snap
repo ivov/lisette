@@ -75,15 +75,9 @@ type _lisAdapter_T_Child_0[T any] struct {
 }
 
 func (a _lisAdapter_T_Child_0[T]) fetch(arg0 bool) lisette.Partial[int, error] {
-	receiver, ok := any(a.inner).(interface{ fetch(bool) (int, error) })
-	if ok {
-		ret, ret2 := receiver.fetch(arg0)
-		if ret2 != nil {
-			return lisette.MakePartialBoth[int, error](ret, ret2)
-		}
-		return lisette.MakePartialOk[int, error](ret)
+	ret, ret2 := any(a.inner).(interface{ fetch(bool) (int, error) }).fetch(arg0)
+	if ret2 != nil {
+		return lisette.MakePartialBoth[int, error](ret, ret2)
 	}
-	return any(a.inner).(interface {
-		fetch(bool) lisette.Partial[int, error]
-	}).fetch(arg0)
+	return lisette.MakePartialOk[int, error](ret)
 }

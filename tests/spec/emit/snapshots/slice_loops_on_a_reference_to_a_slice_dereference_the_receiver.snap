@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(r: Ref<Slice<int>>) -> (Slice<int>, Slice<int>, int, Option<int>) {
+    let doubled = r.map(|x| x * 2)
+    let big = r.filter(|x| x > 1)
+    let total = r.fold(0, |acc, x| acc + x)
+    let first = r.find(|x| x > 1)
+    (doubled, big, total, first)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(r *[]int) ([]int, []int, int, lisette.Option[int]) {
+	doubled := make([]int, len(*r))
+	for i, x := range *r {
+		doubled[i] = x * 2
+	}
+	var big []int
+	for _, x := range *r {
+		if x > 1 {
+			big = append(big, x)
+		}
+	}
+	total := 0
+	for _, x := range *r {
+		total += x
+	}
+	first := lisette.MakeOptionNone[int]()
+	for _, x := range *r {
+		if x > 1 {
+			first = lisette.MakeOptionSome[int](x)
+			break
+		}
+	}
+	return doubled, big, total, first
+}

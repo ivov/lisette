@@ -5,13 +5,13 @@ use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi,
 use crate::abi::coercion::CoercionPlan;
 use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
+use crate::ir::bodies::{LoweredBlock, Statement, define, directed_first};
+use crate::ir::go_expression::FunctionLiteralLayout;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, Statement, define, directed_first};
-use crate::plan::go_expression::FunctionLiteralLayout;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use syntax::ast::Expression;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
@@ -27,7 +27,7 @@ pub(crate) struct TryBlockPairPlan<'e> {
 
 impl TryBlockPairPlan<'_> {
     pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundValue {
-        let go_return = planner.callable_return_go_type(
+        let go_return = planner.return_go_type(
             &CallableReturnAbi::Lowered(self.shape.clone()),
             &self.effective_ty,
         );
@@ -40,10 +40,9 @@ impl TryBlockPairPlan<'_> {
 }
 
 impl Planner<'_> {
-    /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
-    pub(crate) fn lower_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
+    pub(crate) fn plan_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
         let result_var = self.fresh_local(Some("tryResult"));
-        self.lower_try_block_as(items, ty, ty, result_var)
+        self.plan_try_block_as(items, ty, ty, result_var)
     }
 
     pub(crate) fn lower_try_block_into(
@@ -53,7 +52,7 @@ impl Planner<'_> {
         target_ty: &Type,
         name: &GoIdentifier,
     ) -> Vec<Statement> {
-        self.lower_try_block_as(items, ty, target_ty, name.clone())
+        self.plan_try_block_as(items, ty, target_ty, name.clone())
             .into_parts()
             .0
     }
@@ -64,7 +63,7 @@ impl Planner<'_> {
         ty: &Type,
     ) -> Option<TryBlockPairPlan<'e>> {
         let effective_ty = self.facts.peel_alias(ty);
-        let fallible = Fallible::from_type(&effective_ty)?;
+        let fallible = self.facts.fallible(&effective_ty)?;
         let body_ctx = self.return_context_for_type(effective_ty.clone());
         let shape = body_ctx.lowered_shape()?;
         let kind = match shape {
@@ -86,7 +85,7 @@ impl Planner<'_> {
         })
     }
 
-    fn lower_try_block_as(
+    fn plan_try_block_as(
         &mut self,
         items: &[Expression],
         ty: &Type,
@@ -94,11 +93,13 @@ impl Planner<'_> {
         result_var: GoIdentifier,
     ) -> ValuePlan {
         let effective_ty = self.facts.peel_alias(ty);
-        let fallible = Fallible::from_type(&effective_ty)
+        let fallible = self
+            .facts
+            .fallible(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
         self.declare(result_var.spelling());
-        let full_ty = { self.fallible_go_type(&fallible) };
+        let full_ty = self.go_type(&effective_ty);
         let source = self.value_layout(&effective_ty, SlotOrigin::Lisette);
         let target = self.value_layout(target_ty, SlotOrigin::Lisette);
         let coercion = CoercionPlan::bridge(self, &source, &target);
@@ -119,8 +120,7 @@ impl Planner<'_> {
         }
     }
 
-    /// A `try` block ending a function of its own type lowers without the closure.
-    pub(crate) fn lower_try_tail_in_place(
+    pub(crate) fn try_lower_try_tail_in_place(
         &mut self,
         items: &[Expression],
         ty: &Type,
@@ -130,7 +130,7 @@ impl Planner<'_> {
         if return_ty.demoted() != effective_ty.demoted() {
             return None;
         }
-        let fallible = Fallible::from_type(&effective_ty)?;
+        let fallible = self.facts.fallible(&effective_ty)?;
         Some(self.with_binding_frame(|planner| planner.lower_try_items(items, &fallible)))
     }
 
@@ -143,7 +143,7 @@ impl Planner<'_> {
             .enumerate()
             .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
             .collect();
-        let line = self.source_position(&last.get_span());
+        let line = self.facts.source_position(&last.get_span());
         let tail = self.lower_try_tail(last, fallible);
         statements.extend(directed_first(line, tail));
         statements
@@ -171,7 +171,7 @@ impl Planner<'_> {
         }
 
         let (mut statements, final_expression) = self
-            .lower_value(last, ExpressionContext::value())
+            .plan_value(last, ExpressionContext::value())
             .into_parts();
         if final_expression.is_empty() {
             statements.extend(self.lower_try_unit_return(fallible));
@@ -194,8 +194,6 @@ impl Planner<'_> {
         statements
     }
 
-    /// `Err(...)?` and `None?` short-circuit directly into a return. `None`
-    /// when the expression is not a failure-constructor `?`.
     pub(super) fn try_lower_error_constructor(
         &mut self,
         expression: &Expression,
@@ -213,7 +211,7 @@ impl Planner<'_> {
                 }
                 if !args.is_empty() {
                     let (setup, value) = self
-                        .lower_value(&args[0], ExpressionContext::value())
+                        .plan_value(&args[0], ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
                     Some(value)
@@ -237,10 +235,11 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// `recover { ... }` → `result := lisette.RecoverBlock(func() T { ... })`.
-    pub(crate) fn lower_recover_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
+    pub(crate) fn plan_recover_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
         let effective_ty = self.facts.peel_alias(ty);
-        let fallible = Fallible::from_type(&effective_ty)
+        let fallible = self
+            .facts
+            .fallible(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
         let result_var = self.fresh_declared("recoverResult");
@@ -300,7 +299,7 @@ impl Planner<'_> {
             return statements;
         }
         let (mut statements, expression) = self
-            .lower_value(last, ExpressionContext::value())
+            .plan_value(last, ExpressionContext::value())
             .into_parts();
         let expression =
             self.apply_type_coercion(&mut statements, Some(fallible.ok_ty()), last, expression);
@@ -315,10 +314,9 @@ impl Planner<'_> {
         statements
     }
 
-    /// `()` converted to the block's ok type, which can be wider than unit, such as `Unknown`.
     fn unit_value(&mut self, statements: &mut Vec<Statement>, ok_ty: &Type) -> GoExpression {
         let unit_ty = Type::unit();
-        let unit_val = self.zero_value(&unit_ty);
+        let unit_val = self.go_zero(&unit_ty);
         let (setup, value) = CoercionPlan::internal(self, &unit_ty, ok_ty).lower(self, unit_val);
         statements.extend(setup);
         value

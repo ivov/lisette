@@ -3964,3 +3964,25 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn lisette_closure_with_option_parameters_converted_to_go_function_type() {
+    let input = r#"
+import "go:fmt"
+import "go:io/fs"
+import "go:path/filepath"
+
+fn walker(n: int) -> filepath.WalkFunc {
+  filepath.WalkFunc(|p: string, info: Option<fs.FileInfo>, err: Option<error>| -> Result<(), error> {
+    fmt.Println(n, p, info.is_some(), err.is_none())
+    Ok(())
+  })
+}
+
+fn main() {
+  let w = walker(1)
+  let _ = filepath.Walk(".", w)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

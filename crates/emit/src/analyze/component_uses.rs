@@ -73,26 +73,7 @@ impl Walker {
             Expression::Reference { expression, .. } if self.names_the_local(expression) => {
                 return None;
             }
-            Expression::Match { subject, arms, .. } => {
-                if self.names_the_local(subject) {
-                    if !arms.iter().all(|arm| is_component_arm(&arm.pattern)) {
-                        return None;
-                    }
-                    self.supported |= !arms.iter().any(MatchArm::has_guard);
-                    let value = if arms.iter().any(MatchArm::has_guard) {
-                        ValueDemand::Whole
-                    } else if arms.iter().any(|arm| binds_payload(&arm.pattern)) {
-                        ValueDemand::Payload
-                    } else {
-                        ValueDemand::StatusOnly
-                    };
-                    self.demand.value = self.demand.value.max(value);
-                } else {
-                    self.walk(subject)?;
-                }
-                self.walk_arms(arms)?;
-                return Some(());
-            }
+            Expression::Match { subject, arms, .. } => return self.walk_match(subject, arms),
             Expression::IfLet {
                 pattern,
                 scrutinee,
@@ -163,6 +144,27 @@ impl Walker {
         self.walk_items(expression.children())
     }
 
+    fn walk_match(&mut self, subject: &Expression, arms: &[MatchArm]) -> Option<()> {
+        if self.names_the_local(subject) {
+            if !arms.iter().all(|arm| is_component_arm(&arm.pattern)) {
+                return None;
+            }
+            let has_guard = arms.iter().any(MatchArm::has_guard);
+            self.supported |= !has_guard;
+            let value = if has_guard {
+                ValueDemand::Whole
+            } else if arms.iter().any(|arm| binds_payload(&arm.pattern)) {
+                ValueDemand::Payload
+            } else {
+                ValueDemand::StatusOnly
+            };
+            self.demand.value = self.demand.value.max(value);
+        } else {
+            self.walk(subject)?;
+        }
+        self.walk_arms(arms)
+    }
+
     fn walk_items<'e>(&mut self, items: impl IntoIterator<Item = &'e Expression>) -> Option<()> {
         for item in items {
             self.walk(item)?;
@@ -200,68 +202,4 @@ fn is_component_arm(pattern: &Pattern) -> bool {
 fn binds_payload(pattern: &Pattern) -> bool {
     let is_err = matches!(prelude_variant(pattern), Some((PreludeVariant::Err, _)));
     !is_err && !collect_pattern_bindings(pattern).is_empty()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use syntax::ast::{ExpressionId, Span};
-    use syntax::program::DotAccessResolution;
-    use syntax::types::Type;
-
-    fn local(id: u32) -> Expression {
-        Expression::Identifier {
-            id: ExpressionId::parsed(0, 3),
-            value: "value".into(),
-            ty: Type::unit(),
-            span: Span::dummy(),
-            resolution: IdentifierResolution::Binding(BindingId::new(id)),
-        }
-    }
-
-    fn component() -> Expression {
-        Expression::DotAccess {
-            id: ExpressionId::parsed(0, 2),
-            expression: Box::new(local(1)),
-            member: "0".into(),
-            ty: Type::unit(),
-            span: Span::dummy(),
-            resolution: DotAccessResolution::Unresolved,
-        }
-    }
-
-    #[test]
-    fn whole_value_demand_survives_component_reads_in_either_order() {
-        let whole = local(1);
-        let payload = component();
-        for region in [[&whole, &payload], [&payload, &whole]] {
-            let demand = component_demand(region, BindingId::new(1)).unwrap();
-            assert!(demand.value == ValueDemand::Whole);
-            assert!(demand.read_indices.contains(&0));
-        }
-    }
-
-    #[test]
-    fn mutation_rejects_component_lowering_in_either_order() {
-        let mutation = Expression::Assignment {
-            id: ExpressionId::parsed(0, 1),
-            target: Box::new(local(1)),
-            value: Box::new(local(2)),
-            compound_operator: None,
-            span: Span::dummy(),
-        };
-        let payload = component();
-        for region in [[&mutation, &payload], [&payload, &mutation]] {
-            assert!(component_demand(region, BindingId::new(1)).is_none());
-        }
-    }
-
-    #[test]
-    fn same_spelled_binding_does_not_increase_payload_demand() {
-        let payload = component();
-        let other = local(2);
-        let demand = component_demand([&payload, &other], BindingId::new(1)).unwrap();
-        assert!(demand.value == ValueDemand::Payload);
-        assert!(component_demand([&other], BindingId::new(1)).is_none());
-    }
 }

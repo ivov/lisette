@@ -1,9 +1,9 @@
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
-use crate::context::expression::ExpressionContext;
+use crate::ir::values::GoExpression;
 use crate::names::go_name;
-use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::CallOperation;
@@ -11,7 +11,7 @@ use syntax::types::FunctionParameter;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(crate) fn emit_identifier(
+    pub(crate) fn plan_identifier(
         &mut self,
         identifier: &Expression,
         value: &str,
@@ -21,7 +21,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         let binding = match resolution {
             IdentifierResolution::Definition { name, .. } => {
-                return self.emit_definition_identifier(identifier, name, ty, ctx);
+                return self.plan_definition_identifier(identifier, name, ty, ctx);
             }
             IdentifierResolution::Binding(id) => self.scope.resolve_binding_id(*id),
 
@@ -49,13 +49,13 @@ impl Planner<'_> {
                     resolution.binding_id().is_none(),
                     "source binding has no emitted value: {value}"
                 );
-                return self.resolve_go_name(value);
+                return self.facts.resolve_go_name(value);
             }
         };
         GoExpression::identifier(local)
     }
 
-    fn emit_definition_identifier(
+    fn plan_definition_identifier(
         &mut self,
         identifier: &Expression,
         symbol: &str,
@@ -65,15 +65,10 @@ impl Planner<'_> {
         if let Some(make_function) = self.facts.variant_make_function(symbol) {
             match ty {
                 Type::Nominal { params, .. } => {
-                    let type_args = match ctx.expected_slot_type() {
-                        Some(t) => self
-                            .prelude_container_type_args(t)
-                            .unwrap_or_else(|| self.format_type_args(params)),
-                        None => self.format_type_args(params),
-                    };
+                    let type_args = self.variant_value_type_args(params, ctx);
                     return GoExpression::pure_call(
                         GoExpression::instantiation(
-                            self.resolve_go_name(&make_function),
+                            self.facts.resolve_go_name(&make_function),
                             type_args,
                         ),
                         Vec::new(),
@@ -86,7 +81,7 @@ impl Planner<'_> {
                     {
                         let type_args = self.constructor_fn_type_args(&f.params, ret_params, ctx);
                         return GoExpression::instantiation(
-                            self.resolve_go_name(&make_function),
+                            self.facts.resolve_go_name(&make_function),
                             type_args,
                         );
                     }
@@ -95,7 +90,7 @@ impl Planner<'_> {
             }
         }
 
-        if let Some(expression) = self.try_emit_method_expression(identifier, ty) {
+        if let Some(expression) = self.try_plan_method_expression(identifier, ty) {
             return expression;
         }
         let function = self.definition_reference(symbol);
@@ -108,8 +103,16 @@ impl Planner<'_> {
         }
     }
 
-    /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).
-    /// Omits them only for a direct call whose parameters support inference.
+    pub(super) fn variant_value_type_args(
+        &mut self,
+        params: &[Type],
+        ctx: ExpressionContext<'_>,
+    ) -> GoType {
+        ctx.expected_slot_type()
+            .and_then(|t| self.prelude_container_type_args(t))
+            .unwrap_or_else(|| self.format_type_args(params))
+    }
+
     pub(super) fn constructor_fn_type_args(
         &mut self,
         fn_params: &[FunctionParameter],
@@ -122,7 +125,7 @@ impl Planner<'_> {
                 .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
         let parameters_support_go_inference = fn_params
             .iter()
-            .all(|param| !self.is_function_alias(&param.ty));
+            .all(|param| !self.facts.is_function_alias(&param.ty));
         let inferred_at_call_site =
             ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference;
         if inferred_at_call_site {
@@ -132,8 +135,7 @@ impl Planner<'_> {
         }
     }
 
-    /// Go method-expression syntax for an instance method of a type.
-    fn try_emit_method_expression(
+    fn try_plan_method_expression(
         &mut self,
         identifier: &Expression,
         id_ty: &Type,
@@ -145,29 +147,24 @@ impl Planner<'_> {
         let symbol = recorded.definition.as_deref()?;
         let (_, method) = symbol.rsplit_once('.')?;
         let first = id_ty.as_function_type()?.params.first()?;
-        let mut go_method = self.method_go_name(method, is_public);
-        if self.definition_selects_tagged_twin(symbol) {
+        let mut go_method = self.facts.method_go_name(method, is_public);
+        if self.facts.definition_selects_tagged_twin(symbol) {
             go_method = go_name::tagged_twin(&go_method);
         }
-        let receiver_type = self.go_type(&first.ty.strip_refs());
-        Some(method_expression(
-            receiver_type,
-            first.ty.is_ref(),
-            go_method,
-        ))
+        Some(self.method_expression(&first.ty, go_method))
     }
-}
 
-/// Go method expression on a type, `T.method` or `(*T).method`.
-pub(crate) fn method_expression(
-    receiver_type: GoType,
-    pointer_receiver: bool,
-    go_method: String,
-) -> GoExpression {
-    let receiver = if pointer_receiver {
-        GoType::pointer_to(&receiver_type).parenthesized()
-    } else {
-        receiver_type
-    };
-    GoExpression::selector(GoExpression::type_name(receiver), go_method)
+    pub(crate) fn method_expression(
+        &self,
+        receiver_param: &Type,
+        go_method: String,
+    ) -> GoExpression {
+        let receiver_type = self.go_type(&receiver_param.strip_refs());
+        let receiver = if receiver_param.is_ref() {
+            GoType::pointer_to(&receiver_type).parenthesized()
+        } else {
+            receiver_type
+        };
+        GoExpression::selector(GoExpression::type_name(receiver), go_method)
+    }
 }

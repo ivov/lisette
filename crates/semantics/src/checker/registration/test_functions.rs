@@ -2,27 +2,18 @@ use diagnostics::LocalSink;
 use syntax::ast::{Annotation, Attribute, AttributeArg, Binding, Expression};
 use syntax::attributes::test_attribute;
 use syntax::program::TestFunction;
-use syntax::types::{Symbol, Type};
+use syntax::types::Type;
 
 use super::{RegistrationFile, TaskState};
-use crate::prelude;
 use crate::store::Store;
 use std::mem;
-
-fn test_context_type() -> Type {
-    Type::Nominal {
-        id: Symbol::from_parts(prelude::TEST_PRELUDE_PACKAGE_ID, "TestContext"),
-        params: vec![],
-        writable: false,
-    }
-}
 
 pub(crate) fn normalize_test_params(mut params: Vec<Binding>, is_test: bool) -> Vec<Binding> {
     if is_test
         && let [param] = params.as_mut_slice()
         && param.annotation.is_none()
     {
-        param.ty = test_context_type();
+        param.ty = Type::test_context();
     }
     params
 }

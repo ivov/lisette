@@ -1,16 +1,16 @@
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::ValueLayout;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
-use crate::is_order_sensitive;
-use crate::plan::bodies::with_setup;
-use crate::plan::bodies::{
+use crate::ir::bodies::with_setup;
+use crate::ir::bodies::{
     AssignForm, CompoundKind, LoweredBlock, LoweredStatement, Statement, define,
 };
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::values::{GoExpression, ValuePlan};
+use crate::is_order_sensitive;
 use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;
@@ -83,12 +83,9 @@ impl Planner<'_> {
             .go_place_layout(target)
             .or_else(|| self.go_physical_expression_layout(target));
 
-        // `target = value`. Stage RHS first (so the target capture knows
-        // whether RHS produced setup), capture the target, then fold RHS
-        // setup + coercion setup into the value plan in emission order.
         let literal_slot = go_field_slot
             .as_ref()
-            .and_then(|layout| self.lower_option_literal_into_layout(value, layout));
+            .and_then(|layout| self.try_plan_option_literal_into_layout(value, layout));
         let is_literal_slot = literal_slot.is_some();
         let origin = if go_field_slot.is_some() {
             SlotOrigin::Lisette
@@ -96,7 +93,7 @@ impl Planner<'_> {
             self.function_type_origin(&target.get_type(), SlotOrigin::Lisette)
         };
         let right_hand_side = literal_slot.unwrap_or_else(|| {
-            self.lower_composite_value(
+            self.plan_composite_value(
                 value,
                 ExpressionContext::value()
                     .with_function_slot_origin(origin)
@@ -127,7 +124,6 @@ impl Planner<'_> {
         )
     }
 
-    /// The Go layout of a Go field, or of an element indexed out of one.
     fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
         match target.unwrap_parens() {
             Expression::DotAccess {
@@ -144,12 +140,10 @@ impl Planner<'_> {
                 ty,
             ),
             Expression::IndexedAccess { expression, .. } => {
-                match self.go_place_layout(expression)?.underlying() {
-                    ValueLayout::Slice { element, .. } | ValueLayout::Array { element, .. } => {
-                        Some(element.as_ref().clone())
-                    }
+                let layout = self.go_place_layout(expression)?;
+                match layout.underlying() {
                     ValueLayout::Map { value, .. } => Some(value.as_ref().clone()),
-                    _ => None,
+                    _ => layout.element().cloned(),
                 }
             }
             _ => None,
@@ -176,8 +170,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Build a compound assignment plan (`+=`, `-=`, `++`, etc.), staging the
-    /// right-hand side and capturing the target in evaluation order.
     fn build_compound_assignment_plan(
         &mut self,
         target: &Expression,
@@ -239,7 +231,7 @@ impl Planner<'_> {
         ordering: PlaceOrdering,
     ) -> (Vec<Statement>, GoExpression) {
         let mut target_capture: Vec<Statement> = Vec::new();
-        let target = self.lower_place(&mut target_capture, target, ordering);
+        let target = self.plan_place(&mut target_capture, target, ordering);
         (target_capture, target)
     }
 
@@ -259,7 +251,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn lower_place(
+    pub(crate) fn plan_place(
         &mut self,
         setup: &mut Vec<Statement>,
         expression: &Expression,
@@ -296,35 +288,35 @@ impl Planner<'_> {
                 }
                 let elided_deref = base
                     .deref_inner()
-                    .filter(|inner| !self.points_to_ref(&inner.get_type()));
+                    .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
                 let base_value = if let Some(inner) = elided_deref {
                     self.place_operand(setup, inner, "ref", ordering)
                 } else if reads_through_reference(base) || !is_place_expression(base) {
                     self.place_operand(setup, base, "ref", ordering)
                 } else {
-                    self.lower_place(setup, base, ordering)
+                    self.plan_place(setup, base, ordering)
                 };
                 if let Some(access) =
-                    self.try_emit_tuple_member_dot(&base_value, &expression_ty, member, resolution)
+                    self.try_plan_tuple_member_dot(&base_value, &expression_ty, member, resolution)
                 {
                     return access;
                 }
                 let field = self.dot_member_go_name(base, &expression_ty, member, resolution);
-                self.field_access(base_value, &expression_ty, field)
+                self.facts.field_access(base_value, &expression_ty, field)
             }
             Expression::IndexedAccess {
                 expression: base,
                 index,
                 ..
-            } => self.lower_indexed_place(setup, base, index, ordering),
+            } => self.plan_indexed_place(setup, base, index, ordering),
             Expression::Unary {
                 operator: UnaryOperator::Deref,
                 expression: pointee,
                 ..
-            } => self.emit_deref_lvalue(setup, pointee, ordering),
+            } => self.plan_deref_lvalue(setup, pointee, ordering),
             Expression::Call { .. } if expression.get_type().is_ref() => {
                 let (call_setup, call) = self
-                    .lower_composite_value(expression, ExpressionContext::value())
+                    .plan_composite_value(expression, ExpressionContext::value())
                     .into_parts();
                 setup.extend(call_setup);
                 GoExpression::identifier(self.hoist_tmp_value_statement(setup, "ref", call))
@@ -337,7 +329,7 @@ impl Planner<'_> {
         }
     }
 
-    fn lower_indexed_place(
+    fn plan_indexed_place(
         &mut self,
         setup: &mut Vec<Statement>,
         base: &Expression,
@@ -347,11 +339,11 @@ impl Planner<'_> {
         let base_expression = if let Some(inner) = base.deref_inner() {
             GoExpression::dereference(self.place_operand(setup, inner, "ref", ordering))
         } else if is_place_expression(base) {
-            self.lower_place(setup, base, ordering)
+            self.plan_place(setup, base, ordering)
         } else {
             self.place_operand(setup, base, "base", ordering)
         };
-        let index_plan = self.lower_composite_value(index, ExpressionContext::value());
+        let index_plan = self.plan_composite_value(index, ExpressionContext::value());
         let pin_index = ordering.pins(&index_plan);
         let base_plan = ValuePlan::computed(Vec::new(), base_expression)
             .with_stability(self.place_read_stability(base));
@@ -384,7 +376,7 @@ impl Planner<'_> {
         base: &Expression,
         expression: GoExpression,
     ) -> GoExpression {
-        let pinned = if !matches!(self.emit_shape_ty(&base.get_type()), Type::Array { .. }) {
+        let pinned = if !matches!(self.facts.shape_ty(&base.get_type()), Type::Array { .. }) {
             expression
         } else if let GoExpressionNode::Dereference(pointer) = expression.node() {
             expression.peeled(pointer)
@@ -401,7 +393,7 @@ impl Planner<'_> {
         prefix: &'static str,
         ordering: PlaceOrdering,
     ) -> GoExpression {
-        let plan = self.lower_composite_value(expression, ExpressionContext::value());
+        let plan = self.plan_composite_value(expression, ExpressionContext::value());
         let pin = ordering.pins(&plan);
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
@@ -412,10 +404,7 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit `*X` lvalue form, capturing the pointee into a temp if it's a
-    /// call (Go requires an addressable operand for deref-assignment) or when
-    /// RHS setup could reassign the pointer before the write executes.
-    fn emit_deref_lvalue(
+    fn plan_deref_lvalue(
         &mut self,
         setup: &mut Vec<Statement>,
         pointee: &Expression,
@@ -453,8 +442,6 @@ fn reads_through_reference(base: &Expression) -> bool {
     matches!(base.unwrap_parens(), Expression::Identifier { .. }) && base.get_type().is_ref()
 }
 
-/// Recognize compound assignment: either `x += y` syntax (caller supplies
-/// `compound_operator`) or the desugared `x = x + y` pattern.
 fn detect_compound_assignment<'a>(
     target: &Expression,
     value: &'a Expression,
@@ -488,10 +475,6 @@ fn is_literal_one(expression: &Expression) -> bool {
     )
 }
 
-/// Check if two lvalue expressions refer to the same location.
-/// Used to detect `x = x + y` → `x += y` patterns.
-/// Compares by binding_id for identifiers, recursively for DotAccess/Deref.
-/// Deliberately skips IndexedAccess (side-effect hazard from index evaluation).
 pub(crate) fn lvalues_match(a: &Expression, b: &Expression) -> bool {
     let a = a.unwrap_parens();
     let b = b.unwrap_parens();

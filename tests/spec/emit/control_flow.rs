@@ -5139,3 +5139,20 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn bytes_loop_over_string_alias_matches_string() {
+    let input = r#"
+import "go:fmt"
+
+type S = string
+
+fn test() {
+  let a: string = "hi"
+  let b: S = "hi"
+  for x in a.bytes() { fmt.Println(x) }
+  for x in b.bytes() { fmt.Println(x) }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

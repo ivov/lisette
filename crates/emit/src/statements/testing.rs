@@ -1,14 +1,15 @@
+use crate::EmitFacts;
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
-use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
-use crate::names::go_name::{self, GeneratedPackage};
-use crate::names::packages::PackageUse;
-use crate::plan::bodies::{
+use crate::expressions::{BinaryOperand, flip_comparison};
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
 };
-use crate::plan::go_expression::{CompositeLayout, UnaryOp};
-use crate::plan::values::CaptureBoundary;
-use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
+use crate::ir::go_expression::{CompositeLayout, UnaryOp};
+use crate::ir::values::CaptureBoundary;
+use crate::ir::values::{GoExpression, OperandForm, ValuePlan};
+use crate::names::go_name::{self, GeneratedPackage};
+use crate::names::packages::PackageUse;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
 use syntax::program::{EqualityRecipe, OperandConversion};
@@ -101,7 +102,6 @@ impl Planner<'_> {
             },
             ElseArm::None,
         ));
-        // The block exists only to scope the temps.
         if statements.is_empty() {
             return test;
         }
@@ -109,28 +109,13 @@ impl Planner<'_> {
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
-    pub(crate) fn is_test_log_call(&self, expression: &Expression) -> bool {
-        let Expression::Call {
-            expression: callee, ..
-        } = expression.unwrap_parens()
-        else {
-            return false;
-        };
-        self.facts
-            .checked(callee)
-            .callee()
-            .definition
-            .as_deref()
-            .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD)
-    }
-
     pub(crate) fn lower_test_log_statement(&mut self, expression: &Expression) -> LoweredStatement {
-        let (mut statements, call) = self.lower_test_log_call(expression);
+        let (mut statements, call) = self.plan_test_log_call(expression);
         statements.push(expression_statement(call));
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
-    pub(crate) fn lower_test_log_call(
+    pub(crate) fn plan_test_log_call(
         &mut self,
         expression: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
@@ -140,17 +125,17 @@ impl Planner<'_> {
             ..
         } = expression.unwrap_parens()
         else {
-            unreachable!("lower_test_log_call requires a call");
+            unreachable!("plan_test_log_call requires a call");
         };
         let Expression::DotAccess {
             expression: receiver,
             ..
         } = callee.unwrap_parens()
         else {
-            unreachable!("lower_test_log_call requires a method receiver");
+            unreachable!("plan_test_log_call requires a method receiver");
         };
-        let handle = self.lower_value(receiver, ExpressionContext::value());
-        let value = self.lower_value(&arguments[0], ExpressionContext::value());
+        let handle = self.plan_value(receiver, ExpressionContext::value());
+        let value = self.plan_value(&arguments[0], ExpressionContext::value());
         let sequenced =
             self.sequence_values(vec![handle, value], CaptureBoundary::SiblingSequence, "log");
         let statements = sequenced.setup;
@@ -183,7 +168,7 @@ impl Planner<'_> {
         let (lhs, rhs) =
             self.stage_assert_operands(left, right, LiteralInlining::Allowed, statements);
         let flipped = flip_comparison(operator)
-            .filter(|_| flip_preserves_nan(&self.facts, operator, left, right));
+            .filter(|_| self.facts.flip_preserves_nan(operator, left, right));
         let operands = paired_operands(lhs.value.expression(), rhs.value.expression());
         let (cond_setup, condition) = self
             .plan_lowered_binary(
@@ -262,9 +247,8 @@ impl Planner<'_> {
         literals: LiteralInlining,
         statements: &mut Vec<Statement>,
     ) -> (AssertOperand, AssertOperand) {
-        let left_plan = self.lower_value(left, ExpressionContext::value());
-        let right_plan = self.lower_value(right, ExpressionContext::value());
-        // The failure report reads both operands again.
+        let left_plan = self.plan_value(left, ExpressionContext::value());
+        let right_plan = self.plan_value(right, ExpressionContext::value());
         let names_inline = left_plan.setup().is_empty()
             && right_plan.setup().is_empty()
             && left_plan.effects().can_duplicate()
@@ -321,7 +305,6 @@ impl Planner<'_> {
         };
         let (_, value) = plan.into_parts();
         let name = self.fresh_declared(hint);
-        // An untyped integer can overflow if `:=` infers `int`.
         let constant_needs_type = self
             .constant_needs_go_type(constant, &expression.get_type())
             .is_some();
@@ -347,7 +330,6 @@ impl Planner<'_> {
     }
 }
 
-/// The receiver and argument of `receiver.equals(argument)`.
 fn equals_decomposition(operand: &Expression) -> Option<(&Expression, &Expression)> {
     let Expression::Call {
         expression: callee,
@@ -383,7 +365,6 @@ struct AssertOperand {
     value: ValuePlan,
 }
 
-// Bare literals are not valid Go method receivers.
 #[derive(Clone, Copy)]
 enum LiteralInlining {
     Allowed,
@@ -419,4 +400,20 @@ fn is_assert_relation(operator: &BinaryOperator) -> bool {
         operator,
         Equal | NotEqual | LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual
     )
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_test_log_call(&self, expression: &Expression) -> bool {
+        let Expression::Call {
+            expression: callee, ..
+        } = expression.unwrap_parens()
+        else {
+            return false;
+        };
+        self.checked(callee)
+            .callee()
+            .definition
+            .as_deref()
+            .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD)
+    }
 }

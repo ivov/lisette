@@ -1,0 +1,136 @@
+use syntax::ast::Expression;
+use syntax::types::Type;
+
+use crate::ir::values::CaptureBoundary;
+use syntax::program::SlotOrigin;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum CalleeRole {
+    #[default]
+    Value,
+    Callee,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FunctionValueAbiTarget {
+    Slot(SlotOrigin),
+    Tagged,
+}
+
+impl Default for FunctionValueAbiTarget {
+    fn default() -> Self {
+        Self::Slot(SlotOrigin::Lisette)
+    }
+}
+
+fn result_is_type_parameter(declared: &Type) -> bool {
+    declared
+        .unwrap_forall()
+        .as_function_type()
+        .is_some_and(|function| matches!(function.return_type.as_ref(), Type::Parameter(_)))
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ExpressionContext<'a> {
+    callee_role: CalleeRole,
+    expected_slot_type: Option<&'a Type>,
+    function_value_abi_target: FunctionValueAbiTarget,
+    generic_result_slot: Option<&'a Type>,
+    capture_boundary: CaptureBoundary,
+    retired_receiver: Option<&'a Expression>,
+}
+
+impl<'a> ExpressionContext<'a> {
+    pub(crate) fn value() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn callee(mut self) -> Self {
+        self.callee_role = CalleeRole::Callee;
+        self
+    }
+
+    pub(crate) fn with_expected_slot_type(mut self, ty: Option<&'a Type>) -> Self {
+        self.expected_slot_type = ty;
+        self
+    }
+
+    pub(crate) fn with_forced_tagged_go_function(self, force: bool) -> Self {
+        if force {
+            Self {
+                function_value_abi_target: FunctionValueAbiTarget::Tagged,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
+    pub(crate) fn with_function_slot_origin(self, origin: SlotOrigin) -> Self {
+        match self.function_value_abi_target {
+            FunctionValueAbiTarget::Tagged => self,
+            FunctionValueAbiTarget::Slot(_) => Self {
+                function_value_abi_target: FunctionValueAbiTarget::Slot(origin),
+                ..self
+            },
+        }
+    }
+
+    pub(crate) fn with_generic_result_slot(
+        mut self,
+        declared: Option<&Type>,
+        instantiated: Option<&'a Type>,
+    ) -> Self {
+        self.generic_result_slot =
+            instantiated.filter(|_| declared.is_some_and(result_is_type_parameter));
+        self
+    }
+
+    pub(crate) fn with_capture_boundary(mut self, boundary: CaptureBoundary) -> Self {
+        self.capture_boundary = boundary;
+        self
+    }
+
+    pub(crate) fn expected_slot_type(self) -> Option<&'a Type> {
+        self.expected_slot_type
+    }
+
+    pub(crate) fn is_callee(self) -> bool {
+        matches!(self.callee_role, CalleeRole::Callee)
+    }
+
+    pub(crate) fn forces_tagged_go_function(self) -> bool {
+        matches!(
+            self.function_value_abi_target,
+            FunctionValueAbiTarget::Tagged
+        )
+    }
+
+    pub(crate) fn function_slot_origin(self) -> SlotOrigin {
+        match self.function_value_abi_target {
+            FunctionValueAbiTarget::Slot(origin) => origin,
+            FunctionValueAbiTarget::Tagged => SlotOrigin::Lisette,
+        }
+    }
+
+    pub(crate) fn generic_result_slot(self) -> Option<&'a Type> {
+        self.generic_result_slot
+    }
+
+    pub(crate) fn result_fills_type_parameter(self) -> bool {
+        self.generic_result_slot.is_some()
+    }
+
+    pub(crate) fn capture_boundary(self) -> CaptureBoundary {
+        self.capture_boundary
+    }
+
+    pub(crate) fn with_retired_receiver(mut self, target: &'a Expression) -> Self {
+        self.retired_receiver = Some(target);
+        self
+    }
+
+    pub(crate) fn retired_receiver(self) -> Option<&'a Expression> {
+        self.retired_receiver
+    }
+}

@@ -2,28 +2,21 @@ use crate::Planner;
 use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::wrapping::NilGuard;
 use crate::calls::bound_value::{BoundValue, LoweredPair, PairValue};
-use crate::context::expression::ExpressionContext;
+use crate::ir::bodies::{Statement, define, define_many};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::names::source_name::SourceName;
-use crate::plan::bodies::{Statement, define, define_many};
 use crate::plan::calls::CallableOrigin;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
+use crate::state::expression::ExpressionContext;
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
 use syntax::program::CallOperation;
 use syntax::program::NativeTypeKind;
 
-/// How an Option-typed scrutinee produces its Go comma-ok pair.
 pub(crate) enum CommaOkSource {
-    /// Call whose lowered ABI is already `(T, bool)`.
-    LoweredCall {
-        /// Nil test the tagged wrap would apply on top of `ok`.
-        nil_guard: Option<NilGuard>,
-    },
-    /// `m.get(k)` lowered as `m[k]`.
+    LoweredCall { nil_guard: Option<NilGuard> },
     MapIndex,
-    /// `assert_type<T>(x)` lowered as `x.(T)`.
     TypeAssert,
 }
 
@@ -44,16 +37,11 @@ impl CommaOkSource {
     }
 }
 
-/// What the caller needs from the pair's value slot.
 pub(crate) enum CommaOkValueSlot {
-    /// Bind this local (already freshened and declared).
     Named(GoIdentifier),
-    /// Allocate a fresh temporary.
     Temp,
     Arm(GoIdentifier),
-    /// No payload use. The value is still captured when the nil guard needs it.
     Unused,
-    /// No payload use, bound as a statement so the status can serve as a value.
     Discarded,
 }
 
@@ -129,7 +117,6 @@ impl Planner<'_> {
                 let operand_ty = operand.get_type();
                 let asserts_on_interface = self.facts.is_interface_or_unknown(&operand_ty)
                     || self.facts.peel_alias(&operand_ty).is_error();
-                // A function asserted out of `any` needs a bridge to its Lisette layout.
                 let asserts_function = self
                     .any_slot_function_layouts(
                         &self.facts.peel_alias(&expression.get_type()).ok_type(),
@@ -166,14 +153,13 @@ impl Planner<'_> {
         }
     }
 
-    /// Bind a recognized pair to its value and ok variables.
     pub(crate) fn bind_comma_ok_pair(
         &mut self,
         expression: &Expression,
         source: CommaOkSource,
         slot: CommaOkValueSlot,
     ) -> BoundValue {
-        let (statements, pair) = self.lower_comma_ok_pair(expression, &source);
+        let (statements, pair) = self.plan_comma_ok_pair(expression, &source);
         self.bind_pair(
             statements,
             pair,
@@ -258,7 +244,6 @@ impl Planner<'_> {
         name
     }
 
-    /// Fresh within a Go block; nested blocks may shadow outer statuses.
     pub(crate) fn pair_status(
         &mut self,
         hint: Option<&SourceName>,
@@ -284,23 +269,22 @@ impl Planner<'_> {
         name
     }
 
-    /// Lower the pair-producing Go expression.
-    fn lower_comma_ok_pair(
+    fn plan_comma_ok_pair(
         &mut self,
         expression: &Expression,
         source: &CommaOkSource,
     ) -> (Vec<Statement>, GoExpression) {
         match source {
             CommaOkSource::LoweredCall { .. } => self
-                .lower_call(expression, None, ExpressionContext::value())
+                .plan_call_expression(expression, None, ExpressionContext::value())
                 .into_parts(),
-            CommaOkSource::MapIndex => self.lower_map_index_pair(expression),
+            CommaOkSource::MapIndex => self.plan_map_index_pair(expression),
             CommaOkSource::TypeAssert => {
                 let Expression::Call { args, .. } = expression else {
                     unreachable!("comma_ok_source only accepts Call expressions");
                 };
                 let (setup, operand) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value())
+                    .plan_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
                 let target = self.go_type(&target_ty);

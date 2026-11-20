@@ -1,7 +1,7 @@
+use crate::ir::declarations::GoDeclaration;
 use crate::names::packages::{PackageRequirements, PackageUse};
-use crate::output::imports::ImportPlan;
-use crate::output::{OutputCollector, OutputImport};
-use crate::plan::declarations::GoDeclaration;
+use crate::render::imports::ImportPlan;
+use crate::render::output::{OutputCollector, OutputImport};
 use crate::state::rejections::Rejections;
 use diagnostics::LisetteDiagnostic;
 use std::mem;

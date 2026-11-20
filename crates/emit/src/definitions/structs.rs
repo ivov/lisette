@@ -1,20 +1,22 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
-use crate::expressions::top_items::emit_item_doc;
+use crate::expressions::top_items::item_doc_text;
+use crate::ir::bodies::LoweredBlock;
+use crate::ir::declarations::GoDeclaration;
+use crate::ir::declarations::{DeclarationKind, FieldDeclaration, TypeParameter};
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::go_expression::GoParameter;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
+use crate::names::generics::generic_bounds;
 use crate::names::go_name::{self, GeneratedPackage};
-use crate::plan::bodies::LoweredBlock;
-use crate::plan::declarations::GoDeclaration;
-use crate::plan::declarations::{DeclarationKind, FieldDeclaration, TypeParameter};
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::go_expression::GoParameter;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::names::receiver::ReceiverGenerics;
+use crate::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::types::go_type::GoType;
-use crate::utils::ReceiverGenerics;
-use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
@@ -23,7 +25,7 @@ use syntax::program::MethodOrigin;
 use syntax::program::{Definition, DefinitionBody, Methods, interface_requirements};
 use syntax::types::Type;
 
-pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
+const DEBUG_STRING_METHOD: &str = "DebugString";
 
 impl Planner<'_> {
     pub(crate) fn emit_struct_definition(
@@ -33,21 +35,8 @@ impl Planner<'_> {
         fields: &StructFields,
         attributes: &[Attribute],
     ) -> Vec<GoDeclaration> {
-        let parameters = self.plan_generics(
-            &generics
-                .iter()
-                .map(|generic| {
-                    (
-                        generic.name.clone(),
-                        generic
-                            .resolved_bounds()
-                            .expect("generic bounds are resolved before emission")
-                            .cloned()
-                            .collect(),
-                    )
-                })
-                .collect::<Vec<_>>(),
-        );
+        let parameters =
+            self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
         let StructFields::Record(fields) = fields else {
             let StructFields::Tuple(fields) = fields else {
                 unreachable!();
@@ -66,15 +55,13 @@ impl Planner<'_> {
         })];
         for method in self.struct_synthesized_methods(name, attributes, StructShape::Record) {
             result.push(match method {
-                SynthesizedMethod::Format(format) => emit_struct_format_method(
-                    self,
+                SynthesizedMethod::Format(format) => self.emit_struct_format_method(
                     name,
                     &receiver_generics,
                     &stringer_fields,
                     format,
                 ),
-                SynthesizedMethod::StringerShadow => emit_struct_shadow_stringer_method(
-                    self,
+                SynthesizedMethod::StringerShadow => self.emit_struct_shadow_stringer_method(
                     name,
                     &receiver_generics,
                     &stringer_fields,
@@ -82,7 +69,7 @@ impl Planner<'_> {
                 SynthesizedMethod::ToString => self.emit_to_string_method(
                     name,
                     &receiver_generics,
-                    &self.to_string_method_go_name(),
+                    &self.facts.to_string_method_go_name(),
                 ),
                 SynthesizedMethod::Equals => {
                     self.struct_equals_method(name, generics, fields, attributes)
@@ -93,7 +80,7 @@ impl Planner<'_> {
         result
     }
 
-    pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
+    fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
         let id = self.facts.qualified_current(name);
         let Some(definition) = self.facts.definition(&id) else {
             return false;
@@ -104,7 +91,7 @@ impl Planner<'_> {
     }
 
     fn stringer_kind(&self, ty: &Type, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
-        let Type::Nominal { id, .. } = &self.emit_shape_ty(ty) else {
+        let Type::Nominal { id, .. } = &self.facts.shape_ty(ty) else {
             return None;
         };
         if !visited.insert(id.to_string()) {
@@ -117,11 +104,15 @@ impl Planner<'_> {
 
     fn stringer_kind_of(&self, id: &str, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
         let definition = self.facts.definition(id)?;
-        if definition_declares_string(definition, |m| self.facts.is_ufcs_method(id, m)) {
+        if ["string", ENUM_STRINGER_METHOD]
+            .iter()
+            .any(|method| self.facts.emits_go_method(id, method))
+        {
             return Some(StringerKind::Foreign);
         }
         if matches!(definition.body, DefinitionBody::Interface { .. }) {
             return self
+                .facts
                 .interface_has_string_selector(id)
                 .then_some(StringerKind::Foreign);
         }
@@ -153,19 +144,6 @@ impl Planner<'_> {
         matches!(first, StringerKind::Synthesized).then_some(StringerKind::Synthesized)
     }
 
-    fn interface_has_string_selector(&self, id: &str) -> bool {
-        let interface_ty = Type::Nominal {
-            id: id.into(),
-            params: vec![],
-            writable: false,
-        };
-        interface_requirements(&interface_ty, |id| self.facts.definition(id))
-            .iter()
-            .any(|requirement| {
-                requirement.name == "string" || requirement.name == ENUM_STRINGER_METHOD
-            })
-    }
-
     fn emit_tuple_struct(
         &mut self,
         name: &str,
@@ -174,8 +152,10 @@ impl Planner<'_> {
         generics: &[Generic],
         attributes: &[Attribute],
     ) -> Vec<GoDeclaration> {
-        let underlying =
-            (fields.len() == 1 && parameters.is_empty()).then(|| self.go_type(&fields[0].ty));
+        let underlying = self
+            .facts
+            .is_newtype_definition(name)
+            .then(|| self.go_type(&fields[0].ty));
         let go_name = go_name::escape_type_name(name).into_owned();
         let definition = match &underlying {
             Some(underlying) => DeclarationKind::Type {
@@ -191,7 +171,7 @@ impl Planner<'_> {
                     .enumerate()
                     .map(|(index, field)| FieldDeclaration {
                         documentation: Default::default(),
-                        name: Some(format!("F{index}")),
+                        name: Some(go_name::tuple_struct_field(index)),
                         ty: self.go_type(&field.ty),
                         tag: None,
                     })
@@ -206,8 +186,7 @@ impl Planner<'_> {
             .collect::<Vec<_>>();
         for method in self.struct_synthesized_methods(name, attributes, StructShape::Tuple) {
             result.push(match method {
-                SynthesizedMethod::Format(format) => emit_tuple_struct_format_method(
-                    self,
+                SynthesizedMethod::Format(format) => self.emit_tuple_struct_format_method(
                     name,
                     &receiver_generics,
                     &formats,
@@ -217,7 +196,7 @@ impl Planner<'_> {
                 SynthesizedMethod::ToString => self.emit_to_string_method(
                     name,
                     &receiver_generics,
-                    &self.to_string_method_go_name(),
+                    &self.facts.to_string_method_go_name(),
                 ),
                 _ => unreachable!("tuple structs synthesize only formatting methods"),
             });
@@ -242,7 +221,7 @@ impl Planner<'_> {
             )
         };
         let declaration = FieldDeclaration {
-            documentation: emit_item_doc(&field.doc, &field.name, &name).into(),
+            documentation: item_doc_text(&field.doc, &field.name, &name).into(),
             name: (!field.is_embedded()).then(|| name.clone()),
             ty: self.go_type(&field.ty),
             tag,
@@ -255,70 +234,6 @@ impl Planner<'_> {
                 format: DisplayForm::of(&field.ty, |id| self.facts.definition(id)),
             },
         )
-    }
-
-    /// Whether the user already supplies `(String, GoString)` via real receiver
-    /// methods (UFCS-emitted free functions do not satisfy Go interfaces, so
-    /// they don't count). Drives which stringers the compiler synthesizes.
-    pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
-        let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
-        let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
-        let has_go_stringer =
-            is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
-        (has_stringer, has_go_stringer)
-    }
-
-    pub(crate) fn debug_string_override(&self, name: &str) -> bool {
-        (self.method_needs_export("debug_string")
-            && self.has_stringer_signature(name, "debug_string"))
-            || self.has_stringer_signature(name, DEBUG_STRING_METHOD)
-    }
-
-    fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts
-            .definition(qualified.as_str())
-            .and_then(type_methods)
-            .and_then(|methods| methods.get(method_name))
-            .is_some_and(|method| {
-                method
-                    .ty
-                    .is_stringer_signature(|ty| self.facts.peel_alias(ty))
-            })
-            && !self.facts.is_ufcs_method(&qualified, method_name)
-    }
-
-    pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
-        self.facts.emit_tests_enabled() && !self.debug_string_override(name)
-    }
-
-    pub(crate) fn should_synthesize_to_string(&self, name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts
-            .method(&qualified, "to_string")
-            .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
-    }
-
-    pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts.synthesizes_equals(qualified.as_str())
-    }
-
-    fn is_pointer_backed_newtype(&self, name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts
-            .definition(qualified.as_str())
-            .is_some_and(|definition| {
-                definition.is_pointer_backed_newtype(|id| self.facts.definition(id))
-            })
-    }
-
-    pub(crate) fn to_string_method_go_name(&self) -> String {
-        self.method_go_name("to_string", false)
-    }
-
-    pub(crate) fn equals_method_go_name(&self) -> String {
-        self.method_go_name("equals", false)
     }
 
     fn struct_equals_method(
@@ -355,10 +270,10 @@ impl Planner<'_> {
             .into_iter()
             .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
             .unwrap_or_else(|| GoExpression::literal("true".to_string()));
-        let receiver_type = receiver_generics.instantiate(&go_name::escape_type_name(name));
+        let receiver_type = receiver_generics.receiver_type(name);
         GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
-            self.equals_method_go_name(),
+            self.facts.equals_method_go_name(),
             Vec::new(),
             vec![GoParameter::new(other, receiver_type)],
             GoType::new("bool"),
@@ -368,31 +283,30 @@ impl Planner<'_> {
         )
     }
 
-    /// The Go methods emit adds to the struct `name`, in emission order.
     pub(crate) fn struct_synthesized_methods(
         &self,
         name: &str,
         attributes: &[Attribute],
         shape: StructShape,
     ) -> Vec<SynthesizedMethod> {
-        if shape == StructShape::Tuple && self.is_pointer_backed_newtype(name) {
+        if shape == StructShape::Tuple && self.facts.is_pointer_backed_newtype(name) {
             return Vec::new();
         }
         let mut methods = Vec::new();
-        if let Some(method) = self.stringer_method_name(name, attributes) {
+        if let Some(method) = self.facts.stringer_method_name(name, attributes) {
             methods.push(SynthesizedMethod::Format(StringFormat::Display {
                 method,
                 qualified: false,
             }));
         }
-        if self.synthesizes_debug_string(name) {
+        if self.facts.synthesizes_debug_string(name) {
             methods.push(SynthesizedMethod::Format(StringFormat::Debug));
         }
-        if self.should_synthesize_to_string(name) {
+        if self.facts.should_synthesize_to_string(name) {
             methods.push(SynthesizedMethod::ToString);
         }
         if shape == StructShape::Record {
-            if self.should_synthesize_equals(name) {
+            if self.facts.should_synthesize_equals(name) {
                 methods.push(SynthesizedMethod::Equals);
             }
             if self.synthesizes_embedded_stringer_shadow(name) {
@@ -402,74 +316,139 @@ impl Planner<'_> {
         methods
     }
 
-    /// The Go methods emit adds to the enum `name`, in emission order.
-    pub(crate) fn enum_synthesized_methods(
-        &self,
+    pub(crate) fn emit_to_string_method(
+        &mut self,
         name: &str,
-        attributes: &[Attribute],
-    ) -> Vec<SynthesizedMethod> {
-        let mut methods = Vec::new();
-        if should_synthesize_stringer(attributes) {
-            let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
-            if !has_user_string {
-                methods.push(SynthesizedMethod::Format(StringFormat::Display {
-                    method: ENUM_STRINGER_METHOD,
-                    qualified: false,
-                }));
-            }
-            if !has_user_go_string {
-                methods.push(SynthesizedMethod::Format(StringFormat::Display {
-                    method: ENUM_GO_STRINGER_METHOD,
-                    qualified: true,
-                }));
-            }
-        }
-        if attributes.iter().any(|attribute| attribute.name == "json") {
-            methods.push(SynthesizedMethod::Json);
-        }
-        if self.synthesizes_debug_string(name) {
-            methods.push(SynthesizedMethod::Format(StringFormat::Debug));
-        }
-        if self.should_synthesize_to_string(name) {
-            methods.push(SynthesizedMethod::ToString);
-        }
-        if self.should_synthesize_equals(name) {
-            methods.push(SynthesizedMethod::Equals);
-        }
-        methods
+        generics: &ReceiverGenerics,
+        method: &str,
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let value = GoExpression::call(
+            GoExpression::selector(
+                GoExpression::identifier(receiver.clone()),
+                ENUM_STRINGER_METHOD.to_string(),
+            ),
+            vec![],
+        );
+        string_method(name, generics, receiver, method, value)
     }
 
-    pub(crate) fn synthesized_method_go_names(&self, method: SynthesizedMethod) -> Vec<String> {
-        match method {
-            SynthesizedMethod::Format(format) => vec![format.method().to_string()],
-            SynthesizedMethod::StringerShadow => vec![ENUM_STRINGER_METHOD.to_string()],
-            SynthesizedMethod::Json => vec!["MarshalJSON".to_string(), "UnmarshalJSON".to_string()],
-            SynthesizedMethod::ToString => vec![self.to_string_method_go_name()],
-            SynthesizedMethod::Equals => vec![self.equals_method_go_name()],
-        }
+    fn emit_struct_format_method(
+        &mut self,
+        name: &str,
+        generics: &ReceiverGenerics,
+        fields: &[StringerField],
+        format: StringFormat<'_>,
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let parts = fields
+            .iter()
+            .map(|field| format!("{}: {}", field.source_name, format.verb(field.format)))
+            .collect::<Vec<_>>();
+        let arguments = fields
+            .iter()
+            .filter_map(|field| {
+                format.format_argument(
+                    GoExpression::selector(
+                        GoExpression::identifier(receiver.clone()),
+                        field.go_name.clone(),
+                    ),
+                    field.format,
+                )
+            })
+            .collect();
+        let text = if fields.is_empty() {
+            name.to_string()
+        } else {
+            format!("{name} {{ {} }}", parts.join(", "))
+        };
+        string_method(
+            name,
+            generics,
+            receiver,
+            format.method(),
+            format_value(&text, arguments),
+        )
     }
 
-    /// Single stringer to synthesize for structs: `String` by default,
-    /// `GoString` when the user already supplies `String`, none when both
-    /// exist. Enums use [`Self::stringer_overrides`] directly, since they
-    /// synthesize both a bare `String` and a qualified `GoString`.
-    pub(crate) fn stringer_method_name(
-        &self,
+    fn emit_struct_shadow_stringer_method(
+        &mut self,
         name: &str,
-        attributes: &[Attribute],
-    ) -> Option<&'static str> {
-        if !should_synthesize_stringer(attributes) {
-            return None;
-        }
-        match self.stringer_overrides(name) {
-            (true, true) => None,
-            (true, false) => Some(ENUM_GO_STRINGER_METHOD),
-            _ => Some(ENUM_STRINGER_METHOD),
-        }
+        generics: &ReceiverGenerics,
+        fields: &[StringerField],
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let text = format!("{{{}}}", vec!["%v"; fields.len()].join(" "));
+        let arguments = fields
+            .iter()
+            .map(|field| {
+                GoExpression::selector(
+                    GoExpression::identifier(receiver.clone()),
+                    field.go_name.clone(),
+                )
+            })
+            .collect();
+        string_method(
+            name,
+            generics,
+            receiver,
+            ENUM_STRINGER_METHOD,
+            format_value(&text, arguments),
+        )
+    }
+
+    fn emit_tuple_struct_format_method(
+        &mut self,
+        name: &str,
+        generics: &ReceiverGenerics,
+        fields: &[DisplayForm],
+        underlying: Option<&GoType>,
+        format: StringFormat<'_>,
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let arguments = fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let receiver = GoExpression::identifier(receiver.clone());
+                let value = match underlying {
+                    Some(ty) => GoExpression::conversion(ty.clone(), receiver),
+                    None => GoExpression::selector(receiver, go_name::tuple_struct_field(index)),
+                };
+                format.format_argument(value, *field)
+            })
+            .collect();
+        let text = if fields.is_empty() {
+            name.to_string()
+        } else {
+            format!(
+                "{name}({})",
+                fields
+                    .iter()
+                    .map(|field| format.verb(*field))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        string_method(
+            name,
+            generics,
+            receiver,
+            format.method(),
+            format_value(&text, arguments),
+        )
     }
 }
 
-pub(crate) fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
+fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "display")
 }
 
@@ -503,13 +482,10 @@ pub(crate) enum StructShape {
     Tuple,
 }
 
-/// A Go method that emit adds to a Lisette struct or enum.
 #[derive(Clone, Copy)]
 pub(crate) enum SynthesizedMethod {
     Format(StringFormat<'static>),
-    /// A struct `String` that hides the one an embedded field synthesizes.
     StringerShadow,
-    /// An enum's `MarshalJSON` and `UnmarshalJSON`.
     Json,
     ToString,
     Equals,
@@ -574,10 +550,7 @@ fn string_method(
     value: GoExpression,
 ) -> GoDeclaration {
     GoDeclaration::function(
-        Some(GoParameter::new(
-            receiver,
-            generics.instantiate(&go_name::escape_type_name(name)),
-        )),
+        Some(GoParameter::new(receiver, generics.receiver_type(name))),
         method.to_string(),
         Vec::new(),
         Vec::new(),
@@ -598,66 +571,6 @@ pub(crate) fn format_value(text: &str, mut arguments: Vec<GoExpression>) -> GoEx
         arguments,
     )
 }
-impl Planner<'_> {
-    pub(crate) fn emit_to_string_method(
-        &mut self,
-        name: &str,
-        generics: &ReceiverGenerics,
-        method: &str,
-    ) -> GoDeclaration {
-        let receiver = self
-            .scope
-            .new_local_identifier(synthesized_receiver_name(name, generics));
-        let value = GoExpression::call(
-            GoExpression::selector(
-                GoExpression::identifier(receiver.clone()),
-                "String".to_string(),
-            ),
-            vec![],
-        );
-        string_method(name, generics, receiver, method, value)
-    }
-}
-fn emit_struct_format_method(
-    planner: &mut Planner,
-    name: &str,
-    generics: &ReceiverGenerics,
-    fields: &[StringerField],
-    format: StringFormat<'_>,
-) -> GoDeclaration {
-    let receiver = planner
-        .scope
-        .new_local_identifier(synthesized_receiver_name(name, generics));
-    let parts = fields
-        .iter()
-        .map(|field| format!("{}: {}", field.source_name, format.verb(field.format)))
-        .collect::<Vec<_>>();
-    let arguments = fields
-        .iter()
-        .filter_map(|field| {
-            format.format_argument(
-                GoExpression::selector(
-                    GoExpression::identifier(receiver.clone()),
-                    field.go_name.clone(),
-                ),
-                field.format,
-            )
-        })
-        .collect();
-    let text = if fields.is_empty() {
-        name.to_string()
-    } else {
-        format!("{name} {{ {} }}", parts.join(", "))
-    };
-    string_method(
-        name,
-        generics,
-        receiver,
-        format.method(),
-        format_value(&text, arguments),
-    )
-}
-
 #[derive(Clone, Copy, PartialEq)]
 enum StringerKind {
     Synthesized,
@@ -683,82 +596,134 @@ fn type_methods(definition: &Definition) -> Option<&Methods> {
     }
 }
 
-fn definition_declares_string(definition: &Definition, is_ufcs: impl Fn(&str) -> bool) -> bool {
-    let Some(methods) = type_methods(definition) else {
-        return false;
-    };
-    ["string", ENUM_STRINGER_METHOD]
-        .iter()
-        .any(|method| methods.contains_key(*method) && !is_ufcs(method))
-}
+impl EmitFacts<'_> {
+    fn interface_has_string_selector(&self, id: &str) -> bool {
+        let interface_ty = Type::Nominal {
+            id: id.into(),
+            params: vec![],
+            writable: false,
+        };
+        interface_requirements(&interface_ty, |id| self.definition(id))
+            .iter()
+            .any(|requirement| {
+                requirement.name == "string" || requirement.name == ENUM_STRINGER_METHOD
+            })
+    }
 
-fn emit_struct_shadow_stringer_method(
-    planner: &mut Planner,
-    name: &str,
-    generics: &ReceiverGenerics,
-    fields: &[StringerField],
-) -> GoDeclaration {
-    let receiver = planner
-        .scope
-        .new_local_identifier(synthesized_receiver_name(name, generics));
-    let text = format!("{{{}}}", vec!["%v"; fields.len()].join(" "));
-    let arguments = fields
-        .iter()
-        .map(|field| {
-            GoExpression::selector(
-                GoExpression::identifier(receiver.clone()),
-                field.go_name.clone(),
-            )
-        })
-        .collect();
-    string_method(
-        name,
-        generics,
-        receiver,
-        "String",
-        format_value(&text, arguments),
-    )
-}
-fn emit_tuple_struct_format_method(
-    planner: &mut Planner,
-    name: &str,
-    generics: &ReceiverGenerics,
-    fields: &[DisplayForm],
-    underlying: Option<&GoType>,
-    format: StringFormat<'_>,
-) -> GoDeclaration {
-    let receiver = planner
-        .scope
-        .new_local_identifier(synthesized_receiver_name(name, generics));
-    let arguments = fields
-        .iter()
-        .enumerate()
-        .filter_map(|(index, field)| {
-            let receiver = GoExpression::identifier(receiver.clone());
-            let value = match underlying {
-                Some(ty) => GoExpression::conversion(ty.clone(), receiver),
-                None => GoExpression::selector(receiver, format!("F{index}")),
-            };
-            format.format_argument(value, *field)
-        })
-        .collect();
-    let text = if fields.is_empty() {
-        name.to_string()
-    } else {
-        format!(
-            "{name}({})",
-            fields
-                .iter()
-                .map(|field| format.verb(*field))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    };
-    string_method(
-        name,
-        generics,
-        receiver,
-        format.method(),
-        format_value(&text, arguments),
-    )
+    fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.definition(qualified.as_str())
+            .and_then(type_methods)
+            .and_then(|methods| methods.get(method_name))
+            .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
+            && self.emits_go_method(&qualified, method_name)
+    }
+
+    fn should_synthesize_to_string(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.method(&qualified, "to_string")
+            .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
+    }
+
+    fn should_synthesize_equals(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.synthesizes_equals(qualified.as_str())
+    }
+
+    pub(crate) fn is_newtype_definition(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.definition(qualified.as_str())
+            .is_some_and(Definition::is_newtype)
+    }
+
+    fn is_pointer_backed_newtype(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.definition(qualified.as_str())
+            .is_some_and(|definition| {
+                definition.is_pointer_backed_newtype(|id| self.definition(id))
+            })
+    }
+
+    fn stringer_overrides(&self, name: &str) -> (bool, bool) {
+        let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
+        let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
+        let has_go_stringer =
+            is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
+        (has_stringer, has_go_stringer)
+    }
+
+    fn debug_string_override(&self, name: &str) -> bool {
+        (self.method_needs_export("debug_string")
+            && self.has_stringer_signature(name, "debug_string"))
+            || self.has_stringer_signature(name, DEBUG_STRING_METHOD)
+    }
+
+    fn synthesizes_debug_string(&self, name: &str) -> bool {
+        self.tests_enabled() && !self.debug_string_override(name)
+    }
+
+    pub(crate) fn to_string_method_go_name(&self) -> String {
+        self.method_go_name("to_string", false)
+    }
+
+    pub(crate) fn equals_method_go_name(&self) -> String {
+        self.method_go_name("equals", false)
+    }
+
+    fn stringer_method_name(&self, name: &str, attributes: &[Attribute]) -> Option<&'static str> {
+        if !should_synthesize_stringer(attributes) {
+            return None;
+        }
+        match self.stringer_overrides(name) {
+            (true, true) => None,
+            (true, false) => Some(ENUM_GO_STRINGER_METHOD),
+            _ => Some(ENUM_STRINGER_METHOD),
+        }
+    }
+
+    pub(crate) fn enum_synthesized_methods(
+        &self,
+        name: &str,
+        attributes: &[Attribute],
+    ) -> Vec<SynthesizedMethod> {
+        let mut methods = Vec::new();
+        if should_synthesize_stringer(attributes) {
+            let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
+            if !has_user_string {
+                methods.push(SynthesizedMethod::Format(StringFormat::Display {
+                    method: ENUM_STRINGER_METHOD,
+                    qualified: false,
+                }));
+            }
+            if !has_user_go_string {
+                methods.push(SynthesizedMethod::Format(StringFormat::Display {
+                    method: ENUM_GO_STRINGER_METHOD,
+                    qualified: true,
+                }));
+            }
+        }
+        if attributes.iter().any(|attribute| attribute.name == "json") {
+            methods.push(SynthesizedMethod::Json);
+        }
+        if self.synthesizes_debug_string(name) {
+            methods.push(SynthesizedMethod::Format(StringFormat::Debug));
+        }
+        if self.should_synthesize_to_string(name) {
+            methods.push(SynthesizedMethod::ToString);
+        }
+        if self.should_synthesize_equals(name) {
+            methods.push(SynthesizedMethod::Equals);
+        }
+        methods
+    }
+
+    pub(crate) fn synthesized_method_go_names(&self, method: SynthesizedMethod) -> Vec<String> {
+        match method {
+            SynthesizedMethod::Format(format) => vec![format.method().to_string()],
+            SynthesizedMethod::StringerShadow => vec![ENUM_STRINGER_METHOD.to_string()],
+            SynthesizedMethod::Json => vec!["MarshalJSON".to_string(), "UnmarshalJSON".to_string()],
+            SynthesizedMethod::ToString => vec![self.to_string_method_go_name()],
+            SynthesizedMethod::Equals => vec![self.equals_method_go_name()],
+        }
+    }
 }

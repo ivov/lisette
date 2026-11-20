@@ -18,7 +18,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     let Some(kind) = ctx.store.underlying_simple_kind(ty) else {
         return;
     };
-    if !(kind.is_signed_int() || kind.is_unsigned_int() || kind == SimpleKind::Uintptr) {
+    if !(kind.is_integer() || kind == SimpleKind::Uintptr) {
         return;
     }
 

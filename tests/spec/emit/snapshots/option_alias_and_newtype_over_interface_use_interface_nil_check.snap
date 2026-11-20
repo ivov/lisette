@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  import "go:io"
+  import "go:strings"
+  
+  type MaybeReader = Option<io.Reader>
+  
+  fn plain(r: io.Reader) -> Option<io.Reader> {
+    Some(r)
+  }
+  
+  fn aliased(r: io.Reader) -> MaybeReader {
+    Some(r)
+  }
+  
+  struct W(io.Reader)
+  
+  fn wrapped(r: io.Reader) -> Option<W> {
+    Some(W(r))
+  }
+  
+  fn main() {
+    let r: io.Reader = strings.NewReader("x")
+    let a = plain(r)
+    let b = aliased(r)
+    let c = wrapped(r)
+    fmt.Println(a.is_some(), b.is_some(), c.is_some())
+  }
+---
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type MaybeReader = lisette.Option[io.Reader]
+
+func plain(r io.Reader) io.Reader {
+	return r
+}
+
+func aliased(r io.Reader) io.Reader {
+	return r
+}
+
+type W io.Reader
+
+func wrapped(r io.Reader) W {
+	return W(r)
+}
+
+func main() {
+	var r io.Reader = strings.NewReader("x")
+	raw := plain(r)
+	a := lisette.OptionFromNilable[io.Reader](raw, lisette.IsNilInterface(raw))
+	raw2 := aliased(r)
+	b := lisette.OptionFromNilable[io.Reader](raw2, lisette.IsNilInterface(raw2))
+	raw3 := wrapped(r)
+	c := lisette.OptionFromNilable[W](raw3, lisette.IsNilInterface(raw3))
+	fmt.Println(a.IsSome(), b.IsSome(), c.IsSome())
+}

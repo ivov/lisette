@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let attr = os.ProcAttr { Dir: "", Env: [], Files: [None, Some(os.Stdout)], Sys: None }
+    match attr {
+      os.ProcAttr { Files: [_, ..rest], .. } => {
+        let n = rest.length()
+        match rest.get(0) {
+          Some(Some(f)) => fmt.Println(n, f.Name()),
+          _ => fmt.Println(n, "none"),
+        }
+      },
+      _ => fmt.Println("other"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	src := []lisette.Option[*os.File]{
+		lisette.MakeOptionNone[*os.File](),
+		lisette.MakeOptionSome(os.Stdout),
+	}
+	unwrapped := make([]*os.File, len(src))
+	for i, v := range src {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = v.SomeVal
+		}
+	}
+	attr := os.ProcAttr{
+		Dir:   "",
+		Env:   []string{},
+		Files: unwrapped,
+		Sys:   nil,
+	}
+	if len(attr.Files) >= 1 {
+		src2 := attr.Files[1:]
+		wrapped := make([]lisette.Option[*os.File], len(src2))
+		for i2, v2 := range src2 {
+			if v2 != nil {
+				wrapped[i2] = lisette.MakeOptionSome[*os.File](v2)
+			} else {
+				wrapped[i2] = lisette.MakeOptionNone[*os.File]()
+			}
+		}
+		rest := wrapped
+		n := len(rest)
+		subject := lisette.SliceGet(rest, 0)
+		if subject.Tag == lisette.OptionSome {
+			if subject.SomeVal.Tag == lisette.OptionSome {
+				fmt.Println(n, subject.SomeVal.SomeVal.Name())
+			} else {
+				fmt.Println(n, "none")
+			}
+		} else {
+			fmt.Println(n, "none")
+		}
+	} else {
+		fmt.Println("other")
+	}
+}

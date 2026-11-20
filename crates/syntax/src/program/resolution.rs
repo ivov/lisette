@@ -138,11 +138,9 @@ pub enum DotAccessResolution {
         instantiation: SubstitutionMap,
     },
     /// Instance method used as a first-class value (not called).
-    /// E.g., `Point.area` used as a callback. The emitter needs to know
-    /// whether the receiver is a pointer to emit Go method expression syntax.
+    /// E.g., `Point.area` used as a callback.
     InstanceMethodValue {
         is_exported: bool,
-        is_pointer_receiver: bool,
         definition: Option<Symbol>,
         instantiation: SubstitutionMap,
     },

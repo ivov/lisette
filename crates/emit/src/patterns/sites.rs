@@ -2,9 +2,9 @@ use crate::abi::fallible_producer::ResultFusePlan;
 use std::borrow::Cow;
 use std::slice;
 
+use crate::ir::bodies::GoUses;
+use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::patterns::binding_decls::{has_binding_or_pattern, split_binding_or_patterns};
-use crate::plan::bodies::GoUses;
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 
 use syntax::ast::{Expression, IdentifierResolution, MatchArm, Pattern, Span};
 use syntax::types::Type;
@@ -12,13 +12,16 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::context::expression::ExpressionContext;
+use crate::ir::bodies::{
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, PlacePlan, Statement,
+    declare, define, discard, expression_statement,
+};
+use crate::ir::go_expression::CompositeLayout;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
-use crate::patterns::binding_emit::{
-    self, AssertedPattern, apply_refutable_root_assertion, apply_root_assertion,
-    tree_assignment_statements, tree_binding_statements, with_tree_bindings,
-};
+use crate::patterns::binding_statements::AssertedPattern;
 use crate::patterns::decision_tree::{
     self, BindingTarget, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
@@ -26,14 +29,8 @@ use crate::patterns::matching::{
     ArmBinding, FusedName, PreludeVariant, field_binding, ok_pattern_field, prelude_variant,
     some_pattern_field,
 };
-use crate::plan::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
-    Statement, define, discard, expression_statement,
-};
-use crate::plan::go_expression::CompositeLayout;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
 use crate::statements::testing::{test_context_call, testkit_operand_type};
 
 #[derive(Clone, Copy)]
@@ -49,10 +46,9 @@ enum RefutableFail<'a> {
 }
 
 pub(crate) enum PatternSubject<'a> {
-    /// Already in a Go variable named by the caller.
-    Existing { var: GoExpression },
-    /// Pattern-site picks: inline the scrutinee identifier when safe, else
-    /// hoist into a fresh temp with the given hint.
+    Existing {
+        var: GoExpression,
+    },
     Expression {
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
@@ -80,7 +76,6 @@ impl<'a> PatternSubject<'a> {
     }
 }
 
-/// A pattern subject and the declaration or discard needed to keep it valid.
 pub(super) enum ResolvedSubject {
     Existing(GoExpression),
     Materialized {
@@ -122,7 +117,6 @@ impl ResolvedSubject {
     }
 }
 
-/// The identifier under a chain of field accesses.
 fn field_path_root(expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
     let mut expression = expression.unwrap_parens();
     while let Expression::DotAccess {
@@ -153,14 +147,6 @@ fn field_path_go_root(expression: &GoExpression) -> Option<&GoIdentifier> {
     }
 }
 
-fn loop_break(planner: &Planner) -> LoweredStatement {
-    LoweredStatement::Break(
-        planner
-            .current_loop_id()
-            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
-    )
-}
-
 impl Planner<'_> {
     pub(crate) fn can_reuse_subject_identifier(
         &self,
@@ -176,7 +162,6 @@ impl Planner<'_> {
                 .is_none_or(BindingValue::can_reuse_pattern_subject)
     }
 
-    /// A field path such as `t.status` is read where it sits when nothing rebinds its root.
     pub(crate) fn field_path_reads_in_place(
         &self,
         subject: &Expression,
@@ -215,7 +200,7 @@ impl Planner<'_> {
                         self.reference_go_identifier(value, resolution),
                     ));
                 }
-                let plan = self.lower_value(scrutinee, ExpressionContext::value());
+                let plan = self.plan_value(scrutinee, ExpressionContext::value());
                 let materialized = plan
                     .expression()
                     .as_identifier()
@@ -254,8 +239,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Lower an irrefutable pattern site (no branching): subject setup +
-    /// declaration, root type assertion, per-field binding leaves.
     pub(crate) fn lower_irrefutable_pattern_site(
         &mut self,
         subject: PatternSubject<'_>,
@@ -264,12 +247,11 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(&mut statements, subject);
-        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
+        let info = self.collect_pattern_info(pattern, subject_ty);
 
         let mut body = Vec::new();
-        let asserted = apply_root_assertion(self, &mut body, info, &resolved.var());
-        tree_binding_statements(
-            self,
+        let asserted = self.apply_root_assertion(&mut body, info, &resolved.var());
+        self.tree_binding_statements(
             &mut body,
             &asserted.bindings,
             SubjectRoot::Var(&asserted.subject),
@@ -307,12 +289,12 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         if let RefutableFail::ElseBlock(else_block) = fail {
             if let Some(statements) =
-                self.lower_fused_option_let_else(pattern, scrutinee, else_block)
+                self.try_lower_fused_option_let_else(pattern, scrutinee, else_block)
             {
                 return statements;
             }
             if let Some(statements) =
-                self.lower_fused_result_let_else(pattern, scrutinee, else_block)
+                self.try_lower_fused_result_let_else(pattern, scrutinee, else_block)
             {
                 return statements;
             }
@@ -329,7 +311,7 @@ impl Planner<'_> {
             ty: &value_ty,
         };
 
-        let subject_is_fixed = self.is_unmutated_identifier(scrutinee);
+        let subject_is_fixed = self.facts.is_unmutated_identifier(scrutinee);
         let body = if matches!(pattern, Pattern::Or { .. }) || has_binding_or_pattern(pattern) {
             self.lower_let_else_or_pattern(pattern, subject, fail)
         } else {
@@ -341,8 +323,7 @@ impl Planner<'_> {
         statements
     }
 
-    /// Fuse `let Ok(x) = <Go (T, error) call> else { ... }` into a direct error test.
-    fn lower_fused_result_let_else(
+    fn try_lower_fused_result_let_else(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
@@ -354,7 +335,7 @@ impl Planner<'_> {
         }
         let Some(field) = ok_pattern_field(pattern) else {
             return self
-                .lower_fused_result_let_else_destructure(fuse, pattern, scrutinee, else_block);
+                .try_lower_fused_result_let_else_destructure(fuse, pattern, scrutinee, else_block);
         };
 
         let binding = self.declare_fused_binding(field);
@@ -367,8 +348,7 @@ impl Planner<'_> {
         Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
     }
 
-    /// `let Ok(<irrefutable pattern>) = f() else { ... }`
-    fn lower_fused_result_let_else_destructure(
+    fn try_lower_fused_result_let_else_destructure(
         &mut self,
         fuse: ResultFusePlan<'_>,
         pattern: &Pattern,
@@ -382,7 +362,7 @@ impl Planner<'_> {
             return None;
         }
         let payload_ty = self.facts.peel_alias(&scrutinee.get_type()).ok_type();
-        let info = decision_tree::collect_pattern_info(self, payload, &payload_ty);
+        let info = self.collect_pattern_info(payload, &payload_ty);
         if !info.is_irrefutable() {
             return None;
         }
@@ -398,7 +378,6 @@ impl Planner<'_> {
         let bound = fuse.bind(self, slot, None);
         let value = bound.payload_identifier().cloned();
         let fail_condition = bound.failure_condition();
-        // The else block lowers before the pattern binds its names.
         let mut statements =
             self.finish_fused_let_else(bound.statements, fail_condition, None, else_block);
         if let Some(value) = value.filter(|_| binds) {
@@ -411,9 +390,7 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// Fuse `let Some(x) = <lowered Option source> else { ... }` into a direct
-    /// physical-ABI test.
-    fn lower_fused_option_let_else(
+    fn try_lower_fused_option_let_else(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
@@ -443,7 +420,6 @@ impl Planner<'_> {
         binding: Option<(FusedName<'_>, GoIdentifier)>,
         else_block: &Expression,
     ) -> Vec<Statement> {
-        // The else block sees the enclosing scope, so it lowers before the binding installs.
         let fail_body = self.lower_block_as_body(else_block);
         statements.push(
             LoweredStatement::If(IfPlan {
@@ -485,8 +461,6 @@ impl Planner<'_> {
         Some((name, go_name))
     }
 
-    /// Resolve a while-let scrutinee to its loop-subject var, returning any
-    /// setup statements (none when the scrutinee is an inlinable identifier).
     fn while_let_subject(
         &mut self,
         pattern: &Pattern,
@@ -522,14 +496,13 @@ impl Planner<'_> {
         scrutinee: &Expression,
         body: &Expression,
     ) -> LoweredBlock {
-        if let Some(fused) = self.lower_fused_option_while_let(pattern, scrutinee, body) {
+        if let Some(fused) = self.try_lower_fused_option_while_let(pattern, scrutinee, body) {
             return fused;
         }
 
         let scrutinee_ty = scrutinee.get_type();
         let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
-        // Only a binding or-pattern tests each alternative in turn.
         let alternatives = split_binding_or_patterns(pattern);
         let mut loop_body = subject_setup;
         self.lower_while_let_alternatives(
@@ -552,9 +525,7 @@ impl Planner<'_> {
         }
     }
 
-    /// Fuse `while let Some(x) = <lowered Option source>` into a per-iteration
-    /// physical-ABI test.
-    fn lower_fused_option_while_let(
+    fn try_lower_fused_option_while_let(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
@@ -578,7 +549,7 @@ impl Planner<'_> {
                 initializer: none_condition.initializer,
                 condition: none_condition.condition,
                 then_body: LoweredBlock {
-                    statements: vec![loop_break(self).into()],
+                    statements: vec![self.loop_break().into()],
                 },
                 else_arm: ElseArm::None,
                 else_if_line: None,
@@ -660,10 +631,10 @@ impl Planner<'_> {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
+        let info = self.collect_pattern_info(pattern, subject_ty);
 
         let mut statements = Vec::new();
-        let mut asserted = apply_refutable_root_assertion(self, &mut statements, info, subject_var);
+        let mut asserted = self.apply_refutable_root_assertion(&mut statements, info, subject_var);
 
         if subject_is_fixed {
             asserted.checks.retain(|check| {
@@ -673,8 +644,7 @@ impl Planner<'_> {
         }
 
         if asserted.is_irrefutable() {
-            tree_binding_statements(
-                self,
+            self.tree_binding_statements(
                 &mut statements,
                 &asserted.bindings,
                 SubjectRoot::Var(&asserted.subject),
@@ -717,8 +687,7 @@ impl Planner<'_> {
         statements
             .push(LoweredStatement::If(IfPlan::plain(guard, fail_body, ElseArm::None)).into());
 
-        tree_binding_statements(
-            self,
+        self.tree_binding_statements(
             &mut statements,
             &bindings,
             SubjectRoot::Var(&effective_subject),
@@ -744,7 +713,7 @@ impl Planner<'_> {
         let mut infos: Vec<_> = alternatives
             .iter()
             .flat_map(split_binding_or_patterns)
-            .map(|alt| decision_tree::collect_pattern_info(self, &alt, subject_ty))
+            .map(|alt| self.collect_pattern_info(&alt, subject_ty))
             .collect();
         let mut bindings: Vec<_> = infos.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);
@@ -766,8 +735,7 @@ impl Planner<'_> {
         let mut pieces = Vec::new();
         for alternative in alternatives {
             let mut assigns = Vec::new();
-            tree_assignment_statements(
-                self,
+            self.tree_assignment_statements(
                 &mut assigns,
                 &alternative.bindings,
                 &alternative.subject,
@@ -805,7 +773,7 @@ impl Planner<'_> {
                     continue;
                 }
                 BindingTarget::Unit => {
-                    binding_emit::bind_inline_unit(self, binding);
+                    self.bind_inline_unit(binding);
                     continue;
                 }
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
@@ -818,14 +786,7 @@ impl Planner<'_> {
                 self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, go_name)
             };
             let go_type = self.go_type(ty);
-            statements.push(
-                LoweredStatement::VarDecl {
-                    name: go_name,
-                    go_type,
-                    value: None,
-                }
-                .into(),
-            );
+            statements.push(declare(go_name, go_type));
         }
     }
 
@@ -837,7 +798,7 @@ impl Planner<'_> {
     ) -> Vec<AssertedPattern> {
         infos
             .into_iter()
-            .map(|info| apply_refutable_root_assertion(self, statements, info, subject))
+            .map(|info| self.apply_refutable_root_assertion(statements, info, subject))
             .collect()
     }
 
@@ -854,7 +815,7 @@ impl Planner<'_> {
         } = subject;
         let mut alternatives: Vec<_> = patterns
             .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
+            .map(|alt| self.collect_pattern_info(alt, subject_ty))
             .collect();
         let mut bindings: Vec<_> = alternatives.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);
@@ -865,8 +826,7 @@ impl Planner<'_> {
         for alternative in alternatives {
             let branch = self.with_scope(|this| {
                 let mut branch = Vec::new();
-                with_tree_bindings(
-                    this,
+                this.with_tree_bindings(
                     &mut branch,
                     &alternative.bindings,
                     &alternative.subject,
@@ -885,7 +845,7 @@ impl Planner<'_> {
         }
 
         let terminal = LoweredBlock {
-            statements: vec![loop_break(self).into()],
+            statements: vec![self.loop_break().into()],
         };
         statements.push(assemble_if_else_chain(pieces, terminal).into());
     }
@@ -912,13 +872,10 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> Vec<Statement> {
         self.lower_refutable_arm(subject, pattern, some_body, place, |this| {
-            Some(lower_none_arm_body(this, match_arms, place))
+            Some(this.lower_none_arm_body(match_arms, place))
         })
     }
 
-    /// Lower a refutable site whose checks gate `body` into structured IR. The
-    /// `failure` callback produces the `else` block (run only on the guarded
-    /// path) for the caller's failure continuation; `None` means no `else`.
     fn lower_refutable_arm(
         &mut self,
         subject: TypedSubject,
@@ -931,13 +888,12 @@ impl Planner<'_> {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
+        let info = self.collect_pattern_info(pattern, subject_ty);
         let mut statements = Vec::new();
-        let asserted = apply_refutable_root_assertion(self, &mut statements, info, subject_var);
+        let asserted = self.apply_refutable_root_assertion(&mut statements, info, subject_var);
 
         if asserted.is_irrefutable() {
-            with_tree_bindings(
-                self,
+            self.with_tree_bindings(
                 &mut statements,
                 &asserted.bindings,
                 &asserted.subject,
@@ -951,8 +907,7 @@ impl Planner<'_> {
         }
         let condition = asserted.condition(&mut self.scope);
         let mut then_body = Vec::new();
-        with_tree_bindings(
-            self,
+        self.with_tree_bindings(
             &mut then_body,
             &asserted.bindings,
             &asserted.subject,
@@ -978,55 +933,7 @@ impl Planner<'_> {
         );
         statements
     }
-}
 
-pub(crate) fn lower_none_arm_body(
-    planner: &mut Planner,
-    match_arms: &[MatchArm],
-    place: &PlacePlan,
-) -> LoweredBlock {
-    for match_arm in match_arms {
-        if matches!(
-            prelude_variant(&match_arm.pattern),
-            Some((PreludeVariant::None, _))
-        ) {
-            return planner.lower_block_to_place(&match_arm.expression, place);
-        }
-    }
-    LoweredBlock {
-        statements: Vec::new(),
-    }
-}
-
-/// Peel `Some(inner)` to expose `inner`; returns the original pattern when
-/// the outer is not `Some(_)`.
-pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
-    let pattern = peel_as_binding(pattern);
-    some_payload_pattern(pattern).unwrap_or(pattern)
-}
-
-pub(crate) fn some_payload_pattern(pattern: &Pattern) -> Option<&Pattern> {
-    match prelude_variant(pattern)? {
-        (PreludeVariant::Some, [payload]) => Some(payload),
-        _ => None,
-    }
-}
-
-pub(crate) fn is_some_pattern(pattern: &Pattern) -> bool {
-    some_payload_pattern(peel_as_binding(pattern)).is_some()
-}
-
-fn peel_as_binding(pattern: &Pattern) -> &Pattern {
-    match pattern {
-        Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
-        p => p,
-    }
-}
-
-impl Planner<'_> {
-    /// Map a `Some(pattern)` payload to a case-variable name and whether the
-    /// payload needs decision-tree destructuring inside the arm body (rather
-    /// than being bound directly by the `case v := <-ch:` header).
     pub(crate) fn classify_receive_var_pattern(
         &mut self,
         pattern: &Pattern,
@@ -1038,7 +945,7 @@ impl Planner<'_> {
                 binding,
                 ..
             } => {
-                let Some(go_name) = self.go_name_for_binding(pattern) else {
+                let Some(go_name) = self.facts.go_name_for_binding(pattern) else {
                     return (GoIdentifier::external("_".to_string()), false);
                 };
                 let preferred = go_name.preferred();
@@ -1063,11 +970,53 @@ impl Planner<'_> {
             }
         }
     }
+
+    fn loop_break(&self) -> LoweredStatement {
+        LoweredStatement::Break(self.current_loop_transfer())
+    }
+
+    pub(crate) fn lower_none_arm_body(
+        &mut self,
+        match_arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> LoweredBlock {
+        for match_arm in match_arms {
+            if matches!(
+                prelude_variant(&match_arm.pattern),
+                Some((PreludeVariant::None, _))
+            ) {
+                return self.lower_block_to_place(&match_arm.expression, place);
+            }
+        }
+        LoweredBlock {
+            statements: Vec::new(),
+        }
+    }
 }
 
-/// Fold the `(condition, body)` pieces plus a terminal `else` block into a
-/// nested if/else-if statement, built from the back. `pieces` must be
-/// non-empty.
+pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
+    let pattern = peel_as_binding(pattern);
+    some_payload_pattern(pattern).unwrap_or(pattern)
+}
+
+pub(crate) fn some_payload_pattern(pattern: &Pattern) -> Option<&Pattern> {
+    match prelude_variant(pattern)? {
+        (PreludeVariant::Some, [payload]) => Some(payload),
+        _ => None,
+    }
+}
+
+pub(crate) fn is_some_pattern(pattern: &Pattern) -> bool {
+    some_payload_pattern(peel_as_binding(pattern)).is_some()
+}
+
+fn peel_as_binding(pattern: &Pattern) -> &Pattern {
+    match pattern {
+        Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
+        p => p,
+    }
+}
+
 fn assemble_if_else_chain(
     mut pieces: Vec<(GoExpression, LoweredBlock)>,
     terminal: LoweredBlock,

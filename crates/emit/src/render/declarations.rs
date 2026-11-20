@@ -1,9 +1,11 @@
-use crate::plan::bodies::{LoweredBlock, for_each_statements_mut};
-use crate::plan::declarations::{DeclarationKind, Documentation, GoDeclaration, TypeParameter};
-use crate::plan::go_expression::Position;
+use crate::ir::bodies::{LoweredBlock, for_each_statements_mut};
+use crate::ir::declarations::{
+    ConstantDeclaration, DeclarationKind, Documentation, FieldDeclaration, GoDeclaration,
+    InterfaceMethod, TypeParameter,
+};
+use crate::ir::go_expression::Position;
 use crate::render::{Renderer, writer::GoWriter};
-use crate::types::go_type::GoTypeShape;
-use crate::utils::group_params;
+use crate::types::go_type::{GoType, GoTypeShape};
 use std::fmt::Write;
 
 fn write_documentation(output: &mut GoWriter, documentation: &Documentation) {
@@ -78,17 +80,7 @@ impl Renderer {
                 write!(output, "type {name}").unwrap();
                 generics(&mut output, parameters);
                 output.push_str(" ");
-                if let GoTypeShape::Struct(fields) = underlying.shape.as_ref()
-                    && !fields.is_empty()
-                {
-                    output.push_str("struct {\n");
-                    for (name, ty) in fields {
-                        writeln!(output, "{name} {}", ty.code).unwrap();
-                    }
-                    output.push('}');
-                } else {
-                    output.push_str(&underlying.code);
-                }
+                write_underlying(&mut output, underlying);
             }
             DeclarationKind::Alias {
                 name,
@@ -98,17 +90,7 @@ impl Renderer {
                 write!(output, "type {name}").unwrap();
                 generics(&mut output, parameters);
                 output.push_str(" = ");
-                if let GoTypeShape::Struct(fields) = underlying.shape.as_ref()
-                    && !fields.is_empty()
-                {
-                    output.push_str("struct {\n");
-                    for (name, ty) in fields {
-                        writeln!(output, "{name} {}", ty.code).unwrap();
-                    }
-                    output.push('}');
-                } else {
-                    output.push_str(&underlying.code);
-                }
+                write_underlying(&mut output, underlying);
             }
             DeclarationKind::Struct {
                 name,
@@ -117,27 +99,7 @@ impl Renderer {
             } => {
                 write!(output, "type {name}").unwrap();
                 generics(&mut output, parameters);
-                if fields.is_empty() {
-                    output.push_str(" struct{}");
-                } else {
-                    output.push_str(" struct {\n");
-                    for field in fields {
-                        write_documentation(&mut output, &field.documentation);
-                        if let Some(position) = &declaration.position {
-                            output.push_line_directive(position);
-                        }
-                        if let Some(name) = &field.name {
-                            write!(output, "{name} ").unwrap();
-                        }
-                        output.push_str(&field.ty.code);
-                        if let Some(tag) = &field.tag {
-                            output.push(' ');
-                            output.push_foreign(tag);
-                        }
-                        output.push('\n');
-                    }
-                    output.push('}');
-                }
+                write_struct_body(&mut output, fields, declaration.position.as_ref());
             }
             DeclarationKind::Interface {
                 name,
@@ -147,42 +109,9 @@ impl Renderer {
             } => {
                 write!(output, "type {name}").unwrap();
                 generics(&mut output, parameters);
-                output.push_str(" interface {\n");
-                for parent in parents {
-                    writeln!(output, "{}", parent.code).unwrap();
-                }
-                for method in methods {
-                    write!(output, "{}(", method.name).unwrap();
-                    for (index, parameter) in method.parameters.iter().enumerate() {
-                        if index > 0 {
-                            output.push_str(", ");
-                        }
-                        output.push_str(&parameter.code);
-                    }
-                    output.push(')');
-                    if !method.result.is_empty() {
-                        write!(output, " {}", method.result.code).unwrap();
-                    }
-                    output.push('\n');
-                }
-                output.push('}');
+                write_interface_body(&mut output, parents, methods);
             }
-            DeclarationKind::Constants(constants) => {
-                output.push_str("const (\n");
-                for constant in constants {
-                    write_documentation(&mut output, &constant.documentation);
-                    output.push_str(&constant.name);
-                    if let Some(ty) = &constant.ty {
-                        write!(output, " {}", ty.code).unwrap();
-                    }
-                    if let Some(value) = &constant.value {
-                        output.push_str(" = ");
-                        value.write(&mut output);
-                    }
-                    output.push('\n');
-                }
-                output.push(')');
-            }
+            DeclarationKind::Constants(constants) => write_constants(&mut output, constants),
             DeclarationKind::Binding(binding) => self.render_lowered_block(
                 &mut output,
                 &LoweredBlock {
@@ -218,4 +147,110 @@ impl Renderer {
         }
         output.into_text()
     }
+}
+
+fn write_struct_body(
+    output: &mut GoWriter,
+    fields: &[FieldDeclaration],
+    position: Option<&Position>,
+) {
+    if fields.is_empty() {
+        output.push_str(" struct{}");
+        return;
+    }
+    output.push_str(" struct {\n");
+    for field in fields {
+        write_documentation(output, &field.documentation);
+        if let Some(position) = position {
+            output.push_line_directive(position);
+        }
+        if let Some(name) = &field.name {
+            write!(output, "{name} ").unwrap();
+        }
+        output.push_str(&field.ty.code);
+        if let Some(tag) = &field.tag {
+            output.push(' ');
+            output.push_foreign(tag);
+        }
+        output.push('\n');
+    }
+    output.push('}');
+}
+
+fn write_interface_body(output: &mut GoWriter, parents: &[GoType], methods: &[InterfaceMethod]) {
+    output.push_str(" interface {\n");
+    for parent in parents {
+        writeln!(output, "{}", parent.code).unwrap();
+    }
+    for method in methods {
+        write!(output, "{}(", method.name).unwrap();
+        for (index, parameter) in method.parameters.iter().enumerate() {
+            if index > 0 {
+                output.push_str(", ");
+            }
+            output.push_str(&parameter.code);
+        }
+        output.push(')');
+        if !method.result.is_empty() {
+            write!(output, " {}", method.result.code).unwrap();
+        }
+        output.push('\n');
+    }
+    output.push('}');
+}
+
+fn write_constants(output: &mut GoWriter, constants: &[ConstantDeclaration]) {
+    output.push_str("const (\n");
+    for constant in constants {
+        write_documentation(output, &constant.documentation);
+        output.push_str(&constant.name);
+        if let Some(ty) = &constant.ty {
+            write!(output, " {}", ty.code).unwrap();
+        }
+        if let Some(value) = &constant.value {
+            output.push_str(" = ");
+            value.write(output);
+        }
+        output.push('\n');
+    }
+    output.push(')');
+}
+
+fn write_underlying(output: &mut GoWriter, underlying: &GoType) {
+    if let GoTypeShape::Struct(fields) = underlying.shape.as_ref()
+        && !fields.is_empty()
+    {
+        output.push_str("struct {\n");
+        for (name, ty) in fields {
+            writeln!(output, "{name} {}", ty.code).unwrap();
+        }
+        output.push('}');
+    } else {
+        output.push_str(&underlying.code);
+    }
+}
+
+pub(crate) fn group_params(params: &[(String, String)]) -> String {
+    if params.is_empty() {
+        return String::new();
+    }
+    if params.len() == 1 {
+        return format!("{} {}", params[0].0, params[0].1);
+    }
+    let mut parts: Vec<String> = Vec::new();
+    let mut names: Vec<&str> = vec![&params[0].0];
+    let mut current_ty = &params[0].1;
+
+    for param in &params[1..] {
+        if param.1 == *current_ty {
+            names.push(&param.0);
+        } else {
+            parts.push(format!("{} {}", names.join(", "), current_ty));
+            names.clear();
+            names.push(&param.0);
+            current_ty = &param.1;
+        }
+    }
+    parts.push(format!("{} {}", names.join(", "), current_ty));
+    parts.join(", ")
 }

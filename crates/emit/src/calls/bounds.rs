@@ -1,9 +1,9 @@
 use super::NativeCallContext;
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
-use crate::plan::bodies::Statement;
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::values::{CaptureBoundary, GoExpression};
+use crate::ir::bodies::Statement;
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::values::{CaptureBoundary, GoExpression};
+use crate::state::expression::ExpressionContext;
 
 pub(crate) struct BoundsCheckedIndex {
     receiver: GoExpression,
@@ -52,7 +52,6 @@ impl BoundsCheckedIndex {
 }
 
 impl Planner<'_> {
-    /// `xs.get(i)` as a bounds test and a direct index, each operand evaluated once.
     pub(crate) fn lower_bounds_checked_index(
         &mut self,
         call: &NativeCallContext<'_>,
@@ -77,7 +76,7 @@ impl Planner<'_> {
         let mut values = sequenced.values;
         let index = values.pop().expect("index operand");
         let mut receiver = values.pop().expect("receiver operand");
-        if source.get_type().is_ref() {
+        if self.facts.is_reference(&source.get_type()) {
             receiver = GoExpression::dereference(receiver);
         }
         (setup, BoundsCheckedIndex { receiver, index })

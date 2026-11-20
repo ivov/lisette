@@ -1,23 +1,27 @@
 use crate::Planner;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::structs::SynthesizedMethod;
+use crate::ir::bodies::{
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, SwitchCasePlan, SwitchKind,
+    SwitchStatementPlan,
+};
+use crate::ir::declarations::GoDeclaration;
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::go_expression::{CompositeLayout, GoParameter};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
+use crate::names::generics::generic_bounds;
 use crate::names::go_name;
-use crate::plan::bodies::{ElseArm, IfPlan, LoweredStatement, SwitchKind, SwitchStatementPlan};
-use crate::plan::bodies::{LoweredBlock, SwitchCasePlan};
-use crate::plan::declarations::GoDeclaration;
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::go_expression::{CompositeLayout, GoParameter};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::names::receiver::ReceiverGenerics;
+use crate::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::types::go_type::GoType;
-use crate::utils::ReceiverGenerics;
-use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
+use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
-    pub(crate) fn emit_enum(
+    pub(crate) fn try_emit_enum(
         &mut self,
         name: &str,
         generics: &[Generic],
@@ -29,25 +33,11 @@ impl Planner<'_> {
         let layout = self.facts.enum_layout(&enum_id)?;
 
         let receiver_generics = self.receiver_generics(generics);
-        let generics = self.plan_generics(
-            &generics
-                .iter()
-                .map(|generic| {
-                    (
-                        generic.name.clone(),
-                        generic
-                            .resolved_bounds()
-                            .expect("generic bounds are resolved before emission")
-                            .cloned()
-                            .collect(),
-                    )
-                })
-                .collect::<Vec<_>>(),
-        );
+        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
         let mut result = layout.emit_definition(self, generics, doc_comment);
-        for method in self.enum_synthesized_methods(name, attributes) {
+        for method in self.facts.enum_synthesized_methods(name, attributes) {
             match method {
                 SynthesizedMethod::Format(format) => {
                     result.push(layout.format_declaration(self, &receiver_generics, format))
@@ -58,7 +48,7 @@ impl Planner<'_> {
                 SynthesizedMethod::ToString => result.push(self.emit_to_string_method(
                     name,
                     &receiver_generics,
-                    &self.to_string_method_go_name(),
+                    &self.facts.to_string_method_go_name(),
                 )),
                 SynthesizedMethod::Equals => {
                     result.extend(self.enum_equals_method(name, &enum_id, &receiver_generics))
@@ -107,9 +97,8 @@ impl Planner<'_> {
         let other = synthesized_local_name("other", &receiver, receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
-        let go_type_name = go_name::escape_type_name(name);
-        let receiver_type = receiver_generics.instantiate(&go_type_name);
-        let go_method = self.equals_method_go_name();
+        let receiver_type = receiver_generics.receiver_type(name);
+        let go_method = self.facts.equals_method_go_name();
 
         let mut recipes = self.facts.synthesized_field_equalities(enum_id).iter();
         let mut cases: Vec<SwitchCasePlan> = Vec::new();
@@ -155,39 +144,7 @@ impl Planner<'_> {
             });
         }
 
-        let left = GoExpression::selector(
-            GoExpression::identifier(receiver.clone()),
-            "Tag".to_string(),
-        );
-        let right =
-            GoExpression::selector(GoExpression::identifier(other.clone()), "Tag".to_string());
-        let statements = if cases.is_empty() {
-            vec![plain_return(GoExpression::binary(
-                left,
-                BinaryOp::Eq,
-                right,
-            ))]
-        } else {
-            vec![
-                LoweredStatement::If(IfPlan::plain(
-                    GoExpression::binary(left.clone(), BinaryOp::Ne, right),
-                    LoweredBlock {
-                        statements: vec![plain_return(GoExpression::literal("false".to_string()))],
-                    },
-                    ElseArm::None,
-                ))
-                .into(),
-                LoweredStatement::Switch(SwitchStatementPlan {
-                    kind: SwitchKind::Value { subject: left },
-                    cases,
-                    default: Some(LoweredBlock {
-                        statements: vec![plain_return(GoExpression::literal("true".to_string()))],
-                    }),
-                    default_line: None,
-                })
-                .into(),
-            ]
-        };
+        let statements = lower_enum_equals_body(&receiver, &other, cases);
         let declaration = GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
             go_method,
@@ -206,10 +163,10 @@ impl Planner<'_> {
     ) -> GoDeclaration {
         let layout = self.facts.enum_layout(enum_id).expect("enum layout exists");
         let variant = layout
-            .get_variant(variant_name)
+            .variant(variant_name)
             .expect("variant exists in layout");
         let mut fields = vec![(
-            "Tag".to_string(),
+            ENUM_TAG_FIELD.to_string(),
             GoExpression::external_name(variant.tag_constant.clone()),
         )];
         let mut parameters = Vec::new();
@@ -242,16 +199,7 @@ impl Planner<'_> {
                 &layout
                     .generics
                     .iter()
-                    .map(|generic| {
-                        (
-                            generic.name.clone(),
-                            generic
-                                .resolved_bounds()
-                                .expect("generic bounds are resolved before emission")
-                                .cloned()
-                                .collect(),
-                        )
-                    })
+                    .map(generic_bounds)
                     .collect::<Vec<_>>(),
             ),
             parameters,
@@ -264,5 +212,47 @@ impl Planner<'_> {
                 ))],
             },
         )
+    }
+}
+
+fn lower_enum_equals_body(
+    receiver: &GoIdentifier,
+    other: &GoIdentifier,
+    cases: Vec<SwitchCasePlan>,
+) -> Vec<Statement> {
+    let left = GoExpression::selector(
+        GoExpression::identifier(receiver.clone()),
+        ENUM_TAG_FIELD.to_string(),
+    );
+    let right = GoExpression::selector(
+        GoExpression::identifier(other.clone()),
+        ENUM_TAG_FIELD.to_string(),
+    );
+    if cases.is_empty() {
+        vec![plain_return(GoExpression::binary(
+            left,
+            BinaryOp::Eq,
+            right,
+        ))]
+    } else {
+        vec![
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::binary(left.clone(), BinaryOp::Ne, right),
+                LoweredBlock {
+                    statements: vec![plain_return(GoExpression::literal("false".to_string()))],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+            LoweredStatement::Switch(SwitchStatementPlan {
+                kind: SwitchKind::Value { subject: left },
+                cases,
+                default: Some(LoweredBlock {
+                    statements: vec![plain_return(GoExpression::literal("true".to_string()))],
+                }),
+                default_line: None,
+            })
+            .into(),
+        ]
     }
 }

@@ -1,28 +1,29 @@
+use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::ReturnSlot;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::BodyOrigin;
-use crate::names::go_name;
-use crate::names::go_name::GO_IMPORT_PREFIX;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, directed_first,
     expression_statement,
 };
-use crate::plan::declarations::{
+use crate::ir::declarations::{
     DeclarationKind, FieldDeclaration, FunctionSignature, GoDeclaration,
 };
-use crate::plan::go_expression::GoParameter;
-use crate::plan::go_expression::Position;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::ir::go_expression::GoParameter;
+use crate::ir::go_expression::Position;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
+use crate::names::go_name;
+use crate::names::go_name::GO_IMPORT_PREFIX;
+use crate::names::receiver::fresh_receiver_name;
 use crate::types::go_type::GoType;
-use crate::utils::fresh_receiver_name;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::StructFields;
 use syntax::ast::{Expression, FunctionDefinitionView};
-use syntax::program::GoHint;
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, CheckedMethod, ConformanceWitness, InterfaceConversion};
 use syntax::program::{
@@ -42,16 +43,11 @@ pub(crate) struct AdapterPlan {
 
 #[derive(Debug, Clone)]
 pub(crate) struct AdapterMethod {
-    /// The interface's Go method name.
     go_name: String,
     source_name: EcoString,
-    /// The implementation's Go method name.
     source_go_name: String,
-    /// An unconstrained generic receiver may expose either physical signature.
     alternate: Option<FunctionLayout>,
-    /// The implementation's Go slots.
     source: FunctionLayout,
-    /// The interface's Go slots.
     target: FunctionLayout,
 }
 
@@ -64,29 +60,6 @@ impl AdapterMethod {
 }
 
 impl Planner<'_> {
-    /// Source checking proves the logical bound, but Go cannot express a union
-    /// of methods returning tagged Partial and methods returning (value, error).
-    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
-        interface_requirements(&self.facts.peel_alias(bound), |id| {
-            self.facts.definition(id)
-        })
-        .iter()
-        .any(|requirement| {
-            !go_name::is_go_import(&requirement.declaring_interface)
-                && requirement
-                    .ty
-                    .get_function_ret()
-                    .is_some_and(|ty| self.facts.peel_alias(ty).is_partial())
-        })
-    }
-
-    /// Generic Lisette interfaces call a method's tagged twin.
-    pub(crate) fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
-        !go_name::is_go_import(&requirement.declaring_interface)
-            && self.facts.method_uses_tagged_return(&requirement.name)
-    }
-
-    /// Lisette code calls the twin, so Go code alone sees the method's Go shape.
     pub(crate) fn selects_tagged_twin(&self, expression: &Expression) -> bool {
         match expression.unwrap_parens() {
             Expression::DotAccess {
@@ -102,15 +75,9 @@ impl Planner<'_> {
                 .checked(expression)
                 .function_value()
                 .and_then(|recorded| recorded.definition.as_deref())
-                .is_some_and(|symbol| self.definition_selects_tagged_twin(symbol)),
+                .is_some_and(|symbol| self.facts.definition_selects_tagged_twin(symbol)),
             _ => false,
         }
-    }
-
-    pub(crate) fn definition_selects_tagged_twin(&self, symbol: &str) -> bool {
-        symbol
-            .rsplit_once('.')
-            .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
     }
 
     fn receiver_selects_tagged_twin(&self, receiver_ty: &Type, member: &str) -> bool {
@@ -126,9 +93,7 @@ impl Planner<'_> {
                 .find(|parameter| &parameter.name == name)
                 .map(|parameter| parameter.bounds.clone())
                 .unwrap_or_default(),
-            Type::Nominal { id, .. }
-                if go_name::is_go_import(id) || id.starts_with(go_name::PRELUDE_PREFIX) =>
-            {
+            Type::Nominal { id, .. } if go_name::is_go_import(id) || go_name::is_prelude_id(id) => {
                 return false;
             }
             Type::Nominal { id, .. }
@@ -137,7 +102,7 @@ impl Planner<'_> {
                     .definition(id)
                     .is_some_and(Definition::is_interface) =>
             {
-                return self.has_tagged_twin(id, member);
+                return self.facts.has_tagged_twin(id, member);
             }
             Type::Nominal { .. } => vec![receiver.clone()],
             _ => return false,
@@ -148,20 +113,11 @@ impl Planner<'_> {
             })
             .iter()
             .any(|requirement| {
-                requirement.name == member && self.requirement_uses_tagged_twin(requirement)
+                requirement.name == member && self.facts.requirement_uses_tagged_twin(requirement)
             })
         })
     }
 
-    fn has_tagged_twin(&self, owner: &str, member: &str) -> bool {
-        !go_name::is_go_import(owner)
-            && !owner.starts_with(go_name::PRELUDE_PREFIX)
-            && self.facts.method_uses_tagged_return(member)
-            && self.facts.method(owner, member).is_some()
-            && !self.facts.is_ufcs_method(owner, member)
-    }
-
-    /// A twin that returns the one tagged value a generic interface result needs.
     pub(crate) fn emit_tagged_twin(
         &mut self,
         method: FunctionDefinitionView<'_>,
@@ -181,7 +137,7 @@ impl Planner<'_> {
         let source = self.function_layout(
             parameters.clone(),
             &result,
-            self.method_return_abi(return_ty),
+            self.facts.return_abi(return_ty, ReturnSlot::Method),
             Some(return_ty),
         );
         let target = self.function_layout(
@@ -198,7 +154,7 @@ impl Planner<'_> {
             source,
             target,
         };
-        let line = self.source_position(&method.name_span);
+        let line = self.facts.source_position(&method.name_span);
         self.emit_adapter_method(
             MethodReceiver::Itself(&receiver.ty),
             generic_context,
@@ -207,28 +163,15 @@ impl Planner<'_> {
         )
     }
 
-    fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
-        let name = self.method_go_name(&requirement.name, false);
-        if self.requirement_uses_tagged_twin(requirement) {
-            go_name::tagged_twin(&name)
-        } else {
-            name
-        }
-    }
-
     pub(crate) fn bound_dispatch_requirement(
         &self,
         expression: &Expression,
     ) -> Option<(Type, InterfaceRequirement)> {
         self.bound_requirement(expression)
-            .filter(|(bound, _)| self.bound_needs_dispatch(bound))
+            .filter(|(bound, _)| self.facts.bound_needs_dispatch(bound))
     }
 
-    /// The requirement of a type parameter's bound that a method access selects, as the checker selected it.
-    pub(crate) fn bound_requirement(
-        &self,
-        expression: &Expression,
-    ) -> Option<(Type, InterfaceRequirement)> {
+    fn bound_requirement(&self, expression: &Expression) -> Option<(Type, InterfaceRequirement)> {
         let Expression::DotAccess {
             expression: receiver,
             ..
@@ -257,7 +200,6 @@ impl Planner<'_> {
         Some((bound, requirement))
     }
 
-    /// The Go interface method a bound method access selects.
     pub(crate) fn go_bound_requirement(
         &self,
         expression: &Expression,
@@ -280,8 +222,6 @@ impl Planner<'_> {
     ) -> Option<FunctionLayout> {
         let function = requirement.ty.as_function_type()?;
         let declared = if go && !go_name::is_go_import(&requirement.declaring_interface) {
-            // A Go implementation satisfies the instantiated logical signature;
-            // it does not inherit the Lisette interface's type parameters.
             function
         } else {
             requirement.method.ty.as_function_type()?
@@ -308,19 +248,18 @@ impl Planner<'_> {
         let result =
             self.value_layout_with_declaration(&result_type, origin, &declared.return_type);
         let abi = if go {
-            self.facts
-                .classify_go_return_type(&declared.return_type, &requirement.method.go_hints)
-                .map_or_else(
-                    || CallableReturnAbi::unlowered(&declared.return_type),
-                    CallableReturnAbi::Lowered,
-                )
+            self.facts.return_abi(
+                &declared.return_type,
+                ReturnSlot::Go {
+                    hints: &requirement.method.go_hints,
+                },
+            )
         } else {
-            self.interface_method_return_abi(&requirement.name, &requirement.method)
+            self.facts.requirement_return_abi(requirement)
         };
         Some(self.function_layout(parameters, &result, abi, Some(&declared.return_type)))
     }
 
-    /// The adapter of a type parameter whose bound needs dispatch, where `witness` selects each method, or the target is the recorded bound itself when it is absent.
     pub(crate) fn dynamic_interface_adapter(
         &self,
         source: &Type,
@@ -336,7 +275,7 @@ impl Planner<'_> {
         let mut methods = Vec::new();
         let mut seen = HashSet::default();
         for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
-            if !seen.insert(self.method_go_name(&requirement.name, false)) {
+            if !seen.insert(self.facts.method_go_name(&requirement.name, false)) {
                 continue;
             }
             let selected = match witness {
@@ -353,8 +292,8 @@ impl Planner<'_> {
                 None => local.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette),
             };
             methods.push(AdapterMethod {
-                source_go_name: self.requirement_go_name(&selected),
-                go_name: self.requirement_go_name(&requirement),
+                source_go_name: self.facts.requirement_go_name(&selected),
+                go_name: self.facts.requirement_go_name(&requirement),
                 source_name: selected.name,
                 source: local,
                 alternate: Some(foreign),
@@ -371,7 +310,6 @@ impl Planner<'_> {
         })
     }
 
-    /// The method of a bound of the type parameter `parameter` that `witness` selected for `requirement`.
     fn selected_bound_requirement(
         &self,
         parameter: &str,
@@ -411,7 +349,7 @@ impl Planner<'_> {
         GoType::method_interface(method_name, &parameters, &result)
     }
 
-    fn plan_dynamic_adapter_body(
+    fn lower_dynamic_adapter_body(
         &mut self,
         method: &AdapterMethod,
         alternate: &FunctionLayout,
@@ -426,9 +364,7 @@ impl Planner<'_> {
             ),
         );
         let mut statements = Vec::new();
-        if !method.source.same_parameter_representation(alternate)
-            || !method.source.same_result_representation(alternate)
-        {
+        if !method.source.same_representation(alternate) {
             let local_type = self.dynamic_method_interface(&method.source_go_name, &method.source);
             let local = self.fresh_local(Some("receiver"));
             let ok = self.fresh_local(Some("ok"));
@@ -466,7 +402,7 @@ impl Planner<'_> {
                 .into(),
             );
         }
-        let foreign_name = self.method_go_name(&method.source_name, false);
+        let foreign_name = self.facts.method_go_name(&method.source_name, false);
         let foreign_type = self.dynamic_method_interface(&foreign_name, alternate);
         let foreign = GoExpression::type_assertion(inner, foreign_type);
         let arguments = self.plan_bridged_arguments(
@@ -489,72 +425,15 @@ impl Planner<'_> {
         variant: Option<&str>,
         field_name: &str,
     ) -> Option<Type> {
-        let (field_ty, subst_map) = self.declared_field_ty(struct_ty, variant, field_name)?;
+        let (field_ty, subst_map) = self
+            .facts
+            .declared_field_ty(struct_ty, variant, field_name)?;
         Some(match subst_map {
             Some(subst_map) => substitute(&field_ty, &subst_map),
             None => field_ty,
         })
     }
 
-    pub(crate) fn declared_field_ty(
-        &self,
-        struct_ty: &Type,
-        variant: Option<&str>,
-        field_name: &str,
-    ) -> Option<(Type, Option<SubstitutionMap>)> {
-        let stripped = self.facts.strip_and_peel(struct_ty);
-        let Type::Nominal { id, params, .. } = &stripped else {
-            return None;
-        };
-        let (field_ty, generics) = match (&self.facts.definition(id.as_str())?.body, variant) {
-            (
-                DefinitionBody::Struct {
-                    fields, generics, ..
-                },
-                None,
-            ) => {
-                let field = fields
-                    .iter()
-                    .find(|field| field.name == field_name)
-                    .or_else(|| {
-                        let StructFields::Tuple(fields) = fields else {
-                            return None;
-                        };
-                        fields.get(field_name.parse::<usize>().ok()?)
-                    })?;
-                (field.ty.clone(), generics)
-            }
-            (
-                DefinitionBody::Enum {
-                    variants, generics, ..
-                },
-                Some(variant_name),
-            ) => {
-                let variant = variants
-                    .iter()
-                    .find(|variant| variant.name == unqualified_name(variant_name))?;
-                let field = variant
-                    .fields
-                    .iter()
-                    .find(|field| field.name == field_name)?;
-                (field.ty.clone(), generics)
-            }
-            _ => return None,
-        };
-        let subst_map = (!generics.is_empty()).then(|| build_substitution_map(generics, params));
-        Some((field_ty, subst_map))
-    }
-
-    pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal { .. } = ty else {
-            return false;
-        };
-        self.facts.resolve_to_function_type(ty).is_some()
-    }
-
-    /// Build an adapter when the implementation and interface expose different
-    /// physical Go return signatures for the same logical methods.
-    /// The adapter that `conversion` needs, or None when Go converts the value as it is.
     pub(crate) fn interface_adapter(
         &self,
         conversion: &InterfaceConversion,
@@ -578,7 +457,7 @@ impl Planner<'_> {
                     && parameter
                         .bounds
                         .iter()
-                        .any(|bound| self.bound_needs_dispatch(bound))
+                        .any(|bound| self.facts.bound_needs_dispatch(bound))
             })
         {
             return self.dynamic_interface_adapter(source_ty, &target, conversion.witness.as_ref());
@@ -598,8 +477,6 @@ impl Planner<'_> {
         })
     }
 
-    /// The adapter's method plans, or None when the source cannot implement
-    /// the interface or no method needs adapting.
     fn adapted_methods(
         &self,
         source_stripped: &Type,
@@ -619,8 +496,7 @@ impl Planner<'_> {
         let mut any_adapted = false;
         let mut seen = HashSet::default();
         for requirement in requirements {
-            // Parents may spell one Go method with different source names.
-            let selector = self.method_go_name(&requirement.name, false);
+            let selector = self.facts.method_go_name(&requirement.name, false);
             if !seen.insert(selector) {
                 continue;
             }
@@ -702,11 +578,12 @@ impl Planner<'_> {
                 CallableReturnAbi::Lowered,
             )
         } else if let Some(source) = source_requirement {
-            self.interface_method_return_abi(&source.name, &source.method)
-        } else if self.requirement_uses_tagged_twin(requirement) {
+            self.facts.requirement_return_abi(source)
+        } else if self.facts.requirement_uses_tagged_twin(requirement) {
             CallableReturnAbi::Value
         } else {
-            self.method_return_abi(&function.return_type)
+            self.facts
+                .return_abi(&function.return_type, ReturnSlot::Method)
         };
         let peeled_return = self.facts.peel_alias(&return_type);
         let user_result = self.interface_result_layout(source_go_method.as_deref(), &peeled_return);
@@ -737,7 +614,7 @@ impl Planner<'_> {
                     || CallableReturnAbi::unlowered(interface_return),
                     CallableReturnAbi::Lowered,
                 ),
-            None => self.interface_method_return_abi(&requirement.name, &requirement.method),
+            None => self.facts.requirement_return_abi(requirement),
         };
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
         let target = if abi_matches_type(&interface_abi, &peeled_return) {
@@ -752,27 +629,21 @@ impl Planner<'_> {
             )
         };
 
-        let selected_exported = checked.is_exported;
-        let source_go_name = match source_requirement {
-            Some(source) => self.requirement_go_name(source),
-            None if source_go_method.is_none()
-                && self.requirement_uses_tagged_twin(requirement) =>
-            {
-                go_name::tagged_twin(&self.method_go_name(implementation_name, selected_exported))
-            }
-            None => self.method_go_name(implementation_name, selected_exported),
-        };
         Some(AdapterMethod {
-            go_name: self.requirement_go_name(requirement),
+            go_name: self.facts.requirement_go_name(requirement),
             source_name: implementation_name.clone(),
-            source_go_name,
+            source_go_name: self.facts.adapter_source_go_name(
+                requirement,
+                source_requirement,
+                source_go_method.as_deref(),
+                checked,
+            ),
             alternate: None,
             source,
             target,
         })
     }
 
-    /// Go-imported interface slots come from the Go catalog.
     fn interface_parameter_layouts(
         &self,
         go_method: Option<&str>,
@@ -803,23 +674,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Go-imported interfaces take their ABI from the Go catalog instead.
-    pub(crate) fn interface_method_return_abi(
-        &self,
-        method_name: &str,
-        method: &Method,
-    ) -> CallableReturnAbi {
-        let return_ty = method
-            .ty
-            .get_function_ret()
-            .expect("interface method must have function type");
-        let return_ty = self.facts.peel_alias(return_ty);
-        if self.facts.method_uses_tagged_return(method_name) {
-            return CallableReturnAbi::Value;
-        }
-        with_comma_ok_hint(self.method_return_abi(&return_ty), method)
-    }
-
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
         let key = (plan.concrete_ty.clone(), plan.interface_ty.clone());
         let cacheable = plan.generic_context.is_empty();
@@ -834,7 +688,7 @@ impl Planner<'_> {
         let base_name = self
             .adapter_registry
             .register(cacheable.then_some(key), |index| {
-                let mut name = adapter_type_name(&plan, index);
+                let mut name = plan.type_name(index);
                 while scope.is_go_name_declared(&name) {
                     name.push('_');
                 }
@@ -863,7 +717,7 @@ impl Planner<'_> {
             }],
         })];
         for method in &plan.methods {
-            let line = self.adapter_method_line(&plan, method);
+            let line = self.facts.adapter_method_line(&plan, method);
             declarations.push(self.emit_adapter_method(
                 MethodReceiver::Adapter(&receiver_type),
                 &plan.generic_context,
@@ -873,19 +727,6 @@ impl Planner<'_> {
         }
         self.namespace.collect_adapters(declarations);
         adapter_type
-    }
-
-    fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<Position> {
-        self.facts
-            .method(&plan.concrete_id, &method.source_name)
-            .and_then(|source| source.name_span.as_ref())
-            .and_then(|span| self.source_position(span))
-            .or_else(|| {
-                self.facts
-                    .definition(&plan.interface_id)
-                    .and_then(|interface| interface.name_span.as_ref())
-                    .and_then(|span| self.source_position(span))
-            })
     }
 
     fn emit_adapter_method(
@@ -965,7 +806,6 @@ impl Planner<'_> {
         (go_result, body)
     }
 
-    /// `bindings` holds the receiver, then one binding per parameter.
     fn plan_adapter_body(
         &mut self,
         method: &AdapterMethod,
@@ -979,7 +819,7 @@ impl Planner<'_> {
             let go_result = method.target.result_go_type(self).unwrap_or_default();
             return (
                 go_result,
-                self.plan_dynamic_adapter_body(method, alternate, receiver, parameters),
+                self.lower_dynamic_adapter_body(method, alternate, receiver, parameters),
             );
         }
         let mut statements = Vec::new();
@@ -1006,8 +846,7 @@ impl Planner<'_> {
         if method.target.return_abi == CallableReturnAbi::Void {
             statements.push(expression_statement(inner_call));
         } else if method.source.return_abi == CallableReturnAbi::Void {
-            // A unit result still fills the interface's generic result slot.
-            let zero = self.zero_value(return_type);
+            let zero = self.go_zero(return_type);
             statements.push(expression_statement(inner_call));
             statements.push(plain_return(zero));
         } else if method.source.same_result_representation(&method.target) {
@@ -1027,26 +866,6 @@ impl Planner<'_> {
 enum MethodReceiver<'a> {
     Adapter(&'a GoType),
     Itself(&'a Type),
-}
-
-fn adapter_type_name(plan: &AdapterPlan, index: usize) -> String {
-    let concrete_name = plan
-        .concrete_id
-        .rsplit('.')
-        .next()
-        .unwrap_or(plan.concrete_id.as_str());
-    let go_path = plan
-        .interface_id
-        .strip_prefix(GO_IMPORT_PREFIX)
-        .unwrap_or(plan.interface_id.as_str());
-    let iface_name = unqualified_name(go_path);
-    format!(
-        "{}{}_{}_{}",
-        go_name::ADAPTER_TYPE_PREFIX,
-        concrete_name,
-        iface_name,
-        index
-    )
 }
 
 fn adapter_uses_type_parameter(
@@ -1082,14 +901,177 @@ fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
     }
 }
 
-/// `#[go(comma_ok)]` shifts a nullable `Option` return to comma-ok form.
-pub(crate) fn with_comma_ok_hint(base: CallableReturnAbi, method: &Method) -> CallableReturnAbi {
-    if base == CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
-        && method.go_hints.contains(&GoHint::CommaOk)
-    {
-        return CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
-            payload: PayloadLayout::Packed,
-        }));
+impl EmitFacts<'_> {
+    fn requirement_return_abi(&self, requirement: &InterfaceRequirement) -> CallableReturnAbi {
+        self.return_abi(
+            requirement
+                .method
+                .ty
+                .get_function_ret()
+                .unwrap_or(&Type::Never),
+            ReturnSlot::InterfaceMethod {
+                name: &requirement.name,
+                method: &requirement.method,
+            },
+        )
     }
-    base
+
+    fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
+        !go_name::is_go_import(&requirement.declaring_interface)
+            && self.method_uses_tagged_return(&requirement.name)
+    }
+
+    fn has_tagged_twin(&self, owner: &str, member: &str) -> bool {
+        !go_name::is_go_import(owner)
+            && !go_name::is_prelude_id(owner)
+            && self.method_uses_tagged_return(member)
+            && self.emits_go_method(owner, member)
+    }
+
+    pub(crate) fn declared_field_ty(
+        &self,
+        struct_ty: &Type,
+        variant: Option<&str>,
+        field_name: &str,
+    ) -> Option<(Type, Option<SubstitutionMap>)> {
+        let stripped = self.strip_and_peel(struct_ty);
+        let Type::Nominal { id, params, .. } = &stripped else {
+            return None;
+        };
+        let (field_ty, generics) = match (&self.definition(id.as_str())?.body, variant) {
+            (
+                DefinitionBody::Struct {
+                    fields, generics, ..
+                },
+                None,
+            ) => {
+                let field = fields
+                    .iter()
+                    .find(|field| field.name == field_name)
+                    .or_else(|| {
+                        let StructFields::Tuple(fields) = fields else {
+                            return None;
+                        };
+                        fields.get(field_name.parse::<usize>().ok()?)
+                    })?;
+                (field.ty.clone(), generics)
+            }
+            (
+                DefinitionBody::Enum {
+                    variants, generics, ..
+                },
+                Some(variant_name),
+            ) => {
+                let variant = variants
+                    .iter()
+                    .find(|variant| variant.name == unqualified_name(variant_name))?;
+                let field = variant
+                    .fields
+                    .iter()
+                    .find(|field| field.name == field_name)?;
+                (field.ty.clone(), generics)
+            }
+            _ => return None,
+        };
+        let subst_map = (!generics.is_empty()).then(|| build_substitution_map(generics, params));
+        Some((field_ty, subst_map))
+    }
+
+    pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
+        let Type::Nominal { .. } = ty else {
+            return false;
+        };
+        self.resolve_to_function_type(ty).is_some()
+    }
+
+    pub(crate) fn interface_method(&self, interface_ty: &Type, name: &str) -> Option<Method> {
+        if !self.is_interface(interface_ty) {
+            return None;
+        }
+        interface_requirements(&self.peel_alias(interface_ty), |id| self.definition(id))
+            .into_iter()
+            .find(|requirement| requirement.name == name)
+            .map(|requirement| requirement.method)
+    }
+
+    pub(crate) fn definition_selects_tagged_twin(&self, symbol: &str) -> bool {
+        symbol
+            .rsplit_once('.')
+            .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
+    }
+
+    fn adapter_source_go_name(
+        &self,
+        requirement: &InterfaceRequirement,
+        source_requirement: Option<&InterfaceRequirement>,
+        source_go_method: Option<&str>,
+        checked: &CheckedMethod,
+    ) -> String {
+        let method_go_name = || self.method_go_name(&checked.selected_name, checked.is_exported);
+        match source_requirement {
+            Some(source) => self.requirement_go_name(source),
+            None if source_go_method.is_none()
+                && self.requirement_uses_tagged_twin(requirement) =>
+            {
+                go_name::tagged_twin(&method_go_name())
+            }
+            None => method_go_name(),
+        }
+    }
+
+    fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
+        let name = self.method_go_name(&requirement.name, false);
+        if self.requirement_uses_tagged_twin(requirement) {
+            go_name::tagged_twin(&name)
+        } else {
+            name
+        }
+    }
+
+    fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<Position> {
+        self.method(&plan.concrete_id, &method.source_name)
+            .and_then(|source| source.name_span.as_ref())
+            .and_then(|span| self.source_position(span))
+            .or_else(|| {
+                self.definition(&plan.interface_id)
+                    .and_then(|interface| interface.name_span.as_ref())
+                    .and_then(|span| self.source_position(span))
+            })
+    }
+
+    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
+        interface_requirements(&self.peel_alias(bound), |id| self.definition(id))
+            .iter()
+            .any(|requirement| {
+                !go_name::is_go_import(&requirement.declaring_interface)
+                    && requirement.ty.get_function_ret().is_some_and(|ty| {
+                        matches!(
+                            self.return_abi(ty, ReturnSlot::Method),
+                            CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
+                        )
+                    })
+            })
+    }
+}
+
+impl AdapterPlan {
+    fn type_name(&self, index: usize) -> String {
+        let concrete_name = self
+            .concrete_id
+            .rsplit('.')
+            .next()
+            .unwrap_or(self.concrete_id.as_str());
+        let go_path = self
+            .interface_id
+            .strip_prefix(GO_IMPORT_PREFIX)
+            .unwrap_or(self.interface_id.as_str());
+        let iface_name = unqualified_name(go_path);
+        format!(
+            "{}{}_{}_{}",
+            go_name::ADAPTER_TYPE_PREFIX,
+            concrete_name,
+            iface_name,
+            index
+        )
+    }
 }

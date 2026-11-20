@@ -1691,3 +1691,49 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn result_and_option_methods_through_embedding_interface() {
+    let input = r#"
+import "go:io"
+
+interface Base {
+  fn load() -> Result<int, error>
+  fn find() -> Option<int>
+}
+interface Child { embed Base }
+struct Source {}
+impl Source {
+  fn load(self) -> Result<int, error> { Err(io.EOF) }
+  fn find(self) -> Option<int> { Some(1) }
+}
+fn main() {
+  let c: Child = Source {}
+  if c.load().is_ok() { panic("lost") }
+  if c.find().is_none() { panic("lost") }
+  let f = c.load
+  let _ = f()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_tail_of_generic_closure_wraps_adapter_once() {
+    let input = r#"
+struct Thing { v: int }
+interface Box<T> { fn get() -> T }
+struct Bar {}
+impl Bar {
+  fn get(self) -> Option<Ref<Thing>> { None }
+}
+fn apply<T>(f: fn() -> T) -> T { f() }
+fn main() {
+  let pair = apply(|| -> (Box<Option<Ref<Thing>>>, int) { (Bar {}, 2) })
+  if pair.0.get().is_some() { panic("expected None") }
+  let s: Slice<(Box<Option<Ref<Thing>>>, int)> = [(Bar {}, 3)]
+  let _ = s
+}
+"#;
+    assert_emit_snapshot!(input);
+}

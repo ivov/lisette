@@ -1,12 +1,13 @@
+use crate::EmitFacts;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
 use crate::control_flow::propagation::plain_return;
+use crate::ir::bodies::{LoweredBlock, Statement, assign};
+use crate::ir::go_expression::{FunctionLiteralLayout, GoParameter};
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, Statement, assign};
-use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
-use crate::plan::values::GoExpression;
 
 impl Planner<'_> {
     pub(crate) fn clone_expression(&mut self, value: GoExpression, ty: &Type) -> GoExpression {
@@ -80,33 +81,34 @@ impl Planner<'_> {
                 break;
             };
             let field_place = GoExpression::selector(place.clone(), field.to_string());
-            let peeled = self.facts.peel_alias(elem);
-            match &peeled {
-                Type::Compound {
-                    kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
-                    ..
-                } => {
-                    let clone = self.clone_expression(field_place.clone(), elem);
-                    statements.push(assign(field_place, clone));
-                }
-                Type::Tuple(inner) if self.needs_clone(elem) => {
-                    statements.extend(self.tuple_clone_statements(&field_place, inner))
-                }
-                _ => {}
+            if self.facts.is_clone_container(elem) {
+                let clone = self.clone_expression(field_place.clone(), elem);
+                statements.push(assign(field_place, clone));
+            } else if let Type::Tuple(inner) = self.facts.peel_alias(elem)
+                && self.needs_clone(elem)
+            {
+                statements.extend(self.tuple_clone_statements(&field_place, &inner))
             }
         }
         statements
     }
 
     fn needs_clone(&self, ty: &Type) -> bool {
-        let peeled = self.facts.peel_alias(ty);
-        match &peeled {
+        match self.facts.peel_alias(ty) {
+            Type::Tuple(elems) => elems.iter().any(|e| self.needs_clone(e)),
+            _ => self.facts.is_clone_container(ty),
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_clone_container(&self, ty: &Type) -> bool {
+        matches!(
+            self.peel_alias(ty),
             Type::Compound {
                 kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
                 ..
-            } => true,
-            Type::Tuple(elems) => elems.iter().any(|e| self.needs_clone(e)),
-            _ => false,
-        }
+            }
+        )
     }
 }

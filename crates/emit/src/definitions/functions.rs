@@ -1,44 +1,38 @@
 use crate::Planner;
 use crate::ReturnContext;
+use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::analyze::facts::EmitFacts;
 use crate::analyze::reusable_bindings::ReusableBindings;
-use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name;
-use crate::names::source_name::SourceName;
-use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::AsyncKind;
-use crate::plan::bodies::{
+use crate::ir::bodies::AsyncKind;
+use crate::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, inherit_line_directives, rename_generated_locals,
 };
-use crate::plan::cleanup::{clean_up, declare_zero_values};
-use crate::plan::declarations::{DeclarationKind, FunctionSignature, GoDeclaration};
-use crate::plan::go_expression::{
+use crate::ir::declarations::{DeclarationKind, FunctionSignature, GoDeclaration};
+use crate::ir::go_expression::{
     FunctionLiteralLayout, GoExpressionNode, GoParameter, verbatim_identifiers,
 };
-use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::values::GoExpression;
-use crate::plan::verify::verify_final_function_body;
-use crate::plan::verify::verify_local_scopes;
-use crate::plan::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
+use crate::ir::local::{GoIdentifier, LocalId};
+use crate::ir::values::GoExpression;
+use crate::ir::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
+use crate::names::generics::generic_bounds;
+use crate::names::go_name;
+use crate::names::receiver::fresh_receiver_name;
+use crate::names::source_name::SourceName;
+use crate::passes::cleanup::{clean_up, declare_zero_values};
+use crate::passes::verify::verify_final_function_body;
+use crate::passes::verify::verify_local_scopes;
+use crate::patterns::sites::PatternSubject;
+use crate::state::expression::ExpressionContext;
 use crate::statements::testing::test_context_call;
 use crate::types::go_type::GoType;
-use crate::utils::fresh_receiver_name;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
 use syntax::ast::{
     Binding, Expression, FunctionDefinitionView, Pattern, SelectArm, collect_pattern_bindings,
 };
 use syntax::types::{Type, build_substitution_map, substitute};
-
-pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
-    let stripped = ty.strip_refs();
-    stripped.get_qualified_id().is_some_and(|id| {
-        id.strip_suffix(".TestContext")
-            .is_some_and(|package| package == go_name::TEST_PRELUDE_PACKAGE)
-    })
-}
 
 type ParamDestructure<'a> = (GoIdentifier, &'a Pattern, &'a Type);
 
@@ -69,7 +63,7 @@ impl LambdaReturnInfo {
 }
 
 impl Planner<'_> {
-    fn emit_function_body_inner(
+    fn lower_function_body_inner(
         &mut self,
         body: &Expression,
         should_return: bool,
@@ -83,7 +77,6 @@ impl Planner<'_> {
         self.finish_function_body(lowered, parameters, should_return, BodyOrigin::Source)
     }
 
-    /// Resolve locals, clean the body, and verify it before collecting its imports.
     pub(super) fn finish_function_body(
         &mut self,
         mut body: LoweredBlock,
@@ -92,7 +85,6 @@ impl Planner<'_> {
         origin: BodyOrigin,
     ) -> LoweredBlock {
         let sourcemap = self.facts.sourcemap();
-        // Cleanup moves statements out of the context they would inherit from.
         if sourcemap {
             inherit_line_directives(&mut body.statements, None);
         }
@@ -187,7 +179,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn emit_lambda(
+    pub(crate) fn plan_lambda(
         &mut self,
         params: &[Binding],
         body: &Expression,
@@ -203,11 +195,10 @@ impl Planner<'_> {
                 ..
             } = this.lower_parameters(params);
 
-            // The deferred `Recover` needs a real name.
             let test_handle = test_handle.or_else(|| {
                 let index = params
                     .iter()
-                    .position(|param| is_test_context_ty(&param.ty))
+                    .position(|param| param.ty.is_test_context())
                     .filter(|&index| param_pairs[index].0.spelling() == "_")?;
                 let name = this.fresh_declared("lisetteSub");
                 let handle = name.clone();
@@ -242,10 +233,7 @@ impl Planner<'_> {
             let unit_result =
                 return_info.should_return() && ty.get_function_ret().is_some_and(Type::is_unit);
             if unit_result && !body.go_terminates() {
-                body.statements
-                    .push(plain_return(GoExpression::empty_composite(GoType::new(
-                        "struct{}",
-                    ))));
+                body.statements.push(plain_return(GoExpression::unit()));
             }
 
             GoExpression::function_literal(
@@ -260,13 +248,7 @@ impl Planner<'_> {
         })
     }
 
-    /// Lambda Go return-type + `ReturnContext`. Go-prelude generic callbacks
-    /// suppress lambda return-type lowering so signature and body agree.
-    pub(crate) fn lambda_return_info(
-        &mut self,
-        ty: &Type,
-        ctx: ExpressionContext<'_>,
-    ) -> LambdaReturnInfo {
+    fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
         let Type::Function(function) = ty else {
             return LambdaReturnInfo {
                 signature: None,
@@ -275,8 +257,11 @@ impl Planner<'_> {
         };
 
         let return_ty = function.return_type.as_ref();
-        let abi = self.function_expression_return_abi(return_ty, ctx);
-        let has_return = abi != CallableReturnAbi::Void;
+        let abi = self
+            .facts
+            .return_abi(return_ty, ReturnSlot::FunctionExpression(ctx));
+        let signature =
+            (abi != CallableReturnAbi::Void).then(|| self.return_go_type(&abi, return_ty));
         let return_ctx = match abi {
             CallableReturnAbi::Void => ReturnContext::Void(return_ty.clone()),
             CallableReturnAbi::Value => ReturnContext::Tagged(return_ty.clone()),
@@ -284,16 +269,6 @@ impl Planner<'_> {
                 return_ty: return_ty.clone(),
                 shape,
             },
-        };
-        let signature = if has_return {
-            match return_ctx.lowered_shape() {
-                Some(shape) => Some(
-                    self.callable_return_go_type(&CallableReturnAbi::Lowered(shape), return_ty),
-                ),
-                None => Some(self.go_type(return_ty)),
-            }
-        } else {
-            None
         };
 
         LambdaReturnInfo {
@@ -334,16 +309,9 @@ impl Planner<'_> {
         } else {
             0
         };
-        generic_context.extend(function_definition.generics.iter().map(|generic| {
-            let bounds = generic
-                .resolved_bounds()
-                .expect("generic bounds must be resolved before emission")
-                .cloned()
-                .collect();
-            (generic.name.clone(), bounds)
-        }));
+        generic_context.extend(function_definition.generics.iter().map(generic_bounds));
         let signature_generics = generic_context[signature_generics_start..].to_vec();
-        let position = self.source_position(&function_definition.name_span);
+        let position = self.facts.source_position(&function_definition.name_span);
         let return_ctx = if receiver_ty.is_some() {
             self.return_context_for_method(function_definition.return_type.clone())
         } else {
@@ -375,7 +343,7 @@ impl Planner<'_> {
         }
 
         let receiver =
-            self_param.map(|parameter| self.emit_receiver_part(params_to_process, parameter));
+            self_param.map(|parameter| self.receiver_parameter(params_to_process, parameter));
         let generics = self.plan_generics(&signature_generics);
         let (signature_parameters, deferred_patterns) =
             self.lower_signature_params(params_to_process);
@@ -390,7 +358,7 @@ impl Planner<'_> {
             parameters.push(receiver.clone());
         }
 
-        let body = self.emit_function_body_with_deferred_patterns(
+        let body = self.lower_function_body_with_deferred_patterns(
             function_definition,
             &deferred_patterns,
             &mut parameters,
@@ -442,7 +410,8 @@ impl Planner<'_> {
         is_public: bool,
     ) -> String {
         if has_receiver {
-            self.method_go_name(function_definition.name, is_public)
+            self.facts
+                .method_go_name(function_definition.name, is_public)
         } else {
             self.free_function_go_name(function_definition.name, is_public)
         }
@@ -468,19 +437,15 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         return_shape: Option<&LoweredReturnAbi>,
     ) -> GoType {
-        if matches!(self.return_ctx(), ReturnContext::Void(_)) {
-            GoType::default()
-        } else if let Some(shape) = return_shape {
-            self.callable_return_go_type(
-                &CallableReturnAbi::Lowered(shape.clone()),
-                function_definition.return_type,
-            )
-        } else {
-            self.go_type(function_definition.return_type)
-        }
+        let abi = match (self.return_ctx(), return_shape) {
+            (ReturnContext::Void(_), _) => CallableReturnAbi::Void,
+            (_, Some(shape)) => CallableReturnAbi::Lowered(shape.clone()),
+            (_, None) => CallableReturnAbi::Value,
+        };
+        self.return_go_type(&abi, function_definition.return_type)
     }
 
-    fn emit_function_body_with_deferred_patterns(
+    fn lower_function_body_with_deferred_patterns(
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
         deferred_patterns: &[ParamDestructure<'_>],
@@ -488,7 +453,7 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let should_return = !matches!(self.return_ctx(), ReturnContext::Void(_));
         let prefix = self.lower_param_destructures(deferred_patterns);
-        self.emit_function_body_inner(
+        self.lower_function_body_inner(
             function_definition
                 .body
                 .expect("declarations return before function body emission"),
@@ -498,7 +463,7 @@ impl Planner<'_> {
         )
     }
 
-    fn emit_receiver_part(
+    fn receiver_parameter(
         &mut self,
         params_to_process: &[Binding],
         self_param: &Binding,
@@ -583,12 +548,12 @@ impl Planner<'_> {
                     binding: id,
                     ..
                 } => {
-                    if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
+                    if let Some(go_name) = self.facts.go_name_for_binding(&param.pattern) {
                         let name = self.claim_declared_binding(identifier, id.as_slice(), &go_name);
                         lowered.test_handle = lowered
                             .test_handle
                             .take()
-                            .or_else(|| is_test_context_ty(&param.ty).then(|| name.clone()));
+                            .or_else(|| param.ty.is_test_context().then(|| name.clone()));
                         name
                     } else {
                         self.scope
@@ -622,16 +587,6 @@ impl Planner<'_> {
             ));
         }
         statements
-    }
-}
-
-pub(crate) fn is_go_never(facts: &EmitFacts, expression: &Expression) -> bool {
-    match expression {
-        Expression::Return { .. } => true,
-        Expression::Call { expression, .. } => {
-            facts.checked(expression).callee().definition.as_deref() == Some("prelude.panic")
-        }
-        _ => false,
     }
 }
 
@@ -678,4 +633,16 @@ fn push_binder_names(pattern: &Pattern, out: &mut Vec<SourceName>) {
             .into_iter()
             .map(|(name, _)| SourceName::new(&name.into())),
     );
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_go_never(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Return { .. } => true,
+            Expression::Call { expression, .. } => {
+                self.checked(expression).callee().definition.as_deref() == Some("prelude.panic")
+            }
+            _ => false,
+        }
+    }
 }

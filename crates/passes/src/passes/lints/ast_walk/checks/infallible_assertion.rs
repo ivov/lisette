@@ -3,8 +3,6 @@ use syntax::ast::{Binding, Expression, Pattern};
 
 use super::helpers::bool_literal;
 
-const TEST_CONTEXT_QUALIFIED_ID: &str = "**test_prelude.TestContext";
-
 pub fn check_infallible_assertion(expression: &Expression, ctx: &NodeCtx) {
     if !ctx.is_test() || !establishes_test_context(expression) {
         return;
@@ -51,5 +49,5 @@ fn establishes_test_context(expression: &Expression) -> bool {
 
 fn provides_test_handle(param: &Binding) -> bool {
     matches!(&param.pattern, Pattern::Identifier { identifier, .. } if identifier != "_")
-        && param.ty.strip_refs().get_qualified_id() == Some(TEST_CONTEXT_QUALIFIED_ID)
+        && param.ty.is_test_context()
 }

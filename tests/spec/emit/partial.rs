@@ -416,3 +416,58 @@ fn read(s: string) -> Result<int, error> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn partial_method_through_embedding_interface() {
+    let input = r#"
+import "go:io"
+
+interface Base { fn fetch() -> Partial<int, error> }
+interface Child { embed Base }
+struct Source {}
+impl Source {
+  fn fetch(self) -> Partial<int, error> { Partial.Both(0, io.EOF) }
+}
+fn main() {
+  let c: Child = Source {}
+  if !c.fetch().is_both() { panic("lost") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_partial_method_called_as_method_and_free_function() {
+    let input = r#"
+import "go:io"
+
+struct Source {}
+impl Source {
+  fn fetch<T>(self, x: T) -> Partial<int, error> { Partial.Both(0, io.EOF) }
+}
+fn main() {
+  let s = Source {}
+  if !s.fetch(1).is_both() { panic("lost") }
+  if !Source.fetch(s, "a").is_both() { panic("lost") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_method_with_non_nilable_error_through_bound() {
+    let input = r#"
+interface Fetcher { fn fetch() -> Partial<int, string> }
+struct Source {}
+impl Source {
+  fn fetch(self) -> Partial<int, string> { Partial.Both(0, "x") }
+}
+fn run<T: Fetcher>(t: T) -> bool { t.fetch().is_both() }
+fn main() {
+  if !run(Source {}) { panic("lost") }
+  let f: Fetcher = Source {}
+  if !f.fetch().is_both() { panic("lost") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

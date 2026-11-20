@@ -1,20 +1,22 @@
+use crate::EmitFacts;
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SequenceStage;
-use crate::patterns::binding_decls::pattern_has_bindings;
-use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::GoUses;
-use crate::plan::bodies::{
+use crate::ir::bodies::GoUses;
+use crate::ir::bodies::{
     LoopHeader, LoweredBlock, LoweredStatement, Statement, define, discard, with_setup,
 };
-use crate::plan::go_expression::BinaryOp;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::ConstantKind;
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::ir::go_expression::BinaryOp;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::ConstantKind;
+use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::names::go_name;
+use crate::patterns::binding_decls::pattern_has_bindings;
+use crate::patterns::sites::PatternSubject;
+use crate::state::expression::ExpressionContext;
 use crate::types::shape::RangeShape;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
-use syntax::types::Type;
+use syntax::types::{self, IterSeqKind, Type};
 
 fn range_header(
     key: Option<&GoIdentifier>,
@@ -30,7 +32,6 @@ fn range_header(
 }
 
 impl Planner<'_> {
-    /// Lower a `for` statement, dispatching on iterable/pattern shape.
     pub(crate) fn lower_for_statement(&mut self, full_expression: &Expression) -> Statement {
         let Expression::For {
             binding,
@@ -43,9 +44,9 @@ impl Planner<'_> {
         };
         let iterable = iterable.as_ref();
         let body = body.as_ref();
-        let shape = self.classify_for(binding, iterable);
+        let shape = self.facts.classify_for(binding, iterable);
 
-        let line = self.source_position(&full_expression.get_span());
+        let line = self.facts.source_position(&full_expression.get_span());
         let plan = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range => this.lower_range_for(binding, iterable, body),
@@ -72,9 +73,7 @@ impl Planner<'_> {
         Statement { line, kind: plan }
     }
 
-    /// Plan `expr` as an operand, pushing its setup into `prologue` and
-    /// returning the value.
-    pub(crate) fn capture_operand_into(
+    fn capture_operand_into(
         &mut self,
         prologue: &mut Vec<Statement>,
         expr: &Expression,
@@ -85,7 +84,6 @@ impl Planner<'_> {
         value
     }
 
-    /// `for i in stored_range`.
     fn lower_stored_range_for(
         &mut self,
         binding: &Binding,
@@ -96,15 +94,15 @@ impl Planner<'_> {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
             let iterable_ty = iterable.get_type();
-            let range_var = if this.facts.peel_alias(&iterable_ty).is_ref() {
+            let range_var = if this.facts.is_reference(&iterable_ty) {
                 let reference = this.capture_operand_into(&mut prologue, iterable);
-                let range = this.dereference_refs(&iterable_ty, reference);
+                let range = this.facts.dereference_refs(&iterable_ty, reference);
                 GoExpression::identifier(this.hoist_tmp_value_statement(
                     &mut prologue,
                     "range",
                     range,
                 ))
-            } else if this.is_unmutated_identifier(iterable) {
+            } else if this.facts.is_unmutated_identifier(iterable) {
                 this.capture_operand_into(&mut prologue, iterable)
             } else {
                 this.capture_value_at_boundary(
@@ -120,7 +118,7 @@ impl Planner<'_> {
                 GoExpression::binary(
                     GoExpression::identifier(loop_var.clone()),
                     operator,
-                    bound("End"),
+                    bound(go_name::RANGE_END_FIELD),
                 )
             };
             let condition = match range_shape {
@@ -133,7 +131,7 @@ impl Planner<'_> {
             };
             let header = LoopHeader::Counted {
                 variable: loop_var,
-                start: bound("Start"),
+                start: bound(go_name::RANGE_START_FIELD),
                 condition,
             };
             let lowered_body = this.lower_block_as_body(body);
@@ -141,7 +139,6 @@ impl Planner<'_> {
         })
     }
 
-    /// `for r in s.runes()`.
     fn lower_runes_for(
         &mut self,
         binding: &Binding,
@@ -158,7 +155,6 @@ impl Planner<'_> {
         })
     }
 
-    /// `for b in s.bytes()`.
     fn lower_bytes_for(
         &mut self,
         binding: &Binding,
@@ -167,7 +163,7 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
-            let receiver_var = if this.is_unmutated_identifier(receiver) {
+            let receiver_var = if this.facts.is_unmutated_identifier(receiver) {
                 this.capture_operand_into(&mut prologue, receiver)
             } else {
                 this.capture_value_at_boundary(
@@ -211,18 +207,8 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, GoExpression) {
         let mut prologue = Vec::new();
         let iter_raw = self.capture_operand_into(&mut prologue, iterable);
-        let iter_expression = self.dereference_refs(&iterable.get_type(), iter_raw);
+        let iter_expression = self.facts.dereference_refs(&iterable.get_type(), iter_raw);
         (prologue, iter_expression)
-    }
-
-    fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
-        let mut current = self.facts.peel_alias(ty);
-        while current.is_ref() {
-            value = GoExpression::dereference(value);
-            let pointee = current.inner().expect("Ref<T> must have inner");
-            current = self.facts.peel_alias(&pointee);
-        }
-        value
     }
 
     fn lower_iterate_for(
@@ -249,9 +235,6 @@ impl Planner<'_> {
         (prologue, header, lowered_body)
     }
 
-    /// `for (k, v) in map`. Simple identifier/wildcard pairs bind directly
-    /// in the `range` header; compound patterns capture into fresh vars and
-    /// destructure inside the body.
     fn lower_map_tuple_for(
         &mut self,
         binding: &Binding,
@@ -289,7 +272,6 @@ impl Planner<'_> {
         (prologue, header, lowered_body)
     }
 
-    /// Simple map-tuple element pair: bind directly in the `range` header.
     fn lower_map_tuple_simple_body(
         &mut self,
         first: &Pattern,
@@ -297,10 +279,10 @@ impl Planner<'_> {
         iter_expression: GoExpression,
         body: &Expression,
     ) -> (LoopHeader, LoweredBlock) {
-        let first_is_discard =
-            matches!(first, Pattern::WildCard { .. }) || self.go_name_for_binding(first).is_none();
+        let first_is_discard = matches!(first, Pattern::WildCard { .. })
+            || self.facts.go_name_for_binding(first).is_none();
         let second_is_discard = matches!(second, Pattern::WildCard { .. })
-            || self.go_name_for_binding(second).is_none();
+            || self.facts.go_name_for_binding(second).is_none();
         let header = if first_is_discard && second_is_discard {
             range_header(None, None, iter_expression)
         } else if second_is_discard {
@@ -314,8 +296,6 @@ impl Planner<'_> {
         (header, self.lower_block_as_body(body))
     }
 
-    /// Compound map-tuple element pattern: capture key/value into fresh vars,
-    /// destructure at the top of the body, discard the temp when unused.
     fn lower_map_tuple_compound_body(
         &mut self,
         first: &Pattern,
@@ -357,7 +337,6 @@ impl Planner<'_> {
         let references_value = used.contains_identifier(&value_identifier);
         let references_key = used.contains_identifier(&key_identifier);
 
-        // Discard guards: value first, then key (insertion order matters).
         let mut statements = Vec::new();
         if !references_value {
             statements.push(discard(GoExpression::identifier(value_identifier)));
@@ -403,7 +382,6 @@ impl Planner<'_> {
         (header, LoweredBlock { statements })
     }
 
-    /// `for i in start..end`.
     fn lower_range_for(
         &mut self,
         binding: &Binding,
@@ -484,49 +462,6 @@ impl Planner<'_> {
         (prologue, header, lowered_body)
     }
 
-    fn classify_for<'a>(&self, binding: &'a Binding, iterable: &'a Expression) -> ForShape<'a> {
-        if matches!(iterable, Expression::Range { .. }) {
-            return ForShape::Range;
-        }
-        let iterable_ty = iterable.get_type();
-        if let Some(range_shape) = self.range_shape(&iterable_ty)
-            && matches!(
-                range_shape,
-                RangeShape::Range | RangeShape::RangeInclusive | RangeShape::RangeFrom
-            )
-        {
-            return ForShape::StoredRange(range_shape);
-        }
-        if let Some((kind, receiver)) = recognize_string_view_loop(binding, iterable) {
-            return ForShape::StringView(kind, receiver);
-        }
-        if let Pattern::Tuple { elements, .. } = &binding.pattern
-            && elements.len() == 2
-            && self.is_map_tuple_iterable(&iterable_ty)
-        {
-            return ForShape::MapTuple;
-        }
-        let is_channel = self.native_shape(&iterable_ty).is_some_and(|shape| {
-            matches!(shape, NativeTypeKind::Channel | NativeTypeKind::Receiver)
-        });
-        let yields = if is_channel || self.iter_seq_arity(&iterable_ty) == Some(1) {
-            RangeYield::Single
-        } else {
-            RangeYield::Pair
-        };
-        ForShape::Iterate {
-            yields,
-            simple_pattern: matches!(
-                &binding.pattern,
-                Pattern::Identifier { .. } | Pattern::WildCard { .. }
-            ),
-        }
-    }
-
-    /// Extract a loop variable from a pattern, binding the identifier if present.
-    /// `fallback` controls what happens when the pattern is unused or non-identifier:
-    /// - `Some(hint)`: generate a fresh var (needed for C-style loops where `_` is invalid)
-    /// - `None`: use `"_"` (valid in `for range` syntax)
     fn bind_loop_pattern(
         &mut self,
         pattern: &Pattern,
@@ -537,7 +472,7 @@ impl Planner<'_> {
             binding,
             ..
         } = pattern
-            && let Some(go_name) = self.go_name_for_binding(pattern)
+            && let Some(go_name) = self.facts.go_name_for_binding(pattern)
         {
             let preferred = go_name.preferred();
             let go_name = if self.scope.has_binding_for_go_name(&preferred)
@@ -555,38 +490,6 @@ impl Planner<'_> {
             Some(hint) => self.fresh_local(Some(hint)),
             None => GoIdentifier::external("_".to_string()),
         }
-    }
-
-    fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
-        self.native_shape(iterable_ty).is_some_and(|shape| {
-            matches!(shape, NativeTypeKind::Map | NativeTypeKind::EnumeratedSlice)
-        }) || self.iter_seq_arity(iterable_ty) == Some(2)
-    }
-
-    /// Peels one alias at a time, because `iter.Seq` is itself an alias.
-    fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
-        let mut current = iterable_ty.strip_refs();
-        for _ in 0..64 {
-            let Type::Nominal {
-                id,
-                params,
-                writable,
-            } = &current
-            else {
-                return None;
-            };
-            match id.as_str() {
-                "go:iter.Seq" => return Some(1),
-                "go:iter.Seq2" => return Some(2),
-                _ => {}
-            }
-            let next = self
-                .facts
-                .definition(id)?
-                .instantiate_alias_target(params, *writable)?;
-            current = next.unwrap_forall().clone();
-        }
-        None
     }
 }
 
@@ -613,45 +516,111 @@ enum StringViewKind {
     Runes,
 }
 
-/// Recognise `for x in s.bytes()` / `for x in s.runes()` for zero-alloc lowering.
-fn recognize_string_view_loop<'a>(
-    binding: &'a Binding,
-    iterable: &'a Expression,
-) -> Option<(StringViewKind, &'a Expression)> {
-    if !matches!(
-        &binding.pattern,
-        Pattern::Identifier { .. } | Pattern::WildCard { .. }
-    ) {
-        return None;
+impl EmitFacts<'_> {
+    fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
+        let mut current = self.peel_alias(ty);
+        while current.is_ref() {
+            value = GoExpression::dereference(value);
+            let pointee = current.inner().expect("Ref<T> must have inner");
+            current = self.peel_alias(&pointee);
+        }
+        value
     }
 
-    let Expression::Call {
-        expression, args, ..
-    } = iterable
-    else {
-        return None;
-    };
-
-    if !args.is_empty() {
-        return None;
+    fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
+        let (kind, _) =
+            types::peel_to_iter_seq(&iterable_ty.strip_refs(), |id| self.definition(id))?;
+        Some(match kind {
+            IterSeqKind::Seq => 1,
+            IterSeqKind::Seq2 => 2,
+        })
     }
 
-    let Expression::DotAccess {
-        expression: receiver,
-        member,
-        ..
-    } = expression.as_ref()
-    else {
-        return None;
-    };
-
-    if !receiver.get_type().is_string() {
-        return None;
+    fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
+        self.native_shape(iterable_ty).is_some_and(|shape| {
+            matches!(shape, NativeTypeKind::Map | NativeTypeKind::EnumeratedSlice)
+        }) || self.iter_seq_arity(iterable_ty) == Some(2)
     }
 
-    match member.as_str() {
-        "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
-        "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
-        _ => None,
+    fn classify_for<'a>(&self, binding: &'a Binding, iterable: &'a Expression) -> ForShape<'a> {
+        if matches!(iterable, Expression::Range { .. }) {
+            return ForShape::Range;
+        }
+        let iterable_ty = iterable.get_type();
+        if let Some(range_shape) = self.range_shape(&iterable_ty)
+            && matches!(
+                range_shape,
+                RangeShape::Range | RangeShape::RangeInclusive | RangeShape::RangeFrom
+            )
+        {
+            return ForShape::StoredRange(range_shape);
+        }
+        if let Some((kind, receiver)) = self.recognize_string_view_loop(binding, iterable) {
+            return ForShape::StringView(kind, receiver);
+        }
+        if let Pattern::Tuple { elements, .. } = &binding.pattern
+            && elements.len() == 2
+            && self.is_map_tuple_iterable(&iterable_ty)
+        {
+            return ForShape::MapTuple;
+        }
+        let is_channel = self.native_shape(&iterable_ty).is_some_and(|shape| {
+            matches!(shape, NativeTypeKind::Channel | NativeTypeKind::Receiver)
+        });
+        let yields = if is_channel || self.iter_seq_arity(&iterable_ty) == Some(1) {
+            RangeYield::Single
+        } else {
+            RangeYield::Pair
+        };
+        ForShape::Iterate {
+            yields,
+            simple_pattern: matches!(
+                &binding.pattern,
+                Pattern::Identifier { .. } | Pattern::WildCard { .. }
+            ),
+        }
+    }
+
+    fn recognize_string_view_loop<'a>(
+        &self,
+        binding: &'a Binding,
+        iterable: &'a Expression,
+    ) -> Option<(StringViewKind, &'a Expression)> {
+        if !matches!(
+            &binding.pattern,
+            Pattern::Identifier { .. } | Pattern::WildCard { .. }
+        ) {
+            return None;
+        }
+
+        let Expression::Call {
+            expression, args, ..
+        } = iterable
+        else {
+            return None;
+        };
+
+        if !args.is_empty() {
+            return None;
+        }
+
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = expression.as_ref()
+        else {
+            return None;
+        };
+
+        if !self.peel_alias(&receiver.get_type()).is_string() {
+            return None;
+        }
+
+        match member.as_str() {
+            "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
+            "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
+            _ => None,
+        }
     }
 }

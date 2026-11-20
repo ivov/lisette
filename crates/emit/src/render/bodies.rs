@@ -1,16 +1,21 @@
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan,
     LoopTransfer, LoweredBlock, LoweredStatement, SelectArmKind, SelectStatementPlan, Statement,
     SwitchKind, SwitchStatementPlan,
 };
-use crate::plan::go_expression::Position;
-use crate::plan::go_expression::{
+use crate::ir::go_expression::Position;
+use crate::ir::go_expression::{
     CompositeLayout, FunctionLiteralLayout, GoExpressionNode, TreeVisitor,
 };
-use crate::plan::values::GoExpression;
+use crate::ir::values::GoExpression;
 use crate::render::Renderer;
 use crate::render::writer::GoWriter;
-use crate::write_line;
+
+macro_rules! write_line {
+    ($dst:expr, $($arg:tt)*) => {
+        { use std::fmt::Write as _; writeln!($dst, $($arg)*).unwrap() }
+    };
+}
 
 fn write_header_line(output: &mut GoWriter, line: Option<&Position>) {
     if let Some(line) = line {
@@ -42,8 +47,6 @@ impl Renderer {
         output.push_str("}\n");
     }
 
-    /// Render a `switch` statement: the value/type-switch header, each
-    /// `case`/`default:` plus body, and the closing brace.
     fn render_switch(&self, output: &mut GoWriter, plan: &SwitchStatementPlan) {
         match &plan.kind {
             SwitchKind::Conditional => output.push_str("switch {\n"),

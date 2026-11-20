@@ -1,20 +1,20 @@
 use super::arguments::CallArgsContext;
-use crate::calls::dispatch::{
-    CallArgShape, all_type_params_inferrable, callee_is_go_builtin, go_builtin_name,
-};
+use crate::EmitFacts;
+use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
 use syntax::program::GoTypeRecipe;
+use syntax::program::ReceiverCoercion;
 
 use crate::Planner;
-use crate::abi::callable::CallableAbi;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::expressions::staging::SpreadSequenceOptions;
+use crate::ir::bodies::Statement;
+use crate::ir::evaluation::Effects;
+use crate::ir::go_expression::{GoExpressionNode, Operand};
+use crate::ir::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
-use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::{GoExpressionNode, Operand};
-use crate::plan::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
@@ -74,27 +74,6 @@ pub(super) fn receiver_type_binding(
     Some((declared, receiver.get_type().strip_refs()))
 }
 
-/// Arguments cannot change the address a pointer receiver takes of a local.
-fn pointer_receiver_on_value_local(
-    callee_expression: &Expression,
-    callee: &ResolvedCallee<'_>,
-) -> bool {
-    let Some((declared, _)) = receiver_type_binding(callee_expression, callee) else {
-        return false;
-    };
-    let Expression::DotAccess {
-        expression: receiver,
-        ..
-    } = callee_expression.unwrap_parens()
-    else {
-        return false;
-    };
-    declared.is_ref()
-        && matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
-        && !receiver.get_type().is_ref()
-}
-
-/// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
 fn find_go_string_literal_close(s: &str) -> Option<usize> {
     let bytes = s.as_bytes();
     if bytes.first() != Some(&b'"') {
@@ -126,32 +105,6 @@ enum FmtArgument {
     Sprint,
 }
 
-fn classify_fmt_argument(planner: &Planner, expression: &Expression) -> Option<FmtArgument> {
-    match expression.unwrap_parens() {
-        Expression::Literal {
-            literal: Literal::FormatString(parts),
-            ..
-        } => planner
-            .format_string_lowers_to_sprintf(parts)
-            .then_some(FmtArgument::Sprintf),
-        Expression::Call {
-            expression: callee,
-            args: arguments,
-            spread,
-            ..
-        } => match (
-            planner.facts.checked(callee).callee().definition.as_deref(),
-            arguments.as_slice(),
-            spread,
-        ) {
-            (Some("go:fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
-            (Some("go:fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
 enum FmtPrint {
     Print,
     Println,
@@ -167,7 +120,6 @@ impl FmtPrint {
     }
 }
 
-/// The arguments of `callee(...)` when the expression is a call to that name.
 fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Option<&'n [Operand]> {
     let GoExpressionNode::Call {
         callee: called,
@@ -180,53 +132,8 @@ fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Opti
     (fmt_member(called) == Some(callee)).then_some(arguments.as_slice())
 }
 
-/// Collapse redundant fmt wrappers:
-/// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
-/// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
-fn collapse_fmt_print(
-    planner: &Planner,
-    callee: &GoExpression,
-    args: &[Expression],
-    arguments: &[GoExpression],
-) -> Option<GoExpression> {
-    let print = FmtPrint::from_callee(callee.node())?;
-    let ([arg_expression], [argument]) = (args, arguments) else {
-        return None;
-    };
-
-    match classify_fmt_argument(planner, arg_expression)? {
-        FmtArgument::Sprintf => {
-            let mut inner = call_arguments_of(argument.node(), "Sprintf")?.to_vec();
-            if let FmtPrint::Println = print {
-                let Some(GoExpressionNode::Literal(format)) = inner.first_mut().map(AsMut::as_mut)
-                else {
-                    return None;
-                };
-                let close_quote = find_go_string_literal_close(format)?;
-                format.insert_str(close_quote, "\\n");
-            }
-            Some(GoExpression::call(
-                GoExpression::generated(GeneratedPackage::Fmt, "Printf"),
-                inner.into_iter().map(GoExpression::from_operand).collect(),
-            ))
-        }
-        FmtArgument::Sprint => {
-            let inner = call_arguments_of(argument.node(), "Sprint")?;
-            Some(GoExpression::call(
-                callee.clone(),
-                inner
-                    .iter()
-                    .cloned()
-                    .map(GoExpression::from_operand)
-                    .collect(),
-            ))
-        }
-    }
-}
-
 impl<'a> Planner<'a> {
-    /// Lower a regular call: typed setup plus the call value text.
-    pub(super) fn lower_regular_call(
+    pub(super) fn plan_regular_call(
         &mut self,
         call_expression: &Expression,
         call_plan: &CallPlan<'a>,
@@ -241,7 +148,7 @@ impl<'a> Planner<'a> {
             ..
         } = call_expression
         else {
-            unreachable!("lower_regular_call requires a Call expression");
+            unreachable!("plan_regular_call requires a Call expression");
         };
         let function = callee.unwrap_parens();
         let spread = spread.as_deref();
@@ -252,41 +159,10 @@ impl<'a> Planner<'a> {
             return plan;
         }
 
-        if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
-            let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
-                (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
-                    ExpressionContext::value().with_retired_receiver(retired)
-                }
-                _ => ExpressionContext::value(),
-            };
-            let stages: Vec<ValuePlan> =
-                args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
-            let spread_stage =
-                spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
-            let sequenced = self.sequence_with_spread_values(
-                stages,
-                spread_stage,
-                SpreadSequenceOptions {
-                    wrap_to_any: spread_needs_any_wrap(
-                        &self.facts,
-                        &call_plan.resolved.abi,
-                        spread,
-                    ),
-                    combine: call_plan.resolved.abi.variadic_combine(0),
-                    boundary: expression_ctx.capture_boundary(),
-                },
-            );
-            let callee = GoExpression::external_name(go_name);
-            let expression = if self.is_pure_constructor_callee(function) {
-                GoExpression::pure_call(callee, sequenced.values)
-            } else {
-                GoExpression::call(callee, sequenced.values)
-            };
-            return if self.callee_lowers_to_type_construction(function) {
-                ValuePlan::computed(sequenced.setup, expression)
-            } else {
-                ValuePlan::plain_call(sequenced.setup, expression)
-            };
+        if let Some(plan) =
+            self.try_plan_go_named_call(function, args, spread, call_plan, expression_ctx)
+        {
+            return plan;
         }
 
         let callee_staged = self.plan_operand(function, expression_ctx.callee());
@@ -303,7 +179,9 @@ impl<'a> Planner<'a> {
             },
             ctx: expression_ctx,
         });
-        let builtin_conversion = callee_is_go_builtin(&self.facts, function)
+        let builtin_conversion = self
+            .facts
+            .callee_is_go_builtin(function)
             .then(|| go_builtin_conversion(&type_args_string))
             .flatten();
         if builtin_conversion.is_some() {
@@ -316,18 +194,19 @@ impl<'a> Planner<'a> {
         let args_ctx = CallArgsContext {
             plan: call_plan,
             spread,
-            wrap_spread_to_any: spread_needs_any_wrap(&self.facts, &call_plan.resolved.abi, spread),
             capture_boundary: expression_ctx.capture_boundary(),
             retired_receiver: (args.len() == 1
                 && self.callee_lowers_to_type_construction(function))
             .then(|| expression_ctx.retired_receiver())
             .flatten(),
-            callee_is_builtin: callee_is_go_builtin(&self.facts, function),
+            callee_is_builtin: self.facts.callee_is_go_builtin(function),
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: receiver_type_binding(function, &call_plan.resolved),
         };
-        let sequenced_args = self.emit_call_args(args, &args_ctx, None);
-        let constant_result = go_builtin_name(&self.facts, function)
+        let sequenced_args = self.plan_call_args(args, &args_ctx, None);
+        let constant_result = self
+            .facts
+            .go_builtin_name(function)
             .filter(|_| builtin_conversion.is_none())
             .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
         let SequencedValues {
@@ -336,24 +215,14 @@ impl<'a> Planner<'a> {
             ..
         } = sequenced_args;
 
-        let arguments_effects = arguments
-            .iter()
-            .fold(Effects::default(), |effects, argument| {
-                effects.union(argument.effects())
-            });
-        let callee_needs_pin = type_args_string.is_empty()
-            && !pointer_receiver_on_value_local(function, &call_plan.resolved)
-            && LaterStages::sequenced(
-                &args_setup,
-                arguments_effects.with_known_reads(arguments_effects.reads()),
-            )
-            .can_change(self.place_read_stability(function));
-        if callee_needs_pin {
+        if type_args_string.is_empty()
+            && self.callee_needs_pin(function, &call_plan.resolved, &args_setup, &arguments)
+        {
             let pinned = self.hoist_tmp_value_statement(&mut setup, "callee", callee);
             callee = GoExpression::identifier(pinned);
         }
 
-        let call = match collapse_fmt_print(self, &callee, args, &arguments) {
+        let call = match self.collapse_fmt_print(&callee, args, &arguments) {
             Some(collapsed) => collapsed,
             None if self.is_pure_constructor_callee(function) => GoExpression::pure_call(
                 GoExpression::instantiation(callee, type_args_string),
@@ -379,8 +248,71 @@ impl<'a> Planner<'a> {
         }
     }
 
-    /// Emit `errors.New(f"...")` as `fmt.Errorf(...)`: compiler-built format strings
-    /// cannot contain `%w`, and bypassing the callee drops an unused `errors` import.
+    fn callee_needs_pin(
+        &self,
+        function: &Expression,
+        resolved: &ResolvedCallee<'_>,
+        args_setup: &[Statement],
+        arguments: &[GoExpression],
+    ) -> bool {
+        let arguments_effects = arguments
+            .iter()
+            .fold(Effects::default(), |effects, argument| {
+                effects.union(argument.effects())
+            });
+        !self
+            .facts
+            .pointer_receiver_on_value_local(function, resolved)
+            && LaterStages::sequenced(
+                args_setup,
+                arguments_effects.with_known_reads(arguments_effects.reads()),
+            )
+            .can_change(self.place_read_stability(function))
+    }
+
+    fn try_plan_go_named_call(
+        &mut self,
+        function: &Expression,
+        args: &[Expression],
+        spread: Option<&Expression>,
+        call_plan: &CallPlan<'a>,
+        expression_ctx: ExpressionContext<'_>,
+    ) -> Option<ValuePlan> {
+        let go_name = self.facts.callee_go_name(function)?.to_string();
+        let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
+            (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
+                ExpressionContext::value().with_retired_receiver(retired)
+            }
+            _ => ExpressionContext::value(),
+        };
+        let stages: Vec<ValuePlan> = args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
+        let spread_stage =
+            spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
+        let sequenced = self.sequence_with_spread_values(
+            stages,
+            spread_stage,
+            SpreadSequenceOptions {
+                wrap_to_any: call_plan
+                    .resolved
+                    .abi
+                    .spread_wraps_to_any(&self.facts, spread),
+                combine: call_plan.resolved.abi.variadic_combine(0),
+                boundary: expression_ctx.capture_boundary(),
+            },
+        );
+        let callee = GoExpression::external_name(go_name);
+        let expression = if self.is_pure_constructor_callee(function) {
+            GoExpression::pure_call(callee, sequenced.values)
+        } else {
+            GoExpression::call(callee, sequenced.values)
+        };
+        Some(if self.callee_lowers_to_type_construction(function) {
+            ValuePlan::computed(sequenced.setup, expression)
+        } else {
+            ValuePlan::plain_call(sequenced.setup, expression)
+        })
+    }
+
     fn collapse_errors_new_format_arg(
         &mut self,
         function: &Expression,
@@ -401,7 +333,7 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
-        if !self.format_string_lowers_to_sprintf(parts) {
+        if !self.facts.format_string_lowers_to_sprintf(parts) {
             return None;
         }
         let staged = self.plan_operand(argument, ExpressionContext::value());
@@ -428,31 +360,6 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::plain_call(sequenced.setup, call))
     }
 
-    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
-        callee
-            .declaration?
-            .go_type_param_recipe()
-            .map(<[_]>::to_vec)
-    }
-
-    /// True when Go can infer every type parameter of a collapsed callee from
-    /// its value parameters. A var present only in the return type, or only in a
-    /// trailing `VarArgs<T>` the call leaves empty, is not inferable, so the
-    /// recipe must be rebuilt.
-    fn collapsed_callee_fully_inferable(
-        &self,
-        callee: &ResolvedCallee<'_>,
-        arg_shape: CallArgShape,
-    ) -> bool {
-        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
-            return false;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return false;
-        };
-        all_type_params_inferrable(vars, &f.params, 0, arg_shape)
-    }
-
     fn resolve_call_type_args(&mut self, request: CallTypeArgsRequest<'_, '_>) -> GoType {
         let CallTypeArgsRequest {
             function,
@@ -467,8 +374,12 @@ impl<'a> Planner<'a> {
         }
 
         let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
-        if let Some(recipe) = self.callee_collapsed_recipe(callee) {
-            if has_value_args && self.collapsed_callee_fully_inferable(callee, arg_shape) {
+        if let Some(recipe) = self.facts.callee_collapsed_recipe(callee) {
+            if has_value_args
+                && self
+                    .facts
+                    .collapsed_callee_fully_inferable(callee, arg_shape)
+            {
                 return GoType::default();
             }
             let type_arguments = &self.facts.checked(function).callee().type_arguments;
@@ -516,34 +427,84 @@ impl<'a> Planner<'a> {
 
         type_args_string
     }
+
+    fn classify_fmt_argument(&self, expression: &Expression) -> Option<FmtArgument> {
+        match expression.unwrap_parens() {
+            Expression::Literal {
+                literal: Literal::FormatString(parts),
+                ..
+            } => self
+                .facts
+                .format_string_lowers_to_sprintf(parts)
+                .then_some(FmtArgument::Sprintf),
+            Expression::Call {
+                expression: callee,
+                args: arguments,
+                spread,
+                ..
+            } => match (
+                self.facts.checked(callee).callee().definition.as_deref(),
+                arguments.as_slice(),
+                spread,
+            ) {
+                (Some("go:fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
+                (Some("go:fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn collapse_fmt_print(
+        &self,
+        callee: &GoExpression,
+        args: &[Expression],
+        arguments: &[GoExpression],
+    ) -> Option<GoExpression> {
+        let print = FmtPrint::from_callee(callee.node())?;
+        let ([arg_expression], [argument]) = (args, arguments) else {
+            return None;
+        };
+
+        match self.classify_fmt_argument(arg_expression)? {
+            FmtArgument::Sprintf => {
+                let mut inner = call_arguments_of(argument.node(), "Sprintf")?.to_vec();
+                if let FmtPrint::Println = print {
+                    let Some(GoExpressionNode::Literal(format)) =
+                        inner.first_mut().map(AsMut::as_mut)
+                    else {
+                        return None;
+                    };
+                    let close_quote = find_go_string_literal_close(format)?;
+                    format.insert_str(close_quote, "\\n");
+                }
+                Some(GoExpression::call(
+                    GoExpression::generated(GeneratedPackage::Fmt, "Printf"),
+                    inner.into_iter().map(GoExpression::from_operand).collect(),
+                ))
+            }
+            FmtArgument::Sprint => {
+                let inner = call_arguments_of(argument.node(), "Sprint")?;
+                Some(GoExpression::call(
+                    callee.clone(),
+                    inner
+                        .iter()
+                        .cloned()
+                        .map(GoExpression::from_operand)
+                        .collect(),
+                ))
+            }
+        }
+    }
 }
 
 fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
     let Some(Type::Forall { body, .. }) = callee.declared_type() else {
         return false;
     };
-    let Type::Function(declared_fn) = body.as_ref() else {
-        return false;
-    };
-    callee
-        .instantiated
-        .as_function_type()
-        .is_some_and(|instantiated_fn| instantiated_fn.params.len() < declared_fn.params.len())
-}
-
-fn spread_needs_any_wrap(
-    facts: &crate::EmitFacts<'_>,
-    abi: &CallableAbi,
-    spread: Option<&Expression>,
-) -> bool {
-    let (Some(spread), Some(variadic)) = (spread, abi.variadic_param()) else {
-        return false;
-    };
-    facts.resolves_to_unknown(&variadic.instantiated)
-        && spread
-            .get_type()
-            .inner()
-            .is_some_and(|ty| !facts.resolves_to_unknown(&ty))
+    matches!(body.as_ref(), Type::Function(_))
+        && callee.instantiated.as_function_type().is_some()
+        && callee.receiver_offset > 0
 }
 
 fn fmt_member(node: &GoExpressionNode) -> Option<&str> {
@@ -552,5 +513,47 @@ fn fmt_member(node: &GoExpressionNode) -> Option<&str> {
             Some(name)
         }
         _ => None,
+    }
+}
+
+impl EmitFacts<'_> {
+    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
+        callee
+            .declaration?
+            .go_type_param_recipe()
+            .map(<[_]>::to_vec)
+    }
+
+    fn collapsed_callee_fully_inferable(
+        &self,
+        callee: &ResolvedCallee<'_>,
+        arg_shape: CallArgShape,
+    ) -> bool {
+        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
+            return false;
+        };
+        let Type::Function(f) = body.as_ref() else {
+            return false;
+        };
+        all_type_params_inferrable(vars, &f.params, 0, arg_shape)
+    }
+
+    fn pointer_receiver_on_value_local(
+        &self,
+        callee_expression: &Expression,
+        callee: &ResolvedCallee<'_>,
+    ) -> bool {
+        if receiver_type_binding(callee_expression, callee).is_none() {
+            return false;
+        }
+        let Expression::DotAccess {
+            expression: receiver,
+            ..
+        } = callee_expression.unwrap_parens()
+        else {
+            return false;
+        };
+        matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
+            && self.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoAddress)
     }
 }

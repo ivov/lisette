@@ -1,4 +1,8 @@
+use crate::ir::values::GoExpression;
+use syntax::ast::Expression;
 use syntax::types::Type;
+
+use crate::EmitFacts;
 
 use crate::Planner;
 use crate::types::go_type::returns_go_void;
@@ -7,12 +11,9 @@ use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::expressions::staging::VariadicCombine;
 use syntax::program::SlotOrigin;
 
-/// How a logical tuple payload occupies a callable's physical Go result slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PayloadLayout {
-    /// One Go result containing Lisette's generated tuple value.
     Packed,
-    /// One Go result per tuple element.
     Flattened,
 }
 
@@ -22,7 +23,6 @@ impl PayloadLayout {
     }
 }
 
-/// Physical encoding of an `Option<T>` result at a callable boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OptionReturnAbi {
     CommaOk { payload: PayloadLayout },
@@ -30,31 +30,20 @@ pub(crate) enum OptionReturnAbi {
     Sentinel(i64),
 }
 
-/// Physical Go result contract for a callable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CallableReturnAbi {
-    /// No Go result, including a concrete unit or diverging function.
     Void,
-    /// One Go result holding the Lisette value.
     Value,
     Lowered(LoweredReturnAbi),
 }
 
-/// A `Result`, `Partial`, `Option`, or tuple spread across Go result slots.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LoweredReturnAbi {
-    /// A `Result<(), E>` represented by its error value alone.
     BareError,
-    Result {
-        payload: PayloadLayout,
-    },
-    Partial {
-        payload: PayloadLayout,
-    },
+    Result { payload: PayloadLayout },
+    Partial { payload: PayloadLayout },
     Option(OptionReturnAbi),
-    Tuple {
-        arity: usize,
-    },
+    Tuple { arity: usize },
 }
 
 impl CallableReturnAbi {
@@ -122,10 +111,28 @@ impl LoweredReturnAbi {
         self.clone().with_payload(PayloadLayout::Packed)
             == other.clone().with_payload(PayloadLayout::Packed)
     }
+
+    pub(crate) fn ok_values(&self, mut payload: Vec<GoExpression>) -> Vec<GoExpression> {
+        match self {
+            LoweredReturnAbi::BareError => vec![GoExpression::nil()],
+            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
+                payload.push(GoExpression::nil());
+                payload
+            }
+            LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+                payload.push(GoExpression::literal("true".to_string()));
+                payload
+            }
+            LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
+                payload
+            }
+            LoweredReturnAbi::Tuple { .. } => {
+                unreachable!("a tuple return has its own emission path")
+            }
+        }
+    }
 }
 
-/// The instantiated and declaration-level views of one callable parameter.
-///
 #[derive(Debug, Clone)]
 pub(crate) struct CallableParamAbi {
     pub(crate) instantiated: Type,
@@ -135,7 +142,6 @@ pub(crate) struct CallableParamAbi {
     pub(crate) variadic: Option<ValueLayout>,
 }
 
-/// Complete physical contract consumed by call lowering.
 #[derive(Debug, Clone)]
 pub(crate) struct CallableAbi {
     pub(crate) params: Vec<CallableParamAbi>,
@@ -151,6 +157,21 @@ impl CallableAbi {
 
     pub(crate) fn variadic_param(&self) -> Option<&CallableParamAbi> {
         self.params.last().filter(|param| param.variadic.is_some())
+    }
+
+    pub(crate) fn spread_wraps_to_any(
+        &self,
+        facts: &EmitFacts<'_>,
+        spread: Option<&Expression>,
+    ) -> bool {
+        let (Some(spread), Some(variadic)) = (spread, self.variadic_param()) else {
+            return false;
+        };
+        facts.resolves_to_unknown(&variadic.instantiated)
+            && spread
+                .get_type()
+                .inner()
+                .is_some_and(|ty| !facts.resolves_to_unknown(&ty))
     }
 
     pub(crate) fn variadic_combine(&self, extra_leading: usize) -> Option<VariadicCombine> {

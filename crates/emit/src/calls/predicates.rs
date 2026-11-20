@@ -3,8 +3,8 @@ use crate::abi::fallible_producer::FallibleProducer;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 
-use crate::plan::bodies::Statement;
-use crate::plan::values::ValuePlan;
+use crate::ir::bodies::Statement;
+use crate::ir::values::ValuePlan;
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::CallOperation;
 
@@ -29,7 +29,6 @@ pub(crate) fn strip_negations(expression: &Expression) -> (&Expression, bool) {
 }
 
 impl<'p> Planner<'p> {
-    /// `call().is_ok()` and its siblings on a call whose Go result can be tested directly.
     fn fused_predicate<'a>(&self, expression: &'a Expression) -> Option<FusedPredicate<'a>>
     where
         'p: 'a,
@@ -87,7 +86,7 @@ impl<'p> Planner<'p> {
         (bound.statements, condition)
     }
 
-    pub(crate) fn lower_fused_predicate_condition(
+    pub(crate) fn try_plan_fused_predicate_condition(
         &mut self,
         condition: &Expression,
     ) -> Option<(Vec<Statement>, PairCondition)> {
@@ -96,7 +95,7 @@ impl<'p> Planner<'p> {
         Some(self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Unused))
     }
 
-    pub(crate) fn lower_fused_predicate_value(
+    pub(crate) fn try_plan_fused_predicate_value(
         &mut self,
         expression: &Expression,
         negated: bool,

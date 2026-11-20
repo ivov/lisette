@@ -7,14 +7,14 @@ use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
 use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
-use crate::context::expression::ExpressionContext;
+use crate::control_flow::fallible::prelude_call;
 use crate::control_flow::fallible_blocks::TryBlockPairPlan;
-use crate::names::go_name::GeneratedPackage;
+use crate::ir::bodies::{Statement, define};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::names::source_name::SourceName;
-use crate::plan::bodies::{Statement, define};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
 use crate::state::bindings::{ComponentBinding, ComponentKind};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
 use syntax::program::NativeTypeKind;
@@ -56,7 +56,7 @@ impl OptionFusePlan<'_> {
                 let value = if matches!(subject.unwrap_parens(), Expression::DotAccess { .. }) {
                     planner.plan_raw_nullable_field(subject)
                 } else {
-                    planner.lower_call(subject, None, ExpressionContext::value())
+                    planner.plan_call_expression(subject, None, ExpressionContext::value())
                 };
                 let (mut statements, call) = value.into_parts();
                 let (value, opens_if) = match slot {
@@ -146,7 +146,7 @@ impl ResultFusePlan<'_> {
 
         let carries_value = self.carries_payload();
         let (setup, call) = planner
-            .lower_call(self.subject, None, ExpressionContext::value())
+            .plan_call_expression(self.subject, None, ExpressionContext::value())
             .into_parts();
         let (message_setup, messages) = planner.prepare_wrap_messages(&self.wraps, read_error);
 
@@ -265,7 +265,7 @@ impl FallibleProducer<'_> {
         }
     }
 
-    pub(crate) fn supports_components(&self) -> bool {
+    fn supports_components(&self) -> bool {
         match self {
             Self::Result(producer) => {
                 !producer.has_nil_guard() && !producer.wraps_error() && producer.carries_payload()
@@ -287,11 +287,9 @@ impl<'p> Planner<'p> {
             .whole_value_constructor()
             .expect("component binding has no whole-value constructor");
         let payload_go_type = self.go_type(&components.payload_type);
-        GoExpression::call(
-            GoExpression::instantiation(
-                GoExpression::generated(GeneratedPackage::Prelude, constructor),
-                GoType::type_argument(&payload_go_type),
-            ),
+        prelude_call(
+            constructor,
+            GoType::type_argument(&payload_go_type),
             vec![
                 GoExpression::identifier(components.value.clone()),
                 GoExpression::identifier(components.status.clone()),
@@ -355,14 +353,10 @@ impl<'p> Planner<'p> {
         if !lowered.is_result() || lowered.is_bridged() {
             return None;
         }
-        let nil_guard = if lowered.from_go {
-            if lowered.has_tuple_payload(self) {
-                return None;
-            }
-            lowered.nil_guard
-        } else {
-            None
-        };
+        if lowered.from_go && lowered.has_tuple_payload(self) {
+            return None;
+        }
+        let nil_guard = lowered.nil_guard;
         Some(ResultFusePlan {
             subject: lowered.call,
             shape: lowered.shape,

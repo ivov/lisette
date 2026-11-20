@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  type S = string
+  
+  fn test() {
+    let a: string = "hi"
+    let b: S = "hi"
+    for x in a.bytes() { fmt.Println(x) }
+    for x in b.bytes() { fmt.Println(x) }
+  }
+---
+package main
+
+import "fmt"
+
+type S = string
+
+func test() {
+	a := "hi"
+	b := "hi"
+	for i := 0; i < len(a); i++ {
+		x := a[i]
+		fmt.Println(x)
+	}
+	for i2 := 0; i2 < len(b); i2++ {
+		x := b[i2]
+		fmt.Println(x)
+	}
+}

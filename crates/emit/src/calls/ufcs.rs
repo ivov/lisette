@@ -4,12 +4,12 @@ use crate::calls::regular::receiver_type_binding;
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
-use crate::plan::bodies::Statement;
+use crate::ir::bodies::Statement;
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
 use syntax::program::ReceiverCoercion;
@@ -26,7 +26,6 @@ impl Planner<'_> {
     ) -> Option<GoType> {
         let definition_ty = callee.declared_type()?;
 
-        // A method with no type parameters lowers to a non-generic free function.
         let Type::Forall { vars, body } = &definition_ty else {
             return None;
         };
@@ -44,7 +43,7 @@ impl Planner<'_> {
         self.format_generic_instantiation(definition_ty, type_arguments)
     }
 
-    pub(super) fn lower_ufcs_call(
+    pub(super) fn plan_ufcs_call(
         &mut self,
         function: &Expression,
         args: &[Expression],
@@ -58,7 +57,7 @@ impl Planner<'_> {
             ..
         } = function
         else {
-            unreachable!("lower_ufcs_call called on non-DotAccess");
+            unreachable!("plan_ufcs_call called on non-DotAccess");
         };
 
         let mut coercion = self.facts.checked(receiver).receiver_change();
@@ -98,14 +97,11 @@ impl Planner<'_> {
         if coercion == Some(ReceiverCoercion::AutoAddress) {
             receiver_stage = self.coerce_receiver_address_stage(receiver, receiver_stage);
         } else if coercion == Some(ReceiverCoercion::AutoDeref) {
-            // Read the receiver value before sequencing arguments that can
-            // mutate its pointee; capturing only the pointer is insufficient.
             receiver_stage = receiver_stage.dereference();
         }
         let args_ctx = CallArgsContext {
             plan: call_plan,
             spread,
-            wrap_spread_to_any: false,
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
             callee_is_builtin: false,
@@ -143,10 +139,6 @@ impl Planner<'_> {
         let callee = &ctx.plan.resolved;
         let spread = ctx.spread;
         let sequenced = if callee.is_prelude_dispatch {
-            // The DotAccess function type curries `self` out, so its params line
-            // up 1:1 with the user args. Pair each so a function-typed param
-            // suppresses the Go-fn-value identity short-circuit before dispatch
-            // into prelude helpers like `lisette.OptionAndThen`.
             let mut stages = Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
             stages.push(receiver_stage);
             for (i, arg) in args.iter().enumerate() {
@@ -163,13 +155,13 @@ impl Planner<'_> {
                 stages,
                 spread_stage,
                 SpreadSequenceOptions {
-                    wrap_to_any: false,
+                    wrap_to_any: callee.abi.spread_wraps_to_any(&self.facts, spread),
                     combine: callee.abi.variadic_combine(1),
                     boundary: CaptureBoundary::SiblingSequence,
                 },
             )
         } else {
-            self.emit_call_args(args, ctx, Some(receiver_stage))
+            self.plan_call_args(args, ctx, Some(receiver_stage))
         };
         let mut all_values = sequenced.values;
         let receiver_arg = all_values.remove(0);
@@ -225,7 +217,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(super) fn lower_receiver_method_ufcs(
+    pub(super) fn plan_receiver_method_ufcs(
         &mut self,
         args: &[Expression],
         go_method: String,
@@ -235,18 +227,16 @@ impl Planner<'_> {
         let args_ctx = CallArgsContext {
             plan: call_plan,
             spread,
-            wrap_spread_to_any: false,
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
             callee_is_builtin: false,
             callee_pins_type_args: false,
             receiver_binding: None,
         };
-        let sequenced = self.emit_call_args(args, &args_ctx, None);
+        let sequenced = self.plan_call_args(args, &args_ctx, None);
         let mut emitted_all = sequenced.values;
         let receiver = emitted_all.remove(0);
 
-        // The method call takes the value's own address, so `&x` unwraps.
         let receiver = match receiver.node() {
             GoExpressionNode::AddressOf(inner)
                 if !is_address_of_composite_literal(args.first()) =>

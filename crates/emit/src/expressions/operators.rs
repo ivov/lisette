@@ -1,17 +1,17 @@
 use crate::Planner;
 use crate::analyze::facts::EmitFacts;
 use crate::calls::predicates::strip_negations;
-use crate::context::expression::ExpressionContext;
-use crate::names::go_name;
-use crate::plan::bodies::{
+use crate::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
 };
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::names::go_name;
+use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
 use syntax::program::{DefinitionBody, OperandConversion};
-use syntax::types::Type;
+use syntax::types::{self, ScaledImaginary, Type};
 
 struct NumericBinaryEmitInfo {
     cast_left_to: Option<Type>,
@@ -47,8 +47,6 @@ impl BinaryOperand {
 }
 
 impl Planner<'_> {
-    /// Plan a binary expression. Numeric-cast, imaginary-multiply, and
-    /// short-circuit `&&`/`||` bridge through their string emitters.
     pub(crate) fn plan_binary(
         &mut self,
         operator: &BinaryOperator,
@@ -73,27 +71,20 @@ impl Planner<'_> {
         let left_ty = &left.ty;
         let right_ty = &right.ty;
 
-        if matches!(operator, BinaryOperator::Multiplication) {
-            if let Expression::Literal {
-                literal: Literal::Imaginary(imag_coef),
-                ..
-            } = right_expression
-                && left_ty.is_float()
-                && !left_ty.is_complex()
-            {
-                let staged = self.plan_operand(left_expression, ctx);
-                return staged.map_expression(|_, value| imaginary_product(value, *imag_coef));
-            }
-            if let Expression::Literal {
-                literal: Literal::Imaginary(imag_coef),
-                ..
-            } = left_expression
-                && right_ty.is_float()
-                && !right_ty.is_complex()
-            {
-                let staged = self.plan_operand(right_expression, ctx);
-                return staged.map_expression(|_, value| imaginary_product(value, *imag_coef));
-            }
+        if matches!(operator, BinaryOperator::Multiplication)
+            && let Some(scaled) = types::scaled_imaginary(
+                left_expression.imaginary_coefficient(),
+                left_ty,
+                right_expression.imaginary_coefficient(),
+                right_ty,
+            )
+        {
+            let (operand, coefficient) = match scaled {
+                ScaledImaginary::FloatLeft(coefficient) => (left_expression, coefficient),
+                ScaledImaginary::FloatRight(coefficient) => (right_expression, coefficient),
+            };
+            let staged = self.plan_operand(operand, ctx);
+            return staged.map_expression(|_, value| imaginary_product(value, coefficient));
         }
 
         if matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
@@ -105,8 +96,8 @@ impl Planner<'_> {
             );
         }
 
-        let left_plan = self.lower_composite_value(left_expression, ctx);
-        let right_plan = self.lower_composite_value(right_expression, ctx);
+        let left_plan = self.plan_composite_value(left_expression, ctx);
+        let right_plan = self.plan_composite_value(right_expression, ctx);
         self.combine_binary(operator, left_plan, right_plan, None)
     }
 
@@ -160,8 +151,8 @@ impl Planner<'_> {
         right_expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let left_staged = self.lower_composite_value(left_expression, ctx);
-        let right_staged = self.lower_composite_value(right_expression, ctx);
+        let left_staged = self.plan_composite_value(left_expression, ctx);
+        let right_staged = self.plan_composite_value(right_expression, ctx);
         let (mut setup, left_value) = left_staged.into_parts();
         let (mut statements, mut right_value) = right_staged.into_parts();
         if let Some(inlined) = inline_single_read(&statements, &right_value) {
@@ -175,7 +166,6 @@ impl Planner<'_> {
             );
         }
 
-        // The right setup runs only when control reaches the right operand.
         let result = self.fresh_declared("cond");
         let read = GoExpression::identifier(result.clone());
         let reaches_right = match operator {
@@ -201,9 +191,6 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        // Special case: -9223372036854775808 cannot be written as a positive
-        // literal because 9223372036854775808 overflows i64. Go handles this
-        // correctly when written directly as -9223372036854775808.
         if matches!(operator, UnaryOperator::Negative)
             && let Expression::Literal {
                 literal:
@@ -230,8 +217,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Plan `!` (logical-not). Comparisons flip operator because `!` binds
-    /// tighter than `==` in Go (`!(a == b)` must not emit as `!a == b`).
     pub(crate) fn plan_unary_not(
         &mut self,
         expression: &Expression,
@@ -245,18 +230,18 @@ impl Planner<'_> {
             ..
         } = target
             && let Some(flipped) = flip_comparison(cmp)
-            && flip_preserves_nan(&self.facts, cmp, left, right)
+            && self.facts.flip_preserves_nan(cmp, left, right)
         {
             let conversion = self.facts.checked(target).operand_conversion();
             return self.plan_binary(&flipped, left, right, conversion, ctx);
         }
         let (innermost, inner_negated) = strip_negations(expression);
-        if let Some(predicate) = self.lower_fused_predicate_value(innermost, !inner_negated) {
+        if let Some(predicate) = self.try_plan_fused_predicate_value(innermost, !inner_negated) {
             return predicate;
         }
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<Statement> = Vec::new();
-            if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
+            if let Some(negated) = self.try_plan_negated_call(&mut setup, target) {
                 return ValuePlan::computed(setup, negated);
             }
         }
@@ -264,52 +249,7 @@ impl Planner<'_> {
         let staged = self.plan_operand(expression, ctx);
         staged.unary(UnaryOp::Not)
     }
-}
 
-/// `!(a < b)` holds for a NaN operand where `a >= b` does not, so only `==`
-/// and `!=` flip unconditionally.
-pub(crate) fn flip_preserves_nan(
-    facts: &EmitFacts<'_>,
-    operator: &BinaryOperator,
-    left: &Expression,
-    right: &Expression,
-) -> bool {
-    matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
-        || (is_non_float(facts, left) && is_non_float(facts, right))
-}
-
-fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    facts
-        .underlying_simple_kind(&expression.get_type())
-        .is_some_and(|kind| !kind.is_float())
-}
-
-pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
-    match operator {
-        BinaryOperator::Equal => Some(BinaryOperator::NotEqual),
-        BinaryOperator::NotEqual => Some(BinaryOperator::Equal),
-        BinaryOperator::LessThan => Some(BinaryOperator::GreaterThanOrEqual),
-        BinaryOperator::LessThanOrEqual => Some(BinaryOperator::GreaterThan),
-        BinaryOperator::GreaterThan => Some(BinaryOperator::LessThanOrEqual),
-        BinaryOperator::GreaterThanOrEqual => Some(BinaryOperator::LessThan),
-        _ => None,
-    }
-}
-
-fn is_literal_expression(expression: &Expression) -> bool {
-    match expression {
-        Expression::Literal { .. } => true,
-        Expression::Paren { expression, .. } => is_literal_expression(expression),
-        Expression::Unary {
-            operator: UnaryOperator::Negative,
-            expression,
-            ..
-        } => is_literal_expression(expression),
-        _ => false,
-    }
-}
-
-impl Planner<'_> {
     pub(crate) fn is_go_constant_expression(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Literal { literal, .. } => {
@@ -322,7 +262,7 @@ impl Planner<'_> {
                 expression: package,
                 member,
                 ..
-            } => self.imported_member_is_const(package, member),
+            } => self.facts.imported_member_is_const(package, member),
             Expression::Paren { expression, .. } => self.is_go_constant_expression(expression),
             Expression::Unary {
                 operator: UnaryOperator::Negative | UnaryOperator::Not | UnaryOperator::BitwiseNot,
@@ -355,33 +295,6 @@ impl Planner<'_> {
         }
     }
 
-    fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
-        let package = package.unwrap_parens();
-        let Expression::Identifier { value, .. } = package else {
-            return false;
-        };
-        let package = package.get_type();
-        let package = package.as_import_namespace().unwrap_or(value);
-        let qualified = format!("{package}.{member}");
-        let body = self
-            .facts
-            .definition(&qualified)
-            .or_else(|| {
-                self.facts
-                    .definition(&self.facts.qualified_current_member(value, member))
-            })
-            .map(|definition| &definition.body);
-        match body {
-            Some(DefinitionBody::Value { .. })
-                if package.starts_with(go_name::GO_IMPORT_PREFIX) =>
-            {
-                self.facts.is_const(&qualified)
-            }
-            Some(DefinitionBody::Value { .. }) => true,
-            _ => false,
-        }
-    }
-
     pub(crate) fn contains_untyped_constant_shift(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Paren { expression, .. } | Expression::Unary { expression, .. } => {
@@ -408,6 +321,31 @@ impl Planner<'_> {
     }
 }
 
+pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
+    match operator {
+        BinaryOperator::Equal => Some(BinaryOperator::NotEqual),
+        BinaryOperator::NotEqual => Some(BinaryOperator::Equal),
+        BinaryOperator::LessThan => Some(BinaryOperator::GreaterThanOrEqual),
+        BinaryOperator::LessThanOrEqual => Some(BinaryOperator::GreaterThan),
+        BinaryOperator::GreaterThan => Some(BinaryOperator::LessThanOrEqual),
+        BinaryOperator::GreaterThanOrEqual => Some(BinaryOperator::LessThan),
+        _ => None,
+    }
+}
+
+fn is_literal_expression(expression: &Expression) -> bool {
+    match expression {
+        Expression::Literal { .. } => true,
+        Expression::Paren { expression, .. } => is_literal_expression(expression),
+        Expression::Unary {
+            operator: UnaryOperator::Negative,
+            expression,
+            ..
+        } => is_literal_expression(expression),
+        _ => false,
+    }
+}
+
 fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
     if is_literal {
         None
@@ -416,7 +354,6 @@ fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
     }
 }
 
-/// The conversion of the operand that the checker recorded, which Go writes out unless that operand is an untyped constant.
 fn operand_casts(
     conversion: OperandConversion,
     left: &BinaryOperand,
@@ -434,8 +371,6 @@ fn operand_casts(
     }
 }
 
-/// `name := value` followed by a pure read of `name` folds into one
-/// expression, because nothing else in the read runs code.
 fn inline_single_read(statements: &[Statement], read: &GoExpression) -> Option<GoExpression> {
     let [statement] = statements else {
         return None;
@@ -477,5 +412,41 @@ fn fold_read(
                 && fold_read(right, name, value, reads)
         }
         _ => false,
+    }
+}
+
+impl EmitFacts<'_> {
+    fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
+        let package = package.unwrap_parens();
+        let Expression::Identifier { value, .. } = package else {
+            return false;
+        };
+        let package = package.get_type();
+        let package = package.as_import_namespace().unwrap_or(value);
+        let qualified = format!("{package}.{member}");
+        let definition = self
+            .definition(&qualified)
+            .or_else(|| self.definition(&self.qualified_current_member(value, member)));
+        match definition {
+            Some(definition) if !matches!(definition.body, DefinitionBody::Value { .. }) => false,
+            Some(_) if package.starts_with(go_name::GO_IMPORT_PREFIX) => self.is_const(&qualified),
+            Some(definition) => !matches!(definition.ty.unwrap_forall(), Type::Function(_)),
+            None => false,
+        }
+    }
+
+    pub(crate) fn flip_preserves_nan(
+        &self,
+        operator: &BinaryOperator,
+        left: &Expression,
+        right: &Expression,
+    ) -> bool {
+        matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
+            || (self.is_non_float(left) && self.is_non_float(right))
+    }
+
+    fn is_non_float(&self, expression: &Expression) -> bool {
+        self.underlying_simple_kind(&expression.get_type())
+            .is_some_and(|kind| !kind.is_float())
     }
 }

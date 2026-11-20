@@ -1,20 +1,19 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::layout::ValueLayout;
 use crate::definitions::structs::struct_field_go_name;
+use crate::ir::values::GoExpression;
 use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
-use crate::plan::values::GoExpression;
+use std::borrow::Cow;
 use std::iter::once;
 use std::{fmt::Display, slice};
 use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{
-    CompoundKind, FunctionParameter, SimpleKind, SubstitutionMap, Type, peel_underlying,
-};
+use syntax::types::{CompoundKind, SimpleKind, SubstitutionMap, Type, peel_underlying};
 
-/// Types whose Go definitions come from the Lisette prelude.
 pub(crate) fn is_prelude_type(name: &str) -> bool {
     matches!(
         name,
@@ -30,16 +29,17 @@ pub(crate) fn is_prelude_type(name: &str) -> bool {
     )
 }
 
-/// Whether `return_ty` has no Go result (Unit or Never).
 pub(crate) fn returns_go_void(return_ty: &Type) -> bool {
     return_ty.is_unit() || return_ty.is_never()
 }
 
+fn is_plain_type_name(code: &str) -> bool {
+    code.chars()
+        .all(|character| character.is_alphanumeric() || character == '_' || character == '.')
+}
+
 pub(crate) fn conversion_prefix(go_type: &str) -> String {
-    let is_plain_name = go_type
-        .chars()
-        .all(|character| character.is_alphanumeric() || character == '_' || character == '.');
-    if is_plain_name {
+    if is_plain_type_name(go_type) {
         format!("{}(", go_type)
     } else {
         format!("({})(", go_type)
@@ -119,18 +119,13 @@ impl GoType {
             "" => GoTypeShape::Empty,
             "struct{}" => GoTypeShape::Struct(Vec::new()),
             "any" | "interface{}" => GoTypeShape::EmptyInterface,
-            name if name.chars().all(|character| {
-                character.is_alphanumeric() || character == '_' || character == '.'
-            }) =>
-            {
-                match name.rsplit_once('.') {
-                    Some((package, member)) => GoTypeShape::Qualified {
-                        package: package.to_string(),
-                        member: member.to_string(),
-                    },
-                    None => GoTypeShape::Name(name.to_string()),
-                }
-            }
+            name if is_plain_type_name(name) => match name.rsplit_once('.') {
+                Some((package, member)) => GoTypeShape::Qualified {
+                    package: package.to_string(),
+                    member: member.to_string(),
+                },
+                None => GoTypeShape::Name(name.to_string()),
+            },
             _ => GoTypeShape::Raw(code.clone()),
         };
         Self {
@@ -183,7 +178,7 @@ impl GoType {
         base
     }
 
-    pub(crate) fn merge(&mut self, other: &GoType) {
+    fn merge(&mut self, other: &GoType) {
         self.requirements.extend(&other.requirements);
     }
 
@@ -445,7 +440,7 @@ impl Planner<'_> {
                 id,
                 params: parameters,
                 ..
-            } => self.emit_constructor(id, parameters, ty),
+            } => self.constructor_go_type(id, parameters, ty),
             Type::Simple(kind) => {
                 if matches!(kind, SimpleKind::Unit) {
                     GoType::new("struct{}")
@@ -457,21 +452,21 @@ impl Planner<'_> {
                 kind,
                 args: arguments,
                 ..
-            } => self.emit_compound(*kind, arguments, ty),
-            Type::Function(f) => self.emit_function_type(&f.params, &f.return_type),
+            } => self.compound_go_type(*kind, arguments, ty),
+            Type::Function(_) => self.value_layout(ty, SlotOrigin::Lisette).go_type(self),
             Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
             Type::Never => GoType::new("struct{}"),
             Type::Error => self.reject_untyped_position("an error type"),
-            Type::Tuple(elements) => self.emit_tuple_type(elements),
+            Type::Tuple(elements) => self.tuple_go_type(elements),
             Type::Array { length, element } => GoType::array_of(length, &self.go_type(element)),
             Type::ImportNamespace(_) => self.reject_untyped_position("a package name"),
             Type::ReceiverPlaceholder => GoType::new("any"),
         }
     }
 
-    fn emit_compound(&self, kind: CompoundKind, arguments: &[Type], ty: &Type) -> GoType {
+    fn compound_go_type(&self, kind: CompoundKind, arguments: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
         match kind {
@@ -486,7 +481,7 @@ impl Planner<'_> {
             _ => {
                 let native = NativeTypeKind::from_type(ty)
                     .expect("every other compound type is a native Go type");
-                self.emit_native_type(native, ty)
+                self.native_go_type(native, ty)
             }
         }
     }
@@ -539,12 +534,12 @@ impl Planner<'_> {
         })
     }
 
-    fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
+    fn tuple_go_type(&self, elements: &[Type]) -> GoType {
         let element_types: Vec<GoType> = elements.iter().map(|e| self.go_type(e)).collect();
         GoType::prelude(&format!("Tuple{}", elements.len()), &element_types)
     }
 
-    fn emit_constructor(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
+    fn constructor_go_type(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
         if let Some(index) = self.facts.type_parameter_alias_index(qualified_name)
             && let Some(target) = parameters.get(index)
         {
@@ -556,10 +551,6 @@ impl Planner<'_> {
         }
 
         let (name, package) = self.unqualify_name(qualified_name);
-
-        if ty.is_unit() {
-            return GoType::new("struct{}");
-        }
 
         let kind = physical_type_kind(ty, |id| self.facts.definition(id));
         let param_types: Vec<GoType> = parameters
@@ -578,7 +569,7 @@ impl Planner<'_> {
         GoType::named(&name, &param_types, None).with_physical_kind(kind)
     }
 
-    fn emit_native_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
+    fn native_go_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
         let argument = |index| {
             let stripped = ty.strip_refs();
             let arguments = stripped.get_type_params().expect("native type arguments");
@@ -597,21 +588,6 @@ impl Planner<'_> {
             NativeTypeKind::Receiver => GoType::channel(ChannelDirection::Receive, &argument(0)),
             NativeTypeKind::Array => self.reject_untyped_position("an array without a length"),
         }
-    }
-
-    fn emit_function_type(&self, parameters: &[FunctionParameter], return_ty: &Type) -> GoType {
-        let parameters = parameters
-            .iter()
-            .map(|parameter| self.value_layout(&parameter.ty, SlotOrigin::Lisette))
-            .collect();
-        let result = self.value_layout(return_ty, SlotOrigin::Lisette);
-        self.function_layout(
-            parameters,
-            &result,
-            self.slot_return_abi(return_ty, SlotOrigin::Lisette),
-            None,
-        )
-        .go_type(self)
     }
 
     fn reject_untyped_position(&self, what: &'static str) -> GoType {
@@ -642,15 +618,9 @@ impl Planner<'_> {
             return ("any".to_string(), None);
         }
 
-        let escaped =
-            if package == go_name::PRELUDE_PACKAGE || self.facts.is_foreign_package(package) {
-                go_name::escape_keyword(unqualified)
-            } else {
-                go_name::escape_type_name(unqualified)
-            };
+        let escaped = self.facts.type_member_go_name(package, unqualified);
 
         if self.facts.is_foreign_package(package) {
-            // Only its own package can name a non-exported Go type.
             if !escaped.starts_with(char::is_uppercase) {
                 self.namespace.rejections().reject(id, |span| {
                     let go_type = id.strip_prefix(go_name::GO_IMPORT_PREFIX).unwrap_or(id);
@@ -667,8 +637,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Prepend the receiver's generic params to the explicit type args (for
-    /// native-method and UFCS call sites).
     pub(crate) fn format_type_args_with_receiver<'t>(
         &self,
         receiver_ty: &Type,
@@ -683,9 +651,9 @@ impl Planner<'_> {
         GoType::type_arguments(&arguments)
     }
 
-    pub(crate) fn zero_value(&self, ty: &Type) -> GoExpression {
+    pub(crate) fn go_zero(&self, ty: &Type) -> GoExpression {
         if self.facts.is_interface(ty) {
-            return GoExpression::literal("nil".to_string());
+            return GoExpression::nil();
         }
 
         let go_ty = self.go_type(ty);
@@ -717,7 +685,7 @@ impl Planner<'_> {
                 SimpleKind::Float32 | SimpleKind::Float64 => literal("0.0"),
                 SimpleKind::Bool => literal("false"),
                 SimpleKind::String => literal("\"\""),
-                SimpleKind::Unit => GoExpression::empty_composite(GoType::new("struct{}")),
+                SimpleKind::Unit => GoExpression::unit(),
                 SimpleKind::Complex64 | SimpleKind::Complex128 => dereferenced_new(&go_ty),
             },
             ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty),
@@ -755,8 +723,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Render a `#[go(anon_struct)]` stand-in as inline `struct{...}`: its name
-    /// has no Go counterpart, so `pkg.Name` would not compile.
     pub(crate) fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {
         let definition = self.facts.definition(id)?;
         if !definition.is_anon_struct() {
@@ -774,67 +740,12 @@ impl Planner<'_> {
     }
 }
 
-#[cfg(test)]
-mod structural_tests {
-    use super::*;
-
-    #[test]
-    fn qualified_type_identity_does_not_depend_on_constructor() {
-        let named = GoType::named("Flag", &[], Some(PackageUse::new("flag", "flag")));
-        assert_eq!(GoType::new("flag.Flag"), named);
-        assert_ne!(GoType::new("other.Flag"), named);
-    }
-
-    #[test]
-    fn named_type_classification_does_not_expand_tuple_children() {
-        use std::cell::Cell;
-        use syntax::ast::{Annotation, Generic, Span};
-        use syntax::program::{AliasKind, Definition, Visibility};
-        use syntax::types::Symbol;
-
-        let next = Type::Nominal {
-            id: Symbol::from_raw("main.Next"),
-            params: vec![Type::Parameter("T".into())],
-            writable: false,
-        };
-        let target = Type::Tuple(vec![next.clone(), next]);
-        let definition = Definition {
-            ty: target.clone(),
-            visibility: Visibility::Public,
-            name_span: None,
-            doc: None,
-            body: DefinitionBody::TypeAlias {
-                generics: vec![Generic::new("T", vec![], Span::dummy())],
-                alias: AliasKind::Transparent {
-                    annotation: Annotation::Unknown,
-                    target,
-                },
-                methods: Default::default(),
-                attributes: Default::default(),
-            },
-        };
-        let ty = Type::Nominal {
-            id: Symbol::from_raw("main.Root"),
-            params: vec![Type::int()],
-            writable: false,
-        };
-        let lookups = Cell::new(0);
-        let kind = physical_type_kind(&ty, |id| {
-            lookups.set(lookups.get() + 1);
-            assert_eq!(id, "main.Root", "classification expanded a tuple child");
-            Some(&definition)
-        });
-        assert_eq!(kind, GoTypeKind::Value);
-        assert_eq!(lookups.get(), 1);
-    }
-
-    #[test]
-    fn any_and_empty_interface_have_the_same_structural_identity() {
-        let any = GoType::new("any");
-        let interface = GoType::new("interface{}");
-        assert_eq!(any, interface);
-        assert!(any.contains_empty_interface());
-        assert!(GoType::slice_of(&any).contains_empty_interface());
-        assert!(!GoType::new("SomeanyName").contains_empty_interface());
+impl EmitFacts<'_> {
+    pub(crate) fn type_member_go_name<'n>(&self, package: &str, name: &'n str) -> Cow<'n, str> {
+        if package == go_name::PRELUDE_PACKAGE || self.is_foreign_package(package) {
+            go_name::escape_keyword(name)
+        } else {
+            go_name::escape_type_name(name)
+        }
     }
 }

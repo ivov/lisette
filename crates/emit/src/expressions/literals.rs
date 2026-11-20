@@ -1,19 +1,22 @@
+use crate::EmitFacts;
 use std::fmt::Write;
+use std::iter::Peekable;
 use std::mem::take;
+use std::str::Chars;
 
 use crate::Planner;
-use crate::context::expression::ExpressionContext;
 use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
+use crate::ir::go_expression::{BinaryOp, CompositeLayout};
+use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::go_expression::{BinaryOp, CompositeLayout};
-use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(super) fn emit_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
+    pub(super) fn plan_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
         let (value, kind) = match literal {
             Literal::Integer { value, text } => {
                 let rendered = match text {
@@ -49,13 +52,15 @@ impl Planner<'_> {
                 format!("\"{}\"", convert_escape_sequences(value)),
                 ConstantKind::String,
             ),
-            Literal::String { value, raw: true } => (emit_raw_string(value), ConstantKind::String),
+            Literal::String { value, raw: true } => {
+                (raw_string_literal(value), ConstantKind::String)
+            }
             Literal::Char(c) => (
                 format!("'{}'", convert_escape_sequences(c)),
                 ConstantKind::Rune,
             ),
-            Literal::FormatString(parts) => return self.emit_format_string(parts),
-            Literal::Slice(elements) => return self.emit_slice_literal(elements, ty),
+            Literal::FormatString(parts) => return self.plan_format_string(parts),
+            Literal::Slice(elements) => return self.plan_slice_literal(elements, ty),
         };
         ValuePlan::constant(value, kind)
     }
@@ -75,31 +80,24 @@ impl Planner<'_> {
             Type::Nominal { params, .. } if params.is_empty() => {}
             _ => return None,
         }
-        if peeled.as_simple() == Some(kind.default_kind()) {
+        if kind.is_default_go_type(&self.go_type(&peeled)) {
             return None;
         }
         Some(self.go_type(slot_ty))
     }
 
-    fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
-        // A list literal builds a slice or a fixed-size array, per its type.
-        let (element_lisette_ty, length) = match ty {
-            Type::Array { length, element } => (element.as_ref().clone(), Some(length)),
-            _ => (
-                ty.get_type_params()
-                    .expect("Slice type must have type args")
-                    .first()
-                    .expect("Slice type must have element type")
-                    .clone(),
-                None,
-            ),
+    fn plan_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
+        let element_lisette_ty = match ty {
+            Type::Array { element, .. } => element.as_ref().clone(),
+            _ => ty
+                .get_type_params()
+                .expect("Slice type must have type args")
+                .first()
+                .expect("Slice type must have element type")
+                .clone(),
         };
         let element_ty = self.go_type(&element_lisette_ty);
-
-        let go_type = match length {
-            Some(length) => GoType::array_of(length, &element_ty),
-            None => GoType::slice_of(&element_ty),
-        };
+        let go_type = self.go_type(ty);
         if elements.is_empty() {
             return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }
@@ -108,7 +106,7 @@ impl Planner<'_> {
             .iter()
             .map(|e| {
                 let origin = self.function_type_origin(&element_lisette_ty, SlotOrigin::Lisette);
-                self.lower_composite_value(
+                self.plan_composite_value(
                     e,
                     ExpressionContext::value().with_function_slot_origin(origin),
                 )
@@ -138,11 +136,11 @@ impl Planner<'_> {
 
         let layout = CompositeLayout::for_elements(wrapped.len(), widest);
         let value = GoExpression::composite(Some(go_type), wrapped, layout)
-            .position_elements(|index, _| self.source_position(&elements[index].get_span()));
+            .position_elements(|index, _| self.facts.source_position(&elements[index].get_span()));
         ValuePlan::built_from(setup, value, stability)
     }
 
-    fn emit_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {
+    fn plan_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {
         let has_interpolation = parts
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
@@ -151,13 +149,13 @@ impl Planner<'_> {
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.lower_format_operand(e))
+                    Some(self.plan_format_operand(e))
                 } else {
                     None
                 }
             })
             .collect();
-        let concatenates = self.format_string_concatenates(parts);
+        let concatenates = self.facts.format_string_concatenates(parts);
         if concatenates && stages.len() == 1 && parts.len() == 1 {
             return stages.pop().expect("one staged operand");
         }
@@ -179,7 +177,7 @@ impl Planner<'_> {
                         let value = values
                             .next()
                             .expect("sequenced count matches expression parts");
-                        if self.display_form(expression) == DisplayForm::Unit {
+                        if self.facts.display_form(expression) == DisplayForm::Unit {
                             text.push_str(UNIT_DISPLAY);
                             continue;
                         }
@@ -201,7 +199,7 @@ impl Planner<'_> {
             return ValuePlan::built_from(setup, concatenation, stability);
         }
 
-        let (format_string, args) = self.sprintf_pieces(parts, values, has_interpolation);
+        let (format_string, args) = self.facts.sprintf_pieces(parts, values, has_interpolation);
 
         if args.is_empty() {
             return ValuePlan::computed(
@@ -210,12 +208,7 @@ impl Planner<'_> {
             );
         }
 
-        // Solo-expression f-strings round-trip through fmt.Sprint, which skips
-        // the format-string parse. Excluded: a rune, because Sprint on a rune
-        // prints the integer codepoint instead of the character.
-        if let ([FormatStringPart::Expression(solo)], [_]) = (parts, args.as_slice())
-            && self.display_form(solo) != DisplayForm::Char
-        {
+        if !self.facts.format_string_lowers_to_sprintf(parts) {
             return ValuePlan::plain_call(
                 setup,
                 GoExpression::call(
@@ -235,7 +228,97 @@ impl Planner<'_> {
         )
     }
 
-    /// The `fmt` format text and arguments for the parts, given their lowered values in order.
+    pub(crate) fn plan_format_operand(&mut self, operand: &Expression) -> ValuePlan {
+        if self.facts.display_form(operand) != DisplayForm::Unit {
+            return self.plan_composite_value(operand, ExpressionContext::value());
+        }
+        let setup = self.lower_discard_value(operand);
+        ValuePlan::built_from(
+            setup,
+            string_constant(UNIT_DISPLAY.to_string()),
+            Stability::Fixed,
+        )
+    }
+}
+
+fn string_constant(text: String) -> GoExpression {
+    GoExpression::constant(format!("\"{text}\""), ConstantKind::String)
+}
+
+pub(crate) fn raw_string_literal(value: &str) -> String {
+    if !value.contains('`') && !value.contains('\r') {
+        format!("`{}`", value)
+    } else {
+        let escaped = value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\r', "\\r")
+            .replace('\n', "\\n");
+        format!("\"{}\"", escaped)
+    }
+}
+
+pub(crate) fn convert_escape_sequences(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => convert_escape(&mut chars, &mut result),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
+fn convert_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
+    match chars.peek().copied() {
+        Some('\\') => {
+            chars.next();
+            result.push_str("\\\\");
+        }
+        Some('0'..='7') => write_octal_escape(chars, result),
+        Some('u') if starts_unicode_escape(chars) => write_unicode_escape(chars, result),
+        _ => result.push('\\'),
+    }
+}
+
+fn write_octal_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
+    let mut value: u16 = 0;
+    for _ in 0..3 {
+        let Some(&digit @ '0'..='7') = chars.peek() else {
+            break;
+        };
+        value = value * 8 + (digit as u16 - b'0' as u16);
+        chars.next();
+    }
+    write!(result, "\\x{:02x}", value).unwrap();
+}
+
+fn starts_unicode_escape(chars: &Peekable<Chars<'_>>) -> bool {
+    let mut lookahead = chars.clone();
+    lookahead.next();
+    lookahead.peek() == Some(&'{')
+}
+
+fn write_unicode_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
+    chars.next();
+    chars.next();
+    let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
+    let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
+    if codepoint <= 0xFFFF {
+        write!(result, "\\u{:04X}", codepoint).unwrap();
+    } else {
+        write!(result, "\\U{:08X}", codepoint).unwrap();
+    }
+}
+
+impl EmitFacts<'_> {
+    fn display_form(&self, expression: &Expression) -> DisplayForm {
+        DisplayForm::of(&expression.get_type(), |id| self.definition(id))
+    }
+
     pub(crate) fn sprintf_pieces(
         &self,
         parts: &[FormatStringPart],
@@ -271,35 +354,6 @@ impl Planner<'_> {
         (format_string, args)
     }
 
-    pub(crate) fn lower_format_operand(&mut self, operand: &Expression) -> ValuePlan {
-        if self.display_form(operand) != DisplayForm::Unit {
-            return self.lower_composite_value(operand, ExpressionContext::value());
-        }
-        let setup = self.lower_discard_value(operand);
-        ValuePlan::built_from(
-            setup,
-            string_constant(UNIT_DISPLAY.to_string()),
-            Stability::Fixed,
-        )
-    }
-
-    pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {
-        let has_interpolation = parts
-            .iter()
-            .any(|p| matches!(p, FormatStringPart::Expression(_)));
-        if !has_interpolation || self.format_string_concatenates(parts) {
-            return false;
-        }
-        let [FormatStringPart::Expression(solo)] = parts else {
-            return true;
-        };
-        self.display_form(solo) == DisplayForm::Char
-    }
-
-    fn display_form(&self, expression: &Expression) -> DisplayForm {
-        DisplayForm::of(&expression.get_type(), |id| self.facts.definition(id))
-    }
-
     fn format_string_concatenates(&self, parts: &[FormatStringPart]) -> bool {
         let mut operands = parts
             .iter()
@@ -316,72 +370,17 @@ impl Planner<'_> {
                 )
             })
     }
-}
 
-fn string_constant(text: String) -> GoExpression {
-    GoExpression::constant(format!("\"{text}\""), ConstantKind::String)
-}
-
-pub(crate) fn emit_raw_string(value: &str) -> String {
-    // Go backtick raw strings cannot contain backticks, and Go discards `\r`
-    // from them, so fall back to double-quoted form in either case.
-    if !value.contains('`') && !value.contains('\r') {
-        format!("`{}`", value)
-    } else {
-        let escaped = value
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\r', "\\r")
-            .replace('\n', "\\n");
-        format!("\"{}\"", escaped)
-    }
-}
-
-pub(crate) fn convert_escape_sequences(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if chars.peek() == Some(&'\\') {
-                result.push('\\');
-                result.push('\\');
-                chars.next();
-            } else if matches!(chars.peek(), Some('0'..='7')) {
-                let mut value: u16 = 0;
-                for _ in 0..3 {
-                    match chars.peek() {
-                        Some(&d @ '0'..='7') => {
-                            value = value * 8 + (d as u16 - b'0' as u16);
-                            chars.next();
-                        }
-                        _ => break,
-                    }
-                }
-                write!(result, "\\x{:02x}", value).unwrap();
-            } else if chars.peek() == Some(&'u') && {
-                let mut lookahead = chars.clone();
-                lookahead.next();
-                lookahead.peek() == Some(&'{')
-            } {
-                chars.next(); // consume 'u'
-                chars.next(); // consume '{'
-                let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
-                let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
-                if codepoint <= 0xFFFF {
-                    write!(result, "\\u{:04X}", codepoint).unwrap();
-                } else {
-                    write!(result, "\\U{:08X}", codepoint).unwrap();
-                }
-            } else {
-                result.push(c);
-            }
-        } else if c == '\n' {
-            result.push_str("\\n");
-        } else if c == '\r' {
-            result.push_str("\\r");
-        } else {
-            result.push(c);
+    pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {
+        let has_interpolation = parts
+            .iter()
+            .any(|p| matches!(p, FormatStringPart::Expression(_)));
+        if !has_interpolation || self.format_string_concatenates(parts) {
+            return false;
         }
+        let [FormatStringPart::Expression(solo)] = parts else {
+            return true;
+        };
+        self.display_form(solo) == DisplayForm::Char
     }
-    result
 }

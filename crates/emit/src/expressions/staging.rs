@@ -1,30 +1,28 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::layout::ValueLayout;
-use crate::context::expression::ExpressionContext;
+use crate::ir::bodies::direct_first;
+use crate::ir::bodies::{Definition, LoweredStatement, Statement};
+use crate::ir::evaluation::Effects;
+use crate::ir::go_expression::CompositeLayout;
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::go_expression::Position;
+use crate::ir::values::{CaptureBoundary, GoExpression, SequencedValues, Stability, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
+use crate::passes::verify::verify_operand_order;
 use crate::patterns::matching::prelude_constructor;
-use crate::plan::bodies::direct_first;
-use crate::plan::bodies::{Definition, LoweredStatement, Statement};
 use crate::plan::calls::{CallableOrigin, FunctionBridge};
-use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::CompositeLayout;
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::go_expression::Position;
-use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, Stability, ValuePlan};
-use crate::plan::verify::verify_operand_order;
+use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
-use crate::utils::reads_value_member;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
-/// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)`: Go rejects the former.
 #[derive(Clone)]
 pub(crate) struct VariadicCombine {
     pub element_ty: Type,
-    /// EmittedExpr-value index where variadic-feeding args begin.
     pub fixed_count: usize,
 }
 
@@ -34,7 +32,6 @@ pub(crate) struct SpreadSequenceOptions {
     pub(crate) boundary: CaptureBoundary,
 }
 
-/// What later operands run before an operand's expression is read.
 #[derive(Default)]
 pub(crate) struct LaterStages {
     before: Effects,
@@ -98,11 +95,15 @@ fn setup_effects(setup: &[Statement]) -> Effects {
         .unwrap_or_else(Effects::anything)
 }
 
+pub(crate) fn takes_prelude_callback(declared_param: Option<&Type>) -> bool {
+    declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)))
+}
+
 fn prelude_arg_context<'a>(
     declared_param: Option<&Type>,
     param_ty: Option<&'a Type>,
 ) -> (bool, ExpressionContext<'a>) {
-    let suppress = declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
+    let suppress = takes_prelude_callback(declared_param);
     let arg_ctx = ExpressionContext::value()
         .with_forced_tagged_go_function(suppress)
         .with_generic_result_slot(declared_param, param_ty);
@@ -128,8 +129,6 @@ impl Planner<'_> {
         ValuePlan::captured(setup, temp_var)
     }
 
-    /// Pin a staged operand's value into a temp so it evaluates before any
-    /// later sibling.
     pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &'static str) {
         staged.pin(|setup, value| self.hoist_tmp_value_statement(setup, prefix, value));
     }
@@ -144,7 +143,6 @@ impl Planner<'_> {
             && value.expression().constant_kind().is_none()
             && !self.plan_rests_in_stable_name(&value)
         {
-            // Keep the source type when Go would default an untyped shift to int.
             if self.contains_untyped_constant_shift(source) {
                 value = value.conversion(self.go_type(&source.get_type()));
             }
@@ -160,7 +158,7 @@ impl Planner<'_> {
         prefix: &'static str,
         boundary: CaptureBoundary,
     ) -> GoExpression {
-        let plan = self.lower_composite_value(expression, ExpressionContext::value());
+        let plan = self.plan_composite_value(expression, ExpressionContext::value());
         let requires_capture = boundary.delays_reads() && !plan.can_delay();
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
@@ -178,27 +176,9 @@ impl Planner<'_> {
     }
 
     pub(crate) fn is_pure_constructor_callee(&self, callee: &Expression) -> bool {
-        if prelude_constructor(callee).is_some() {
-            return true;
-        }
-        self.resolve_callee_definition(callee)
-            .1
-            .is_some_and(|definition| definition.is_type_definition())
+        prelude_constructor(callee).is_some() || self.callee_lowers_to_type_construction(callee)
     }
 
-    /// No binding id means a top-level definition, which is immutable.
-    pub(crate) fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
-        match expression {
-            Expression::Identifier {
-                resolution: IdentifierResolution::Binding(id),
-                ..
-            } => !self.facts.is_mutated(*id),
-            Expression::Identifier { .. } => true,
-            _ => false,
-        }
-    }
-
-    /// Whether readers can name the value where it sits instead of pinning it.
     pub(crate) fn plan_rests_in_stable_name(&self, plan: &ValuePlan) -> bool {
         if plan.rests_in_fixed_name() {
             return true;
@@ -206,27 +186,6 @@ impl Planner<'_> {
         plan.expression().as_identifier().is_some_and(|local| {
             plan.binds_local(local) && !self.scope.has_binding_for_local(local)
         })
-    }
-
-    /// How much of a read's surroundings can change the value it observes.
-    pub(crate) fn identifier_read_stability(&self, expression: &Expression) -> Stability {
-        if self.is_unmutated_identifier(expression) {
-            Stability::Fixed
-        } else if self.identifier_immune_to_calls(expression) {
-            Stability::StableAcrossCalls
-        } else {
-            Stability::Observable
-        }
-    }
-
-    fn binding_read_stability(&self, id: BindingId) -> Stability {
-        if !self.facts.is_mutated(id) {
-            Stability::Fixed
-        } else if !self.facts.is_alias_mutated(id) {
-            Stability::StableAcrossCalls
-        } else {
-            Stability::Observable
-        }
     }
 
     pub(crate) fn path_read_stability(&self, path: &GoExpression) -> Stability {
@@ -237,7 +196,7 @@ impl Planner<'_> {
         path.node().visit(&mut |node| {
             if let GoExpressionNode::Identifier(name) = node {
                 stability = stability.max(match self.scope.source_binding_for_local(name) {
-                    Some(id) => self.binding_read_stability(id),
+                    Some(id) => self.facts.binding_read_stability(id),
                     None => Stability::StableAcrossCalls,
                 });
             }
@@ -245,29 +204,20 @@ impl Planner<'_> {
         stability
     }
 
-    /// Only a binding mutated through an alias can be rebound by a call, so
-    /// reads of alias-free bindings commute with sibling calls.
-    pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
-        match expression {
-            Expression::Identifier {
-                resolution: IdentifierResolution::Binding(id),
-                ..
-            } => !self.facts.is_alias_mutated(*id),
-            Expression::Identifier { .. } => true,
-            _ => false,
-        }
-    }
-
     pub(crate) fn place_read_stability(&self, place: &Expression) -> Stability {
         match place.unwrap_parens() {
-            Expression::Identifier { .. } => self.identifier_read_stability(place),
+            Expression::Identifier { .. } => self.facts.identifier_read_stability(place),
             Expression::Call { .. } => Stability::StableAcrossCalls,
             Expression::DotAccess {
                 expression,
                 resolution,
                 ..
             } if resolution.is_field_read()
-                && !reads_value_member(resolution, expression, &expression.get_type()) =>
+                && !self.facts.reads_value_member(
+                    resolution,
+                    expression,
+                    &expression.get_type(),
+                ) =>
             {
                 Stability::Observable
             }
@@ -288,7 +238,7 @@ impl Planner<'_> {
         param_ty: Option<&Type>,
     ) -> ValuePlan {
         let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
-        let staged = self.lower_composite_value(expression, arg_ctx);
+        let staged = self.plan_composite_value(expression, arg_ctx);
 
         if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
             return staged.map_expression(|setup, value| {
@@ -325,7 +275,6 @@ impl Planner<'_> {
                 .is_none()
     }
 
-    /// Detect whether a tagged-Go lowering applies. Pure: no emission.
     pub(crate) fn detect_lower_arg_to_tagged(
         &self,
         arg: &Expression,
@@ -334,7 +283,6 @@ impl Planner<'_> {
         if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
             return None;
         }
-        // A Go function value is already wrapped to the tagged ABI here.
         let callee = self.resolve_callable_value(arg)?;
         if matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
@@ -377,8 +325,6 @@ impl Planner<'_> {
             .collect()
     }
 
-    /// Post-staging fix-up for the spread slot: optional `any`-wrap, then
-    /// either `append([]T{leading...}, spread...)...` or plain `value...`.
     fn finalize_spread_stage(
         &mut self,
         values: &mut Vec<GoExpression>,
@@ -412,7 +358,6 @@ impl Planner<'_> {
         values.push(GoExpression::spread(spread));
     }
 
-    /// Sequence value plans while preserving left-to-right evaluation order.
     pub(crate) fn sequence_values(
         &mut self,
         stages: Vec<ValuePlan>,
@@ -498,5 +443,49 @@ impl Planner<'_> {
             self.finalize_spread_stage(&mut sequenced.values, options.wrap_to_any, options.combine);
         }
         sequenced
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(id),
+                ..
+            } => !self.is_mutated(*id),
+            Expression::Identifier { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn binding_read_stability(&self, id: BindingId) -> Stability {
+        if !self.is_mutated(id) {
+            Stability::Fixed
+        } else if !self.is_alias_mutated(id) {
+            Stability::StableAcrossCalls
+        } else {
+            Stability::Observable
+        }
+    }
+
+    fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(id),
+                ..
+            } => !self.is_alias_mutated(*id),
+            Expression::Identifier { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn identifier_read_stability(&self, expression: &Expression) -> Stability {
+        if self.is_unmutated_identifier(expression) {
+            Stability::Fixed
+        } else if self.identifier_immune_to_calls(expression) {
+            Stability::StableAcrossCalls
+        } else {
+            Stability::Observable
+        }
     }
 }

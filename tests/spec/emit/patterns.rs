@@ -2218,3 +2218,105 @@ pub struct Addr { pub Scope_id: uint32, pub Port: uint16 }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/net", typedef)]);
 }
+
+#[test]
+fn slice_pattern_on_go_field_of_option_elements() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn main() {
+  let attr = os.ProcAttr { Dir: "", Env: [], Files: [None, Some(os.Stdout)], Sys: None }
+  match attr {
+    os.ProcAttr { Files: [Some(f), ..], .. } => fmt.Println("some", f.Name()),
+    _ => fmt.Println("other"),
+  }
+  let fs = attr.Files
+  match fs {
+    [None, Some(g)] => fmt.Println("pair", g.Name()),
+    _ => fmt.Println("x"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_rest_binding_on_go_field_of_option_elements() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let attr = os.ProcAttr { Dir: "", Env: [], Files: [None, Some(os.Stdout)], Sys: None }
+  match attr {
+    os.ProcAttr { Files: [_, ..rest], .. } => {
+      let n = rest.length()
+      match rest.get(0) {
+        Some(Some(f)) => fmt.Println(n, f.Name()),
+        _ => fmt.Println(n, "none"),
+      }
+    },
+    _ => fmt.Println("other"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_tuple_fields_through_alias_and_reference() {
+    let input = r#"
+import "go:fmt"
+
+enum Tree { Node(int, int), Leaf }
+type T = Tree
+
+fn sum(t: T) -> int {
+  match t {
+    Tree.Node(a, b) => a + b,
+    Tree.Leaf => 0,
+  }
+}
+
+fn first(t: Ref<T>) -> int {
+  if let Tree.Node(a, _) = t.* { a } else { 0 }
+}
+
+fn main() {
+  let t: T = Tree.Node(1, 2)
+  fmt.Println(sum(t), first(&t))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn option_and_result_fields_through_alias_and_reference() {
+    let input = r#"
+import "go:fmt"
+
+type M = Option<int>
+type R = Result<int, string>
+
+fn get(m: M) -> int {
+  match m {
+    Some(x) => x,
+    None => 0,
+  }
+}
+
+fn read(r: Ref<R>) -> int {
+  match r.* {
+    Ok(x) => x,
+    Err(_) => 0,
+  }
+}
+
+fn main() {
+  let r: R = Ok(4)
+  fmt.Println(get(Some(3)), read(&r))
+}
+"#;
+    assert_emit_snapshot!(input);
+}

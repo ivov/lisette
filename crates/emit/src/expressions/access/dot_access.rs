@@ -1,33 +1,23 @@
-use crate::state::bindings::BindingValue;
-use syntax::ast::{Expression, StructFieldDefinition};
-use syntax::parse;
-use syntax::program::GoHint;
-use syntax::program::{
-    ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
-};
-use syntax::types::{CompoundKind, Symbol, Type};
-
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::ValueLayout;
 use crate::abi::wrapping::NilGuard;
-use crate::context::expression::ExpressionContext;
-use crate::go_name;
-use crate::plan::bodies::Statement;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::{GoExpression, Stability, ValuePlan};
-use crate::utils::reads_value_member;
+use crate::ir::bodies::Statement;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, Stability, ValuePlan};
+use crate::names::go_name;
+use crate::state::bindings::BindingValue;
+use crate::state::expression::ExpressionContext;
+use syntax::ast::Expression;
+use syntax::parse;
+use syntax::program::GoHint;
 use syntax::program::SlotOrigin;
-
-struct NullableFieldAccess<'a> {
-    value: GoExpression,
-    member: &'a str,
-    expression_ty: &'a Type,
-    declaring_type: Option<&'a Symbol>,
-    result_ty: &'a Type,
-    callee: bool,
-}
+use syntax::program::{
+    ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
+};
+use syntax::types::{CompoundKind, Type};
 
 impl Planner<'_> {
     pub(crate) fn plan_dot_access(
@@ -38,7 +28,6 @@ impl Planner<'_> {
         self.plan_dot_access_with(dot_access, ctx, true)
     }
 
-    /// Read a nullable Go field as its raw Go value, without the `Option` wrap.
     pub(crate) fn plan_raw_nullable_field(&mut self, dot_access: &Expression) -> ValuePlan {
         self.plan_dot_access_with(
             dot_access.unwrap_parens(),
@@ -63,17 +52,10 @@ impl Planner<'_> {
         else {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
-        let receiver_coercion =
-            self.facts
-                .checked(expression)
-                .receiver_change()
-                .filter(|coercion| {
-                    *coercion != ReceiverCoercion::AutoAddress
-                        || !self.has_go_value_receiver(&expression.get_type(), member)
-                });
+        let receiver_coercion = self.facts.dot_receiver_coercion(expression, member);
         let tagged_twin = self.selects_tagged_twin(dot_access);
 
-        if let Some(expression) = self.try_emit_pre_receiver_dot(dot_access, tagged_twin, ctx) {
+        if let Some(expression) = self.try_plan_pre_receiver_dot(dot_access, tagged_twin, ctx) {
             let plan = ValuePlan::computed(Vec::new(), expression);
             if matches!(resolution, DotAccessResolution::EnumVariant { .. }) {
                 return plan.with_stability(Stability::Fixed);
@@ -85,16 +67,11 @@ impl Planner<'_> {
         if let Some(component) = self.tuple_component_read(expression, member) {
             let mut setup = Vec::new();
             if wrap_nullable
-                && let Some(wrapped) = self.plan_nullable_field_access(
+                && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
-                    NullableFieldAccess {
-                        value: GoExpression::identifier(component.clone()),
-                        member,
-                        expression_ty: &expression_ty,
-                        declaring_type: resolution.declaring_type(),
-                        result_ty,
-                        callee: ctx.is_callee(),
-                    },
+                    dot_access,
+                    GoExpression::identifier(component.clone()),
+                    ctx,
                 )
             {
                 return ValuePlan::computed(setup, wrapped);
@@ -112,39 +89,20 @@ impl Planner<'_> {
             ),
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
-        let stability = if let Some(package) = expression_ty.as_import_namespace()
-            && self.package_member_is_fixed(package, member)
-        {
-            Stability::Fixed
-        } else if reads_value_member(resolution, expression, &expression_ty) {
-            base_plan.stability()
-        } else {
-            Stability::Observable
-        };
-        let (mut setup, mut base) = base_plan.into_parts();
-        if let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) {
-            let receiver_type = self.facts.strip_and_peel(&expression_ty);
-            let adapter = self
-                .dynamic_interface_adapter(&receiver_type, &bound, None)
-                .expect("a dispatched bound has an adapter");
-            let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
-            setup.extend(adapter_setup);
-            base = adapted;
-        }
+        let stability =
+            self.facts
+                .dot_member_stability(dot_access, &expression_ty, base_plan.stability());
+        let (mut setup, base) = base_plan.into_parts();
+        let base = self.plan_bound_dispatch_receiver(&mut setup, dot_access, base, &expression_ty);
         if let Some(member_access) =
-            self.try_emit_tuple_member_dot(&base, &expression_ty, member, resolution)
+            self.try_plan_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
             if wrap_nullable
-                && let Some(wrapped) = self.plan_nullable_field_access(
+                && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
-                    NullableFieldAccess {
-                        value: member_access.clone(),
-                        member,
-                        expression_ty: &expression_ty,
-                        declaring_type: resolution.declaring_type(),
-                        result_ty,
-                        callee: ctx.is_callee(),
-                    },
+                    dot_access,
+                    member_access.clone(),
+                    ctx,
                 )
             {
                 return ValuePlan::computed(setup, wrapped);
@@ -157,32 +115,25 @@ impl Planner<'_> {
             field = go_name::tagged_twin(&field);
         }
 
-        let value_field =
-            resolution.is_field_read() && self.field_read_cannot_panic(&expression_ty);
         let selector = match package {
             Some(package) => GoExpression::qualified(package, field),
-            None if value_field => GoExpression::value_field(base, field),
+            None if resolution.is_field_read() => {
+                self.facts.field_access(base, &expression_ty, field)
+            }
             None => GoExpression::selector(base, field),
         };
         if wrap_nullable
-            && let Some(wrapped) = self.plan_nullable_field_access(
-                &mut setup,
-                NullableFieldAccess {
-                    value: selector.clone(),
-                    member,
-                    expression_ty: &expression_ty,
-                    declaring_type: resolution.declaring_type(),
-                    result_ty,
-                    callee: ctx.is_callee(),
-                },
-            )
+            && let Some(wrapped) =
+                self.try_plan_nullable_field_access(&mut setup, dot_access, selector.clone(), ctx)
         {
             return ValuePlan::computed(setup, wrapped);
         }
         let expression =
             self.append_cross_package_type_args(selector, dot_access, &expression_ty, ctx);
         let expression = if let Some(package) = expression_ty.as_import_namespace()
-            && self.go_constant_exceeds_int(package, member, result_ty)
+            && self
+                .facts
+                .go_constant_exceeds_int(package, member, result_ty)
         {
             GoExpression::conversion(self.go_type(result_ty), expression)
         } else {
@@ -197,7 +148,26 @@ impl Planner<'_> {
         ValuePlan::computed(setup, expression).with_stability(stability)
     }
 
-    fn try_emit_pre_receiver_dot(
+    fn plan_bound_dispatch_receiver(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        dot_access: &Expression,
+        base: GoExpression,
+        expression_ty: &Type,
+    ) -> GoExpression {
+        let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) else {
+            return base;
+        };
+        let receiver_type = self.facts.strip_and_peel(expression_ty);
+        let adapter = self
+            .dynamic_interface_adapter(&receiver_type, &bound, None)
+            .expect("a dispatched bound has an adapter");
+        let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
+        setup.extend(adapter_setup);
+        adapted
+    }
+
+    fn try_plan_pre_receiver_dot(
         &mut self,
         dot_access: &Expression,
         tagged_twin: bool,
@@ -214,22 +184,13 @@ impl Planner<'_> {
         };
         match resolution {
             DotAccessResolution::EnumVariant { definition, .. } => {
-                self.emit_enum_variant_dot(definition, result_ty, ctx)
+                self.try_plan_enum_variant_dot(definition, result_ty, ctx)
             }
             DotAccessResolution::StaticMethod { definition, .. } => {
-                Some(self.emit_static_method_dot(dot_access, definition, ctx))
+                Some(self.plan_static_method_dot(dot_access, definition, ctx))
             }
-            DotAccessResolution::InstanceMethodValue {
-                is_exported,
-                is_pointer_receiver,
-                ..
-            } => self.emit_instance_method_value_dot(
-                member,
-                result_ty,
-                *is_exported,
-                *is_pointer_receiver,
-                tagged_twin,
-            ),
+            DotAccessResolution::InstanceMethodValue { is_exported, .. } => self
+                .try_plan_instance_method_value_dot(member, result_ty, *is_exported, tagged_twin),
             _ => None,
         }
     }
@@ -251,10 +212,6 @@ impl Planner<'_> {
         tuple.names.get(index).cloned()
     }
 
-    /// Tuple-shape members: plain tuple slots emit as `.F{index}` (or the
-    /// `TUPLE_FIELDS` name); tuple-struct slots additionally try a newtype
-    /// cast when the struct has a single field and no generics.
-    /// The Go name of `member` on `expression`, for a read or a write.
     pub(crate) fn dot_member_go_name(
         &self,
         expression: &Expression,
@@ -262,14 +219,19 @@ impl Planner<'_> {
         member: &str,
         resolution: &DotAccessResolution,
     ) -> String {
+        if let Some(package) = expression_ty.as_import_namespace() {
+            return self.facts.package_member_go_name(package, member);
+        }
         let canonical_ty = self.facts.strip_and_peel(expression_ty);
+        if let DotAccessResolution::StructField { is_exported, .. } = resolution {
+            return self.struct_field_go_name(&canonical_ty, member, *is_exported);
+        }
         let is_exported = self.resolve_is_exported(expression, &canonical_ty, member, resolution);
-        let embedded = self.embedded_field(expression_ty, member);
-        self.try_resolve_cross_package_const(expression_ty, member)
-            .unwrap_or_else(|| go_field_name(&canonical_ty, member, is_exported, embedded))
+        let embedded = self.facts.embedded_field(expression_ty, member);
+        go_name::member_go_name(&canonical_ty, member, is_exported, embedded)
     }
 
-    pub(crate) fn try_emit_tuple_member_dot(
+    pub(crate) fn try_plan_tuple_member_dot(
         &mut self,
         base: &GoExpression,
         expression_ty: &Type,
@@ -284,20 +246,25 @@ impl Planner<'_> {
                 let field = parse::TUPLE_FIELDS
                     .get(index)
                     .expect("oversize tuple arity");
-                Some(self.field_access(base.clone(), expression_ty, field.to_string()))
+                Some(
+                    self.facts
+                        .field_access(base.clone(), expression_ty, field.to_string()),
+                )
             }
             DotAccessResolution::TupleStructField { is_newtype } => {
-                if *is_newtype && let Some(cast) = self.try_emit_newtype_cast(expression_ty, base) {
+                if *is_newtype && let Some(cast) = self.try_plan_newtype_cast(expression_ty, base) {
                     return Some(cast);
                 }
-                Some(self.field_access(base.clone(), expression_ty, format!("F{}", index)))
+                Some(self.facts.field_access(
+                    base.clone(),
+                    expression_ty,
+                    go_name::tuple_struct_field(index),
+                ))
             }
             _ => None,
         }
     }
 
-    /// Whether the Go member name must be capitalized. Adds emit-side checks
-    /// on top of semantic `is_exported` (`#[json]`, interface methods).
     fn resolve_is_exported(
         &self,
         expression: &Expression,
@@ -306,11 +273,8 @@ impl Planner<'_> {
         resolution: &DotAccessResolution,
     ) -> bool {
         match resolution {
-            DotAccessResolution::StructField { is_exported, .. } => {
-                *is_exported || self.struct_field_is_exported(expression_ty, member)
-            }
             DotAccessResolution::InstanceMethod { is_exported, .. } => {
-                *is_exported || self.method_needs_export(member)
+                *is_exported || self.facts.method_needs_export(member)
             }
             _ => {
                 if self.compute_is_exported_context(expression, expression_ty)
@@ -318,7 +282,8 @@ impl Planner<'_> {
                 {
                     return true;
                 }
-                !self.has_field(expression_ty, member) && self.method_needs_export(member)
+                !self.facts.has_field(expression_ty, member)
+                    && self.facts.method_needs_export(member)
             }
         }
     }
@@ -351,25 +316,29 @@ impl Planner<'_> {
         if !payload.is_identity() {
             return None;
         }
-        Some(self.option_nil_guard(result_ty))
+        Some(self.facts.option_nil_guard(result_ty))
     }
 
-    /// Accessing a nullable field on a Go-imported type: capture the raw
-    /// access into a temp and wrap in the Some/None nullable shape expected
-    /// downstream. Returns `None` when no wrapping is needed.
-    fn plan_nullable_field_access(
+    fn try_plan_nullable_field_access(
         &mut self,
         setup: &mut Vec<Statement>,
-        access: NullableFieldAccess<'_>,
+        dot_access: &Expression,
+        value: GoExpression,
+        ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
-        let NullableFieldAccess {
-            value,
+        let Expression::DotAccess {
+            expression,
             member,
-            expression_ty,
-            declaring_type,
-            result_ty,
-            callee,
-        } = access;
+            ty: result_ty,
+            resolution,
+            ..
+        } = dot_access
+        else {
+            unreachable!("a nullable field access reads a DotAccess expression");
+        };
+        let expression_ty = &expression.get_type();
+        let declaring_type = resolution.declaring_type();
+        let callee = ctx.is_callee();
         let source_layout =
             self.field_slot_layout(expression_ty, declaring_type, None, member, result_ty)?;
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
@@ -382,7 +351,6 @@ impl Planner<'_> {
             && target.return_abi == CallableReturnAbi::Void
             && source.same_parameter_representation(target)
         {
-            // A direct Go call can discard a generic unit result without a wrapper.
             return None;
         }
         let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
@@ -395,9 +363,6 @@ impl Planner<'_> {
         Some(coerced)
     }
 
-    /// When accessing a cross-package generic member by value (not as a callee),
-    /// append the type args of the instantiation the checker recorded.
-    /// Callee-position accesses skip this because the call site re-instantiates.
     fn append_cross_package_type_args(
         &mut self,
         base_access: GoExpression,
@@ -414,15 +379,12 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit `.0` on a newtype as a Go conversion to the field type, `int(n)`.
-    /// Peels type aliases, so `.0` through `type Alias = New` also converts.
-    /// Returns None when the type is not a newtype.
-    fn try_emit_newtype_cast(
+    fn try_plan_newtype_cast(
         &mut self,
         expression_ty: &Type,
         base: &GoExpression,
     ) -> Option<GoExpression> {
-        let field_ty = self.get_newtype_underlying(expression_ty)?;
+        let field_ty = self.facts.newtype_underlying(expression_ty)?;
         let go_type = self.go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
             GoExpression::dereference(base.clone())
@@ -432,7 +394,6 @@ impl Planner<'_> {
         Some(GoExpression::conversion(go_type, operand))
     }
 
-    /// Compute whether a dot access context requires exported (capitalized) Go names.
     fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
         let is_import_namespace_identifier = matches!(
             expression,
@@ -449,7 +410,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let elided_deref = expression
             .deref_inner()
-            .filter(|inner| !self.points_to_ref(&inner.get_type()));
+            .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
         let (staged, had_explicit_deref) = if let Some(inner) = elided_deref {
             (self.plan_operand(inner, ctx), true)
         } else {
@@ -477,34 +438,135 @@ impl Planner<'_> {
         })
     }
 
-    /// Go follows only one pointer in a selector.
+    fn try_plan_enum_variant_dot(
+        &mut self,
+        definition: &str,
+        result_ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<GoExpression> {
+        let make_fn_name = self.facts.variant_make_function(definition)?;
+        let enum_package = self.facts.package_for_qualified_name(definition)?;
+        let make_fn = if go_name::is_prelude_id(&make_fn_name) {
+            go_name::resolve(&make_fn_name).into_expression()
+        } else if self.facts.is_current_package(enum_package) {
+            GoExpression::external_name(make_fn_name)
+        } else {
+            GoExpression::qualified(self.package_use_for_package(enum_package), make_fn_name)
+        };
+
+        match result_ty {
+            Type::Function(f) => {
+                let Type::Nominal {
+                    params: ret_params, ..
+                } = f.return_type.as_ref()
+                else {
+                    return None;
+                };
+                let type_args = self.constructor_fn_type_args(&f.params, ret_params, ctx);
+                Some(GoExpression::instantiation(make_fn, type_args))
+            }
+            Type::Nominal { params, .. } => {
+                let type_args = self.variant_value_type_args(params, ctx);
+                Some(GoExpression::pure_call(
+                    GoExpression::instantiation(make_fn, type_args),
+                    Vec::new(),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    fn plan_static_method_dot(
+        &mut self,
+        dot_access: &Expression,
+        definition: &str,
+        ctx: ExpressionContext<'_>,
+    ) -> GoExpression {
+        let function = self.definition_reference(definition);
+        if ctx.is_callee() {
+            return function;
+        }
+        let type_args = self.format_value_type_args(dot_access);
+        GoExpression::instantiation(function, type_args.unwrap_or_default())
+    }
+
+    fn try_plan_instance_method_value_dot(
+        &mut self,
+        member: &str,
+        result_ty: &Type,
+        is_exported: bool,
+        tagged_twin: bool,
+    ) -> Option<GoExpression> {
+        let receiver_param = &result_ty.as_function_type()?.params.first()?.ty;
+        let mut go_method = self.facts.method_go_name(member, is_exported);
+        if tagged_twin {
+            go_method = go_name::tagged_twin(&go_method);
+        }
+        Some(self.method_expression(receiver_param, go_method))
+    }
+}
+
+impl EmitFacts<'_> {
+    fn dot_member_stability(
+        &self,
+        dot_access: &Expression,
+        expression_ty: &Type,
+        base_stability: Stability,
+    ) -> Stability {
+        let Expression::DotAccess {
+            expression,
+            member,
+            resolution,
+            ..
+        } = dot_access
+        else {
+            unreachable!("a member stability reads a DotAccess expression");
+        };
+        if let Some(package) = expression_ty.as_import_namespace()
+            && self.package_member_is_fixed(package, member)
+        {
+            Stability::Fixed
+        } else if self.reads_value_member(resolution, expression, expression_ty) {
+            base_stability
+        } else {
+            Stability::Observable
+        }
+    }
+
+    fn dot_receiver_coercion(
+        &self,
+        receiver: &Expression,
+        member: &str,
+    ) -> Option<ReceiverCoercion> {
+        self.checked(receiver).receiver_change().filter(|coercion| {
+            *coercion != ReceiverCoercion::AutoAddress
+                || !self.has_go_value_receiver(&receiver.get_type(), member)
+        })
+    }
+
     pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
-        let peeled = self.facts.peel_alias(ty);
+        let peeled = self.peel_alias(ty);
         peeled.is_ref()
             && peeled
                 .inner()
-                .is_some_and(|inner| self.facts.peel_alias(&inner).is_ref())
+                .is_some_and(|inner| self.peel_alias(&inner).is_ref())
     }
 
-    /// A Go method with a value receiver takes its receiver as is, so a call result needs no temp.
     fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
-        let receiver_ty = self.facts.peel_alias(&receiver_ty.strip_refs());
+        let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
         receiver_ty
             .get_qualified_id()
-            .filter(|owner| owner.starts_with("go:"))
-            .and_then(|owner| self.facts.method(owner, method))
+            .filter(|owner| go_name::is_go_import(owner))
+            .and_then(|owner| self.method(owner, method))
             .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
     }
 
-    /// A Go constant above `MaxInt64` has no Go default type, so Go needs the declared type.
     fn go_constant_exceeds_int(&self, package: &str, member: &str, ty: &Type) -> bool {
-        // Only an unsigned constant can hold a value above `MaxInt64`.
         if !ty.is_unsigned_int() || !go_name::is_go_import(package) {
             return false;
         }
         let qualified_name = format!("{}.{}", package, member);
-        self.facts
-            .definition(qualified_name.as_str())
+        self.definition(qualified_name.as_str())
             .is_some_and(|definition| {
                 matches!(
                     &definition.body,
@@ -518,69 +580,9 @@ impl Planner<'_> {
 
     fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {
         let qualified_name = format!("{}.{}", package, member);
-        self.facts
-            .definition(qualified_name.as_str())
+        self.definition(qualified_name.as_str())
             .is_some_and(|definition| {
                 matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
             })
     }
-
-    fn try_resolve_cross_package_const(
-        &self,
-        expression_ty: &Type,
-        member: &str,
-    ) -> Option<String> {
-        let package = expression_ty.as_import_namespace()?;
-        if go_name::is_go_import(package) {
-            return None;
-        }
-        let qualified_name = format!("{}.{}", package, member);
-        let definition = self.facts.definition(qualified_name.as_str())?;
-        if !definition.visibility.is_public() {
-            return None;
-        }
-        if !matches!(definition.body, DefinitionBody::Value { .. }) {
-            return None;
-        }
-        let ty = &definition.ty;
-        let is_function = matches!(ty, Type::Function(_))
-            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)));
-        if is_function {
-            return None;
-        }
-        Some(go_name::screaming_snake_to_camel(member))
-    }
-}
-
-/// Pick the Go-side name for a struct field or method. Exported members on
-/// prelude types follow snake_case → camelCase (matching the stdlib
-/// convention); exported members elsewhere get first-letter capitalization;
-/// non-exported members become lower camelCase, embedded fields keep their
-/// type's name.
-fn go_field_name(
-    expression_ty: &Type,
-    member: &str,
-    is_exported: bool,
-    embedded: Option<&StructFieldDefinition>,
-) -> String {
-    if expression_ty
-        .as_import_namespace()
-        .is_some_and(go_name::is_go_import)
-    {
-        return member.to_string();
-    }
-
-    go_name::member_go_name(expression_ty, member, is_exported, embedded)
-}
-
-/// Whether the type resolves to a prelude-package declaration. Shared with
-/// the struct-call path, which also uses prelude-ness to decide field
-/// naming and type formatting.
-pub(super) fn is_from_prelude(ty: &Type) -> bool {
-    let Type::Nominal { id, .. } = ty.strip_refs() else {
-        return false;
-    };
-    // Only return true if the type actually comes from the prelude package.
-    // User-defined types with the same name should NOT be treated as prelude types.
-    id.starts_with(go_name::PRELUDE_PREFIX)
 }

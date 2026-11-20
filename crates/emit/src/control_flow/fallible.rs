@@ -1,11 +1,12 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::transition;
 use crate::control_flow::propagation::plain_return;
+use crate::ir::bodies::Statement;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
-use crate::plan::bodies::Statement;
-use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -17,6 +18,7 @@ pub(crate) const PARTIAL_OK_FIELD: &str = "OkVal";
 pub(crate) const PARTIAL_ERR_FIELD: &str = "ErrVal";
 
 pub(crate) const RESULT_OK_TAG: &str = "ResultOk";
+pub(crate) const RESULT_ERR_TAG: &str = "ResultErr";
 pub(crate) const OPTION_SOME_TAG: &str = "OptionSome";
 pub(crate) const PARTIAL_OK_TAG: &str = "PartialOk";
 pub(crate) const PARTIAL_ERR_TAG: &str = "PartialErr";
@@ -35,12 +37,12 @@ pub(crate) enum Fallible {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConstructorKind {
-    Success, // Some(x) or Ok(x)
-    Failure, // None or Err(x)
+    Success,
+    Failure,
 }
 
 impl Fallible {
-    pub(crate) fn from_type(ty: &Type) -> Option<Self> {
+    fn from_type(ty: &Type) -> Option<Self> {
         if ty.is_result() {
             let args = ty.get_type_params()?;
             Some(Self::Result {
@@ -82,13 +84,6 @@ impl Fallible {
         match self {
             Self::Result { err_ty, .. } => Some(err_ty),
             Self::Option { .. } => None,
-        }
-    }
-
-    fn struct_name(&self) -> &'static str {
-        match self {
-            Self::Result { .. } => "Result",
-            Self::Option { .. } => "Option",
         }
     }
 
@@ -136,17 +131,16 @@ pub(crate) fn prelude_call(
 }
 
 impl Planner<'_> {
-    pub(crate) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
-        if let Some(ty) = self.return_ctx().ty() {
-            let peeled = self.facts.peel_alias(ty);
-            if peeled.is_result() {
-                return Some(peeled.err_type());
-            }
-        }
-        fallible.err_ty().cloned()
+    pub(crate) fn return_fallible(&self) -> Option<Fallible> {
+        self.facts.fallible(self.return_ctx().ty()?)
     }
 
-    /// The error of the `?` on `operand`, converted to the error slot that the checker recorded for it.
+    pub(crate) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
+        self.return_fallible()
+            .and_then(|returned| returned.err_ty().cloned())
+            .or_else(|| fallible.err_ty().cloned())
+    }
+
     pub(crate) fn convert_error_to_return_context(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -158,7 +152,6 @@ impl Planner<'_> {
         else {
             return value;
         };
-        // Emit also lowers a tail call through this path, with no `?` and an unchanged error.
         if self.facts.peel_alias(&from) == self.facts.peel_alias(&to) {
             return value;
         }
@@ -179,9 +172,9 @@ impl Planner<'_> {
             let return_ty = return_ctx.expect_ty();
             return match error {
                 Some(error) if fallible.is_result() => {
-                    transition::lowered_err_values(self, &shape, &return_ty, error)
+                    self.lowered_err_values(&shape, &return_ty, error)
                 }
-                _ => transition::lowered_none_values(self, &shape, &return_ty),
+                _ => self.lowered_none_values(&shape, &return_ty),
             };
         }
         vec![self.contextual_failure(fallible, error)]
@@ -211,16 +204,11 @@ impl Planner<'_> {
             return vec![plain_return(success)];
         };
         let (mut statements, payload) =
-            transition::lowered_payload_values(self, &shape, fallible.ok_ty(), value);
-        statements.push(transition::multi_value_return(
-            transition::lowered_ok_values(&shape, payload),
-        ));
+            self.lowered_payload_values(&shape, fallible.ok_ty(), value);
+        statements.push(transition::multi_value_return(shape.ok_values(payload)));
         statements
     }
-}
 
-impl Planner<'_> {
-    /// `[T]` or `[T, E]`, the type arguments of a prelude `Option` or `Result`.
     fn fallible_type_args(&self, ok_ty: &Type, err_ty: Option<&Type>) -> GoType {
         let arguments: Vec<GoType> = [Some(ok_ty), err_ty]
             .into_iter()
@@ -228,15 +216,6 @@ impl Planner<'_> {
             .map(|ty| self.go_type(ty))
             .collect();
         GoType::type_arguments(&arguments)
-    }
-
-    pub(crate) fn fallible_go_type(&self, fallible: &Fallible) -> GoType {
-        let arguments: Vec<_> = [Some(fallible.ok_ty()), fallible.err_ty()]
-            .into_iter()
-            .flatten()
-            .map(|ty| self.go_type(ty))
-            .collect();
-        GoType::prelude(fallible.struct_name(), &arguments)
     }
 
     pub(crate) fn fallible_call(
@@ -249,15 +228,10 @@ impl Planner<'_> {
         prelude_call(constructor, type_args, arguments)
     }
 
-    pub(crate) fn fallible_success(
-        &mut self,
-        fallible: &Fallible,
-        value: GoExpression,
-    ) -> GoExpression {
+    fn fallible_success(&mut self, fallible: &Fallible, value: GoExpression) -> GoExpression {
         self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
     }
 
-    /// A failure typed by the enclosing return type, with the fallible's own types as fallback.
     fn contextual_failure(
         &mut self,
         fallible: &Fallible,
@@ -274,5 +248,11 @@ impl Planner<'_> {
         let type_args = self.fallible_type_args(&ok_ty, err_ty.as_ref());
         let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
         prelude_call(fallible.err_constructor(), type_args, arguments)
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn fallible(&self, ty: &Type) -> Option<Fallible> {
+        Fallible::from_type(&self.peel_alias(ty))
     }
 }

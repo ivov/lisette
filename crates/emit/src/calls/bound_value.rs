@@ -1,11 +1,11 @@
 use crate::Planner;
-use crate::abi::wrapping::{NilGuard, is_nil, non_nil};
+use crate::abi::wrapping::{NilGuard, nil_condition, non_nil_condition};
 use crate::calls::bounds::BoundsCheckedIndex;
 
-use crate::plan::bodies::{Definition, Statement, define, discard};
-use crate::plan::go_expression::{BinaryOp, UnaryOp};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::ir::bodies::{Definition, Statement, define, discard};
+use crate::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 
 pub(crate) struct BoundValue {
@@ -30,7 +30,6 @@ enum BoundSource {
     },
 }
 
-/// A bound two-result expression and the rule that distinguishes success.
 pub(super) struct LoweredPair {
     pub(super) value: PairValue,
     pub(super) status: GoIdentifier,
@@ -80,8 +79,8 @@ impl LoweredPair {
         let status = match (self.status_kind, success) {
             (PairStatusKind::Ok, true) => status,
             (PairStatusKind::Ok, false) => GoExpression::unary(UnaryOp::Not, status),
-            (PairStatusKind::Error, true) => is_nil(status),
-            (PairStatusKind::Error, false) => non_nil(status),
+            (PairStatusKind::Error, true) => nil_condition(status),
+            (PairStatusKind::Error, false) => non_nil_condition(status),
         };
         let condition = match &self.value {
             PairValue::Named {
@@ -90,9 +89,9 @@ impl LoweredPair {
             } => {
                 let value = GoExpression::identifier(name.clone());
                 let nil_condition = if success {
-                    guard.non_nil(value)
+                    guard.non_nil_condition(value)
                 } else {
-                    guard.is_nil(value)
+                    guard.nil_condition(value)
                 };
                 let operator = if success { BinaryOp::And } else { BinaryOp::Or };
                 GoExpression::binary(status, operator, nil_condition)
@@ -157,7 +156,6 @@ impl BoundValue {
         }
     }
 
-    /// The payload expression, valid once the some-condition holds.
     pub(crate) fn payload(&self) -> Option<GoExpression> {
         match &self.source {
             BoundSource::Index { index, .. } => Some(index.element()),
@@ -208,7 +206,6 @@ impl BoundValue {
         !matches!(self.source, BoundSource::Index { .. })
     }
 
-    /// The statement that reads a late payload into its requested name.
     pub(crate) fn late_binding(&self) -> Option<Statement> {
         let BoundSource::Index {
             index,
@@ -265,9 +262,9 @@ impl BoundValue {
             } => {
                 let tested = GoExpression::identifier(value.clone());
                 let test = if success {
-                    nil_guard.non_nil(tested)
+                    nil_guard.non_nil_condition(tested)
                 } else {
-                    nil_guard.is_nil(tested)
+                    nil_guard.nil_condition(tested)
                 };
                 PairCondition {
                     initializer: initializer_call.as_ref().map(|call| Definition {

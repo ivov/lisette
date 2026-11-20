@@ -1,22 +1,17 @@
-use syntax::ast::IdentifierResolution;
-use syntax::types::{Type, unqualified_name};
-
+use crate::EmitFacts;
 use crate::Planner;
+use crate::ir::go_expression::GoExpressionNode;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::{self, ResolvedName};
 use crate::names::packages::PackageUse;
-use crate::output::imports::rendered_qualifier;
-use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::render::imports::rendered_qualifier;
 use crate::state::bindings::BindingValue;
+use syntax::ast::IdentifierResolution;
 use syntax::program::{self, Definition};
+use syntax::types::{Type, unqualified_name};
 
 impl Planner<'_> {
-    /// A name the checker did not resolve to a definition.
-    pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
-        go_name::resolve(name).into_expression()
-    }
-
     pub(crate) fn definition_reference(&self, symbol: &str) -> GoExpression {
         let package = self
             .facts
@@ -24,7 +19,7 @@ impl Planner<'_> {
             .expect("definition symbols are package-qualified");
         let name = &symbol[package.len() + 1..];
         if let Some((owner, method)) = name.rsplit_once('.') {
-            let owner_id = self.peel_alias_id(&format!("{package}.{owner}"));
+            let owner_id = self.facts.peel_alias_id(&format!("{package}.{owner}"));
             let is_public = match self.facts.method(&owner_id, method) {
                 Some(method) => method.visibility.is_public(),
                 None => self
@@ -38,7 +33,6 @@ impl Planner<'_> {
             }
             return expression;
         }
-        // Prelude functions re-expose the Go builtins under the same name.
         if package == go_name::PRELUDE_PACKAGE {
             return GoExpression::external_name(name.to_string());
         }
@@ -56,17 +50,12 @@ impl Planner<'_> {
             };
             return GoExpression::external_name(go_name);
         }
-        let member = if go_name::is_go_import(package) {
-            name.to_string()
-        } else if is_const {
-            go_name::screaming_snake_to_camel(name)
-        } else {
-            go_name::snake_to_camel(name)
-        };
-        GoExpression::qualified(self.package_use_for_package(package), member)
+        GoExpression::qualified(
+            self.package_use_for_package(package),
+            self.facts.package_member_go_name(package, name),
+        )
     }
 
-    /// The Go local an identifier reads, keeping a source binding's `LocalId`.
     pub(crate) fn reference_go_identifier(
         &self,
         lisette_name: &str,
@@ -97,7 +86,6 @@ impl Planner<'_> {
             .to_string()
     }
 
-    /// The qualifier is the one the import renders: sanitized default names, aliases as written.
     pub(crate) fn package_use_for_package(&self, package: &str) -> PackageUse {
         if package == go_name::TEST_PRELUDE_PACKAGE {
             return PackageUse::generated(go_name::GeneratedPackage::TestKit);
@@ -160,19 +148,63 @@ impl Planner<'_> {
     pub(crate) fn resolve_variant(&self, identifier: &str, enum_id: &str) -> GoExpression {
         let enum_name = unqualified_name(enum_id);
         let variant_name = unqualified_name(identifier);
-        if enum_id.starts_with(go_name::PRELUDE_PREFIX) {
-            return ResolvedName::stdlib(format!("{enum_name}{variant_name}")).into_expression();
+        let tag_constant = go_name::enum_tag_constant(enum_name, variant_name);
+        if go_name::is_prelude_id(enum_id) {
+            return ResolvedName::stdlib(tag_constant).into_expression();
         }
         let enum_package = self
             .facts
             .package_for_qualified_name(enum_id)
             .unwrap_or(enum_id);
-        let tag_constant = go_name::enum_tag_constant(enum_name, variant_name);
         let resolved = if self.facts.is_current_package(enum_package) {
             ResolvedName::local(tag_constant)
         } else {
             ResolvedName::foreign(tag_constant, self.package_use_for_package(enum_package))
         };
         resolved.into_expression()
+    }
+
+    pub(crate) fn free_function_go_name(&self, name: &str, is_public: bool) -> String {
+        if is_public {
+            go_name::snake_to_camel(name)
+        } else {
+            self.package
+                .escape_remap(name)
+                .map(str::to_string)
+                .unwrap_or_else(|| go_name::escape_reserved(name).into_owned())
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
+        go_name::resolve(name).into_expression()
+    }
+
+    pub(crate) fn package_member_go_name(&self, package: &str, member: &str) -> String {
+        if go_name::is_go_import(package) {
+            member.to_string()
+        } else if self.is_const(&format!("{package}.{member}")) {
+            go_name::screaming_snake_to_camel(member)
+        } else {
+            go_name::snake_to_camel(member)
+        }
+    }
+
+    pub(crate) fn method_go_name(&self, method: &str, is_public: bool) -> String {
+        if is_public || self.method_needs_export(method) {
+            go_name::snake_to_camel(method)
+        } else {
+            go_name::unexported_method_go_name(method)
+        }
+    }
+
+    pub(crate) fn interface_method_go_name(&self, method: &str, is_public: bool) -> String {
+        let name = self.method_go_name(method, is_public);
+        if self.method_uses_tagged_return(method) {
+            go_name::tagged_twin(&name)
+        } else {
+            name
+        }
     }
 }

@@ -1,32 +1,33 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::callable::PayloadLayout;
 use crate::abi::coercion::LayoutBridge;
 use crate::abi::layout::ValueLayout;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::control_flow::fallible::{
-    Fallible, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
+    PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
 };
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name;
-use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define, define_many,
+use crate::ir::bodies::{
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, declare, define,
+    define_many,
 };
-use crate::plan::go_expression::{BinaryOp, UnaryOp};
-use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
+use crate::names::go_name::GeneratedPackage;
 use crate::types::go_type::GoType;
-use syntax::types::Type;
+use syntax::types::{GoNilForm, Type};
 
-pub(crate) fn is_nil(value: GoExpression) -> GoExpression {
+pub(crate) fn nil_condition(value: GoExpression) -> GoExpression {
     GoExpression::binary(value, BinaryOp::Eq, GoExpression::nil())
 }
 
-pub(crate) fn non_nil(value: GoExpression) -> GoExpression {
+pub(crate) fn non_nil_condition(value: GoExpression) -> GoExpression {
     GoExpression::binary(value, BinaryOp::Ne, GoExpression::nil())
 }
 
-pub(crate) fn is_nil_interface(value: GoExpression) -> GoExpression {
+fn nil_interface_condition(value: GoExpression) -> GoExpression {
     GoExpression::call(
         GoExpression::generated(GeneratedPackage::Prelude, "IsNilInterface"),
         vec![value],
@@ -43,10 +44,10 @@ pub(crate) enum NilGuard {
 }
 
 impl NilGuard {
-    pub(crate) fn is_nil(self, value: GoExpression) -> GoExpression {
+    pub(crate) fn nil_condition(self, value: GoExpression) -> GoExpression {
         match self {
-            NilGuard::Pointer => is_nil(value),
-            NilGuard::Interface => is_nil_interface(value),
+            NilGuard::Pointer => nil_condition(value),
+            NilGuard::Interface => nil_interface_condition(value),
             NilGuard::Sentinel(sentinel) => GoExpression::binary(
                 value,
                 BinaryOp::Eq,
@@ -55,10 +56,12 @@ impl NilGuard {
         }
     }
 
-    pub(crate) fn non_nil(self, value: GoExpression) -> GoExpression {
+    pub(crate) fn non_nil_condition(self, value: GoExpression) -> GoExpression {
         match self {
-            NilGuard::Pointer => non_nil(value),
-            NilGuard::Interface => GoExpression::unary(UnaryOp::Not, is_nil_interface(value)),
+            NilGuard::Pointer => non_nil_condition(value),
+            NilGuard::Interface => {
+                GoExpression::unary(UnaryOp::Not, nil_interface_condition(value))
+            }
             NilGuard::Sentinel(sentinel) => GoExpression::binary(
                 value,
                 BinaryOp::Ne,
@@ -108,25 +111,11 @@ impl Planner<'_> {
         match target {
             WrapperTarget::FreshSlot => {
                 let variable = self.fresh_declared(name_hint);
-                statements.push(
-                    LoweredStatement::VarDecl {
-                        name: variable.clone(),
-                        go_type: type_str.clone(),
-                        value: None,
-                    }
-                    .into(),
-                );
+                statements.push(declare(variable.clone(), type_str.clone()));
                 (ResolvedSink::Slot(variable.clone()), Some(variable))
             }
             WrapperTarget::Slot(name) => {
-                statements.push(
-                    LoweredStatement::VarDecl {
-                        name: name.clone(),
-                        go_type: type_str.clone(),
-                        value: None,
-                    }
-                    .into(),
-                );
+                statements.push(declare(name.clone(), type_str.clone()));
                 self.declare(name.spelling());
                 let owned = name.clone();
                 (ResolvedSink::Slot(owned.clone()), Some(owned))
@@ -266,19 +255,14 @@ impl Planner<'_> {
         let else_arm = ElseArm::from_body(ok_body, false);
 
         statements.push(
-            LoweredStatement::If(IfPlan::plain(non_nil(error_value()), then_body, else_arm)).into(),
+            LoweredStatement::If(IfPlan::plain(
+                non_nil_condition(error_value()),
+                then_body,
+                else_arm,
+            ))
+            .into(),
         );
         (statements, outcome)
-    }
-
-    pub(crate) fn partial_ok_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
-        self.facts.partial_ok_is_nilable(ok_ty).then(|| {
-            if self.facts.as_interface(ok_ty).is_some() {
-                NilGuard::Interface
-            } else {
-                NilGuard::Pointer
-            }
-        })
     }
 
     pub(crate) fn partial_ok_nil_check(
@@ -286,29 +270,22 @@ impl Planner<'_> {
         ok_ty: &Type,
         value: GoExpression,
     ) -> Option<GoExpression> {
-        let guard = self.partial_ok_nil_guard(ok_ty)?;
-        Some(guard.is_nil(value))
+        let guard = self.facts.partial_ok_nil_guard(ok_ty)?;
+        Some(guard.nil_condition(value))
     }
 
     pub(crate) fn result_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
-        if ok_ty.is_ref() {
-            return Some(NilGuard::Pointer);
+        match self.facts.nil_guard(ok_ty)? {
+            NilGuard::Pointer => self
+                .facts
+                .underlying(ok_ty)
+                .is_ref()
+                .then_some(NilGuard::Pointer),
+            NilGuard::Interface => {
+                (!self.facts.is_prelude_error(ok_ty)).then_some(NilGuard::Interface)
+            }
+            NilGuard::Sentinel(_) => None,
         }
-        let id = self.facts.as_interface(ok_ty)?;
-        (id != go_name::PRELUDE_ERROR_ID).then_some(NilGuard::Interface)
-    }
-
-    pub(crate) fn option_nil_guard(&self, option_ty: &Type) -> NilGuard {
-        if self.is_interface_option(option_ty) {
-            NilGuard::Interface
-        } else {
-            NilGuard::Pointer
-        }
-    }
-
-    pub(crate) fn nullable_option_nil_guard(&self, option_ty: &Type) -> Option<NilGuard> {
-        (self.is_interface_option(option_ty) || self.facts.is_nullable_option(option_ty))
-            .then(|| self.option_nil_guard(option_ty))
     }
 
     pub(crate) fn result_from_pair(
@@ -318,16 +295,16 @@ impl Planner<'_> {
         layout: PayloadLayout,
         payload_bridge: Option<&LayoutBridge>,
     ) -> Result<GoExpression, GoExpression> {
-        let Some(fallible) = Fallible::from_type(result_layout.underlying().logical_type()) else {
+        let Some(fallible) = self
+            .facts
+            .fallible(result_layout.underlying().logical_type())
+        else {
             return Err(call);
         };
         let ok_ty = fallible.ok_ty();
-        let err_is_error = fallible.err_ty().is_some_and(|err_ty| {
-            matches!(
-                self.facts.peel_alias(err_ty),
-                Type::Nominal { id, .. } if id.as_str() == go_name::PRELUDE_ERROR_ID
-            )
-        });
+        let err_is_error = fallible
+            .err_ty()
+            .is_some_and(|err_ty| self.facts.is_prelude_error(err_ty));
         if !err_is_error
             || payload_bridge.is_some()
             || (layout.is_flattened() && ok_ty.is_tuple())
@@ -362,7 +339,10 @@ impl Planner<'_> {
         else {
             unreachable!("Result wrapping requires a fallible layout")
         };
-        let fallible = Fallible::from_type(fallible_type).expect("Result type expected");
+        let fallible = self
+            .facts
+            .fallible(fallible_type)
+            .expect("Result type expected");
 
         let mut statements = Vec::new();
         let call = match self.result_from_pair(call, result_layout, layout, payload_bridge) {
@@ -407,7 +387,7 @@ impl Planner<'_> {
         };
 
         let else_arm = if let Some(nil_guard) = nil_guard {
-            let nil_condition = nil_guard.is_nil(ok());
+            let nil_condition = nil_guard.nil_condition(ok());
             let nil_err = prelude_call(
                 fallible.err_constructor(),
                 type_params,
@@ -423,7 +403,12 @@ impl Planner<'_> {
         };
 
         statements.push(
-            LoweredStatement::If(IfPlan::plain(non_nil(error_value()), then_body, else_arm)).into(),
+            LoweredStatement::If(IfPlan::plain(
+                non_nil_condition(error_value()),
+                then_body,
+                else_arm,
+            ))
+            .into(),
         );
         (statements, outcome)
     }
@@ -435,7 +420,9 @@ impl Planner<'_> {
         error_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let fallible = Fallible::from_type(result_layout.underlying().logical_type())
+        let fallible = self
+            .facts
+            .fallible(result_layout.underlying().logical_type())
             .expect("Result type expected");
         debug_assert!(fallible.ok_ty().is_unit());
         self.lower_unit_result_wrapping(call, result_layout, error_bridge, target)
@@ -473,7 +460,10 @@ impl Planner<'_> {
         else {
             unreachable!("unit Result wrapping requires a fallible layout")
         };
-        let fallible = Fallible::from_type(fallible_type).expect("Result type expected");
+        let fallible = self
+            .facts
+            .fallible(fallible_type)
+            .expect("Result type expected");
         let result_ty_str = result_layout.underlying().go_type(self);
         let type_params = GoType::type_arguments(&[payload.go_type(self), error.go_type(self)]);
 
@@ -493,26 +483,22 @@ impl Planner<'_> {
             prelude_call(
                 fallible.ok_constructor(),
                 type_params,
-                vec![GoExpression::empty_composite(GoType::new("struct{}"))],
+                vec![GoExpression::unit()],
             )
         };
         let else_arm = ElseArm::from_body(leaf_block(&sink, ok_wrapper), false);
 
         statements.push(
-            LoweredStatement::If(IfPlan::plain(non_nil(error_value()), then_body, else_arm)).into(),
+            LoweredStatement::If(IfPlan::plain(
+                non_nil_condition(error_value()),
+                then_body,
+                else_arm,
+            ))
+            .into(),
         );
         (statements, outcome)
     }
-}
 
-pub(crate) fn unexpected_nil_error() -> GoExpression {
-    GoExpression::call(
-        GoExpression::generated(GeneratedPackage::Errors, "New"),
-        vec![GoExpression::literal("\"unexpected nil\"".to_string())],
-    )
-}
-
-impl Planner<'_> {
     pub(crate) fn lower_sentinel_wrapping(
         &mut self,
         call: GoExpression,
@@ -590,7 +576,10 @@ impl Planner<'_> {
         let inner_ty_str = payload.go_type(self);
         let inner_tuple_arity = inner_ty.tuple_arity();
 
-        let fallible = Fallible::from_type(option_ty).expect("Option type expected");
+        let fallible = self
+            .facts
+            .fallible(option_ty)
+            .expect("Option type expected");
 
         let val_vars = if layout.is_flattened()
             && let Some(arity) = inner_tuple_arity
@@ -627,8 +616,10 @@ impl Planner<'_> {
         let option_ty_str = option_layout.underlying().go_type(self);
 
         let ok = GoExpression::identifier(value_variable);
-        let condition = match self.nullable_option_nil_guard(option_ty) {
-            Some(guard) => GoExpression::binary(ok, BinaryOp::And, guard.non_nil(first_val)),
+        let condition = match self.facts.nullable_option_nil_guard(option_ty) {
+            Some(guard) => {
+                GoExpression::binary(ok, BinaryOp::And, guard.non_nil_condition(first_val))
+            }
             None => ok,
         };
 
@@ -669,8 +660,9 @@ impl Planner<'_> {
         let inner_type = inner.go_type(self);
         let inner_ty_str = inner_type;
         let is_nil_check = self
+            .facts
             .option_nil_guard(layout.logical_type())
-            .is_nil(raw_value.clone());
+            .nil_condition(raw_value.clone());
         let value = prelude_call(
             "OptionFromNilable",
             GoType::type_argument(&inner_ty_str),
@@ -678,5 +670,42 @@ impl Planner<'_> {
         );
         let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
         (statements, outcome)
+    }
+}
+
+pub(crate) fn unexpected_nil_error() -> GoExpression {
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::Errors, "New"),
+        vec![GoExpression::literal("\"unexpected nil\"".to_string())],
+    )
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn nil_guard(&self, ty: &Type) -> Option<NilGuard> {
+        match self.go_nil_form(ty) {
+            GoNilForm::Never => None,
+            GoNilForm::Pointer => Some(NilGuard::Pointer),
+            GoNilForm::Interface => Some(NilGuard::Interface),
+        }
+    }
+
+    pub(crate) fn partial_ok_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
+        self.nil_guard(ok_ty).or_else(|| {
+            self.partial_ok_is_nilable(ok_ty)
+                .then_some(NilGuard::Pointer)
+        })
+    }
+
+    pub(crate) fn nullable_option_nil_guard(&self, option_ty: &Type) -> Option<NilGuard> {
+        let option_ty = self.peel_alias(option_ty);
+        if !option_ty.is_option() {
+            return None;
+        }
+        self.nil_guard(&option_ty.ok_type())
+    }
+
+    pub(crate) fn option_nil_guard(&self, option_ty: &Type) -> NilGuard {
+        self.nullable_option_nil_guard(option_ty)
+            .unwrap_or(NilGuard::Pointer)
     }
 }

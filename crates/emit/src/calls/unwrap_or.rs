@@ -2,20 +2,19 @@ use super::NativeCallContext;
 use crate::Planner;
 use crate::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::context::expression::ExpressionContext;
-use crate::patterns::matching::{FusedName, OptionArms, field_binding};
-use crate::plan::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign, define,
+use crate::ir::bodies::{
+    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign,
+    declare, define,
 };
-use crate::plan::local::GoIdentifier;
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::{GoExpression, ValuePlan};
+use crate::patterns::matching::{FusedName, OptionArms, field_binding};
 use crate::plan::placement::collapse_declared_temp;
-use crate::plan::values::{GoExpression, ValuePlan};
-use crate::statements::let_binding::needs_explicit_type_declaration;
+use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, Literal};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
-/// `call.unwrap_or(default)`, `call.map_or(default, |v| ..)`, or `call.map(|v| ..).unwrap_or(default)`.
 struct DefaultedCall<'a> {
     producer: FallibleProducer<'a>,
     map: Option<MapLambda<'a>>,
@@ -27,7 +26,6 @@ pub(crate) struct MapLambda<'a> {
     pub(crate) body: &'a Expression,
 }
 
-/// A statement that would leave the lambda if its body ran inline.
 fn escapes_lambda(expression: &Expression) -> bool {
     match expression {
         Expression::Return { .. }
@@ -54,7 +52,6 @@ fn is_literal_default(default: &Expression) -> bool {
     }
 }
 
-/// Reads and constants only, so the default can run before the bounds test.
 fn runs_no_code(expression: &Expression) -> bool {
     match expression {
         Expression::Literal {
@@ -158,7 +155,6 @@ impl<'p> Planner<'p> {
         } else {
             return None;
         };
-        // map_or evaluates its default before the mapper; map(...).unwrap_or(...) after.
         if map.is_some() && !is_literal_default(default) {
             return None;
         }
@@ -208,11 +204,10 @@ impl<'p> Planner<'p> {
         {
             return None;
         }
-        Some(self.lower_map_index_pair(subject))
+        Some(self.plan_map_index_pair(subject))
     }
 
-    /// `x, ok := call` then `if !ok { x = default }`, with `x` as `slot` names it.
-    fn lower_default_into_slot(
+    fn plan_default_into_slot(
         &mut self,
         producer: FallibleProducer<'_>,
         default: &Expression,
@@ -221,7 +216,7 @@ impl<'p> Planner<'p> {
     ) -> (Vec<Statement>, GoIdentifier) {
         let (bound, value) = match producer {
             FallibleProducer::Option(OptionFusePlan::Index { call }) => {
-                return self.lower_defaulted_index_into_slot(&call, default, ty, slot);
+                return self.plan_defaulted_index_into_slot(&call, default, ty, slot);
             }
             producer => producer.payload(self, slot),
         };
@@ -229,7 +224,7 @@ impl<'p> Planner<'p> {
         let mut statements = bound.statements;
         let literal_default = is_literal_default(default);
         let origin = self.function_type_origin(ty, SlotOrigin::Lisette);
-        let value_plan = self.lower_value(
+        let value_plan = self.plan_value(
             default,
             ExpressionContext::value().with_function_slot_origin(origin),
         );
@@ -261,8 +256,7 @@ impl<'p> Planner<'p> {
         (statements, value)
     }
 
-    /// `x := default` then `if i >= 0 && i < len(xs) { x = xs[i] }`.
-    fn lower_defaulted_index_into_slot(
+    fn plan_defaulted_index_into_slot(
         &mut self,
         call: &NativeCallContext<'_>,
         default: &Expression,
@@ -275,16 +269,17 @@ impl<'p> Planner<'p> {
             _ => self.fresh_declared("ret"),
         };
         let origin = self.function_type_origin(ty, SlotOrigin::Lisette);
-        let plan = self.lower_value(
+        let plan = self.plan_value(
             default,
             ExpressionContext::value().with_function_slot_origin(origin),
         );
         let coercion = self.value_slot_coercion(default, ty);
-        let typed = (coercion.is_identity()
-            && self
-                .constant_needs_go_type(plan.expression().constant_kind(), ty)
-                .is_some())
-            || needs_explicit_type_declaration(self, default, ty);
+        let typed = self.declaration_needs_go_type(
+            default,
+            plan.expression().constant_kind(),
+            &coercion,
+            ty,
+        );
         let (setup, default) = plan.into_parts();
         statements.extend(setup);
         let (coercion_setup, default) = coercion.lower(self, default);
@@ -342,8 +337,7 @@ impl<'p> Planner<'p> {
         )
     }
 
-    /// `let x = call.unwrap_or(default)` writes straight into `x`.
-    pub(crate) fn lower_defaulted_call_into(
+    pub(crate) fn try_lower_defaulted_call_into(
         &mut self,
         value: &Expression,
         go_name: &GoIdentifier,
@@ -360,21 +354,14 @@ impl<'p> Planner<'p> {
         let Some(map) = call.map else {
             let slot = CommaOkValueSlot::Named(go_name.clone());
             return Some(
-                self.lower_default_into_slot(call.producer, call.default, &ty, slot)
+                self.plan_default_into_slot(call.producer, call.default, &ty, slot)
                     .0,
             );
         };
         let FallibleProducer::Option(producer) = call.producer else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
-        let mut statements = vec![
-            LoweredStatement::VarDecl {
-                name: go_name.clone(),
-                go_type: self.go_type(&ty),
-                value: None,
-            }
-            .into(),
-        ];
+        let mut statements = vec![declare(go_name.clone(), self.go_type(&ty))];
         statements.extend(self.lower_mapped_default_into(
             producer,
             map,
@@ -385,7 +372,7 @@ impl<'p> Planner<'p> {
         Some(statements)
     }
 
-    pub(crate) fn lower_defaulted_call_value(
+    pub(crate) fn try_plan_defaulted_call_value(
         &mut self,
         expression: &Expression,
     ) -> Option<ValuePlan> {
@@ -395,7 +382,7 @@ impl<'p> Planner<'p> {
         }
         let ty = expression.get_type();
         let Some(map) = call.map else {
-            let (statements, value) = self.lower_default_into_slot(
+            let (statements, value) = self.plan_default_into_slot(
                 call.producer,
                 call.default,
                 &ty,
@@ -418,7 +405,7 @@ impl<'p> Planner<'p> {
         collapse_declared_temp(
             &mut statements,
             &result_var,
-            self.short_declaration_keeps_type(&ty),
+            self.facts.short_declaration_keeps_type(&ty),
         );
         Some(ValuePlan::captured(statements, result_var))
     }

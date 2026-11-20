@@ -1,6 +1,6 @@
+use crate::ir::declarations::TypeParameter;
 use crate::names::packages::PackageUse;
-use crate::plan::declarations::TypeParameter;
-use crate::utils::ReceiverGenerics;
+use crate::names::receiver::ReceiverGenerics;
 use std::borrow::Cow;
 
 use rustc_hash::FxHashMap as HashMap;
@@ -23,7 +23,6 @@ fn build_type_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
 
 pub(crate) use syntax::types::substitute;
 
-/// Substitute a field's type using generics and their concrete type arguments.
 pub(crate) fn resolve_field_type(
     generics: &[Generic],
     type_args: &[Type],
@@ -34,10 +33,11 @@ pub(crate) fn resolve_field_type(
 }
 
 impl Planner<'_> {
-    /// Type arguments for the generic definition that `expression` names as a value.
     pub(crate) fn format_value_type_args(&mut self, expression: &Expression) -> Option<GoType> {
         let recorded = self.facts.checked(expression).function_value()?;
-        let declaration = self.callable_declaration(recorded.definition.as_deref()?)?;
+        let declaration = self
+            .facts
+            .callable_declaration(recorded.definition.as_deref()?)?;
         let instantiation = &recorded.type_arguments;
         match declaration.go_type_param_recipe() {
             Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
@@ -73,7 +73,6 @@ impl Planner<'_> {
         Some(GoType::type_arguments(&arguments))
     }
 
-    /// Make `generics` the type parameters of the declaration being emitted.
     pub(crate) fn set_type_params(&mut self, generics: &[(EcoString, Vec<Type>)]) {
         let type_params = generics
             .iter()
@@ -112,7 +111,7 @@ impl Planner<'_> {
                 let has_ordered = bounds.iter().any(is_ordered_bound);
                 let mut planned = Vec::new();
                 for bound in bounds {
-                    if self.bound_needs_dispatch(bound) || is_zeroable_bound(bound) {
+                    if self.facts.bound_needs_dispatch(bound) || is_zeroable_bound(bound) {
                         continue;
                     }
                     let ty = if is_comparable_bound(bound) {
@@ -169,8 +168,6 @@ pub(crate) fn extract_type_mapping(
         return;
     }
 
-    // Walk type arguments for any type that carries them (Constructor,
-    // Compound, or mixed-variant pairs).
     if let (Some(gen_params), Some(conc_params)) =
         (generic.get_type_params(), concrete.get_type_params())
     {
@@ -206,4 +203,13 @@ pub(crate) fn extract_type_mapping(
         }
         _ => {}
     }
+}
+
+pub(crate) fn generic_bounds(generic: &Generic) -> (EcoString, Vec<Type>) {
+    let bounds = generic
+        .resolved_bounds()
+        .expect("generic bounds are resolved before emission")
+        .cloned()
+        .collect();
+    (generic.name.clone(), bounds)
 }

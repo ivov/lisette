@@ -1,17 +1,20 @@
+use crate::EmitFacts;
 use crate::Planner;
-use crate::definitions::functions::is_test_context_ty;
+use crate::abi::ReturnSlot;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
+use crate::ir::bodies::{
+    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, expression_statement,
+};
+use crate::ir::declarations::GoDeclaration;
+use crate::ir::go_expression::{BinaryOp, GoParameter};
+use crate::ir::local::GoIdentifier;
+use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::go_name::{self, testing_qualifier, testkit_qualifier};
 use crate::names::packages::PackageUse;
-use crate::plan::bodies::{
-    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, expression_statement,
-};
-use crate::plan::declarations::GoDeclaration;
-use crate::plan::go_expression::{BinaryOp, GoParameter};
-use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Visibility};
-use syntax::types::{Symbol, Type};
+use syntax::types::Type;
 
 impl Planner<'_> {
     pub(crate) fn emit_top_item(&mut self, item: &Expression) -> Vec<GoDeclaration> {
@@ -25,23 +28,7 @@ impl Planner<'_> {
                 visibility,
                 name,
                 ..
-            } => {
-                let is_public = matches!(visibility, Visibility::Public);
-                let function = item.function_definition_view();
-                let go_name = self.pick_go_function_name(function, false, is_public);
-                let doc_comment = emit_item_doc(doc, name, &go_name);
-                let qualified_name = self.facts.qualified_current(name);
-
-                if self.facts.is_test(&qualified_name) {
-                    self.emit_test_function(name, function, is_public, &doc_comment)
-                } else {
-                    let mut declarations = self.emit_function(function, None, &go_name, None);
-                    if let Some(first) = declarations.first_mut() {
-                        first.documentation = doc_comment.into();
-                    }
-                    declarations
-                }
-            }
+            } => self.emit_function_item(item, doc, name, matches!(visibility, Visibility::Public)),
             Expression::Struct {
                 doc,
                 attributes,
@@ -51,12 +38,12 @@ impl Planner<'_> {
                 fields,
                 ..
             } => {
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declarations =
                     self.emit_struct_definition(name, generics, fields, attributes);
                 declarations[0].documentation = doc_comment.into();
                 for declaration in &mut declarations {
-                    declaration.position = self.source_position(name_span);
+                    declaration.position = self.facts.source_position(name_span);
                 }
                 declarations
             }
@@ -68,12 +55,12 @@ impl Planner<'_> {
                 generics,
                 ..
             } => {
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declarations = self
-                    .emit_enum(name, generics, attributes, &doc_comment)
+                    .try_emit_enum(name, generics, attributes, &doc_comment)
                     .unwrap_or_default();
                 for declaration in &mut declarations {
-                    declaration.position = self.source_position(name_span);
+                    declaration.position = self.facts.source_position(name_span);
                 }
                 declarations
             }
@@ -84,14 +71,10 @@ impl Planner<'_> {
                 ty,
                 ..
             } => {
-                if self
-                    .facts
-                    .type_parameter_alias_index(&self.facts.qualified_current(name))
-                    .is_some()
-                {
+                if self.facts.alias_emits_nothing(name) {
                     return Vec::new();
                 }
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declaration = self.emit_type_alias(name, generics, ty);
                 declaration.documentation = doc_comment.into();
                 vec![declaration]
@@ -105,7 +88,7 @@ impl Planner<'_> {
                 visibility,
                 ..
             } => {
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let is_public = matches!(visibility, Visibility::Public);
                 let mut declaration =
                     self.emit_interface(name, method_signatures, parents, generics, is_public);
@@ -129,17 +112,30 @@ impl Planner<'_> {
                 let Some(expression) = expression.value() else {
                     return Vec::new();
                 };
-                let mut declaration = self.emit_const(identifier, expression, ty);
-                let go_name = self
-                    .scope
-                    .bound_go_identifier(identifier)
-                    .expect("`emit_const` binds the identifier");
-                let doc_comment = emit_item_doc(doc, identifier, go_name.spelling());
-                declaration.documentation = doc_comment.into();
-                vec![declaration]
+                vec![self.emit_const(identifier, expression, ty, doc)]
             }
             _ => Vec::new(),
         }
+    }
+
+    fn emit_function_item(
+        &mut self,
+        item: &Expression,
+        doc: &Option<String>,
+        name: &str,
+        is_public: bool,
+    ) -> Vec<GoDeclaration> {
+        let function = item.function_definition_view();
+        let go_name = self.pick_go_function_name(function, false, is_public);
+        let doc_comment = item_doc_text(doc, name, &go_name);
+        if self.facts.is_test(&self.facts.qualified_current(name)) {
+            return self.emit_test_function(name, function, is_public, &doc_comment);
+        }
+        let mut declarations = self.emit_function(function, None, &go_name, None);
+        if let Some(first) = declarations.first_mut() {
+            first.documentation = doc_comment.into();
+        }
+        declarations
     }
 
     fn emit_test_function(
@@ -149,7 +145,7 @@ impl Planner<'_> {
         is_public: bool,
         doc_comment: &str,
     ) -> Vec<GoDeclaration> {
-        let injected = self.synthesized_test_handle_params(function);
+        let injected = self.facts.synthesized_test_handle_params(function);
         let function = match &injected {
             Some(params) => FunctionDefinitionView { params, ..function },
             None => function,
@@ -163,6 +159,17 @@ impl Planner<'_> {
             first.documentation = doc_comment.to_string().into();
         }
         let handle = self.scope.new_local_identifier(handle);
+        declarations.push(self.emit_test_wrapper(name, function, callee, handle));
+        declarations
+    }
+
+    fn emit_test_wrapper(
+        &mut self,
+        name: &str,
+        function: FunctionDefinitionView<'_>,
+        callee: String,
+        handle: GoIdentifier,
+    ) -> GoDeclaration {
         let handle_value = GoExpression::identifier(handle.clone());
         let span = function.name_span;
         let location = || {
@@ -192,7 +199,11 @@ impl Planner<'_> {
             GoExpression::external_name(callee),
             vec![testkit("New", vec![handle_value.clone()])],
         );
-        if function.return_type.is_result() {
+        if matches!(
+            self.facts
+                .return_abi(function.return_type, ReturnSlot::Function),
+            CallableReturnAbi::Lowered(LoweredReturnAbi::BareError)
+        ) {
             let error_name = self.scope.new_local_identifier("err".to_string());
             let error = GoExpression::identifier(error_name.clone());
             let mut arguments = vec![handle_value];
@@ -203,11 +214,7 @@ impl Planner<'_> {
                 testkit("ErrOperand", vec![error.clone()]),
             ]);
             let mut check = IfPlan::plain(
-                GoExpression::binary(
-                    error,
-                    BinaryOp::Ne,
-                    GoExpression::literal("nil".to_string()),
-                ),
+                GoExpression::binary(error, BinaryOp::Ne, GoExpression::nil()),
                 LoweredBlock {
                     statements: vec![expression_statement(testkit("Fail", arguments))],
                 },
@@ -221,7 +228,7 @@ impl Planner<'_> {
         } else {
             statements.push(expression_statement(call));
         }
-        declarations.push(GoDeclaration::function(
+        GoDeclaration::function(
             None,
             go_name::go_test_function_name(name),
             Vec::new(),
@@ -235,42 +242,15 @@ impl Planner<'_> {
             )],
             GoType::default(),
             LoweredBlock { statements },
-        ));
-        declarations
-    }
-
-    fn synthesized_test_handle_params(
-        &self,
-        function: FunctionDefinitionView<'_>,
-    ) -> Option<Vec<Binding>> {
-        let has_usable_handle = function.params.iter().any(|param| {
-            is_test_context_ty(&param.ty) && self.go_name_for_binding(&param.pattern).is_some()
-        });
-        if has_usable_handle {
-            return None;
-        }
-        Some(vec![Binding {
-            pattern: Pattern::Identifier {
-                identifier: go_name::TEST_CTX_PARAM.into(),
-                span: function.name_span,
-                binding: None,
-            },
-            annotation: None,
-            ty: Type::Nominal {
-                id: Symbol::from_parts(go_name::TEST_PRELUDE_PACKAGE, "TestContext"),
-                params: vec![],
-                writable: false,
-            },
-            mut_span: None,
-        }])
+        )
     }
 }
 
-pub(crate) fn emit_doc(doc: &Option<String>) -> String {
+pub(crate) fn doc_text(doc: &Option<String>) -> String {
     doc.as_deref().map_or_else(String::new, doc_lines)
 }
 
-pub(crate) fn emit_item_doc(doc: &Option<String>, lisette_name: &str, go_name: &str) -> String {
+pub(crate) fn item_doc_text(doc: &Option<String>, lisette_name: &str, go_name: &str) -> String {
     let Some(text) = doc else {
         return String::new();
     };
@@ -297,4 +277,28 @@ fn doc_lines(text: &str) -> String {
         })
         .collect();
     format!("{}\n", lines.join("\n"))
+}
+
+impl EmitFacts<'_> {
+    fn synthesized_test_handle_params(
+        &self,
+        function: FunctionDefinitionView<'_>,
+    ) -> Option<Vec<Binding>> {
+        let has_usable_handle = function.params.iter().any(|param| {
+            param.ty.is_test_context() && self.go_name_for_binding(&param.pattern).is_some()
+        });
+        if has_usable_handle {
+            return None;
+        }
+        Some(vec![Binding {
+            pattern: Pattern::Identifier {
+                identifier: go_name::TEST_CTX_PARAM.into(),
+                span: function.name_span,
+                binding: None,
+            },
+            annotation: None,
+            ty: Type::test_context(),
+            mut_span: None,
+        }])
+    }
 }
