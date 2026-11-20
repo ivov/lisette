@@ -288,21 +288,18 @@ impl Planner<'_> {
                 target, payload, ..
             } => {
                 if payload.is_identity() {
-                    {
-                        let inner_type = target
-                            .payload()
-                            .expect("Option has a payload layout")
-                            .go_type(self);
-                        let inner_ty_str = inner_type;
-                        let value = prelude_call(
-                            "OptionFromPointer",
-                            GoType::type_argument(&inner_ty_str),
-                            vec![value],
-                        );
-                        GoExpression::identifier(
-                            self.hoist_tmp_value_statement(statements, "option", value),
-                        )
-                    }
+                    let inner_type = target
+                        .payload()
+                        .expect("Option has a payload layout")
+                        .go_type(self);
+                    let value = prelude_call(
+                        "OptionFromPointer",
+                        GoType::type_argument(&inner_type),
+                        vec![value],
+                    );
+                    GoExpression::identifier(
+                        self.hoist_tmp_value_statement(statements, "option", value),
+                    )
                 } else {
                     self.plan_option_wrap_with_bridge(statements, value, target, payload, true)
                 }
@@ -325,151 +322,129 @@ impl Planner<'_> {
                 self.plan_function_layout_bridge(statements, value, source, target, false)
             }
             LayoutBridge::NilablePayload { target, payload } => {
-                let pointer = match target.as_ref() {
-                    ValueLayout::NullableOption { .. } => false,
-                    ValueLayout::PointerOption { .. } => true,
-                    _ => unreachable!("nilable payload bridges require a nilable option layout"),
-                };
-                let source = self.stable_source(statements, "raw", value);
-                let output = self.fresh_declared("adapted");
-                let go_type = target.go_type(self);
-                statements.push(
-                    LoweredStatement::VarDecl {
-                        name: output.clone(),
-                        go_type,
-                        value: None,
-                    }
-                    .into(),
-                );
-                let mut body = Vec::new();
-                let inner = if pointer {
-                    GoExpression::dereference(source.clone())
-                } else {
-                    source.clone()
-                };
-                let adapted = self.plan_layout_bridge(&mut body, inner, payload, true);
-                let adapted = if pointer {
-                    let local = self.hoist_tmp_value_statement(&mut body, "value", adapted);
-                    GoExpression::address_of(GoExpression::identifier(local))
-                } else {
-                    adapted
-                };
-                body.push(assign(GoExpression::identifier(output.clone()), adapted));
-                statements.push(
-                    LoweredStatement::If(IfPlan::plain(
-                        non_nil(source),
-                        LoweredBlock { statements: body },
-                        ElseArm::None,
-                    ))
-                    .into(),
-                );
-                GoExpression::identifier(output)
+                self.plan_nilable_payload_bridge(statements, value, target, payload)
             }
             LayoutBridge::Immutable { target, elements } => {
-                let target = target.as_ref();
-                {
-                    let source = self.stable_source(statements, "src", value);
-                    let go_type = target.go_type(self);
-                    let output = self.fresh_declared("adapted");
-                    statements.push(
-                        LoweredStatement::VarDecl {
-                            name: output.clone(),
-                            go_type,
-                            value: None,
-                        }
-                        .into(),
-                    );
-                    let output = GoExpression::identifier(output);
-                    let fields: Vec<(&str, Option<(&str, BinaryOp)>)> = match target {
-                        ValueLayout::Tuple { elements, .. } => TUPLE_FIELDS[..elements.len()]
-                            .iter()
-                            .map(|field| (*field, None))
-                            .collect(),
-                        ValueLayout::TaggedOption { .. } => {
-                            vec![(
-                                tags::OPTION_SOME_FIELD,
-                                Some((OPTION_SOME_TAG, BinaryOp::Eq)),
-                            )]
-                        }
-                        ValueLayout::Fallible { fallible_type, .. }
-                            if fallible_type.is_partial() =>
-                        {
-                            vec![
-                                (
-                                    tags::PARTIAL_OK_FIELD,
-                                    Some((tags::PARTIAL_ERR_TAG, BinaryOp::Ne)),
-                                ),
-                                (
-                                    tags::PARTIAL_ERR_FIELD,
-                                    Some((tags::PARTIAL_OK_TAG, BinaryOp::Ne)),
-                                ),
-                            ]
-                        }
-                        ValueLayout::Fallible { .. } => vec![
-                            (
-                                tags::RESULT_OK_FIELD,
-                                Some((tags::RESULT_OK_TAG, BinaryOp::Eq)),
-                            ),
-                            (
-                                tags::RESULT_ERR_FIELD,
-                                Some((tags::RESULT_ERR_TAG, BinaryOp::Eq)),
-                            ),
-                        ],
-                        _ => unreachable!("immutable bridges require a tuple or tagged container"),
-                    };
-                    assert_eq!(
-                        fields.len(),
-                        elements.len(),
-                        "immutable bridge has one plan per payload"
-                    );
-                    if !matches!(target, ValueLayout::Tuple { .. }) {
-                        statements.push(assign(
-                            GoExpression::selector(output.clone(), ENUM_TAG_FIELD.to_string()),
-                            GoExpression::selector(source.clone(), ENUM_TAG_FIELD.to_string()),
-                        ));
-                    }
-                    for ((field, guard), bridge) in fields.into_iter().zip(elements) {
-                        let mut body = Vec::new();
-                        let value = self.plan_layout_bridge(
-                            &mut body,
-                            GoExpression::selector(source.clone(), field.to_string()),
-                            bridge,
-                            true,
-                        );
-                        body.push(assign(
-                            GoExpression::selector(output.clone(), field.to_string()),
-                            value,
-                        ));
-                        if let Some((tag, op)) = guard {
-                            statements.push(
-                                LoweredStatement::If(IfPlan {
-                                    initializer: None,
-                                    condition: GoExpression::binary(
-                                        GoExpression::selector(
-                                            source.clone(),
-                                            ENUM_TAG_FIELD.to_string(),
-                                        ),
-                                        op,
-                                        GoExpression::generated(GeneratedPackage::Prelude, tag),
-                                    ),
-                                    then_body: LoweredBlock { statements: body },
-                                    else_arm: ElseArm::None,
-                                    else_if_line: None,
-                                    origin: IfOrigin::User,
-                                })
-                                .into(),
-                            );
-                        } else {
-                            statements.extend(body);
-                        }
-                    }
-                    output
-                }
+                self.plan_immutable_bridge(statements, value, target, elements)
             }
             LayoutBridge::Aggregate { .. } => {
                 self.plan_aggregate_layout_bridge(statements, value, bridge)
             }
         }
+    }
+
+    fn plan_nilable_payload_bridge(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        value: GoExpression,
+        target: &ValueLayout,
+        payload: &LayoutBridge,
+    ) -> GoExpression {
+        let pointer = match target {
+            ValueLayout::NullableOption { .. } => false,
+            ValueLayout::PointerOption { .. } => true,
+            _ => unreachable!("nilable payload bridges require a nilable option layout"),
+        };
+        let source = self.stable_source(statements, "raw", value);
+        let output = self.fresh_declared("adapted");
+        let go_type = target.go_type(self);
+        statements.push(
+            LoweredStatement::VarDecl {
+                name: output.clone(),
+                go_type,
+                value: None,
+            }
+            .into(),
+        );
+        let mut body = Vec::new();
+        let inner = if pointer {
+            GoExpression::dereference(source.clone())
+        } else {
+            source.clone()
+        };
+        let adapted = self.plan_layout_bridge(&mut body, inner, payload, true);
+        let adapted = if pointer {
+            let local = self.hoist_tmp_value_statement(&mut body, "value", adapted);
+            GoExpression::address_of(GoExpression::identifier(local))
+        } else {
+            adapted
+        };
+        body.push(assign(GoExpression::identifier(output.clone()), adapted));
+        statements.push(
+            LoweredStatement::If(IfPlan::plain(
+                non_nil(source),
+                LoweredBlock { statements: body },
+                ElseArm::None,
+            ))
+            .into(),
+        );
+        GoExpression::identifier(output)
+    }
+
+    fn plan_immutable_bridge(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        value: GoExpression,
+        target: &ValueLayout,
+        elements: &[LayoutBridge],
+    ) -> GoExpression {
+        let source = self.stable_source(statements, "src", value);
+        let go_type = target.go_type(self);
+        let output = self.fresh_declared("adapted");
+        statements.push(
+            LoweredStatement::VarDecl {
+                name: output.clone(),
+                go_type,
+                value: None,
+            }
+            .into(),
+        );
+        let output = GoExpression::identifier(output);
+        let fields = immutable_bridge_fields(target);
+        assert_eq!(
+            fields.len(),
+            elements.len(),
+            "immutable bridge has one plan per payload"
+        );
+        if !matches!(target, ValueLayout::Tuple { .. }) {
+            statements.push(assign(
+                GoExpression::selector(output.clone(), ENUM_TAG_FIELD.to_string()),
+                GoExpression::selector(source.clone(), ENUM_TAG_FIELD.to_string()),
+            ));
+        }
+        for ((field, guard), bridge) in fields.into_iter().zip(elements) {
+            let mut body = Vec::new();
+            let value = self.plan_layout_bridge(
+                &mut body,
+                GoExpression::selector(source.clone(), field.to_string()),
+                bridge,
+                true,
+            );
+            body.push(assign(
+                GoExpression::selector(output.clone(), field.to_string()),
+                value,
+            ));
+            if let Some((tag, op)) = guard {
+                statements.push(
+                    LoweredStatement::If(IfPlan {
+                        initializer: None,
+                        condition: GoExpression::binary(
+                            GoExpression::selector(source.clone(), ENUM_TAG_FIELD.to_string()),
+                            op,
+                            GoExpression::generated(GeneratedPackage::Prelude, tag),
+                        ),
+                        then_body: LoweredBlock { statements: body },
+                        else_arm: ElseArm::None,
+                        else_if_line: None,
+                        origin: IfOrigin::User,
+                    })
+                    .into(),
+                );
+            } else {
+                statements.extend(body);
+            }
+        }
+        output
     }
 
     fn plan_option_wrap_with_bridge(
@@ -862,42 +837,62 @@ impl Planner<'_> {
             return;
         }
         if !source.return_abi.same_logical_contract(&target.return_abi) {
-            if target.return_abi.is_lowered() {
-                let tagged =
-                    self.value_layout(source.result_layout.logical_type(), SlotOrigin::Lisette);
-                let intermediate =
-                    self.function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
-                if !intermediate.same_result_representation(target) {
-                    let body = self.reencode_return(
-                        call,
-                        &source.return_abi,
-                        &intermediate.return_abi,
-                        source.result_layout.logical_type(),
-                    );
-                    let result = intermediate
-                        .result_go_type(self)
-                        .expect("a lowered result has a Go signature");
-                    let call = GoExpression::call(
-                        GoExpression::function_literal(
-                            Vec::new(),
-                            result,
-                            LoweredBlock { statements: body },
-                            FunctionLiteralLayout::MultiLine,
-                        ),
-                        Vec::new(),
-                    );
-                    self.plan_function_result_bridge(statements, call, &intermediate, target);
-                    return;
-                }
-            }
-            statements.extend(self.reencode_return(
-                call,
-                &source.return_abi,
-                &target.return_abi,
-                source.result_layout.logical_type(),
-            ));
+            self.plan_reencoded_result_bridge(statements, call, source, target);
             return;
         }
+        self.plan_same_contract_result_bridge(statements, call, source, target);
+    }
+
+    fn plan_reencoded_result_bridge(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        call: GoExpression,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) {
+        if target.return_abi.is_lowered() {
+            let tagged =
+                self.value_layout(source.result_layout.logical_type(), SlotOrigin::Lisette);
+            let intermediate =
+                self.function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
+            if !intermediate.same_result_representation(target) {
+                let body = self.reencode_return(
+                    call,
+                    &source.return_abi,
+                    &intermediate.return_abi,
+                    source.result_layout.logical_type(),
+                );
+                let result = intermediate
+                    .result_go_type(self)
+                    .expect("a lowered result has a Go signature");
+                let call = GoExpression::call(
+                    GoExpression::function_literal(
+                        Vec::new(),
+                        result,
+                        LoweredBlock { statements: body },
+                        FunctionLiteralLayout::MultiLine,
+                    ),
+                    Vec::new(),
+                );
+                self.plan_function_result_bridge(statements, call, &intermediate, target);
+                return;
+            }
+        }
+        statements.extend(self.reencode_return(
+            call,
+            &source.return_abi,
+            &target.return_abi,
+            source.result_layout.logical_type(),
+        ));
+    }
+
+    fn plan_same_contract_result_bridge(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        call: GoExpression,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) {
         match source.return_abi.lowered() {
             None => {
                 if source.results.is_empty() {
@@ -924,47 +919,7 @@ impl Planner<'_> {
                 LoweredReturnAbi::Result { .. }
                 | LoweredReturnAbi::Partial { .. }
                 | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }),
-            ) => {
-                let source_flat = source.return_abi.has_flattened_payload();
-                let mut values = self.create_temp_vars("ret", source.results.len() + 1);
-                statements.push(define_many(values.clone(), call));
-                let auxiliary = values.pop().expect("a lowered callable has a status slot");
-
-                if matches!(
-                    source.return_abi.lowered(),
-                    Some(LoweredReturnAbi::Partial { .. })
-                ) && !source_flat
-                {
-                    let ok_type = source.result_layout.logical_type().ok_type();
-                    if let Some(condition) = self
-                        .partial_ok_nil_check(&ok_type, GoExpression::identifier(values[0].clone()))
-                    {
-                        statements.push(
-                            LoweredStatement::If(IfPlan::plain(
-                                condition,
-                                LoweredBlock {
-                                    statements: vec![multi_value_return(vec![
-                                        GoExpression::nil(),
-                                        GoExpression::identifier(auxiliary.clone()),
-                                    ])],
-                                },
-                                ElseArm::None,
-                            ))
-                            .into(),
-                        );
-                    }
-                }
-
-                let mut values = self.bridge_payload_slots(
-                    statements,
-                    names(&values),
-                    &source.results,
-                    &target.results,
-                    target.return_abi.has_flattened_payload(),
-                );
-                values.push(GoExpression::identifier(auxiliary));
-                statements.push(multi_value_return(values));
-            }
+            ) => self.plan_status_result_bridge(statements, call, source, target),
             Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
                 let raw = self.hoist_tmp_value_statement(statements, "raw", call);
                 let condition = self
@@ -1007,6 +962,54 @@ impl Planner<'_> {
                 statements.push(multi_value_return(values));
             }
         }
+    }
+
+    fn plan_status_result_bridge(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        call: GoExpression,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) {
+        let source_flat = source.return_abi.has_flattened_payload();
+        let mut values = self.create_temp_vars("ret", source.results.len() + 1);
+        statements.push(define_many(values.clone(), call));
+        let auxiliary = values.pop().expect("a lowered callable has a status slot");
+
+        if matches!(
+            source.return_abi.lowered(),
+            Some(LoweredReturnAbi::Partial { .. })
+        ) && !source_flat
+        {
+            let ok_type = source.result_layout.logical_type().ok_type();
+            if let Some(condition) =
+                self.partial_ok_nil_check(&ok_type, GoExpression::identifier(values[0].clone()))
+            {
+                statements.push(
+                    LoweredStatement::If(IfPlan::plain(
+                        condition,
+                        LoweredBlock {
+                            statements: vec![multi_value_return(vec![
+                                GoExpression::nil(),
+                                GoExpression::identifier(auxiliary.clone()),
+                            ])],
+                        },
+                        ElseArm::None,
+                    ))
+                    .into(),
+                );
+            }
+        }
+
+        let mut values = self.bridge_payload_slots(
+            statements,
+            names(&values),
+            &source.results,
+            &target.results,
+            target.return_abi.has_flattened_payload(),
+        );
+        values.push(GoExpression::identifier(auxiliary));
+        statements.push(multi_value_return(values));
     }
 
     fn bridge_payload_slots(
@@ -1089,5 +1092,45 @@ impl GoResultBridge {
             Self::Whole(bridge) => bridge.is_identity(),
             Self::Payload { value, error } => value.is_identity() && error.is_identity(),
         }
+    }
+}
+
+fn immutable_bridge_fields(
+    target: &ValueLayout,
+) -> Vec<(&'static str, Option<(&'static str, BinaryOp)>)> {
+    match target {
+        ValueLayout::Tuple { elements, .. } => TUPLE_FIELDS[..elements.len()]
+            .iter()
+            .map(|field| (*field, None))
+            .collect(),
+        ValueLayout::TaggedOption { .. } => {
+            vec![(
+                tags::OPTION_SOME_FIELD,
+                Some((OPTION_SOME_TAG, BinaryOp::Eq)),
+            )]
+        }
+        ValueLayout::Fallible { fallible_type, .. } if fallible_type.is_partial() => {
+            vec![
+                (
+                    tags::PARTIAL_OK_FIELD,
+                    Some((tags::PARTIAL_ERR_TAG, BinaryOp::Ne)),
+                ),
+                (
+                    tags::PARTIAL_ERR_FIELD,
+                    Some((tags::PARTIAL_OK_TAG, BinaryOp::Ne)),
+                ),
+            ]
+        }
+        ValueLayout::Fallible { .. } => vec![
+            (
+                tags::RESULT_OK_FIELD,
+                Some((tags::RESULT_OK_TAG, BinaryOp::Eq)),
+            ),
+            (
+                tags::RESULT_ERR_FIELD,
+                Some((tags::RESULT_ERR_TAG, BinaryOp::Eq)),
+            ),
+        ],
+        _ => unreachable!("immutable bridges require a tuple or tagged container"),
     }
 }
