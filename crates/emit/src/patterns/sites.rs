@@ -958,6 +958,43 @@ impl Planner<'_> {
         );
         statements
     }
+
+    pub(crate) fn classify_receive_var_pattern(
+        &mut self,
+        pattern: &Pattern,
+    ) -> (GoIdentifier, bool) {
+        match pattern {
+            Pattern::WildCard { .. } => (GoIdentifier::external("_".to_string()), false),
+            Pattern::Identifier {
+                identifier,
+                binding,
+                ..
+            } => {
+                let Some(go_name) = self.facts.go_name_for_binding(pattern) else {
+                    return (GoIdentifier::external("_".to_string()), false);
+                };
+                let preferred = go_name.preferred();
+                if self.scope.resolve_identifier_binding(identifier).is_some()
+                    || self
+                        .scope
+                        .binds_go_name_for_other_source_name(&preferred, identifier)
+                    || self.package.is_package_block_name(&preferred)
+                {
+                    let name = self.fresh_local(Some("recv"));
+                    return (name.clone(), true);
+                }
+                (
+                    self.scope
+                        .bind_source(identifier, binding.as_slice(), go_name),
+                    false,
+                )
+            }
+            _ => {
+                let name = self.fresh_local(Some("recv"));
+                (name.clone(), true)
+            }
+        }
+    }
 }
 
 pub(crate) fn lower_none_arm_body(
@@ -998,45 +1035,6 @@ fn peel_as_binding(pattern: &Pattern) -> &Pattern {
     match pattern {
         Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
         p => p,
-    }
-}
-
-impl Planner<'_> {
-    pub(crate) fn classify_receive_var_pattern(
-        &mut self,
-        pattern: &Pattern,
-    ) -> (GoIdentifier, bool) {
-        match pattern {
-            Pattern::WildCard { .. } => (GoIdentifier::external("_".to_string()), false),
-            Pattern::Identifier {
-                identifier,
-                binding,
-                ..
-            } => {
-                let Some(go_name) = self.facts.go_name_for_binding(pattern) else {
-                    return (GoIdentifier::external("_".to_string()), false);
-                };
-                let preferred = go_name.preferred();
-                if self.scope.resolve_identifier_binding(identifier).is_some()
-                    || self
-                        .scope
-                        .binds_go_name_for_other_source_name(&preferred, identifier)
-                    || self.package.is_package_block_name(&preferred)
-                {
-                    let name = self.fresh_local(Some("recv"));
-                    return (name.clone(), true);
-                }
-                (
-                    self.scope
-                        .bind_source(identifier, binding.as_slice(), go_name),
-                    false,
-                )
-            }
-            _ => {
-                let name = self.fresh_local(Some("recv"));
-                (name.clone(), true)
-            }
-        }
     }
 }
 

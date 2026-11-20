@@ -494,16 +494,7 @@ impl Planner<'_> {
         );
         (statements, outcome)
     }
-}
 
-pub(crate) fn unexpected_nil_error() -> GoExpression {
-    GoExpression::call(
-        GoExpression::generated(GeneratedPackage::Errors, "New"),
-        vec![GoExpression::literal("\"unexpected nil\"".to_string())],
-    )
-}
-
-impl Planner<'_> {
     pub(crate) fn lower_sentinel_wrapping(
         &mut self,
         call: GoExpression,
@@ -676,6 +667,13 @@ impl Planner<'_> {
     }
 }
 
+pub(crate) fn unexpected_nil_error() -> GoExpression {
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::Errors, "New"),
+        vec![GoExpression::literal("\"unexpected nil\"".to_string())],
+    )
+}
+
 impl EmitFacts<'_> {
     pub(crate) fn nil_guard(&self, ty: &Type) -> Option<NilGuard> {
         match self.go_nil_form(ty) {
@@ -684,9 +682,7 @@ impl EmitFacts<'_> {
             GoNilForm::Interface => Some(NilGuard::Interface),
         }
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn partial_ok_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
         self.nil_guard(ok_ty).or_else(|| {
             self.partial_ok_is_nilable(ok_ty)
@@ -701,9 +697,7 @@ impl EmitFacts<'_> {
         }
         self.nil_guard(&option_ty.ok_type())
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn option_nil_guard(&self, option_ty: &Type) -> NilGuard {
         self.nullable_option_nil_guard(option_ty)
             .unwrap_or(NilGuard::Pointer)

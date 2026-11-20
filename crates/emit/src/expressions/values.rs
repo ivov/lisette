@@ -639,9 +639,7 @@ impl Planner<'_> {
         setup.push(async_statement(inner).into());
         statement_plan(setup)
     }
-}
 
-impl Planner<'_> {
     fn is_go_unaddressable(&self, expression: &Expression) -> bool {
         if self
             .facts

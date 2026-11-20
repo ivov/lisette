@@ -1039,17 +1039,13 @@ impl EmitFacts<'_> {
             .find(|requirement| requirement.name == name)
             .map(|requirement| requirement.method)
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn definition_selects_tagged_twin(&self, symbol: &str) -> bool {
         symbol
             .rsplit_once('.')
             .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
     }
-}
 
-impl EmitFacts<'_> {
     fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
         let name = self.method_go_name(&requirement.name, false);
         if self.requirement_uses_tagged_twin(requirement) {
@@ -1069,9 +1065,7 @@ impl EmitFacts<'_> {
                     .and_then(|span| self.source_position(span))
             })
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
         interface_requirements(&self.peel_alias(bound), |id| self.definition(id))
             .iter()

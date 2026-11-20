@@ -384,9 +384,7 @@ impl EmitFacts<'_> {
             out.push(emit_diag::reserved_go_qualifier(go, span));
         }
     }
-}
 
-impl EmitFacts<'_> {
     fn collect_const(
         &self,
         item: &Expression,
@@ -445,9 +443,7 @@ impl EmitFacts<'_> {
             }
         }
     }
-}
 
-impl EmitFacts<'_> {
     fn collect_impl_block(
         &self,
         item: &Expression,
@@ -495,9 +491,7 @@ impl EmitFacts<'_> {
             package_block.entry(go).or_default().push(*name_span);
         }
     }
-}
 
-impl EmitFacts<'_> {
     fn collect_interface(
         &self,
         item: &Expression,
@@ -537,9 +531,7 @@ impl EmitFacts<'_> {
             }
         }
     }
-}
 
-impl EmitFacts<'_> {
     fn collect_enum(
         &self,
         item: &Expression,

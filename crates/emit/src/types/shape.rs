@@ -15,9 +15,7 @@ impl EmitFacts<'_> {
             current = peeled;
         }
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn native_kind(&self, ty: &Type) -> Option<NativeTypeKind> {
         NativeTypeKind::from_type(&self.emit_shape_ty(ty))
     }
@@ -25,16 +23,12 @@ impl EmitFacts<'_> {
     pub(crate) fn range_shape(&self, ty: &Type) -> Option<RangeShape> {
         RangeShape::of(&self.emit_shape_ty(ty))
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeTypeKind> {
         self.native_kind(ty)
             .filter(|kind| *kind != NativeTypeKind::Array)
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn is_native_shape(&self, ty: &Type, kind: NativeTypeKind) -> bool {
         self.native_shape(ty).is_some_and(|shape| shape == kind)
     }

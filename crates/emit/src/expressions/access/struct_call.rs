@@ -946,9 +946,7 @@ impl EmitFacts<'_> {
             Some(DefinitionBody::TypeAlias { generics, .. }) if generics.is_empty()
         )
     }
-}
 
-impl EmitFacts<'_> {
     fn empty_composite_is_go_zero(&self, ty: &Type) -> bool {
         let ty = self.peel_alias(ty);
         self.is_plain_struct(&ty) || self.is_lisette_enum(&ty)

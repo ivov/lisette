@@ -132,7 +132,7 @@ pub(crate) struct PlanningSnapshot {
     namespace: FileNamespace,
 }
 
-impl Planner<'_> {
+impl<'a> Planner<'a> {
     pub(crate) fn planning_snapshot(&self) -> PlanningSnapshot {
         let Self {
             facts: _,
@@ -252,24 +252,7 @@ impl Planner<'_> {
             statement.kind.walk(&mut collector);
         }
     }
-}
 
-struct ImportCollector<'a>(&'a mut FileNamespace);
-
-impl TreeVisitor for ImportCollector<'_> {
-    fn expression(&mut self, node: &GoExpressionNode) {
-        if let GoExpressionNode::Qualified { package, .. } = node {
-            self.0.require(package.clone());
-        }
-        node.own_types(&mut |go_type| self.0.absorb(go_type.requirements()));
-    }
-
-    fn statement(&mut self, statement: &LoweredStatement) {
-        statement.own_types(&mut |go_type| self.0.absorb(go_type.requirements()));
-    }
-}
-
-impl<'a> Planner<'a> {
     fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
         let abi = self.facts.return_abi(&return_ty, ReturnSlot::Function);
         Self::return_context_from_abi(return_ty, abi)
@@ -289,9 +272,7 @@ impl<'a> Planner<'a> {
             _ => ReturnContext::Tagged(return_ty),
         }
     }
-}
 
-impl<'a> Planner<'a> {
     pub fn emit(
         analysis: &'a EmitInput,
         go_module: &str,
@@ -706,6 +687,21 @@ impl<'a> Planner<'a> {
     }
 }
 
+struct ImportCollector<'a>(&'a mut FileNamespace);
+
+impl TreeVisitor for ImportCollector<'_> {
+    fn expression(&mut self, node: &GoExpressionNode) {
+        if let GoExpressionNode::Qualified { package, .. } = node {
+            self.0.require(package.clone());
+        }
+        node.own_types(&mut |go_type| self.0.absorb(go_type.requirements()));
+    }
+
+    fn statement(&mut self, statement: &LoweredStatement) {
+        statement.own_types(&mut |go_type| self.0.absorb(go_type.requirements()));
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum OuterBindings {
     MayShadow,
@@ -765,9 +761,7 @@ impl EmitFacts<'_> {
             column: source.col_for_offset(byte_offset),
         })
     }
-}
 
-impl EmitFacts<'_> {
     fn source_position(&self, span: &Span) -> Option<Position> {
         self.position_at(span, span.byte_offset)
     }

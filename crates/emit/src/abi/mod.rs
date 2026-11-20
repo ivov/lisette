@@ -303,9 +303,7 @@ impl EmitFacts<'_> {
         let err = fallible_ty.err_type();
         self.is_prelude_error(&err) || self.is_nilable_go_type(&err)
     }
-}
 
-impl EmitFacts<'_> {
     fn lowered_partial(
         &self,
         return_ty: &Type,
@@ -347,9 +345,7 @@ impl EmitFacts<'_> {
         }
         None
     }
-}
 
-impl EmitFacts<'_> {
     fn function_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
         self.classify_direct_emission(return_ty).map_or_else(
             || CallableReturnAbi::unlowered(return_ty),
@@ -374,9 +370,7 @@ impl EmitFacts<'_> {
             abi
         })
     }
-}
 
-impl EmitFacts<'_> {
     fn method_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
         match self.lowered_partial(return_ty, |_| PayloadLayout::Packed) {
             Some(abi) => CallableReturnAbi::Lowered(abi),
@@ -396,9 +390,7 @@ impl EmitFacts<'_> {
             CallableReturnAbi::Lowered,
         )
     }
-}
 
-impl EmitFacts<'_> {
     fn interface_method_return_abi(
         &self,
         return_ty: &Type,
@@ -420,9 +412,7 @@ impl EmitFacts<'_> {
         }
         abi
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn return_abi(&self, return_ty: &Type, slot: ReturnSlot<'_>) -> CallableReturnAbi {
         match slot {
             ReturnSlot::Function => self.function_return_abi(return_ty),

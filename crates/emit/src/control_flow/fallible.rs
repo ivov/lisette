@@ -210,9 +210,7 @@ impl Planner<'_> {
         ));
         statements
     }
-}
 
-impl Planner<'_> {
     fn fallible_type_args(&self, ok_ty: &Type, err_ty: Option<&Type>) -> GoType {
         let arguments: Vec<GoType> = [Some(ok_ty), err_ty]
             .into_iter()

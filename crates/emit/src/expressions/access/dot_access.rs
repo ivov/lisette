@@ -463,9 +463,7 @@ impl Planner<'_> {
             }
         })
     }
-}
 
-impl Planner<'_> {
     pub(crate) fn try_plan_enum_variant_dot(
         &mut self,
         definition: &str,

@@ -668,6 +668,44 @@ impl IfPlan {
             origin: IfOrigin::Match { else_label: None },
         }
     }
+
+    pub(super) fn walk(&self, visit: &mut impl TreeVisitor) {
+        if let Some(initializer) = &self.initializer {
+            initializer.value.node().walk(visit);
+        }
+        self.condition.node().walk(visit);
+        self.then_body.walk(visit);
+        match &self.else_arm {
+            ElseArm::None => {}
+            ElseArm::ElseIf(plan) => plan.walk(visit),
+            ElseArm::Else { body, .. } => body.walk(visit),
+        }
+    }
+
+    fn terminate_go_tail(&mut self) {
+        terminate_go_path(&mut self.then_body.statements);
+        match &mut self.else_arm {
+            ElseArm::None => {}
+            ElseArm::ElseIf(inner) => inner.terminate_go_tail(),
+            ElseArm::Else { body, .. } => terminate_go_path(&mut body.statements),
+        }
+    }
+
+    fn flow(&self) -> FlowSummary {
+        let then_flow = FlowSummary::statements(&self.then_body.statements);
+        let else_flow = match &self.else_arm {
+            ElseArm::None => FlowSummary::next(),
+            ElseArm::ElseIf(inner) => inner.flow(),
+            ElseArm::Else { body, .. } => FlowSummary::statements(&body.statements),
+        };
+        let mut branches = then_flow.clone().branch(else_flow.clone());
+        if matches!(self.else_arm, ElseArm::Else { inline: true, .. }) {
+            let go = then_flow.branch(FlowSummary::next()).sequence(else_flow);
+            branches.go_falls_through = go.go_falls_through;
+            branches.go_exits = go.go_exits;
+        }
+        branches
+    }
 }
 
 pub(crate) fn with_setup(setup: Vec<Statement>, statement: LoweredStatement) -> LoweredStatement {
@@ -1060,45 +1098,5 @@ impl SwitchCasePlan {
             label.node().walk(visit);
         }
         self.body.walk(visit);
-    }
-}
-
-impl IfPlan {
-    pub(super) fn walk(&self, visit: &mut impl TreeVisitor) {
-        if let Some(initializer) = &self.initializer {
-            initializer.value.node().walk(visit);
-        }
-        self.condition.node().walk(visit);
-        self.then_body.walk(visit);
-        match &self.else_arm {
-            ElseArm::None => {}
-            ElseArm::ElseIf(plan) => plan.walk(visit),
-            ElseArm::Else { body, .. } => body.walk(visit),
-        }
-    }
-
-    fn terminate_go_tail(&mut self) {
-        terminate_go_path(&mut self.then_body.statements);
-        match &mut self.else_arm {
-            ElseArm::None => {}
-            ElseArm::ElseIf(inner) => inner.terminate_go_tail(),
-            ElseArm::Else { body, .. } => terminate_go_path(&mut body.statements),
-        }
-    }
-
-    fn flow(&self) -> FlowSummary {
-        let then_flow = FlowSummary::statements(&self.then_body.statements);
-        let else_flow = match &self.else_arm {
-            ElseArm::None => FlowSummary::next(),
-            ElseArm::ElseIf(inner) => inner.flow(),
-            ElseArm::Else { body, .. } => FlowSummary::statements(&body.statements),
-        };
-        let mut branches = then_flow.clone().branch(else_flow.clone());
-        if matches!(self.else_arm, ElseArm::Else { inline: true, .. }) {
-            let go = then_flow.branch(FlowSummary::next()).sequence(else_flow);
-            branches.go_falls_through = go.go_falls_through;
-            branches.go_exits = go.go_exits;
-        }
-        branches
     }
 }

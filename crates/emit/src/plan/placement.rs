@@ -876,7 +876,7 @@ impl<'p> Planner<'p> {
     }
 }
 
-impl EmitFacts<'_> {
+impl<'a> EmitFacts<'a> {
     pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
         let peeled = self.peel_alias(ty);
         !self.is_function_alias(ty)
@@ -884,9 +884,7 @@ impl EmitFacts<'_> {
             && !(matches!(peeled, Type::Nominal { .. })
                 && self.underlying_simple_kind(&peeled).is_some())
     }
-}
 
-impl<'a> EmitFacts<'a> {
     fn slice_growth_method<'e>(&self, func: &'e Expression) -> Option<(&'a str, &'e Expression)> {
         let Expression::DotAccess { expression, .. } = func else {
             return None;

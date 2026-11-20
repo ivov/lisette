@@ -845,9 +845,7 @@ impl EmitFacts<'_> {
             _ => panic!("internal error: a map constructor has no checked entry types"),
         }
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
         let ty = &self.peel_alias(ty);
         let Type::Nominal { id, .. } = ty else {
@@ -860,9 +858,7 @@ impl EmitFacts<'_> {
                 Some(DefinitionBody::Struct { .. })
             )
     }
-}
 
-impl EmitFacts<'_> {
     pub(super) fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
         let symbol = self.checked(function).callee().definition.as_ref()?;
         self.definition(symbol)?.go_name()

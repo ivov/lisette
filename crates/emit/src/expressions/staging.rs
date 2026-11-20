@@ -480,9 +480,7 @@ impl EmitFacts<'_> {
             _ => false,
         }
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn identifier_read_stability(&self, expression: &Expression) -> Stability {
         if self.is_unmutated_identifier(expression) {
             Stability::Fixed

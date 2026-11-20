@@ -68,20 +68,7 @@ impl Planner<'_> {
         (coercion.is_identity() && self.constant_needs_go_type(constant, ty).is_some())
             || needs_explicit_type_declaration(self, value, ty)
     }
-}
 
-fn resolve_let_temp_declaration_ty(
-    planner: &Planner,
-    value: &Expression,
-    binding_ty: &Type,
-) -> Type {
-    if planner.facts.has_no_go_value(binding_ty) {
-        return value.get_type();
-    }
-    binding_ty.clone()
-}
-
-impl Planner<'_> {
     fn choose_let_go_name(
         &mut self,
         identifier: &EcoString,
@@ -592,6 +579,34 @@ impl Planner<'_> {
             value: None,
         })
     }
+
+    pub(crate) fn build_let_plan(
+        &mut self,
+        binding: &Binding,
+        value: &Expression,
+        mode: &LetMode,
+        demand: Option<ComponentDemand>,
+    ) -> LoweredBlock {
+        LetPlanner {
+            planner: self,
+            binding,
+            value,
+            mode,
+            demand,
+        }
+        .build()
+    }
+}
+
+fn resolve_let_temp_declaration_ty(
+    planner: &Planner,
+    value: &Expression,
+    binding_ty: &Type,
+) -> Type {
+    if planner.facts.has_no_go_value(binding_ty) {
+        return value.get_type();
+    }
+    binding_ty.clone()
 }
 
 struct LetPlanner<'a, 'e> {
@@ -907,24 +922,5 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .into()
         });
         LoweredBlock { statements }
-    }
-}
-
-impl Planner<'_> {
-    pub(crate) fn build_let_plan(
-        &mut self,
-        binding: &Binding,
-        value: &Expression,
-        mode: &LetMode,
-        demand: Option<ComponentDemand>,
-    ) -> LoweredBlock {
-        LetPlanner {
-            planner: self,
-            binding,
-            value,
-            mode,
-            demand,
-        }
-        .build()
     }
 }

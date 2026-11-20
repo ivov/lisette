@@ -307,9 +307,7 @@ impl EmitFacts<'_> {
     fn display_form(&self, expression: &Expression) -> DisplayForm {
         DisplayForm::of(&expression.get_type(), |id| self.definition(id))
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn sprintf_pieces(
         &self,
         parts: &[FormatStringPart],
@@ -361,9 +359,7 @@ impl EmitFacts<'_> {
                 )
             })
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {
         let has_interpolation = parts
             .iter()

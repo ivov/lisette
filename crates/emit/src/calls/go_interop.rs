@@ -344,50 +344,7 @@ impl Planner<'_> {
         let constructor = build_tuple_literal(values);
         GoExpression::identifier(self.hoist_tmp_value_statement(statements, "tup", constructor))
     }
-}
 
-pub(crate) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
-    GoExpression::pure_call(
-        GoExpression::generated(
-            GeneratedPackage::Prelude,
-            format!("MakeTuple{}", values.len()),
-        ),
-        values,
-    )
-}
-
-#[derive(Debug, Clone)]
-
-pub(crate) struct LoweredCall<'a> {
-    pub(crate) call: &'a Expression,
-    pub(crate) wraps: Vec<&'a Expression>,
-    pub(crate) shape: LoweredReturnAbi,
-    pub(crate) from_go: bool,
-    pub(crate) ok_ty: Type,
-    pub(crate) nil_guard: Option<NilGuard>,
-    pub(crate) bridge: Option<GoResultBridge>,
-}
-
-impl LoweredCall<'_> {
-    pub(crate) fn is_result(&self) -> bool {
-        matches!(
-            self.shape,
-            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::BareError
-        )
-    }
-
-    pub(crate) fn is_bridged(&self) -> bool {
-        self.bridge
-            .as_ref()
-            .is_some_and(|bridge| !bridge.is_identity())
-    }
-
-    pub(crate) fn has_tuple_payload(&self, planner: &Planner<'_>) -> bool {
-        planner.facts.has_tuple_payload(&self.call.get_type())
-    }
-}
-
-impl Planner<'_> {
     pub(crate) fn lowered_call<'a>(&self, subject: &'a Expression) -> Option<LoweredCall<'a>> {
         let (call, wraps) = self.peel_wrap_err(subject);
         let plan = self.plan_call(call)?;
@@ -435,5 +392,46 @@ impl Planner<'_> {
             nil_guard,
             bridge,
         })
+    }
+}
+
+pub(crate) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
+    GoExpression::pure_call(
+        GoExpression::generated(
+            GeneratedPackage::Prelude,
+            format!("MakeTuple{}", values.len()),
+        ),
+        values,
+    )
+}
+
+#[derive(Debug, Clone)]
+
+pub(crate) struct LoweredCall<'a> {
+    pub(crate) call: &'a Expression,
+    pub(crate) wraps: Vec<&'a Expression>,
+    pub(crate) shape: LoweredReturnAbi,
+    pub(crate) from_go: bool,
+    pub(crate) ok_ty: Type,
+    pub(crate) nil_guard: Option<NilGuard>,
+    pub(crate) bridge: Option<GoResultBridge>,
+}
+
+impl LoweredCall<'_> {
+    pub(crate) fn is_result(&self) -> bool {
+        matches!(
+            self.shape,
+            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::BareError
+        )
+    }
+
+    pub(crate) fn is_bridged(&self) -> bool {
+        self.bridge
+            .as_ref()
+            .is_some_and(|bridge| !bridge.is_identity())
+    }
+
+    pub(crate) fn has_tuple_payload(&self, planner: &Planner<'_>) -> bool {
+        planner.facts.has_tuple_payload(&self.call.get_type())
     }
 }

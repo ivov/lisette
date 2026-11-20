@@ -249,50 +249,7 @@ impl Planner<'_> {
         let staged = self.plan_operand(expression, ctx);
         staged.unary(UnaryOp::Not)
     }
-}
 
-pub(crate) fn flip_preserves_nan(
-    facts: &EmitFacts<'_>,
-    operator: &BinaryOperator,
-    left: &Expression,
-    right: &Expression,
-) -> bool {
-    matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
-        || (is_non_float(facts, left) && is_non_float(facts, right))
-}
-
-fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    facts
-        .underlying_simple_kind(&expression.get_type())
-        .is_some_and(|kind| !kind.is_float())
-}
-
-pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
-    match operator {
-        BinaryOperator::Equal => Some(BinaryOperator::NotEqual),
-        BinaryOperator::NotEqual => Some(BinaryOperator::Equal),
-        BinaryOperator::LessThan => Some(BinaryOperator::GreaterThanOrEqual),
-        BinaryOperator::LessThanOrEqual => Some(BinaryOperator::GreaterThan),
-        BinaryOperator::GreaterThan => Some(BinaryOperator::LessThanOrEqual),
-        BinaryOperator::GreaterThanOrEqual => Some(BinaryOperator::LessThan),
-        _ => None,
-    }
-}
-
-fn is_literal_expression(expression: &Expression) -> bool {
-    match expression {
-        Expression::Literal { .. } => true,
-        Expression::Paren { expression, .. } => is_literal_expression(expression),
-        Expression::Unary {
-            operator: UnaryOperator::Negative,
-            expression,
-            ..
-        } => is_literal_expression(expression),
-        _ => false,
-    }
-}
-
-impl Planner<'_> {
     pub(crate) fn is_go_constant_expression(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Literal { literal, .. } => {
@@ -361,6 +318,47 @@ impl Planner<'_> {
             }
             _ => false,
         }
+    }
+}
+
+pub(crate) fn flip_preserves_nan(
+    facts: &EmitFacts<'_>,
+    operator: &BinaryOperator,
+    left: &Expression,
+    right: &Expression,
+) -> bool {
+    matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
+        || (is_non_float(facts, left) && is_non_float(facts, right))
+}
+
+fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
+    facts
+        .underlying_simple_kind(&expression.get_type())
+        .is_some_and(|kind| !kind.is_float())
+}
+
+pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
+    match operator {
+        BinaryOperator::Equal => Some(BinaryOperator::NotEqual),
+        BinaryOperator::NotEqual => Some(BinaryOperator::Equal),
+        BinaryOperator::LessThan => Some(BinaryOperator::GreaterThanOrEqual),
+        BinaryOperator::LessThanOrEqual => Some(BinaryOperator::GreaterThan),
+        BinaryOperator::GreaterThan => Some(BinaryOperator::LessThanOrEqual),
+        BinaryOperator::GreaterThanOrEqual => Some(BinaryOperator::LessThan),
+        _ => None,
+    }
+}
+
+fn is_literal_expression(expression: &Expression) -> bool {
+    match expression {
+        Expression::Literal { .. } => true,
+        Expression::Paren { expression, .. } => is_literal_expression(expression),
+        Expression::Unary {
+            operator: UnaryOperator::Negative,
+            expression,
+            ..
+        } => is_literal_expression(expression),
+        _ => false,
     }
 }
 

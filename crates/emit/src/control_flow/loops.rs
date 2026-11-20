@@ -578,17 +578,13 @@ impl EmitFacts<'_> {
             IterSeqKind::Seq2 => 2,
         })
     }
-}
 
-impl EmitFacts<'_> {
     fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
         self.native_shape(iterable_ty).is_some_and(|shape| {
             matches!(shape, NativeTypeKind::Map | NativeTypeKind::EnumeratedSlice)
         }) || self.iter_seq_arity(iterable_ty) == Some(2)
     }
-}
 
-impl EmitFacts<'_> {
     fn classify_for<'a>(&self, binding: &'a Binding, iterable: &'a Expression) -> ForShape<'a> {
         if matches!(iterable, Expression::Range { .. }) {
             return ForShape::Range;

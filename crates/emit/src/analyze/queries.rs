@@ -242,9 +242,7 @@ impl<'a> EmitFacts<'a> {
         let definition = self.definition(id.as_str())?;
         Some(ResolvedNominal { id, definition })
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn embedded_field(
         &self,
         struct_ty: &Type,
@@ -356,9 +354,7 @@ impl EmitFacts<'_> {
 
         unreachable!("enum `{ty:?}` has no layout for field {index} of `{variant}`")
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn is_newtype_struct(&self, ty: &Type) -> bool {
         self.get_newtype_underlying(ty).is_some()
     }

@@ -330,6 +330,25 @@ impl Planner<'_> {
         }
         methods
     }
+
+    pub(crate) fn emit_to_string_method(
+        &mut self,
+        name: &str,
+        generics: &ReceiverGenerics,
+        method: &str,
+    ) -> GoDeclaration {
+        let receiver = self
+            .scope
+            .new_local_identifier(synthesized_receiver_name(name, generics));
+        let value = GoExpression::call(
+            GoExpression::selector(
+                GoExpression::identifier(receiver.clone()),
+                ENUM_STRINGER_METHOD.to_string(),
+            ),
+            vec![],
+        );
+        string_method(name, generics, receiver, method, value)
+    }
 }
 
 pub(crate) fn should_synthesize_stringer(attributes: &[Attribute]) -> bool {
@@ -454,26 +473,6 @@ pub(crate) fn format_value(text: &str, mut arguments: Vec<GoExpression>) -> GoEx
         GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
         arguments,
     )
-}
-impl Planner<'_> {
-    pub(crate) fn emit_to_string_method(
-        &mut self,
-        name: &str,
-        generics: &ReceiverGenerics,
-        method: &str,
-    ) -> GoDeclaration {
-        let receiver = self
-            .scope
-            .new_local_identifier(synthesized_receiver_name(name, generics));
-        let value = GoExpression::call(
-            GoExpression::selector(
-                GoExpression::identifier(receiver.clone()),
-                ENUM_STRINGER_METHOD.to_string(),
-            ),
-            vec![],
-        );
-        string_method(name, generics, receiver, method, value)
-    }
 }
 fn emit_struct_format_method(
     planner: &mut Planner,
@@ -658,9 +657,7 @@ impl EmitFacts<'_> {
                 definition.is_pointer_backed_newtype(|id| self.definition(id))
             })
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
         let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
@@ -674,9 +671,7 @@ impl EmitFacts<'_> {
             && self.has_stringer_signature(name, "debug_string"))
             || self.has_stringer_signature(name, DEBUG_STRING_METHOD)
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
         self.emit_tests_enabled() && !self.debug_string_override(name)
     }
@@ -703,9 +698,7 @@ impl EmitFacts<'_> {
             _ => Some(ENUM_STRINGER_METHOD),
         }
     }
-}
 
-impl EmitFacts<'_> {
     pub(crate) fn enum_synthesized_methods(
         &self,
         name: &str,
