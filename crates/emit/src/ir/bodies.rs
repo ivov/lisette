@@ -189,63 +189,12 @@ pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: O
         let line = statement.line.as_ref();
         match &mut statement.kind {
             LoweredStatement::If(plan) => inherit_into_if(plan, line),
-            LoweredStatement::Loop(plan) => {
-                match &mut plan.header {
-                    LoopHeader::Infinite => {}
-                    LoopHeader::While(condition) => inherit_into_expression(condition, line),
-                    LoopHeader::Range { iterable, .. } => inherit_into_expression(iterable, line),
-                    LoopHeader::Counted {
-                        start, condition, ..
-                    } => {
-                        inherit_into_expression(start, line);
-                        if let Some(condition) = condition {
-                            inherit_into_expression(condition, line);
-                        }
-                    }
-                }
-                inherit_line_directives(&mut plan.body.statements, line);
-            }
+            LoweredStatement::Loop(plan) => inherit_into_loop(plan, line),
             LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
                 inherit_line_directives(&mut body.statements, line)
             }
-            LoweredStatement::Select(plan) => {
-                for arm in &mut plan.arms {
-                    let arm_line = arm.line.as_ref().or(line);
-                    match &mut arm.kind {
-                        SelectArmKind::Receive { channel, .. } => {
-                            inherit_into_expression(channel, arm_line)
-                        }
-                        SelectArmKind::Send { channel, value, .. } => {
-                            inherit_into_expression(channel, arm_line);
-                            inherit_into_expression(value, arm_line);
-                        }
-                        SelectArmKind::Default { .. } => {}
-                    }
-                    inherit_line_directives(&mut arm.kind.body_mut().statements, arm_line);
-                    inherit_header(&mut arm.line, arm.kind.body(), line);
-                }
-            }
-            LoweredStatement::Switch(plan) => {
-                match &mut plan.kind {
-                    SwitchKind::Conditional => {}
-                    SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
-                        inherit_into_expression(subject, line)
-                    }
-                }
-                for case in &mut plan.cases {
-                    let case_line = case.line.as_ref().or(line);
-                    for label in &mut case.labels {
-                        inherit_into_expression(label, case_line);
-                    }
-                    inherit_line_directives(&mut case.body.statements, case_line);
-                    inherit_header(&mut case.line, &case.body, line);
-                }
-                if let Some(default) = &mut plan.default {
-                    let default_line = plan.default_line.as_ref().or(line);
-                    inherit_line_directives(&mut default.statements, default_line);
-                    inherit_header(&mut plan.default_line, default, line);
-                }
-            }
+            LoweredStatement::Select(plan) => inherit_into_select(plan, line),
+            LoweredStatement::Switch(plan) => inherit_into_switch(plan, line),
             LoweredStatement::Return(values) => {
                 for value in values {
                     inherit_into_expression(value, line);
@@ -277,6 +226,61 @@ pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: O
             | LoweredStatement::UnreachablePanic => {}
         }
         previous = statement.line.clone();
+    }
+}
+
+fn inherit_into_loop(plan: &mut LoopPlan, line: Option<&Position>) {
+    match &mut plan.header {
+        LoopHeader::Infinite => {}
+        LoopHeader::While(condition) => inherit_into_expression(condition, line),
+        LoopHeader::Range { iterable, .. } => inherit_into_expression(iterable, line),
+        LoopHeader::Counted {
+            start, condition, ..
+        } => {
+            inherit_into_expression(start, line);
+            if let Some(condition) = condition {
+                inherit_into_expression(condition, line);
+            }
+        }
+    }
+    inherit_line_directives(&mut plan.body.statements, line);
+}
+
+fn inherit_into_select(plan: &mut SelectStatementPlan, line: Option<&Position>) {
+    for arm in &mut plan.arms {
+        let arm_line = arm.line.as_ref().or(line);
+        match &mut arm.kind {
+            SelectArmKind::Receive { channel, .. } => inherit_into_expression(channel, arm_line),
+            SelectArmKind::Send { channel, value, .. } => {
+                inherit_into_expression(channel, arm_line);
+                inherit_into_expression(value, arm_line);
+            }
+            SelectArmKind::Default { .. } => {}
+        }
+        inherit_line_directives(&mut arm.kind.body_mut().statements, arm_line);
+        inherit_header(&mut arm.line, arm.kind.body(), line);
+    }
+}
+
+fn inherit_into_switch(plan: &mut SwitchStatementPlan, line: Option<&Position>) {
+    match &mut plan.kind {
+        SwitchKind::Conditional => {}
+        SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
+            inherit_into_expression(subject, line)
+        }
+    }
+    for case in &mut plan.cases {
+        let case_line = case.line.as_ref().or(line);
+        for label in &mut case.labels {
+            inherit_into_expression(label, case_line);
+        }
+        inherit_line_directives(&mut case.body.statements, case_line);
+        inherit_header(&mut case.line, &case.body, line);
+    }
+    if let Some(default) = &mut plan.default {
+        let default_line = plan.default_line.as_ref().or(line);
+        inherit_line_directives(&mut default.statements, default_line);
+        inherit_header(&mut plan.default_line, default, line);
     }
 }
 

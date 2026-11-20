@@ -1065,69 +1065,84 @@ fn analyze(node: &GoExpressionNode, temp: &GoIdentifier) -> Analysis {
 }
 
 fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalId>) {
-    loop {
-        let uses = NameUses::of(statements);
-        let mut discards: HashMap<LocalId, usize> = HashMap::default();
-        for_each_statements_mut(statements, &mut |list| {
-            for statement in list.iter() {
-                if let Some(id) = discarded_name(&statement.kind).and_then(GoIdentifier::id) {
-                    *discards.entry(id).or_default() += 1;
-                }
-            }
-        });
-        let mut dropped: Option<GoIdentifier> = None;
-        for_each_statements_mut(statements, &mut |list| {
-            for statement in list.iter() {
-                if dropped.is_some() {
-                    return;
-                }
-                let Some((name, value)) = pure_define(&statement.kind) else {
-                    continue;
-                };
-                if name.id().is_some_and(|id| shadowing.contains(&id)) {
-                    continue;
-                }
-                let discard_count = name
-                    .id()
-                    .and_then(|id| discards.get(&id))
-                    .copied()
-                    .unwrap_or_default();
-                let unread = uses.value_reads(name) == discard_count
-                    && uses.bindings(name) == 1
-                    && !uses.is_written(name);
-                let mut sources = Vec::new();
-                value.node().visit(&mut |node| {
-                    if let GoExpressionNode::Identifier(source) = node {
-                        sources.push(source.clone());
-                    }
-                });
-                let read_elsewhere = |source: &GoIdentifier| {
-                    let reads_in_value =
-                        sources.iter().filter(|s| s.refers_to_same(source)).count();
-                    uses.value_reads(source) > reads_in_value
-                };
-                if unread && sources.iter().all(read_elsewhere) {
-                    dropped = Some(name.clone());
-                }
-            }
-        });
-        let Some(name) = dropped else {
-            return;
-        };
-        for_each_statements_mut(statements, &mut |list| {
-            list.retain(|statement| {
-                pure_define(&statement.kind)
-                    .is_none_or(|(defined, _)| !defined.refers_to_same(&name))
-                    && discarded_name(&statement.kind)
-                        .is_none_or(|discarded| !discarded.refers_to_same(&name))
-            });
-        });
-        for_each_statements_mut(statements, &mut |list| {
-            for statement in list {
-                drop_empty_else(&mut statement.kind);
-            }
-        });
+    while let Some(name) = find_unread_temp(statements, shadowing) {
+        remove_temp(statements, &name);
     }
+}
+
+fn find_unread_temp(
+    statements: &mut Vec<Statement>,
+    shadowing: &HashSet<LocalId>,
+) -> Option<GoIdentifier> {
+    let uses = NameUses::of(statements);
+    let discards = discard_counts(statements);
+    let mut found = None;
+    for_each_statements_mut(statements, &mut |list| {
+        if found.is_none() {
+            found = list
+                .iter()
+                .find_map(|statement| unread_temp(statement, &uses, &discards, shadowing));
+        }
+    });
+    found
+}
+
+fn discard_counts(statements: &mut Vec<Statement>) -> HashMap<LocalId, usize> {
+    let mut discards: HashMap<LocalId, usize> = HashMap::default();
+    for_each_statements_mut(statements, &mut |list| {
+        for statement in list.iter() {
+            if let Some(id) = discarded_name(&statement.kind).and_then(GoIdentifier::id) {
+                *discards.entry(id).or_default() += 1;
+            }
+        }
+    });
+    discards
+}
+
+fn unread_temp(
+    statement: &Statement,
+    uses: &NameUses,
+    discards: &HashMap<LocalId, usize>,
+    shadowing: &HashSet<LocalId>,
+) -> Option<GoIdentifier> {
+    let (name, value) = pure_define(&statement.kind)?;
+    if name.id().is_some_and(|id| shadowing.contains(&id)) {
+        return None;
+    }
+    let discard_count = name
+        .id()
+        .and_then(|id| discards.get(&id))
+        .copied()
+        .unwrap_or_default();
+    let unread = uses.value_reads(name) == discard_count
+        && uses.bindings(name) == 1
+        && !uses.is_written(name);
+    let mut sources = Vec::new();
+    value.node().visit(&mut |node| {
+        if let GoExpressionNode::Identifier(source) = node {
+            sources.push(source.clone());
+        }
+    });
+    let read_elsewhere = |source: &GoIdentifier| {
+        let reads_in_value = sources.iter().filter(|s| s.refers_to_same(source)).count();
+        uses.value_reads(source) > reads_in_value
+    };
+    (unread && sources.iter().all(read_elsewhere)).then(|| name.clone())
+}
+
+fn remove_temp(statements: &mut Vec<Statement>, name: &GoIdentifier) {
+    for_each_statements_mut(statements, &mut |list| {
+        list.retain(|statement| {
+            pure_define(&statement.kind).is_none_or(|(defined, _)| !defined.refers_to_same(name))
+                && discarded_name(&statement.kind)
+                    .is_none_or(|discarded| !discarded.refers_to_same(name))
+        });
+    });
+    for_each_statements_mut(statements, &mut |list| {
+        for statement in list {
+            drop_empty_else(&mut statement.kind);
+        }
+    });
 }
 
 fn drop_empty_else(statement: &mut LoweredStatement) {

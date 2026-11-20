@@ -1,6 +1,8 @@
 use crate::EmitFacts;
 use std::fmt::Write;
+use std::iter::Peekable;
 use std::mem::take;
+use std::str::Chars;
 
 use crate::Planner;
 use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
@@ -258,49 +260,56 @@ pub(crate) fn convert_escape_sequences(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '\\' {
-            if chars.peek() == Some(&'\\') {
-                result.push('\\');
-                result.push('\\');
-                chars.next();
-            } else if matches!(chars.peek(), Some('0'..='7')) {
-                let mut value: u16 = 0;
-                for _ in 0..3 {
-                    match chars.peek() {
-                        Some(&d @ '0'..='7') => {
-                            value = value * 8 + (d as u16 - b'0' as u16);
-                            chars.next();
-                        }
-                        _ => break,
-                    }
-                }
-                write!(result, "\\x{:02x}", value).unwrap();
-            } else if chars.peek() == Some(&'u') && {
-                let mut lookahead = chars.clone();
-                lookahead.next();
-                lookahead.peek() == Some(&'{')
-            } {
-                chars.next();
-                chars.next();
-                let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
-                let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
-                if codepoint <= 0xFFFF {
-                    write!(result, "\\u{:04X}", codepoint).unwrap();
-                } else {
-                    write!(result, "\\U{:08X}", codepoint).unwrap();
-                }
-            } else {
-                result.push(c);
-            }
-        } else if c == '\n' {
-            result.push_str("\\n");
-        } else if c == '\r' {
-            result.push_str("\\r");
-        } else {
-            result.push(c);
+        match c {
+            '\\' => convert_escape(&mut chars, &mut result),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            _ => result.push(c),
         }
     }
     result
+}
+
+fn convert_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
+    match chars.peek().copied() {
+        Some('\\') => {
+            chars.next();
+            result.push_str("\\\\");
+        }
+        Some('0'..='7') => write_octal_escape(chars, result),
+        Some('u') if starts_unicode_escape(chars) => write_unicode_escape(chars, result),
+        _ => result.push('\\'),
+    }
+}
+
+fn write_octal_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
+    let mut value: u16 = 0;
+    for _ in 0..3 {
+        let Some(&digit @ '0'..='7') = chars.peek() else {
+            break;
+        };
+        value = value * 8 + (digit as u16 - b'0' as u16);
+        chars.next();
+    }
+    write!(result, "\\x{:02x}", value).unwrap();
+}
+
+fn starts_unicode_escape(chars: &Peekable<Chars<'_>>) -> bool {
+    let mut lookahead = chars.clone();
+    lookahead.next();
+    lookahead.peek() == Some(&'{')
+}
+
+fn write_unicode_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
+    chars.next();
+    chars.next();
+    let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
+    let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
+    if codepoint <= 0xFFFF {
+        write!(result, "\\u{:04X}", codepoint).unwrap();
+    } else {
+        write!(result, "\\U{:08X}", codepoint).unwrap();
+    }
 }
 
 impl EmitFacts<'_> {

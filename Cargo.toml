@@ -27,6 +27,7 @@ description = "Little language inspired by Rust that compiles to Go"
 
 [workspace.lints.clippy]
 too_many_arguments = "forbid"
+excessive_nesting = "deny"
 result_large_err = "forbid"
 large_enum_variant = "forbid"
 absolute_paths = "deny"
