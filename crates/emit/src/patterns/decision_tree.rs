@@ -26,7 +26,7 @@ use crate::ir::values::GoExpression;
 use crate::names::generics;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
-use crate::patterns::binding_decls::emit_pattern_literal;
+use crate::patterns::binding_decls::pattern_literal_text;
 use crate::types::go_type::GoType;
 use syntax::program::SlotOrigin;
 
@@ -234,9 +234,9 @@ impl Check {
             Check::Nilable { path, guard, some } => {
                 let value = path.render(subject);
                 if *some != negative {
-                    guard.non_nil(value)
+                    guard.non_nil_condition(value)
                 } else {
-                    guard.is_nil(value)
+                    guard.nil_condition(value)
                 }
             }
             Check::EnumTag { path, tag_constant } => {

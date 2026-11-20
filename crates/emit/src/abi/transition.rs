@@ -52,7 +52,7 @@ pub(crate) fn tag_check_with_initializer(
     })
 }
 
-fn has_tag(value: &GoExpression, tag: &str) -> GoExpression {
+fn tag_condition(value: &GoExpression, tag: &str) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(value.clone(), ENUM_TAG_FIELD.to_string()),
         BinaryOp::Eq,
@@ -186,7 +186,7 @@ impl Planner<'_> {
                     self.lowered_payload_values(shape, &ok_ty(), field(p, tags::RESULT_OK_FIELD));
                 vec![
                     tag_check(
-                        has_tag(p, RESULT_OK_TAG),
+                        tag_condition(p, RESULT_OK_TAG),
                         ok_setup,
                         shape.ok_values(ok_payload),
                     )
@@ -207,13 +207,13 @@ impl Planner<'_> {
                 both_values.push(field(p, tags::PARTIAL_ERR_FIELD));
                 let mut statements = vec![
                     tag_check(
-                        has_tag(p, PARTIAL_OK_TAG),
+                        tag_condition(p, PARTIAL_OK_TAG),
                         ok_setup,
                         shape.ok_values(ok_payload),
                     )
                     .into(),
                     tag_check(
-                        has_tag(p, PARTIAL_ERR_TAG),
+                        tag_condition(p, PARTIAL_ERR_TAG),
                         Vec::new(),
                         self.lowered_err_values(
                             shape,
@@ -232,7 +232,7 @@ impl Planner<'_> {
                     self.lowered_payload_values(shape, &ok_ty(), field(p, tags::OPTION_SOME_FIELD));
                 vec![
                     tag_check(
-                        has_tag(p, OPTION_SOME_TAG),
+                        tag_condition(p, OPTION_SOME_TAG),
                         some_setup,
                         shape.ok_values(some_payload),
                     )

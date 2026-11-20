@@ -1,6 +1,6 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::expressions::top_items::emit_item_doc;
+use crate::expressions::top_items::item_doc_text;
 use crate::ir::declarations::GoDeclaration;
 use crate::names::go_name;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Visibility};
@@ -87,7 +87,7 @@ impl Planner<'_> {
         if declarations.is_empty() {
             return None;
         }
-        let method_doc_comment = emit_item_doc(doc, function.name, &go_name);
+        let method_doc_comment = item_doc_text(doc, function.name, &go_name);
         declarations[0].documentation = method_doc_comment.into();
         Some(declarations)
     }

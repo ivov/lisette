@@ -439,7 +439,7 @@ impl<'a> EmitFacts<'a> {
             .is_imported_type(qualified_name)
     }
 
-    pub(crate) fn emit_tests_enabled(&self) -> bool {
+    pub(crate) fn tests_enabled(&self) -> bool {
         self.shared.emit_tests
     }
 

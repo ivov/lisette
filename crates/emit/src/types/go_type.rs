@@ -440,7 +440,7 @@ impl Planner<'_> {
                 id,
                 params: parameters,
                 ..
-            } => self.emit_constructor(id, parameters, ty),
+            } => self.constructor_go_type(id, parameters, ty),
             Type::Simple(kind) => {
                 if matches!(kind, SimpleKind::Unit) {
                     GoType::new("struct{}")
@@ -452,21 +452,21 @@ impl Planner<'_> {
                 kind,
                 args: arguments,
                 ..
-            } => self.emit_compound(*kind, arguments, ty),
+            } => self.compound_go_type(*kind, arguments, ty),
             Type::Function(_) => self.value_layout(ty, SlotOrigin::Lisette).go_type(self),
             Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
             Type::Never => GoType::new("struct{}"),
             Type::Error => self.reject_untyped_position("an error type"),
-            Type::Tuple(elements) => self.emit_tuple_type(elements),
+            Type::Tuple(elements) => self.tuple_go_type(elements),
             Type::Array { length, element } => GoType::array_of(length, &self.go_type(element)),
             Type::ImportNamespace(_) => self.reject_untyped_position("a package name"),
             Type::ReceiverPlaceholder => GoType::new("any"),
         }
     }
 
-    fn emit_compound(&self, kind: CompoundKind, arguments: &[Type], ty: &Type) -> GoType {
+    fn compound_go_type(&self, kind: CompoundKind, arguments: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
         match kind {
@@ -481,7 +481,7 @@ impl Planner<'_> {
             _ => {
                 let native = NativeTypeKind::from_type(ty)
                     .expect("every other compound type is a native Go type");
-                self.emit_native_type(native, ty)
+                self.native_go_type(native, ty)
             }
         }
     }
@@ -534,12 +534,12 @@ impl Planner<'_> {
         })
     }
 
-    fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
+    fn tuple_go_type(&self, elements: &[Type]) -> GoType {
         let element_types: Vec<GoType> = elements.iter().map(|e| self.go_type(e)).collect();
         GoType::prelude(&format!("Tuple{}", elements.len()), &element_types)
     }
 
-    fn emit_constructor(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
+    fn constructor_go_type(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
         if let Some(index) = self.facts.type_parameter_alias_index(qualified_name)
             && let Some(target) = parameters.get(index)
         {
@@ -569,7 +569,7 @@ impl Planner<'_> {
         GoType::named(&name, &param_types, None).with_physical_kind(kind)
     }
 
-    fn emit_native_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
+    fn native_go_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
         let argument = |index| {
             let stripped = ty.strip_refs();
             let arguments = stripped.get_type_params().expect("native type arguments");

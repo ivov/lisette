@@ -296,7 +296,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn enum_tuple_field_name(&self, ty: &Type, variant: &str, index: usize) -> String {
-        let ty = &self.emit_shape_ty(ty);
+        let ty = &self.shape_ty(ty);
         if ty.is_option() {
             return match variant {
                 "Some" => fallible::OPTION_SOME_FIELD.to_string(),

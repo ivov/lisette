@@ -347,7 +347,7 @@ impl Planner<'_> {
         }
 
         let receiver =
-            self_param.map(|parameter| self.emit_receiver_part(params_to_process, parameter));
+            self_param.map(|parameter| self.receiver_parameter(params_to_process, parameter));
         let generics = self.plan_generics(&signature_generics);
         let (signature_parameters, deferred_patterns) =
             self.lower_signature_params(params_to_process);
@@ -467,7 +467,7 @@ impl Planner<'_> {
         )
     }
 
-    fn emit_receiver_part(
+    fn receiver_parameter(
         &mut self,
         params_to_process: &[Binding],
         self_param: &Binding,

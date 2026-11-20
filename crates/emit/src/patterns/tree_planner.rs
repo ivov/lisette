@@ -290,7 +290,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let (inner, needs_block) = self.with_scope(|this| {
             let mut inner: Vec<Statement> = Vec::new();
             this.with_bindings(&mut inner, bindings, &[arm_body], |this, inner| {
-                this.emit_arm_body(inner, arm_index, place)
+                this.lower_arm_body(inner, arm_index, place)
             });
             let needs_block =
                 this.planner.scope.current_block_declared_nonempty() || pattern_has_collisions;
@@ -706,7 +706,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         .cloned()
                         .collect();
                     this.with_bindings(&mut body, &bindings, &[arm_body], |this, body| {
-                        this.emit_arm_leaf(body, leaf.arm_index, &ctx);
+                        this.lower_arm_leaf(body, leaf.arm_index, &ctx);
                     });
                 }
             }
@@ -728,7 +728,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
             Decision::Chain { tests, tail } => {
                 if ctx.is_grouped_retry() {
-                    self.emit_chain_grouped(statements, tests, tail, ctx);
+                    self.lower_chain_grouped(statements, tests, tail, ctx);
                 } else {
                     self.lower_chain_branch(statements, tests, tail, ctx.arm_place);
                 }
@@ -747,7 +747,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 &leaf.bindings,
                 &[arm_body],
                 |this, lowered| {
-                    this.emit_arm_leaf(lowered, leaf.arm_index, ctx);
+                    this.lower_arm_leaf(lowered, leaf.arm_index, ctx);
                 },
             );
             (
@@ -767,9 +767,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn emit_arm_leaf(&mut self, statements: &mut Vec<Statement>, arm_index: usize, ctx: &WalkCtx) {
+    fn lower_arm_leaf(&mut self, statements: &mut Vec<Statement>, arm_index: usize, ctx: &WalkCtx) {
         let mut body_statements: Vec<Statement> = Vec::new();
-        self.emit_arm_body(&mut body_statements, arm_index, ctx.arm_place);
+        self.lower_arm_body(&mut body_statements, arm_index, ctx.arm_place);
         let body_diverges = capture_diverge(body_statements, statements);
         apply_leaf_terminator(statements, ctx, body_diverges);
     }
@@ -926,7 +926,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     let (condition_setup, condition) = this.try_plan_guard_condition(arm_index)?;
                     let then_body = this.with_scope(|this| {
                         let mut then_statements: Vec<Statement> = Vec::new();
-                        this.emit_arm_leaf(&mut then_statements, arm_index, &ctx.nested());
+                        this.lower_arm_leaf(&mut then_statements, arm_index, &ctx.nested());
                         LoweredBlock {
                             statements: then_statements,
                         }
@@ -1146,7 +1146,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         (!body.is_empty()).then_some(LoweredBlock { statements: body })
     }
 
-    fn emit_chain_grouped(
+    fn lower_chain_grouped(
         &mut self,
         statements: &mut Vec<Statement>,
         tests: &[ChainTest],
@@ -1162,7 +1162,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             let start = statements.len();
             let is_last_group = g == group_count - 1;
             let collapse_as_catchall = is_last_group && matches!(tail, ChainTail::LastTest);
-            self.emit_chain_group(
+            self.lower_chain_group(
                 statements,
                 ChainGroup {
                     indices,
@@ -1183,7 +1183,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn emit_chain_group(
+    fn lower_chain_group(
         &mut self,
         statements: &mut Vec<Statement>,
         group: ChainGroup<'_>,
@@ -1196,13 +1196,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             conditions,
         } = group;
         if collapse_as_catchall {
-            self.emit_chain_group_tests(statements, indices, tests, ctx);
+            self.lower_chain_group_tests(statements, indices, tests, ctx);
             return;
         }
 
         let body = self.with_scope(|this| {
             let mut body: Vec<Statement> = Vec::new();
-            this.emit_chain_group_tests(&mut body, indices, tests, ctx);
+            this.lower_chain_group_tests(&mut body, indices, tests, ctx);
             body
         });
 
@@ -1217,7 +1217,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn emit_chain_group_tests(
+    fn lower_chain_group_tests(
         &mut self,
         statements: &mut Vec<Statement>,
         indices: &[usize],
@@ -1225,13 +1225,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         ctx: &WalkCtx,
     ) {
         if bindings_are_hoistable(tests, indices) {
-            self.emit_chain_group_hoisted(statements, indices, tests, ctx);
+            self.lower_chain_group_hoisted(statements, indices, tests, ctx);
         } else {
-            self.emit_chain_group_per_test(statements, indices, tests, ctx);
+            self.lower_chain_group_per_test(statements, indices, tests, ctx);
         }
     }
 
-    fn emit_chain_group_hoisted(
+    fn lower_chain_group_hoisted(
         &mut self,
         statements: &mut Vec<Statement>,
         indices: &[usize],
@@ -1255,14 +1255,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 consumers.push(&arm.expression);
             }
             self.with_bindings(statements, &bindings, &consumers, |this, statements| {
-                this.emit_chain_group_bodies(statements, indices, tests, ctx);
+                this.lower_chain_group_bodies(statements, indices, tests, ctx);
             });
         } else {
-            self.emit_chain_group_bodies(statements, indices, tests, ctx);
+            self.lower_chain_group_bodies(statements, indices, tests, ctx);
         }
     }
 
-    fn emit_chain_group_bodies(
+    fn lower_chain_group_bodies(
         &mut self,
         statements: &mut Vec<Statement>,
         indices: &[usize],
@@ -1271,7 +1271,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) {
         for &test_index in indices {
             match &tests[test_index].arm {
-                ChainArm::Leaf(leaf) => self.emit_arm_leaf(statements, leaf.arm_index, ctx),
+                ChainArm::Leaf(leaf) => self.lower_arm_leaf(statements, leaf.arm_index, ctx),
                 ChainArm::Guard(guard) => {
                     let arm_index = guard.leaf.arm_index;
                     if let Some((condition_setup, condition)) =
@@ -1279,7 +1279,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     {
                         let then_body = self.with_scope(|this| {
                             let mut then_body: Vec<Statement> = Vec::new();
-                            this.emit_arm_leaf(&mut then_body, arm_index, ctx);
+                            this.lower_arm_leaf(&mut then_body, arm_index, ctx);
                             then_body
                         });
                         let mut guarded = condition_setup;
@@ -1300,7 +1300,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn emit_chain_group_per_test(
+    fn lower_chain_group_per_test(
         &mut self,
         statements: &mut Vec<Statement>,
         indices: &[usize],
@@ -1361,7 +1361,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         })
     }
 
-    fn emit_arm_body(
+    fn lower_arm_body(
         &mut self,
         statements: &mut Vec<Statement>,
         arm_index: usize,

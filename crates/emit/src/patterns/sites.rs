@@ -21,7 +21,7 @@ use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
-use crate::patterns::binding_emit::AssertedPattern;
+use crate::patterns::binding_statements::AssertedPattern;
 use crate::patterns::decision_tree::{
     self, BindingTarget, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };

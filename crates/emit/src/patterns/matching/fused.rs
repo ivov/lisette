@@ -68,7 +68,7 @@ impl Planner<'_> {
         let error = self.pair_status(error_hint.as_ref(), PairStatusKind::Error, false);
         let failure_body = self.lower_partial_failure_arm(arms, &error, &PlacePlan::Statement);
         statements.push(define_many(vec![go_name.clone(), error.clone()], call));
-        let condition = non_nil(GoExpression::identifier(error));
+        let condition = non_nil_condition(GoExpression::identifier(error));
         statements.push(
             LoweredStatement::If(IfPlan::plain(condition, failure_body, ElseArm::None)).into(),
         );
@@ -206,7 +206,7 @@ impl Planner<'_> {
             else_body.statements.insert(
                 0,
                 LoweredStatement::If(IfPlan::plain(
-                    is_nil(error.clone()),
+                    nil_condition(error.clone()),
                     LoweredBlock {
                         statements: vec![assign(error.clone(), unexpected_nil_error())],
                     },
@@ -402,7 +402,7 @@ impl Planner<'_> {
         statements.push(
             LoweredStatement::If(IfPlan {
                 initializer: Some(initializer),
-                condition: is_nil(err()),
+                condition: nil_condition(err()),
                 then_body: ok_body,
                 else_arm,
                 else_if_line: None,
@@ -472,9 +472,9 @@ impl Planner<'_> {
         let failure_first = ok_body.renders_empty()
             || (failure_body.ends_with_diverge() && ok_body.ends_with_diverge());
         let (condition, then_body, else_body) = if failure_first {
-            (non_nil(err), failure_body, ok_body)
+            (non_nil_condition(err), failure_body, ok_body)
         } else {
-            (is_nil(err), ok_body, failure_body)
+            (nil_condition(err), ok_body, failure_body)
         };
         let bound_value = value
             .filter(|_| value_used)
@@ -566,14 +566,18 @@ impl Planner<'_> {
             || GoExpression::identifier(value.clone().expect("nil guard captures the value"));
         let condition = match (arms.selects_both, nil_guard) {
             (true, Some(guard)) => GoExpression::binary(
-                non_nil(err()),
+                non_nil_condition(err()),
                 BinaryOp::And,
-                guard.non_nil(guarded_value()),
+                guard.non_nil_condition(guarded_value()),
             ),
-            (true, None) => non_nil(err()),
+            (true, None) => non_nil_condition(err()),
             (false, guard) => {
                 let guard = guard.expect("non-nilable Err returned above");
-                GoExpression::binary(non_nil(err()), BinaryOp::And, guard.is_nil(guarded_value()))
+                GoExpression::binary(
+                    non_nil_condition(err()),
+                    BinaryOp::And,
+                    guard.nil_condition(guarded_value()),
+                )
             }
         };
         let selected_diverges = selected.ends_with_diverge();

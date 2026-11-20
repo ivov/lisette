@@ -3,7 +3,7 @@ use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi}
 use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::abi::transition::multi_value_return;
-use crate::abi::wrapping::{WrapperTarget, non_nil};
+use crate::abi::wrapping::{WrapperTarget, non_nil_condition};
 use crate::control_flow::fallible as tags;
 use crate::control_flow::fallible::{OPTION_SOME_TAG, prelude_call};
 use crate::control_flow::propagation::plain_return;
@@ -25,7 +25,7 @@ use syntax::parse::TUPLE_FIELDS;
 use syntax::program::SlotOrigin;
 use syntax::types::{CompoundKind, Type};
 
-fn is_some(option: GoExpression) -> GoExpression {
+fn some_condition(option: GoExpression) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(option, ENUM_TAG_FIELD.to_string()),
         BinaryOp::Eq,
@@ -153,8 +153,9 @@ impl Planner<'_> {
             payload_bridge,
             address,
         );
-        statements
-            .push(LoweredStatement::If(IfPlan::plain(is_some(option), body, ElseArm::None)).into());
+        statements.push(
+            LoweredStatement::If(IfPlan::plain(some_condition(option), body, ElseArm::None)).into(),
+        );
         GoExpression::identifier(slot)
     }
 
@@ -202,11 +203,11 @@ impl Planner<'_> {
         then_statements.push(assign(slot.clone(), some));
         let none = prelude_call("MakeOptionNone", type_args, Vec::new());
         let condition = if pointer {
-            non_nil(raw)
+            non_nil_condition(raw)
         } else {
             self.facts
                 .option_nil_guard(target.logical_type())
-                .non_nil(raw)
+                .non_nil_condition(raw)
         };
         LoweredStatement::If(IfPlan::plain(
             condition,
@@ -260,7 +261,7 @@ impl Planner<'_> {
                     let nil = self
                         .facts
                         .option_nil_guard(target.logical_type())
-                        .is_nil(value.clone());
+                        .nil_condition(value.clone());
                     let value = prelude_call(
                         "OptionFromNilable",
                         GoType::type_argument(&inner.go_type(self)),
@@ -358,7 +359,7 @@ impl Planner<'_> {
         body.push(assign(GoExpression::identifier(output.clone()), adapted));
         statements.push(
             LoweredStatement::If(IfPlan::plain(
-                non_nil(source),
+                non_nil_condition(source),
                 LoweredBlock { statements: body },
                 ElseArm::None,
             ))
@@ -561,8 +562,12 @@ impl Planner<'_> {
                 };
                 LoweredBlock {
                     statements: vec![
-                        LoweredStatement::If(IfPlan::plain(is_some(element), then_block, else_arm))
-                            .into(),
+                        LoweredStatement::If(IfPlan::plain(
+                            some_condition(element),
+                            then_block,
+                            else_arm,
+                        ))
+                        .into(),
                     ],
                 }
             }
@@ -659,7 +664,7 @@ impl Planner<'_> {
         statements.push(declare(adapted.clone(), go_type));
         statements.push(
             LoweredStatement::If(IfPlan::plain(
-                non_nil(callee),
+                non_nil_condition(callee),
                 LoweredBlock {
                     statements: vec![assign(GoExpression::identifier(adapted.clone()), callback)],
                 },
@@ -887,7 +892,7 @@ impl Planner<'_> {
                 let condition = self
                     .facts
                     .option_nil_guard(source.result_layout.logical_type())
-                    .is_nil(GoExpression::identifier(raw.clone()));
+                    .nil_condition(GoExpression::identifier(raw.clone()));
                 statements.push(
                     LoweredStatement::If(IfPlan::plain(
                         condition,

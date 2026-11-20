@@ -6,7 +6,7 @@ use crate::abi::fallible_producer::GuardedPayload;
 use crate::abi::fallible_producer::{OptionFusePlan, ResultFusePlan};
 use crate::abi::layout::ValueLayout;
 use crate::abi::transition;
-use crate::abi::wrapping::{is_nil, non_nil, unexpected_nil_error};
+use crate::abi::wrapping::{nil_condition, non_nil_condition, unexpected_nil_error};
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
@@ -364,7 +364,7 @@ impl Planner<'_> {
         statements.push(
             transition::tag_check_with_initializer(
                 initializer,
-                non_nil(outcome()),
+                non_nil_condition(outcome()),
                 failure_setup,
                 failure_values,
             )
@@ -375,7 +375,8 @@ impl Planner<'_> {
             let (nil_setup, nil_failure) =
                 self.propagate_failure_values(expression, fallible, error);
             statements.push(
-                transition::tag_check(guard.is_nil(guarded_value()), nil_setup, nil_failure).into(),
+                transition::tag_check(guard.nil_condition(guarded_value()), nil_setup, nil_failure)
+                    .into(),
             );
         }
 
@@ -497,7 +498,7 @@ impl Planner<'_> {
                 if has_nil_guard && mappers[0].reads_error() {
                     failure_setup.push(
                         LoweredStatement::If(IfPlan::plain(
-                            is_nil(GoExpression::identifier(status.clone())),
+                            nil_condition(GoExpression::identifier(status.clone())),
                             LoweredBlock {
                                 statements: vec![assign(
                                     GoExpression::identifier(status.clone()),

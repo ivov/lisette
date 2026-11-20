@@ -59,7 +59,7 @@ impl Planner<'_> {
             Pattern::Literal { literal, .. } => {
                 collector.checks.push(Check::Literal {
                     path: path.clone(),
-                    go_literal: GoExpression::literal(emit_pattern_literal(literal)),
+                    go_literal: GoExpression::literal(pattern_literal_text(literal)),
                     value: self.facts.exact_switch_value(path_ty, literal),
                 });
             }

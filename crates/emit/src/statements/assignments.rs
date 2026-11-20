@@ -376,10 +376,7 @@ impl Planner<'_> {
         base: &Expression,
         expression: GoExpression,
     ) -> GoExpression {
-        let pinned = if !matches!(
-            self.facts.emit_shape_ty(&base.get_type()),
-            Type::Array { .. }
-        ) {
+        let pinned = if !matches!(self.facts.shape_ty(&base.get_type()), Type::Array { .. }) {
             expression
         } else if let GoExpressionNode::Dereference(pointer) = expression.node() {
             expression.peeled(pointer)

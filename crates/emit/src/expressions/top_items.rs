@@ -32,7 +32,7 @@ impl Planner<'_> {
                 let is_public = matches!(visibility, Visibility::Public);
                 let function = item.function_definition_view();
                 let go_name = self.pick_go_function_name(function, false, is_public);
-                let doc_comment = emit_item_doc(doc, name, &go_name);
+                let doc_comment = item_doc_text(doc, name, &go_name);
                 let qualified_name = self.facts.qualified_current(name);
 
                 if self.facts.is_test(&qualified_name) {
@@ -54,7 +54,7 @@ impl Planner<'_> {
                 fields,
                 ..
             } => {
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declarations =
                     self.emit_struct_definition(name, generics, fields, attributes);
                 declarations[0].documentation = doc_comment.into();
@@ -71,7 +71,7 @@ impl Planner<'_> {
                 generics,
                 ..
             } => {
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declarations = self
                     .try_emit_enum(name, generics, attributes, &doc_comment)
                     .unwrap_or_default();
@@ -90,7 +90,7 @@ impl Planner<'_> {
                 if self.facts.alias_emits_nothing(name) {
                     return Vec::new();
                 }
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declaration = self.emit_type_alias(name, generics, ty);
                 declaration.documentation = doc_comment.into();
                 vec![declaration]
@@ -104,7 +104,7 @@ impl Planner<'_> {
                 visibility,
                 ..
             } => {
-                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
+                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let is_public = matches!(visibility, Visibility::Public);
                 let mut declaration =
                     self.emit_interface(name, method_signatures, parents, generics, is_public);
@@ -133,7 +133,7 @@ impl Planner<'_> {
                     .scope
                     .bound_go_identifier(identifier)
                     .expect("`emit_const` binds the identifier");
-                let doc_comment = emit_item_doc(doc, identifier, go_name.spelling());
+                let doc_comment = item_doc_text(doc, identifier, go_name.spelling());
                 declaration.documentation = doc_comment.into();
                 vec![declaration]
             }
@@ -249,11 +249,11 @@ impl Planner<'_> {
     }
 }
 
-pub(crate) fn emit_doc(doc: &Option<String>) -> String {
+pub(crate) fn doc_text(doc: &Option<String>) -> String {
     doc.as_deref().map_or_else(String::new, doc_lines)
 }
 
-pub(crate) fn emit_item_doc(doc: &Option<String>, lisette_name: &str, go_name: &str) -> String {
+pub(crate) fn item_doc_text(doc: &Option<String>, lisette_name: &str, go_name: &str) -> String {
     let Some(text) = doc else {
         return String::new();
     };

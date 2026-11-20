@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
-use crate::expressions::top_items::emit_doc;
+use crate::expressions::top_items::doc_text;
 use crate::render::imports::format_import;
 
 #[derive(Clone, Debug)]
@@ -39,7 +39,7 @@ impl OutputFile {
     fn render_unformatted(&self) -> String {
         let mut output = OutputCollector::new();
 
-        let header = emit_doc(&self.file_comment);
+        let header = doc_text(&self.file_comment);
         if !header.is_empty() {
             output.collect(header.trim_end_matches('\n'));
             output.collect("");

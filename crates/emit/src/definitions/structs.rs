@@ -4,7 +4,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::display_form::{DisplayForm, UNIT_DISPLAY};
-use crate::expressions::top_items::emit_item_doc;
+use crate::expressions::top_items::item_doc_text;
 use crate::ir::bodies::LoweredBlock;
 use crate::ir::declarations::GoDeclaration;
 use crate::ir::declarations::{DeclarationKind, FieldDeclaration, TypeParameter};
@@ -91,7 +91,7 @@ impl Planner<'_> {
     }
 
     fn stringer_kind(&self, ty: &Type, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
-        let Type::Nominal { id, .. } = &self.facts.emit_shape_ty(ty) else {
+        let Type::Nominal { id, .. } = &self.facts.shape_ty(ty) else {
             return None;
         };
         if !visited.insert(id.to_string()) {
@@ -221,7 +221,7 @@ impl Planner<'_> {
             )
         };
         let declaration = FieldDeclaration {
-            documentation: emit_item_doc(&field.doc, &field.name, &name).into(),
+            documentation: item_doc_text(&field.doc, &field.name, &name).into(),
             name: (!field.is_embedded()).then(|| name.clone()),
             ty: self.go_type(&field.ty),
             tag,
@@ -659,7 +659,7 @@ impl EmitFacts<'_> {
     }
 
     pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
-        self.emit_tests_enabled() && !self.debug_string_override(name)
+        self.tests_enabled() && !self.debug_string_override(name)
     }
 
     pub(crate) fn to_string_method_go_name(&self) -> String {

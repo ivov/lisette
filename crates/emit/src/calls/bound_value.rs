@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::wrapping::{NilGuard, is_nil, non_nil};
+use crate::abi::wrapping::{NilGuard, nil_condition, non_nil_condition};
 use crate::calls::bounds::BoundsCheckedIndex;
 
 use crate::ir::bodies::{Definition, Statement, define, discard};
@@ -79,8 +79,8 @@ impl LoweredPair {
         let status = match (self.status_kind, success) {
             (PairStatusKind::Ok, true) => status,
             (PairStatusKind::Ok, false) => GoExpression::unary(UnaryOp::Not, status),
-            (PairStatusKind::Error, true) => is_nil(status),
-            (PairStatusKind::Error, false) => non_nil(status),
+            (PairStatusKind::Error, true) => nil_condition(status),
+            (PairStatusKind::Error, false) => non_nil_condition(status),
         };
         let condition = match &self.value {
             PairValue::Named {
@@ -89,9 +89,9 @@ impl LoweredPair {
             } => {
                 let value = GoExpression::identifier(name.clone());
                 let nil_condition = if success {
-                    guard.non_nil(value)
+                    guard.non_nil_condition(value)
                 } else {
-                    guard.is_nil(value)
+                    guard.nil_condition(value)
                 };
                 let operator = if success { BinaryOp::And } else { BinaryOp::Or };
                 GoExpression::binary(status, operator, nil_condition)
@@ -262,9 +262,9 @@ impl BoundValue {
             } => {
                 let tested = GoExpression::identifier(value.clone());
                 let test = if success {
-                    nil_guard.non_nil(tested)
+                    nil_guard.non_nil_condition(tested)
                 } else {
-                    nil_guard.is_nil(tested)
+                    nil_guard.nil_condition(tested)
                 };
                 PairCondition {
                     initializer: initializer_call.as_ref().map(|call| Definition {

@@ -19,15 +19,15 @@ use crate::names::go_name::GeneratedPackage;
 use crate::types::go_type::GoType;
 use syntax::types::{GoNilForm, Type};
 
-pub(crate) fn is_nil(value: GoExpression) -> GoExpression {
+pub(crate) fn nil_condition(value: GoExpression) -> GoExpression {
     GoExpression::binary(value, BinaryOp::Eq, GoExpression::nil())
 }
 
-pub(crate) fn non_nil(value: GoExpression) -> GoExpression {
+pub(crate) fn non_nil_condition(value: GoExpression) -> GoExpression {
     GoExpression::binary(value, BinaryOp::Ne, GoExpression::nil())
 }
 
-pub(crate) fn is_nil_interface(value: GoExpression) -> GoExpression {
+pub(crate) fn nil_interface_condition(value: GoExpression) -> GoExpression {
     GoExpression::call(
         GoExpression::generated(GeneratedPackage::Prelude, "IsNilInterface"),
         vec![value],
@@ -44,10 +44,10 @@ pub(crate) enum NilGuard {
 }
 
 impl NilGuard {
-    pub(crate) fn is_nil(self, value: GoExpression) -> GoExpression {
+    pub(crate) fn nil_condition(self, value: GoExpression) -> GoExpression {
         match self {
-            NilGuard::Pointer => is_nil(value),
-            NilGuard::Interface => is_nil_interface(value),
+            NilGuard::Pointer => nil_condition(value),
+            NilGuard::Interface => nil_interface_condition(value),
             NilGuard::Sentinel(sentinel) => GoExpression::binary(
                 value,
                 BinaryOp::Eq,
@@ -56,10 +56,12 @@ impl NilGuard {
         }
     }
 
-    pub(crate) fn non_nil(self, value: GoExpression) -> GoExpression {
+    pub(crate) fn non_nil_condition(self, value: GoExpression) -> GoExpression {
         match self {
-            NilGuard::Pointer => non_nil(value),
-            NilGuard::Interface => GoExpression::unary(UnaryOp::Not, is_nil_interface(value)),
+            NilGuard::Pointer => non_nil_condition(value),
+            NilGuard::Interface => {
+                GoExpression::unary(UnaryOp::Not, nil_interface_condition(value))
+            }
             NilGuard::Sentinel(sentinel) => GoExpression::binary(
                 value,
                 BinaryOp::Ne,
@@ -253,7 +255,12 @@ impl Planner<'_> {
         let else_arm = ElseArm::from_body(ok_body, false);
 
         statements.push(
-            LoweredStatement::If(IfPlan::plain(non_nil(error_value()), then_body, else_arm)).into(),
+            LoweredStatement::If(IfPlan::plain(
+                non_nil_condition(error_value()),
+                then_body,
+                else_arm,
+            ))
+            .into(),
         );
         (statements, outcome)
     }
@@ -264,7 +271,7 @@ impl Planner<'_> {
         value: GoExpression,
     ) -> Option<GoExpression> {
         let guard = self.facts.partial_ok_nil_guard(ok_ty)?;
-        Some(guard.is_nil(value))
+        Some(guard.nil_condition(value))
     }
 
     pub(crate) fn result_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
@@ -380,7 +387,7 @@ impl Planner<'_> {
         };
 
         let else_arm = if let Some(nil_guard) = nil_guard {
-            let nil_condition = nil_guard.is_nil(ok());
+            let nil_condition = nil_guard.nil_condition(ok());
             let nil_err = prelude_call(
                 fallible.err_constructor(),
                 type_params,
@@ -396,7 +403,12 @@ impl Planner<'_> {
         };
 
         statements.push(
-            LoweredStatement::If(IfPlan::plain(non_nil(error_value()), then_body, else_arm)).into(),
+            LoweredStatement::If(IfPlan::plain(
+                non_nil_condition(error_value()),
+                then_body,
+                else_arm,
+            ))
+            .into(),
         );
         (statements, outcome)
     }
@@ -477,7 +489,12 @@ impl Planner<'_> {
         let else_arm = ElseArm::from_body(leaf_block(&sink, ok_wrapper), false);
 
         statements.push(
-            LoweredStatement::If(IfPlan::plain(non_nil(error_value()), then_body, else_arm)).into(),
+            LoweredStatement::If(IfPlan::plain(
+                non_nil_condition(error_value()),
+                then_body,
+                else_arm,
+            ))
+            .into(),
         );
         (statements, outcome)
     }
@@ -600,7 +617,9 @@ impl Planner<'_> {
 
         let ok = GoExpression::identifier(value_variable);
         let condition = match self.facts.nullable_option_nil_guard(option_ty) {
-            Some(guard) => GoExpression::binary(ok, BinaryOp::And, guard.non_nil(first_val)),
+            Some(guard) => {
+                GoExpression::binary(ok, BinaryOp::And, guard.non_nil_condition(first_val))
+            }
             None => ok,
         };
 
@@ -643,7 +662,7 @@ impl Planner<'_> {
         let is_nil_check = self
             .facts
             .option_nil_guard(layout.logical_type())
-            .is_nil(raw_value.clone());
+            .nil_condition(raw_value.clone());
         let value = prelude_call(
             "OptionFromNilable",
             GoType::type_argument(&inner_ty_str),

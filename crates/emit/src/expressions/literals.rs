@@ -52,7 +52,9 @@ impl Planner<'_> {
                 format!("\"{}\"", convert_escape_sequences(value)),
                 ConstantKind::String,
             ),
-            Literal::String { value, raw: true } => (emit_raw_string(value), ConstantKind::String),
+            Literal::String { value, raw: true } => {
+                (raw_string_literal(value), ConstantKind::String)
+            }
             Literal::Char(c) => (
                 format!("'{}'", convert_escape_sequences(c)),
                 ConstantKind::Rune,
@@ -243,7 +245,7 @@ fn string_constant(text: String) -> GoExpression {
     GoExpression::constant(format!("\"{text}\""), ConstantKind::String)
 }
 
-pub(crate) fn emit_raw_string(value: &str) -> String {
+pub(crate) fn raw_string_literal(value: &str) -> String {
     if !value.contains('`') && !value.contains('\r') {
         format!("`{}`", value)
     } else {

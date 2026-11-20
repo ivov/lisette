@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::fallible_producer::OptionFusePlan;
-use crate::abi::wrapping::{is_nil, non_nil, unexpected_nil_error};
+use crate::abi::wrapping::{nil_condition, non_nil_condition, unexpected_nil_error};
 use crate::calls::bound_value::{BoundValue, PairCondition};
 use crate::calls::comma_ok::CommaOkValueSlot;
 
@@ -20,7 +20,7 @@ use crate::patterns::binding_decls::{
 };
 use crate::patterns::decision_tree;
 use crate::patterns::sites::ResolvedSubject;
-use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
+use crate::patterns::tree_planner::{MatchSubject, TreePlanner};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::state::expression::ExpressionContext;
 use crate::state::scope::PairStatusKind;
@@ -376,8 +376,8 @@ impl Planner<'_> {
         subject_ty: Type,
         place: &PlacePlan,
     ) -> LoweredBlock {
-        let tree_emitter = TreePlanner::new(self, arms, subject_var, subject_ty);
-        tree_emitter.lower(place)
+        let tree_planner = TreePlanner::new(self, arms, subject_var, subject_ty);
+        tree_planner.lower(place)
     }
 
     fn lower_match_subject_var(

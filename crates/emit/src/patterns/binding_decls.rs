@@ -3,9 +3,9 @@ use std::borrow::Cow;
 use syntax::ast::{Literal, Pattern, RestPattern, expand_or_patterns, outermost_or_patterns};
 
 use crate::Planner;
-use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
+use crate::expressions::literals::{convert_escape_sequences, raw_string_literal};
 
-pub(crate) fn emit_pattern_literal(literal: &Literal) -> String {
+pub(crate) fn pattern_literal_text(literal: &Literal) -> String {
     match literal {
         Literal::Integer { value, text } => {
             if let Some(original) = text {
@@ -19,7 +19,7 @@ pub(crate) fn emit_pattern_literal(literal: &Literal) -> String {
         Literal::String { value, raw: false } => {
             format!("\"{}\"", convert_escape_sequences(value))
         }
-        Literal::String { value, raw: true } => emit_raw_string(value),
+        Literal::String { value, raw: true } => raw_string_literal(value),
         Literal::Char(c) => {
             format!("'{}'", convert_escape_sequences(c))
         }
