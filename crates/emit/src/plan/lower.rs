@@ -1,5 +1,6 @@
+use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::transition::try_emit_layout_return;
+use crate::abi::transition::try_lower_layout_return;
 use crate::analyze::component_uses::component_demand;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::predicates::strip_negations;
@@ -145,7 +146,7 @@ impl Planner<'_> {
         collapse_declared_temp(
             &mut setup,
             &result_var,
-            self.short_declaration_keeps_type(ty),
+            self.facts.short_declaration_keeps_type(ty),
         );
         ValuePlan::captured(setup, result_var)
     }
@@ -190,15 +191,15 @@ impl Planner<'_> {
         if let Some((check, _, tail)) = forwarded {
             let (mut body, value) = match tail {
                 ForwardedTail::ErrorCall(call) => {
-                    self.lower_call(call, None, ExpressionContext::value())
+                    self.plan_call_expression(call, None, ExpressionContext::value())
                 }
                 ForwardedTail::TaggedResult(result) => {
-                    self.lower_value(result, ExpressionContext::value())
+                    self.plan_value(result, ExpressionContext::value())
                 }
             }
             .into_parts();
             body.push(plain_return(value));
-            statements.push(self.directed_at(
+            statements.push(self.facts.directed_at(
                 check,
                 LoweredStatement::Body(LoweredBlock { statements: body }),
             ));
@@ -303,7 +304,7 @@ impl Planner<'_> {
             _ => None,
         };
         let plan = self.build_let_plan(binding, value, mode, demand);
-        self.directed_at(item, LoweredStatement::Body(plan))
+        self.facts.directed_at(item, LoweredStatement::Body(plan))
     }
 
     pub(crate) fn lower_statement(&mut self, expression: &Expression) -> Statement {
@@ -326,17 +327,19 @@ impl Planner<'_> {
                     alternative.as_deref(),
                     &PlacePlan::Statement,
                 );
-                self.directed_at(expression, statement)
+                self.facts.directed_at(expression, statement)
             }
             Expression::Loop { body, .. } => {
                 let plan = self.lower_infinite_loop(body);
-                self.directed_at(expression, LoweredStatement::Loop(plan))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Loop(plan))
             }
             Expression::While {
                 condition, body, ..
             } => {
                 let plan = self.lower_while(condition, body);
-                self.directed_at(expression, LoweredStatement::Loop(plan))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Loop(plan))
             }
             Expression::Block { .. } => LoweredStatement::Block(
                 self.with_scope(|this| this.lower_block_as_body(expression)),
@@ -347,19 +350,22 @@ impl Planner<'_> {
                 let target = self
                     .current_loop_id()
                     .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
-                self.directed_at(expression, LoweredStatement::Continue(target))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Continue(target))
             }
             Expression::Break { value: None, .. } => {
                 let target = self
                     .current_loop_id()
                     .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
-                self.directed_at(expression, LoweredStatement::Break(target))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Break(target))
             }
             Expression::Break {
                 value: Some(value), ..
             } => {
                 let plan = self.build_break_value_plan(value);
-                self.directed_at(expression, LoweredStatement::Body(plan))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Const {
                 binding,
@@ -373,13 +379,14 @@ impl Planner<'_> {
                 };
                 let statement =
                     self.lower_const(identifier, *binding, value, ty, ConstPlacement::Local);
-                self.directed_at(expression, statement)
+                self.facts.directed_at(expression, statement)
             }
             Expression::Return {
                 expression: value, ..
             } => {
                 let plan = self.build_return_plan(value);
-                self.directed_at(expression, LoweredStatement::Body(plan))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Let {
                 binding,
@@ -388,7 +395,8 @@ impl Planner<'_> {
                 ..
             } => {
                 let plan = self.build_let_plan(binding, value, mode, None);
-                self.directed_at(expression, LoweredStatement::Body(plan))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Assignment {
                 target,
@@ -398,7 +406,7 @@ impl Planner<'_> {
             } => {
                 let statement =
                     self.build_assignment_plan(target, value, compound_operator.as_ref());
-                self.directed_at(expression, statement)
+                self.facts.directed_at(expression, statement)
             }
             Expression::IfLet {
                 pattern,
@@ -412,20 +420,22 @@ impl Planner<'_> {
                 let arms =
                     if_let_match_arms(pattern, consequence, alternative, *span, implicit_unit);
                 let body = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Statement);
-                self.directed_at(expression, LoweredStatement::Body(body))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Body(body))
             }
             Expression::Match { subject, arms, .. } => {
                 let body = self.lower_match_to_block(subject, arms, &PlacePlan::Statement);
-                self.directed_at(expression, LoweredStatement::Body(body))
+                self.facts
+                    .directed_at(expression, LoweredStatement::Body(body))
             }
             Expression::Select { arms, span, .. } => {
                 let statement = self.lower_select(arms, span, &PlacePlan::Statement);
-                self.directed_at(expression, statement)
+                self.facts.directed_at(expression, statement)
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
             Expression::Assert { .. } => {
                 let statement = self.lower_assert_statement(expression);
-                self.directed_at(expression, statement)
+                self.facts.directed_at(expression, statement)
             }
             Expression::Struct { .. }
             | Expression::Enum { .. }
@@ -434,18 +444,11 @@ impl Planner<'_> {
             | Expression::ImplBlock { .. } => {
                 unreachable!("the parser rejects item definitions inside function bodies")
             }
-            Expression::Call { .. } if self.is_test_log_call(expression) => {
+            Expression::Call { .. } if self.facts.is_test_log_call(expression) => {
                 let statement = self.lower_test_log_statement(expression);
-                self.directed_at(expression, statement)
+                self.facts.directed_at(expression, statement)
             }
             _ => self.lower_expression_statement(expression),
-        }
-    }
-
-    fn directed_at(&self, expression: &Expression, kind: LoweredStatement) -> Statement {
-        Statement {
-            line: self.source_position(&expression.get_span()),
-            kind,
         }
     }
 
@@ -471,7 +474,7 @@ impl Planner<'_> {
                 statements: self.lower_discard_value(unwrapped),
             })
         };
-        self.directed_at(expression, statement)
+        self.facts.directed_at(expression, statement)
     }
 
     fn lower_while_let_statement(&mut self, expression: &Expression) -> Statement {
@@ -487,7 +490,8 @@ impl Planner<'_> {
         let body = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             this.lower_while_let(pattern, scrutinee, body)
         });
-        self.directed_at(expression, LoweredStatement::Body(body))
+        self.facts
+            .directed_at(expression, LoweredStatement::Body(body))
     }
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
@@ -496,16 +500,16 @@ impl Planner<'_> {
         })
     }
 
-    fn lower_condition(&mut self, condition: &Expression) -> (Vec<Statement>, GoExpression) {
+    fn plan_condition(&mut self, condition: &Expression) -> (Vec<Statement>, GoExpression) {
         let plan = self.plan_operand(condition, ExpressionContext::value());
         plan.into_parts()
     }
 
     fn lower_if_condition(&mut self, condition: &Expression) -> (Vec<Statement>, PairCondition) {
-        if let Some(fused) = self.lower_fused_predicate_condition(condition) {
+        if let Some(fused) = self.try_plan_fused_predicate_condition(condition) {
             return fused;
         }
-        let (setup, rendered) = self.lower_condition(condition);
+        let (setup, rendered) = self.plan_condition(condition);
         (
             setup,
             PairCondition {
@@ -563,11 +567,11 @@ impl Planner<'_> {
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
         self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             let (target, negated) = strip_negations(condition);
-            if let Some(exit) = this.lower_fused_predicate_value(target, !negated) {
+            if let Some(exit) = this.try_plan_fused_predicate_value(target, !negated) {
                 let (setup, failure) = exit.into_parts();
                 return this.lower_loop_with_exit_test(setup, failure, body);
             }
-            let (setup, rendered) = this.lower_condition(condition);
+            let (setup, rendered) = this.plan_condition(condition);
             if !setup.is_empty() {
                 let exit = GoExpression::unary(UnaryOp::Not, rendered);
                 return this.lower_loop_with_exit_test(setup, exit, body);
@@ -758,7 +762,7 @@ impl Planner<'_> {
             return self.lower_never_return_tail(last, &return_span);
         }
 
-        let line = self.source_position(&return_span);
+        let line = self.facts.source_position(&return_span);
         match last {
             Expression::If { .. } | Expression::Select { .. } => {
                 let mut block = self.lower_branching_to_block(last, &PlacePlan::Return);
@@ -773,14 +777,14 @@ impl Planner<'_> {
                 statements.extend(directed_first(line, block.statements));
             }
             Expression::TryBlock { items, ty, .. }
-                if let Some(inlined) = self.lower_try_tail_in_place(items, ty) =>
+                if let Some(inlined) = self.try_lower_try_tail_in_place(items, ty) =>
             {
                 statements.extend(directed_first(line, inlined));
             }
             _ => {
-                let tail = if let Some(tail) = try_emit_layout_return(self, last) {
+                let tail = if let Some(tail) = try_lower_layout_return(self, last) {
                     tail
-                } else if let Some(wrapped) = self.lower_wrapped_return(last) {
+                } else if let Some(wrapped) = self.try_lower_wrapped_return(last) {
                     wrapped
                 } else {
                     self.lower_plain_return_tail(last)
@@ -793,7 +797,7 @@ impl Planner<'_> {
     }
 
     fn lower_never_return_tail(&mut self, last: &Expression, return_span: &Span) -> Vec<Statement> {
-        let line = self.source_position(return_span);
+        let line = self.facts.source_position(return_span);
         directed_first(line, vec![self.lower_statement(last)])
     }
 
@@ -806,7 +810,7 @@ impl Planner<'_> {
             }
             statements
         } else {
-            let (mut statements, expression) = self.lower_tail_value(last);
+            let (mut statements, expression) = self.plan_tail_value(last);
             let expression = if self.tail_tuple_return_slots(last).is_some() {
                 expression
             } else {
@@ -875,7 +879,7 @@ impl Planner<'_> {
             ..
         } = alternative
         {
-            let line = self.source_position(&alternative.get_span());
+            let line = self.facts.source_position(&alternative.get_span());
             if next_alternative.is_none() && is_conjunction(condition) {
                 return self.with_scope(|this| {
                     let guard = this.lower_conjunction_guard(condition, |this| {
@@ -953,6 +957,15 @@ impl Planner<'_> {
         } else {
             let body = self.with_scope(|this| this.lower_block_to_place(alternative, place));
             ElseArm::from_body(body, false)
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    fn directed_at(&self, expression: &Expression, kind: LoweredStatement) -> Statement {
+        Statement {
+            line: self.source_position(&expression.get_span()),
+            kind,
         }
     }
 }

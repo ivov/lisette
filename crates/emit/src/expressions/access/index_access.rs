@@ -34,8 +34,10 @@ impl Planner<'_> {
         let mut base_staged = self.stage_base_with_deref(expression);
 
         let index_ty = index.get_type();
-        if let Some(range_kind) = self.range_shape(&index_ty) {
-            let needs_cap = self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
+        if let Some(range_kind) = self.facts.range_shape(&index_ty) {
+            let needs_cap = self
+                .facts
+                .is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
             if !base_staged.effects().can_duplicate() {
                 self.pin_staged(&mut base_staged, "base");
             }
@@ -62,7 +64,7 @@ impl Planner<'_> {
         index: &Expression,
         prefix: &'static str,
     ) -> ValuePlan {
-        let index_staged = self.lower_composite_value(index, ExpressionContext::value());
+        let index_staged = self.plan_composite_value(index, ExpressionContext::value());
         let index_effects = index_staged.effects();
         let index_is_fixed = index_staged.can_delay() && !index_effects.runs_code();
         if base_staged.setup().is_empty()
@@ -125,7 +127,10 @@ impl Planner<'_> {
         inclusive: bool,
         cap: bool,
     ) -> ValuePlan {
-        let needs_cap = cap && self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
+        let needs_cap = cap
+            && self
+                .facts
+                .is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
         let base_staged = self.stage_base_with_deref(expression);
 
         let mut all_stages = vec![base_staged];

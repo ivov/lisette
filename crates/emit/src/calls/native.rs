@@ -366,7 +366,7 @@ impl Planner<'_> {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
                 let staged = self.stage_native_method(context);
-                let recipe = self.native_equality(context);
+                let recipe = self.facts.native_equality(context);
                 let body = self.equality_test(
                     staged.receiver.clone(),
                     staged.arguments[0].clone(),
@@ -381,34 +381,36 @@ impl Planner<'_> {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice() {
                 let mut staged = self.stage_native_method(context);
-                let body =
-                    if let EqualityRecipe::Slice(Some(element)) = &self.native_equality(context) {
-                        let searched = staged.arguments[0].clone();
-                        let target =
-                            self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
-                        let predicate =
-                            self.contains_predicate(element, GoExpression::identifier(target));
-                        GoExpression::call(
-                            GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
-                            vec![staged.receiver.clone(), predicate],
-                        )
-                    } else {
-                        GoExpression::read_only_call(
-                            GoExpression::generated(GeneratedPackage::Slices, "Contains"),
-                            vec![staged.receiver.clone(), staged.arguments[0].clone()],
-                        )
-                    };
+                let body = if let EqualityRecipe::Slice(Some(element)) =
+                    &self.facts.native_equality(context)
+                {
+                    let searched = staged.arguments[0].clone();
+                    let target =
+                        self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
+                    let predicate =
+                        self.contains_predicate(element, GoExpression::identifier(target));
+                    GoExpression::call(
+                        GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
+                        vec![staged.receiver.clone(), predicate],
+                    )
+                } else {
+                    GoExpression::read_only_call(
+                        GoExpression::generated(GeneratedPackage::Slices, "Contains"),
+                        vec![staged.receiver.clone(), staged.arguments[0].clone()],
+                    )
+                };
                 return staged.finish(body);
             }
         }
 
         if matches!(context.native_type, NativeTypeKind::Array)
             && NativeOperation::new(context.native_type, context.method).reads_array_in_place()
-            && self.native_kind(&receiver_expression.get_type()) == Some(NativeTypeKind::Array)
+            && self.facts.native_kind(&receiver_expression.get_type())
+                == Some(NativeTypeKind::Array)
         {
             let mut staged = self.stage_native_method(context);
             let index = staged.arguments.first().cloned();
-            let body = self.lower_array_method_body(
+            let body = self.plan_array_method_body(
                 context.method,
                 receiver_expression,
                 staged.receiver.clone(),
@@ -426,7 +428,7 @@ impl Planner<'_> {
 
         if context.method == "clone" {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
-            if self.is_clone_container(&receiver_ty) {
+            if self.facts.is_clone_container(&receiver_ty) {
                 let staged = self.stage_native_method(context);
                 let body = self.clone_expression(staged.receiver.clone(), &receiver_ty);
                 return staged.finish(body);
@@ -486,7 +488,9 @@ impl Planner<'_> {
         emitted_args.extend(staged.arguments.iter().enumerate().map(|(index, value)| {
             let parameter = context.abi.param(first_param + index);
             match argument_expressions.get(index).zip(parameter) {
-                Some((argument, parameter)) if self.converts_for_inference(argument, parameter) => {
+                Some((argument, parameter))
+                    if self.facts.converts_for_inference(argument, parameter) =>
+                {
                     GoExpression::conversion(self.go_type(&parameter.instantiated), value.clone())
                 }
                 _ => value.clone(),
@@ -498,7 +502,7 @@ impl Planner<'_> {
         ))
     }
 
-    fn lower_array_method_body(
+    fn plan_array_method_body(
         &mut self,
         method: &str,
         receiver_expr: &Expression,
@@ -577,7 +581,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(super) fn try_emit_negated_native_method(
+    pub(super) fn try_plan_negated_native_method(
         &mut self,
         setup: &mut Vec<Statement>,
         ctx: &NativeCallContext,
@@ -621,12 +625,12 @@ impl Planner<'_> {
             self.facts.call_operation(receiver_expression),
             receiver_expression,
         )?;
-        if self.native_kind(&array.get_type()) != Some(NativeTypeKind::Array) {
+        if self.facts.native_kind(&array.get_type()) != Some(NativeTypeKind::Array) {
             return None;
         }
         if matches!(context.method, "contains" | "equals")
             && matches!(
-                self.native_equality(context),
+                self.facts.native_equality(context),
                 EqualityRecipe::Slice(Some(_))
             )
         {
@@ -698,7 +702,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(super) fn lower_map_index_pair(
+    pub(super) fn plan_map_index_pair(
         &mut self,
         expression: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
@@ -709,7 +713,7 @@ impl Planner<'_> {
             ..
         } = expression
         else {
-            unreachable!("lower_map_index_pair requires a Call expression");
+            unreachable!("plan_map_index_pair requires a Call expression");
         };
         let native_type = NativeTypeKind::Map;
         let function = function.unwrap_parens();
@@ -787,6 +791,7 @@ impl Planner<'_> {
 
         let arg_ty = arg.get_type();
         let range_kind = self
+            .facts
             .range_shape(&arg_ty)
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.plan_operand(receiver_expr, ExpressionContext::value());
@@ -829,7 +834,7 @@ impl Planner<'_> {
         let call = match recipe {
             EqualityRecipe::Operator => return GoExpression::binary(lhs, operator, rhs),
             EqualityRecipe::Method { .. } => GoExpression::call(
-                GoExpression::selector(lhs, self.equals_method_go_name().to_string()),
+                GoExpression::selector(lhs, self.facts.equals_method_go_name().to_string()),
                 vec![rhs],
             ),
             EqualityRecipe::Slice(element) | EqualityRecipe::Map(element) => {
@@ -895,14 +900,6 @@ impl Planner<'_> {
             body,
         )
     }
-
-    fn native_equality(&self, context: &NativeCallContext<'_>) -> EqualityRecipe {
-        self.facts
-            .checked(context.function)
-            .equality()
-            .expect("internal error: a built-in comparison has a selected equality")
-            .clone()
-    }
 }
 
 fn predicate_literal(parameters: Vec<GoParameter>, body: GoExpression) -> GoExpression {
@@ -939,5 +936,14 @@ pub(crate) fn method_prefix(kind: NativeTypeKind) -> &'static str {
     match kind {
         NativeTypeKind::String => "String",
         _ => kind.name(),
+    }
+}
+
+impl EmitFacts<'_> {
+    fn native_equality(&self, context: &NativeCallContext<'_>) -> EqualityRecipe {
+        self.checked(context.function)
+            .equality()
+            .expect("internal error: a built-in comparison has a selected equality")
+            .clone()
     }
 }

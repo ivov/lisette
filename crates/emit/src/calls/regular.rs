@@ -131,6 +131,7 @@ fn classify_fmt_argument(planner: &Planner, expression: &Expression) -> Option<F
             literal: Literal::FormatString(parts),
             ..
         } => planner
+            .facts
             .format_string_lowers_to_sprintf(parts)
             .then_some(FmtArgument::Sprintf),
         Expression::Call {
@@ -220,7 +221,7 @@ fn collapse_fmt_print(
 }
 
 impl<'a> Planner<'a> {
-    pub(super) fn lower_regular_call(
+    pub(super) fn plan_regular_call(
         &mut self,
         call_expression: &Expression,
         call_plan: &CallPlan<'a>,
@@ -235,7 +236,7 @@ impl<'a> Planner<'a> {
             ..
         } = call_expression
         else {
-            unreachable!("lower_regular_call requires a Call expression");
+            unreachable!("plan_regular_call requires a Call expression");
         };
         let function = callee.unwrap_parens();
         let spread = spread.as_deref();
@@ -246,7 +247,7 @@ impl<'a> Planner<'a> {
             return plan;
         }
 
-        if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
+        if let Some(go_name) = self.facts.get_callee_go_name(function).map(str::to_string) {
             let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
                 (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
                     ExpressionContext::value().with_retired_receiver(retired)
@@ -318,7 +319,7 @@ impl<'a> Planner<'a> {
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: receiver_type_binding(function, &call_plan.resolved),
         };
-        let sequenced_args = self.emit_call_args(args, &args_ctx, None);
+        let sequenced_args = self.plan_call_args(args, &args_ctx, None);
         let constant_result = go_builtin_name(&self.facts, function)
             .filter(|_| builtin_conversion.is_none())
             .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
@@ -391,7 +392,7 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
-        if !self.format_string_lowers_to_sprintf(parts) {
+        if !self.facts.format_string_lowers_to_sprintf(parts) {
             return None;
         }
         let staged = self.plan_operand(argument, ExpressionContext::value());
@@ -418,27 +419,6 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::plain_call(sequenced.setup, call))
     }
 
-    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
-        callee
-            .declaration?
-            .go_type_param_recipe()
-            .map(<[_]>::to_vec)
-    }
-
-    fn collapsed_callee_fully_inferable(
-        &self,
-        callee: &ResolvedCallee<'_>,
-        arg_shape: CallArgShape,
-    ) -> bool {
-        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
-            return false;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return false;
-        };
-        all_type_params_inferrable(vars, &f.params, 0, arg_shape)
-    }
-
     fn resolve_call_type_args(&mut self, request: CallTypeArgsRequest<'_, '_>) -> GoType {
         let CallTypeArgsRequest {
             function,
@@ -453,8 +433,12 @@ impl<'a> Planner<'a> {
         }
 
         let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
-        if let Some(recipe) = self.callee_collapsed_recipe(callee) {
-            if has_value_args && self.collapsed_callee_fully_inferable(callee, arg_shape) {
+        if let Some(recipe) = self.facts.callee_collapsed_recipe(callee) {
+            if has_value_args
+                && self
+                    .facts
+                    .collapsed_callee_fully_inferable(callee, arg_shape)
+            {
                 return GoType::default();
             }
             let type_arguments = &self.facts.checked(function).callee().type_arguments;
@@ -519,5 +503,28 @@ fn fmt_member(node: &GoExpressionNode) -> Option<&str> {
             Some(name)
         }
         _ => None,
+    }
+}
+
+impl EmitFacts<'_> {
+    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
+        callee
+            .declaration?
+            .go_type_param_recipe()
+            .map(<[_]>::to_vec)
+    }
+
+    fn collapsed_callee_fully_inferable(
+        &self,
+        callee: &ResolvedCallee<'_>,
+        arg_shape: CallArgShape,
+    ) -> bool {
+        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
+            return false;
+        };
+        let Type::Function(f) = body.as_ref() else {
+            return false;
+        };
+        all_type_params_inferrable(vars, &f.params, 0, arg_shape)
     }
 }

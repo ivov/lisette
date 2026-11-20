@@ -402,14 +402,6 @@ impl<'p> Planner<'p> {
                 .is_some_and(|operation| *operation != CallOperation::Zero)
     }
 
-    pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
-        let peeled = self.facts.peel_alias(ty);
-        !self.is_function_alias(ty)
-            && !self.facts.is_interface_or_unknown(&peeled)
-            && !(matches!(peeled, Type::Nominal { .. })
-                && self.facts.underlying_simple_kind(&peeled).is_some())
-    }
-
     pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<Statement> {
         let unwrapped = value.unwrap_parens();
 
@@ -447,7 +439,7 @@ impl<'p> Planner<'p> {
 
         if let Expression::Call { .. } = unwrapped {
             let mut statements: Vec<Statement> = Vec::new();
-            if let Some(call) = self.emit_go_call_discarded(&mut statements, unwrapped) {
+            if let Some(call) = self.try_plan_go_call_discarded(&mut statements, unwrapped) {
                 statements.push(expression_statement(call));
                 return statements;
             }
@@ -472,7 +464,7 @@ impl<'p> Planner<'p> {
         target: &GoExpression,
     ) -> Vec<Statement> {
         let (mut statements, call) = self
-            .lower_value(value, ExpressionContext::value())
+            .plan_value(value, ExpressionContext::value())
             .into_parts();
         if !call.is_empty() {
             statements.push(effect_statement(call));
@@ -533,7 +525,7 @@ impl<'p> Planner<'p> {
             .filter(|t| self.facts.is_option_or_result(t))
             .map(|t| self.facts.peel_alias(t))
             .unwrap_or_else(|| self.facts.peel_alias(&expression.get_type()));
-        let Some(fallible) = self.fallible(&ty) else {
+        let Some(fallible) = self.facts.fallible(&ty) else {
             return self.lower_plain_assign(target, expression);
         };
 
@@ -541,7 +533,7 @@ impl<'p> Planner<'p> {
             Expression::Block { items, .. } if items.len() == 1 => &items[0],
             _ => expression,
         };
-        let line = self.source_position(&actual_expression.get_span());
+        let line = self.facts.source_position(&actual_expression.get_span());
 
         let statements = match actual_expression {
             Expression::Call {
@@ -566,7 +558,7 @@ impl<'p> Planner<'p> {
                 };
                 if let Some(constructor_arg) = constructor_arg {
                     let argument =
-                        self.lower_composite_value(constructor_arg, ExpressionContext::value());
+                        self.plan_composite_value(constructor_arg, ExpressionContext::value());
                     let (arg_setup, argument) = argument.into_parts();
                     let call = self.fallible_call(&fallible, constructor_name, vec![argument]);
                     let value = ValuePlan::plain_call(arg_setup, call);
@@ -615,7 +607,7 @@ impl<'p> Planner<'p> {
                 for (index, item) in rest.iter().enumerate() {
                     statements.push(this.lower_block_item(item, &items[index + 1..]));
                 }
-                let line = this.source_position(&last.get_span());
+                let line = this.facts.source_position(&last.get_span());
                 let tail = this.lower_assign_tail(last, target, target_ty);
                 statements.extend(directed_first(line, tail));
                 statements
@@ -667,7 +659,7 @@ impl<'p> Planner<'p> {
         if self.is_unit_call(last) {
             return self.lower_unit_call_into_var(last, target);
         }
-        if let Some(statements) = self.lower_slice_growth_to_var(target, last) {
+        if let Some(statements) = self.try_lower_slice_growth_to_var(target, last) {
             return statements;
         }
         if matches!(
@@ -686,7 +678,7 @@ impl<'p> Planner<'p> {
         let origin = target_ty.map_or(SlotOrigin::Lisette, |ty| {
             self.function_type_origin(ty, SlotOrigin::Lisette)
         });
-        let value = self.lower_value(
+        let value = self.plan_value(
             last,
             ExpressionContext::value().with_function_slot_origin(origin),
         );
@@ -696,7 +688,7 @@ impl<'p> Planner<'p> {
         vec![simple_assign(target, value).into()]
     }
 
-    fn lower_slice_growth_to_var(
+    fn try_lower_slice_growth_to_var(
         &mut self,
         target: &GoExpression,
         last: &Expression,
@@ -710,17 +702,17 @@ impl<'p> Planner<'p> {
         else {
             return None;
         };
-        let (method, receiver) = self.slice_growth_method(func)?;
+        let (method, receiver) = self.facts.slice_growth_method(func)?;
 
         let unwrapped = receiver.unwrap_parens();
         let receiver_is_lvalue =
-            is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
+            is_lvalue_chain(unwrapped) && !self.facts.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
             let (arguments, ordering) = self.lower_growth_args(last, args, spread.as_deref());
             let mut capture: Vec<Statement> = Vec::new();
             let receiver_lv =
-                self.lower_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
+                self.plan_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
             let target_differs = receiver_lv.node() != target.node();
             let receiver_read = ValuePlan::computed(Vec::new(), receiver_lv.clone())
                 .with_stability(self.path_read_stability(&receiver_lv));
@@ -760,23 +752,13 @@ impl<'p> Planner<'p> {
             (value, capture)
         } else {
             let (setup, value) = self
-                .lower_value(last, ExpressionContext::value())
+                .plan_value(last, ExpressionContext::value())
                 .into_parts();
             (value, setup)
         };
 
         statements.push(simple_assign(target, ValuePlan::computed(Vec::new(), value)).into());
         Some(statements)
-    }
-
-    fn slice_growth_method<'e>(&self, func: &'e Expression) -> Option<(&'p str, &'e Expression)> {
-        let Expression::DotAccess { expression, .. } = func else {
-            return None;
-        };
-        let operation = self.facts.checked(func).callee().native()?;
-        operation
-            .grows_slice()
-            .then_some((operation.method, expression))
     }
 
     fn lower_growth_args(
@@ -787,7 +769,7 @@ impl<'p> Planner<'p> {
     ) -> (Vec<GoExpression>, ValuePlan) {
         let stages: Vec<ValuePlan> = args
             .iter()
-            .map(|a| self.lower_composite_value(a, ExpressionContext::value()))
+            .map(|a| self.plan_composite_value(a, ExpressionContext::value()))
             .collect();
         let spread_stage = spread.map(|spread| self.plan_copied_spread(spread));
         let plan = spread.and_then(|_| self.plan_call(call));
@@ -808,7 +790,7 @@ impl<'p> Planner<'p> {
         (sequenced.values, ordering)
     }
 
-    pub(crate) fn lower_tail_value(&mut self, last: &Expression) -> (Vec<Statement>, GoExpression) {
+    pub(crate) fn plan_tail_value(&mut self, last: &Expression) -> (Vec<Statement>, GoExpression) {
         let plan = if let Expression::Tuple { .. } = last {
             self.plan_tuple_value(last, true)
         } else if matches!(
@@ -817,16 +799,12 @@ impl<'p> Planner<'p> {
         ) {
             ValuePlan::computed(vec![self.lower_statement(last)], GoExpression::unit())
         } else {
-            self.lower_value(last, ExpressionContext::value())
+            self.plan_value(last, ExpressionContext::value())
         };
         plan.into_parts()
     }
 
-    pub(crate) fn lower_to_operand_temp(
-        &mut self,
-        expression: &Expression,
-        ty: &Type,
-    ) -> ValuePlan {
+    pub(crate) fn plan_to_operand_temp(&mut self, expression: &Expression, ty: &Type) -> ValuePlan {
         if let Expression::Block { items, .. } = expression {
             if ty.is_never() || self.facts.has_no_go_value(ty) || matches!(ty, Type::Forall { .. })
             {
@@ -865,7 +843,7 @@ impl<'p> Planner<'p> {
 
     pub(crate) fn build_break_value_plan(&mut self, val: &Expression) -> LoweredBlock {
         let (mut statements, value) = self
-            .lower_value(val, ExpressionContext::value())
+            .plan_value(val, ExpressionContext::value())
             .into_parts();
         if value.is_empty() && matches!(val, Expression::Propagate { .. }) {
             return LoweredBlock { statements };
@@ -895,5 +873,27 @@ impl<'p> Planner<'p> {
             .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
         statements.push(LoweredStatement::Break(target).into());
         LoweredBlock { statements }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
+        let peeled = self.peel_alias(ty);
+        !self.is_function_alias(ty)
+            && !self.is_interface_or_unknown(&peeled)
+            && !(matches!(peeled, Type::Nominal { .. })
+                && self.underlying_simple_kind(&peeled).is_some())
+    }
+}
+
+impl<'a> EmitFacts<'a> {
+    fn slice_growth_method<'e>(&self, func: &'e Expression) -> Option<(&'a str, &'e Expression)> {
+        let Expression::DotAccess { expression, .. } = func else {
+            return None;
+        };
+        let operation = self.checked(func).callee().native()?;
+        operation
+            .grows_slice()
+            .then_some((operation.method, expression))
     }
 }

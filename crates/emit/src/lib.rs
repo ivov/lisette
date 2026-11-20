@@ -15,17 +15,15 @@ mod render;
 mod state;
 pub(crate) mod statements;
 pub(crate) mod types;
-mod utils;
 
 pub(crate) use analyze::facts::EmitFacts;
+pub(crate) use analyze::queries::is_order_sensitive;
 pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_local;
 pub(crate) use render::Renderer;
 pub(crate) use render::output::OutputCollector;
 pub(crate) use state::lowering::{LineIndex, ReturnContext};
-pub(crate) use utils::is_order_sensitive;
-pub(crate) use utils::write_line;
 
 pub use names::go_name::PRELUDE_IMPORT_PATH;
 pub use names::go_name::go_test_function_name;
@@ -273,12 +271,12 @@ impl TreeVisitor for ImportCollector<'_> {
 
 impl<'a> Planner<'a> {
     fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
-        let abi = self.return_abi(&return_ty, ReturnSlot::Function);
+        let abi = self.facts.return_abi(&return_ty, ReturnSlot::Function);
         Self::return_context_from_abi(return_ty, abi)
     }
 
     fn return_context_for_method(&self, return_ty: Type) -> ReturnContext {
-        let abi = self.return_abi(&return_ty, ReturnSlot::Method);
+        let abi = self.facts.return_abi(&return_ty, ReturnSlot::Method);
         Self::return_context_from_abi(return_ty, abi)
     }
 
@@ -633,26 +631,6 @@ impl<'a> Planner<'a> {
             .fresh_go_name(Some(name.spelling()), self.package)
     }
 
-    fn source_position(&self, span: &Span) -> Option<Position> {
-        self.position_at(span, span.byte_offset)
-    }
-
-    fn end_position(&self, span: &Span) -> Option<Position> {
-        self.position_at(span, span.byte_offset + span.byte_length)
-    }
-
-    fn position_at(&self, span: &Span, byte_offset: u32) -> Option<Position> {
-        if span.is_dummy() {
-            return None;
-        }
-        let source = self.facts.line_index(span.file_id)?;
-        Some(Position {
-            path: source.path.clone(),
-            line: source.line_for_offset(byte_offset),
-            column: source.col_for_offset(byte_offset),
-        })
-    }
-
     fn emit_files_with_facts(
         facts: EmitFacts<'a>,
         files: &[&File],
@@ -709,7 +687,7 @@ impl<'a> Planner<'a> {
             let enum_id = self.facts.qualified_current(name);
             for variant in variants {
                 let mut declaration = self.create_make_function_code(&enum_id, &variant.name);
-                declaration.position = self.source_position(&variant.name_span);
+                declaration.position = self.facts.source_position(&variant.name_span);
                 declarations.push(declaration);
             }
         }
@@ -773,4 +751,28 @@ pub(crate) fn written_span(expression: &Expression) -> Span {
         }
     }
     span
+}
+
+impl EmitFacts<'_> {
+    fn position_at(&self, span: &Span, byte_offset: u32) -> Option<Position> {
+        if span.is_dummy() {
+            return None;
+        }
+        let source = self.line_index(span.file_id)?;
+        Some(Position {
+            path: source.path.clone(),
+            line: source.line_for_offset(byte_offset),
+            column: source.col_for_offset(byte_offset),
+        })
+    }
+}
+
+impl EmitFacts<'_> {
+    fn source_position(&self, span: &Span) -> Option<Position> {
+        self.position_at(span, span.byte_offset)
+    }
+
+    fn end_position(&self, span: &Span) -> Option<Position> {
+        self.position_at(span, span.byte_offset + span.byte_length)
+    }
 }

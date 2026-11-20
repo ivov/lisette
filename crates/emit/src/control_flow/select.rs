@@ -79,7 +79,7 @@ impl Planner<'_> {
         span: &Span,
         place: &PlacePlan,
     ) -> LoweredStatement {
-        let line = self.source_position(span);
+        let line = self.facts.source_position(span);
         let needs_retry_loop = arms.iter().any(
             |arm| matches!(arm, SelectArm::Receive { binding, .. } if is_some_pattern(binding)),
         );
@@ -139,7 +139,7 @@ impl Planner<'_> {
 
         let mut arm_plans = Vec::with_capacity(arms.len());
         for arm in arms {
-            let line = self.source_position(&arm.span());
+            let line = self.facts.source_position(&arm.span());
             let kind = match arm {
                 PreparedSelectArm::Receive {
                     binding,
@@ -187,11 +187,11 @@ impl Planner<'_> {
                     let operation = channel_operation(send_expression.unwrap_parens());
                     let plan = if let Some(operation) = &operation {
                         let channel = operation.channel();
-                        let plan = self.lower_value(channel, ExpressionContext::value());
+                        let plan = self.plan_value(channel, ExpressionContext::value());
                         if self.facts.is_reference(&channel.get_type()) {
                             plan.map_expression(|_, value| cancel_deref_of_address(value))
                         } else { plan }
-                    } else { self.lower_channel_operand(send_expression) };
+                    } else { self.plan_channel_operand(send_expression) };
                     let send_value = match operation {
                         Some(ChannelOperation::Send { value, .. }) => Some(value),
                         _ => None,
@@ -200,16 +200,16 @@ impl Planner<'_> {
                 }
                 SelectArm::Receive { receive_expression, .. }
                 | SelectArm::MatchReceive { receive_expression, .. } => (
-                    self.lower_channel_operand(receive_expression), receive_expression.get_span(),
+                    self.plan_channel_operand(receive_expression), receive_expression.get_span(),
                     matches!(arm, SelectArm::Receive { binding, .. } if is_some_pattern(binding)), None,
                 ),
                 SelectArm::WildCard { .. } => return None,
             };
-            let line = self.source_position(&span);
+            let line = self.facts.source_position(&span);
             stages.push(SequenceStage { plan, prefix: "ch", capture, line: line.clone() });
             Some(if let Some(value) = send_value {
                 stages.push(SequenceStage {
-                    plan: self.lower_composite_value(value, ExpressionContext::value()),
+                    plan: self.plan_composite_value(value, ExpressionContext::value()),
                     prefix: "sendVal", capture: false, line,
                 });
                 ChannelOperationKind::Send
@@ -274,16 +274,16 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn lower_channel_operand(&mut self, receive_expression: &Expression) -> ValuePlan {
+    fn plan_channel_operand(&mut self, receive_expression: &Expression) -> ValuePlan {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some(ChannelOperation::Receive { channel }) = channel_operation(unwrapped) {
-            let plan = self.lower_value(channel, ExpressionContext::value());
+            let plan = self.plan_value(channel, ExpressionContext::value());
             if self.facts.is_reference(&channel.get_type()) {
                 return plan.map_expression(|_, value| cancel_deref_of_address(value));
             }
             return plan;
         }
-        self.lower_value(receive_expression, ExpressionContext::value())
+        self.plan_value(receive_expression, ExpressionContext::value())
     }
 
     fn fresh_ok_var(&mut self) -> GoIdentifier {
@@ -394,7 +394,7 @@ impl Planner<'_> {
             binding,
             ..
         } = effective_pattern
-            && let Some(go_name) = self.go_name_for_binding(effective_pattern)
+            && let Some(go_name) = self.facts.go_name_for_binding(effective_pattern)
         {
             return self.lower_ok_guard(
                 |this| {
@@ -440,7 +440,7 @@ impl Planner<'_> {
                 binding,
                 ..
             } = effective_pattern
-                && let Some(go_name) = this.go_name_for_binding(effective_pattern)
+                && let Some(go_name) = this.facts.go_name_for_binding(effective_pattern)
             {
                 vec![this.claim_block_binding(
                     identifier,
@@ -513,7 +513,7 @@ impl Planner<'_> {
             let ok_var = this.fresh_ok_var();
 
             let case_subject = GoExpression::identifier(case_var.clone());
-            let some_block = this.lower_receive_some_arm(
+            let some_block = this.try_lower_receive_some_arm(
                 some_arm,
                 match_arms,
                 TypedSubject {
@@ -552,7 +552,7 @@ impl Planner<'_> {
         })
     }
 
-    fn lower_receive_some_arm(
+    fn try_lower_receive_some_arm(
         &mut self,
         some_arm: &MatchArm,
         match_arms: &[MatchArm],

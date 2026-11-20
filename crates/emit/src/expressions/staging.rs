@@ -1,7 +1,9 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::layout::ValueLayout;
+use crate::analyze::queries::reads_value_member;
 use crate::ir::bodies::direct_first;
 use crate::ir::bodies::{Definition, LoweredStatement, Statement};
 use crate::ir::evaluation::Effects;
@@ -15,7 +17,6 @@ use crate::patterns::matching::prelude_constructor;
 use crate::plan::calls::{CallableOrigin, FunctionBridge};
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
-use crate::utils::reads_value_member;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
@@ -158,7 +159,7 @@ impl Planner<'_> {
         prefix: &'static str,
         boundary: CaptureBoundary,
     ) -> GoExpression {
-        let plan = self.lower_composite_value(expression, ExpressionContext::value());
+        let plan = self.plan_composite_value(expression, ExpressionContext::value());
         let requires_capture = boundary.delays_reads() && !plan.can_delay();
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
@@ -179,17 +180,6 @@ impl Planner<'_> {
         prelude_constructor(callee).is_some() || self.callee_lowers_to_type_construction(callee)
     }
 
-    pub(crate) fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
-        match expression {
-            Expression::Identifier {
-                resolution: IdentifierResolution::Binding(id),
-                ..
-            } => !self.facts.is_mutated(*id),
-            Expression::Identifier { .. } => true,
-            _ => false,
-        }
-    }
-
     pub(crate) fn plan_rests_in_stable_name(&self, plan: &ValuePlan) -> bool {
         if plan.rests_in_fixed_name() {
             return true;
@@ -197,26 +187,6 @@ impl Planner<'_> {
         plan.expression().as_identifier().is_some_and(|local| {
             plan.binds_local(local) && !self.scope.has_binding_for_local(local)
         })
-    }
-
-    pub(crate) fn identifier_read_stability(&self, expression: &Expression) -> Stability {
-        if self.is_unmutated_identifier(expression) {
-            Stability::Fixed
-        } else if self.identifier_immune_to_calls(expression) {
-            Stability::StableAcrossCalls
-        } else {
-            Stability::Observable
-        }
-    }
-
-    fn binding_read_stability(&self, id: BindingId) -> Stability {
-        if !self.facts.is_mutated(id) {
-            Stability::Fixed
-        } else if !self.facts.is_alias_mutated(id) {
-            Stability::StableAcrossCalls
-        } else {
-            Stability::Observable
-        }
     }
 
     pub(crate) fn path_read_stability(&self, path: &GoExpression) -> Stability {
@@ -227,7 +197,7 @@ impl Planner<'_> {
         path.node().visit(&mut |node| {
             if let GoExpressionNode::Identifier(name) = node {
                 stability = stability.max(match self.scope.source_binding_for_local(name) {
-                    Some(id) => self.binding_read_stability(id),
+                    Some(id) => self.facts.binding_read_stability(id),
                     None => Stability::StableAcrossCalls,
                 });
             }
@@ -235,20 +205,9 @@ impl Planner<'_> {
         stability
     }
 
-    pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
-        match expression {
-            Expression::Identifier {
-                resolution: IdentifierResolution::Binding(id),
-                ..
-            } => !self.facts.is_alias_mutated(*id),
-            Expression::Identifier { .. } => true,
-            _ => false,
-        }
-    }
-
     pub(crate) fn place_read_stability(&self, place: &Expression) -> Stability {
         match place.unwrap_parens() {
-            Expression::Identifier { .. } => self.identifier_read_stability(place),
+            Expression::Identifier { .. } => self.facts.identifier_read_stability(place),
             Expression::Call { .. } => Stability::StableAcrossCalls,
             Expression::DotAccess {
                 expression,
@@ -281,7 +240,7 @@ impl Planner<'_> {
         param_ty: Option<&Type>,
     ) -> ValuePlan {
         let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
-        let staged = self.lower_composite_value(expression, arg_ctx);
+        let staged = self.plan_composite_value(expression, arg_ctx);
 
         if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
             return staged.map_expression(|setup, value| {
@@ -486,5 +445,51 @@ impl Planner<'_> {
             self.finalize_spread_stage(&mut sequenced.values, options.wrap_to_any, options.combine);
         }
         sequenced
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(id),
+                ..
+            } => !self.is_mutated(*id),
+            Expression::Identifier { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn binding_read_stability(&self, id: BindingId) -> Stability {
+        if !self.is_mutated(id) {
+            Stability::Fixed
+        } else if !self.is_alias_mutated(id) {
+            Stability::StableAcrossCalls
+        } else {
+            Stability::Observable
+        }
+    }
+
+    pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(id),
+                ..
+            } => !self.is_alias_mutated(*id),
+            Expression::Identifier { .. } => true,
+            _ => false,
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn identifier_read_stability(&self, expression: &Expression) -> Stability {
+        if self.is_unmutated_identifier(expression) {
+            Stability::Fixed
+        } else if self.identifier_immune_to_calls(expression) {
+            Stability::StableAcrossCalls
+        } else {
+            Stability::Observable
+        }
     }
 }

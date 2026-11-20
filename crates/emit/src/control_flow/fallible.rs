@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::transition;
@@ -130,12 +131,8 @@ pub(crate) fn prelude_call(
 }
 
 impl Planner<'_> {
-    pub(crate) fn fallible(&self, ty: &Type) -> Option<Fallible> {
-        Fallible::from_type(&self.facts.peel_alias(ty))
-    }
-
     pub(crate) fn return_fallible(&self) -> Option<Fallible> {
-        self.fallible(self.return_ctx().ty()?)
+        self.facts.fallible(self.return_ctx().ty()?)
     }
 
     pub(crate) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
@@ -259,5 +256,11 @@ impl Planner<'_> {
         let type_args = self.fallible_type_args(&ok_ty, err_ty.as_ref());
         let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
         prelude_call(fallible.err_constructor(), type_args, arguments)
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn fallible(&self, ty: &Type) -> Option<Fallible> {
+        Fallible::from_type(&self.peel_alias(ty))
     }
 }

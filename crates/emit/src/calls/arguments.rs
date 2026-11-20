@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::abi::ReturnSlot;
 use crate::abi::is_closure_literal;
 use crate::abi::wrapping::NilGuard;
@@ -45,7 +46,7 @@ impl CallArgsContext<'_, '_> {
 }
 
 impl Planner<'_> {
-    pub(super) fn emit_call_args(
+    pub(super) fn plan_call_args(
         &mut self,
         args: &[Expression],
         ctx: &CallArgsContext<'_, '_>,
@@ -54,15 +55,15 @@ impl Planner<'_> {
         let stages: Vec<ValuePlan> = args
             .iter()
             .enumerate()
-            .map(|(i, arg)| self.lower_call_arg(arg, i, ctx))
+            .map(|(i, arg)| self.plan_call_arg(arg, i, ctx))
             .collect();
         let stages = self.type_constant_arguments(stages, ctx);
         let extra_leading = usize::from(leading.is_some());
         let stages: Vec<ValuePlan> = leading.into_iter().chain(stages).collect();
         let variadic = ctx.plan.resolved.abi.variadic_param();
         let spread_stage = ctx.spread.map(|spread| {
-            self.try_emit_variadic_spread_adapter(spread, variadic)
-                .or_else(|| self.lower_variadic_spread_slot_bridge(spread, variadic))
+            self.try_plan_variadic_spread_adapter(spread, variadic)
+                .or_else(|| self.try_plan_variadic_spread_slot_bridge(spread, variadic))
                 .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()))
         });
         self.sequence_with_spread_values(
@@ -80,7 +81,7 @@ impl Planner<'_> {
         )
     }
 
-    fn lower_call_arg(
+    fn plan_call_arg(
         &mut self,
         argument: &Expression,
         index: usize,
@@ -96,8 +97,8 @@ impl Planner<'_> {
             .expect("CallPlan has one argument plan per argument");
 
         match plan {
-            ArgumentPlan::Bridge(bridge) => self.lower_go_slot_bridge(argument, bridge),
-            ArgumentPlan::Direct => self.lower_direct_arg(argument, ctx, param, declared_param_ty),
+            ArgumentPlan::Bridge(bridge) => self.plan_go_slot_bridge(argument, bridge),
+            ArgumentPlan::Direct => self.plan_direct_arg(argument, ctx, param, declared_param_ty),
         }
     }
 
@@ -193,7 +194,7 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn lower_direct_arg(
+    fn plan_direct_arg(
         &mut self,
         arg: &Expression,
         ctx: &CallArgsContext<'_, '_>,
@@ -205,7 +206,7 @@ impl Planner<'_> {
         if let Some(retired) = ctx.retired_receiver {
             arg_ctx = arg_ctx.with_retired_receiver(retired);
         }
-        let argument = self.lower_composite_value(arg, arg_ctx);
+        let argument = self.plan_composite_value(arg, arg_ctx);
         let Some(param) = param else {
             return argument;
         };
@@ -214,7 +215,7 @@ impl Planner<'_> {
             if ctx.receiver_bound_parameters().contains(name.as_str()));
         let inferred = !ctx.callee_pins_type_args
             && !receiver_binds
-            && self.converts_for_inference(arg, param);
+            && self.facts.converts_for_inference(arg, param);
         if coercion.is_identity() && !inferred {
             return argument;
         }
@@ -246,7 +247,7 @@ impl Planner<'_> {
             )
     }
 
-    fn try_emit_variadic_spread_adapter(
+    fn try_plan_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
         parameter: Option<&CallableParamAbi>,
@@ -271,7 +272,7 @@ impl Planner<'_> {
         }
 
         let source = self
-            .lower_value(spread, ExpressionContext::value())
+            .plan_value(spread, ExpressionContext::value())
             .map_expression(|setup, source_value| {
                 GoExpression::identifier(self.hoist_tmp_value_statement(setup, "src", source_value))
             });
@@ -345,7 +346,7 @@ impl Planner<'_> {
         let Type::Function(param_f) = &param_fn_ty else {
             return None;
         };
-        let CallableReturnAbi::Lowered(target) = self.return_abi(
+        let CallableReturnAbi::Lowered(target) = self.facts.return_abi(
             &param_f.return_type,
             ReturnSlot::FunctionValue(parameter.origin),
         ) else {
@@ -416,18 +417,18 @@ impl Planner<'_> {
         })
     }
 
-    fn lower_go_slot_bridge(
+    fn plan_go_slot_bridge(
         &mut self,
         argument: &Expression,
         plan: &ArgumentSlotBridge,
     ) -> ValuePlan {
-        if let Some(literal) = self.lower_option_literal_into_layout(argument, &plan.target) {
+        if let Some(literal) = self.try_plan_option_literal_into_layout(argument, &plan.target) {
             return literal;
         }
         let value = match plan.source {
             ArgumentValueSource::GoPhysical => {
                 if matches!(argument.unwrap_parens(), Expression::Call { .. }) {
-                    self.lower_call(
+                    self.plan_call_expression(
                         argument,
                         Some(&argument.get_type()),
                         ExpressionContext::value(),
@@ -441,7 +442,7 @@ impl Planner<'_> {
                 ExpressionContext::value().with_forced_tagged_go_function(true),
             ),
             ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
-            ArgumentValueSource::Lisette => self.lower_value(argument, ExpressionContext::value()),
+            ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
         };
         value.map_expression(|setup, value| {
             let mut coercion_setup = Vec::new();
@@ -473,7 +474,7 @@ impl Planner<'_> {
             return None;
         };
         let passes_unchanged = !matches!(
-            self.nullable_option_nil_guard(ty),
+            self.facts.nullable_option_nil_guard(ty),
             Some(NilGuard::Interface)
         ) && self
             .value_layout(ty, SlotOrigin::Lisette)
@@ -502,7 +503,7 @@ impl Planner<'_> {
         })
     }
 
-    fn lower_variadic_spread_slot_bridge(
+    fn try_plan_variadic_spread_slot_bridge(
         &mut self,
         spread: &Expression,
         parameter: Option<&CallableParamAbi>,
@@ -524,9 +525,9 @@ impl Planner<'_> {
         }
 
         let value = if raw_source.is_some() {
-            self.lower_call(spread, Some(&spread.get_type()), ExpressionContext::value())
+            self.plan_call_expression(spread, Some(&spread.get_type()), ExpressionContext::value())
         } else {
-            self.lower_value(spread, ExpressionContext::value())
+            self.plan_value(spread, ExpressionContext::value())
         };
         Some(value.map_expression(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
@@ -540,7 +541,7 @@ fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Opti
     callee.is_prelude_dispatch && takes_prelude_callback(declared_param_ty)
 }
 
-impl Planner<'_> {
+impl EmitFacts<'_> {
     pub(crate) fn converts_for_inference(
         &self,
         argument: &Expression,
@@ -549,7 +550,7 @@ impl Planner<'_> {
         if !matches!(parameter.declared, Some(Type::Parameter(_))) {
             return false;
         }
-        let checked = self.facts.checked(argument.unwrap_parens());
+        let checked = self.checked(argument.unwrap_parens());
         let value_use = match argument.unwrap_parens() {
             Expression::Cast { .. } => checked.cast_operand(),
             _ => checked.value_use(),

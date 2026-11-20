@@ -1,7 +1,8 @@
 use super::*;
+use crate::EmitFacts;
 
 impl Planner<'_> {
-    pub(crate) fn lower_fused_result_match_into(
+    pub(crate) fn try_lower_fused_result_match_into(
         &mut self,
         value: &Expression,
         go_name: &GoIdentifier,
@@ -9,10 +10,10 @@ impl Planner<'_> {
         let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
             return None;
         };
-        self.lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
+        self.try_lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
     }
 
-    pub(crate) fn lower_fused_option_match_into(
+    pub(crate) fn try_lower_fused_option_match_into(
         &mut self,
         value: &Expression,
         go_name: &GoIdentifier,
@@ -42,7 +43,7 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    pub(crate) fn lower_fused_partial_match_into(
+    pub(crate) fn try_lower_fused_partial_match_into(
         &mut self,
         value: &Expression,
         go_name: &GoIdentifier,
@@ -60,7 +61,7 @@ impl Planner<'_> {
         }
 
         let (mut statements, call) = self
-            .lower_call(subject, None, ExpressionContext::value())
+            .plan_call_expression(subject, None, ExpressionContext::value())
             .into_parts();
         self.declare(go_name.spelling());
         let error_hint = arms.error_hint();
@@ -74,20 +75,7 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn arm_payload_name<'a>(&self, arm: &'a MatchArm) -> Option<FusedName<'a>> {
-        let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
-            return None;
-        };
-        let [field] = fields.as_slice() else {
-            return None;
-        };
-        if self.facts.is_unused_binding(field) {
-            return None;
-        }
-        simple_payload_binding(arm).flatten()
-    }
-
-    pub(super) fn lower_fused_lowered_match(
+    pub(super) fn try_lower_fused_lowered_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -105,13 +93,13 @@ impl Planner<'_> {
             {
                 return None;
             }
-            self.arm_payload_name(ok.arm)
+            self.facts.arm_payload_name(ok.arm)
         };
         let err_name = if err.is_catch_all {
             None
         } else {
             simple_payload_binding(err.arm)?;
-            self.arm_payload_name(err.arm)
+            self.facts.arm_payload_name(err.arm)
         };
 
         if let Some(name) = destination {
@@ -132,7 +120,7 @@ impl Planner<'_> {
             && arm_body_is_noop(&err.arm.expression)
         {
             let (mut statements, call) = self
-                .lower_call(subject, None, ExpressionContext::value())
+                .plan_call_expression(subject, None, ExpressionContext::value())
                 .into_parts();
             statements.push(expression_statement(call));
             return Some(statements);
@@ -237,7 +225,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(super) fn lower_nested_result_pair_match(
+    pub(super) fn try_lower_nested_result_pair_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -339,7 +327,7 @@ impl Planner<'_> {
         !self.facts.has_tuple_payload(&subject.get_type())
     }
 
-    pub(super) fn lower_fused_partial_match(
+    pub(super) fn try_lower_fused_partial_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -359,7 +347,7 @@ impl Planner<'_> {
         let nilable = self.facts.partial_ok_is_nilable(&ok_ty);
 
         let (mut statements, call) = self
-            .lower_call(subject, None, ExpressionContext::value())
+            .plan_call_expression(subject, None, ExpressionContext::value())
             .into_parts();
         let val_var = match ok_name.or(both_val) {
             Some(value) => Some(self.arm_value_name(&value.go_name())),
@@ -456,7 +444,7 @@ impl Planner<'_> {
             .0
     }
 
-    pub(super) fn lower_fused_partial_outcome_match(
+    pub(super) fn try_lower_fused_partial_outcome_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -464,7 +452,7 @@ impl Planner<'_> {
     ) -> Option<Vec<Statement>> {
         let arms = self.partial_outcome_arms(subject, arms)?;
         let (mut statements, call) = self
-            .lower_call(subject, None, ExpressionContext::value())
+            .plan_call_expression(subject, None, ExpressionContext::value())
             .into_parts();
         let value = arms
             .value_binding
@@ -512,7 +500,7 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    pub(super) fn lower_fused_selective_partial_match(
+    pub(super) fn try_lower_fused_selective_partial_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -526,12 +514,12 @@ impl Planner<'_> {
         }
         let arms = classify_selective_partial_arms(arms)?;
         let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
-        let nil_guard = self.partial_ok_nil_guard(&ok_ty);
+        let nil_guard = self.facts.partial_ok_nil_guard(&ok_ty);
 
         let (value_binding, error_binding) = (arms.value_binding, arms.error_binding);
 
         let (mut statements, call) = self
-            .lower_call(subject, None, ExpressionContext::value())
+            .plan_call_expression(subject, None, ExpressionContext::value())
             .into_parts();
 
         if !arms.selects_both && nil_guard.is_none() {
@@ -610,7 +598,7 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    pub(super) fn lower_fused_option_match(
+    pub(super) fn try_lower_fused_option_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -987,5 +975,20 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
         | LoweredReturnAbi::Partial { .. }
         | LoweredReturnAbi::Option(_)
         | LoweredReturnAbi::Tuple { .. } => false,
+    }
+}
+
+impl EmitFacts<'_> {
+    fn arm_payload_name<'a>(&self, arm: &'a MatchArm) -> Option<FusedName<'a>> {
+        let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
+            return None;
+        };
+        let [field] = fields.as_slice() else {
+            return None;
+        };
+        if self.is_unused_binding(field) {
+            return None;
+        }
+        simple_payload_binding(arm).flatten()
     }
 }

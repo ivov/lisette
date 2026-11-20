@@ -16,7 +16,7 @@ pub(super) fn collect_checks_and_bindings(
             binding,
             ..
         } => {
-            let go_name = planner.go_name_for_binding(pattern);
+            let go_name = planner.facts.go_name_for_binding(pattern);
             collector.bindings.push(PatternBinding {
                 lisette_name: identifier.to_string(),
                 binding_ids: binding.as_slice().to_vec(),
@@ -47,7 +47,7 @@ pub(super) fn collect_checks_and_bindings(
                     ConstructorPatternResolution::Const { .. }
                         | ConstructorPatternResolution::ConstValue { .. }
                 ) || matches!(resolution, ConstructorPatternResolution::EnumVariant { .. })
-                    && !planner.is_tuple_struct_type(ty);
+                    && !planner.facts.is_tuple_struct_type(ty);
             collector.requires_materialized_subject |= !can_split_tuple;
             collect_enum_variant_checks(planner, path, pattern, path_ty, path_layout, collector);
         }
@@ -77,7 +77,7 @@ pub(super) fn collect_checks_and_bindings(
             ..
         } => {
             collect_checks_and_bindings(planner, path, inner, path_ty, path_layout, collector);
-            let go_name = planner.go_name_for_binding(p);
+            let go_name = planner.facts.go_name_for_binding(p);
             collector.bindings.push(PatternBinding {
                 lisette_name: name.to_string(),
                 binding_ids: binding.as_slice().to_vec(),
@@ -183,7 +183,7 @@ fn collect_slice_checks(
     }
 
     if let RestPattern::Bind { name, binding, .. } = rest {
-        let go_name = planner.go_name_for_rest_binding(rest);
+        let go_name = planner.facts.go_name_for_rest_binding(rest);
         let (segment, rest_ty) = match &array_info {
             Some((length, element_type)) => {
                 let sub_length = length.saturating_sub(prefix.len() as u64);
@@ -261,6 +261,7 @@ fn compute_struct_field_path(
 ) -> AccessPath {
     let go_field_name = if let Some((enum_id, variant_name)) = enum_info {
         planner
+            .facts
             .enum_struct_field_name(enum_id, variant_name, &field.name)
             .unwrap_or_else(|| {
                 panic!(
@@ -274,8 +275,12 @@ fn compute_struct_field_path(
 
     if let Some((_, variant_name)) = enum_info
         && let Some(field_index) =
-            planner.get_enum_struct_field_index(ty, variant_name, &field.name)
-        && planner.is_enum_field_recursive(ty, variant_name, field_index)
+            planner
+                .facts
+                .get_enum_struct_field_index(ty, variant_name, &field.name)
+        && planner
+            .facts
+            .is_enum_field_recursive(ty, variant_name, field_index)
     {
         return parent_path
             .push(field_segment(planner, ty, go_field_name))
@@ -362,7 +367,7 @@ fn collect_enum_variant_checks(
             guard: if pointer {
                 NilGuard::Pointer
             } else {
-                planner.option_nil_guard(ty)
+                planner.facts.option_nil_guard(ty)
             },
             some,
         });
@@ -454,10 +459,10 @@ fn collect_enum_variant_checks(
         field_layouts: &field_layouts,
     };
 
-    if planner.is_tuple_struct_type(ty) {
+    if planner.facts.is_tuple_struct_type(ty) {
         let child_path = interface_assert_child_path(planner, path, ty, path_ty, collector)
             .unwrap_or_else(|| path.clone());
-        if planner.is_newtype_struct(ty) {
+        if planner.facts.is_newtype_struct(ty) {
             collect_newtype_checks(planner, &child_path, &variant_data, collector);
         } else {
             collect_tuple_struct_checks(
@@ -506,7 +511,7 @@ fn handle_foreign_variant_literal(
     identifier: &str,
     collector: &mut PatternInfo,
 ) -> bool {
-    if planner.as_enum(ty).is_some() || !identifier.contains('.') {
+    if planner.facts.as_enum(ty).is_some() || !identifier.contains('.') {
         return false;
     }
     let go_literal = match identifier.split_once('.') {
@@ -532,7 +537,7 @@ fn collect_newtype_checks(
     variant: &EnumVariantData,
     collector: &mut PatternInfo,
 ) {
-    let Some(underlying_ty) = planner.get_newtype_underlying(variant.ty) else {
+    let Some(underlying_ty) = planner.facts.get_newtype_underlying(variant.ty) else {
         return;
     };
     let go_underlying = planner.go_type(&underlying_ty);
@@ -602,11 +607,18 @@ fn collect_tagged_enum_checks(
         .next_back()
         .unwrap_or(variant.identifier);
     for (i, field) in variant.fields.iter().enumerate() {
-        let field_name = planner.get_enum_tuple_field_name(variant.ty, variant_name, i);
+        let field_name = planner
+            .facts
+            .get_enum_tuple_field_name(variant.ty, variant_name, i);
 
-        let is_unit = planner.is_enum_field_unit(variant.ty, variant_name, i);
+        let is_unit = planner
+            .facts
+            .is_enum_field_unit(variant.ty, variant_name, i);
 
-        let field_path = if planner.is_enum_field_recursive(variant.ty, variant_name, i) {
+        let field_path = if planner
+            .facts
+            .is_enum_field_recursive(variant.ty, variant_name, i)
+        {
             path.push(field_segment(planner, variant.ty, field_name))
                 .push(PathSegment::Deref)
         } else {

@@ -45,23 +45,23 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
-        if let Some(statements) = transition::try_emit_layout_return(self, expression) {
+        if let Some(statements) = transition::try_lower_layout_return(self, expression) {
             return LoweredBlock { statements };
         }
 
-        if let Some(statements) = self.lower_wrapped_return(expression) {
+        if let Some(statements) = self.try_lower_wrapped_return(expression) {
             return LoweredBlock { statements };
         }
 
         let (mut statements, value) = self
-            .lower_value(expression, ExpressionContext::value())
+            .plan_value(expression, ExpressionContext::value())
             .into_parts();
         let value = self.apply_type_coercion(&mut statements, return_ctx.ty(), expression, value);
         statements.push(plain_return(value));
         LoweredBlock { statements }
     }
 
-    pub(crate) fn lower_wrapped_return(
+    pub(crate) fn try_lower_wrapped_return(
         &mut self,
         expression: &Expression,
     ) -> Option<Vec<Statement>> {
@@ -71,16 +71,16 @@ impl Planner<'_> {
         let return_ty = return_ctx
             .ty()
             .map(|ty| self.facts.peel_alias(ty))
-            .filter(|ty| self.fallible(ty).is_some())
+            .filter(|ty| self.facts.fallible(ty).is_some())
             .unwrap_or(expression_ty);
 
-        let fallible = self.fallible(&return_ty)?;
+        let fallible = self.facts.fallible(&return_ty)?;
 
         let mut statements = Vec::new();
 
         if is_go_never(&self.facts, expression) {
             let (setup, call) = self
-                .lower_call(expression, None, ExpressionContext::value())
+                .plan_call_expression(expression, None, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
             statements.push(
@@ -116,14 +116,14 @@ impl Planner<'_> {
             expression: inner, ..
         } = expression
         {
-            let (setup, value) = self.lower_propagate(inner);
+            let (setup, value) = self.plan_propagate(inner);
             statements.extend(setup);
             statements.extend(self.wrapped_value_return(value, &return_ty));
             return Some(statements);
         }
 
         let (setup, value) = self
-            .lower_value(expression, ExpressionContext::value())
+            .plan_value(expression, ExpressionContext::value())
             .into_parts();
         statements.extend(setup);
         statements.extend(self.wrapped_value_return(value, &return_ty));
@@ -134,7 +134,7 @@ impl Planner<'_> {
         let Some(shape) = self.return_ctx().lowered_shape() else {
             return vec![plain_return(value)];
         };
-        transition::emit_lowered_result_return(self, value, "v", return_ty, &shape)
+        transition::lower_result_return(self, value, "v", return_ty, &shape)
     }
 
     fn lower_wrapped_call_return(
@@ -181,7 +181,7 @@ impl Planner<'_> {
             Some(LoweredReturnAbi::BareError) => {
                 if !args.is_empty() {
                     let (setup, _) = self
-                        .lower_composite_value(&args[0], ExpressionContext::value())
+                        .plan_composite_value(&args[0], ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
                 }
@@ -207,7 +207,7 @@ impl Planner<'_> {
             }
             _ => {
                 let (setup, value) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value())
+                    .plan_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
                 let value = self.apply_type_coercion(
@@ -230,7 +230,7 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let error = args.first().map(|arg| {
-            let error = self.lower_composite_value(arg, ExpressionContext::value());
+            let error = self.plan_composite_value(arg, ExpressionContext::value());
             let (message_setup, wraps) = self.prepare_wrap_messages(wraps, true);
             let error = if message_setup.is_empty() {
                 error
@@ -266,9 +266,10 @@ impl Planner<'_> {
                 Some(OptionFusePlan::Found { .. })
             )
         {
-            let (setup, value) = self.lower_propagate(expression);
+            let (setup, value) = self.plan_propagate(expression);
             statements.extend(setup);
             let fallible = self
+                .facts
                 .fallible(return_ty)
                 .expect("an Option return has a fallible type");
             statements.extend(self.success_return(&fallible, value));
@@ -284,9 +285,10 @@ impl Planner<'_> {
                 .map_err_call(expression)
                 .is_some_and(|(plan, _)| plan.carries_payload()))
         {
-            let (setup, value) = self.lower_propagate(expression);
+            let (setup, value) = self.plan_propagate(expression);
             statements.extend(setup);
             let fallible = self
+                .facts
                 .fallible(return_ty)
                 .expect("a lowered Result shape has a fallible return type");
             statements.extend(self.success_return(&fallible, value));
@@ -296,7 +298,7 @@ impl Planner<'_> {
             && self.callee_matches_lowered_shape(expression, shape)
         {
             let (setup, call) = self
-                .lower_call(expression, None, ExpressionContext::value())
+                .plan_call_expression(expression, None, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
             statements.push(plain_return(call));
@@ -324,17 +326,17 @@ impl Planner<'_> {
         {
             if let Some(shape) = lowered {
                 let (setup, result_var) = self
-                    .lower_go_abi_wrapped_call(expression, &plan.resolved.abi, return_ty)
+                    .plan_go_abi_wrapped_call(expression, &plan.resolved.abi, return_ty)
                     .into_parts();
                 statements.extend(setup);
-                statements.extend(transition::emit_lowered_result_return(
+                statements.extend(transition::lower_result_return(
                     self, result_var, "res", return_ty, shape,
                 ));
             } else {
                 let abi = plan.resolved.abi.clone();
                 if self.go_result_bridge(&abi, return_ty).is_none() {
                     let (setup, call) = self
-                        .lower_call(expression, None, ExpressionContext::value())
+                        .plan_call_expression(expression, None, ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
                     statements.extend(self.lower_abi_to_tagged_return(
@@ -344,7 +346,7 @@ impl Planner<'_> {
                     ));
                 } else {
                     let (setup, result_var) = self
-                        .lower_go_abi_wrapped_call(expression, &abi, return_ty)
+                        .plan_go_abi_wrapped_call(expression, &abi, return_ty)
                         .into_parts();
                     statements.extend(setup);
                     statements.push(plain_return(result_var));
@@ -354,16 +356,16 @@ impl Planner<'_> {
         }
         if let Some(shape) = lowered {
             let (setup, value) = self
-                .lower_value(expression, ExpressionContext::value())
+                .plan_value(expression, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
-            statements.extend(transition::emit_lowered_result_return(
+            statements.extend(transition::lower_result_return(
                 self, value, "v", return_ty, shape,
             ));
             return statements;
         }
         let (setup, call) = self
-            .lower_call(expression, None, ExpressionContext::value())
+            .plan_call_expression(expression, None, ExpressionContext::value())
             .into_parts();
         statements.extend(setup);
         statements.push(plain_return(call));

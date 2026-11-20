@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::callable::PayloadLayout;
 use crate::abi::coercion::LayoutBridge;
@@ -270,33 +271,17 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    pub(crate) fn nil_guard(&self, ty: &Type) -> Option<NilGuard> {
-        match self.facts.go_nil_form(ty) {
-            GoNilForm::Never => None,
-            GoNilForm::Pointer => Some(NilGuard::Pointer),
-            GoNilForm::Interface => Some(NilGuard::Interface),
-        }
-    }
-
-    pub(crate) fn partial_ok_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
-        self.nil_guard(ok_ty).or_else(|| {
-            self.facts
-                .partial_ok_is_nilable(ok_ty)
-                .then_some(NilGuard::Pointer)
-        })
-    }
-
     pub(crate) fn partial_ok_nil_check(
         &mut self,
         ok_ty: &Type,
         value: GoExpression,
     ) -> Option<GoExpression> {
-        let guard = self.partial_ok_nil_guard(ok_ty)?;
+        let guard = self.facts.partial_ok_nil_guard(ok_ty)?;
         Some(guard.is_nil(value))
     }
 
     pub(crate) fn result_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
-        match self.nil_guard(ok_ty)? {
+        match self.facts.nil_guard(ok_ty)? {
             NilGuard::Pointer => self
                 .facts
                 .underlying(ok_ty)
@@ -309,19 +294,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn option_nil_guard(&self, option_ty: &Type) -> NilGuard {
-        self.nullable_option_nil_guard(option_ty)
-            .unwrap_or(NilGuard::Pointer)
-    }
-
-    pub(crate) fn nullable_option_nil_guard(&self, option_ty: &Type) -> Option<NilGuard> {
-        let option_ty = self.facts.peel_alias(option_ty);
-        if !option_ty.is_option() {
-            return None;
-        }
-        self.nil_guard(&option_ty.ok_type())
-    }
-
     pub(crate) fn result_from_pair(
         &mut self,
         call: GoExpression,
@@ -329,7 +301,10 @@ impl Planner<'_> {
         layout: PayloadLayout,
         payload_bridge: Option<&LayoutBridge>,
     ) -> Result<GoExpression, GoExpression> {
-        let Some(fallible) = self.fallible(result_layout.underlying().logical_type()) else {
+        let Some(fallible) = self
+            .facts
+            .fallible(result_layout.underlying().logical_type())
+        else {
             return Err(call);
         };
         let ok_ty = fallible.ok_ty();
@@ -370,7 +345,10 @@ impl Planner<'_> {
         else {
             unreachable!("Result wrapping requires a fallible layout")
         };
-        let fallible = self.fallible(fallible_type).expect("Result type expected");
+        let fallible = self
+            .facts
+            .fallible(fallible_type)
+            .expect("Result type expected");
 
         let mut statements = Vec::new();
         let call = match self.result_from_pair(call, result_layout, layout, payload_bridge) {
@@ -444,6 +422,7 @@ impl Planner<'_> {
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let fallible = self
+            .facts
             .fallible(result_layout.underlying().logical_type())
             .expect("Result type expected");
         debug_assert!(fallible.ok_ty().is_unit());
@@ -482,7 +461,10 @@ impl Planner<'_> {
         else {
             unreachable!("unit Result wrapping requires a fallible layout")
         };
-        let fallible = self.fallible(fallible_type).expect("Result type expected");
+        let fallible = self
+            .facts
+            .fallible(fallible_type)
+            .expect("Result type expected");
         let result_ty_str = result_layout.underlying().go_type(self);
         let type_params = GoType::type_arguments(&[payload.go_type(self), error.go_type(self)]);
 
@@ -599,7 +581,10 @@ impl Planner<'_> {
         let inner_ty_str = payload.go_type(self);
         let inner_tuple_arity = inner_ty.tuple_arity();
 
-        let fallible = self.fallible(option_ty).expect("Option type expected");
+        let fallible = self
+            .facts
+            .fallible(option_ty)
+            .expect("Option type expected");
 
         let val_vars = if layout.is_flattened()
             && let Some(arity) = inner_tuple_arity
@@ -636,7 +621,7 @@ impl Planner<'_> {
         let option_ty_str = option_layout.underlying().go_type(self);
 
         let ok = GoExpression::identifier(value_variable);
-        let condition = match self.nullable_option_nil_guard(option_ty) {
+        let condition = match self.facts.nullable_option_nil_guard(option_ty) {
             Some(guard) => GoExpression::binary(ok, BinaryOp::And, guard.non_nil(first_val)),
             None => ok,
         };
@@ -678,6 +663,7 @@ impl Planner<'_> {
         let inner_type = inner.go_type(self);
         let inner_ty_str = inner_type;
         let is_nil_check = self
+            .facts
             .option_nil_guard(layout.logical_type())
             .is_nil(raw_value.clone());
         let value = prelude_call(
@@ -687,5 +673,39 @@ impl Planner<'_> {
         );
         let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
         (statements, outcome)
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn nil_guard(&self, ty: &Type) -> Option<NilGuard> {
+        match self.go_nil_form(ty) {
+            GoNilForm::Never => None,
+            GoNilForm::Pointer => Some(NilGuard::Pointer),
+            GoNilForm::Interface => Some(NilGuard::Interface),
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn partial_ok_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
+        self.nil_guard(ok_ty).or_else(|| {
+            self.partial_ok_is_nilable(ok_ty)
+                .then_some(NilGuard::Pointer)
+        })
+    }
+
+    pub(crate) fn nullable_option_nil_guard(&self, option_ty: &Type) -> Option<NilGuard> {
+        let option_ty = self.peel_alias(option_ty);
+        if !option_ty.is_option() {
+            return None;
+        }
+        self.nil_guard(&option_ty.ok_type())
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn option_nil_guard(&self, option_ty: &Type) -> NilGuard {
+        self.nullable_option_nil_guard(option_ty)
+            .unwrap_or(NilGuard::Pointer)
     }
 }

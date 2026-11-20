@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
@@ -12,9 +13,9 @@ use crate::ir::go_expression::GoParameter;
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::names::go_name::{self, GeneratedPackage};
+use crate::names::receiver::ReceiverGenerics;
+use crate::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::types::go_type::GoType;
-use crate::utils::ReceiverGenerics;
-use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
@@ -82,7 +83,7 @@ impl Planner<'_> {
                 SynthesizedMethod::ToString => self.emit_to_string_method(
                     name,
                     &receiver_generics,
-                    &self.to_string_method_go_name(),
+                    &self.facts.to_string_method_go_name(),
                 ),
                 SynthesizedMethod::Equals => {
                     self.struct_equals_method(name, generics, fields, attributes)
@@ -104,7 +105,7 @@ impl Planner<'_> {
     }
 
     fn stringer_kind(&self, ty: &Type, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
-        let Type::Nominal { id, .. } = &self.emit_shape_ty(ty) else {
+        let Type::Nominal { id, .. } = &self.facts.emit_shape_ty(ty) else {
             return None;
         };
         if !visited.insert(id.to_string()) {
@@ -125,6 +126,7 @@ impl Planner<'_> {
         }
         if matches!(definition.body, DefinitionBody::Interface { .. }) {
             return self
+                .facts
                 .interface_has_string_selector(id)
                 .then_some(StringerKind::Foreign);
         }
@@ -156,19 +158,6 @@ impl Planner<'_> {
         matches!(first, StringerKind::Synthesized).then_some(StringerKind::Synthesized)
     }
 
-    fn interface_has_string_selector(&self, id: &str) -> bool {
-        let interface_ty = Type::Nominal {
-            id: id.into(),
-            params: vec![],
-            writable: false,
-        };
-        interface_requirements(&interface_ty, |id| self.facts.definition(id))
-            .iter()
-            .any(|requirement| {
-                requirement.name == "string" || requirement.name == ENUM_STRINGER_METHOD
-            })
-    }
-
     fn emit_tuple_struct(
         &mut self,
         name: &str,
@@ -178,6 +167,7 @@ impl Planner<'_> {
         attributes: &[Attribute],
     ) -> Vec<GoDeclaration> {
         let underlying = self
+            .facts
             .is_newtype_definition(name)
             .then(|| self.go_type(&fields[0].ty));
         let go_name = go_name::escape_type_name(name).into_owned();
@@ -221,7 +211,7 @@ impl Planner<'_> {
                 SynthesizedMethod::ToString => self.emit_to_string_method(
                     name,
                     &receiver_generics,
-                    &self.to_string_method_go_name(),
+                    &self.facts.to_string_method_go_name(),
                 ),
                 _ => unreachable!("tuple structs synthesize only formatting methods"),
             });
@@ -261,74 +251,6 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
-        let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
-        let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
-        let has_go_stringer =
-            is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
-        (has_stringer, has_go_stringer)
-    }
-
-    pub(crate) fn debug_string_override(&self, name: &str) -> bool {
-        (self.method_needs_export("debug_string")
-            && self.has_stringer_signature(name, "debug_string"))
-            || self.has_stringer_signature(name, DEBUG_STRING_METHOD)
-    }
-
-    fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts
-            .definition(qualified.as_str())
-            .and_then(type_methods)
-            .and_then(|methods| methods.get(method_name))
-            .is_some_and(|method| {
-                method
-                    .ty
-                    .is_stringer_signature(|ty| self.facts.peel_alias(ty))
-            })
-            && self.facts.emits_go_method(&qualified, method_name)
-    }
-
-    pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
-        self.facts.emit_tests_enabled() && !self.debug_string_override(name)
-    }
-
-    pub(crate) fn should_synthesize_to_string(&self, name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts
-            .method(&qualified, "to_string")
-            .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
-    }
-
-    pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts.synthesizes_equals(qualified.as_str())
-    }
-
-    pub(crate) fn is_newtype_definition(&self, name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts
-            .definition(qualified.as_str())
-            .is_some_and(Definition::is_newtype)
-    }
-
-    fn is_pointer_backed_newtype(&self, name: &str) -> bool {
-        let qualified = self.facts.qualified_current(name);
-        self.facts
-            .definition(qualified.as_str())
-            .is_some_and(|definition| {
-                definition.is_pointer_backed_newtype(|id| self.facts.definition(id))
-            })
-    }
-
-    pub(crate) fn to_string_method_go_name(&self) -> String {
-        self.method_go_name("to_string", false)
-    }
-
-    pub(crate) fn equals_method_go_name(&self) -> String {
-        self.method_go_name("equals", false)
-    }
-
     fn struct_equals_method(
         &mut self,
         name: &str,
@@ -366,7 +288,7 @@ impl Planner<'_> {
         let receiver_type = receiver_generics.receiver_type(name);
         GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
-            self.equals_method_go_name(),
+            self.facts.equals_method_go_name(),
             Vec::new(),
             vec![GoParameter::new(other, receiver_type)],
             GoType::new("bool"),
@@ -382,24 +304,24 @@ impl Planner<'_> {
         attributes: &[Attribute],
         shape: StructShape,
     ) -> Vec<SynthesizedMethod> {
-        if shape == StructShape::Tuple && self.is_pointer_backed_newtype(name) {
+        if shape == StructShape::Tuple && self.facts.is_pointer_backed_newtype(name) {
             return Vec::new();
         }
         let mut methods = Vec::new();
-        if let Some(method) = self.stringer_method_name(name, attributes) {
+        if let Some(method) = self.facts.stringer_method_name(name, attributes) {
             methods.push(SynthesizedMethod::Format(StringFormat::Display {
                 method,
                 qualified: false,
             }));
         }
-        if self.synthesizes_debug_string(name) {
+        if self.facts.synthesizes_debug_string(name) {
             methods.push(SynthesizedMethod::Format(StringFormat::Debug));
         }
-        if self.should_synthesize_to_string(name) {
+        if self.facts.should_synthesize_to_string(name) {
             methods.push(SynthesizedMethod::ToString);
         }
         if shape == StructShape::Record {
-            if self.should_synthesize_equals(name) {
+            if self.facts.should_synthesize_equals(name) {
                 methods.push(SynthesizedMethod::Equals);
             }
             if self.synthesizes_embedded_stringer_shadow(name) {
@@ -407,67 +329,6 @@ impl Planner<'_> {
             }
         }
         methods
-    }
-
-    pub(crate) fn enum_synthesized_methods(
-        &self,
-        name: &str,
-        attributes: &[Attribute],
-    ) -> Vec<SynthesizedMethod> {
-        let mut methods = Vec::new();
-        if should_synthesize_stringer(attributes) {
-            let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
-            if !has_user_string {
-                methods.push(SynthesizedMethod::Format(StringFormat::Display {
-                    method: ENUM_STRINGER_METHOD,
-                    qualified: false,
-                }));
-            }
-            if !has_user_go_string {
-                methods.push(SynthesizedMethod::Format(StringFormat::Display {
-                    method: ENUM_GO_STRINGER_METHOD,
-                    qualified: true,
-                }));
-            }
-        }
-        if attributes.iter().any(|attribute| attribute.name == "json") {
-            methods.push(SynthesizedMethod::Json);
-        }
-        if self.synthesizes_debug_string(name) {
-            methods.push(SynthesizedMethod::Format(StringFormat::Debug));
-        }
-        if self.should_synthesize_to_string(name) {
-            methods.push(SynthesizedMethod::ToString);
-        }
-        if self.should_synthesize_equals(name) {
-            methods.push(SynthesizedMethod::Equals);
-        }
-        methods
-    }
-
-    pub(crate) fn synthesized_method_go_names(&self, method: SynthesizedMethod) -> Vec<String> {
-        match method {
-            SynthesizedMethod::Format(format) => vec![format.method().to_string()],
-            SynthesizedMethod::StringerShadow => vec![ENUM_STRINGER_METHOD.to_string()],
-            SynthesizedMethod::Json => vec!["MarshalJSON".to_string(), "UnmarshalJSON".to_string()],
-            SynthesizedMethod::ToString => vec![self.to_string_method_go_name()],
-            SynthesizedMethod::Equals => vec![self.equals_method_go_name()],
-        }
-    }
-
-    pub(crate) fn stringer_method_name(
-        &self,
-        name: &str,
-        attributes: &[Attribute],
-    ) -> Option<&'static str> {
-        if !should_synthesize_stringer(attributes) {
-            return None;
-        }
-        match self.stringer_overrides(name) {
-            (true, true) => None,
-            (true, false) => Some(ENUM_GO_STRINGER_METHOD),
-            _ => Some(ENUM_STRINGER_METHOD),
-        }
     }
 }
 
@@ -748,4 +609,146 @@ fn emit_tuple_struct_format_method(
         format.method(),
         format_value(&text, arguments),
     )
+}
+
+impl EmitFacts<'_> {
+    fn interface_has_string_selector(&self, id: &str) -> bool {
+        let interface_ty = Type::Nominal {
+            id: id.into(),
+            params: vec![],
+            writable: false,
+        };
+        interface_requirements(&interface_ty, |id| self.definition(id))
+            .iter()
+            .any(|requirement| {
+                requirement.name == "string" || requirement.name == ENUM_STRINGER_METHOD
+            })
+    }
+
+    fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.definition(qualified.as_str())
+            .and_then(type_methods)
+            .and_then(|methods| methods.get(method_name))
+            .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
+            && self.emits_go_method(&qualified, method_name)
+    }
+
+    pub(crate) fn should_synthesize_to_string(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.method(&qualified, "to_string")
+            .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
+    }
+
+    pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.synthesizes_equals(qualified.as_str())
+    }
+
+    pub(crate) fn is_newtype_definition(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.definition(qualified.as_str())
+            .is_some_and(Definition::is_newtype)
+    }
+
+    fn is_pointer_backed_newtype(&self, name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.definition(qualified.as_str())
+            .is_some_and(|definition| {
+                definition.is_pointer_backed_newtype(|id| self.definition(id))
+            })
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
+        let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
+        let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
+        let has_go_stringer =
+            is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
+        (has_stringer, has_go_stringer)
+    }
+
+    pub(crate) fn debug_string_override(&self, name: &str) -> bool {
+        (self.method_needs_export("debug_string")
+            && self.has_stringer_signature(name, "debug_string"))
+            || self.has_stringer_signature(name, DEBUG_STRING_METHOD)
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {
+        self.emit_tests_enabled() && !self.debug_string_override(name)
+    }
+
+    pub(crate) fn to_string_method_go_name(&self) -> String {
+        self.method_go_name("to_string", false)
+    }
+
+    pub(crate) fn equals_method_go_name(&self) -> String {
+        self.method_go_name("equals", false)
+    }
+
+    pub(crate) fn stringer_method_name(
+        &self,
+        name: &str,
+        attributes: &[Attribute],
+    ) -> Option<&'static str> {
+        if !should_synthesize_stringer(attributes) {
+            return None;
+        }
+        match self.stringer_overrides(name) {
+            (true, true) => None,
+            (true, false) => Some(ENUM_GO_STRINGER_METHOD),
+            _ => Some(ENUM_STRINGER_METHOD),
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn enum_synthesized_methods(
+        &self,
+        name: &str,
+        attributes: &[Attribute],
+    ) -> Vec<SynthesizedMethod> {
+        let mut methods = Vec::new();
+        if should_synthesize_stringer(attributes) {
+            let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
+            if !has_user_string {
+                methods.push(SynthesizedMethod::Format(StringFormat::Display {
+                    method: ENUM_STRINGER_METHOD,
+                    qualified: false,
+                }));
+            }
+            if !has_user_go_string {
+                methods.push(SynthesizedMethod::Format(StringFormat::Display {
+                    method: ENUM_GO_STRINGER_METHOD,
+                    qualified: true,
+                }));
+            }
+        }
+        if attributes.iter().any(|attribute| attribute.name == "json") {
+            methods.push(SynthesizedMethod::Json);
+        }
+        if self.synthesizes_debug_string(name) {
+            methods.push(SynthesizedMethod::Format(StringFormat::Debug));
+        }
+        if self.should_synthesize_to_string(name) {
+            methods.push(SynthesizedMethod::ToString);
+        }
+        if self.should_synthesize_equals(name) {
+            methods.push(SynthesizedMethod::Equals);
+        }
+        methods
+    }
+
+    pub(crate) fn synthesized_method_go_names(&self, method: SynthesizedMethod) -> Vec<String> {
+        match method {
+            SynthesizedMethod::Format(format) => vec![format.method().to_string()],
+            SynthesizedMethod::StringerShadow => vec![ENUM_STRINGER_METHOD.to_string()],
+            SynthesizedMethod::Json => vec!["MarshalJSON".to_string(), "UnmarshalJSON".to_string()],
+            SynthesizedMethod::ToString => vec![self.to_string_method_go_name()],
+            SynthesizedMethod::Equals => vec![self.equals_method_go_name()],
+        }
+    }
 }

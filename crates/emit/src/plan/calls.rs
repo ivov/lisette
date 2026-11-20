@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableAbi, CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
@@ -188,7 +189,9 @@ impl<'a> Planner<'a> {
         receiver_offset: usize,
     ) -> ResolvedCallee<'a> {
         let bound_layout = self.bound_dispatch_layout(function);
-        let declaration = id.as_deref().and_then(|id| self.callable_declaration(id));
+        let declaration = id
+            .as_deref()
+            .and_then(|id| self.facts.callable_declaration(id));
         let alias_declaration = self.facts.function_alias_declaration(&function.get_type());
         let declared_type = declaration
             .map(CallableDeclaration::ty)
@@ -211,7 +214,7 @@ impl<'a> Planner<'a> {
         let callee_ty = function.get_type();
         if declaration.is_some_and(CallableDeclaration::is_type_definition)
             && matches!(callee_ty.unwrap_forall(), Type::Nominal { id: type_id, .. } if id.as_deref() == Some(type_id.as_str()))
-            && self.is_go_named_function_type(&callee_ty)
+            && self.facts.is_go_named_function_type(&callee_ty)
         {
             params = vec![CallableParamAbi {
                 instantiated: callee_ty.clone(),
@@ -237,7 +240,7 @@ impl<'a> Planner<'a> {
                     })
                 ) =>
                 {
-                    self.return_abi(return_type, ReturnSlot::Function)
+                    self.facts.return_abi(return_type, ReturnSlot::Function)
                 }
                 None => self
                     .classify_callee_abi(function, id.as_deref(), declaration, declared_return)
@@ -330,20 +333,10 @@ impl<'a> Planner<'a> {
                 .map(ToString::to_string),
             _ => None,
         };
-        let declaration = id.as_deref().and_then(|id| self.callable_declaration(id));
+        let declaration = id
+            .as_deref()
+            .and_then(|id| self.facts.callable_declaration(id));
         (id, declaration)
-    }
-
-    pub(crate) fn callable_declaration(&self, id: &str) -> Option<CallableDeclaration<'a>> {
-        self.facts
-            .definition(id)
-            .map(CallableDeclaration::Definition)
-            .or_else(|| {
-                let (owner, name) = id.rsplit_once('.')?;
-                self.facts
-                    .method(owner, name)
-                    .map(CallableDeclaration::Method)
-            })
     }
 
     fn classify_callee_abi(
@@ -373,7 +366,7 @@ impl<'a> Planner<'a> {
         } = inner
         {
             let receiver_type = receiver.get_type();
-            if self.native_kind(&receiver_type).is_some()
+            if self.facts.native_kind(&receiver_type).is_some()
                 || self.facts.is_prelude_nominal(&receiver_type)
                 || matches!(
                     &**receiver,
@@ -397,10 +390,11 @@ impl<'a> Planner<'a> {
             member,
             ..
         } = inner
-            && let Some(method) =
-                self.interface_method(&self.facts.strip_and_peel(&receiver.get_type()), member)
+            && let Some(method) = self
+                .facts
+                .interface_method(&self.facts.strip_and_peel(&receiver.get_type()), member)
         {
-            return Some(self.return_abi(
+            return Some(self.facts.return_abi(
                 method.ty.get_function_ret().unwrap_or(&Type::Never),
                 ReturnSlot::InterfaceMethod {
                     name: &method.source_name,
@@ -417,16 +411,19 @@ impl<'a> Planner<'a> {
                 .and_then(|id| id.rsplit_once('.'))
                 .is_none_or(|(owner, name)| self.facts.emits_go_method(owner, name));
             return Some(if go_method {
-                self.return_abi(classify_ty, ReturnSlot::Method)
+                self.facts.return_abi(classify_ty, ReturnSlot::Method)
             } else {
-                self.return_abi(classify_ty, ReturnSlot::Function)
+                self.facts.return_abi(classify_ty, ReturnSlot::Function)
             });
         }
         if declaration.is_some_and(|declaration| !declaration.is_type_definition()) {
-            return Some(self.return_abi(classify_ty, ReturnSlot::Function));
+            return Some(self.facts.return_abi(classify_ty, ReturnSlot::Function));
         }
         let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
-        Some(self.return_abi(classify_ty, ReturnSlot::FunctionValue(origin)))
+        Some(
+            self.facts
+                .return_abi(classify_ty, ReturnSlot::FunctionValue(origin)),
+        )
     }
 
     fn resolve_go_call_abi(&self, expression: &Expression) -> Option<LoweredReturnAbi> {
@@ -452,6 +449,7 @@ impl<'a> Planner<'a> {
         }
         if let Some(requirement) = self.go_bound_requirement(callee) {
             return self
+                .facts
                 .return_abi(
                     return_ty,
                     ReturnSlot::Go {
@@ -484,7 +482,8 @@ impl<'a> Planner<'a> {
                     .map(|method| method.go_hints.as_slice())
             })
             .unwrap_or_default();
-        self.return_abi(return_ty, ReturnSlot::Go { hints: go_hints })
+        self.facts
+            .return_abi(return_ty, ReturnSlot::Go { hints: go_hints })
             .lowered()
             .cloned()
     }
@@ -597,4 +596,15 @@ fn build_param_abi(
             }
         })
         .collect()
+}
+
+impl<'a> EmitFacts<'a> {
+    pub(crate) fn callable_declaration(&self, id: &str) -> Option<CallableDeclaration<'a>> {
+        self.definition(id)
+            .map(CallableDeclaration::Definition)
+            .or_else(|| {
+                let (owner, name) = id.rsplit_once('.')?;
+                self.method(owner, name).map(CallableDeclaration::Method)
+            })
+    }
 }

@@ -72,17 +72,17 @@ impl Planner<'_> {
                     let mut values = Vec::new();
                     for part in parts {
                         if let FormatStringPart::Expression(expression) = part {
-                            let value = self.lower_format_operand(expression);
+                            let value = self.plan_format_operand(expression);
                             let (part_setup, value) =
                                 self.eager_operand(expression, value, "fmtarg").into_parts();
                             setup.extend(part_setup);
                             values.push(value);
                         }
                     }
-                    self.sprintf_pieces(parts, values, true)
+                    self.facts.sprintf_pieces(parts, values, true)
                 }
                 _ => {
-                    let value = self.lower_composite_value(message, ExpressionContext::value());
+                    let value = self.plan_composite_value(message, ExpressionContext::value());
                     let (message_setup, value) =
                         self.eager_operand(message, value, "msg").into_parts();
                     setup.extend(message_setup);

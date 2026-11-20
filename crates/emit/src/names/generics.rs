@@ -1,6 +1,6 @@
 use crate::ir::declarations::TypeParameter;
 use crate::names::packages::PackageUse;
-use crate::utils::ReceiverGenerics;
+use crate::names::receiver::ReceiverGenerics;
 use std::borrow::Cow;
 
 use rustc_hash::FxHashMap as HashMap;
@@ -35,7 +35,9 @@ pub(crate) fn resolve_field_type(
 impl Planner<'_> {
     pub(crate) fn format_value_type_args(&mut self, expression: &Expression) -> Option<GoType> {
         let recorded = self.facts.checked(expression).function_value()?;
-        let declaration = self.callable_declaration(recorded.definition.as_deref()?)?;
+        let declaration = self
+            .facts
+            .callable_declaration(recorded.definition.as_deref()?)?;
         let instantiation = &recorded.type_arguments;
         match declaration.go_type_param_recipe() {
             Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
@@ -109,7 +111,7 @@ impl Planner<'_> {
                 let has_ordered = bounds.iter().any(is_ordered_bound);
                 let mut planned = Vec::new();
                 for bound in bounds {
-                    if self.bound_needs_dispatch(bound) || is_zeroable_bound(bound) {
+                    if self.facts.bound_needs_dispatch(bound) || is_zeroable_bound(bound) {
                         continue;
                     }
                     let ty = if is_comparable_bound(bound) {

@@ -44,9 +44,9 @@ impl Planner<'_> {
         };
         let iterable = iterable.as_ref();
         let body = body.as_ref();
-        let shape = self.classify_for(binding, iterable);
+        let shape = self.facts.classify_for(binding, iterable);
 
-        let line = self.source_position(&full_expression.get_span());
+        let line = self.facts.source_position(&full_expression.get_span());
         let plan = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range => this.lower_range_for(binding, iterable, body),
@@ -96,13 +96,13 @@ impl Planner<'_> {
             let iterable_ty = iterable.get_type();
             let range_var = if this.facts.is_reference(&iterable_ty) {
                 let reference = this.capture_operand_into(&mut prologue, iterable);
-                let range = this.dereference_refs(&iterable_ty, reference);
+                let range = this.facts.dereference_refs(&iterable_ty, reference);
                 GoExpression::identifier(this.hoist_tmp_value_statement(
                     &mut prologue,
                     "range",
                     range,
                 ))
-            } else if this.is_unmutated_identifier(iterable) {
+            } else if this.facts.is_unmutated_identifier(iterable) {
                 this.capture_operand_into(&mut prologue, iterable)
             } else {
                 this.capture_value_at_boundary(
@@ -163,7 +163,7 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
-            let receiver_var = if this.is_unmutated_identifier(receiver) {
+            let receiver_var = if this.facts.is_unmutated_identifier(receiver) {
                 this.capture_operand_into(&mut prologue, receiver)
             } else {
                 this.capture_value_at_boundary(
@@ -207,18 +207,8 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, GoExpression) {
         let mut prologue = Vec::new();
         let iter_raw = self.capture_operand_into(&mut prologue, iterable);
-        let iter_expression = self.dereference_refs(&iterable.get_type(), iter_raw);
+        let iter_expression = self.facts.dereference_refs(&iterable.get_type(), iter_raw);
         (prologue, iter_expression)
-    }
-
-    fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
-        let mut current = self.facts.peel_alias(ty);
-        while current.is_ref() {
-            value = GoExpression::dereference(value);
-            let pointee = current.inner().expect("Ref<T> must have inner");
-            current = self.facts.peel_alias(&pointee);
-        }
-        value
     }
 
     fn lower_iterate_for(
@@ -289,10 +279,10 @@ impl Planner<'_> {
         iter_expression: GoExpression,
         body: &Expression,
     ) -> (LoopHeader, LoweredBlock) {
-        let first_is_discard =
-            matches!(first, Pattern::WildCard { .. }) || self.go_name_for_binding(first).is_none();
+        let first_is_discard = matches!(first, Pattern::WildCard { .. })
+            || self.facts.go_name_for_binding(first).is_none();
         let second_is_discard = matches!(second, Pattern::WildCard { .. })
-            || self.go_name_for_binding(second).is_none();
+            || self.facts.go_name_for_binding(second).is_none();
         let header = if first_is_discard && second_is_discard {
             range_header(None, None, iter_expression)
         } else if second_is_discard {
@@ -472,45 +462,6 @@ impl Planner<'_> {
         (prologue, header, lowered_body)
     }
 
-    fn classify_for<'a>(&self, binding: &'a Binding, iterable: &'a Expression) -> ForShape<'a> {
-        if matches!(iterable, Expression::Range { .. }) {
-            return ForShape::Range;
-        }
-        let iterable_ty = iterable.get_type();
-        if let Some(range_shape) = self.range_shape(&iterable_ty)
-            && matches!(
-                range_shape,
-                RangeShape::Range | RangeShape::RangeInclusive | RangeShape::RangeFrom
-            )
-        {
-            return ForShape::StoredRange(range_shape);
-        }
-        if let Some((kind, receiver)) = recognize_string_view_loop(&self.facts, binding, iterable) {
-            return ForShape::StringView(kind, receiver);
-        }
-        if let Pattern::Tuple { elements, .. } = &binding.pattern
-            && elements.len() == 2
-            && self.is_map_tuple_iterable(&iterable_ty)
-        {
-            return ForShape::MapTuple;
-        }
-        let is_channel = self.native_shape(&iterable_ty).is_some_and(|shape| {
-            matches!(shape, NativeTypeKind::Channel | NativeTypeKind::Receiver)
-        });
-        let yields = if is_channel || self.iter_seq_arity(&iterable_ty) == Some(1) {
-            RangeYield::Single
-        } else {
-            RangeYield::Pair
-        };
-        ForShape::Iterate {
-            yields,
-            simple_pattern: matches!(
-                &binding.pattern,
-                Pattern::Identifier { .. } | Pattern::WildCard { .. }
-            ),
-        }
-    }
-
     fn bind_loop_pattern(
         &mut self,
         pattern: &Pattern,
@@ -521,7 +472,7 @@ impl Planner<'_> {
             binding,
             ..
         } = pattern
-            && let Some(go_name) = self.go_name_for_binding(pattern)
+            && let Some(go_name) = self.facts.go_name_for_binding(pattern)
         {
             let preferred = go_name.preferred();
             let go_name = if self.scope.has_binding_for_go_name(&preferred)
@@ -539,21 +490,6 @@ impl Planner<'_> {
             Some(hint) => self.fresh_local(Some(hint)),
             None => GoIdentifier::external("_".to_string()),
         }
-    }
-
-    fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
-        self.native_shape(iterable_ty).is_some_and(|shape| {
-            matches!(shape, NativeTypeKind::Map | NativeTypeKind::EnumeratedSlice)
-        }) || self.iter_seq_arity(iterable_ty) == Some(2)
-    }
-
-    fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
-        let (kind, _) =
-            types::peel_to_iter_seq(&iterable_ty.strip_refs(), |id| self.facts.definition(id))?;
-        Some(match kind {
-            IterSeqKind::Seq => 1,
-            IterSeqKind::Seq2 => 2,
-        })
     }
 }
 
@@ -620,5 +556,75 @@ fn recognize_string_view_loop<'a>(
         "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
         "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
         _ => None,
+    }
+}
+
+impl EmitFacts<'_> {
+    fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
+        let mut current = self.peel_alias(ty);
+        while current.is_ref() {
+            value = GoExpression::dereference(value);
+            let pointee = current.inner().expect("Ref<T> must have inner");
+            current = self.peel_alias(&pointee);
+        }
+        value
+    }
+
+    fn iter_seq_arity(&self, iterable_ty: &Type) -> Option<usize> {
+        let (kind, _) =
+            types::peel_to_iter_seq(&iterable_ty.strip_refs(), |id| self.definition(id))?;
+        Some(match kind {
+            IterSeqKind::Seq => 1,
+            IterSeqKind::Seq2 => 2,
+        })
+    }
+}
+
+impl EmitFacts<'_> {
+    fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
+        self.native_shape(iterable_ty).is_some_and(|shape| {
+            matches!(shape, NativeTypeKind::Map | NativeTypeKind::EnumeratedSlice)
+        }) || self.iter_seq_arity(iterable_ty) == Some(2)
+    }
+}
+
+impl EmitFacts<'_> {
+    fn classify_for<'a>(&self, binding: &'a Binding, iterable: &'a Expression) -> ForShape<'a> {
+        if matches!(iterable, Expression::Range { .. }) {
+            return ForShape::Range;
+        }
+        let iterable_ty = iterable.get_type();
+        if let Some(range_shape) = self.range_shape(&iterable_ty)
+            && matches!(
+                range_shape,
+                RangeShape::Range | RangeShape::RangeInclusive | RangeShape::RangeFrom
+            )
+        {
+            return ForShape::StoredRange(range_shape);
+        }
+        if let Some((kind, receiver)) = recognize_string_view_loop(self, binding, iterable) {
+            return ForShape::StringView(kind, receiver);
+        }
+        if let Pattern::Tuple { elements, .. } = &binding.pattern
+            && elements.len() == 2
+            && self.is_map_tuple_iterable(&iterable_ty)
+        {
+            return ForShape::MapTuple;
+        }
+        let is_channel = self.native_shape(&iterable_ty).is_some_and(|shape| {
+            matches!(shape, NativeTypeKind::Channel | NativeTypeKind::Receiver)
+        });
+        let yields = if is_channel || self.iter_seq_arity(&iterable_ty) == Some(1) {
+            RangeYield::Single
+        } else {
+            RangeYield::Pair
+        };
+        ForShape::Iterate {
+            yields,
+            simple_pattern: matches!(
+                &binding.pattern,
+                Pattern::Identifier { .. } | Pattern::WildCard { .. }
+            ),
+        }
     }
 }

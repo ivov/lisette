@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
 use crate::ir::bodies::{
@@ -108,28 +109,13 @@ impl Planner<'_> {
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
-    pub(crate) fn is_test_log_call(&self, expression: &Expression) -> bool {
-        let Expression::Call {
-            expression: callee, ..
-        } = expression.unwrap_parens()
-        else {
-            return false;
-        };
-        self.facts
-            .checked(callee)
-            .callee()
-            .definition
-            .as_deref()
-            .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD)
-    }
-
     pub(crate) fn lower_test_log_statement(&mut self, expression: &Expression) -> LoweredStatement {
-        let (mut statements, call) = self.lower_test_log_call(expression);
+        let (mut statements, call) = self.plan_test_log_call(expression);
         statements.push(expression_statement(call));
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
-    pub(crate) fn lower_test_log_call(
+    pub(crate) fn plan_test_log_call(
         &mut self,
         expression: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
@@ -139,17 +125,17 @@ impl Planner<'_> {
             ..
         } = expression.unwrap_parens()
         else {
-            unreachable!("lower_test_log_call requires a call");
+            unreachable!("plan_test_log_call requires a call");
         };
         let Expression::DotAccess {
             expression: receiver,
             ..
         } = callee.unwrap_parens()
         else {
-            unreachable!("lower_test_log_call requires a method receiver");
+            unreachable!("plan_test_log_call requires a method receiver");
         };
-        let handle = self.lower_value(receiver, ExpressionContext::value());
-        let value = self.lower_value(&arguments[0], ExpressionContext::value());
+        let handle = self.plan_value(receiver, ExpressionContext::value());
+        let value = self.plan_value(&arguments[0], ExpressionContext::value());
         let sequenced =
             self.sequence_values(vec![handle, value], CaptureBoundary::SiblingSequence, "log");
         let statements = sequenced.setup;
@@ -261,8 +247,8 @@ impl Planner<'_> {
         literals: LiteralInlining,
         statements: &mut Vec<Statement>,
     ) -> (AssertOperand, AssertOperand) {
-        let left_plan = self.lower_value(left, ExpressionContext::value());
-        let right_plan = self.lower_value(right, ExpressionContext::value());
+        let left_plan = self.plan_value(left, ExpressionContext::value());
+        let right_plan = self.plan_value(right, ExpressionContext::value());
         let names_inline = left_plan.setup().is_empty()
             && right_plan.setup().is_empty()
             && left_plan.effects().can_duplicate()
@@ -414,4 +400,20 @@ fn is_assert_relation(operator: &BinaryOperator) -> bool {
         operator,
         Equal | NotEqual | LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual
     )
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_test_log_call(&self, expression: &Expression) -> bool {
+        let Expression::Call {
+            expression: callee, ..
+        } = expression.unwrap_parens()
+        else {
+            return false;
+        };
+        self.checked(callee)
+            .callee()
+            .definition
+            .as_deref()
+            .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD)
+    }
 }

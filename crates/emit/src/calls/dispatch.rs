@@ -1,5 +1,5 @@
 use crate::abi::ReturnSlot;
-use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::expressions::access::struct_call::plan_struct_literal;
 use crate::types::go_type::ChannelDirection;
 use syntax::types::SimpleKind;
 
@@ -90,33 +90,10 @@ pub(crate) fn all_type_params_inferrable(
     })
 }
 
-impl Planner<'_> {
-    pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
-        let ty = &self.facts.peel_alias(ty);
-        let Type::Nominal { id, .. } = ty else {
-            return false;
-        };
-        !go_name::is_go_import(id.as_str())
-            && self.get_newtype_underlying(ty).is_none()
-            && matches!(
-                self.facts.definition(id.as_str()).map(|d| &d.body),
-                Some(DefinitionBody::Struct { .. })
-            )
-    }
-}
-
 impl<'a> Planner<'a> {
     fn native_element_type(&mut self, function: &Expression) -> GoType {
         let element = self.facts.checked(function).callee().first_type_argument();
         self.go_type(element)
-    }
-
-    fn map_entry_types(&self, function: &Expression) -> (Type, Type) {
-        let mut types = self.facts.checked(function).callee().type_arguments.types();
-        match (types.next(), types.next()) {
-            (Some(key), Some(value)) => (key.clone(), value.clone()),
-            _ => panic!("internal error: a map constructor has no checked entry types"),
-        }
     }
 
     fn stage_size_argument(&mut self, ctx: &NativeCallContext) -> (Vec<Statement>, GoExpression) {
@@ -128,7 +105,7 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn try_lower_native_constructor(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
+    fn try_plan_native_constructor(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
         match (ctx.native_type, ctx.method) {
             (NativeTypeKind::Channel, "new") => {
                 let element = self.native_element_type(ctx.function);
@@ -161,7 +138,7 @@ impl<'a> Planner<'a> {
                 ))
             }
             (NativeTypeKind::Map, "new") => {
-                let (key, val) = self.map_entry_types(ctx.function);
+                let (key, val) = self.facts.map_entry_types(ctx.function);
                 let (key, val) = (self.go_type(&key), self.go_type(&val));
                 Some(ValuePlan::computed(
                     Vec::new(),
@@ -171,7 +148,7 @@ impl<'a> Planner<'a> {
                     ),
                 ))
             }
-            (NativeTypeKind::Map, "from") => self.try_lower_map_from_pairs(ctx),
+            (NativeTypeKind::Map, "from") => self.try_plan_map_from_pairs(ctx),
             (NativeTypeKind::Slice, "new") => {
                 let element = self.native_element_type(ctx.function);
                 Some(ValuePlan::computed(
@@ -245,12 +222,12 @@ impl<'a> Planner<'a> {
                     None
                 }
             }
-            (NativeTypeKind::Array, "from") => self.try_lower_array_from(ctx),
+            (NativeTypeKind::Array, "from") => self.try_plan_array_from(ctx),
             _ => None,
         }
     }
 
-    fn try_lower_array_from(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
+    fn try_plan_array_from(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
         let callee_ty = ctx.function.get_type();
         let returned = callee_ty
             .as_function_type()
@@ -262,7 +239,7 @@ impl<'a> Planner<'a> {
             return None;
         };
         let argument = ctx.args.first()?;
-        let abi = self.return_abi(&option_ty, ReturnSlot::Function);
+        let abi = self.facts.return_abi(&option_ty, ReturnSlot::Function);
         if !matches!(
             abi,
             CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }))
@@ -321,7 +298,7 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::computed(setup, value))
     }
 
-    fn try_lower_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
+    fn try_plan_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
         if ctx.spread.is_some() {
             return None;
         }
@@ -346,7 +323,7 @@ impl<'a> Planner<'a> {
             })
             .collect::<Option<Vec<_>>>()?;
 
-        let (key_ty, value_ty) = self.map_entry_types(ctx.function);
+        let (key_ty, value_ty) = self.facts.map_entry_types(ctx.function);
         let keys: Vec<_> = pairs.iter().map(|(key, _)| *key).collect();
         if !keys_checked_as_go_constants(&keys, &self.facts.peel_alias(&key_ty)) {
             return None;
@@ -366,7 +343,7 @@ impl<'a> Planner<'a> {
             .flat_map(|(key, value)| [(*key, &key_ty), (*value, &value_ty)])
             .map(|(e, slot)| {
                 let origin = self.function_type_origin(slot, SlotOrigin::Lisette);
-                self.lower_composite_value(
+                self.plan_composite_value(
                     e,
                     ExpressionContext::value().with_function_slot_origin(origin),
                 )
@@ -402,11 +379,11 @@ impl<'a> Planner<'a> {
 
         let layout = CompositeLayout::for_elements(lowered.len(), widest);
         let value = GoExpression::composite(Some(map_ty), lowered, layout)
-            .position_elements(|index, _| self.source_position(&entries[index].get_span()));
+            .position_elements(|index, _| self.facts.source_position(&entries[index].get_span()));
         Some(ValuePlan::computed(setup, value))
     }
 
-    pub(crate) fn try_emit_negated_call(
+    pub(crate) fn try_plan_negated_call(
         &mut self,
         setup: &mut Vec<Statement>,
         call_expression: &Expression,
@@ -446,10 +423,10 @@ impl<'a> Planner<'a> {
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
         };
-        self.try_emit_negated_native_method(setup, &native_ctx)
+        self.try_plan_negated_native_method(setup, &native_ctx)
     }
 
-    pub(crate) fn lower_call(
+    pub(crate) fn plan_call_expression(
         &mut self,
         call_expression: &Expression,
         call_ty: Option<&Type>,
@@ -458,21 +435,22 @@ impl<'a> Planner<'a> {
         let plan = self
             .plan_call(call_expression)
             .expect("plan_call yields Some for a Call expression");
-        self.lower_call_with_plan(call_expression, call_ty, ctx, plan)
+        self.plan_call_with_plan(call_expression, call_ty, ctx, plan)
     }
 
-    pub(crate) fn lower_call_with_plan(
+    pub(crate) fn plan_call_with_plan(
         &mut self,
         call_expression: &Expression,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
         plan: CallPlan<'a>,
     ) -> ValuePlan {
-        let lowered = self.lower_unpositioned_call(call_expression, call_ty, ctx, plan);
-        self.with_source_positions(&written_span(call_expression), lowered)
+        let lowered = self.plan_unpositioned_call(call_expression, call_ty, ctx, plan);
+        self.facts
+            .with_source_positions(&written_span(call_expression), lowered)
     }
 
-    fn lower_unpositioned_call(
+    fn plan_unpositioned_call(
         &mut self,
         call_expression: &Expression,
         call_ty: Option<&Type>,
@@ -487,22 +465,22 @@ impl<'a> Planner<'a> {
             ..
         } = call_expression
         else {
-            unreachable!("lower_call requires a Call expression");
+            unreachable!("plan_call_expression requires a Call expression");
         };
         let function = callee.unwrap_parens();
         let spread = spread.as_deref();
         let written_type_arguments = type_arguments.annotations().len();
 
-        if let Some(predicate) = self.lower_fused_predicate_value(call_expression, false) {
+        if let Some(predicate) = self.try_plan_fused_predicate_value(call_expression, false) {
             return predicate;
         }
-        if let Some(defaulted) = self.lower_defaulted_call_value(call_expression) {
+        if let Some(defaulted) = self.try_plan_defaulted_call_value(call_expression) {
             return defaulted;
         }
 
         match &plan.resolved.origin {
             CallableOrigin::Source(CallOperation::TupleStructConstructor) => {
-                if let Some(result) = self.try_lower_tuple_struct_call(function, args, call_ty, ctx)
+                if let Some(result) = self.try_plan_tuple_struct_call(function, args, call_ty, ctx)
                 {
                     return result;
                 }
@@ -514,7 +492,7 @@ impl<'a> Planner<'a> {
                     .callee()
                     .first_type_argument()
                     .clone();
-                let value = if self.is_plain_struct(&ty) {
+                let value = if self.facts.is_plain_struct(&ty) {
                     GoExpression::empty_composite(self.go_type(&ty))
                 } else {
                     self.lisette_zero(&ty)
@@ -526,11 +504,11 @@ impl<'a> Planner<'a> {
                 return ValuePlan::computed(Vec::new(), value);
             }
             CallableOrigin::Source(CallOperation::AssertType) => {
-                let (setup, value) = self.lower_assert_type(function, args);
+                let (setup, value) = self.plan_assert_type(function, args);
                 return ValuePlan::plain_call(setup, value);
             }
             CallableOrigin::Source(CallOperation::UfcsFunction) => {
-                return self.lower_ufcs_call(function, args, written_type_arguments, spread, &plan);
+                return self.plan_ufcs_call(function, args, written_type_arguments, spread, &plan);
             }
             CallableOrigin::Source(
                 operation @ (CallOperation::NativeConstructor { kind, method }
@@ -553,15 +531,15 @@ impl<'a> Planner<'a> {
                     capture_boundary: ctx.capture_boundary(),
                     retired_receiver: ctx.retired_receiver(),
                 };
-                return self.lower_native_call(&native_ctx);
+                return self.plan_native_call(&native_ctx);
             }
             CallableOrigin::Source(CallOperation::ReceiverMethod { is_public }) => {
                 let method = extract_receiver_ufcs_method(function);
-                let mut go_method = self.method_go_name(&method, *is_public);
+                let mut go_method = self.facts.method_go_name(&method, *is_public);
                 if self.selects_tagged_twin(function) {
                     go_method = go_name::tagged_twin(&go_method);
                 }
-                return self.lower_receiver_method_ufcs(args, go_method, spread, &plan);
+                return self.plan_receiver_method_ufcs(args, go_method, spread, &plan);
             }
             CallableOrigin::GoInterop
             | CallableOrigin::Source(
@@ -571,11 +549,11 @@ impl<'a> Planner<'a> {
             ) => {}
         }
 
-        self.lower_regular_call(call_expression, &plan, call_ty, ctx)
+        self.plan_regular_call(call_expression, &plan, call_ty, ctx)
     }
 
-    pub(super) fn lower_native_call(&mut self, context: &NativeCallContext) -> ValuePlan {
-        if let Some(result) = self.try_lower_native_constructor(context) {
+    pub(super) fn plan_native_call(&mut self, context: &NativeCallContext) -> ValuePlan {
+        if let Some(result) = self.try_plan_native_constructor(context) {
             return result;
         }
         let result = self.lower_native_method(context);
@@ -588,7 +566,7 @@ impl<'a> Planner<'a> {
                 NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver
             )
             && split.is_some_and(|(receiver, _)| {
-                self.is_unmutated_identifier(receiver)
+                self.facts.is_unmutated_identifier(receiver)
                     && !self.facts.is_reference(&receiver.get_type())
             });
         if let GoExpressionNode::Identifier(name) = result.value.node()
@@ -633,9 +611,11 @@ impl<'a> Planner<'a> {
         let mapping = &self.facts.checked(function).callee().type_arguments;
 
         if all_inferrable {
-            let any_needs_explicit = vars
-                .iter()
-                .any(|v| mapping.get(v).is_some_and(|t| self.is_function_alias(t)));
+            let any_needs_explicit = vars.iter().any(|v| {
+                mapping
+                    .get(v)
+                    .is_some_and(|t| self.facts.is_function_alias(t))
+            });
             if !any_needs_explicit {
                 return None;
             }
@@ -653,7 +633,7 @@ impl<'a> Planner<'a> {
         Some(self.format_type_args(&resolved))
     }
 
-    fn try_lower_tuple_struct_call(
+    fn try_plan_tuple_struct_call(
         &mut self,
         function: &Expression,
         args: &[Expression],
@@ -681,7 +661,7 @@ impl<'a> Planner<'a> {
                 let origin = self.function_type_origin(slot, SlotOrigin::Lisette);
                 let ctx = arg_ctx.with_function_slot_origin(origin);
                 let source = self.emitted_value_layout(a, ctx);
-                (self.lower_composite_value(a, ctx), source)
+                (self.plan_composite_value(a, ctx), source)
             })
             .unzip();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
@@ -700,9 +680,9 @@ impl<'a> Planner<'a> {
         }
 
         let value =
-            emit_struct_literal(&target.go_ty, field_pairs).position_elements(|index, _| {
+            plan_struct_literal(&target.go_ty, field_pairs).position_elements(|index, _| {
                 args.get(index)
-                    .and_then(|argument| self.source_position(&argument.get_span()))
+                    .and_then(|argument| self.facts.source_position(&argument.get_span()))
             });
         Some(ValuePlan::computed(setup, value))
     }
@@ -753,7 +733,7 @@ impl<'a> Planner<'a> {
         })
     }
 
-    fn lower_assert_type(
+    fn plan_assert_type(
         &mut self,
         function: &Expression,
         args: &[Expression],
@@ -772,7 +752,7 @@ impl<'a> Planner<'a> {
         let (mut setup, arguments) = match args.first() {
             Some(a) => {
                 let (setup, value) = self
-                    .lower_composite_value(a, ExpressionContext::value())
+                    .plan_composite_value(a, ExpressionContext::value())
                     .into_parts();
                 (setup, vec![value])
             }
@@ -803,11 +783,6 @@ impl<'a> Planner<'a> {
         (setup, value)
     }
 
-    pub(super) fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
-        let symbol = self.facts.checked(function).callee().definition.as_ref()?;
-        self.facts.definition(symbol)?.go_name()
-    }
-
     pub(crate) fn is_local_binding(&self, function: &Expression) -> bool {
         if let Expression::Identifier {
             value, resolution, ..
@@ -834,7 +809,7 @@ impl<'a> Planner<'a> {
         }
         params
             .iter()
-            .any(|p| self.facts.is_interface_or_unknown(p) || self.is_function_alias(p))
+            .any(|p| self.facts.is_interface_or_unknown(p) || self.facts.is_function_alias(p))
             .then(|| self.format_type_args(params))
     }
 }
@@ -860,4 +835,36 @@ pub(super) fn go_builtin_name<'a>(facts: &EmitFacts<'a>, callee: &Expression) ->
         .as_deref()
         .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
         .and_then(|qualified| qualified.strip_prefix("prelude."))
+}
+
+impl EmitFacts<'_> {
+    fn map_entry_types(&self, function: &Expression) -> (Type, Type) {
+        let mut types = self.checked(function).callee().type_arguments.types();
+        match (types.next(), types.next()) {
+            (Some(key), Some(value)) => (key.clone(), value.clone()),
+            _ => panic!("internal error: a map constructor has no checked entry types"),
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
+        let ty = &self.peel_alias(ty);
+        let Type::Nominal { id, .. } = ty else {
+            return false;
+        };
+        !go_name::is_go_import(id.as_str())
+            && self.get_newtype_underlying(ty).is_none()
+            && matches!(
+                self.definition(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Struct { .. })
+            )
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(super) fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
+        let symbol = self.checked(function).callee().definition.as_ref()?;
+        self.definition(symbol)?.go_name()
+    }
 }

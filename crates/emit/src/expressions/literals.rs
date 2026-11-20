@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use std::fmt::Write;
 use std::mem::take;
 
@@ -13,7 +14,7 @@ use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(super) fn emit_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
+    pub(super) fn plan_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
         let (value, kind) = match literal {
             Literal::Integer { value, text } => {
                 let rendered = match text {
@@ -54,8 +55,8 @@ impl Planner<'_> {
                 format!("'{}'", convert_escape_sequences(c)),
                 ConstantKind::Rune,
             ),
-            Literal::FormatString(parts) => return self.emit_format_string(parts),
-            Literal::Slice(elements) => return self.emit_slice_literal(elements, ty),
+            Literal::FormatString(parts) => return self.plan_format_string(parts),
+            Literal::Slice(elements) => return self.plan_slice_literal(elements, ty),
         };
         ValuePlan::constant(value, kind)
     }
@@ -81,7 +82,7 @@ impl Planner<'_> {
         Some(self.go_type(slot_ty))
     }
 
-    fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
+    fn plan_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
         let element_lisette_ty = match ty {
             Type::Array { element, .. } => element.as_ref().clone(),
             _ => ty
@@ -101,7 +102,7 @@ impl Planner<'_> {
             .iter()
             .map(|e| {
                 let origin = self.function_type_origin(&element_lisette_ty, SlotOrigin::Lisette);
-                self.lower_composite_value(
+                self.plan_composite_value(
                     e,
                     ExpressionContext::value().with_function_slot_origin(origin),
                 )
@@ -131,11 +132,11 @@ impl Planner<'_> {
 
         let layout = CompositeLayout::for_elements(wrapped.len(), widest);
         let value = GoExpression::composite(Some(go_type), wrapped, layout)
-            .position_elements(|index, _| self.source_position(&elements[index].get_span()));
+            .position_elements(|index, _| self.facts.source_position(&elements[index].get_span()));
         ValuePlan::built_from(setup, value, stability)
     }
 
-    fn emit_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {
+    fn plan_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {
         let has_interpolation = parts
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
@@ -144,13 +145,13 @@ impl Planner<'_> {
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.lower_format_operand(e))
+                    Some(self.plan_format_operand(e))
                 } else {
                     None
                 }
             })
             .collect();
-        let concatenates = self.format_string_concatenates(parts);
+        let concatenates = self.facts.format_string_concatenates(parts);
         if concatenates && stages.len() == 1 && parts.len() == 1 {
             return stages.pop().expect("one staged operand");
         }
@@ -172,7 +173,7 @@ impl Planner<'_> {
                         let value = values
                             .next()
                             .expect("sequenced count matches expression parts");
-                        if self.display_form(expression) == DisplayForm::Unit {
+                        if self.facts.display_form(expression) == DisplayForm::Unit {
                             text.push_str(UNIT_DISPLAY);
                             continue;
                         }
@@ -194,7 +195,7 @@ impl Planner<'_> {
             return ValuePlan::built_from(setup, concatenation, stability);
         }
 
-        let (format_string, args) = self.sprintf_pieces(parts, values, has_interpolation);
+        let (format_string, args) = self.facts.sprintf_pieces(parts, values, has_interpolation);
 
         if args.is_empty() {
             return ValuePlan::computed(
@@ -203,7 +204,7 @@ impl Planner<'_> {
             );
         }
 
-        if !self.format_string_lowers_to_sprintf(parts) {
+        if !self.facts.format_string_lowers_to_sprintf(parts) {
             return ValuePlan::plain_call(
                 setup,
                 GoExpression::call(
@@ -223,44 +224,9 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn sprintf_pieces(
-        &self,
-        parts: &[FormatStringPart],
-        values: impl IntoIterator<Item = GoExpression>,
-        escape_percent: bool,
-    ) -> (String, Vec<GoExpression>) {
-        let mut values = values.into_iter();
-        let mut format_string = String::new();
-        let mut args = Vec::new();
-        for part in parts {
-            match part {
-                FormatStringPart::Text(text) => {
-                    let unescaped = text.replace("{{", "{").replace("}}", "}");
-                    let unescaped = convert_escape_sequences(&unescaped);
-                    if escape_percent {
-                        format_string.push_str(&unescaped.replace('%', "%%"));
-                    } else {
-                        format_string.push_str(&unescaped);
-                    }
-                }
-                FormatStringPart::Expression(expression) => {
-                    let value = values
-                        .next()
-                        .expect("sequenced count matches expression parts");
-                    let form = self.display_form(expression);
-                    format_string.push_str(form.interpolation_verb());
-                    if form != DisplayForm::Unit {
-                        args.push(value);
-                    }
-                }
-            }
-        }
-        (format_string, args)
-    }
-
-    pub(crate) fn lower_format_operand(&mut self, operand: &Expression) -> ValuePlan {
-        if self.display_form(operand) != DisplayForm::Unit {
-            return self.lower_composite_value(operand, ExpressionContext::value());
+    pub(crate) fn plan_format_operand(&mut self, operand: &Expression) -> ValuePlan {
+        if self.facts.display_form(operand) != DisplayForm::Unit {
+            return self.plan_composite_value(operand, ExpressionContext::value());
         }
         let setup = self.lower_discard_value(operand);
         ValuePlan::built_from(
@@ -268,40 +234,6 @@ impl Planner<'_> {
             string_constant(UNIT_DISPLAY.to_string()),
             Stability::Fixed,
         )
-    }
-
-    pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {
-        let has_interpolation = parts
-            .iter()
-            .any(|p| matches!(p, FormatStringPart::Expression(_)));
-        if !has_interpolation || self.format_string_concatenates(parts) {
-            return false;
-        }
-        let [FormatStringPart::Expression(solo)] = parts else {
-            return true;
-        };
-        self.display_form(solo) == DisplayForm::Char
-    }
-
-    fn display_form(&self, expression: &Expression) -> DisplayForm {
-        DisplayForm::of(&expression.get_type(), |id| self.facts.definition(id))
-    }
-
-    fn format_string_concatenates(&self, parts: &[FormatStringPart]) -> bool {
-        let mut operands = parts
-            .iter()
-            .filter_map(|part| match part {
-                FormatStringPart::Expression(expression) => Some(expression),
-                FormatStringPart::Text(_) => None,
-            })
-            .peekable();
-        operands.peek().is_some()
-            && operands.all(|expression| {
-                matches!(
-                    self.display_form(expression),
-                    DisplayForm::Unit | DisplayForm::String
-                )
-            })
     }
 }
 
@@ -369,4 +301,79 @@ pub(crate) fn convert_escape_sequences(s: &str) -> String {
         }
     }
     result
+}
+
+impl EmitFacts<'_> {
+    fn display_form(&self, expression: &Expression) -> DisplayForm {
+        DisplayForm::of(&expression.get_type(), |id| self.definition(id))
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn sprintf_pieces(
+        &self,
+        parts: &[FormatStringPart],
+        values: impl IntoIterator<Item = GoExpression>,
+        escape_percent: bool,
+    ) -> (String, Vec<GoExpression>) {
+        let mut values = values.into_iter();
+        let mut format_string = String::new();
+        let mut args = Vec::new();
+        for part in parts {
+            match part {
+                FormatStringPart::Text(text) => {
+                    let unescaped = text.replace("{{", "{").replace("}}", "}");
+                    let unescaped = convert_escape_sequences(&unescaped);
+                    if escape_percent {
+                        format_string.push_str(&unescaped.replace('%', "%%"));
+                    } else {
+                        format_string.push_str(&unescaped);
+                    }
+                }
+                FormatStringPart::Expression(expression) => {
+                    let value = values
+                        .next()
+                        .expect("sequenced count matches expression parts");
+                    let form = self.display_form(expression);
+                    format_string.push_str(form.interpolation_verb());
+                    if form != DisplayForm::Unit {
+                        args.push(value);
+                    }
+                }
+            }
+        }
+        (format_string, args)
+    }
+
+    fn format_string_concatenates(&self, parts: &[FormatStringPart]) -> bool {
+        let mut operands = parts
+            .iter()
+            .filter_map(|part| match part {
+                FormatStringPart::Expression(expression) => Some(expression),
+                FormatStringPart::Text(_) => None,
+            })
+            .peekable();
+        operands.peek().is_some()
+            && operands.all(|expression| {
+                matches!(
+                    self.display_form(expression),
+                    DisplayForm::Unit | DisplayForm::String
+                )
+            })
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {
+        let has_interpolation = parts
+            .iter()
+            .any(|p| matches!(p, FormatStringPart::Expression(_)));
+        if !has_interpolation || self.format_string_concatenates(parts) {
+            return false;
+        }
+        let [FormatStringPart::Expression(solo)] = parts else {
+            return true;
+        };
+        self.display_form(solo) == DisplayForm::Char
+    }
 }

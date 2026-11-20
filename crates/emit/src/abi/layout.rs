@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use syntax::ast::Expression;
 use syntax::program::DotAccessResolution;
 use syntax::program::{GoOptionRepresentation, go_option_representation};
@@ -522,7 +523,7 @@ impl Planner<'_> {
         }
         let owner = match declaring_type {
             Some(declaring) => declaring.clone(),
-            None => self.resolve_nominal(owner_type)?.id,
+            None => self.facts.resolve_nominal(owner_type)?.id,
         };
         if let Some(slot) = self.facts.go_field(owner.as_str(), field) {
             return Some(self.value_layout_with_declaration(
@@ -532,7 +533,7 @@ impl Planner<'_> {
             ));
         }
         let function_type = self.facts.resolve_to_function_type(value_type);
-        let (declared, _) = self.declared_field_ty(owner_type, variant, field)?;
+        let (declared, _) = self.facts.declared_field_ty(owner_type, variant, field)?;
         let declaration = self
             .facts
             .function_alias_declaration(value_type)
@@ -555,11 +556,6 @@ impl Planner<'_> {
             .facts
             .go_variable(Symbol::from_parts(package, member).as_str())?;
         Some(self.value_layout_with_declaration(value_type, slot.origin, &slot.declared_type))
-    }
-
-    pub(crate) fn is_go_abi_type(&self, ty: &Type) -> bool {
-        self.resolve_nominal(ty)
-            .is_some_and(|resolved| self.facts.is_go_imported_type(resolved.id.as_str()))
     }
 
     pub(crate) fn value_layout(&self, ty: &Type, origin: SlotOrigin) -> ValueLayout {
@@ -778,7 +774,7 @@ impl Planner<'_> {
             let underlying = build(origin);
             let declared_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
             if origin != declared_origin
-                && !self.is_go_named_function_type(ty)
+                && !self.facts.is_go_named_function_type(ty)
                 && !underlying.same_representation(&build(declared_origin))
             {
                 return underlying;
@@ -959,7 +955,7 @@ impl Planner<'_> {
                         .unwrap_or(Type::Never);
                     let declared_result =
                         declared_function.as_ref().and_then(Type::get_function_ret);
-                    let return_abi = self.return_abi(
+                    let return_abi = self.facts.return_abi(
                         physical_return.unwrap_or(&result_type),
                         ReturnSlot::FunctionValue(origin),
                     );
@@ -979,9 +975,9 @@ impl Planner<'_> {
                         ),
                     };
                 }
-                if let Some(underlying) = self.get_newtype_underlying(&ty) {
+                if let Some(underlying) = self.facts.get_newtype_underlying(&ty) {
                     let declared_underlying =
-                        declaration.and_then(|ty| self.get_newtype_underlying(ty));
+                        declaration.and_then(|ty| self.facts.get_newtype_underlying(ty));
                     return ValueLayout::Named {
                         named_type: ty,
                         underlying: Box::new(self.value_layout_with_hint(
@@ -1028,4 +1024,11 @@ fn tuple_hint(declaration: Option<&Type>, index: usize) -> Option<&Type> {
         return None;
     };
     elements.get(index)
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn is_go_abi_type(&self, ty: &Type) -> bool {
+        self.resolve_nominal(ty)
+            .is_some_and(|resolved| self.is_go_imported_type(resolved.id.as_str()))
+    }
 }

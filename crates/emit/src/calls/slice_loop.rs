@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::ir::local::GoIdentifier;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
@@ -211,7 +212,7 @@ impl Planner<'_> {
             _ => return None,
         };
         let result_ty = ctx.call_ty?.clone();
-        let element_ty = self.first_type_argument(&receiver.get_type())?;
+        let element_ty = self.facts.first_type_argument(&receiver.get_type())?;
         Some(SliceLoopShape {
             kind,
             callback,
@@ -228,7 +229,7 @@ impl Planner<'_> {
         self.prelude_callback_stages_as_is(callee, declared, instantiated)
     }
 
-    pub(crate) fn lower_slice_loop_into(
+    pub(crate) fn try_lower_slice_loop_into(
         &mut self,
         value: &Expression,
         go_name: &GoIdentifier,
@@ -281,7 +282,7 @@ impl Planner<'_> {
         let mut stages = vec![source_staged];
         if kind == SliceLoop::Fold {
             let origin = self.function_type_origin(&result_ty, SlotOrigin::Lisette);
-            let init = self.lower_composite_value(
+            let init = self.plan_composite_value(
                 &args[0],
                 ExpressionContext::value().with_function_slot_origin(origin),
             );
@@ -429,7 +430,7 @@ impl Planner<'_> {
         let Pattern::Identifier { binding, .. } = pattern else {
             return self.fresh_local(Some("result"));
         };
-        match self.go_name_for_binding(pattern) {
+        match self.facts.go_name_for_binding(pattern) {
             Some(name)
                 if self
                     .scope
@@ -476,7 +477,7 @@ impl Planner<'_> {
                     .bind_identifier(identifier.as_str(), ids.as_slice(), name.clone());
                 name
             }
-            None => match self.go_name_for_binding(pattern) {
+            None => match self.facts.go_name_for_binding(pattern) {
                 Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), &name),
                 None => GoIdentifier::external("_".to_string()),
             },
@@ -561,7 +562,7 @@ impl Planner<'_> {
 
     fn lower_slice_loop_body(&mut self, loop_body: &SliceLoopBody<'_>) -> Vec<Statement> {
         let line = match loop_body.callback {
-            LoweredCallback::Body(body) => self.source_position(&body.get_span()),
+            LoweredCallback::Body(body) => self.facts.source_position(&body.get_span()),
             LoweredCallback::Callee(_) => None,
         };
         let statements = self.lower_slice_loop_statements(loop_body);
@@ -582,6 +583,7 @@ impl Planner<'_> {
                 return match callback {
                     LoweredCallback::Body(body) => {
                         let element_ty = self
+                            .facts
                             .first_type_argument(result_ty)
                             .expect("map returns a slice carrying its element type");
                         self.lower_body_into_slot(body, &slot, &element_ty)
@@ -663,7 +665,7 @@ impl Planner<'_> {
                     let guard = self.lower_conjunction_guard(body, |_| then_body);
                     return vec![guard.into_statement().into()];
                 }
-                self.lower_value(body, ExpressionContext::value())
+                self.plan_value(body, ExpressionContext::value())
             }
         };
         let (mut statements, condition) = plan.into_parts();
@@ -685,18 +687,17 @@ impl Planner<'_> {
         self.lower_block_to_place(body, &place).statements
     }
 
-    fn first_type_argument(&self, ty: &Type) -> Option<Type> {
-        self.facts
-            .strip_and_peel(ty)
-            .get_type_params()?
-            .first()
-            .cloned()
-    }
-
     fn first_type_argument_go_type(&self, ty: &Type) -> GoType {
         let argument = self
+            .facts
             .first_type_argument(ty)
             .expect("slice and option results carry a type argument");
         self.go_type(&argument)
+    }
+}
+
+impl EmitFacts<'_> {
+    fn first_type_argument(&self, ty: &Type) -> Option<Type> {
+        self.strip_and_peel(ty).get_type_params()?.first().cloned()
     }
 }

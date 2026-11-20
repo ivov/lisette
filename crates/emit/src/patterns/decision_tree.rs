@@ -165,7 +165,7 @@ impl AccessPath {
 }
 
 fn field_segment(planner: &Planner<'_>, receiver_ty: &Type, name: String) -> PathSegment {
-    if planner.field_read_cannot_panic(receiver_ty) {
+    if planner.facts.field_read_cannot_panic(receiver_ty) {
         PathSegment::ValueField(name)
     } else {
         PathSegment::Field(name)

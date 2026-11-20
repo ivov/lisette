@@ -1,15 +1,16 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::ValueLayout;
 use crate::abi::wrapping::NilGuard;
+use crate::analyze::queries::reads_value_member;
 use crate::ir::bodies::Statement;
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, Stability, ValuePlan};
 use crate::names::go_name;
 use crate::state::bindings::BindingValue;
 use crate::state::expression::ExpressionContext;
-use crate::utils::reads_value_member;
 use syntax::ast::Expression;
 use syntax::parse;
 use syntax::program::GoHint;
@@ -67,11 +68,13 @@ impl Planner<'_> {
                 .receiver_change()
                 .filter(|coercion| {
                     *coercion != ReceiverCoercion::AutoAddress
-                        || !self.has_go_value_receiver(&expression.get_type(), member)
+                        || !self
+                            .facts
+                            .has_go_value_receiver(&expression.get_type(), member)
                 });
         let tagged_twin = self.selects_tagged_twin(dot_access);
 
-        if let Some(expression) = self.try_emit_pre_receiver_dot(dot_access, tagged_twin, ctx) {
+        if let Some(expression) = self.try_plan_pre_receiver_dot(dot_access, tagged_twin, ctx) {
             let plan = ValuePlan::computed(Vec::new(), expression);
             if matches!(resolution, DotAccessResolution::EnumVariant { .. }) {
                 return plan.with_stability(Stability::Fixed);
@@ -83,7 +86,7 @@ impl Planner<'_> {
         if let Some(component) = self.tuple_component_read(expression, member) {
             let mut setup = Vec::new();
             if wrap_nullable
-                && let Some(wrapped) = self.plan_nullable_field_access(
+                && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
                     NullableFieldAccess {
                         value: GoExpression::identifier(component.clone()),
@@ -111,7 +114,7 @@ impl Planner<'_> {
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
         let stability = if let Some(package) = expression_ty.as_import_namespace()
-            && self.package_member_is_fixed(package, member)
+            && self.facts.package_member_is_fixed(package, member)
         {
             Stability::Fixed
         } else if reads_value_member(&self.facts, resolution, expression, &expression_ty) {
@@ -130,10 +133,10 @@ impl Planner<'_> {
             base = adapted;
         }
         if let Some(member_access) =
-            self.try_emit_tuple_member_dot(&base, &expression_ty, member, resolution)
+            self.try_plan_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
             if wrap_nullable
-                && let Some(wrapped) = self.plan_nullable_field_access(
+                && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
                     NullableFieldAccess {
                         value: member_access.clone(),
@@ -157,11 +160,13 @@ impl Planner<'_> {
 
         let selector = match package {
             Some(package) => GoExpression::qualified(package, field),
-            None if resolution.is_field_read() => self.field_access(base, &expression_ty, field),
+            None if resolution.is_field_read() => {
+                self.facts.field_access(base, &expression_ty, field)
+            }
             None => GoExpression::selector(base, field),
         };
         if wrap_nullable
-            && let Some(wrapped) = self.plan_nullable_field_access(
+            && let Some(wrapped) = self.try_plan_nullable_field_access(
                 &mut setup,
                 NullableFieldAccess {
                     value: selector.clone(),
@@ -178,7 +183,9 @@ impl Planner<'_> {
         let expression =
             self.append_cross_package_type_args(selector, dot_access, &expression_ty, ctx);
         let expression = if let Some(package) = expression_ty.as_import_namespace()
-            && self.go_constant_exceeds_int(package, member, result_ty)
+            && self
+                .facts
+                .go_constant_exceeds_int(package, member, result_ty)
         {
             GoExpression::conversion(self.go_type(result_ty), expression)
         } else {
@@ -193,7 +200,7 @@ impl Planner<'_> {
         ValuePlan::computed(setup, expression).with_stability(stability)
     }
 
-    fn try_emit_pre_receiver_dot(
+    fn try_plan_pre_receiver_dot(
         &mut self,
         dot_access: &Expression,
         tagged_twin: bool,
@@ -210,14 +217,13 @@ impl Planner<'_> {
         };
         match resolution {
             DotAccessResolution::EnumVariant { definition, .. } => {
-                self.emit_enum_variant_dot(definition, result_ty, ctx)
+                self.try_plan_enum_variant_dot(definition, result_ty, ctx)
             }
             DotAccessResolution::StaticMethod { definition, .. } => {
-                Some(self.emit_static_method_dot(dot_access, definition, ctx))
+                Some(self.plan_static_method_dot(dot_access, definition, ctx))
             }
-            DotAccessResolution::InstanceMethodValue { is_exported, .. } => {
-                self.emit_instance_method_value_dot(member, result_ty, *is_exported, tagged_twin)
-            }
+            DotAccessResolution::InstanceMethodValue { is_exported, .. } => self
+                .try_plan_instance_method_value_dot(member, result_ty, *is_exported, tagged_twin),
             _ => None,
         }
     }
@@ -247,18 +253,18 @@ impl Planner<'_> {
         resolution: &DotAccessResolution,
     ) -> String {
         if let Some(package) = expression_ty.as_import_namespace() {
-            return self.package_member_go_name(package, member);
+            return self.facts.package_member_go_name(package, member);
         }
         let canonical_ty = self.facts.strip_and_peel(expression_ty);
         if let DotAccessResolution::StructField { is_exported, .. } = resolution {
             return self.struct_field_go_name(&canonical_ty, member, *is_exported);
         }
         let is_exported = self.resolve_is_exported(expression, &canonical_ty, member, resolution);
-        let embedded = self.embedded_field(expression_ty, member);
+        let embedded = self.facts.embedded_field(expression_ty, member);
         go_name::member_go_name(&canonical_ty, member, is_exported, embedded)
     }
 
-    pub(crate) fn try_emit_tuple_member_dot(
+    pub(crate) fn try_plan_tuple_member_dot(
         &mut self,
         base: &GoExpression,
         expression_ty: &Type,
@@ -273,13 +279,16 @@ impl Planner<'_> {
                 let field = parse::TUPLE_FIELDS
                     .get(index)
                     .expect("oversize tuple arity");
-                Some(self.field_access(base.clone(), expression_ty, field.to_string()))
+                Some(
+                    self.facts
+                        .field_access(base.clone(), expression_ty, field.to_string()),
+                )
             }
             DotAccessResolution::TupleStructField { is_newtype } => {
-                if *is_newtype && let Some(cast) = self.try_emit_newtype_cast(expression_ty, base) {
+                if *is_newtype && let Some(cast) = self.try_plan_newtype_cast(expression_ty, base) {
                     return Some(cast);
                 }
-                Some(self.field_access(
+                Some(self.facts.field_access(
                     base.clone(),
                     expression_ty,
                     go_name::tuple_struct_field(index),
@@ -298,7 +307,7 @@ impl Planner<'_> {
     ) -> bool {
         match resolution {
             DotAccessResolution::InstanceMethod { is_exported, .. } => {
-                *is_exported || self.method_needs_export(member)
+                *is_exported || self.facts.method_needs_export(member)
             }
             _ => {
                 if self.compute_is_exported_context(expression, expression_ty)
@@ -306,7 +315,8 @@ impl Planner<'_> {
                 {
                     return true;
                 }
-                !self.has_field(expression_ty, member) && self.method_needs_export(member)
+                !self.facts.has_field(expression_ty, member)
+                    && self.facts.method_needs_export(member)
             }
         }
     }
@@ -339,10 +349,10 @@ impl Planner<'_> {
         if !payload.is_identity() {
             return None;
         }
-        Some(self.option_nil_guard(result_ty))
+        Some(self.facts.option_nil_guard(result_ty))
     }
 
-    fn plan_nullable_field_access(
+    fn try_plan_nullable_field_access(
         &mut self,
         setup: &mut Vec<Statement>,
         access: NullableFieldAccess<'_>,
@@ -395,12 +405,12 @@ impl Planner<'_> {
         }
     }
 
-    fn try_emit_newtype_cast(
+    fn try_plan_newtype_cast(
         &mut self,
         expression_ty: &Type,
         base: &GoExpression,
     ) -> Option<GoExpression> {
-        let field_ty = self.get_newtype_underlying(expression_ty)?;
+        let field_ty = self.facts.get_newtype_underlying(expression_ty)?;
         let go_type = self.go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
             GoExpression::dereference(base.clone())
@@ -426,7 +436,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let elided_deref = expression
             .deref_inner()
-            .filter(|inner| !self.points_to_ref(&inner.get_type()));
+            .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
         let (staged, had_explicit_deref) = if let Some(inner) = elided_deref {
             (self.plan_operand(inner, ctx), true)
         } else {
@@ -453,54 +463,10 @@ impl Planner<'_> {
             }
         })
     }
-
-    pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
-        let peeled = self.facts.peel_alias(ty);
-        peeled.is_ref()
-            && peeled
-                .inner()
-                .is_some_and(|inner| self.facts.peel_alias(&inner).is_ref())
-    }
-
-    fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
-        let receiver_ty = self.facts.peel_alias(&receiver_ty.strip_refs());
-        receiver_ty
-            .get_qualified_id()
-            .filter(|owner| go_name::is_go_import(owner))
-            .and_then(|owner| self.facts.method(owner, method))
-            .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
-    }
-
-    fn go_constant_exceeds_int(&self, package: &str, member: &str, ty: &Type) -> bool {
-        if !ty.is_unsigned_int() || !go_name::is_go_import(package) {
-            return false;
-        }
-        let qualified_name = format!("{}.{}", package, member);
-        self.facts
-            .definition(qualified_name.as_str())
-            .is_some_and(|definition| {
-                matches!(
-                    &definition.body,
-                    DefinitionBody::Value {
-                        kind: ValueKind::Constant(ConstantValue::Integer { value, .. }),
-                        ..
-                    } if *value > i64::MAX as u64
-                )
-            })
-    }
-
-    fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {
-        let qualified_name = format!("{}.{}", package, member);
-        self.facts
-            .definition(qualified_name.as_str())
-            .is_some_and(|definition| {
-                matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
-            })
-    }
 }
 
 impl Planner<'_> {
-    pub(crate) fn emit_enum_variant_dot(
+    pub(crate) fn try_plan_enum_variant_dot(
         &mut self,
         definition: &str,
         result_ty: &Type,
@@ -538,7 +504,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn emit_static_method_dot(
+    pub(crate) fn plan_static_method_dot(
         &mut self,
         dot_access: &Expression,
         definition: &str,
@@ -552,7 +518,7 @@ impl Planner<'_> {
         GoExpression::instantiation(function, type_args.unwrap_or_default())
     }
 
-    pub(crate) fn emit_instance_method_value_dot(
+    pub(crate) fn try_plan_instance_method_value_dot(
         &mut self,
         member: &str,
         result_ty: &Type,
@@ -560,10 +526,54 @@ impl Planner<'_> {
         tagged_twin: bool,
     ) -> Option<GoExpression> {
         let receiver_param = &result_ty.as_function_type()?.params.first()?.ty;
-        let mut go_method = self.method_go_name(member, is_exported);
+        let mut go_method = self.facts.method_go_name(member, is_exported);
         if tagged_twin {
             go_method = go_name::tagged_twin(&go_method);
         }
         Some(self.method_expression(receiver_param, go_method))
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
+        let peeled = self.peel_alias(ty);
+        peeled.is_ref()
+            && peeled
+                .inner()
+                .is_some_and(|inner| self.peel_alias(&inner).is_ref())
+    }
+
+    fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
+        let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
+        receiver_ty
+            .get_qualified_id()
+            .filter(|owner| go_name::is_go_import(owner))
+            .and_then(|owner| self.method(owner, method))
+            .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
+    }
+
+    fn go_constant_exceeds_int(&self, package: &str, member: &str, ty: &Type) -> bool {
+        if !ty.is_unsigned_int() || !go_name::is_go_import(package) {
+            return false;
+        }
+        let qualified_name = format!("{}.{}", package, member);
+        self.definition(qualified_name.as_str())
+            .is_some_and(|definition| {
+                matches!(
+                    &definition.body,
+                    DefinitionBody::Value {
+                        kind: ValueKind::Constant(ConstantValue::Integer { value, .. }),
+                        ..
+                    } if *value > i64::MAX as u64
+                )
+            })
+    }
+
+    fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {
+        let qualified_name = format!("{}.{}", package, member);
+        self.definition(qualified_name.as_str())
+            .is_some_and(|definition| {
+                matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
+            })
     }
 }

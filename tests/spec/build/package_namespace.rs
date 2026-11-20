@@ -229,7 +229,7 @@ fn package_block_names_are_numbered_by_one_allocator() {
         "crates/emit/src/names/go_name.rs",
         "crates/emit/src/state/package_state.rs",
         "crates/emit/src/state/scope/names.rs",
-        "crates/emit/src/utils.rs",
+        "crates/emit/src/names/receiver.rs",
         "crates/emit/src/expressions/top_items.rs",
     ];
     let offenders: Vec<String> = source_files("crates/emit/src")

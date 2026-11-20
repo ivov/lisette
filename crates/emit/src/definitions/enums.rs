@@ -9,16 +9,16 @@ use crate::ir::go_expression::{CompositeLayout, GoParameter};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::names::go_name;
+use crate::names::receiver::ReceiverGenerics;
+use crate::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::types::go_type::GoType;
-use crate::utils::ReceiverGenerics;
-use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
 use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
-    pub(crate) fn emit_enum(
+    pub(crate) fn try_emit_enum(
         &mut self,
         name: &str,
         generics: &[Generic],
@@ -48,7 +48,7 @@ impl Planner<'_> {
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
         let mut result = layout.emit_definition(self, generics, doc_comment);
-        for method in self.enum_synthesized_methods(name, attributes) {
+        for method in self.facts.enum_synthesized_methods(name, attributes) {
             match method {
                 SynthesizedMethod::Format(format) => {
                     result.push(layout.format_declaration(self, &receiver_generics, format))
@@ -59,7 +59,7 @@ impl Planner<'_> {
                 SynthesizedMethod::ToString => result.push(self.emit_to_string_method(
                     name,
                     &receiver_generics,
-                    &self.to_string_method_go_name(),
+                    &self.facts.to_string_method_go_name(),
                 )),
                 SynthesizedMethod::Equals => {
                     result.extend(self.enum_equals_method(name, &enum_id, &receiver_generics))
@@ -109,7 +109,7 @@ impl Planner<'_> {
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
         let receiver_type = receiver_generics.receiver_type(name);
-        let go_method = self.equals_method_go_name();
+        let go_method = self.facts.equals_method_go_name();
 
         let mut recipes = self.facts.synthesized_field_equalities(enum_id).iter();
         let mut cases: Vec<SwitchCasePlan> = Vec::new();

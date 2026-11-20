@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::ir::go_expression::GoExpressionNode;
 use crate::ir::local::GoIdentifier;
@@ -11,10 +12,6 @@ use syntax::program::{self, Definition};
 use syntax::types::{Type, unqualified_name};
 
 impl Planner<'_> {
-    pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
-        go_name::resolve(name).into_expression()
-    }
-
     pub(crate) fn definition_reference(&self, symbol: &str) -> GoExpression {
         let package = self
             .facts
@@ -22,7 +19,7 @@ impl Planner<'_> {
             .expect("definition symbols are package-qualified");
         let name = &symbol[package.len() + 1..];
         if let Some((owner, method)) = name.rsplit_once('.') {
-            let owner_id = self.peel_alias_id(&format!("{package}.{owner}"));
+            let owner_id = self.facts.peel_alias_id(&format!("{package}.{owner}"));
             let is_public = match self.facts.method(&owner_id, method) {
                 Some(method) => method.visibility.is_public(),
                 None => self
@@ -55,18 +52,8 @@ impl Planner<'_> {
         }
         GoExpression::qualified(
             self.package_use_for_package(package),
-            self.package_member_go_name(package, name),
+            self.facts.package_member_go_name(package, name),
         )
-    }
-
-    pub(crate) fn package_member_go_name(&self, package: &str, member: &str) -> String {
-        if go_name::is_go_import(package) {
-            member.to_string()
-        } else if self.facts.is_const(&format!("{package}.{member}")) {
-            go_name::screaming_snake_to_camel(member)
-        } else {
-            go_name::snake_to_camel(member)
-        }
     }
 
     pub(crate) fn reference_go_identifier(
@@ -179,23 +166,6 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn method_go_name(&self, method: &str, is_public: bool) -> String {
-        if is_public || self.method_needs_export(method) {
-            go_name::snake_to_camel(method)
-        } else {
-            go_name::unexported_method_go_name(method)
-        }
-    }
-
-    pub(crate) fn interface_method_go_name(&self, method: &str, is_public: bool) -> String {
-        let name = self.method_go_name(method, is_public);
-        if self.facts.method_uses_tagged_return(method) {
-            go_name::tagged_twin(&name)
-        } else {
-            name
-        }
-    }
-
     pub(crate) fn free_function_go_name(&self, name: &str, is_public: bool) -> String {
         if is_public {
             go_name::snake_to_camel(name)
@@ -204,6 +174,43 @@ impl Planner<'_> {
                 .escape_remap(name)
                 .map(str::to_string)
                 .unwrap_or_else(|| go_name::escape_reserved(name).into_owned())
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
+        go_name::resolve(name).into_expression()
+    }
+
+    pub(crate) fn package_member_go_name(&self, package: &str, member: &str) -> String {
+        if go_name::is_go_import(package) {
+            member.to_string()
+        } else if self.is_const(&format!("{package}.{member}")) {
+            go_name::screaming_snake_to_camel(member)
+        } else {
+            go_name::snake_to_camel(member)
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn method_go_name(&self, method: &str, is_public: bool) -> String {
+        if is_public || self.method_needs_export(method) {
+            go_name::snake_to_camel(method)
+        } else {
+            go_name::unexported_method_go_name(method)
+        }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn interface_method_go_name(&self, method: &str, is_public: bool) -> String {
+        let name = self.method_go_name(method, is_public);
+        if self.method_uses_tagged_return(method) {
+            go_name::tagged_twin(&name)
+        } else {
+            name
         }
     }
 }

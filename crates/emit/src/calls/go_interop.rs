@@ -18,7 +18,7 @@ use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(crate) fn lower_go_abi_wrapped_call(
+    pub(crate) fn plan_go_abi_wrapped_call(
         &mut self,
         call_expression: &Expression,
         abi: &CallableAbi,
@@ -26,7 +26,8 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let bridge = self.go_result_bridge(abi, result_ty);
         let bridged = bridge.as_ref().is_some_and(|bridge| !bridge.is_identity());
-        let call_plan = self.lower_call(call_expression, None, ExpressionContext::value());
+        let call_plan =
+            self.plan_call_expression(call_expression, None, ExpressionContext::value());
         let mut wrapped_in_place = false;
         let mut plan = call_plan.map_expression(|setup, call| {
             let shortcut = match abi.result {
@@ -45,7 +46,7 @@ impl Planner<'_> {
             let (wrap, value) = match shortcut {
                 Ok(value) => (Vec::new(), value),
                 Err(call) => {
-                    let (wrap, outcome) = self.lower_abi_wrapping(
+                    let (wrap, outcome) = self.plan_abi_wrapping(
                         call,
                         &abi.result,
                         result_ty,
@@ -135,7 +136,7 @@ impl Planner<'_> {
             .collect()
     }
 
-    pub(crate) fn lower_abi_wrapping(
+    pub(crate) fn plan_abi_wrapping(
         &mut self,
         call: GoExpression,
         abi: &CallableReturnAbi,
@@ -162,7 +163,7 @@ impl Planner<'_> {
                     Some(GoResultBridge::Tuple(bridges)) => Some(bridges),
                     _ => None,
                 };
-                self.lower_tuple_result(call, *arity, result_ty, slot_bridges.as_deref())
+                self.plan_tuple_result(call, *arity, result_ty, slot_bridges.as_deref())
             }
             (Some(LoweredReturnAbi::BareError), _) => {
                 let layout = self.value_layout(declared_result_ty, SlotOrigin::Lisette);
@@ -229,7 +230,7 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    fn lower_tuple_result(
+    fn plan_tuple_result(
         &mut self,
         call: GoExpression,
         arity: usize,
@@ -270,7 +271,7 @@ impl Planner<'_> {
         (statements, tuple)
     }
 
-    pub(crate) fn lower_abi_wrapped_call_to(
+    pub(crate) fn try_lower_abi_wrapped_call_to(
         &mut self,
         expression: &Expression,
         abi: &CallableAbi,
@@ -285,9 +286,9 @@ impl Planner<'_> {
         }
         let bridge = self.go_result_bridge(abi, result_ty);
         let (mut statements, call) = self
-            .lower_call(expression, None, ExpressionContext::value())
+            .plan_call_expression(expression, None, ExpressionContext::value())
             .into_parts();
-        let (wrap, _) = self.lower_abi_wrapping(call, &abi.result, result_ty, bridge, target);
+        let (wrap, _) = self.plan_abi_wrapping(call, &abi.result, result_ty, bridge, target);
         statements.extend(wrap);
         Some(statements)
     }
@@ -303,7 +304,7 @@ impl Planner<'_> {
             .then_some(arity)
     }
 
-    pub(crate) fn emit_go_call_discarded(
+    pub(crate) fn try_plan_go_call_discarded(
         &mut self,
         setup: &mut Vec<Statement>,
         call_expression: &Expression,
@@ -320,7 +321,7 @@ impl Planner<'_> {
         }
 
         let (call_setup, call) = self
-            .lower_call(call_expression, None, ExpressionContext::value())
+            .plan_call_expression(call_expression, None, ExpressionContext::value())
             .into_parts();
         setup.extend(call_setup);
 
@@ -420,7 +421,7 @@ impl Planner<'_> {
             LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
                 Some(NilGuard::Sentinel(*value))
             }
-            LoweredReturnAbi::Option(_) => self.nullable_option_nil_guard(&ty),
+            LoweredReturnAbi::Option(_) => self.facts.nullable_option_nil_guard(&ty),
             _ => None,
         };
 

@@ -43,7 +43,7 @@ impl Planner<'_> {
         self.format_generic_instantiation(definition_ty, type_arguments)
     }
 
-    pub(super) fn lower_ufcs_call(
+    pub(super) fn plan_ufcs_call(
         &mut self,
         function: &Expression,
         args: &[Expression],
@@ -57,7 +57,7 @@ impl Planner<'_> {
             ..
         } = function
         else {
-            unreachable!("lower_ufcs_call called on non-DotAccess");
+            unreachable!("plan_ufcs_call called on non-DotAccess");
         };
 
         let mut coercion = self.facts.checked(receiver).receiver_change();
@@ -161,7 +161,7 @@ impl Planner<'_> {
                 },
             )
         } else {
-            self.emit_call_args(args, ctx, Some(receiver_stage))
+            self.plan_call_args(args, ctx, Some(receiver_stage))
         };
         let mut all_values = sequenced.values;
         let receiver_arg = all_values.remove(0);
@@ -217,7 +217,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(super) fn lower_receiver_method_ufcs(
+    pub(super) fn plan_receiver_method_ufcs(
         &mut self,
         args: &[Expression],
         go_method: String,
@@ -233,7 +233,7 @@ impl Planner<'_> {
             callee_pins_type_args: false,
             receiver_binding: None,
         };
-        let sequenced = self.emit_call_args(args, &args_ctx, None);
+        let sequenced = self.plan_call_args(args, &args_ctx, None);
         let mut emitted_all = sequenced.values;
         let receiver = emitted_all.remove(0);
 

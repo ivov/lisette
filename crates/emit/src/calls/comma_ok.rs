@@ -159,7 +159,7 @@ impl Planner<'_> {
         source: CommaOkSource,
         slot: CommaOkValueSlot,
     ) -> BoundValue {
-        let (statements, pair) = self.lower_comma_ok_pair(expression, &source);
+        let (statements, pair) = self.plan_comma_ok_pair(expression, &source);
         self.bind_pair(
             statements,
             pair,
@@ -269,22 +269,22 @@ impl Planner<'_> {
         name
     }
 
-    fn lower_comma_ok_pair(
+    fn plan_comma_ok_pair(
         &mut self,
         expression: &Expression,
         source: &CommaOkSource,
     ) -> (Vec<Statement>, GoExpression) {
         match source {
             CommaOkSource::LoweredCall { .. } => self
-                .lower_call(expression, None, ExpressionContext::value())
+                .plan_call_expression(expression, None, ExpressionContext::value())
                 .into_parts(),
-            CommaOkSource::MapIndex => self.lower_map_index_pair(expression),
+            CommaOkSource::MapIndex => self.plan_map_index_pair(expression),
             CommaOkSource::TypeAssert => {
                 let Expression::Call { args, .. } = expression else {
                     unreachable!("comma_ok_source only accepts Call expressions");
                 };
                 let (setup, operand) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value())
+                    .plan_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
                 let target = self.go_type(&target_ty);

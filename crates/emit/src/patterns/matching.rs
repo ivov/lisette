@@ -196,42 +196,42 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_fused_lowered_match(subject, arms, place, None) {
+        if let Some(fused) = self.try_lower_fused_lowered_match(subject, arms, place, None) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_fused_partial_match(subject, arms, place) {
+        if let Some(fused) = self.try_lower_fused_partial_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_fused_partial_outcome_match(subject, arms, place) {
+        if let Some(fused) = self.try_lower_fused_partial_outcome_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_fused_selective_partial_match(subject, arms, place) {
+        if let Some(fused) = self.try_lower_fused_selective_partial_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_fused_option_match(subject, arms, place) {
+        if let Some(fused) = self.try_lower_fused_option_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_nested_option_pair_match(subject, arms, place) {
+        if let Some(fused) = self.try_lower_nested_option_pair_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_nested_result_pair_match(subject, arms, place) {
+        if let Some(fused) = self.try_lower_nested_result_pair_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
 
-        if let Some(elementwise) = self.lower_tuple_subject_match(subject, arms, place) {
+        if let Some(elementwise) = self.try_lower_tuple_subject_match(subject, arms, place) {
             statements.extend(elementwise);
             return LoweredBlock { statements };
         }
@@ -253,7 +253,7 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    fn lower_nested_option_pair_match(
+    fn try_lower_nested_option_pair_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -312,7 +312,7 @@ impl Planner<'_> {
         Some(bound.statements)
     }
 
-    fn lower_tuple_subject_match(
+    fn try_lower_tuple_subject_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
@@ -343,7 +343,7 @@ impl Planner<'_> {
         let mut statements: Vec<Statement> = Vec::new();
         let mut stages: Vec<ValuePlan> = elements
             .iter()
-            .map(|element| self.lower_composite_value(element, ExpressionContext::value()))
+            .map(|element| self.plan_composite_value(element, ExpressionContext::value()))
             .collect();
         for ((stage, tested), element) in stages.iter_mut().zip(&tested).zip(elements) {
             let rereadable = is_inert_value(element, stage.expression())
@@ -414,7 +414,7 @@ impl Planner<'_> {
             setup.extend(subject_setup);
             return ResolvedSubject::Existing(value);
         }
-        let staged = self.lower_composite_value(subject, ExpressionContext::value());
+        let staged = self.plan_composite_value(subject, ExpressionContext::value());
         let rests_in_stable_name = self.plan_rests_in_stable_name(&staged);
         let (subject_setup, value) = staged.into_parts();
         setup.extend(subject_setup);

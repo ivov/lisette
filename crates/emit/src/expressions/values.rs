@@ -1,7 +1,8 @@
+use crate::EmitFacts;
 use crate::abi::ReturnSlot;
 use crate::abi::is_closure_literal;
 use crate::calls::split_native_receiver;
-use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::expressions::access::struct_call::plan_struct_literal;
 use crate::ir::bodies::AsyncKind;
 use crate::names::go_name;
 use syntax::program::NativeOperation;
@@ -30,7 +31,7 @@ use syntax::program::{CallOperation, DotAccessResolution};
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(crate) fn lower_value(
+    pub(crate) fn plan_value(
         &mut self,
         expression: &Expression,
         context: ExpressionContext<'_>,
@@ -97,7 +98,7 @@ impl Planner<'_> {
         (!source.same_representation(&target)).then_some(FunctionBridge { source, target })
     }
 
-    pub(crate) fn lower_composite_value(
+    pub(crate) fn plan_composite_value(
         &mut self,
         expression: &Expression,
         context: ExpressionContext<'_>,
@@ -107,7 +108,7 @@ impl Planner<'_> {
                 && matches!(expression.unwrap_parens(), Expression::Block { .. }))
         {
             return self
-                .lower_value(expression, context)
+                .plan_value(expression, context)
                 .map_observable_expression(|setup, call| {
                     if !call.is_empty() {
                         setup.push(effect_statement(call));
@@ -133,7 +134,8 @@ impl Planner<'_> {
                 Some(return_type) => (
                     self.value_layout(&Type::Never, SlotOrigin::Lisette),
                     self.value_layout(return_type, SlotOrigin::Lisette),
-                    self.return_abi(return_type, ReturnSlot::FunctionExpression(context)),
+                    self.facts
+                        .return_abi(return_type, ReturnSlot::FunctionExpression(context)),
                 ),
                 None => (
                     self.value_layout(&Type::unit(), SlotOrigin::Lisette),
@@ -155,15 +157,15 @@ impl Planner<'_> {
             );
             let target = self.function_layout(parameters, &target_result, return_abi, None);
             return self
-                .lower_value(expression, context)
+                .plan_value(expression, context)
                 .map_expression(|statements, value| {
                     self.plan_function_layout_bridge(statements, value, &source, &target, true)
                 });
         }
-        self.lower_value(expression, context)
+        self.plan_value(expression, context)
     }
 
-    pub(crate) fn lower_call_value(
+    pub(crate) fn plan_call_value(
         &mut self,
         expression: &Expression,
         result_type: &Type,
@@ -177,7 +179,7 @@ impl Planner<'_> {
 
         if let Some(bridge) = layout_bridge {
             let call_type = (!wraps_result).then_some(result_type);
-            let call = self.lower_call_with_plan(expression, call_type, context, plan);
+            let call = self.plan_call_with_plan(expression, call_type, context, plan);
             return call.map_observable_expression(|setup, call| {
                 let (bridge_setup, value) = bridge.lower(self, call);
                 setup.extend(bridge_setup);
@@ -186,9 +188,9 @@ impl Planner<'_> {
         }
 
         if wraps_result {
-            self.lower_go_abi_wrapped_call(expression, &plan.resolved.abi, result_type)
+            self.plan_go_abi_wrapped_call(expression, &plan.resolved.abi, result_type)
         } else {
-            self.lower_call_with_plan(expression, Some(result_type), context, plan)
+            self.plan_call_with_plan(expression, Some(result_type), context, plan)
         }
     }
 
@@ -212,7 +214,7 @@ impl Planner<'_> {
         let origin = self.function_type_origin(&expression_ty, ctx.function_slot_origin());
         let fn_ty = self.facts.resolve_to_function_type(&expression_ty)?;
         let f = fn_ty.as_function_type()?;
-        Some(self.return_abi(
+        Some(self.facts.return_abi(
             &f.return_type,
             ReturnSlot::FunctionExpression(ctx.with_function_slot_origin(origin)),
         ))
@@ -224,34 +226,34 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         match expression {
-            Expression::Literal { literal, ty, .. } => self.emit_literal(literal, ty),
+            Expression::Literal { literal, ty, .. } => self.plan_literal(literal, ty),
             Expression::Identifier {
                 value,
                 ty,
                 resolution,
                 ..
             } => {
-                let go_expression = self.emit_identifier(expression, value, resolution, ty, ctx);
+                let go_expression = self.plan_identifier(expression, value, resolution, ty, ctx);
                 let stability = match self
                     .scope
                     .resolve_identifier_with_resolution(value, resolution)
                 {
                     Some(BindingValue::InlineExpr(inline)) => inline.stability(),
-                    _ => self.identifier_read_stability(expression),
+                    _ => self.facts.identifier_read_stability(expression),
                 };
                 ValuePlan::from_identifier_expression(go_expression, stability)
             }
-            Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
+            Expression::Call { ty, .. } => self.plan_call_value(expression, ty, ctx),
             Expression::RawGo { text, .. } => ValuePlan::verbatim(text.clone()),
             Expression::Unit { .. } => ValuePlan::computed(Vec::new(), GoExpression::unit()),
             Expression::Lambda {
                 params, body, ty, ..
-            } => ValuePlan::computed(Vec::new(), self.emit_lambda(params, body, ty, ctx)),
+            } => ValuePlan::computed(Vec::new(), self.plan_lambda(params, body, ty, ctx)),
             Expression::Function {
                 params, body, ty, ..
             } => match body.definition() {
                 Some(body) => {
-                    ValuePlan::computed(Vec::new(), self.emit_lambda(params, body, ty, ctx))
+                    ValuePlan::computed(Vec::new(), self.plan_lambda(params, body, ty, ctx))
                 }
                 None => ValuePlan::computed(Vec::new(), GoExpression::empty()),
             },
@@ -259,7 +261,7 @@ impl Planner<'_> {
             | Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
-            | Expression::Block { ty, .. } => self.lower_to_operand_temp(expression, ty),
+            | Expression::Block { ty, .. } => self.plan_to_operand_temp(expression, ty),
             Expression::Return {
                 expression: return_expression,
                 ..
@@ -388,7 +390,7 @@ impl Planner<'_> {
                 let element_ctx = ExpressionContext::value()
                     .with_expected_slot_type(slot)
                     .with_function_slot_origin(origin);
-                self.lower_composite_value(e, element_ctx)
+                self.plan_composite_value(e, element_ctx)
             })
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
@@ -411,7 +413,7 @@ impl Planner<'_> {
         let ctx = ctx.with_function_slot_origin(slot_origin);
 
         if self.facts.is_interface(ty) {
-            let inner = self.lower_value(expression, ctx);
+            let inner = self.plan_value(expression, ctx);
             let source_ty = expression.get_type();
             let adaptation = &self.facts.checked(cast).cast_operand().adaptation;
             let coercion = CoercionPlan::adapted(self, adaptation, &source_ty, ty, None);
@@ -427,7 +429,7 @@ impl Planner<'_> {
         }
 
         let expression = expression.unwrap_parens();
-        let inner = self.lower_value(expression, ctx);
+        let inner = self.plan_value(expression, ctx);
         let go_type = self.go_type(ty);
 
         let function_bridge = self.function_slot_bridge(expression, ty);
@@ -511,11 +513,11 @@ impl Planner<'_> {
                 self.plan_operand(inner, ExpressionContext::value())
             } else {
                 let mut setup = Vec::new();
-                let place = self.lower_place(&mut setup, inner, PlaceOrdering::alone());
+                let place = self.plan_place(&mut setup, inner, PlaceOrdering::alone());
                 ValuePlan::computed(setup, place)
             }
         } else {
-            self.lower_value(inner, ExpressionContext::value())
+            self.plan_value(inner, ExpressionContext::value())
         };
         inner_plan.map_observable_expression(|setup, emitted| {
             if inner.get_type() == *ty {
@@ -527,25 +529,6 @@ impl Planner<'_> {
                 GoExpression::address_of(emitted)
             }
         })
-    }
-
-    pub(crate) fn contains_newtype_access(&self, expression: &Expression) -> bool {
-        let mut current = expression;
-        while let Expression::DotAccess {
-            expression: inner,
-            resolution,
-            ..
-        } = current
-        {
-            if matches!(
-                resolution,
-                DotAccessResolution::TupleStructField { is_newtype: true }
-            ) {
-                return true;
-            }
-            current = inner;
-        }
-        false
     }
 
     pub(crate) fn plan_range_value(
@@ -588,10 +571,10 @@ impl Planner<'_> {
         }
 
         let bounds: Vec<_> = start.iter().chain(end).collect();
-        let value = emit_struct_literal(&type_string, fields).position_elements(|index, _| {
+        let value = plan_struct_literal(&type_string, fields).position_elements(|index, _| {
             bounds
                 .get(index)
-                .and_then(|bound| self.source_position(&bound.get_span()))
+                .and_then(|bound| self.facts.source_position(&bound.get_span()))
         });
         ValuePlan::computed(sequenced.setup, value)
     }
@@ -616,13 +599,13 @@ impl Planner<'_> {
         }
 
         let mut setup: Vec<Statement> = Vec::new();
-        if let Some(call) = self.emit_go_call_discarded(&mut setup, expression) {
+        if let Some(call) = self.try_plan_go_call_discarded(&mut setup, expression) {
             setup.push(async_statement(call).into());
             return statement_plan(setup);
         }
 
         let checkpoint = self.planning_snapshot();
-        let plan = self.lower_value(
+        let plan = self.plan_value(
             expression,
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
@@ -633,7 +616,7 @@ impl Planner<'_> {
         ) {
             self.restore_planning(checkpoint);
             let (mut setup, inner) = self
-                .lower_value(
+                .plan_value(
                     expression,
                     ExpressionContext::value().with_capture_boundary(CaptureBoundary::Delayed),
                 )
@@ -711,7 +694,7 @@ impl Planner<'_> {
             Expression::DotAccess { expression, ty, .. }
                 if !matches!(ty.unwrap_forall(), Type::Function(_)) =>
             {
-                self.dot_access_is_unaddressable(expression, ty)
+                self.facts.dot_access_is_unaddressable(expression, ty)
             }
             _ => false,
         }
@@ -730,22 +713,6 @@ impl Planner<'_> {
             Some(binding) => binding.as_go_name().is_none(),
             None => self.facts.is_lisette_enum(ty),
         }
-    }
-
-    fn dot_access_is_unaddressable(&self, receiver: &Expression, ty: &Type) -> bool {
-        if !self.facts.is_lisette_enum(ty) {
-            return false;
-        }
-        let Type::Nominal {
-            id: receiver_id, ..
-        } = &receiver.get_type()
-        else {
-            return false;
-        };
-        matches!(
-            self.facts.definition(receiver_id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Enum { .. } | DefinitionBody::TypeAlias { .. })
-        )
     }
 }
 
@@ -769,4 +736,41 @@ fn needs_iife_for_async(
     let arity = split_native_receiver(function, args).map_or(0, |(_, arguments)| arguments.len());
     !matches!(value.syntax_form(), OperandForm::Call)
         || !NativeOperation::new(*kind, method).lowers_to_plain_call(arity)
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn contains_newtype_access(&self, expression: &Expression) -> bool {
+        let mut current = expression;
+        while let Expression::DotAccess {
+            expression: inner,
+            resolution,
+            ..
+        } = current
+        {
+            if matches!(
+                resolution,
+                DotAccessResolution::TupleStructField { is_newtype: true }
+            ) {
+                return true;
+            }
+            current = inner;
+        }
+        false
+    }
+
+    fn dot_access_is_unaddressable(&self, receiver: &Expression, ty: &Type) -> bool {
+        if !self.is_lisette_enum(ty) {
+            return false;
+        }
+        let Type::Nominal {
+            id: receiver_id, ..
+        } = &receiver.get_type()
+        else {
+            return false;
+        };
+        matches!(
+            self.definition(receiver_id.as_str()).map(|d| &d.body),
+            Some(DefinitionBody::Enum { .. } | DefinitionBody::TypeAlias { .. })
+        )
+    }
 }

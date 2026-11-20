@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::expressions::top_items::emit_item_doc;
 use crate::ir::declarations::GoDeclaration;
@@ -30,13 +31,13 @@ impl Planner<'_> {
         methods
             .iter()
             .filter_map(|method| {
-                self.with_declaration_scope(|this| this.emit_impl_method(method, &ctx))
+                self.with_declaration_scope(|this| this.try_emit_impl_method(method, &ctx))
             })
             .flatten()
             .collect()
     }
 
-    fn emit_impl_method(
+    fn try_emit_impl_method(
         &mut self,
         method: &Expression,
         context: &ImplContext<'_>,
@@ -51,7 +52,7 @@ impl Planner<'_> {
 
         let is_public = matches!(visibility, Visibility::Public);
 
-        let should_export = is_public || self.method_needs_export(function.name);
+        let should_export = is_public || self.facts.method_needs_export(function.name);
         let is_free_function = !self
             .facts
             .emits_go_method(&context.qualified_type, function.name);
@@ -65,7 +66,7 @@ impl Planner<'_> {
             .into();
             let mut combined_generics = context.generics.to_vec();
             combined_generics.extend(function.generics.iter().cloned());
-            let (generics, owner) = if self.impl_generics_match_receiver(context) {
+            let (generics, owner) = if self.facts.impl_generics_match_receiver(context) {
                 (function.generics, Some(context.ty))
             } else {
                 (combined_generics.as_slice(), None)
@@ -90,10 +91,11 @@ impl Planner<'_> {
         declarations[0].documentation = method_doc_comment.into();
         Some(declarations)
     }
+}
 
+impl EmitFacts<'_> {
     fn impl_generics_match_receiver(&self, ctx: &ImplContext<'_>) -> bool {
-        self.facts
-            .definition(&ctx.qualified_type)
+        self.definition(&ctx.qualified_type)
             .and_then(|definition| definition.body.generics())
             .is_some_and(|receiver_generics| receiver_generics.len() == ctx.generics.len())
             && type_args_match_params(

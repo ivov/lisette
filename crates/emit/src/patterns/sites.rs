@@ -211,7 +211,7 @@ impl Planner<'_> {
                         self.reference_go_identifier(value, resolution),
                     ));
                 }
-                let plan = self.lower_value(scrutinee, ExpressionContext::value());
+                let plan = self.plan_value(scrutinee, ExpressionContext::value());
                 let materialized = plan
                     .expression()
                     .as_identifier()
@@ -301,12 +301,12 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         if let RefutableFail::ElseBlock(else_block) = fail {
             if let Some(statements) =
-                self.lower_fused_option_let_else(pattern, scrutinee, else_block)
+                self.try_lower_fused_option_let_else(pattern, scrutinee, else_block)
             {
                 return statements;
             }
             if let Some(statements) =
-                self.lower_fused_result_let_else(pattern, scrutinee, else_block)
+                self.try_lower_fused_result_let_else(pattern, scrutinee, else_block)
             {
                 return statements;
             }
@@ -323,7 +323,7 @@ impl Planner<'_> {
             ty: &value_ty,
         };
 
-        let subject_is_fixed = self.is_unmutated_identifier(scrutinee);
+        let subject_is_fixed = self.facts.is_unmutated_identifier(scrutinee);
         let body = if matches!(pattern, Pattern::Or { .. }) || has_binding_or_pattern(pattern) {
             self.lower_let_else_or_pattern(pattern, subject, fail)
         } else {
@@ -335,7 +335,7 @@ impl Planner<'_> {
         statements
     }
 
-    fn lower_fused_result_let_else(
+    fn try_lower_fused_result_let_else(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
@@ -347,7 +347,7 @@ impl Planner<'_> {
         }
         let Some(field) = ok_pattern_field(pattern) else {
             return self
-                .lower_fused_result_let_else_destructure(fuse, pattern, scrutinee, else_block);
+                .try_lower_fused_result_let_else_destructure(fuse, pattern, scrutinee, else_block);
         };
 
         let binding = self.declare_fused_binding(field);
@@ -360,7 +360,7 @@ impl Planner<'_> {
         Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
     }
 
-    fn lower_fused_result_let_else_destructure(
+    fn try_lower_fused_result_let_else_destructure(
         &mut self,
         fuse: ResultFusePlan<'_>,
         pattern: &Pattern,
@@ -402,7 +402,7 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn lower_fused_option_let_else(
+    fn try_lower_fused_option_let_else(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
@@ -508,7 +508,7 @@ impl Planner<'_> {
         scrutinee: &Expression,
         body: &Expression,
     ) -> LoweredBlock {
-        if let Some(fused) = self.lower_fused_option_while_let(pattern, scrutinee, body) {
+        if let Some(fused) = self.try_lower_fused_option_while_let(pattern, scrutinee, body) {
             return fused;
         }
 
@@ -537,7 +537,7 @@ impl Planner<'_> {
         }
     }
 
-    fn lower_fused_option_while_let(
+    fn try_lower_fused_option_while_let(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
@@ -1013,7 +1013,7 @@ impl Planner<'_> {
                 binding,
                 ..
             } => {
-                let Some(go_name) = self.go_name_for_binding(pattern) else {
+                let Some(go_name) = self.facts.go_name_for_binding(pattern) else {
                     return (GoIdentifier::external("_".to_string()), false);
                 };
                 let preferred = go_name.preferred();

@@ -56,7 +56,7 @@ impl OptionFusePlan<'_> {
                 let value = if matches!(subject.unwrap_parens(), Expression::DotAccess { .. }) {
                     planner.plan_raw_nullable_field(subject)
                 } else {
-                    planner.lower_call(subject, None, ExpressionContext::value())
+                    planner.plan_call_expression(subject, None, ExpressionContext::value())
                 };
                 let (mut statements, call) = value.into_parts();
                 let (value, opens_if) = match slot {
@@ -146,7 +146,7 @@ impl ResultFusePlan<'_> {
 
         let carries_value = self.carries_payload();
         let (setup, call) = planner
-            .lower_call(self.subject, None, ExpressionContext::value())
+            .plan_call_expression(self.subject, None, ExpressionContext::value())
             .into_parts();
         let (message_setup, messages) = planner.prepare_wrap_messages(&self.wraps, read_error);
 

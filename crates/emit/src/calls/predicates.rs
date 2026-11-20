@@ -86,7 +86,7 @@ impl<'p> Planner<'p> {
         (bound.statements, condition)
     }
 
-    pub(crate) fn lower_fused_predicate_condition(
+    pub(crate) fn try_plan_fused_predicate_condition(
         &mut self,
         condition: &Expression,
     ) -> Option<(Vec<Statement>, PairCondition)> {
@@ -95,7 +95,7 @@ impl<'p> Planner<'p> {
         Some(self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Unused))
     }
 
-    pub(crate) fn lower_fused_predicate_value(
+    pub(crate) fn try_plan_fused_predicate_value(
         &mut self,
         expression: &Expression,
         negated: bool,

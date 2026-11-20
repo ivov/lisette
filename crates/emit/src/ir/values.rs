@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::ir::bodies::AsyncKind;
 use crate::ir::bodies::{LoweredBlock, Statement};
 use crate::ir::evaluation::Effects;
@@ -827,20 +828,8 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let plan = self.plan_unpositioned_operand(expression, ctx);
-        self.with_source_positions(&written_span(expression), plan)
-    }
-
-    pub(crate) fn with_source_positions(&self, span: &Span, plan: ValuePlan) -> ValuePlan {
-        if !self.facts.sourcemap() {
-            return plan;
-        }
-        let (Some(start), Some(end)) = (self.source_position(span), self.end_position(span)) else {
-            return plan;
-        };
-        plan.map_expression(|_, mut value| {
-            value.node_mut().fill_positions(&start, &end);
-            value.positioned(start.clone())
-        })
+        self.facts
+            .with_source_positions(&written_span(expression), plan)
     }
 
     fn plan_unpositioned_operand(
@@ -848,8 +837,8 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        if self.is_test_log_call(expression) {
-            let (setup, call) = self.lower_test_log_call(expression);
+        if self.facts.is_test_log_call(expression) {
+            let (setup, call) = self.plan_test_log_call(expression);
             return ValuePlan::plain_call(setup, call);
         }
         match expression {
@@ -897,10 +886,10 @@ impl Planner<'_> {
             Expression::Defer {
                 expression: inner, ..
             } => self.plan_async_wrapper(AsyncKind::Defer, inner),
-            Expression::TryBlock { items, ty, .. } => self.lower_try_block(items, ty),
-            Expression::RecoverBlock { items, ty, .. } => self.lower_recover_block(items, ty),
+            Expression::TryBlock { items, ty, .. } => self.plan_try_block(items, ty),
+            Expression::RecoverBlock { items, ty, .. } => self.plan_recover_block(items, ty),
             Expression::Propagate { expression, .. } => {
-                let (setup, value) = self.lower_propagate(expression);
+                let (setup, value) = self.plan_propagate(expression);
                 let stability = self.path_read_stability(&value);
                 ValuePlan::built_from(setup, value, stability)
             }
@@ -923,4 +912,19 @@ fn is_value_only_builtin(name: &str) -> bool {
         name,
         "append" | "cap" | "complex" | "imag" | "len" | "make" | "max" | "min" | "new" | "real"
     )
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn with_source_positions(&self, span: &Span, plan: ValuePlan) -> ValuePlan {
+        if !self.sourcemap() {
+            return plan;
+        }
+        let (Some(start), Some(end)) = (self.source_position(span), self.end_position(span)) else {
+            return plan;
+        };
+        plan.map_expression(|_, mut value| {
+            value.node_mut().fill_positions(&start, &end);
+            value.positioned(start.clone())
+        })
+    }
 }

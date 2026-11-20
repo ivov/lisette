@@ -10,7 +10,12 @@ use crate::ir::go_expression::{
 use crate::ir::values::GoExpression;
 use crate::render::Renderer;
 use crate::render::writer::GoWriter;
-use crate::write_line;
+
+macro_rules! write_line {
+    ($dst:expr, $($arg:tt)*) => {
+        { use std::fmt::Write as _; writeln!($dst, $($arg)*).unwrap() }
+    };
+}
 
 fn write_header_line(output: &mut GoWriter, line: Option<&Position>) {
     if let Some(line) = line {

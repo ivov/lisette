@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
@@ -57,7 +58,7 @@ impl Planner<'_> {
                     self.emit_struct_definition(name, generics, fields, attributes);
                 declarations[0].documentation = doc_comment.into();
                 for declaration in &mut declarations {
-                    declaration.position = self.source_position(name_span);
+                    declaration.position = self.facts.source_position(name_span);
                 }
                 declarations
             }
@@ -71,10 +72,10 @@ impl Planner<'_> {
             } => {
                 let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
                 let mut declarations = self
-                    .emit_enum(name, generics, attributes, &doc_comment)
+                    .try_emit_enum(name, generics, attributes, &doc_comment)
                     .unwrap_or_default();
                 for declaration in &mut declarations {
-                    declaration.position = self.source_position(name_span);
+                    declaration.position = self.facts.source_position(name_span);
                 }
                 declarations
             }
@@ -146,7 +147,7 @@ impl Planner<'_> {
         is_public: bool,
         doc_comment: &str,
     ) -> Vec<GoDeclaration> {
-        let injected = self.synthesized_test_handle_params(function);
+        let injected = self.facts.synthesized_test_handle_params(function);
         let function = match &injected {
             Some(params) => FunctionDefinitionView { params, ..function },
             None => function,
@@ -190,7 +191,8 @@ impl Planner<'_> {
             vec![testkit("New", vec![handle_value.clone()])],
         );
         if matches!(
-            self.return_abi(function.return_type, ReturnSlot::Function),
+            self.facts
+                .return_abi(function.return_type, ReturnSlot::Function),
             CallableReturnAbi::Lowered(LoweredReturnAbi::BareError)
         ) {
             let error_name = self.scope.new_local_identifier("err".to_string());
@@ -234,28 +236,6 @@ impl Planner<'_> {
         ));
         declarations
     }
-
-    fn synthesized_test_handle_params(
-        &self,
-        function: FunctionDefinitionView<'_>,
-    ) -> Option<Vec<Binding>> {
-        let has_usable_handle = function.params.iter().any(|param| {
-            param.ty.is_test_context() && self.go_name_for_binding(&param.pattern).is_some()
-        });
-        if has_usable_handle {
-            return None;
-        }
-        Some(vec![Binding {
-            pattern: Pattern::Identifier {
-                identifier: go_name::TEST_CTX_PARAM.into(),
-                span: function.name_span,
-                binding: None,
-            },
-            annotation: None,
-            ty: Type::test_context(),
-            mut_span: None,
-        }])
-    }
 }
 
 pub(crate) fn emit_doc(doc: &Option<String>) -> String {
@@ -289,4 +269,28 @@ fn doc_lines(text: &str) -> String {
         })
         .collect();
     format!("{}\n", lines.join("\n"))
+}
+
+impl EmitFacts<'_> {
+    fn synthesized_test_handle_params(
+        &self,
+        function: FunctionDefinitionView<'_>,
+    ) -> Option<Vec<Binding>> {
+        let has_usable_handle = function.params.iter().any(|param| {
+            param.ty.is_test_context() && self.go_name_for_binding(&param.pattern).is_some()
+        });
+        if has_usable_handle {
+            return None;
+        }
+        Some(vec![Binding {
+            pattern: Pattern::Identifier {
+                identifier: go_name::TEST_CTX_PARAM.into(),
+                span: function.name_span,
+                binding: None,
+            },
+            annotation: None,
+            ty: Type::test_context(),
+            mut_span: None,
+        }])
+    }
 }

@@ -78,7 +78,7 @@ impl Planner<'_> {
             || !matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
         .then(|| self.go_type(ty));
 
-        let raw_value = self.lower_value(expression, ExpressionContext::value());
+        let raw_value = self.plan_value(expression, ExpressionContext::value());
         let value = if raw_value.is_empty() {
             GoExpression::unit()
         } else {

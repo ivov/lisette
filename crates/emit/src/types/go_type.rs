@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::layout::ValueLayout;
 use crate::definitions::structs::struct_field_go_name;
@@ -596,14 +597,6 @@ impl Planner<'_> {
         GoType::new("any")
     }
 
-    pub(crate) fn type_member_go_name<'n>(&self, package: &str, name: &'n str) -> Cow<'n, str> {
-        if package == go_name::PRELUDE_PACKAGE || self.facts.is_foreign_package(package) {
-            go_name::escape_keyword(name)
-        } else {
-            go_name::escape_type_name(name)
-        }
-    }
-
     fn unqualify_name(&self, id: &str) -> (String, Option<PackageUse>) {
         if id == "Unknown" {
             return ("any".to_string(), None);
@@ -625,7 +618,7 @@ impl Planner<'_> {
             return ("any".to_string(), None);
         }
 
-        let escaped = self.type_member_go_name(package, unqualified);
+        let escaped = self.facts.type_member_go_name(package, unqualified);
 
         if self.facts.is_foreign_package(package) {
             if !escaped.starts_with(char::is_uppercase) {
@@ -744,5 +737,15 @@ impl Planner<'_> {
                 .map(|field| (struct_field_go_name(field, &[]), self.go_type(&field.ty)))
                 .collect(),
         ))
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn type_member_go_name<'n>(&self, package: &str, name: &'n str) -> Cow<'n, str> {
+        if package == go_name::PRELUDE_PACKAGE || self.is_foreign_package(package) {
+            go_name::escape_keyword(name)
+        } else {
+            go_name::escape_type_name(name)
+        }
     }
 }

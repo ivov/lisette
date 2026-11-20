@@ -1,3 +1,4 @@
+use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
@@ -17,8 +18,8 @@ use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
+use crate::names::receiver::fresh_receiver_name;
 use crate::types::go_type::GoType;
-use crate::utils::fresh_receiver_name;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::StructFields;
@@ -59,27 +60,6 @@ impl AdapterMethod {
 }
 
 impl Planner<'_> {
-    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
-        interface_requirements(&self.facts.peel_alias(bound), |id| {
-            self.facts.definition(id)
-        })
-        .iter()
-        .any(|requirement| {
-            !go_name::is_go_import(&requirement.declaring_interface)
-                && requirement.ty.get_function_ret().is_some_and(|ty| {
-                    matches!(
-                        self.return_abi(ty, ReturnSlot::Method),
-                        CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
-                    )
-                })
-        })
-    }
-
-    pub(crate) fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
-        !go_name::is_go_import(&requirement.declaring_interface)
-            && self.facts.method_uses_tagged_return(&requirement.name)
-    }
-
     pub(crate) fn selects_tagged_twin(&self, expression: &Expression) -> bool {
         match expression.unwrap_parens() {
             Expression::DotAccess {
@@ -95,15 +75,9 @@ impl Planner<'_> {
                 .checked(expression)
                 .function_value()
                 .and_then(|recorded| recorded.definition.as_deref())
-                .is_some_and(|symbol| self.definition_selects_tagged_twin(symbol)),
+                .is_some_and(|symbol| self.facts.definition_selects_tagged_twin(symbol)),
             _ => false,
         }
-    }
-
-    pub(crate) fn definition_selects_tagged_twin(&self, symbol: &str) -> bool {
-        symbol
-            .rsplit_once('.')
-            .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
     }
 
     fn receiver_selects_tagged_twin(&self, receiver_ty: &Type, member: &str) -> bool {
@@ -128,7 +102,7 @@ impl Planner<'_> {
                     .definition(id)
                     .is_some_and(Definition::is_interface) =>
             {
-                return self.has_tagged_twin(id, member);
+                return self.facts.has_tagged_twin(id, member);
             }
             Type::Nominal { .. } => vec![receiver.clone()],
             _ => return false,
@@ -139,16 +113,9 @@ impl Planner<'_> {
             })
             .iter()
             .any(|requirement| {
-                requirement.name == member && self.requirement_uses_tagged_twin(requirement)
+                requirement.name == member && self.facts.requirement_uses_tagged_twin(requirement)
             })
         })
-    }
-
-    fn has_tagged_twin(&self, owner: &str, member: &str) -> bool {
-        !go_name::is_go_import(owner)
-            && !go_name::is_prelude_id(owner)
-            && self.facts.method_uses_tagged_return(member)
-            && self.facts.emits_go_method(owner, member)
     }
 
     pub(crate) fn emit_tagged_twin(
@@ -170,7 +137,7 @@ impl Planner<'_> {
         let source = self.function_layout(
             parameters.clone(),
             &result,
-            self.return_abi(return_ty, ReturnSlot::Method),
+            self.facts.return_abi(return_ty, ReturnSlot::Method),
             Some(return_ty),
         );
         let target = self.function_layout(
@@ -187,7 +154,7 @@ impl Planner<'_> {
             source,
             target,
         };
-        let line = self.source_position(&method.name_span);
+        let line = self.facts.source_position(&method.name_span);
         self.emit_adapter_method(
             MethodReceiver::Itself(&receiver.ty),
             generic_context,
@@ -196,21 +163,12 @@ impl Planner<'_> {
         )
     }
 
-    fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
-        let name = self.method_go_name(&requirement.name, false);
-        if self.requirement_uses_tagged_twin(requirement) {
-            go_name::tagged_twin(&name)
-        } else {
-            name
-        }
-    }
-
     pub(crate) fn bound_dispatch_requirement(
         &self,
         expression: &Expression,
     ) -> Option<(Type, InterfaceRequirement)> {
         self.bound_requirement(expression)
-            .filter(|(bound, _)| self.bound_needs_dispatch(bound))
+            .filter(|(bound, _)| self.facts.bound_needs_dispatch(bound))
     }
 
     pub(crate) fn bound_requirement(
@@ -293,14 +251,14 @@ impl Planner<'_> {
         let result =
             self.value_layout_with_declaration(&result_type, origin, &declared.return_type);
         let abi = if go {
-            self.return_abi(
+            self.facts.return_abi(
                 &declared.return_type,
                 ReturnSlot::Go {
                     hints: &requirement.method.go_hints,
                 },
             )
         } else {
-            self.return_abi(
+            self.facts.return_abi(
                 requirement
                     .method
                     .ty
@@ -330,7 +288,7 @@ impl Planner<'_> {
         let mut methods = Vec::new();
         let mut seen = HashSet::default();
         for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
-            if !seen.insert(self.method_go_name(&requirement.name, false)) {
+            if !seen.insert(self.facts.method_go_name(&requirement.name, false)) {
                 continue;
             }
             let selected = match witness {
@@ -347,8 +305,8 @@ impl Planner<'_> {
                 None => local.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette),
             };
             methods.push(AdapterMethod {
-                source_go_name: self.requirement_go_name(&selected),
-                go_name: self.requirement_go_name(&requirement),
+                source_go_name: self.facts.requirement_go_name(&selected),
+                go_name: self.facts.requirement_go_name(&requirement),
                 source_name: selected.name,
                 source: local,
                 alternate: Some(foreign),
@@ -404,7 +362,7 @@ impl Planner<'_> {
         GoType::method_interface(method_name, &parameters, &result)
     }
 
-    fn plan_dynamic_adapter_body(
+    fn lower_dynamic_adapter_body(
         &mut self,
         method: &AdapterMethod,
         alternate: &FunctionLayout,
@@ -457,7 +415,7 @@ impl Planner<'_> {
                 .into(),
             );
         }
-        let foreign_name = self.method_go_name(&method.source_name, false);
+        let foreign_name = self.facts.method_go_name(&method.source_name, false);
         let foreign_type = self.dynamic_method_interface(&foreign_name, alternate);
         let foreign = GoExpression::type_assertion(inner, foreign_type);
         let arguments = self.plan_bridged_arguments(
@@ -480,67 +438,13 @@ impl Planner<'_> {
         variant: Option<&str>,
         field_name: &str,
     ) -> Option<Type> {
-        let (field_ty, subst_map) = self.declared_field_ty(struct_ty, variant, field_name)?;
+        let (field_ty, subst_map) = self
+            .facts
+            .declared_field_ty(struct_ty, variant, field_name)?;
         Some(match subst_map {
             Some(subst_map) => substitute(&field_ty, &subst_map),
             None => field_ty,
         })
-    }
-
-    pub(crate) fn declared_field_ty(
-        &self,
-        struct_ty: &Type,
-        variant: Option<&str>,
-        field_name: &str,
-    ) -> Option<(Type, Option<SubstitutionMap>)> {
-        let stripped = self.facts.strip_and_peel(struct_ty);
-        let Type::Nominal { id, params, .. } = &stripped else {
-            return None;
-        };
-        let (field_ty, generics) = match (&self.facts.definition(id.as_str())?.body, variant) {
-            (
-                DefinitionBody::Struct {
-                    fields, generics, ..
-                },
-                None,
-            ) => {
-                let field = fields
-                    .iter()
-                    .find(|field| field.name == field_name)
-                    .or_else(|| {
-                        let StructFields::Tuple(fields) = fields else {
-                            return None;
-                        };
-                        fields.get(field_name.parse::<usize>().ok()?)
-                    })?;
-                (field.ty.clone(), generics)
-            }
-            (
-                DefinitionBody::Enum {
-                    variants, generics, ..
-                },
-                Some(variant_name),
-            ) => {
-                let variant = variants
-                    .iter()
-                    .find(|variant| variant.name == unqualified_name(variant_name))?;
-                let field = variant
-                    .fields
-                    .iter()
-                    .find(|field| field.name == field_name)?;
-                (field.ty.clone(), generics)
-            }
-            _ => return None,
-        };
-        let subst_map = (!generics.is_empty()).then(|| build_substitution_map(generics, params));
-        Some((field_ty, subst_map))
-    }
-
-    pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal { .. } = ty else {
-            return false;
-        };
-        self.facts.resolve_to_function_type(ty).is_some()
     }
 
     pub(crate) fn interface_adapter(
@@ -566,7 +470,7 @@ impl Planner<'_> {
                     && parameter
                         .bounds
                         .iter()
-                        .any(|bound| self.bound_needs_dispatch(bound))
+                        .any(|bound| self.facts.bound_needs_dispatch(bound))
             })
         {
             return self.dynamic_interface_adapter(source_ty, &target, conversion.witness.as_ref());
@@ -605,7 +509,7 @@ impl Planner<'_> {
         let mut any_adapted = false;
         let mut seen = HashSet::default();
         for requirement in requirements {
-            let selector = self.method_go_name(&requirement.name, false);
+            let selector = self.facts.method_go_name(&requirement.name, false);
             if !seen.insert(selector) {
                 continue;
             }
@@ -687,17 +591,18 @@ impl Planner<'_> {
                 CallableReturnAbi::Lowered,
             )
         } else if let Some(source) = source_requirement {
-            self.return_abi(
+            self.facts.return_abi(
                 source.method.ty.get_function_ret().unwrap_or(&Type::Never),
                 ReturnSlot::InterfaceMethod {
                     name: &source.name,
                     method: &source.method,
                 },
             )
-        } else if self.requirement_uses_tagged_twin(requirement) {
+        } else if self.facts.requirement_uses_tagged_twin(requirement) {
             CallableReturnAbi::Value
         } else {
-            self.return_abi(&function.return_type, ReturnSlot::Method)
+            self.facts
+                .return_abi(&function.return_type, ReturnSlot::Method)
         };
         let peeled_return = self.facts.peel_alias(&return_type);
         let user_result = self.interface_result_layout(source_go_method.as_deref(), &peeled_return);
@@ -728,7 +633,7 @@ impl Planner<'_> {
                     || CallableReturnAbi::unlowered(interface_return),
                     CallableReturnAbi::Lowered,
                 ),
-            None => self.return_abi(
+            None => self.facts.return_abi(
                 requirement
                     .method
                     .ty
@@ -755,16 +660,22 @@ impl Planner<'_> {
 
         let selected_exported = checked.is_exported;
         let source_go_name = match source_requirement {
-            Some(source) => self.requirement_go_name(source),
+            Some(source) => self.facts.requirement_go_name(source),
             None if source_go_method.is_none()
-                && self.requirement_uses_tagged_twin(requirement) =>
+                && self.facts.requirement_uses_tagged_twin(requirement) =>
             {
-                go_name::tagged_twin(&self.method_go_name(implementation_name, selected_exported))
+                go_name::tagged_twin(
+                    &self
+                        .facts
+                        .method_go_name(implementation_name, selected_exported),
+                )
             }
-            None => self.method_go_name(implementation_name, selected_exported),
+            None => self
+                .facts
+                .method_go_name(implementation_name, selected_exported),
         };
         Some(AdapterMethod {
-            go_name: self.requirement_go_name(requirement),
+            go_name: self.facts.requirement_go_name(requirement),
             source_name: implementation_name.clone(),
             source_go_name,
             alternate: None,
@@ -801,18 +712,6 @@ impl Planner<'_> {
             }
             None => self.value_layout(return_type, SlotOrigin::Lisette),
         }
-    }
-
-    pub(crate) fn interface_method(&self, interface_ty: &Type, name: &str) -> Option<Method> {
-        if !self.facts.is_interface(interface_ty) {
-            return None;
-        }
-        interface_requirements(&self.facts.peel_alias(interface_ty), |id| {
-            self.facts.definition(id)
-        })
-        .into_iter()
-        .find(|requirement| requirement.name == name)
-        .map(|requirement| requirement.method)
     }
 
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
@@ -858,7 +757,7 @@ impl Planner<'_> {
             }],
         })];
         for method in &plan.methods {
-            let line = self.adapter_method_line(&plan, method);
+            let line = self.facts.adapter_method_line(&plan, method);
             declarations.push(self.emit_adapter_method(
                 MethodReceiver::Adapter(&receiver_type),
                 &plan.generic_context,
@@ -868,19 +767,6 @@ impl Planner<'_> {
         }
         self.namespace.collect_adapters(declarations);
         adapter_type
-    }
-
-    fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<Position> {
-        self.facts
-            .method(&plan.concrete_id, &method.source_name)
-            .and_then(|source| source.name_span.as_ref())
-            .and_then(|span| self.source_position(span))
-            .or_else(|| {
-                self.facts
-                    .definition(&plan.interface_id)
-                    .and_then(|interface| interface.name_span.as_ref())
-                    .and_then(|span| self.source_position(span))
-            })
     }
 
     fn emit_adapter_method(
@@ -973,7 +859,7 @@ impl Planner<'_> {
             let go_result = method.target.result_go_type(self).unwrap_or_default();
             return (
                 go_result,
-                self.plan_dynamic_adapter_body(method, alternate, receiver, parameters),
+                self.lower_dynamic_adapter_body(method, alternate, receiver, parameters),
             );
         }
         let mut statements = Vec::new();
@@ -1072,5 +958,131 @@ fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
         Some(LoweredReturnAbi::Tuple { .. }) => {
             peeled.tuple_arity().is_some_and(|arity| arity >= 2)
         }
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
+        !go_name::is_go_import(&requirement.declaring_interface)
+            && self.method_uses_tagged_return(&requirement.name)
+    }
+
+    fn has_tagged_twin(&self, owner: &str, member: &str) -> bool {
+        !go_name::is_go_import(owner)
+            && !go_name::is_prelude_id(owner)
+            && self.method_uses_tagged_return(member)
+            && self.emits_go_method(owner, member)
+    }
+
+    pub(crate) fn declared_field_ty(
+        &self,
+        struct_ty: &Type,
+        variant: Option<&str>,
+        field_name: &str,
+    ) -> Option<(Type, Option<SubstitutionMap>)> {
+        let stripped = self.strip_and_peel(struct_ty);
+        let Type::Nominal { id, params, .. } = &stripped else {
+            return None;
+        };
+        let (field_ty, generics) = match (&self.definition(id.as_str())?.body, variant) {
+            (
+                DefinitionBody::Struct {
+                    fields, generics, ..
+                },
+                None,
+            ) => {
+                let field = fields
+                    .iter()
+                    .find(|field| field.name == field_name)
+                    .or_else(|| {
+                        let StructFields::Tuple(fields) = fields else {
+                            return None;
+                        };
+                        fields.get(field_name.parse::<usize>().ok()?)
+                    })?;
+                (field.ty.clone(), generics)
+            }
+            (
+                DefinitionBody::Enum {
+                    variants, generics, ..
+                },
+                Some(variant_name),
+            ) => {
+                let variant = variants
+                    .iter()
+                    .find(|variant| variant.name == unqualified_name(variant_name))?;
+                let field = variant
+                    .fields
+                    .iter()
+                    .find(|field| field.name == field_name)?;
+                (field.ty.clone(), generics)
+            }
+            _ => return None,
+        };
+        let subst_map = (!generics.is_empty()).then(|| build_substitution_map(generics, params));
+        Some((field_ty, subst_map))
+    }
+
+    pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
+        let Type::Nominal { .. } = ty else {
+            return false;
+        };
+        self.resolve_to_function_type(ty).is_some()
+    }
+
+    pub(crate) fn interface_method(&self, interface_ty: &Type, name: &str) -> Option<Method> {
+        if !self.is_interface(interface_ty) {
+            return None;
+        }
+        interface_requirements(&self.peel_alias(interface_ty), |id| self.definition(id))
+            .into_iter()
+            .find(|requirement| requirement.name == name)
+            .map(|requirement| requirement.method)
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn definition_selects_tagged_twin(&self, symbol: &str) -> bool {
+        symbol
+            .rsplit_once('.')
+            .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
+    }
+}
+
+impl EmitFacts<'_> {
+    fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
+        let name = self.method_go_name(&requirement.name, false);
+        if self.requirement_uses_tagged_twin(requirement) {
+            go_name::tagged_twin(&name)
+        } else {
+            name
+        }
+    }
+
+    fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<Position> {
+        self.method(&plan.concrete_id, &method.source_name)
+            .and_then(|source| source.name_span.as_ref())
+            .and_then(|span| self.source_position(span))
+            .or_else(|| {
+                self.definition(&plan.interface_id)
+                    .and_then(|interface| interface.name_span.as_ref())
+                    .and_then(|span| self.source_position(span))
+            })
+    }
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
+        interface_requirements(&self.peel_alias(bound), |id| self.definition(id))
+            .iter()
+            .any(|requirement| {
+                !go_name::is_go_import(&requirement.declaring_interface)
+                    && requirement.ty.get_function_ret().is_some_and(|ty| {
+                        matches!(
+                            self.return_abi(ty, ReturnSlot::Method),
+                            CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
+                        )
+                    })
+            })
     }
 }

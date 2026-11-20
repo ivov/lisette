@@ -38,7 +38,7 @@ fn some_payload(option: GoExpression) -> GoExpression {
 }
 
 impl Planner<'_> {
-    pub(crate) fn lower_option_literal_into_layout(
+    pub(crate) fn try_plan_option_literal_into_layout(
         &mut self,
         expression: &Expression,
         target: &ValueLayout,
@@ -81,10 +81,10 @@ impl Planner<'_> {
             let emitted = self.emitted_value_layout(value, context);
             let direct = CoercionPlan::bridge(self, &emitted, target_payload);
             if matches!(value.unwrap_parens(), Expression::Lambda { .. }) && direct.is_identity() {
-                return Some(self.lower_composite_value(value, context));
+                return Some(self.plan_composite_value(value, context));
             }
             if self.go_slot_declaration_layout(value, context).is_some() {
-                return Some(self.lower_composite_value(value, context).map_expression(
+                return Some(self.plan_composite_value(value, context).map_expression(
                     |setup, value| {
                         let (bridge_setup, value) = direct.lower(self, value);
                         setup.extend(bridge_setup);
@@ -93,7 +93,7 @@ impl Planner<'_> {
                 ));
             }
         }
-        let inner = self.lower_nullable_payload(inner, &expression.get_type().ok_type());
+        let inner = self.plan_nullable_payload(inner, &expression.get_type().ok_type());
         Some(inner.map_expression(|setup, value| {
             let value = if payload.is_identity() {
                 value
@@ -117,18 +117,18 @@ impl Planner<'_> {
         }))
     }
 
-    pub(crate) fn lower_nullable_payload(
+    pub(crate) fn plan_nullable_payload(
         &mut self,
         payload: &Expression,
         payload_ty: &Type,
     ) -> ValuePlan {
         let origin = self.function_type_origin(payload_ty, SlotOrigin::Lisette);
         if !origin.declared_by_go() {
-            return self.lower_composite_value(payload, ExpressionContext::value());
+            return self.plan_composite_value(payload, ExpressionContext::value());
         }
         let slot = self.function_slot_bridge(payload, payload_ty);
         let context = ExpressionContext::value().with_function_slot_origin(origin);
-        self.lower_composite_value(payload, context)
+        self.plan_composite_value(payload, context)
             .map_expression(|setup, value| {
                 let (slot_setup, value) = slot.lower(self, value);
                 setup.extend(slot_setup);
@@ -211,7 +211,9 @@ impl Planner<'_> {
         let condition = if pointer {
             non_nil(raw)
         } else {
-            self.option_nil_guard(target.logical_type()).non_nil(raw)
+            self.facts
+                .option_nil_guard(target.logical_type())
+                .non_nil(raw)
         };
         LoweredStatement::If(IfPlan::plain(
             condition,
@@ -263,6 +265,7 @@ impl Planner<'_> {
                 if payload.is_identity() {
                     let inner = target.payload().expect("Option has a payload layout");
                     let nil = self
+                        .facts
                         .option_nil_guard(target.logical_type())
                         .is_nil(value.clone());
                     let value = prelude_call(
@@ -821,7 +824,7 @@ impl Planner<'_> {
                 .zip(target_slots)
                 .map(|(source, target)| resolve_layout_bridge(self, source, target))
                 .collect();
-            let (body, _) = self.lower_abi_wrapping(
+            let (body, _) = self.plan_abi_wrapping(
                 call,
                 &source.return_abi,
                 source.result_layout.logical_type(),
@@ -848,7 +851,7 @@ impl Planner<'_> {
             return;
         }
         if let Some(bridge) = self.fallible_payload_bridge(source, target) {
-            let (body, _) = self.lower_abi_wrapping(
+            let (body, _) = self.plan_abi_wrapping(
                 call,
                 &source.return_abi,
                 source.result_layout.logical_type(),
@@ -967,6 +970,7 @@ impl Planner<'_> {
             Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
                 let raw = self.hoist_tmp_value_statement(statements, "raw", call);
                 let condition = self
+                    .facts
                     .option_nil_guard(source.result_layout.logical_type())
                     .is_nil(GoExpression::identifier(raw.clone()));
                 statements.push(

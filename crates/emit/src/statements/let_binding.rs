@@ -48,7 +48,7 @@ pub(crate) fn needs_explicit_type_declaration(
     if widens_to_interface(planner, value, binding_ty) {
         return true;
     }
-    if planner.is_function_alias(binding_ty) {
+    if planner.facts.is_function_alias(binding_ty) {
         let value_ty = value.get_type();
         if matches!(value_ty.unwrap_forall(), Type::Function(_)) {
             return true;
@@ -134,18 +134,18 @@ impl Planner<'_> {
         {
             let local = go_identifier.clone();
             let into = self
-                .lower_fused_result_match_into(value, &local)
-                .or_else(|| self.lower_fused_option_match_into(value, &local))
-                .or_else(|| self.lower_fused_partial_match_into(value, &local))
-                .or_else(|| self.lower_defaulted_call_into(value, &local))
-                .or_else(|| self.lower_slice_loop_into(value, &local));
+                .try_lower_fused_result_match_into(value, &local)
+                .or_else(|| self.try_lower_fused_option_match_into(value, &local))
+                .or_else(|| self.try_lower_fused_partial_match_into(value, &local))
+                .or_else(|| self.try_lower_defaulted_call_into(value, &local))
+                .or_else(|| self.try_lower_slice_loop_into(value, &local));
             if let Some(statements) = into {
                 self.scope.bind_identifier(identifier, ids, local);
                 return statements;
             }
             if let Some(demand) = demand
                 && let Some(statements) =
-                    self.lower_let_as_components(let_spec, &go_identifier, demand)
+                    self.try_lower_let_as_components(let_spec, &go_identifier, demand)
             {
                 return statements;
             }
@@ -204,7 +204,7 @@ impl Planner<'_> {
             ..
         } = let_spec;
         let (mut statements, plan_value) = self
-            .lower_value(value, ExpressionContext::value())
+            .plan_value(value, ExpressionContext::value())
             .into_parts();
         let (coercion_setup, value_expression) = self
             .value_slot_coercion(value, binding_ty)
@@ -221,7 +221,7 @@ impl Planner<'_> {
         statements
     }
 
-    fn lower_let_as_components(
+    fn try_lower_let_as_components(
         &mut self,
         let_spec: LetSpec,
         go_identifier: &GoIdentifier,
@@ -229,13 +229,13 @@ impl Planner<'_> {
     ) -> Option<Vec<Statement>> {
         let ty = self.facts.peel_alias(&let_spec.value.get_type());
         if matches!(ty, Type::Tuple(_)) {
-            self.lower_tuple_components(let_spec, &ty, demand)
+            self.try_lower_tuple_components(let_spec, &ty, demand)
         } else {
-            self.lower_fallible_components(let_spec, go_identifier, &ty, demand)
+            self.try_lower_fallible_components(let_spec, go_identifier, &ty, demand)
         }
     }
 
-    fn lower_fallible_components(
+    fn try_lower_fallible_components(
         &mut self,
         let_spec: LetSpec,
         go_identifier: &GoIdentifier,
@@ -274,7 +274,7 @@ impl Planner<'_> {
         self.unbridged_tuple_arity(&plan, &value.get_type())
     }
 
-    fn lower_tuple_components(
+    fn try_lower_tuple_components(
         &mut self,
         let_spec: LetSpec,
         ty: &Type,
@@ -308,7 +308,7 @@ impl Planner<'_> {
             })
             .collect();
         let (setup, call) = self
-            .lower_call(value, None, ExpressionContext::value())
+            .plan_call_expression(value, None, ExpressionContext::value())
             .into_parts();
         let mut statements = setup;
         statements.push(define_many(names.clone(), call));
@@ -375,7 +375,7 @@ impl Planner<'_> {
         } = let_spec;
         let ids = binding_id.as_slice();
         let (mut statements, value_expression) = self
-            .lower_value(value, ExpressionContext::value())
+            .plan_value(value, ExpressionContext::value())
             .into_parts();
         statements.push(effect_statement(value_expression));
         let Some(raw_go_name) = raw_go_name else {
@@ -422,7 +422,7 @@ impl Planner<'_> {
         } = let_spec;
         let ids = binding_id.as_slice();
         let origin = self.function_type_origin(binding_ty, SlotOrigin::Lisette);
-        let plan = self.lower_value(
+        let plan = self.plan_value(
             value,
             ExpressionContext::value().with_function_slot_origin(origin),
         );
@@ -511,7 +511,7 @@ impl Planner<'_> {
         let local = go_identifier.clone();
         let target = WrapperTarget::Slot(&local);
         let statements =
-            self.lower_abi_wrapped_call_to(value, &plan.resolved.abi, binding_ty, target)?;
+            self.try_lower_abi_wrapped_call_to(value, &plan.resolved.abi, binding_ty, target)?;
         self.scope
             .bind_identifier(identifier, binding_id.as_slice(), local);
         Some(statements)
@@ -546,7 +546,7 @@ impl Planner<'_> {
         collapse_declared_temp(
             &mut statements,
             identifier,
-            self.short_declaration_keeps_type(binding_ty),
+            self.facts.short_declaration_keeps_type(binding_ty),
         );
         statements
     }
@@ -575,7 +575,7 @@ impl Planner<'_> {
             if !needs_context(&peeled_binding) && !needs_context(&peeled_binding.ok_type()) {
                 self.go_type(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
-                if self.fallible(&ctx_ty).is_some() {
+                if self.facts.fallible(&ctx_ty).is_some() {
                     self.go_type(&ctx_ty)
                 } else {
                     self.go_type(&resolved_ty)
@@ -611,7 +611,10 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 binding,
                 ..
             } = &self.binding.pattern
-                && let Some(raw_go_name) = self.planner.go_name_for_binding(&self.binding.pattern)
+                && let Some(raw_go_name) = self
+                    .planner
+                    .facts
+                    .go_name_for_binding(&self.binding.pattern)
             {
                 let go_identifier = self.planner.claim_block_binding(
                     identifier,
@@ -672,7 +675,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 if all_unused {
                     return self.lower_discard();
                 }
-                if let Some(block) = self.lower_channel_split(elements) {
+                if let Some(block) = self.try_lower_channel_split(elements) {
                     return block;
                 }
                 if elements.iter().all(|element| {
@@ -697,7 +700,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
     }
 
-    fn lower_channel_split(&mut self, elements: &[Pattern]) -> Option<LoweredBlock> {
+    fn try_lower_channel_split(&mut self, elements: &[Pattern]) -> Option<LoweredBlock> {
         let slot_types = self.channel_split_slot_types(elements)?;
         let call = self.planner.native_method_call(self.value)?;
         if call.native_type != NativeTypeKind::Channel || call.method != "split" {
@@ -706,7 +709,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         let (source, _) = call.receiver_and_arguments()?;
         let (mut statements, receiver) = self
             .planner
-            .lower_value(source, ExpressionContext::value())
+            .plan_value(source, ExpressionContext::value())
             .into_parts();
         let receiver = if self.planner.facts.is_reference(&source.get_type()) {
             GoExpression::dereference(receiver)
@@ -726,7 +729,8 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 else {
                     return None;
                 };
-                let raw_go_name = GoIdentifier::from(self.planner.go_name_for_binding(pattern)?);
+                let raw_go_name =
+                    GoIdentifier::from(self.planner.facts.go_name_for_binding(pattern)?);
                 let go_name = self.planner.choose_let_go_name(
                     identifier,
                     binding.as_slice(),
@@ -818,6 +822,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
         let mut raw_go_name = self
             .planner
+            .facts
             .go_name_for_binding(&self.binding.pattern)
             .map(GoIdentifier::from);
         if let Some(raw) = &raw_go_name
@@ -859,7 +864,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 if identifier == "_" {
                     return None;
                 }
-                let go_name = self.planner.go_name_for_binding(pattern)?;
+                let go_name = self.planner.facts.go_name_for_binding(pattern)?;
                 let preferred = go_name.preferred();
                 let name = if self.planner.shadows_declaration(&preferred)
                     || self
@@ -878,7 +883,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
         let (mut statements, call) = self
             .planner
-            .lower_call(self.value, None, ExpressionContext::value())
+            .plan_call_expression(self.value, None, ExpressionContext::value())
             .into_parts();
 
         let go_vars: Vec<GoIdentifier> = planned

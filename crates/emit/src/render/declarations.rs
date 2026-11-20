@@ -3,7 +3,6 @@ use crate::ir::declarations::{DeclarationKind, Documentation, GoDeclaration, Typ
 use crate::ir::go_expression::Position;
 use crate::render::{Renderer, writer::GoWriter};
 use crate::types::go_type::{GoType, GoTypeShape};
-use crate::utils::group_params;
 use std::fmt::Write;
 
 fn write_documentation(output: &mut GoWriter, documentation: &Documentation) {
@@ -212,4 +211,29 @@ fn write_underlying(output: &mut GoWriter, underlying: &GoType) {
     } else {
         output.push_str(&underlying.code);
     }
+}
+
+pub(crate) fn group_params(params: &[(String, String)]) -> String {
+    if params.is_empty() {
+        return String::new();
+    }
+    if params.len() == 1 {
+        return format!("{} {}", params[0].0, params[0].1);
+    }
+    let mut parts: Vec<String> = Vec::new();
+    let mut names: Vec<&str> = vec![&params[0].0];
+    let mut current_ty = &params[0].1;
+
+    for param in &params[1..] {
+        if param.1 == *current_ty {
+            names.push(&param.0);
+        } else {
+            parts.push(format!("{} {}", names.join(", "), current_ty));
+            names.clear();
+            names.push(&param.0);
+            current_ty = &param.1;
+        }
+    }
+    parts.push(format!("{} {}", names.join(", "), current_ty));
+    parts.join(", ")
 }

@@ -170,7 +170,7 @@ fn lowered_payload_zeros(
     }
 }
 
-pub(crate) fn emit_lowered_result_return(
+pub(crate) fn lower_result_return(
     planner: &mut Planner,
     result_value: GoExpression,
     hint: &'static str,
@@ -242,13 +242,13 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(lowered_none_values(planner, shape, return_ty)),
             ]
         }
-        LoweredReturnAbi::Tuple { .. } => emit_lowered_tuple_return(planner, p, return_ty),
+        LoweredReturnAbi::Tuple { .. } => lower_tuple_return(planner, p, return_ty),
     };
     statements.extend(arms);
     statements
 }
 
-fn emit_lowered_tuple_return(
+fn lower_tuple_return(
     planner: &mut Planner,
     result_value: &GoExpression,
     return_ty: &Type,
@@ -321,13 +321,13 @@ pub(crate) fn lowered_tuple_literal_values(
         .map(|(i, e)| match slot_tys.get(i) {
             Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
                 let adaptation = adaptations.get(i).unwrap_or(&Adaptation::Identity);
-                lower_nullable_slot_value(planner, e, adaptation, slot_ty)
+                plan_nullable_slot_value(planner, e, adaptation, slot_ty)
             }
             slot => {
                 let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
                     planner.function_type_origin(ty, SlotOrigin::Lisette)
                 });
-                planner.lower_composite_value(
+                planner.plan_composite_value(
                     e,
                     ExpressionContext::value().with_function_slot_origin(origin),
                 )
@@ -342,14 +342,14 @@ pub(crate) fn lowered_tuple_literal_values(
 }
 
 impl Planner<'_> {
-    pub(crate) fn lower_abi_to_tagged(
+    pub(crate) fn plan_abi_to_tagged(
         &mut self,
         raw_value: GoExpression,
         abi: &CallableReturnAbi,
         result_ty: &Type,
     ) -> (Vec<Statement>, GoExpression) {
         let (wrap, outcome) =
-            self.lower_abi_wrapping(raw_value, abi, result_ty, None, WrapperTarget::FreshSlot);
+            self.plan_abi_wrapping(raw_value, abi, result_ty, None, WrapperTarget::FreshSlot);
         (wrap, outcome.expect("wrapper produced no slot"))
     }
 
@@ -360,7 +360,7 @@ impl Planner<'_> {
         result_ty: &Type,
     ) -> Vec<Statement> {
         let (statements, outcome) =
-            self.lower_abi_wrapping(raw_value, abi, result_ty, None, WrapperTarget::Return);
+            self.plan_abi_wrapping(raw_value, abi, result_ty, None, WrapperTarget::Return);
         debug_assert!(outcome.is_none(), "Return target emits its own returns");
         statements
     }
@@ -376,8 +376,8 @@ pub(crate) fn reencode_return(
     match target.lowered() {
         None => planner.lower_abi_to_tagged_return(call, source, return_ty),
         Some(target) => {
-            let (mut statements, tagged) = planner.lower_abi_to_tagged(call, source, return_ty);
-            statements.extend(emit_lowered_result_return(
+            let (mut statements, tagged) = planner.plan_abi_to_tagged(call, source, return_ty);
+            statements.extend(lower_result_return(
                 planner, tagged, "res", return_ty, target,
             ));
             statements
@@ -385,7 +385,7 @@ pub(crate) fn reencode_return(
     }
 }
 
-pub(crate) fn try_emit_layout_return(
+pub(crate) fn try_lower_layout_return(
     planner: &mut Planner,
     expression: &Expression,
 ) -> Option<Vec<Statement>> {
@@ -400,7 +400,7 @@ pub(crate) fn try_emit_layout_return(
         if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
             let peeled = planner.facts.peel_alias(&return_ty);
             let (mut statements, value) =
-                lower_nullable_slot_value(planner, expression, adaptation, &peeled).into_parts();
+                plan_nullable_slot_value(planner, expression, adaptation, &peeled).into_parts();
             statements.push(plain_return(value));
             return Some(statements);
         }
@@ -420,14 +420,12 @@ pub(crate) fn try_emit_layout_return(
         let coercion = CoercionPlan::bridge(planner, &source, &target);
         if !coercion.is_identity() {
             let (mut statements, value) = planner
-                .lower_value(expression, ExpressionContext::value())
+                .plan_value(expression, ExpressionContext::value())
                 .into_parts();
             let (setup, value) = coercion.lower(planner, value);
             statements.extend(setup);
             if let Some(shape) = &shape {
-                statements.extend(emit_lowered_result_return(
-                    planner, value, "v", &return_ty, shape,
-                ));
+                statements.extend(lower_result_return(planner, value, "v", &return_ty, shape));
             } else {
                 statements.push(plain_return(value));
             }
@@ -437,15 +435,13 @@ pub(crate) fn try_emit_layout_return(
     match shape? {
         LoweredReturnAbi::Partial {
             payload: PayloadLayout::Packed,
-        } => Some(emit_lowered_partial_tail(planner, expression)),
-        LoweredReturnAbi::Tuple { arity, .. } => {
-            Some(emit_lowered_tuple_tail(planner, expression, arity))
-        }
+        } => Some(lower_partial_tail(planner, expression)),
+        LoweredReturnAbi::Tuple { arity, .. } => Some(lower_tuple_tail(planner, expression, arity)),
         _ => None,
     }
 }
 
-fn emit_lowered_tuple_tail(
+fn lower_tuple_tail(
     planner: &mut Planner,
     expression: &Expression,
     arity: usize,
@@ -475,14 +471,14 @@ fn emit_lowered_tuple_tail(
             ))
     {
         let (mut statements, call) = planner
-            .lower_call(expression, None, ExpressionContext::value())
+            .plan_call_expression(expression, None, ExpressionContext::value())
             .into_parts();
         statements.push(plain_return(call));
         return statements;
     }
 
     let (mut statements, value) = planner
-        .lower_value(expression, ExpressionContext::value())
+        .plan_value(expression, ExpressionContext::value())
         .into_parts();
     let tup =
         GoExpression::identifier(planner.hoist_tmp_value_statement(&mut statements, "tup", value));
@@ -498,7 +494,7 @@ fn emit_lowered_tuple_tail(
     statements
 }
 
-fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> Vec<Statement> {
+fn lower_partial_tail(planner: &mut Planner, expression: &Expression) -> Vec<Statement> {
     use Expression;
     let return_ty = planner.return_ctx().expect_ty();
 
@@ -513,14 +509,14 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
         let ret = match variant {
             PartialVariant::Ok => {
                 let (setup, v) = planner
-                    .lower_composite_value(&args[0], ExpressionContext::value())
+                    .plan_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
                 multi_value_return(vec![v, GoExpression::nil()])
             }
             PartialVariant::Err => {
                 let (setup, e) = planner
-                    .lower_composite_value(&args[0], ExpressionContext::value())
+                    .plan_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
                 let ok_ty = planner.facts.peel_alias(&return_ty).ok_type();
@@ -529,7 +525,7 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
             PartialVariant::Both => {
                 let stages = args
                     .iter()
-                    .map(|arg| planner.lower_composite_value(arg, ExpressionContext::value()))
+                    .map(|arg| planner.plan_composite_value(arg, ExpressionContext::value()))
                     .collect();
                 let sequenced =
                     planner.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
@@ -542,9 +538,9 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
     }
 
     let (mut statements, value) = planner
-        .lower_value(expression, ExpressionContext::value())
+        .plan_value(expression, ExpressionContext::value())
         .into_parts();
-    statements.extend(emit_lowered_result_return(
+    statements.extend(lower_result_return(
         planner,
         value,
         "v",
@@ -556,7 +552,7 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
     statements
 }
 
-fn lower_nullable_slot_value(
+fn plan_nullable_slot_value(
     planner: &mut Planner,
     expression: &Expression,
     adaptation: &Adaptation,
@@ -564,7 +560,7 @@ fn lower_nullable_slot_value(
 ) -> ValuePlan {
     use Expression;
     if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
-        return planner.lower_nullable_payload(expression, &slot_ty.ok_type());
+        return planner.plan_nullable_payload(expression, &slot_ty.ok_type());
     }
     if let Expression::Call {
         expression: callee,
@@ -575,13 +571,13 @@ fn lower_nullable_slot_value(
     {
         debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
         return planner
-            .lower_nullable_payload(&args[0], &slot_ty.ok_type())
+            .plan_nullable_payload(&args[0], &slot_ty.ok_type())
             .with_constructor_stability();
     }
     if prelude_constructor(expression) == Some(PreludeVariant::None) {
         return ValuePlan::literal("nil".to_string());
     }
-    let value = planner.lower_value(expression, ExpressionContext::value());
+    let value = planner.plan_value(expression, ExpressionContext::value());
     let inner = planner.go_type(&slot_ty.ok_type());
     value.map_expression(|setup, value| {
         planner.plan_option_payload_wrap(setup, value, &inner, &LayoutBridge::Identity, false)

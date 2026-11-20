@@ -17,6 +17,7 @@ use crate::ir::local::{GoIdentifier, LocalId};
 use crate::ir::values::GoExpression;
 use crate::ir::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
 use crate::names::go_name;
+use crate::names::receiver::fresh_receiver_name;
 use crate::names::source_name::SourceName;
 use crate::passes::cleanup::{clean_up, declare_zero_values};
 use crate::passes::verify::verify_final_function_body;
@@ -25,7 +26,6 @@ use crate::patterns::sites::PatternSubject;
 use crate::state::expression::ExpressionContext;
 use crate::statements::testing::test_context_call;
 use crate::types::go_type::GoType;
-use crate::utils::fresh_receiver_name;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
 use syntax::ast::{
@@ -62,7 +62,7 @@ impl LambdaReturnInfo {
 }
 
 impl Planner<'_> {
-    fn emit_function_body_inner(
+    fn lower_function_body_inner(
         &mut self,
         body: &Expression,
         should_return: bool,
@@ -178,7 +178,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn emit_lambda(
+    pub(crate) fn plan_lambda(
         &mut self,
         params: &[Binding],
         body: &Expression,
@@ -260,7 +260,9 @@ impl Planner<'_> {
         };
 
         let return_ty = function.return_type.as_ref();
-        let abi = self.return_abi(return_ty, ReturnSlot::FunctionExpression(ctx));
+        let abi = self
+            .facts
+            .return_abi(return_ty, ReturnSlot::FunctionExpression(ctx));
         let signature =
             (abi != CallableReturnAbi::Void).then(|| self.return_go_type(&abi, return_ty));
         let return_ctx = match abi {
@@ -319,7 +321,7 @@ impl Planner<'_> {
             (generic.name.clone(), bounds)
         }));
         let signature_generics = generic_context[signature_generics_start..].to_vec();
-        let position = self.source_position(&function_definition.name_span);
+        let position = self.facts.source_position(&function_definition.name_span);
         let return_ctx = if receiver_ty.is_some() {
             self.return_context_for_method(function_definition.return_type.clone())
         } else {
@@ -366,7 +368,7 @@ impl Planner<'_> {
             parameters.push(receiver.clone());
         }
 
-        let body = self.emit_function_body_with_deferred_patterns(
+        let body = self.lower_function_body_with_deferred_patterns(
             function_definition,
             &deferred_patterns,
             &mut parameters,
@@ -418,7 +420,8 @@ impl Planner<'_> {
         is_public: bool,
     ) -> String {
         if has_receiver {
-            self.method_go_name(function_definition.name, is_public)
+            self.facts
+                .method_go_name(function_definition.name, is_public)
         } else {
             self.free_function_go_name(function_definition.name, is_public)
         }
@@ -452,7 +455,7 @@ impl Planner<'_> {
         self.return_go_type(&abi, function_definition.return_type)
     }
 
-    fn emit_function_body_with_deferred_patterns(
+    fn lower_function_body_with_deferred_patterns(
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
         deferred_patterns: &[ParamDestructure<'_>],
@@ -460,7 +463,7 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let should_return = !matches!(self.return_ctx(), ReturnContext::Void(_));
         let prefix = self.lower_param_destructures(deferred_patterns);
-        self.emit_function_body_inner(
+        self.lower_function_body_inner(
             function_definition
                 .body
                 .expect("declarations return before function body emission"),
@@ -555,7 +558,7 @@ impl Planner<'_> {
                     binding: id,
                     ..
                 } => {
-                    if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
+                    if let Some(go_name) = self.facts.go_name_for_binding(&param.pattern) {
                         let name = self.claim_declared_binding(identifier, id.as_slice(), &go_name);
                         lowered.test_handle = lowered
                             .test_handle

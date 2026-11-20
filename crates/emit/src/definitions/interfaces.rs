@@ -84,7 +84,7 @@ impl Planner<'_> {
                     .find(|method| method.source_name == *func.name)
             })
             .expect("interface method must be registered");
-        let return_abi = self.return_abi(
+        let return_abi = self.facts.return_abi(
             method.ty.get_function_ret().unwrap_or(&Type::Never),
             ReturnSlot::InterfaceMethod {
                 name: func.name,
@@ -92,7 +92,7 @@ impl Planner<'_> {
             },
         );
 
-        let method_name = self.interface_method_go_name(func.name, is_public);
+        let method_name = self.facts.interface_method_go_name(func.name, is_public);
 
         InterfaceMethod {
             name: method_name,

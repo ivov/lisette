@@ -744,7 +744,7 @@ fn needs_newtype_wrap(planner: &Planner<'_>, from: &Type, to: &Type) -> bool {
     if from == to {
         return false;
     }
-    let Some(underlying) = planner.get_newtype_underlying(to) else {
+    let Some(underlying) = planner.facts.get_newtype_underlying(to) else {
         return false;
     };
     underlying == *from

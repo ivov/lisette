@@ -89,11 +89,11 @@ impl<'a> PropagateTarget<'a> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn lower_propagate(
+    pub(crate) fn plan_propagate(
         &mut self,
         expression: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
-        let (statements, value) = self.lower_propagate_to(expression, PropagateTarget::Value);
+        let (statements, value) = self.plan_propagate_to(expression, PropagateTarget::Value);
         (
             statements,
             value.expect("a value target yields the ok value"),
@@ -101,7 +101,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn lower_propagate_statement(&mut self, inner: &Expression) -> Vec<Statement> {
-        self.lower_propagate_to(inner, PropagateTarget::Discard).0
+        self.plan_propagate_to(inner, PropagateTarget::Discard).0
     }
 
     pub(crate) fn lower_propagate_binding(
@@ -109,19 +109,19 @@ impl Planner<'_> {
         inner: &Expression,
         name: &GoIdentifier,
     ) -> Vec<Statement> {
-        self.lower_propagate_to(inner, PropagateTarget::Bind(name))
-            .0
+        self.plan_propagate_to(inner, PropagateTarget::Bind(name)).0
     }
 
-    fn lower_propagate_to(
+    fn plan_propagate_to(
         &mut self,
         expression: &Expression,
         target: PropagateTarget<'_>,
     ) -> (Vec<Statement>, Option<GoExpression>) {
         let expression_ty = self.facts.peel_alias(&expression.get_type());
         let fallible = self
+            .facts
             .fallible(&expression_ty)
-            .expect("lower_propagate called on non-Result/Option type");
+            .expect("plan_propagate called on non-Result/Option type");
 
         let mut statements = Vec::new();
 
@@ -135,17 +135,16 @@ impl Planner<'_> {
             return (statements, None);
         }
 
-        if let Some(fused) = self.try_lower_fused_propagate(expression, &fallible, target) {
+        if let Some(fused) = self.try_plan_fused_propagate(expression, &fallible, target) {
             return fused;
         }
-        if let Some(fused) = self.try_lower_mapped_error_propagate(expression, &fallible, target) {
+        if let Some(fused) = self.try_plan_mapped_error_propagate(expression, &fallible, target) {
             return fused;
         }
-        if let Some(fused) = self.try_lower_fused_option_propagate(expression, &fallible, target) {
+        if let Some(fused) = self.try_plan_fused_option_propagate(expression, &fallible, target) {
             return fused;
         }
-        if let Some(fused) = self.try_lower_tagged_map_err_propagate(expression, &fallible, target)
-        {
+        if let Some(fused) = self.try_plan_tagged_map_err_propagate(expression, &fallible, target) {
             return fused;
         }
 
@@ -281,7 +280,7 @@ impl Planner<'_> {
         (setup, values)
     }
 
-    fn try_lower_fused_propagate(
+    fn try_plan_fused_propagate(
         &mut self,
         expression: &Expression,
         fallible: &Fallible,
@@ -314,7 +313,7 @@ impl Planner<'_> {
         }
 
         let (mut statements, call) = self
-            .lower_call(call, None, ExpressionContext::value())
+            .plan_call_expression(call, None, ExpressionContext::value())
             .into_parts();
         let want_value = !matches!(target, PropagateTarget::Discard);
         let named = if has_value_slot && payload_bridge.is_none() {
@@ -393,7 +392,7 @@ impl Planner<'_> {
         Some((statements, value))
     }
 
-    fn try_lower_fused_option_propagate(
+    fn try_plan_fused_option_propagate(
         &mut self,
         expression: &Expression,
         fallible: &Fallible,
@@ -429,7 +428,7 @@ impl Planner<'_> {
         Some((statements, value))
     }
 
-    fn try_lower_mapped_error_propagate(
+    fn try_plan_mapped_error_propagate(
         &mut self,
         expression: &Expression,
         fallible: &Fallible,
@@ -511,7 +510,7 @@ impl Planner<'_> {
                     let late_binding = bound.late_binding();
                     let payload = bound.payload();
                     let mut statements = bound.statements;
-                    let value = self.lower_composite_value(error, ExpressionContext::value());
+                    let value = self.plan_composite_value(error, ExpressionContext::value());
                     let (error_setup, error) =
                         self.eager_operand(error, value, "failure").into_parts();
                     statements.extend(error_setup);
@@ -531,7 +530,7 @@ impl Planner<'_> {
                     let payload = bound.payload();
                     let (failure_setup, error) = self
                         .with_binding_frame(|this| {
-                            this.lower_composite_value(map.body, ExpressionContext::value())
+                            this.plan_composite_value(map.body, ExpressionContext::value())
                         })
                         .into_parts();
                     (
@@ -621,7 +620,7 @@ impl Planner<'_> {
             error = match mapper {
                 ErrorMapper::Function(function) => {
                     let (function_setup, function) = self
-                        .lower_composite_value(function, ExpressionContext::value())
+                        .plan_composite_value(function, ExpressionContext::value())
                         .into_parts();
                     setup.extend(function_setup);
                     let function = if names_function(function.node()) {
@@ -648,7 +647,7 @@ impl Planner<'_> {
                             run_unread_error(&mut lambda_setup, &error);
                         }
                         let (body_setup, body) = this
-                            .lower_composite_value(lambda.body, ExpressionContext::value())
+                            .plan_composite_value(lambda.body, ExpressionContext::value())
                             .into_parts();
                         lambda_setup.extend(body_setup);
                         (lambda_setup, body)
@@ -694,7 +693,7 @@ impl Planner<'_> {
         self.scope.bind_identifier(param.name, ids, name);
     }
 
-    fn try_lower_tagged_map_err_propagate(
+    fn try_plan_tagged_map_err_propagate(
         &mut self,
         expression: &Expression,
         fallible: &Fallible,

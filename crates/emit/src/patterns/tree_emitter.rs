@@ -391,6 +391,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
     fn arm_line(&self, arm_index: usize) -> Option<Position> {
         self.planner
+            .facts
             .source_position(&self.arms[arm_index].pattern.get_span())
     }
 
@@ -664,7 +665,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
         let lowered = self.with_binding_frame(|this| {
             this.install_path_overlays(bindings);
-            this.lower_guard_condition(arm_index)
+            this.try_plan_guard_condition(arm_index)
         });
         let (setup, condition) = lowered?;
         if !setup.is_empty() {
@@ -923,7 +924,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 bindings,
                 &guard_consumers,
                 |this, _| {
-                    let (condition_setup, condition) = this.lower_guard_condition(arm_index)?;
+                    let (condition_setup, condition) = this.try_plan_guard_condition(arm_index)?;
                     let then_body = this.with_scope(|this| {
                         let mut then_statements: Vec<Statement> = Vec::new();
                         this.emit_arm_leaf(&mut then_statements, arm_index, &ctx.nested());
@@ -1036,7 +1037,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 self.lower_switch_case(labels, established, &branch.decision, place)
             })
             .collect();
-        let default_block = self.lower_switch_default(default, place);
+        let default_block = self.try_lower_switch_default(default, place);
         switch_statements(
             SwitchStatementPlan {
                 kind: SwitchKind::Value { subject },
@@ -1086,7 +1087,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 nested.lower_switch_case(labels, None, &branch.decision, place)
             })
             .collect();
-        let default_block = nested.lower_switch_default(default, place);
+        let default_block = nested.try_lower_switch_default(default, place);
 
         let mut used = GoUses::default();
         used.extend_cases(&case_plans);
@@ -1131,7 +1132,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn lower_switch_default(
+    fn try_lower_switch_default(
         &mut self,
         default: Option<&Decision>,
         place: &PlacePlan,
@@ -1275,7 +1276,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 ChainArm::Guard(guard) => {
                     let arm_index = guard.leaf.arm_index;
                     if let Some((condition_setup, condition)) =
-                        self.lower_guard_condition(arm_index)
+                        self.try_plan_guard_condition(arm_index)
                     {
                         let then_body = self.with_scope(|this| {
                             let mut then_body: Vec<Statement> = Vec::new();
@@ -1355,7 +1356,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 );
                 let line = consumers
                     .first()
-                    .and_then(|consumer| this.planner.source_position(&consumer.get_span()));
+                    .and_then(|consumer| this.planner.facts.source_position(&consumer.get_span()));
                 direct_first(&mut statements[start..], line);
             }
             f(this, statements)
@@ -1373,7 +1374,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements.extend(block.statements);
     }
 
-    fn lower_guard_condition(
+    fn try_plan_guard_condition(
         &mut self,
         arm_index: usize,
     ) -> Option<(Vec<Statement>, GoExpression)> {

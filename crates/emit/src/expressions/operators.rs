@@ -96,8 +96,8 @@ impl Planner<'_> {
             );
         }
 
-        let left_plan = self.lower_composite_value(left_expression, ctx);
-        let right_plan = self.lower_composite_value(right_expression, ctx);
+        let left_plan = self.plan_composite_value(left_expression, ctx);
+        let right_plan = self.plan_composite_value(right_expression, ctx);
         self.combine_binary(operator, left_plan, right_plan, None)
     }
 
@@ -151,8 +151,8 @@ impl Planner<'_> {
         right_expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let left_staged = self.lower_composite_value(left_expression, ctx);
-        let right_staged = self.lower_composite_value(right_expression, ctx);
+        let left_staged = self.plan_composite_value(left_expression, ctx);
+        let right_staged = self.plan_composite_value(right_expression, ctx);
         let (mut setup, left_value) = left_staged.into_parts();
         let (mut statements, mut right_value) = right_staged.into_parts();
         if let Some(inlined) = inline_single_read(&statements, &right_value) {
@@ -236,12 +236,12 @@ impl Planner<'_> {
             return self.plan_binary(&flipped, left, right, conversion, ctx);
         }
         let (innermost, inner_negated) = strip_negations(expression);
-        if let Some(predicate) = self.lower_fused_predicate_value(innermost, !inner_negated) {
+        if let Some(predicate) = self.try_plan_fused_predicate_value(innermost, !inner_negated) {
             return predicate;
         }
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<Statement> = Vec::new();
-            if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
+            if let Some(negated) = self.try_plan_negated_call(&mut setup, target) {
                 return ValuePlan::computed(setup, negated);
             }
         }
@@ -305,7 +305,7 @@ impl Planner<'_> {
                 expression: package,
                 member,
                 ..
-            } => self.imported_member_is_const(package, member),
+            } => self.facts.imported_member_is_const(package, member),
             Expression::Paren { expression, .. } => self.is_go_constant_expression(expression),
             Expression::Unary {
                 operator: UnaryOperator::Negative | UnaryOperator::Not | UnaryOperator::BitwiseNot,
@@ -335,28 +335,6 @@ impl Planner<'_> {
             None => resolution
                 .definition()
                 .is_some_and(|symbol| self.package.is_go_const_binding(symbol)),
-        }
-    }
-
-    fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
-        let package = package.unwrap_parens();
-        let Expression::Identifier { value, .. } = package else {
-            return false;
-        };
-        let package = package.get_type();
-        let package = package.as_import_namespace().unwrap_or(value);
-        let qualified = format!("{package}.{member}");
-        let definition = self.facts.definition(&qualified).or_else(|| {
-            self.facts
-                .definition(&self.facts.qualified_current_member(value, member))
-        });
-        match definition {
-            Some(definition) if !matches!(definition.body, DefinitionBody::Value { .. }) => false,
-            Some(_) if package.starts_with(go_name::GO_IMPORT_PREFIX) => {
-                self.facts.is_const(&qualified)
-            }
-            Some(definition) => !matches!(definition.ty.unwrap_forall(), Type::Function(_)),
-            None => false,
         }
     }
 
@@ -452,5 +430,26 @@ fn fold_read(
                 && fold_read(right, name, value, reads)
         }
         _ => false,
+    }
+}
+
+impl EmitFacts<'_> {
+    fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
+        let package = package.unwrap_parens();
+        let Expression::Identifier { value, .. } = package else {
+            return false;
+        };
+        let package = package.get_type();
+        let package = package.as_import_namespace().unwrap_or(value);
+        let qualified = format!("{package}.{member}");
+        let definition = self
+            .definition(&qualified)
+            .or_else(|| self.definition(&self.qualified_current_member(value, member)));
+        match definition {
+            Some(definition) if !matches!(definition.body, DefinitionBody::Value { .. }) => false,
+            Some(_) if package.starts_with(go_name::GO_IMPORT_PREFIX) => self.is_const(&qualified),
+            Some(definition) => !matches!(definition.ty.unwrap_forall(), Type::Function(_)),
+            None => false,
+        }
     }
 }
