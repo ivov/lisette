@@ -4,24 +4,8 @@ pub(crate) use syntax::types::RangeKind as RangeShape;
 use syntax::types::Type;
 
 impl EmitFacts<'_> {
-    pub(crate) fn shape_ty(&self, ty: &Type) -> Type {
-        let mut current = ty.clone();
-        loop {
-            let without_refs = current.strip_refs();
-            let peeled = self.peel_alias(&without_refs);
-            if peeled == current {
-                return peeled;
-            }
-            current = peeled;
-        }
-    }
-
     pub(crate) fn native_kind(&self, ty: &Type) -> Option<NativeTypeKind> {
-        NativeTypeKind::from_type(&self.shape_ty(ty))
-    }
-
-    pub(crate) fn range_shape(&self, ty: &Type) -> Option<RangeShape> {
-        RangeShape::of(&self.shape_ty(ty))
+        NativeTypeKind::from_type(&self.receiver_shape(ty))
     }
 
     pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeTypeKind> {

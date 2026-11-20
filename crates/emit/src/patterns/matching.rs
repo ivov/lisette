@@ -285,7 +285,7 @@ impl Planner<'_> {
             return None;
         }
         let none_body = none_body?;
-        let payload_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+        let payload_ty = self.facts.ok_payload(&subject.get_type());
         let mut bound = fuse.bind(self, CommaOkValueSlot::Temp);
         let value = bound.payload()?;
         let condition = bound.success_condition();

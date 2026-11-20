@@ -1,7 +1,7 @@
 use syntax::collections::DenseMap;
 use syntax::program::{
-    CallOperation, CheckedBodiesBuilder, CheckedCallee, ConformanceIndex, ConformanceWitness,
-    EqualityRecipe, ReceiverCoercion, ValueUseKey,
+    CallOperation, CheckedBodiesBuilder, CheckedCallee, CheckedStructLiteral, ConformanceIndex,
+    ConformanceWitness, EqualityRecipe, FieldKey, FieldSelection, ReceiverCoercion, ValueUseKey,
 };
 mod usages;
 pub use usages::{UsageFacts, UsageIndex};
@@ -84,6 +84,8 @@ pub(crate) struct ValueUseObligations {
     pub(crate) implicit_units: Vec<(ExpressionId, ExpressionId)>,
     /// Each binary expression with an operand that converts to the type of the other operand.
     pub(crate) operand_conversions: Vec<(ExpressionId, OperandConversion)>,
+    pub(crate) struct_literals: Vec<(ExpressionId, CheckedStructLiteral)>,
+    pub(crate) field_selections: Vec<(FieldKey, FieldSelection)>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +105,8 @@ impl ValueUseObligations {
         self.selected_witnesses.extend(other.selected_witnesses);
         self.implicit_units.extend(other.implicit_units);
         self.operand_conversions.extend(other.operand_conversions);
+        self.struct_literals.extend(other.struct_literals);
+        self.field_selections.extend(other.field_selections);
     }
 
     pub(crate) fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {
@@ -115,9 +119,22 @@ impl ValueUseObligations {
         }
         for (_, callee) in &mut self.callees {
             callee.type_arguments.types_mut().for_each(&mut visit);
-            if let CallOperation::BoundMethod { bound, .. } = &mut callee.operation {
+            if let CallOperation::BoundMethod { bound, requirement } = &mut callee.operation {
                 visit(bound);
+                visit(&mut requirement.ty);
             }
+            if let Some(requirement) = &mut callee.interface_method {
+                visit(&mut requirement.ty);
+            }
+        }
+        for (_, literal) in &mut self.struct_literals {
+            for (_, ty) in &mut literal.unset_fields {
+                visit(ty);
+            }
+        }
+        for (_, selection) in &mut self.field_selections {
+            visit(&mut selection.declared_ty);
+            selection.substitutions.types_mut().for_each(&mut visit);
         }
     }
 }

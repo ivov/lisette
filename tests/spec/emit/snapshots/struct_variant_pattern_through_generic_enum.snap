@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  enum Shape<T> {
+    Dot(T),
+    Rect { w: T, h: T },
+  }
+  
+  fn area(s: Shape<int>) -> int {
+    match s {
+      Shape.Rect { w: 0, h: _ } => 0,
+      Shape.Rect { w, h } => w * h,
+      Shape.Dot(_) => 1,
+    }
+  }
+---
+package main
+
+func MakeShapeDot[T any](arg0 T) Shape[T] {
+	return Shape[T]{Tag: ShapeDot, Dot: arg0}
+}
+
+func MakeShapeRect[T any](arg0, arg1 T) Shape[T] {
+	return Shape[T]{Tag: ShapeRect, W: arg0, H: arg1}
+}
+
+type ShapeTag uint8
+
+const (
+	ShapeDot ShapeTag = iota
+	ShapeRect
+)
+
+type Shape[T any] struct {
+	Tag ShapeTag
+	Dot T
+	W   T
+	H   T
+}
+
+func area(s Shape[int]) int {
+	if s.Tag == ShapeRect {
+		if s.W == 0 {
+			return 0
+		}
+		return s.W * s.H
+	}
+	return 1
+}

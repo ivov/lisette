@@ -1,11 +1,14 @@
-use rustc_hash::FxHashMap as HashMap;
-use std::fmt::Debug;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::collections::hash_map::Entry;
+use std::fmt::{self, Debug};
 use std::hash::Hash;
 
-use super::{ConformanceWitness, NativeOperation, NativeTypeKind, ReceiverCoercion};
+use super::{
+    ConformanceWitness, InterfaceRequirement, NativeOperation, NativeTypeKind, ReceiverCoercion,
+};
 use crate::EcoString;
 use crate::ast::{Expression, ExpressionId, Span};
-use crate::types::{SubstitutionMap, Symbol, Type};
+use crate::types::{IterableKind, RangeKind, SubstitutionMap, Symbol, Type, substitute};
 
 /// Names one value use: the occurrence that produces the value, and its role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -61,11 +64,12 @@ pub enum Adaptation {
         /// Whether a child that produces the value changes its type.
         converts: bool,
     },
-    Interface(InterfaceConversion),
+    Interface(Box<InterfaceConversion>),
     /// A Go interface value where an `Option` is expected.
     ImplicitSome {
         payload: Box<Adaptation>,
     },
+    Newtype,
     Tuple(Vec<Adaptation>),
     Array(Box<Adaptation>),
     /// A method receiver that takes its address or reads through its reference.
@@ -79,6 +83,7 @@ impl Adaptation {
             Self::Identity => false,
             Self::Delegated { converts } => *converts,
             Self::Interface(_)
+            | Self::Newtype
             | Self::ImplicitSome { .. }
             | Self::Tuple(_)
             | Self::Array(_)
@@ -92,6 +97,8 @@ impl Adaptation {
 pub struct InterfaceConversion {
     pub source: Type,
     pub target: Type,
+    pub source_shape: Type,
+    pub target_interface: Option<Type>,
     /// Absent when the target requires no method, or when the source is no named type or type parameter.
     pub witness: Option<ConformanceWitness>,
 }
@@ -119,11 +126,19 @@ pub struct CheckedCallee {
     pub copies_storage: bool,
     /// Whether the callee holds the receiver that the first parameter of its declaration takes, as `x.m(a)` does.
     pub binds_receiver: bool,
+    pub interface_method: Option<Box<InterfaceRequirement>>,
     /// Where the callee is written, for diagnostics.
     pub span: Span,
 }
 
 impl CheckedCallee {
+    pub fn interface_requirement(&self) -> Option<&InterfaceRequirement> {
+        match &self.operation {
+            CallOperation::BoundMethod { requirement, .. } => Some(requirement),
+            _ => self.interface_method.as_deref(),
+        }
+    }
+
     /// The built-in method this callee runs, if any.
     pub fn native(&self) -> Option<NativeOperation<'_>> {
         match &self.operation {
@@ -167,7 +182,7 @@ pub enum CallOperation {
     /// A method that a type parameter takes from the bound that declares it.
     BoundMethod {
         bound: Type,
-        method: EcoString,
+        requirement: Box<InterfaceRequirement>,
     },
     /// A method of a built-in type.
     Native {
@@ -179,7 +194,10 @@ pub enum CallOperation {
         kind: NativeTypeKind,
         method: EcoString,
     },
-    TupleStructConstructor,
+    TupleStructConstructor {
+        owner: Symbol,
+        is_newtype: bool,
+    },
     AssertType,
     Zero,
     /// No operation, because inference rejected the call before it could select one.
@@ -229,6 +247,34 @@ impl EqualityRecipe {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FieldKey {
+    Access(ExpressionId),
+    Literal(ExpressionId, EcoString),
+    Pattern(Span),
+    Positional(ExpressionId, usize),
+    PatternPosition(Span, usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldSelection {
+    pub owner: Symbol,
+    pub declared_ty: Type,
+    pub substitutions: SubstitutionMap,
+}
+
+impl FieldSelection {
+    pub fn field_ty(&self) -> Type {
+        substitute(&self.declared_ty, &self.substitutions)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CheckedStructLiteral {
+    pub unset_fields: Vec<(EcoString, Type)>,
+    pub via_alias: bool,
+}
+
 /// The records that the checker published for the bodies it checked, which no consumer changes.
 #[derive(Debug, Clone, Default)]
 pub struct CheckedBodies {
@@ -240,6 +286,12 @@ pub struct CheckedBodies {
     implicit_units: HashMap<ExpressionId, ExpressionId>,
     /// Keyed by the binary expression whose operand converts.
     operand_conversions: HashMap<ExpressionId, OperandConversion>,
+    struct_literals: HashMap<ExpressionId, CheckedStructLiteral>,
+    field_selections: HashMap<FieldKey, FieldSelection>,
+    iterable_kinds: HashMap<ExpressionId, IterableKind>,
+    range_kinds: HashMap<ExpressionId, RangeKind>,
+    forwarded_failures: HashSet<ExpressionId>,
+    receiver_generics: HashMap<ExpressionId, Vec<(EcoString, Vec<Type>)>>,
 }
 
 impl CheckedBodies {
@@ -257,6 +309,23 @@ impl CheckedBodies {
 
     pub fn callees(&self) -> impl Iterator<Item = (&ValueUseKey, &CheckedCallee)> {
         self.callees.iter()
+    }
+
+    pub fn pattern_field(&self, name_span: Span) -> &FieldSelection {
+        self.field_selections
+            .get(&FieldKey::Pattern(name_span))
+            .unwrap_or_else(|| {
+                panic!("internal error: no checked field selection for the pattern field at {name_span:?}")
+            })
+    }
+
+    pub fn variant_pattern_fields(&self, pattern_span: Span) -> Vec<&FieldSelection> {
+        (0..)
+            .map_while(|index| {
+                self.field_selections
+                    .get(&FieldKey::PatternPosition(pattern_span, index))
+            })
+            .collect()
     }
 
     /// A lookup of the records for the occurrence `expression`, which does not check that `expression` belongs to these bodies.
@@ -304,6 +373,38 @@ impl CheckedBodiesBuilder {
         insert_unique(&mut self.records.operand_conversions, binary, conversion);
     }
 
+    pub fn insert_struct_literal(&mut self, literal: ExpressionId, record: CheckedStructLiteral) {
+        insert_unique(&mut self.records.struct_literals, literal, record);
+    }
+
+    pub fn insert_field_selection(&mut self, key: FieldKey, selection: FieldSelection) {
+        insert_unique(&mut self.records.field_selections, key, selection);
+    }
+
+    pub fn insert_iterable_kind(&mut self, for_loop: ExpressionId, kind: IterableKind) {
+        insert_unique(&mut self.records.iterable_kinds, for_loop, kind);
+    }
+
+    pub fn insert_range_kind(&mut self, range: ExpressionId, kind: RangeKind) {
+        insert_unique(&mut self.records.range_kinds, range, kind);
+    }
+
+    pub fn insert_forwarded_failure(&mut self, operand: ExpressionId) {
+        let inserted = self.records.forwarded_failures.insert(operand);
+        assert!(
+            inserted,
+            "internal error: two forwarded failures share the key {operand:?}"
+        );
+    }
+
+    pub fn insert_receiver_generics(
+        &mut self,
+        impl_block: ExpressionId,
+        generics: Vec<(EcoString, Vec<Type>)>,
+    ) {
+        insert_unique(&mut self.records.receiver_generics, impl_block, generics);
+    }
+
     pub fn merge(&mut self, other: Self) {
         let CheckedBodies {
             uses,
@@ -311,6 +412,12 @@ impl CheckedBodiesBuilder {
             equalities,
             implicit_units,
             operand_conversions,
+            struct_literals,
+            field_selections,
+            iterable_kinds,
+            range_kinds,
+            forwarded_failures,
+            receiver_generics,
         } = other.records;
         for (key, value_use) in uses {
             self.insert_use(key, value_use);
@@ -327,6 +434,24 @@ impl CheckedBodiesBuilder {
         for (binary, conversion) in operand_conversions {
             self.insert_operand_conversion(binary, conversion);
         }
+        for (literal, record) in struct_literals {
+            self.insert_struct_literal(literal, record);
+        }
+        for (key, selection) in field_selections {
+            self.insert_field_selection(key, selection);
+        }
+        for (for_loop, kind) in iterable_kinds {
+            self.insert_iterable_kind(for_loop, kind);
+        }
+        for (range, kind) in range_kinds {
+            self.insert_range_kind(range, kind);
+        }
+        for operand in forwarded_failures {
+            self.insert_forwarded_failure(operand);
+        }
+        for (impl_block, generics) in receiver_generics {
+            self.insert_receiver_generics(impl_block, generics);
+        }
     }
 
     /// The records collected so far.
@@ -340,12 +465,18 @@ impl CheckedBodiesBuilder {
     }
 }
 
-fn insert_unique<K: Eq + Hash + Copy + Debug, V>(map: &mut HashMap<K, V>, key: K, value: V) {
-    let previous = map.insert(key, value);
-    assert!(
-        previous.is_none(),
-        "internal error: two records share the key {key:?}"
-    );
+fn insert_unique<K: Eq + Hash + Debug, V>(map: &mut HashMap<K, V>, key: K, value: V) {
+    match map.entry(key) {
+        Entry::Occupied(entry) => {
+            panic!(
+                "internal error: two records share the key {:?}",
+                entry.key()
+            )
+        }
+        Entry::Vacant(entry) => {
+            entry.insert(value);
+        }
+    }
 }
 
 /// One expression occurrence with a lookup of the records the checker published for it.
@@ -367,8 +498,9 @@ impl<'a> CheckedExpression<'_, 'a> {
     }
 
     /// The error that a `?` on this operand returns, converted to the error slot of its function or `try` block.
-    pub fn propagated_error(&self) -> &'a CheckedValueUse {
-        self.record(ValueUseKey::propagated_error(self.expression.id()))
+    pub fn propagated_error(&self) -> Option<&'a CheckedValueUse> {
+        self.bodies
+            .value_use(&ValueUseKey::propagated_error(self.expression.id()))
     }
 
     /// The reference change that this method receiver takes, as the checker recorded it.
@@ -381,12 +513,7 @@ impl<'a> CheckedExpression<'_, 'a> {
 
     /// The operation and type arguments that the checker selected for this callee.
     pub fn callee(&self) -> &'a CheckedCallee {
-        self.function_value().unwrap_or_else(|| {
-            panic!(
-                "internal error: no selected callee at {:?}",
-                self.expression.get_span()
-            )
-        })
+        self.expect(self.function_value(), format_args!("selected callee"))
     }
 
     /// The definition and type arguments of this function value, or None when the checker records none for it.
@@ -416,10 +543,84 @@ impl<'a> CheckedExpression<'_, 'a> {
             .copied()
     }
 
+    pub fn receiver_generics(&self) -> &'a [(EcoString, Vec<Type>)] {
+        self.expect(
+            self.bodies
+                .receiver_generics
+                .get(&self.expression.id())
+                .map(Vec::as_slice),
+            format_args!("checked receiver generics"),
+        )
+    }
+
+    pub fn range_kind(&self) -> Option<RangeKind> {
+        self.bodies
+            .range_kinds
+            .get(&self.expression.unwrap_parens().id())
+            .copied()
+    }
+
+    pub fn forwards_failure(&self) -> bool {
+        self.bodies
+            .forwarded_failures
+            .contains(&self.expression.unwrap_parens().id())
+    }
+
+    pub fn iterable_kind(&self) -> IterableKind {
+        *self.expect(
+            self.bodies
+                .iterable_kinds
+                .get(&self.expression.unwrap_parens().id()),
+            format_args!("checked iterable kind"),
+        )
+    }
+
+    pub fn field_selection(&self) -> Option<&'a FieldSelection> {
+        self.bodies
+            .field_selections
+            .get(&FieldKey::Access(self.expression.unwrap_parens().id()))
+    }
+
+    pub fn positional_field(&self, index: usize) -> &'a FieldSelection {
+        self.expect(
+            self.bodies.field_selections.get(&FieldKey::Positional(
+                self.expression.unwrap_parens().id(),
+                index,
+            )),
+            format_args!("checked field selection for field {index}"),
+        )
+    }
+
+    pub fn literal_field(&self, name: &str) -> &'a FieldSelection {
+        self.expect(
+            self.bodies.field_selections.get(&FieldKey::Literal(
+                self.expression.unwrap_parens().id(),
+                name.into(),
+            )),
+            format_args!("checked field selection for `{name}`"),
+        )
+    }
+
+    pub fn struct_literal(&self) -> &'a CheckedStructLiteral {
+        self.expect(
+            self.bodies
+                .struct_literals
+                .get(&self.expression.unwrap_parens().id()),
+            format_args!("checked struct literal"),
+        )
+    }
+
     fn record(&self, key: ValueUseKey) -> &'a CheckedValueUse {
-        self.bodies.value_use(&key).unwrap_or_else(|| {
+        self.expect(
+            self.bodies.value_use(&key),
+            format_args!("checked value use"),
+        )
+    }
+
+    fn expect<V>(&self, found: Option<V>, what: fmt::Arguments<'_>) -> V {
+        found.unwrap_or_else(|| {
             panic!(
-                "internal error: no checked value use at {:?}",
+                "internal error: no {what} at {:?}",
                 self.expression.get_span()
             )
         })

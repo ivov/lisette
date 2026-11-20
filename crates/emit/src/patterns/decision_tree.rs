@@ -12,7 +12,6 @@ use syntax::ast::{
 };
 use syntax::lex::{rune_codepoint, string_bytes};
 use syntax::parse::TUPLE_FIELDS;
-use syntax::program::DefinitionBody;
 use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
@@ -23,7 +22,6 @@ use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::{LoweredBlock, define_many};
 use crate::ir::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, UnaryOp};
 use crate::ir::values::GoExpression;
-use crate::names::generics;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::patterns::binding_decls::pattern_literal_text;

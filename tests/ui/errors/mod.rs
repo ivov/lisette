@@ -12588,6 +12588,36 @@ fn main() {
 }
 
 #[test]
+fn infer_native_receiver_method_value_through_ref_alias() {
+    let result = infer(
+        r#"
+type Nums = Slice<int>
+type NumsRef = Ref<Nums>
+
+fn main() {
+  let v: Nums = [1, 2, 3]
+  let r: NumsRef = &v
+  let p: Ref<Nums> = &v
+  let a = v.length
+  let b = r.length
+  let c = p.length
+  let _ = (a, b, c)
+}
+"#,
+    );
+    let codes: Vec<&str> = result.errors.iter().filter_map(|d| d.code_str()).collect();
+    assert_eq!(
+        codes,
+        vec![
+            "infer.native_method_value",
+            "infer.native_method_value",
+            "infer.native_method_value"
+        ],
+        "a native method value through an alias must be rejected, got: {codes:?}"
+    );
+}
+
+#[test]
 fn infer_native_method_value_on_struct_field() {
     let input = r#"
 import "go:fmt"

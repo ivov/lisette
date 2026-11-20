@@ -1232,6 +1232,100 @@ fn test(a: IntSliceRef, b: Slice<int>) -> bool {
 }
 
 #[test]
+fn slice_length_through_alias_of_ref_alias() {
+    let input = r#"
+type Nums = Slice<int>
+type NumsRef = Ref<Nums>
+fn test(r: NumsRef) -> int {
+  r.length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_capacity_through_alias_of_ref_alias() {
+    let input = r#"
+type Nums = Slice<int>
+type NumsRef = Ref<Nums>
+fn test(r: NumsRef) -> int {
+  r.capacity()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_equals_through_alias_of_ref_alias() {
+    let input = r#"
+type Nums = Slice<int>
+type NumsRef = Ref<Nums>
+fn test(r: NumsRef, other: Nums) -> bool {
+  r.equals(other)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_contains_through_alias_of_ref_alias() {
+    let input = r#"
+type Nums = Slice<int>
+type NumsRef = Ref<Nums>
+fn test(r: NumsRef) -> bool {
+  r.contains(2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_clone_through_alias_of_ref_alias() {
+    let input = r#"
+type Nums = Slice<int>
+type NumsRef = Ref<Nums>
+fn test(r: NumsRef) -> Slice<int> {
+  r.clone()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_clone_through_ref() {
+    let input = r#"
+fn test(r: Ref<Slice<int>>) -> Slice<int> {
+  r.clone()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_get_through_alias_of_ref_alias() {
+    let input = r#"
+type Nums = Slice<int>
+type NumsRef = Ref<Nums>
+fn test(r: NumsRef) -> Option<int> {
+  r.get(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_get_through_alias_of_ref_alias() {
+    let input = r#"
+type M = Map<string, int>
+type MRef = Ref<M>
+fn test(r: MRef) -> Option<int> {
+  r.get("a")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_equals_negated() {
     let input = r#"
 fn test(a: Slice<int>, b: Slice<int>) -> bool {

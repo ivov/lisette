@@ -7,7 +7,8 @@ use syntax::program::{
 };
 use syntax::program::{resolved_definition, resolved_instantiation};
 use syntax::types::{
-    FunctionParameter, GO_IMPORT_PREFIX, SubstitutionMap, Symbol, Type, peel_to_range_type,
+    FunctionParameter, GO_IMPORT_PREFIX, RangeKind, SubstitutionMap, Symbol, Type,
+    peel_to_range_type,
 };
 
 use crate::checker::infer::InferCtx;
@@ -73,7 +74,7 @@ impl InferCtx<'_> {
                 ..
             } => {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
-                let peeled = store.peel_alias(&receiver_ty);
+                let peeled = store.receiver_shape(&receiver_ty);
 
                 let is_ufcs_member = |ty: &Type| {
                     matches!(ty, Type::Nominal { id, .. }
@@ -144,6 +145,22 @@ impl InferCtx<'_> {
         CallKind::Regular
     }
 
+    fn tuple_struct_constructor(&self, callee: &Expression) -> Option<CallOperation> {
+        let callee_ty = callee.get_type().resolve_in(&self.env);
+        let return_ty = callee_ty.as_function_type()?.return_type.as_ref().clone();
+        let Type::Nominal { id, .. } = self.store.peel_alias(&return_ty) else {
+            return None;
+        };
+        let is_newtype = self
+            .store
+            .get_definition(&id)
+            .is_some_and(Definition::is_newtype);
+        Some(CallOperation::TupleStructConstructor {
+            owner: id,
+            is_newtype,
+        })
+    }
+
     /// The operation that a call with this callee and classification runs, or None when the instance method access that the call names selected it.
     pub(super) fn select_call_operation(
         &self,
@@ -171,7 +188,7 @@ impl InferCtx<'_> {
             || (!is_instance_method_access(callee)).then_some(CallOperation::Function);
         let operation = match call_kind {
             _ if local => CallOperation::Function,
-            CallKind::TupleStructConstructor => CallOperation::TupleStructConstructor,
+            CallKind::TupleStructConstructor => self.tuple_struct_constructor(callee)?,
             _ if declared_by_go => return selected_by_access(),
             CallKind::AssertType => CallOperation::AssertType,
             CallKind::Zero => CallOperation::Zero,
@@ -334,9 +351,9 @@ impl InferCtx<'_> {
         else {
             return;
         };
-        let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
+        let receiver_ty = receiver.get_type().resolve_in(&self.env);
 
-        let is_mutating = NativeTypeKind::from_type(&self.store.peel_alias(&receiver_ty))
+        let is_mutating = NativeTypeKind::from_type(&self.store.receiver_shape(&receiver_ty))
             .is_some_and(|kind| {
                 syntax::program::NativeOperation::new(kind, member).mutates_receiver()
             });
@@ -565,6 +582,16 @@ impl InferCtx<'_> {
         } else {
             let expected = self.type_range(store, int_ty);
             self.unify(&expected, &arg_ty, &arg_span);
+        }
+        let resolved = arg.get_type().resolve_in(&self.env);
+        if !arg.unwrap_parens().is_range()
+            && let Some(kind) = peel_to_range_type(&resolved, |id| self.store.get_definition(id))
+                .as_ref()
+                .and_then(RangeKind::of)
+        {
+            self.facts
+                .checked_bodies
+                .insert_range_kind(arg.unwrap_parens().id(), kind);
         }
     }
 

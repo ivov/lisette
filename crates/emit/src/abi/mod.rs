@@ -3,6 +3,7 @@ pub(crate) mod callable;
 pub(crate) mod catalog;
 pub(crate) mod coercion;
 pub(crate) mod fallible_producer;
+#[allow(clippy::disallowed_methods)]
 pub(crate) mod layout;
 pub(crate) mod transition;
 pub(crate) mod wrapping;
@@ -12,7 +13,6 @@ use crate::Planner;
 use crate::names::go_name;
 use crate::plan::calls::CallableOrigin;
 use crate::state::expression::ExpressionContext;
-use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;
 use layout::{FunctionLayout, ValueLayout};
@@ -27,8 +27,7 @@ fn go_return_abi<'d>(
     hints: &[GoHint],
     lookup: impl Fn(&str) -> Option<&'d Definition> + Copy,
 ) -> Option<LoweredReturnAbi> {
-    let peeled = types::peel_alias(return_ty, lookup);
-    let payload = || go_payload_layout(&peeled);
+    let payload = || go_payload_layout(&types::ok_payload(return_ty, lookup));
     Some(match go_return_contract(return_ty, hints, lookup) {
         GoReturnContract::Value => return None,
         GoReturnContract::Error => LoweredReturnAbi::BareError,
@@ -45,12 +44,8 @@ fn go_return_abi<'d>(
     })
 }
 
-fn go_payload_layout(return_ty: &Type) -> PayloadLayout {
-    if return_ty
-        .ok_type()
-        .tuple_arity()
-        .is_some_and(|arity| arity >= 2)
-    {
+fn go_payload_layout(ok_ty: &Type) -> PayloadLayout {
+    if ok_ty.tuple_arity().is_some_and(|arity| arity >= 2) {
         PayloadLayout::Flattened
     } else {
         PayloadLayout::Packed
@@ -267,19 +262,6 @@ impl Planner<'_> {
             bridge
         }
     }
-
-    pub(crate) fn return_go_type(&self, abi: &CallableReturnAbi, return_ty: &Type) -> GoType {
-        match abi {
-            CallableReturnAbi::Void => return GoType::default(),
-            CallableReturnAbi::Value => return self.go_type(return_ty),
-            CallableReturnAbi::Lowered(_) => {}
-        }
-        let peeled = self.facts.peel_alias(return_ty);
-        let result = self.value_layout(&peeled, SlotOrigin::Lisette);
-        self.function_layout(Vec::new(), &result, abi.clone(), None)
-            .result_go_type(self)
-            .unwrap_or_else(|| self.go_type(&peeled))
-    }
 }
 
 pub(crate) fn is_closure_literal(expression: &Expression) -> bool {
@@ -300,7 +282,7 @@ impl EmitFacts<'_> {
     }
 
     fn err_slot_is_nilable(&self, fallible_ty: &Type) -> bool {
-        let err = fallible_ty.err_type();
+        let err = self.err_payload(fallible_ty);
         self.is_prelude_error(&err) || self.is_nilable_go_type(&err)
     }
 
@@ -309,18 +291,16 @@ impl EmitFacts<'_> {
         return_ty: &Type,
         payload: impl FnOnce(&Type) -> PayloadLayout,
     ) -> Option<LoweredReturnAbi> {
-        let peeled = self.peel_alias(return_ty);
-        (peeled.is_partial() && self.err_slot_is_nilable(&peeled)).then(|| {
+        (self.is_partial(return_ty) && self.err_slot_is_nilable(return_ty)).then(|| {
             LoweredReturnAbi::Partial {
-                payload: payload(&peeled),
+                payload: payload(&self.ok_payload(return_ty)),
             }
         })
     }
 
     fn classify_direct_emission(&self, return_ty: &Type) -> Option<LoweredReturnAbi> {
-        let peeled = self.peel_alias(return_ty);
-        if peeled.is_result() && self.err_slot_is_nilable(&peeled) {
-            return Some(if peeled.ok_type().is_unit() {
+        if self.is_result(return_ty) && self.err_slot_is_nilable(return_ty) {
+            return Some(if self.ok_payload(return_ty).is_unit() {
                 LoweredReturnAbi::BareError
             } else {
                 LoweredReturnAbi::Result {
@@ -328,8 +308,8 @@ impl EmitFacts<'_> {
                 }
             });
         }
-        if peeled.is_option() {
-            let encoding = if self.is_nullable_option(&peeled) {
+        if self.is_option(return_ty) {
+            let encoding = if self.is_nullable_option(return_ty) {
                 OptionReturnAbi::Nullable
             } else {
                 OptionReturnAbi::CommaOk {
@@ -338,10 +318,12 @@ impl EmitFacts<'_> {
             };
             return Some(LoweredReturnAbi::Option(encoding));
         }
-        if let Some(arity) = peeled.tuple_arity()
-            && arity >= 2
+        if let Some(elements) = self.tuple_elements(return_ty)
+            && elements.len() >= 2
         {
-            return Some(LoweredReturnAbi::Tuple { arity });
+            return Some(LoweredReturnAbi::Tuple {
+                arity: elements.len(),
+            });
         }
         None
     }
@@ -365,7 +347,7 @@ impl EmitFacts<'_> {
         }
         let abi = self.classify_direct_emission(return_ty)?;
         Some(if origin.declared_by_go() && abi.payload().is_some() {
-            abi.with_payload(go_payload_layout(&self.peel_alias(return_ty)))
+            abi.with_payload(go_payload_layout(&self.ok_payload(return_ty)))
         } else {
             abi
         })
@@ -400,7 +382,10 @@ impl EmitFacts<'_> {
         if self.method_uses_tagged_return(name) {
             return CallableReturnAbi::Value;
         }
-        let abi = self.method_return_abi(&self.peel_alias(return_ty));
+        let abi = match self.method_return_abi(return_ty) {
+            CallableReturnAbi::Value if self.returns_go_void(return_ty) => CallableReturnAbi::Void,
+            abi => abi,
+        };
         if abi == CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
             && method.go_hints.contains(&GoHint::CommaOk)
         {

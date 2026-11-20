@@ -3,11 +3,10 @@ use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableAbi, CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::coercion::LayoutBridge;
-use crate::abi::is_prelude_container_type;
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::names::go_name;
 use crate::patterns::matching::prelude_constructor;
-use syntax::ast::{Expression, IdentifierResolution};
+use syntax::ast::Expression;
 use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
@@ -158,11 +157,7 @@ impl<'a> Planner<'a> {
             checked.receiver_offset(),
         );
         debug_assert!(
-            !resolved.abi.result.is_lowered() || {
-                let peeled = self.facts.peel_alias(ty);
-                is_prelude_container_type(&peeled)
-                    || peeled.tuple_arity().is_some_and(|arity| arity >= 2)
-            },
+            !resolved.abi.result.is_lowered() || self.facts.is_lowered_result_type(ty),
             "a lowered call result wraps into its tagged Lisette value"
         );
         let arguments = args
@@ -242,7 +237,13 @@ impl<'a> Planner<'a> {
                     self.facts.return_abi(return_type, ReturnSlot::Function)
                 }
                 None => self
-                    .classify_callee_abi(function, id.as_deref(), declaration, declared_return)
+                    .classify_callee_abi(
+                        function,
+                        &origin,
+                        id.as_deref(),
+                        declaration,
+                        declared_return,
+                    )
                     .unwrap_or_else(|| {
                         CallableReturnAbi::unlowered(declared_return.unwrap_or(return_type))
                     }),
@@ -322,6 +323,7 @@ impl<'a> Planner<'a> {
     fn classify_callee_abi(
         &self,
         callee: &Expression,
+        origin: &CallableOrigin<'a>,
         id: Option<&str>,
         declaration: Option<CallableDeclaration<'a>>,
         declared_return: Option<&Type>,
@@ -336,49 +338,26 @@ impl<'a> Planner<'a> {
             return None;
         };
         let inner = callee.unwrap_parens();
-        let callee_definition = id;
-        if callee_definition.is_some_and(go_name::is_go_import) {
-            return None;
-        }
-        if let Expression::DotAccess {
-            expression: receiver,
-            ..
-        } = inner
+        if id.is_some_and(|id| go_name::is_go_import(id) || go_name::is_prelude_id(id))
+            || matches!(origin, CallableOrigin::Source(CallOperation::Native { .. }))
         {
-            let receiver_type = receiver.get_type();
-            if self.facts.native_kind(&receiver_type).is_some()
-                || self.facts.is_prelude_nominal(&receiver_type)
-                || matches!(
-                    &**receiver,
-                    Expression::Identifier {
-                        resolution: IdentifierResolution::Definition { name: definition, .. },
-                        ..
-                    }
-                        if go_name::is_prelude_id(definition)
-                )
-            {
-                return None;
-            }
-        } else if callee_definition.is_some_and(go_name::is_prelude_id) {
             return None;
         }
         if prelude_constructor(inner).is_some() {
             return None;
         }
-        if let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = inner
-            && let Some(method) = self
-                .facts
-                .interface_method(&self.facts.strip_and_peel(&receiver.get_type()), member)
+        if let Some(requirement) = self
+            .facts
+            .checked(callee)
+            .function_value()
+            .and_then(CheckedCallee::interface_requirement)
         {
+            let method = &requirement.method;
             return Some(self.facts.return_abi(
                 method.ty.get_function_ret().unwrap_or(&Type::Never),
                 ReturnSlot::InterfaceMethod {
                     name: &method.source_name,
-                    method: &method,
+                    method,
                 },
             ));
         }

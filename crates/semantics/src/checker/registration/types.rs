@@ -874,7 +874,7 @@ fn has_selector_surface(store: &Store, ty: &Type) -> bool {
 fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
     store
         .underlying_type(ty)
-        .is_some_and(|underlying| store.peel_alias(&underlying).is_ref())
+        .is_some_and(|underlying| store.is_reference(&underlying))
 }
 
 // Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.

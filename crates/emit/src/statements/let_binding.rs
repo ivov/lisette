@@ -25,6 +25,7 @@ use crate::state::expression::ExpressionContext;
 use syntax::EcoString;
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
+use syntax::program::ReceiverCoercion;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
@@ -146,12 +147,10 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
-        let peeled = self.facts.peel_alias(binding_ty);
-        if peeled.is_unit()
-            || peeled.is_result()
-            || peeled.is_option()
-            || peeled.is_partial()
-            || peeled.tuple_arity().is_some()
+        if self.facts.resolves_to_unit(binding_ty)
+            || self.facts.is_option_or_result(binding_ty)
+            || self.facts.is_partial(binding_ty)
+            || self.facts.is_tuple(binding_ty)
             || matches!(value, Expression::Propagate { .. })
             || requires_temp_var(value)
             || self.facts.is_interface_or_unknown(binding_ty)
@@ -194,8 +193,8 @@ impl Planner<'_> {
         go_identifier: &GoIdentifier,
         demand: ComponentDemand,
     ) -> Option<Vec<Statement>> {
-        let ty = self.facts.peel_alias(&let_spec.value.get_type());
-        if matches!(ty, Type::Tuple(_)) {
+        let ty = let_spec.value.get_type();
+        if self.facts.is_tuple(&ty) {
             self.try_lower_tuple_components(let_spec, &ty, demand)
         } else {
             self.try_lower_fallible_components(let_spec, go_identifier, &ty, demand)
@@ -518,34 +517,10 @@ impl Planner<'_> {
         if name.spelling() == "_" {
             return None;
         }
-        let return_ctx = self.return_ctx();
         let resolved_ty = self
             .facts
             .resolve_let_temp_declaration_ty(value, binding_ty);
-        let peeled_resolved = self.facts.peel_alias(&resolved_ty);
-        let peeled_binding = self.facts.peel_alias(binding_ty);
-        let needs_context = |ty: &Type| ty.is_variable() || ty.is_placeholder();
-        let has_contextual_ok_ty = matches!(
-            value,
-            Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
-        ) && !needs_context(&peeled_resolved)
-            && needs_context(&peeled_resolved.ok_type());
-
-        let var_ty = if has_contextual_ok_ty {
-            if !needs_context(&peeled_binding) && !needs_context(&peeled_binding.ok_type()) {
-                self.go_type(binding_ty)
-            } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
-                if self.facts.fallible(&ctx_ty).is_some() {
-                    self.go_type(&ctx_ty)
-                } else {
-                    self.go_type(&resolved_ty)
-                }
-            } else {
-                self.go_type(&resolved_ty)
-            }
-        } else {
-            self.go_type(&resolved_ty)
-        };
+        let var_ty = self.go_type(&resolved_ty);
         Some(LoweredStatement::VarDecl {
             name: name.clone(),
             go_type: var_ty,
@@ -681,7 +656,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .planner
             .plan_value(source, ExpressionContext::value())
             .into_parts();
-        let receiver = if self.planner.facts.is_reference(&source.get_type()) {
+        let receiver = if self.planner.facts.checked(source).receiver_change()
+            == Some(ReceiverCoercion::AutoDeref)
+        {
             GoExpression::dereference(receiver)
         } else {
             receiver
@@ -747,9 +724,10 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         let slot_types = self.planner.facts.tuple_element_types(&self.binding.ty);
         let directional = [NativeTypeKind::Sender, NativeTypeKind::Receiver];
         (slot_types.len() == directional.len()
-            && slot_types.iter().zip(directional).all(|(slot_ty, kind)| {
-                NativeTypeKind::from_type(&self.planner.facts.peel_alias(slot_ty)) == Some(kind)
-            }))
+            && slot_types
+                .iter()
+                .zip(directional)
+                .all(|(slot_ty, kind)| self.planner.facts.native_kind(slot_ty) == Some(kind)))
         .then_some(slot_types)
     }
 

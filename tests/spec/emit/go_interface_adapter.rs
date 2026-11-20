@@ -1825,3 +1825,41 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn bound_value_cast_to_another_interface_dispatches_through_the_bound_requirement() {
+    let input = r#"
+import "go:fmt"
+
+pub interface Named {
+  fn name() -> Partial<int, error>
+}
+
+pub interface Labeled {
+  fn name() -> Partial<int, error>
+}
+
+type Tag = Named
+
+struct Dog {}
+
+impl Dog {
+  pub fn name(self) -> Partial<int, error> {
+    Partial.Both(4, fmt.Errorf("eof"))
+  }
+}
+
+fn show(n: Labeled) -> Partial<int, error> {
+  n.name()
+}
+
+fn label<T: Tag>(t: T) -> Partial<int, error> {
+  show(t as Labeled)
+}
+
+fn main() {
+  fmt.Println(label(Dog {}))
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -33,8 +33,7 @@ impl Planner<'_> {
 
         let mut base_staged = self.stage_base_with_deref(expression);
 
-        let index_ty = index.get_type();
-        if let Some(range_kind) = self.facts.range_shape(&index_ty) {
+        if let Some(range_kind) = self.facts.checked(index).range_kind() {
             let needs_cap = self
                 .facts
                 .is_native_shape(&expression.get_type(), NativeTypeKind::Slice);

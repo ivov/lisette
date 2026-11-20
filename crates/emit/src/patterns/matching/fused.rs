@@ -26,7 +26,7 @@ impl Planner<'_> {
         let payload = arms.some_binding?;
         if !arms.none_body.get_type().is_never()
             || arm_body_is_identifier(arms.some_body) != Some(payload.name)
-            || self.facts.peel_alias(&subject.get_type()).ok_type() != value.get_type()
+            || self.facts.converts(arms.some_body)
         {
             return None;
         }
@@ -53,9 +53,9 @@ impl Planner<'_> {
         };
         let arms = self.partial_outcome_arms(subject, arms)?;
         let ok_value = arms.value_binding?;
-        if self.facts.peel_alias(&subject.get_type()).ok_type() != value.get_type()
-            || !arms.failure.expression.get_type().is_never()
+        if !arms.failure.expression.get_type().is_never()
             || arm_body_is_identifier(&arms.ok.expression) != Some(ok_value.name)
+            || self.facts.converts(&arms.ok.expression)
         {
             return None;
         }
@@ -224,7 +224,7 @@ impl Planner<'_> {
         if !fuse.carries_payload() {
             return None;
         }
-        let payload_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+        let payload_ty = self.facts.ok_payload(&subject.get_type());
         let mut ok_arms = Vec::new();
         let mut err_arm: Option<(&MatchArm, Option<&Pattern>)> = None;
         for arm in arms {
@@ -325,7 +325,7 @@ impl Planner<'_> {
         let err_name = simple_payload_binding(err_arm)?;
         let (both_val, both_err) = partial_both_bindings(both_arm)?;
 
-        let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+        let ok_ty = self.facts.ok_payload(&subject.get_type());
         let nilable = self.facts.partial_ok_is_nilable(&ok_ty);
 
         let (mut statements, call) = self
@@ -495,7 +495,7 @@ impl Planner<'_> {
             return None;
         }
         let arms = classify_selective_partial_arms(arms)?;
-        let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+        let ok_ty = self.facts.ok_payload(&subject.get_type());
         let nil_guard = self.facts.partial_ok_nil_guard(&ok_ty);
 
         let (value_binding, error_binding) = (arms.value_binding, arms.error_binding);

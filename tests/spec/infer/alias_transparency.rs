@@ -33,6 +33,8 @@ const TYPES: &[&str] = &[
     "uintptr",
     "Array<int, 2>",
     "Range<int>",
+    "Show",
+    "error",
 ];
 
 const WRAPPERS: &[&str] = &["T", "Slice<T>", "Option<T>", "Ref<T>"];
@@ -186,6 +188,61 @@ pub type HandlerFunc = fn()
 impl HandlerFunc { pub fn handle(self) }
 "#,
         )],
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn an_alias_of_an_interface_unifies_with_the_interface() {
+    infer(
+        r#"
+interface Show { fn show() -> string }
+type Shown = Show
+type Fault = error
+
+fn risky() -> Result<int, error> { Ok(1) }
+
+fn total() -> Result<int, Fault> {
+  let n = risky()?
+  Ok(n)
+}
+
+fn back() -> Result<int, error> {
+  let n = total()?
+  Ok(n)
+}
+
+fn direct() -> Result<int, Fault> {
+  risky()
+}
+
+fn test(s: Show, e: error) {
+  let shown: Shown = s
+  let _: Show = shown
+  let fault: Fault = e
+  let _: error = fault
+  let faults: Slice<Fault> = [e]
+  let _: Slice<error> = faults
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn a_call_that_returns_an_alias_of_a_reference_is_an_assignment_root() {
+    infer(
+        r#"
+struct Counter { n: int }
+type CounterRef = mut Ref<Counter>
+
+fn pick(c: CounterRef) -> CounterRef { c }
+
+fn test() {
+  let mut c = Counter { n: 1 }
+  pick(&c).n = 5
+}
+"#,
     )
     .assert_no_errors();
 }

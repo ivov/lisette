@@ -22,15 +22,13 @@ use crate::names::receiver::fresh_receiver_name;
 use crate::types::go_type::GoType;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
-use syntax::ast::StructFields;
 use syntax::ast::{Expression, FunctionDefinitionView};
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, CheckedMethod, ConformanceWitness, InterfaceConversion};
 use syntax::program::{
-    Definition, DefinitionBody, DotAccessResolution, InterfaceRequirement, Method,
-    interface_requirements,
+    CheckedCallee, DotAccessResolution, InterfaceRequirement, interface_requirements,
 };
-use syntax::types::{SubstitutionMap, Type, build_substitution_map, substitute, unqualified_name};
+use syntax::types::{Type, unqualified_name};
 #[derive(Debug, Clone)]
 pub(crate) struct AdapterPlan {
     concrete_id: EcoString,
@@ -61,61 +59,18 @@ impl AdapterMethod {
 
 impl Planner<'_> {
     pub(crate) fn selects_tagged_twin(&self, expression: &Expression) -> bool {
-        match expression.unwrap_parens() {
+        matches!(
+            expression.unwrap_parens(),
             Expression::DotAccess {
-                expression: receiver,
-                member,
-                resolution:
-                    DotAccessResolution::InstanceMethod { .. }
-                    | DotAccessResolution::InstanceMethodValue { .. },
+                resolution: DotAccessResolution::InstanceMethodValue { .. }
+                    | DotAccessResolution::InstanceMethod { .. },
                 ..
-            } => self.receiver_selects_tagged_twin(&receiver.get_type(), member),
-            Expression::Identifier { .. } => self
-                .facts
-                .checked(expression)
-                .function_value()
-                .and_then(|recorded| recorded.definition.as_deref())
-                .is_some_and(|symbol| self.facts.definition_selects_tagged_twin(symbol)),
-            _ => false,
-        }
-    }
-
-    fn receiver_selects_tagged_twin(&self, receiver_ty: &Type, member: &str) -> bool {
-        if !self.facts.method_uses_tagged_return(member) {
-            return false;
-        }
-        let receiver = self.facts.strip_and_peel(receiver_ty);
-        let interfaces = match &receiver {
-            Type::Parameter(name) => self
-                .scope
-                .type_params()
-                .iter()
-                .find(|parameter| &parameter.name == name)
-                .map(|parameter| parameter.bounds.clone())
-                .unwrap_or_default(),
-            Type::Nominal { id, .. } if go_name::is_go_import(id) || go_name::is_prelude_id(id) => {
-                return false;
-            }
-            Type::Nominal { id, .. }
-                if !self
-                    .facts
-                    .definition(id)
-                    .is_some_and(Definition::is_interface) =>
-            {
-                return self.facts.has_tagged_twin(id, member);
-            }
-            Type::Nominal { .. } => vec![receiver.clone()],
-            _ => return false,
-        };
-        interfaces.iter().any(|interface| {
-            interface_requirements(&self.facts.peel_alias(interface), |id| {
-                self.facts.definition(id)
-            })
-            .iter()
-            .any(|requirement| {
-                requirement.name == member && self.facts.requirement_uses_tagged_twin(requirement)
-            })
-        })
+            } | Expression::Identifier { .. }
+        ) && self
+            .facts
+            .checked(expression)
+            .function_value()
+            .is_some_and(|callee| self.facts.callee_selects_tagged_twin(callee))
     }
 
     pub(crate) fn emit_tagged_twin(
@@ -172,32 +127,12 @@ impl Planner<'_> {
     }
 
     fn bound_requirement(&self, expression: &Expression) -> Option<(Type, InterfaceRequirement)> {
-        let Expression::DotAccess {
-            expression: receiver,
-            ..
-        } = expression.unwrap_parens()
+        let CallOperation::BoundMethod { bound, requirement } =
+            &self.facts.checked(expression).function_value()?.operation
         else {
             return None;
         };
-        if !matches!(
-            self.facts.strip_and_peel(&receiver.get_type()),
-            Type::Parameter(_)
-        ) {
-            return None;
-        }
-        let CallOperation::BoundMethod { bound, method } = &self
-            .facts
-            .checked(expression.unwrap_parens())
-            .callee()
-            .operation
-        else {
-            return None;
-        };
-        let bound = self.facts.peel_alias(bound);
-        let requirement = interface_requirements(&bound, |id| self.facts.definition(id))
-            .into_iter()
-            .find(|requirement| requirement.name == *method)?;
-        Some((bound, requirement))
+        Some((bound.clone(), (**requirement).clone()))
     }
 
     pub(crate) fn go_bound_requirement(
@@ -226,7 +161,6 @@ impl Planner<'_> {
         } else {
             requirement.method.ty.as_function_type()?
         };
-        let result_type = self.facts.peel_alias(&function.return_type);
         let parameters = function
             .params
             .iter()
@@ -245,8 +179,11 @@ impl Planner<'_> {
         } else {
             SlotOrigin::Lisette
         };
-        let result =
-            self.value_layout_with_declaration(&result_type, origin, &declared.return_type);
+        let result = self.target_layout_with_declaration(
+            &function.return_type,
+            origin,
+            &declared.return_type,
+        );
         let abi = if go {
             self.facts.return_abi(
                 &declared.return_type,
@@ -266,9 +203,7 @@ impl Planner<'_> {
         target: &Type,
         witness: Option<&ConformanceWitness>,
     ) -> Option<AdapterPlan> {
-        let Type::Parameter(name) = source.strip_refs() else {
-            return None;
-        };
+        let name = self.facts.type_parameter_behind_refs(source)?;
         let Type::Nominal { id, .. } = target else {
             return None;
         };
@@ -279,7 +214,11 @@ impl Planner<'_> {
                 continue;
             }
             let selected = match witness {
-                Some(witness) => self.selected_bound_requirement(&name, witness, &requirement),
+                Some(witness) => witness
+                    .method_for(&requirement)
+                    .selected_requirement
+                    .clone()
+                    .expect("internal error: a checked conformance selects a method of a bound"),
                 None => requirement.clone(),
             };
             let local = self.requirement_layout(&selected, false)?;
@@ -308,35 +247,6 @@ impl Planner<'_> {
             generic_context: self.adapter_generic_context(source, &methods),
             methods,
         })
-    }
-
-    fn selected_bound_requirement(
-        &self,
-        parameter: &str,
-        witness: &ConformanceWitness,
-        requirement: &InterfaceRequirement,
-    ) -> InterfaceRequirement {
-        let checked = witness
-            .methods
-            .iter()
-            .find(|method| {
-                method.required_interface == requirement.declaring_interface
-                    && method.required_name == requirement.name
-            })
-            .expect("internal error: a checked conformance selects every required method");
-        let bound = checked.selected_definition.without_last_segment();
-        self.scope
-            .type_params()
-            .iter()
-            .filter(|candidate| candidate.name == parameter)
-            .flat_map(|candidate| &candidate.bounds)
-            .map(|candidate| self.facts.peel_alias(candidate))
-            .filter(|candidate| candidate.get_qualified_id() == bound)
-            .flat_map(|candidate| {
-                interface_requirements(&candidate, |id| self.facts.definition(id))
-            })
-            .find(|candidate| candidate.name == checked.selected_name)
-            .expect("internal error: a checked conformance selects a method of a bound")
     }
 
     fn dynamic_method_interface(&mut self, method_name: &str, layout: &FunctionLayout) -> GoType {
@@ -419,39 +329,17 @@ impl Planner<'_> {
         statements
     }
 
-    pub(crate) fn lookup_field_ty(
-        &self,
-        struct_ty: &Type,
-        variant: Option<&str>,
-        field_name: &str,
-    ) -> Option<Type> {
-        let (field_ty, subst_map) = self
-            .facts
-            .declared_field_ty(struct_ty, variant, field_name)?;
-        Some(match subst_map {
-            Some(subst_map) => substitute(&field_ty, &subst_map),
-            None => field_ty,
-        })
-    }
-
     pub(crate) fn interface_adapter(
         &self,
         conversion: &InterfaceConversion,
     ) -> Option<AdapterPlan> {
         let source_ty = &conversion.source;
-        let target = self.facts.peel_alias(&conversion.target);
-        let Type::Nominal { id: target_id, .. } = &target else {
+        let target = conversion.target_interface.as_ref()?;
+        let Type::Nominal { id: target_id, .. } = target else {
             return None;
         };
-        let Some(Definition {
-            body: DefinitionBody::Interface { .. },
-            ..
-        }) = self.facts.definition(target_id.as_str())
-        else {
-            return None;
-        };
-        let source_stripped = self.facts.peel_alias(&source_ty.strip_refs());
-        if let Type::Parameter(name) = &source_stripped
+        let source_shape = &conversion.source_shape;
+        if let Type::Parameter(name) = source_shape
             && self.scope.type_params().iter().any(|parameter| {
                 &parameter.name == name
                     && parameter
@@ -460,13 +348,12 @@ impl Planner<'_> {
                         .any(|bound| self.facts.bound_needs_dispatch(bound))
             })
         {
-            return self.dynamic_interface_adapter(source_ty, &target, conversion.witness.as_ref());
+            return self.dynamic_interface_adapter(source_ty, target, conversion.witness.as_ref());
         }
-        let Type::Nominal { id: source_id, .. } = &source_stripped else {
+        let Type::Nominal { id: source_id, .. } = source_shape else {
             return None;
         };
-        let methods =
-            self.adapted_methods(&source_stripped, &target, conversion.witness.as_ref())?;
+        let methods = self.adapted_methods(source_shape, target, conversion.witness.as_ref())?;
         Some(AdapterPlan {
             concrete_id: source_id.as_eco().clone(),
             interface_id: target_id.as_eco().clone(),
@@ -489,8 +376,6 @@ impl Planner<'_> {
         }
         let witness = witness
             .expect("internal error: an interface conversion that requires methods has a checked conformance");
-        let source_requirements =
-            interface_requirements(source_stripped, |id| self.facts.definition(id));
 
         let mut methods = Vec::new();
         let mut any_adapted = false;
@@ -500,21 +385,11 @@ impl Planner<'_> {
             if !seen.insert(selector) {
                 continue;
             }
-            let checked = witness
-                .methods
-                .iter()
-                .find(|method| {
-                    method.required_interface == requirement.declaring_interface
-                        && method.required_name == requirement.name
-                })
-                .expect("internal error: a checked conformance selects every required method");
-            let source_requirement = source_requirements
-                .iter()
-                .find(|source| source.name == checked.selected_name);
+            let checked = witness.method_for(&requirement);
             let method = self.build_adapter_method(
                 &requirement,
                 source_stripped,
-                source_requirement,
+                checked.selected_requirement.as_ref(),
                 checked,
             )?;
             any_adapted |= method.changes_signature();
@@ -551,12 +426,10 @@ impl Planner<'_> {
     ) -> Option<AdapterMethod> {
         let implementation_name = &checked.selected_name;
         let function = checked.declared_signature.as_function_type()?;
-        let (_, parameters) = function.params.split_first()?;
-        let param_types: Vec<Type> = parameters
-            .iter()
-            .map(|param| substitute(&param.ty, &checked.substitutions))
-            .collect();
-        let return_type = substitute(&function.return_type, &checked.substitutions);
+        let instantiated = checked.instantiated_declared_signature.as_function_type()?;
+        let (_, parameters) = instantiated.params.split_first()?;
+        let param_types: Vec<Type> = parameters.iter().map(|param| param.ty.clone()).collect();
+        let return_type = instantiated.return_type.as_ref().clone();
 
         let source_owner = source_requirement
             .map(|source| source.declaring_interface.as_str())
@@ -585,8 +458,7 @@ impl Planner<'_> {
             self.facts
                 .return_abi(&function.return_type, ReturnSlot::Method)
         };
-        let peeled_return = self.facts.peel_alias(&return_type);
-        let user_result = self.interface_result_layout(source_go_method.as_deref(), &peeled_return);
+        let user_result = self.interface_result_layout(source_go_method.as_deref(), &return_type);
         let source = self.function_layout(
             self.interface_parameter_layouts(
                 source_go_method.as_deref(),
@@ -617,8 +489,8 @@ impl Planner<'_> {
             None => self.facts.requirement_return_abi(requirement),
         };
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
-        let target = if abi_matches_type(&interface_abi, &peeled_return) {
-            let result = self.interface_result_layout(go_method.as_deref(), &peeled_return);
+        let target = if abi_matches_type(&self.facts, &interface_abi, &return_type) {
+            let result = self.interface_result_layout(go_method.as_deref(), &return_type);
             self.function_layout(parameters, &result, interface_abi, Some(interface_return))
         } else {
             self.function_layout(
@@ -663,15 +535,6 @@ impl Planner<'_> {
                 }
             })
             .collect()
-    }
-
-    fn interface_result_layout(&self, go_method: Option<&str>, return_type: &Type) -> ValueLayout {
-        match go_method.and_then(|id| self.facts.go_callable_return_slot(id)) {
-            Some(slot) => {
-                self.value_layout_with_declaration(return_type, slot.origin, &slot.declared_type)
-            }
-            None => self.value_layout(return_type, SlotOrigin::Lisette),
-        }
     }
 
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
@@ -889,15 +752,15 @@ fn adapter_uses_type_parameter(
         })
 }
 
-fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
+fn abi_matches_type(facts: &EmitFacts<'_>, abi: &CallableReturnAbi, ty: &Type) -> bool {
     match abi.lowered() {
         None => true,
-        Some(LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. }) => peeled.is_result(),
-        Some(LoweredReturnAbi::Partial { .. }) => peeled.is_partial(),
-        Some(LoweredReturnAbi::Option(_)) => peeled.is_option(),
-        Some(LoweredReturnAbi::Tuple { .. }) => {
-            peeled.tuple_arity().is_some_and(|arity| arity >= 2)
-        }
+        Some(LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. }) => facts.is_result(ty),
+        Some(LoweredReturnAbi::Partial { .. }) => facts.is_partial(ty),
+        Some(LoweredReturnAbi::Option(_)) => facts.is_option(ty),
+        Some(LoweredReturnAbi::Tuple { .. }) => facts
+            .tuple_elements(ty)
+            .is_some_and(|elements| elements.len() >= 2),
     }
 }
 
@@ -928,55 +791,6 @@ impl EmitFacts<'_> {
             && self.emits_go_method(owner, member)
     }
 
-    pub(crate) fn declared_field_ty(
-        &self,
-        struct_ty: &Type,
-        variant: Option<&str>,
-        field_name: &str,
-    ) -> Option<(Type, Option<SubstitutionMap>)> {
-        let stripped = self.strip_and_peel(struct_ty);
-        let Type::Nominal { id, params, .. } = &stripped else {
-            return None;
-        };
-        let (field_ty, generics) = match (&self.definition(id.as_str())?.body, variant) {
-            (
-                DefinitionBody::Struct {
-                    fields, generics, ..
-                },
-                None,
-            ) => {
-                let field = fields
-                    .iter()
-                    .find(|field| field.name == field_name)
-                    .or_else(|| {
-                        let StructFields::Tuple(fields) = fields else {
-                            return None;
-                        };
-                        fields.get(field_name.parse::<usize>().ok()?)
-                    })?;
-                (field.ty.clone(), generics)
-            }
-            (
-                DefinitionBody::Enum {
-                    variants, generics, ..
-                },
-                Some(variant_name),
-            ) => {
-                let variant = variants
-                    .iter()
-                    .find(|variant| variant.name == unqualified_name(variant_name))?;
-                let field = variant
-                    .fields
-                    .iter()
-                    .find(|field| field.name == field_name)?;
-                (field.ty.clone(), generics)
-            }
-            _ => return None,
-        };
-        let subst_map = (!generics.is_empty()).then(|| build_substitution_map(generics, params));
-        Some((field_ty, subst_map))
-    }
-
     pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
         let Type::Nominal { .. } = ty else {
             return false;
@@ -984,20 +798,20 @@ impl EmitFacts<'_> {
         self.resolve_to_function_type(ty).is_some()
     }
 
-    pub(crate) fn interface_method(&self, interface_ty: &Type, name: &str) -> Option<Method> {
-        if !self.is_interface(interface_ty) {
-            return None;
+    fn callee_selects_tagged_twin(&self, callee: &CheckedCallee) -> bool {
+        match callee.interface_requirement() {
+            Some(requirement) => self.requirement_uses_tagged_twin(requirement),
+            None => callee
+                .definition
+                .as_deref()
+                .is_some_and(|symbol| self.definition_selects_tagged_twin(symbol)),
         }
-        interface_requirements(&self.peel_alias(interface_ty), |id| self.definition(id))
-            .into_iter()
-            .find(|requirement| requirement.name == name)
-            .map(|requirement| requirement.method)
     }
 
     pub(crate) fn definition_selects_tagged_twin(&self, symbol: &str) -> bool {
         symbol
             .rsplit_once('.')
-            .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
+            .is_some_and(|(owner, name)| self.has_tagged_twin(owner, name))
     }
 
     fn adapter_source_go_name(
@@ -1036,20 +850,6 @@ impl EmitFacts<'_> {
                 self.definition(&plan.interface_id)
                     .and_then(|interface| interface.name_span.as_ref())
                     .and_then(|span| self.source_position(span))
-            })
-    }
-
-    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
-        interface_requirements(&self.peel_alias(bound), |id| self.definition(id))
-            .iter()
-            .any(|requirement| {
-                !go_name::is_go_import(&requirement.declaring_interface)
-                    && requirement.ty.get_function_ret().is_some_and(|ty| {
-                        matches!(
-                            self.return_abi(ty, ReturnSlot::Method),
-                            CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
-                        )
-                    })
             })
     }
 }

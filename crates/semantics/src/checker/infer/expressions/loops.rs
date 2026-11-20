@@ -4,7 +4,7 @@ use crate::checker::EnvResolve;
 use crate::checker::infer::context::{BindingInference, LoopContext, LoopElementInference};
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, BindingId, Expression, Pattern, Span};
-use syntax::types::{self, CompoundKind, IterSeqKind, RangeKind, SimpleKind, Type};
+use syntax::types::{self, IterSeqKind, IterableKind, SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::validation::LoopExit;
@@ -31,41 +31,6 @@ fn span_contains(outer: &Span, inner: &Span) -> bool {
     outer.file_id == inner.file_id
         && outer.byte_offset <= inner.byte_offset
         && inner.end() <= outer.end()
-}
-
-#[derive(Clone, Copy)]
-enum IterableKind {
-    String,
-    Slice,
-    EnumeratedSlice,
-    Channel,
-    Array,
-    Map,
-    Seq,
-    Seq2,
-    Range(RangeKind),
-    NotIterable,
-}
-
-impl IterableKind {
-    fn of(ty: &Type) -> Option<Self> {
-        if let Some(range) = RangeKind::of(ty) {
-            return Some(Self::Range(range));
-        }
-        Some(match ty {
-            Type::Simple(SimpleKind::String) => Self::String,
-            Type::Array { .. } => Self::Array,
-            Type::Compound { kind, .. } => match kind {
-                CompoundKind::Slice => Self::Slice,
-                CompoundKind::EnumeratedSlice => Self::EnumeratedSlice,
-                CompoundKind::Channel | CompoundKind::Receiver => Self::Channel,
-                CompoundKind::Map => Self::Map,
-                _ => Self::NotIterable,
-            },
-            Type::Simple(_) | Type::Nominal { .. } | Type::ImportNamespace(_) => Self::NotIterable,
-            _ => return None,
-        })
-    }
 }
 
 impl InferCtx<'_> {
@@ -175,8 +140,8 @@ impl InferCtx<'_> {
         let iterable_ty = self.new_type_var();
         let new_iterable = self.infer_expression(*iterable, &iterable_ty);
 
-        let (element_ty, requires_tuple_destructuring) =
-            self.for_element_type(&iterable_ty, &new_iterable);
+        let (element_ty, iterable_kind) = self.for_element_type(&iterable_ty, &new_iterable);
+        let requires_tuple_destructuring = iterable_kind.yields_key_value();
 
         if let Some(annotation) = &binding.annotation {
             let annotated_ty = self.convert_to_type(store, annotation, &span);
@@ -253,8 +218,12 @@ impl InferCtx<'_> {
             (new_binding, new_body)
         });
 
+        let id = self.fresh_expression_id();
+        self.facts
+            .checked_bodies
+            .insert_iterable_kind(id, iterable_kind);
         Expression::For {
-            id: self.fresh_expression_id(),
+            id,
             binding: Box::new(new_binding),
             iterable: new_iterable.into(),
             body: new_body.into(),
@@ -312,8 +281,11 @@ impl InferCtx<'_> {
         }
     }
 
-    /// Derive the element type and whether the loop must destructure its tuple elements.
-    fn for_element_type(&mut self, iterable_ty: &Type, iterable_expr: &Expression) -> (Type, bool) {
+    fn for_element_type(
+        &mut self,
+        iterable_ty: &Type,
+        iterable_expr: &Expression,
+    ) -> (Type, IterableKind) {
         let store = self.store;
 
         let resolved_unpeeled = iterable_ty.resolve_in(&self.env).strip_refs();
@@ -422,11 +394,7 @@ impl InferCtx<'_> {
             }
         };
 
-        let requires_tuple_destructuring = matches!(
-            iterable_kind,
-            IterableKind::Map | IterableKind::EnumeratedSlice | IterableKind::Seq2
-        );
-        (element_ty, requires_tuple_destructuring)
+        (element_ty, iterable_kind)
     }
 
     pub(super) fn infer_break(

@@ -1,6 +1,6 @@
 use super::*;
 use crate::EmitFacts;
-use syntax::ast::Generic;
+use syntax::program::FieldSelection;
 
 struct EnumVariantData<'a> {
     identifier: &'a str,
@@ -128,9 +128,10 @@ impl Planner<'_> {
         path_layout: Option<&ValueLayout>,
         collector: &mut PatternInfo,
     ) {
-        let Type::Tuple(element_tys) = self.facts.strip_and_peel(path_ty) else {
-            unreachable!("tuple pattern on a non-tuple type: {path_ty:?}");
-        };
+        let element_tys = self
+            .facts
+            .tuple_behind_refs(path_ty)
+            .unwrap_or_else(|| unreachable!("tuple pattern on a non-tuple type: {path_ty:?}"));
 
         for (i, element) in elements.iter().enumerate() {
             let field_name = TUPLE_FIELDS.get(i).expect("oversize tuple arity");
@@ -365,11 +366,7 @@ impl Planner<'_> {
             _ => {}
         }
 
-        let ConstructorPatternResolution::EnumVariant {
-            enum_name,
-            variant_name,
-        } = resolution
-        else {
+        let ConstructorPatternResolution::EnumVariant { variant_name, .. } = resolution else {
             return;
         };
         if let Some(
@@ -379,19 +376,13 @@ impl Planner<'_> {
             self.collect_nilable_option_checks(path, pattern, layout, collector);
             return;
         }
-        let params = self.facts.pattern_type_args(ty);
-        let Some((declared_fields, generics)) =
-            self.facts.variant_declared_fields(enum_name, variant_name)
-        else {
-            return;
-        };
-
-        let field_types: Vec<Type> = declared_fields
+        let selections = self.facts.variant_pattern_fields(pattern.get_span());
+        let field_types: Vec<Type> = selections
             .iter()
-            .map(|ty| generics::resolve_field_type(generics, &params, ty))
+            .map(|selection| selection.field_ty())
             .collect();
         let field_layouts =
-            self.variant_field_layouts(path_layout, variant_name, &declared_fields, &field_types);
+            self.variant_field_layouts(path_layout, variant_name, &selections, &field_types);
 
         let variant_data = EnumVariantData {
             identifier,
@@ -484,14 +475,14 @@ impl Planner<'_> {
         &self,
         path_layout: Option<&ValueLayout>,
         variant_name: &str,
-        declared_fields: &[&Type],
+        selections: &[&FieldSelection],
         field_types: &[Type],
     ) -> Vec<ValueLayout> {
-        declared_fields
+        selections
             .iter()
             .zip(field_types)
             .enumerate()
-            .map(|(index, (declared, ty))| {
+            .map(|(index, (selection, ty))| {
                 let inherited = path_layout.and_then(|layout| match layout {
                     ValueLayout::TaggedOption { payload, .. }
                     | ValueLayout::NullableOption { payload, .. }
@@ -506,7 +497,11 @@ impl Planner<'_> {
                     _ => None,
                 });
                 inherited.cloned().unwrap_or_else(|| {
-                    self.value_layout_with_declaration(ty, SlotOrigin::Lisette, declared)
+                    self.value_layout_with_declaration(
+                        ty,
+                        SlotOrigin::Lisette,
+                        &selection.declared_ty,
+                    )
                 })
             })
             .collect()
@@ -623,7 +618,8 @@ impl Planner<'_> {
                 .facts
                 .enum_tuple_field_name(variant.ty, variant_name, i);
 
-            let is_unit = self.facts.is_enum_field_unit(variant.ty, variant_name, i);
+            let field_ty = &variant.field_types[i];
+            let is_unit = self.facts.resolves_to_unit(field_ty) || field_ty.is_never();
 
             let field_path = if self
                 .facts
@@ -654,7 +650,7 @@ impl Planner<'_> {
                 self.collect_checks_and_bindings(
                     &field_path,
                     field,
-                    &variant.field_types[i],
+                    field_ty,
                     variant.field_layouts.get(i),
                     collector,
                 );
@@ -669,32 +665,18 @@ impl Planner<'_> {
         path_ty: &Type,
         collector: &mut PatternInfo,
     ) {
-        let Pattern::Struct {
-            fields,
-            ty,
-            resolution,
-            ..
-        } = pattern
-        else {
+        let Pattern::Struct { fields, ty, .. } = pattern else {
             return;
         };
 
         let (enum_info, child_path) =
             self.resolve_struct_child_path(path, pattern, path_ty, collector);
-        let variant = match resolution {
-            RecordPatternResolution::EnumVariant { variant_name, .. } => {
-                Some(variant_name.as_str())
-            }
-            RecordPatternResolution::Struct { .. } | RecordPatternResolution::Unresolved => None,
-        };
-
         for field in fields {
             let field_path =
                 self.compute_struct_field_path(&child_path, field, ty, enum_info.as_ref());
-            let field_ty = self
-                .lookup_field_ty(ty, variant, &field.name)
-                .unwrap_or_else(|| panic!("record pattern field not resolved: {}", field.name));
-            let layout = self.field_slot_layout(ty, None, variant, &field.name, &field_ty);
+            let selection = self.facts.pattern_field(field.name_span);
+            let field_ty = selection.field_ty();
+            let layout = self.field_slot_layout(ty, Some(selection), &field.name, &field_ty);
             self.collect_checks_and_bindings(
                 &field_path,
                 &field.value,
@@ -736,48 +718,9 @@ impl Planner<'_> {
 }
 
 impl EmitFacts<'_> {
-    fn variant_declared_fields(
-        &self,
-        enum_name: &str,
-        variant_name: &str,
-    ) -> Option<(Vec<&Type>, &[Generic])> {
-        let definition = self.definition(enum_name)?;
-        match &definition.body {
-            DefinitionBody::Struct {
-                fields, generics, ..
-            } => Some((
-                fields.iter().map(|field| &field.ty).collect::<Vec<_>>(),
-                generics,
-            )),
-            DefinitionBody::Enum {
-                variants, generics, ..
-            } => {
-                let variant = variants
-                    .iter()
-                    .find(|variant| variant.name == unqualified_name(variant_name))?;
-                Some((
-                    variant
-                        .fields
-                        .iter()
-                        .map(|field| &field.ty)
-                        .collect::<Vec<_>>(),
-                    generics,
-                ))
-            }
-            _ => None,
-        }
-    }
-
     fn exact_switch_value(&self, path_ty: &Type, value: &Literal) -> Option<Literal> {
         let kind = self.underlying_simple_kind(path_ty)?;
         let exact = kind.is_integer() || matches!(kind, SimpleKind::Bool | SimpleKind::String);
         (exact && !matches!(value, Literal::Float { .. })).then(|| value.clone())
-    }
-
-    fn pattern_type_args(&self, ty: &Type) -> Vec<Type> {
-        match self.peel_alias(ty) {
-            Type::Nominal { params, .. } => params,
-            _ => vec![],
-        }
     }
 }

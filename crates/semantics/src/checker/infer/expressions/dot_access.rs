@@ -6,7 +6,8 @@ use syntax::ast::{
 };
 use syntax::go_names;
 use syntax::program::{
-    Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, go_import_default_name,
+    Definition, DefinitionBody, DotAccessResolution, FieldKey, NativeTypeKind,
+    go_import_default_name,
 };
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
@@ -43,11 +44,11 @@ impl DotAccessResolutionArgs<'_> {
 
 impl InferCtx<'_> {
     pub(super) fn normalize_aliased_ref(&self, ty: Type) -> Type {
-        if ty.is_ref() {
-            return ty;
+        if !ty.is_ref() && self.store.is_reference(&ty) {
+            self.store.peel_alias(&ty)
+        } else {
+            ty
         }
-        let peeled = self.store.peel_alias(&ty);
-        if peeled.is_ref() { peeled } else { ty }
     }
 
     pub(super) fn unify_member_expectation(
@@ -55,7 +56,9 @@ impl InferCtx<'_> {
         args: &DotAccessResolutionArgs<'_>,
         method_ty: &Type,
     ) {
-        if !self.is_callee_context() && NativeTypeKind::from_type(args.expression_ty).is_some() {
+        if !self.is_callee_context()
+            && NativeTypeKind::from_type(&self.store.receiver_shape(args.expression_ty)).is_some()
+        {
             self.unify(args.expected_ty, &Type::Error, args.span);
         } else {
             self.unify(args.expected_ty, method_ty, args.span);
@@ -149,7 +152,8 @@ impl InferCtx<'_> {
                     expression.get_type().resolve_in(&self.env),
                     Type::Function(_) | Type::Forall { .. }
                 )
-                && NativeTypeKind::from_type(&resolved_expression_ty).is_some()
+                && NativeTypeKind::from_type(&self.store.receiver_shape(&resolved_expression_ty))
+                    .is_some()
             {
                 self.sink.push(diagnostics::infer::native_method_value(
                     &member,
@@ -409,6 +413,7 @@ impl InferCtx<'_> {
 
         let (struct_ty, map) = self.instantiate(&struct_type);
         let field_ty = substitute(&field_type, &map);
+        self.record_field_selection(FieldKey::Access(args.id), &field.ty, &struct_ty);
 
         self.unify(&args.deref_ty.shallow_demoted(), &struct_ty, args.span);
         self.unify(args.expected_ty, &field_ty, args.span);
@@ -451,12 +456,18 @@ impl InferCtx<'_> {
             return None;
         };
         self.mark_component_grant(args.expression, args.expression_ty, &field_ty);
+        let member_field_ty = field_ty.clone();
         let field_ty =
             self.granted_field_type(&member.declaring_type, &field_ty, args.expression_ty);
 
         let declared_field = store
             .fields_of(member.declaring_type.as_str())
             .and_then(|fields| fields.iter().find(|f| f.name == args.member_name));
+        self.record_field_selection(
+            FieldKey::Access(args.id),
+            declared_field.map_or(&member_field_ty, |field| &field.ty),
+            &member.declaring_instance,
+        );
         if let Some(field) = declared_field {
             self.facts.add_usage(*args.span, field.name_span);
         }

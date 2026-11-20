@@ -144,8 +144,6 @@ impl Planner<'_> {
         bridge: Option<GoResultBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, Option<GoExpression>) {
-        let declared_result_ty = result_ty;
-        let result_ty = &self.facts.peel_alias(result_ty);
         let (payload_bridge, error_bridge, bridge) = match bridge {
             Some(GoResultBridge::Payload { value, error }) => (Some(value), Some(error), None),
             bridge => (None, None, bridge),
@@ -166,11 +164,11 @@ impl Planner<'_> {
                 self.plan_tuple_result(call, *arity, result_ty, slot_bridges.as_deref())
             }
             (Some(LoweredReturnAbi::BareError), _) => {
-                let layout = self.value_layout(declared_result_ty, SlotOrigin::Lisette);
+                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
                 return named(self.lower_bare_error_wrapping(call, &layout, error_bridge, target));
             }
             (Some(LoweredReturnAbi::Result { payload }), _) => {
-                let layout = self.value_layout(declared_result_ty, SlotOrigin::Lisette);
+                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
                 return named(self.lower_result_wrapping(
                     call,
                     &layout,
@@ -180,7 +178,7 @@ impl Planner<'_> {
                 ));
             }
             (Some(LoweredReturnAbi::Partial { payload }), _) => {
-                let layout = self.value_layout(declared_result_ty, SlotOrigin::Lisette);
+                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
                 return named(self.lower_partial_wrapping(
                     call,
                     &layout,
@@ -190,7 +188,7 @@ impl Planner<'_> {
                 ));
             }
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { payload })), _) => {
-                let layout = self.value_layout(declared_result_ty, SlotOrigin::Lisette);
+                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
                 return named(self.lower_comma_ok_wrapping(
                     call,
                     &layout,
@@ -202,7 +200,7 @@ impl Planner<'_> {
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)), _) => {
                 let mut statements = Vec::new();
                 let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", call);
-                let layout = self.value_layout(declared_result_ty, SlotOrigin::Lisette);
+                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
                 let (wrap, outcome) = self.lower_nil_check_option_wrap(
                     GoExpression::identifier(raw_var),
                     &layout,
@@ -367,7 +365,7 @@ impl Planner<'_> {
             return None;
         }
         let ty = call.get_type();
-        let ok_ty = self.facts.peel_alias(&ty).ok_type();
+        let ok_ty = self.facts.ok_payload(&ty);
         let nil_guard = match &shape {
             LoweredReturnAbi::Result { .. }
                 if matches!(plan.resolved.origin, CallableOrigin::GoInterop) =>
@@ -382,7 +380,7 @@ impl Planner<'_> {
             _ => None,
         };
 
-        let bridge = self.go_result_bridge(&plan.resolved.abi, &self.facts.peel_alias(&ty));
+        let bridge = self.go_result_bridge(&plan.resolved.abi, &ty);
         Some(LoweredCall {
             call,
             wraps,

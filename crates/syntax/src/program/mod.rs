@@ -6,10 +6,11 @@ mod resolution;
 
 pub use crate::ast::Visibility;
 pub use definition::{
-    AliasKind, Attributes, ConstantValue, Definition, DefinitionBody, Interface, InterfaceInstance,
-    InterfaceRequirement, Method, MethodOrigin, Methods, TypeAttribute, ValueKind,
-    interface_declares_any_method, interface_instances, interface_requirements, method_for_type,
-    methods_for_type, type_has_any_method,
+    AliasKind, Attributes, ConstantValue, ConstructorField, ConstructorFields, Definition,
+    DefinitionBody, Interface, InterfaceInstance, InterfaceRequirement, Method, MethodOrigin,
+    Methods, TypeAttribute, ValueKind, constructor_fields, interface_declares_any_method,
+    interface_instances, interface_requirements, method_for_type, methods_for_type,
+    type_has_any_method,
 };
 pub use emit_input::{
     BindingMutation, EmitBindings, EmitInput, EqualityIndex, ImportKey, TestFunction, TestIndex,
@@ -45,6 +46,6 @@ pub use go_method_policy::GoMethodPolicy;
 mod checked;
 pub use checked::{
     Adaptation, CallOperation, CheckedBodies, CheckedBodiesBuilder, CheckedCallee,
-    CheckedExpression, CheckedValueUse, ElementEquality, EqualityRecipe, InterfaceConversion,
-    OperandConversion, ValueUseKey,
+    CheckedExpression, CheckedStructLiteral, CheckedValueUse, ElementEquality, EqualityRecipe,
+    FieldKey, FieldSelection, InterfaceConversion, OperandConversion, ValueUseKey,
 };

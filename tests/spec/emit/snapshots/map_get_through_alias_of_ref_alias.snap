@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  type M = Map<string, int>
+  type MRef = Ref<M>
+  fn test(r: MRef) -> Option<int> {
+    r.get("a")
+  }
+---
+package main
+
+type M = map[string]int
+
+type MRef = *M
+
+func test(r MRef) (int, bool) {
+	ret, ok := (*r)["a"]
+	return ret, ok
+}

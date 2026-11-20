@@ -457,7 +457,6 @@ impl Planner<'_> {
             expression: base,
             member,
             ty,
-            resolution,
             ..
         } = expression.unwrap_parens()
         else {
@@ -465,8 +464,7 @@ impl Planner<'_> {
         };
         let raw = self.field_slot_layout(
             &base.get_type(),
-            resolution.declaring_type(),
-            None,
+            self.facts.checked(expression).field_selection(),
             member,
             ty,
         )?;

@@ -19,7 +19,7 @@ impl Planner<'_> {
             .expect("definition symbols are package-qualified");
         let name = &symbol[package.len() + 1..];
         if let Some((owner, method)) = name.rsplit_once('.') {
-            let owner_id = self.facts.peel_alias_id(&format!("{package}.{owner}"));
+            let owner_id = format!("{package}.{owner}");
             let is_public = match self.facts.method(&owner_id, method) {
                 Some(method) => method.visibility.is_public(),
                 None => self

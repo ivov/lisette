@@ -60,8 +60,13 @@ impl InferCtx<'_> {
             (generics, impl_ty, new_methods)
         });
 
+        let id = self.fresh_expression_id();
+        let receiver_generics = self.store.receiver_generic_context(&impl_ty);
+        self.facts
+            .checked_bodies
+            .insert_receiver_generics(id, receiver_generics);
         Expression::ImplBlock {
-            id: self.fresh_expression_id(),
+            id,
             annotation,
             ty: impl_ty,
             receiver_name,

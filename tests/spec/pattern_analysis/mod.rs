@@ -2178,6 +2178,98 @@ pub struct Token(string)
     infer_with_go_typedefs(input, &[("go:example.com/events", typedef)]).assert_no_errors();
 }
 
+const SHAPE: &str = r#"
+enum Shape<T> {
+  Dot(T),
+  Rect { w: T, h: T },
+}
+
+type Two<A> = Shape<A>
+"#;
+
+#[test]
+fn struct_variant_pattern_through_generic_enum_substitutes_fields() {
+    let covered = format!(
+        "{SHAPE}
+fn test(s: Shape<bool>) -> int {{
+  match s {{
+    Shape.Rect {{ w: true, h: _ }} => 1,
+    Shape.Rect {{ w: false, h: _ }} => 2,
+    Shape.Dot(_) => 3,
+  }}
+}}
+"
+    );
+    infer(&covered).assert_no_errors();
+    let missing = format!(
+        "{SHAPE}
+fn test(s: Shape<bool>) -> int {{
+  match s {{
+    Shape.Rect {{ w: true, h: _ }} => 1,
+    Shape.Dot(_) => 3,
+  }}
+}}
+"
+    );
+    infer(&missing).assert_infer_code("non_exhaustive");
+}
+
+#[test]
+fn struct_variant_pattern_through_generic_alias_substitutes_fields() {
+    let covered = format!(
+        "{SHAPE}
+fn test(s: Two<bool>) -> int {{
+  match s {{
+    Two.Rect {{ w: true, h: _ }} => 1,
+    Two.Rect {{ w: false, h: _ }} => 2,
+    Two.Dot(_) => 3,
+  }}
+}}
+"
+    );
+    infer(&covered).assert_no_errors();
+    let missing = format!(
+        "{SHAPE}
+fn test(s: Two<bool>) -> int {{
+  match s {{
+    Two.Rect {{ w: false, h: _ }} => 2,
+    Two.Dot(_) => 3,
+  }}
+}}
+"
+    );
+    infer(&missing).assert_infer_code("non_exhaustive");
+}
+
+#[test]
+fn struct_variant_pattern_with_nested_generic_payload_substitutes_fields() {
+    let covered = format!(
+        "{SHAPE}
+fn test(s: Shape<Option<bool>>) -> int {{
+  match s {{
+    Shape.Rect {{ w: Some(true), h: _ }} => 1,
+    Shape.Rect {{ w: Some(false), h: _ }} => 2,
+    Shape.Rect {{ w: None, h: _ }} => 3,
+    Shape.Dot(_) => 4,
+  }}
+}}
+"
+    );
+    infer(&covered).assert_no_errors();
+    let missing = format!(
+        "{SHAPE}
+fn test(s: Shape<Option<bool>>) -> int {{
+  match s {{
+    Shape.Rect {{ w: Some(true), h: _ }} => 1,
+    Shape.Rect {{ w: None, h: _ }} => 3,
+    Shape.Dot(_) => 4,
+  }}
+}}
+"
+    );
+    infer(&missing).assert_infer_code("non_exhaustive");
+}
+
 #[test]
 fn test_redundant_string_pattern_newline_spellings() {
     let input = r#"

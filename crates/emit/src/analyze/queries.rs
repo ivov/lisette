@@ -1,16 +1,24 @@
 use crate::EmitFacts;
 use crate::Planner;
+use crate::abi::ReturnSlot;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::control_flow::fallible;
+use crate::control_flow::fallible::Fallible;
 use crate::ir::values::GoExpression;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use syntax::ast::{Expression, Literal, Pattern, RestPattern, StructFieldDefinition, StructFields};
 use syntax::go_names;
-use syntax::program::{Definition, DefinitionBody, DotAccessResolution};
-use syntax::types;
-use syntax::types::{Symbol, Type, substitute};
+use syntax::program::{Definition, DefinitionBody, DotAccessResolution, constructor_fields};
+use syntax::program::{FieldSelection, GoHint, interface_requirements};
+use syntax::types::{CompoundKind, build_substitution_map};
+use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
+    pub(crate) fn member_owner_type(&self, ty: &Type) -> Type {
+        self.facts.receiver_shape(ty)
+    }
+
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
         let Some(resolved) = self.facts.resolve_nominal(struct_ty) else {
             return false;
@@ -133,18 +141,6 @@ impl<'a> EmitFacts<'a> {
         !self.is_nilable_go_type(ty) && !ty.is_variable() && !ty.is_placeholder()
     }
 
-    pub(crate) fn peel_alias_id(&self, id: &str) -> String {
-        let nominal = Type::Nominal {
-            id: id.into(),
-            params: Vec::new(),
-            writable: false,
-        };
-        self.peel_alias(&nominal)
-            .get_qualified_id()
-            .unwrap_or(id)
-            .to_string()
-    }
-
     pub(crate) fn enum_struct_field_name(
         &self,
         enum_id: &str,
@@ -166,58 +162,23 @@ impl<'a> EmitFacts<'a> {
         false
     }
 
-    pub(crate) fn is_enum_field_unit(&self, ty: &Type, variant: &str, index: usize) -> bool {
-        if let Type::Nominal {
-            id, params: args, ..
-        } = ty
-            && let Some(Definition {
-                body:
-                    DefinitionBody::Enum {
-                        generics, variants, ..
-                    },
-                ..
-            }) = self.definition(id.as_str())
-        {
-            let sub_map: types::SubstitutionMap = generics
-                .iter()
-                .map(|g| g.name.clone())
-                .zip(args.iter().cloned())
-                .collect();
-            for v in variants {
-                if v.name == variant
-                    && let Some(field) = v.fields.iter().nth(index)
-                {
-                    let concrete = substitute(&field.ty, &sub_map);
-                    return self.resolves_to_unit(&concrete) || concrete.is_never();
-                }
-            }
-        }
-        false
-    }
-
     pub(crate) fn enum_struct_field_index(
         &self,
         ty: &Type,
         variant: &str,
         field_name: &str,
     ) -> Option<usize> {
-        if let Type::Nominal { id, .. } = ty
-            && let Some(Definition {
-                body: DefinitionBody::Enum { variants, .. },
-                ..
-            }) = self.definition(id.as_str())
-        {
-            for v in variants {
-                if v.name == variant {
-                    return v.fields.iter().position(|f| f.name == field_name);
-                }
-            }
-        }
-        None
+        let Type::Nominal { id, .. } = ty else {
+            return None;
+        };
+        constructor_fields(id, Some(variant), ty, |id| self.definition(id))?
+            .fields
+            .iter()
+            .position(|field| field.name == field_name)
     }
 
     pub(crate) fn resolve_nominal(&self, ty: &Type) -> Option<ResolvedNominal<'a>> {
-        let Type::Nominal { id, .. } = self.strip_and_peel(ty) else {
+        let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
             return None;
         };
         let definition = self.definition(id.as_str())?;
@@ -251,17 +212,6 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
-    pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let Some(resolved) = self.resolve_nominal(struct_ty) else {
-            return false;
-        };
-        matches!(
-            &resolved.definition.body,
-            DefinitionBody::Struct { fields, .. }
-                if fields.iter().any(|f| f.name == field_name)
-        )
-    }
-
     pub(crate) fn is_tuple_struct_type(&self, ty: &Type) -> bool {
         self.resolve_nominal(ty).is_some_and(|resolved| {
             matches!(
@@ -275,18 +225,10 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn newtype_underlying(&self, ty: &Type) -> Option<Type> {
-        let resolved = self.resolve_nominal(ty)?;
-        if !resolved.definition.is_newtype() {
-            return None;
-        }
-        let DefinitionBody::Struct {
-            fields: StructFields::Tuple(fields),
-            ..
-        } = &resolved.definition.body
-        else {
-            return None;
-        };
-        Some(fields[0].ty.clone())
+        self.resolve_nominal(ty)?
+            .definition
+            .newtype_field()
+            .cloned()
     }
 
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
@@ -296,7 +238,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn enum_tuple_field_name(&self, ty: &Type, variant: &str, index: usize) -> String {
-        let ty = &self.shape_ty(ty);
+        let ty = &self.receiver_shape(ty);
         if ty.is_option() {
             return match variant {
                 "Some" => fallible::OPTION_SOME_FIELD.to_string(),
@@ -343,5 +285,120 @@ impl<'a> EmitFacts<'a> {
         base_ty: &Type,
     ) -> bool {
         resolution.is_field_read() && base.deref_inner().is_none() && !self.is_reference(base_ty)
+    }
+
+    pub(crate) fn is_clone_container(&self, ty: &Type) -> bool {
+        matches!(
+            self.peel_alias(ty),
+            Type::Compound {
+                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
+                ..
+            }
+        )
+    }
+
+    pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
+        let ty = &self.peel_alias(ty);
+        let Type::Nominal { id, .. } = ty else {
+            return false;
+        };
+        !go_name::is_go_import(id.as_str())
+            && self.newtype_underlying(ty).is_none()
+            && matches!(
+                self.definition(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Struct { .. })
+            )
+    }
+
+    pub(crate) fn first_type_argument(&self, ty: &Type) -> Option<Type> {
+        self.receiver_shape(ty).get_type_params()?.first().cloned()
+    }
+
+    pub(crate) fn fallible(&self, ty: &Type) -> Option<Fallible> {
+        Fallible::from_type(&self.peel_alias(ty))
+    }
+
+    pub(crate) fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
+        let mut current = self.peel_alias(ty);
+        while current.is_ref() {
+            value = GoExpression::dereference(value);
+            let pointee = current.inner().expect("Ref<T> must have inner");
+            current = self.peel_alias(&pointee);
+        }
+        value
+    }
+
+    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
+        interface_requirements(bound, |id| self.definition(id))
+            .iter()
+            .any(|requirement| {
+                !go_name::is_go_import(&requirement.declaring_interface)
+                    && requirement.ty.get_function_ret().is_some_and(|ty| {
+                        matches!(
+                            self.return_abi(ty, ReturnSlot::Method),
+                            CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
+                        )
+                    })
+            })
+    }
+
+    pub(crate) fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
+        let qualified = self.qualified_current(name);
+        self.definition(qualified.as_str())
+            .and_then(Definition::methods)
+            .and_then(|methods| methods.get(method_name))
+            .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
+            && self.emits_go_method(&qualified, method_name)
+    }
+
+    pub(crate) fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
+        let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
+        receiver_ty
+            .get_qualified_id()
+            .filter(|owner| go_name::is_go_import(owner))
+            .and_then(|owner| self.method(owner, method))
+            .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
+    }
+
+    pub(crate) fn struct_fields(
+        &self,
+        ty: &Type,
+    ) -> Option<Vec<(ecow::EcoString, FieldSelection)>> {
+        let stripped = ty.strip_refs();
+        let Type::Nominal { id, .. } = &stripped else {
+            return None;
+        };
+        let constructor = constructor_fields(id, None, &stripped, |id| self.definition(id))?;
+        let Type::Nominal { id: owner, .. } = self.peel_alias(&stripped) else {
+            return None;
+        };
+        let substitutions = build_substitution_map(constructor.generics, &constructor.type_args);
+        Some(
+            constructor
+                .fields
+                .into_iter()
+                .map(|field| {
+                    let selection = FieldSelection {
+                        owner: owner.clone(),
+                        declared_ty: field.declared_ty.clone(),
+                        substitutions: substitutions.clone(),
+                    };
+                    (field.name.clone(), selection)
+                })
+                .collect(),
+        )
+    }
+
+    pub(crate) fn empty_composite_is_go_zero(&self, ty: &Type) -> bool {
+        let ty = self.peel_alias(ty);
+        self.is_plain_struct(&ty) || self.is_lisette_enum(&ty)
+    }
+
+    pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
+        let peeled = self.peel_alias(ty);
+        !self.is_function_alias(ty)
+            && !self.is_interface_or_unknown(&peeled)
+            && !(matches!(peeled, Type::Nominal { .. })
+                && self.underlying_simple_kind(&peeled).is_some())
     }
 }

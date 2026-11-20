@@ -30,13 +30,11 @@ impl Planner<'_> {
         &self,
         expression: &'a Expression,
     ) -> Option<(&'a Expression, &'a Expression)> {
-        let (receiver, [message]) = self.prelude_method_call(expression, "wrap_err")? else {
+        let (receiver, [message]) = self.prelude_method_call(expression, "Result", "wrap_err")?
+        else {
             return None;
         };
-        self.facts
-            .peel_alias(&receiver.get_type())
-            .is_result()
-            .then_some((receiver, message))
+        Some((receiver, message))
     }
 
     pub(crate) fn prepare_wrap_messages(
@@ -64,7 +62,7 @@ impl Planner<'_> {
                     ..
                 } if parts.iter().all(|part| match part {
                     FormatStringPart::Expression(e) => {
-                        self.facts.peel_alias(&e.get_type()).as_simple().is_some()
+                        self.facts.simple_kind(&e.get_type()).is_some()
                     }
                     FormatStringPart::Text(_) => true,
                 }) =>

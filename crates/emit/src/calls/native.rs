@@ -19,7 +19,7 @@ use syntax::program::{
     CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
 };
 use syntax::program::{NativeInlineForm, NativeInlinePackage, NativeOperation};
-use syntax::types::{CompoundKind, Type};
+use syntax::types::Type;
 
 pub(super) struct NativeCallResult {
     pub setup: Vec<Statement>,
@@ -344,14 +344,12 @@ impl Planner<'_> {
             );
         }
 
-        if let Some(result) = self.try_lower_native_equality(context, receiver_expression) {
+        if let Some(result) = self.try_lower_native_equality(context) {
             return result;
         }
 
         if matches!(context.native_type, NativeTypeKind::Array)
             && NativeOperation::new(context.native_type, context.method).reads_array_in_place()
-            && self.facts.native_kind(&receiver_expression.get_type())
-                == Some(NativeTypeKind::Array)
         {
             let mut staged = self.stage_native_method(context);
             let index = staged.arguments.first().cloned();
@@ -371,13 +369,12 @@ impl Planner<'_> {
             return result;
         }
 
-        if context.method == "clone" {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
-            if self.facts.is_clone_container(&receiver_ty) {
-                let staged = self.stage_native_method(context);
-                let body = self.clone_expression(staged.receiver.clone(), &receiver_ty);
-                return staged.finish(body);
-            }
+        if context.method == "clone"
+            && let Some(receiver_ty) = self.facts.clone_container(&receiver_expression.get_type())
+        {
+            let staged = self.stage_native_method(context);
+            let body = self.clone_expression(staged.receiver.clone(), &receiver_ty);
+            return staged.finish(body);
         }
 
         let mut staged = self.stage_native_method(context);
@@ -411,7 +408,6 @@ impl Planner<'_> {
     fn try_lower_native_equality(
         &mut self,
         context: &NativeCallContext,
-        receiver_expression: &Expression,
     ) -> Option<NativeCallResult> {
         if context.method == "equals"
             && matches!(
@@ -419,44 +415,36 @@ impl Planner<'_> {
                 NativeTypeKind::Slice | NativeTypeKind::Map
             )
         {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
-            if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let staged = self.stage_native_method(context);
-                let recipe = self.facts.native_equality(context);
-                let body = self.equality_test(
-                    staged.receiver.clone(),
-                    staged.arguments[0].clone(),
-                    &recipe,
-                    false,
-                );
-                return Some(staged.finish(body));
-            }
+            let staged = self.stage_native_method(context);
+            let recipe = self.facts.native_equality(context);
+            let body = self.equality_test(
+                staged.receiver.clone(),
+                staged.arguments[0].clone(),
+                &recipe,
+                false,
+            );
+            return Some(staged.finish(body));
         }
 
         if context.method == "contains" && matches!(context.native_type, NativeTypeKind::Slice) {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
-            if receiver_ty.is_slice() {
-                let mut staged = self.stage_native_method(context);
-                let body = if let EqualityRecipe::Slice(Some(element)) =
-                    &self.facts.native_equality(context)
-                {
-                    let searched = staged.arguments[0].clone();
-                    let target =
-                        self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
-                    let predicate =
-                        self.contains_predicate(element, GoExpression::identifier(target));
-                    GoExpression::call(
-                        GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
-                        vec![staged.receiver.clone(), predicate],
-                    )
-                } else {
-                    GoExpression::read_only_call(
-                        GoExpression::generated(GeneratedPackage::Slices, "Contains"),
-                        vec![staged.receiver.clone(), staged.arguments[0].clone()],
-                    )
-                };
-                return Some(staged.finish(body));
-            }
+            let mut staged = self.stage_native_method(context);
+            let body = if let EqualityRecipe::Slice(Some(element)) =
+                &self.facts.native_equality(context)
+            {
+                let searched = staged.arguments[0].clone();
+                let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
+                let predicate = self.contains_predicate(element, GoExpression::identifier(target));
+                GoExpression::call(
+                    GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
+                    vec![staged.receiver.clone(), predicate],
+                )
+            } else {
+                GoExpression::read_only_call(
+                    GoExpression::generated(GeneratedPackage::Slices, "Contains"),
+                    vec![staged.receiver.clone(), staged.arguments[0].clone()],
+                )
+            };
+            return Some(staged.finish(body));
         }
         None
     }
@@ -581,9 +569,9 @@ impl Planner<'_> {
             }
             Expression::IndexedAccess {
                 expression: base, ..
-            } => match self.facts.strip_and_peel(&base.get_type()).as_compound() {
-                Some((CompoundKind::Map, _)) => false,
-                Some((CompoundKind::Slice, _)) => true,
+            } => match self.facts.native_kind(&base.get_type()) {
+                Some(NativeTypeKind::Map) => false,
+                Some(NativeTypeKind::Slice) => true,
                 _ => self.receiver_is_addressable(base),
             },
             _ => false,
@@ -634,9 +622,6 @@ impl Planner<'_> {
             self.facts.call_operation(receiver_expression),
             receiver_expression,
         )?;
-        if self.facts.native_kind(&array.get_type()) != Some(NativeTypeKind::Array) {
-            return None;
-        }
         if matches!(context.method, "contains" | "equals")
             && matches!(
                 self.facts.native_equality(context),
@@ -798,10 +783,10 @@ impl Planner<'_> {
             );
         }
 
-        let arg_ty = arg.get_type();
         let range_kind = self
             .facts
-            .range_shape(&arg_ty)
+            .checked(arg)
+            .range_kind()
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.plan_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");

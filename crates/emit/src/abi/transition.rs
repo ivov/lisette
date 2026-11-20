@@ -97,7 +97,7 @@ impl Planner<'_> {
         match shape {
             LoweredReturnAbi::BareError => vec![err_expr],
             LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
-                let ok_ty = self.facts.peel_alias(return_ty).ok_type();
+                let ok_ty = self.facts.ok_payload(return_ty);
                 let mut values = self.lowered_payload_zeros(shape, &ok_ty);
                 values.push(err_expr);
                 values
@@ -118,7 +118,7 @@ impl Planner<'_> {
     ) -> Vec<GoExpression> {
         match shape {
             LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                let inner = self.facts.peel_alias(return_ty).ok_type();
+                let inner = self.facts.ok_payload(return_ty);
                 let mut values = self.lowered_payload_zeros(shape, &inner);
                 values.push(GoExpression::literal("false".to_string()));
                 values
@@ -179,7 +179,7 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let p = &self.stable_source(&mut statements, hint, result_value);
-        let ok_ty = || self.facts.peel_alias(return_ty).ok_type();
+        let ok_ty = || self.facts.ok_payload(return_ty);
         let arms = match shape {
             LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. } => {
                 let (ok_setup, ok_payload) =
@@ -374,9 +374,8 @@ impl Planner<'_> {
         ) {
             let adaptation = &self.facts.checked(expression).value_use().adaptation;
             if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
-                let peeled = self.facts.peel_alias(&return_ty);
                 let (mut statements, value) = self
-                    .plan_nullable_slot_value(expression, adaptation, &peeled)
+                    .plan_nullable_slot_value(expression, adaptation, &return_ty)
                     .into_parts();
                 statements.push(plain_return(value));
                 return Some(statements);
@@ -435,7 +434,7 @@ impl Planner<'_> {
 
         if let Some(plan) = self.plan_call(expression)
             && self.unbridged_tuple_arity(&plan, &return_ty) == Some(arity)
-            && self.facts.peel_alias(&expression.get_type()) == self.facts.peel_alias(&return_ty)
+            && self.facts.same_type(&expression.get_type(), &return_ty)
             && plan
                 .resolved
                 .abi
@@ -496,7 +495,7 @@ impl Planner<'_> {
                         .plan_composite_value(&args[0], ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
-                    let ok_ty = self.facts.peel_alias(&return_ty).ok_type();
+                    let ok_ty = self.facts.ok_payload(&return_ty);
                     multi_value_return(vec![self.go_zero(&ok_ty), e])
                 }
                 PartialVariant::Both => {
@@ -536,7 +535,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         use Expression;
         if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
-            return self.plan_nullable_payload(expression, &slot_ty.ok_type());
+            return self.plan_nullable_payload(expression, &self.facts.ok_payload(slot_ty));
         }
         if let Expression::Call {
             expression: callee,
@@ -547,7 +546,7 @@ impl Planner<'_> {
         {
             debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
             return self
-                .plan_nullable_payload(&args[0], &slot_ty.ok_type())
+                .plan_nullable_payload(&args[0], &self.facts.ok_payload(slot_ty))
                 .with_constructor_stability();
         }
         if prelude_constructor(expression) == Some(PreludeVariant::None) {

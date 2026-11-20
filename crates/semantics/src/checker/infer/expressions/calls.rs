@@ -440,8 +440,12 @@ impl InferCtx<'_> {
             self.record_callee(&callee_expression, operation, callee_type_arguments);
         }
 
+        let id = self.fresh_expression_id();
+        if call_kind == CallKind::TupleStructConstructor {
+            self.record_positional_fields(id, &call_ty);
+        }
         Expression::Call {
-            id: self.fresh_expression_id(),
+            id,
             expression: callee_expression.into(),
             args: new_args,
             spread: new_spread.map(Box::new),
@@ -523,7 +527,9 @@ impl InferCtx<'_> {
             }
             _ => return None,
         };
-        let receiver_ty = self.peel_resolved(&receiver.get_type());
+        let receiver_ty = self
+            .store
+            .receiver_shape(&receiver.get_type().resolve_in(&self.env));
         Some(receiver_ty.writable_clone_result())
     }
 

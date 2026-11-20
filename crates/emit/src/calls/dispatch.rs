@@ -7,7 +7,6 @@ use super::{NativeCallContext, NativeCallForm};
 use crate::EmitFacts;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::is_prelude_container_type;
 use crate::abi::layout::ValueLayout;
 use crate::abi::transition::multi_value_return;
 use crate::control_flow::propagation::plain_return;
@@ -26,20 +25,21 @@ use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use crate::{Planner, written_span};
 use syntax::EcoString;
-use syntax::ast::{Expression, Literal, StructFields};
+use syntax::ast::{Expression, Literal};
 use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
-use syntax::program::{CallOperation, DefinitionBody};
-use syntax::types::{CompoundKind, FunctionParameter, Type, build_substitution_map, substitute};
+use syntax::program::{CallOperation, FieldSelection};
+use syntax::types::{CompoundKind, FunctionParameter, Type};
 
-struct TupleStructTarget {
+struct TupleStructTarget<'a> {
     go_ty: GoType,
     field_tys: Vec<Type>,
+    selections: Vec<&'a FieldSelection>,
     owner_type: Type,
 }
 
-fn keys_checked_as_go_constants(keys: &[&Expression], key_ty: &Type) -> bool {
+fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKind>) -> bool {
     let Some(literals) = keys
         .iter()
         .map(|key| match key.unwrap_parens() {
@@ -50,7 +50,7 @@ fn keys_checked_as_go_constants(keys: &[&Expression], key_ty: &Type) -> bool {
     else {
         return false;
     };
-    let integer_key = key_ty.as_simple().is_some_and(SimpleKind::is_integer);
+    let integer_key = key_kind.is_some_and(SimpleKind::is_integer);
     literals
         .iter()
         .all(|literal| matches!(literal, Literal::Boolean(_) | Literal::String { .. }))
@@ -158,11 +158,11 @@ impl<'a> Planner<'a> {
             }
             (NativeTypeKind::Slice, "make") => Some(self.plan_slice_make(ctx)),
             (NativeTypeKind::Array, "new") => {
-                let peeled = ctx.call_ty.map(|t| self.facts.peel_alias(t));
-                if let Some(Type::Array { length, element }) = &peeled {
+                if let Some((length, element)) = ctx.call_ty.and_then(|t| self.facts.array_parts(t))
+                {
                     Some(ValuePlan::computed(
                         Vec::new(),
-                        self.array_zero(*length, element),
+                        self.array_zero(length, &element),
                     ))
                 } else {
                     None
@@ -235,20 +235,21 @@ impl<'a> Planner<'a> {
             .as_function_type()
             .map(|f| f.return_type.as_ref())
             .or(ctx.call_ty)?;
-        let option_ty = self.facts.peel_alias(returned);
-        let inner = option_ty.get_type_params()?.first()?;
-        let Type::Array { length, element } = self.facts.peel_alias(inner) else {
-            return None;
-        };
+        let inner = self
+            .facts
+            .prelude_container_arguments(returned)?
+            .into_iter()
+            .next()?;
+        let (length, element) = self.facts.array_parts(&inner)?;
         let argument = ctx.args.first()?;
-        let abi = self.facts.return_abi(&option_ty, ReturnSlot::Function);
+        let abi = self.facts.return_abi(returned, ReturnSlot::Function);
         if !matches!(
             abi,
             CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }))
         ) {
             return None;
         }
-        let result_list = self.return_go_type(&abi, &option_ty);
+        let result_list = self.return_go_type(&abi, returned);
 
         let element_go = self.go_type(&element);
         let array_go = GoType::array_of(length, &element_go);
@@ -327,7 +328,7 @@ impl<'a> Planner<'a> {
 
         let (key_ty, value_ty) = self.facts.map_entry_types(ctx.function);
         let keys: Vec<_> = pairs.iter().map(|(key, _)| *key).collect();
-        if !keys_checked_as_go_constants(&keys, &self.facts.peel_alias(&key_ty)) {
+        if !keys_checked_as_go_constants(&keys, self.facts.simple_kind(&key_ty)) {
             return None;
         }
         let value_go_ty = self.go_type(&value_ty);
@@ -481,8 +482,11 @@ impl<'a> Planner<'a> {
         }
 
         match &plan.resolved.origin {
-            CallableOrigin::Source(CallOperation::TupleStructConstructor) => {
-                if let Some(result) = self.try_plan_tuple_struct_call(function, args, call_ty, ctx)
+            CallableOrigin::Source(CallOperation::TupleStructConstructor {
+                is_newtype: false,
+                ..
+            }) => {
+                if let Some(result) = self.try_plan_tuple_struct_call(call_expression, call_ty, ctx)
                 {
                     return result;
                 }
@@ -547,6 +551,9 @@ impl<'a> Planner<'a> {
             | CallableOrigin::Source(
                 CallOperation::Function
                 | CallOperation::BoundMethod { .. }
+                | CallOperation::TupleStructConstructor {
+                    is_newtype: true, ..
+                }
                 | CallOperation::Unavailable,
             ) => {}
         }
@@ -637,12 +644,14 @@ impl<'a> Planner<'a> {
 
     fn try_plan_tuple_struct_call(
         &mut self,
-        function: &Expression,
-        args: &[Expression],
+        call_expression: &Expression,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
     ) -> Option<ValuePlan> {
-        let target = self.resolve_tuple_struct_target(function, call_ty)?;
+        let Expression::Call { args, .. } = call_expression else {
+            return None;
+        };
+        let target = self.resolve_tuple_struct_target(call_expression, call_ty)?;
 
         let arg_ctx = match (ctx.retired_receiver(), args.len()) {
             (Some(retired), 1) => ExpressionContext::value().with_retired_receiver(retired),
@@ -651,9 +660,10 @@ impl<'a> Planner<'a> {
         let field_layouts: Vec<_> = target
             .field_tys
             .iter()
+            .zip(&target.selections)
             .enumerate()
-            .map(|(index, ty)| {
-                self.field_slot_layout(&target.owner_type, None, None, &index.to_string(), ty)
+            .map(|(index, (ty, selection))| {
+                self.field_slot_layout(&target.owner_type, Some(selection), &index.to_string(), ty)
             })
             .collect();
         let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = args
@@ -691,46 +701,35 @@ impl<'a> Planner<'a> {
 
     fn resolve_tuple_struct_target(
         &mut self,
-        function: &Expression,
+        call_expression: &Expression,
         call_ty: Option<&Type>,
-    ) -> Option<TupleStructTarget> {
-        let ty = function.get_type();
+    ) -> Option<TupleStructTarget<'a>> {
+        let Expression::Call {
+            expression: function,
+            args,
+            ..
+        } = call_expression
+        else {
+            return None;
+        };
+        let ty = function.unwrap_parens().get_type();
         let f = ty.as_function_type()?;
         let return_ty = call_ty
             .cloned()
             .unwrap_or_else(|| f.return_type.as_ref().clone());
-
-        let Type::Nominal { id, params, .. } = &return_ty else {
-            return None;
-        };
-
-        let definition = self.facts.definition(id.as_str())?;
-        if definition.is_newtype() {
-            return None;
-        }
-        let DefinitionBody::Struct {
-            fields: StructFields::Tuple(fields),
-            generics,
-            ..
-        } = &definition.body
-        else {
-            return None;
-        };
-
-        let field_tys: Vec<Type> = if generics.is_empty() {
-            fields.iter().map(|f| f.ty.clone()).collect()
-        } else {
-            let subst_map = build_substitution_map(generics, params);
-            fields
-                .iter()
-                .map(|f| substitute(&f.ty, &subst_map))
-                .collect()
-        };
-
+        let checked = self.facts.checked(call_expression);
+        let selections: Vec<&'a FieldSelection> = (0..args.len())
+            .map(|index| checked.positional_field(index))
+            .collect();
+        let field_tys = selections
+            .iter()
+            .map(|selection| selection.field_ty())
+            .collect();
         let go_ty = self.go_type(&return_ty);
         Some(TupleStructTarget {
             go_ty,
             field_tys,
+            selections,
             owner_type: return_ty,
         })
     }
@@ -799,20 +798,14 @@ impl<'a> Planner<'a> {
     }
 
     pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<GoType> {
-        let ty = &self.facts.peel_alias(ty);
-        if !is_prelude_container_type(ty) {
-            return None;
-        }
-        let Type::Nominal { params, .. } = ty else {
-            return None;
-        };
+        let params = self.facts.prelude_container_arguments(ty)?;
         if params.is_empty() {
             return None;
         }
         params
             .iter()
             .any(|p| self.facts.is_interface_or_unknown(p) || self.facts.is_function_alias(p))
-            .then(|| self.format_type_args(params))
+            .then(|| self.format_type_args(&params))
     }
 }
 
@@ -832,19 +825,6 @@ impl<'a> EmitFacts<'a> {
             (Some(key), Some(value)) => (key.clone(), value.clone()),
             _ => panic!("internal error: a map constructor has no checked entry types"),
         }
-    }
-
-    pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
-        let ty = &self.peel_alias(ty);
-        let Type::Nominal { id, .. } = ty else {
-            return false;
-        };
-        !go_name::is_go_import(id.as_str())
-            && self.newtype_underlying(ty).is_none()
-            && matches!(
-                self.definition(id.as_str()).map(|d| &d.body),
-                Some(DefinitionBody::Struct { .. })
-            )
     }
 
     pub(super) fn callee_go_name(&self, function: &Expression) -> Option<&str> {

@@ -1,5 +1,6 @@
 use crate::EmitFacts;
 use crate::Planner;
+use crate::abi::callable::CallableReturnAbi;
 use crate::abi::layout::ValueLayout;
 use crate::definitions::structs::struct_field_go_name;
 use crate::ir::values::GoExpression;
@@ -434,6 +435,20 @@ fn physical_type_kind<'argument>(
 }
 
 impl Planner<'_> {
+    pub(crate) fn plain_literal_go_type(&self, ty: &Type) -> Option<GoType> {
+        let peeled = self.facts.peel_alias(ty);
+        match &peeled {
+            Type::Simple(_) => {}
+            Type::Nominal { params, .. } if params.is_empty() => {}
+            _ => return None,
+        }
+        Some(self.go_type(&peeled))
+    }
+
+    pub(crate) fn target_go_type(&self, ty: &Type) -> GoType {
+        self.go_type(&self.facts.peel_alias(ty))
+    }
+
     pub(crate) fn go_type(&self, ty: &Type) -> GoType {
         match ty {
             Type::Nominal {
@@ -649,6 +664,37 @@ impl Planner<'_> {
             .chain(type_args.map(|ty| self.go_type(ty)))
             .collect();
         GoType::type_arguments(&arguments)
+    }
+
+    pub(crate) fn return_go_type(&self, abi: &CallableReturnAbi, return_ty: &Type) -> GoType {
+        match abi {
+            CallableReturnAbi::Void => return GoType::default(),
+            CallableReturnAbi::Value => return self.go_type(return_ty),
+            CallableReturnAbi::Lowered(_) => {}
+        }
+        let peeled = self.facts.peel_alias(return_ty);
+        let result = self.value_layout(&peeled, SlotOrigin::Lisette);
+        self.function_layout(Vec::new(), &result, abi.clone(), None)
+            .result_go_type(self)
+            .unwrap_or_else(|| self.go_type(&peeled))
+    }
+
+    pub(crate) fn go_newtype_zero(
+        &mut self,
+        go_ty: GoType,
+        underlying: &Type,
+    ) -> Option<GoExpression> {
+        let underlying = self.facts.underlying(underlying);
+        if underlying.is_map() || matches!(underlying, Type::Array { .. }) {
+            return Some(GoExpression::empty_composite(go_ty));
+        }
+        if underlying.is_slice() {
+            return Some(GoExpression::conversion(go_ty, GoExpression::nil()));
+        }
+        matches!(underlying, Type::Simple(_)).then(|| {
+            let inner = self.lisette_zero(&underlying);
+            GoExpression::conversion(go_ty, inner)
+        })
     }
 
     pub(crate) fn go_zero(&self, ty: &Type) -> GoExpression {

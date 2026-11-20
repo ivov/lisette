@@ -32,7 +32,7 @@ use syntax::EcoString;
 use syntax::ast::{
     Binding, Expression, FunctionDefinitionView, Pattern, SelectArm, collect_pattern_bindings,
 };
-use syntax::types::{Type, build_substitution_map, substitute};
+use syntax::types::Type;
 
 type ParamDestructure<'a> = (GoIdentifier, &'a Pattern, &'a Type);
 
@@ -294,16 +294,12 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         receiver_ty: Option<&Type>,
         go_name: &str,
-        free_function_owner: Option<&Type>,
+        owner_generics: Option<&[(EcoString, Vec<Type>)]>,
     ) -> Vec<GoDeclaration> {
         if function_definition.body.is_none() {
             return Vec::new();
         }
-
-        let mut generic_context = receiver_ty
-            .or(free_function_owner)
-            .map(|ty| self.receiver_generic_context(ty))
-            .unwrap_or_default();
+        let mut generic_context = owner_generics.map(<[_]>::to_vec).unwrap_or_default();
         let signature_generics_start = if receiver_ty.is_some() {
             generic_context.len()
         } else {
@@ -491,36 +487,6 @@ impl Planner<'_> {
         self.declare(&receiver_var);
 
         GoParameter::new(receiver, go_type)
-    }
-
-    fn receiver_generic_context(&self, receiver_ty: &Type) -> Vec<(EcoString, Vec<Type>)> {
-        let stripped = receiver_ty.strip_refs();
-        let Type::Nominal { id, params, .. } = &stripped else {
-            return Vec::new();
-        };
-        let Some(generics) = self
-            .facts
-            .definition(id)
-            .and_then(|definition| definition.body.generics())
-        else {
-            return Vec::new();
-        };
-        let substitution = build_substitution_map(generics, params);
-        generics
-            .iter()
-            .zip(params)
-            .filter_map(|(generic, param)| {
-                let Type::Parameter(name) = param else {
-                    return None;
-                };
-                let bounds = generic
-                    .resolved_bounds()
-                    .expect("generic bounds must be resolved before emission")
-                    .map(|bound| substitute(bound, &substitution))
-                    .collect();
-                Some((name.clone(), bounds))
-            })
-            .collect()
     }
 
     fn lower_parameters<'a>(&mut self, params: &'a [Binding]) -> LoweredParams<'a> {

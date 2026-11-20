@@ -22,7 +22,7 @@ use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::go_names;
 use syntax::program::MethodOrigin;
-use syntax::program::{Definition, DefinitionBody, Methods, interface_requirements};
+use syntax::program::{Definition, DefinitionBody, interface_requirements};
 use syntax::types::Type;
 
 const DEBUG_STRING_METHOD: &str = "DebugString";
@@ -91,9 +91,7 @@ impl Planner<'_> {
     }
 
     fn stringer_kind(&self, ty: &Type, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
-        let Type::Nominal { id, .. } = &self.facts.shape_ty(ty) else {
-            return None;
-        };
+        let id = &self.facts.receiver_nominal_id(ty)?;
         if !visited.insert(id.to_string()) {
             return None;
         }
@@ -214,11 +212,7 @@ impl Planner<'_> {
             None
         } else {
             let configs = interpret_field_attributes(field, attributes);
-            format_tag_string(
-                &field.name,
-                &configs,
-                self.facts.peel_alias(&field.ty).is_option(),
-            )
+            format_tag_string(&field.name, &configs, self.facts.is_option(&field.ty))
         };
         let declaration = FieldDeclaration {
             documentation: item_doc_text(&field.doc, &field.name, &name).into(),
@@ -587,15 +581,6 @@ fn definition_emits_go_string_field(definition: &Definition) -> bool {
         .any(|field| go_names::struct_field_go_name(field, forces_export) == ENUM_STRINGER_METHOD)
 }
 
-fn type_methods(definition: &Definition) -> Option<&Methods> {
-    match &definition.body {
-        DefinitionBody::Struct { methods, .. }
-        | DefinitionBody::Enum { methods, .. }
-        | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
-        _ => None,
-    }
-}
-
 impl EmitFacts<'_> {
     fn interface_has_string_selector(&self, id: &str) -> bool {
         let interface_ty = Type::Nominal {
@@ -608,15 +593,6 @@ impl EmitFacts<'_> {
             .any(|requirement| {
                 requirement.name == "string" || requirement.name == ENUM_STRINGER_METHOD
             })
-    }
-
-    fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
-        let qualified = self.qualified_current(name);
-        self.definition(qualified.as_str())
-            .and_then(type_methods)
-            .and_then(|methods| methods.get(method_name))
-            .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
-            && self.emits_go_method(&qualified, method_name)
     }
 
     fn should_synthesize_to_string(&self, name: &str) -> bool {

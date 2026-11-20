@@ -61,8 +61,10 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
         }
 
         Expression::Call { args, ty, .. }
-            if ctx.facts.selections.call_operation(expression)
-                == Some(&CallOperation::TupleStructConstructor) =>
+            if matches!(
+                ctx.facts.selections.call_operation(expression),
+                Some(CallOperation::TupleStructConstructor { .. })
+            ) =>
         {
             let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;

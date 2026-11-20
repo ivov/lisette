@@ -6,7 +6,7 @@ use ecow::EcoString;
 use syntax::ast::{
     Expression, ExpressionId, Span, StructFieldAssignment, StructFields, StructSpread,
 };
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{CheckedStructLiteral, Definition, DefinitionBody, FieldKey};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::permission::{ConstructionGrant, MissingSupply};
@@ -35,6 +35,12 @@ struct StructLiteral {
     span: Span,
 }
 
+struct LiteralTarget<'a> {
+    map: &'a SubstitutionMap,
+    instance: &'a Type,
+    via_alias: bool,
+}
+
 impl StructLiteral {
     fn with_type(self, ty: Type, id: ExpressionId) -> Expression {
         Expression::StructCall {
@@ -59,6 +65,7 @@ struct ResolvedVariant {
     fields: Vec<EnumFieldDefinition>,
     substitutions: SubstitutionMap,
     ty: Type,
+    via_alias: bool,
 }
 
 impl InferCtx<'_> {
@@ -98,12 +105,16 @@ impl InferCtx<'_> {
             && let Some(qualified_name) = store.peel_alias_name(&qualified_name)
             && let Some(Definition {
                 ty: alias_ty,
-                body: DefinitionBody::TypeAlias { alias, .. },
+                body:
+                    DefinitionBody::TypeAlias {
+                        alias, generics, ..
+                    },
                 ..
             }) = store.get_definition(&qualified_name)
             && matches!(alias, AliasKind::Opaque(_))
             && literal.fields.is_empty()
         {
+            let via_alias = generics.is_empty();
             let alias_ty = alias_ty.clone();
             let (instantiated_ty, _) = self.instantiate(&alias_ty);
             self.unify(expected_ty, &instantiated_ty, &literal.span);
@@ -117,7 +128,15 @@ impl InferCtx<'_> {
                     literal.span,
                 ));
             }
-            return literal.with_type(instantiated_ty, self.fresh_expression_id());
+            let id = self.fresh_expression_id();
+            self.facts.value_uses.struct_literals.push((
+                id,
+                CheckedStructLiteral {
+                    unset_fields: Vec::new(),
+                    via_alias,
+                },
+            ));
+            return literal.with_type(instantiated_ty, id);
         }
 
         if let Some(resolved) = self
@@ -247,6 +266,7 @@ impl InferCtx<'_> {
             body:
                 DefinitionBody::TypeAlias {
                     alias: AliasKind::Transparent { .. },
+                    generics: alias_generics,
                     ..
                 },
             ..
@@ -254,6 +274,7 @@ impl InferCtx<'_> {
         else {
             return None;
         };
+        let via_alias = alias_generics.is_empty();
         let alias_ty = alias_ty.clone();
         let underlying = store.peel_alias(&alias_ty);
         let Type::Nominal { id: enum_id, .. } = &underlying else {
@@ -266,16 +287,26 @@ impl InferCtx<'_> {
         }
         let variant_fields: Vec<_> = variant.fields.iter().cloned().collect();
 
-        let (instantiated_ty, map) = self.instantiate(&alias_ty);
+        let (instantiated_ty, mut map) = self.instantiate(&alias_ty);
         let instantiated_target = store.peel_alias(&instantiated_ty);
         let enum_ty = match instantiated_target {
             Type::Function(f) => (*f.return_type).clone(),
             other => other,
         };
+        if let Type::Nominal { params, .. } = &enum_ty
+            && let Some(generics) = store
+                .get_definition(enum_id)
+                .and_then(|definition| definition.body.generics())
+        {
+            for (generic, arg) in generics.iter().zip(params) {
+                map.insert(generic.name.clone(), arg.clone());
+            }
+        }
         Some(ResolvedVariant {
             fields: variant_fields,
             substitutions: map,
             ty: enum_ty,
+            via_alias,
         })
     }
 
@@ -305,6 +336,7 @@ impl InferCtx<'_> {
             fields: variant_fields,
             substitutions: map,
             ty: pattern_ty,
+            via_alias: false,
         })
     }
 
@@ -329,6 +361,7 @@ impl InferCtx<'_> {
         } = target;
         let store = self.store;
         let (struct_call_ty, map) = self.instantiate(&struct_ty);
+        let via_alias = alias_underlying.is_some();
 
         if let Some(underlying) = alias_underlying {
             self.unify(&struct_call_ty, &underlying, &span);
@@ -466,8 +499,19 @@ impl InferCtx<'_> {
             span,
         );
 
+        let id = self.fresh_expression_id();
+        self.record_struct_literal(
+            id,
+            struct_fields.iter().map(|f| (&f.name, &f.ty)),
+            &new_field_assignments,
+            LiteralTarget {
+                map: &map,
+                instance: &struct_call_ty,
+                via_alias,
+            },
+        );
         Expression::StructCall {
-            id: self.fresh_expression_id(),
+            id,
             name: struct_name,
             field_assignments: new_field_assignments,
             spread: new_spread,
@@ -533,6 +577,7 @@ impl InferCtx<'_> {
             fields: variant_fields,
             substitutions: map,
             ty: enum_ty,
+            via_alias,
         } = target;
         let store = self.store;
         // The expected type unifies after the grant, so a binding captures the promoted form.
@@ -616,14 +661,57 @@ impl InferCtx<'_> {
 
         self.unify(expected_ty, &enum_ty, &span);
 
+        let id = self.fresh_expression_id();
+        self.record_struct_literal(
+            id,
+            variant_fields.iter().map(|f| (&f.name, &f.ty)),
+            &new_field_assignments,
+            LiteralTarget {
+                map: &map,
+                instance: &enum_ty,
+                via_alias,
+            },
+        );
         Expression::StructCall {
-            id: self.fresh_expression_id(),
+            id,
             name: variant_name,
             field_assignments: new_field_assignments,
             spread: new_spread,
             ty: enum_ty,
             span,
         }
+    }
+
+    fn record_struct_literal<'f>(
+        &mut self,
+        id: ExpressionId,
+        fields: impl Iterator<Item = (&'f EcoString, &'f Type)>,
+        assignments: &[StructFieldAssignment],
+        target: LiteralTarget<'_>,
+    ) {
+        let LiteralTarget {
+            map,
+            instance,
+            via_alias,
+        } = target;
+        let mut unset_fields = Vec::new();
+        let mut seen = HashSet::default();
+        for (name, ty) in fields {
+            if !seen.insert(name) {
+                continue;
+            }
+            self.record_field_selection(FieldKey::Literal(id, name.clone()), ty, instance);
+            if !assignments.iter().any(|a| &a.name == name) {
+                unset_fields.push((name.clone(), substitute(ty, map)));
+            }
+        }
+        self.facts.value_uses.struct_literals.push((
+            id,
+            CheckedStructLiteral {
+                unset_fields,
+                via_alias,
+            },
+        ));
     }
 
     fn infer_struct_spread(&mut self, spread: StructSpread, target_ty: &Type) -> StructSpread {

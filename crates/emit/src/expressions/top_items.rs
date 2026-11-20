@@ -101,7 +101,10 @@ impl Planner<'_> {
                 methods,
                 generics,
                 ..
-            } => self.emit_impl_block(receiver_name, ty, methods, generics),
+            } => {
+                let receiver_generics = self.facts.checked(item).receiver_generics();
+                self.emit_impl_block(receiver_name, ty, methods, generics, receiver_generics)
+            }
             Expression::Const {
                 doc,
                 identifier,

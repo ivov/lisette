@@ -96,7 +96,7 @@ fn does_real_work(argument: &Expression, selections: &Selections) -> bool {
 
 fn is_value_constructor(callee: &Expression, operation: Option<&CallOperation>) -> bool {
     match operation {
-        Some(CallOperation::TupleStructConstructor) => true,
+        Some(CallOperation::TupleStructConstructor { .. }) => true,
         // Enum-variant constructors resolve to a function; an unresolved callee
         // may still be one, so fall back to the leaf-name shape in both cases.
         None

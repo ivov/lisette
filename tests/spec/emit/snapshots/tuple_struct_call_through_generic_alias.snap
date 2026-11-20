@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Pair<T>(T, T)
+  
+  type Same<A> = Pair<A>
+  
+  fn make() -> Same<int> {
+    Same(3, 4)
+  }
+---
+package main
+
+type Pair[T any] struct {
+	F0 T
+	F1 T
+}
+
+type Same[A any] = Pair[A]
+
+func make_() Same[int] {
+	return Pair[int]{
+		F0: 3,
+		F1: 4,
+	}
+}

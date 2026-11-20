@@ -5,8 +5,8 @@ use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::plan_struct_literal;
 use crate::ir::bodies::AsyncKind;
 use crate::names::go_name;
+use syntax::program::Adaptation;
 use syntax::program::NativeOperation;
-use syntax::program::{Adaptation, DefinitionBody};
 
 use crate::abi::bridge::GoResultBridge;
 use crate::abi::callable::CallableReturnAbi;
@@ -304,15 +304,9 @@ impl Planner<'_> {
             unreachable!("only a tuple literal has elements to coerce")
         };
         let tuple_use = self.facts.checked(tuple).value_use();
-        let placed = match (
-            self.facts.peel_alias(ty),
-            &tuple_use.adaptation,
-            self.facts.peel_alias(&tuple_use.slot),
-        ) {
-            (Type::Tuple(own), Adaptation::Tuple(adaptations), Type::Tuple(slots))
-                if own != slot_types =>
-            {
-                Some((adaptations, slots))
+        let placed = match &tuple_use.adaptation {
+            Adaptation::Tuple(adaptations) if self.facts.tuple_element_types(ty) != slot_types => {
+                Some((adaptations, self.facts.tuple_element_types(&tuple_use.slot)))
             }
             _ => None,
         };
@@ -469,9 +463,7 @@ impl Planner<'_> {
         {
             return false;
         }
-        let source = self.facts.peel_alias(&source_ty);
-        let target = self.facts.peel_alias(ty);
-        self.go_type(&source) == self.go_type(&target)
+        self.target_go_type(&source_ty) == self.target_go_type(ty)
     }
 
     fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<GoType> {
@@ -689,10 +681,10 @@ impl Planner<'_> {
             } if !matches!(ty.unwrap_forall(), Type::Function(_)) => {
                 self.identifier_is_unaddressable(value, resolution, ty)
             }
-            Expression::DotAccess { expression, ty, .. }
+            Expression::DotAccess { ty, resolution, .. }
                 if !matches!(ty.unwrap_forall(), Type::Function(_)) =>
             {
-                self.facts.dot_access_is_unaddressable(expression, ty)
+                matches!(resolution, DotAccessResolution::EnumVariant { .. })
             }
             _ => false,
         }
@@ -754,21 +746,5 @@ impl EmitFacts<'_> {
             current = inner;
         }
         false
-    }
-
-    fn dot_access_is_unaddressable(&self, receiver: &Expression, ty: &Type) -> bool {
-        if !self.is_lisette_enum(ty) {
-            return false;
-        }
-        let Type::Nominal {
-            id: receiver_id, ..
-        } = &receiver.get_type()
-        else {
-            return false;
-        };
-        matches!(
-            self.definition(receiver_id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Enum { .. } | DefinitionBody::TypeAlias { .. })
-        )
     }
 }
