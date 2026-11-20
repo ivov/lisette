@@ -177,34 +177,7 @@ impl Planner<'_> {
         let built_from_fields = !matches!(spread, StructSpread::From(_));
         let value = match spread {
             StructSpread::From(base) => {
-                if base.get_type().is_never() {
-                    setup.push(self.lower_statement(base));
-                    GoExpression::empty_composite(ctx.go_type.clone())
-                } else {
-                    let base_staged = self.plan_operand(base, ExpressionContext::value());
-                    let (spread_setup, value) = if ctx.enum_ctx.is_some() {
-                        let field_pairs = self.hoist_observable_fields(&mut setup, fields);
-                        self.plan_enum_variant_spread(
-                            SpreadInput {
-                                base,
-                                base_staged,
-                                field_pairs,
-                            },
-                            &ctx,
-                            field_assignments,
-                        )
-                    } else {
-                        let field_pairs =
-                            if base_staged.setup().is_empty() && base_staged.can_delay() {
-                                fields.into_iter().map(StructCallField::into_pair).collect()
-                            } else {
-                                self.hoist_observable_fields(&mut setup, fields)
-                            };
-                        self.plan_struct_update(base_staged, &field_pairs)
-                    };
-                    setup.extend(spread_setup);
-                    value
-                }
+                self.plan_struct_spread(&mut setup, base, fields, &ctx, field_assignments)
             }
             StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
                 Some(zero) => zero,
@@ -233,6 +206,42 @@ impl Planner<'_> {
             return ValuePlan::built_from(setup, value, fields_stability);
         }
         ValuePlan::computed(setup, value)
+    }
+
+    fn plan_struct_spread(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        base: &Expression,
+        fields: Vec<StructCallField>,
+        ctx: &StructCallContext<'_>,
+        field_assignments: &[StructFieldAssignment],
+    ) -> GoExpression {
+        if base.get_type().is_never() {
+            setup.push(self.lower_statement(base));
+            return GoExpression::empty_composite(ctx.go_type.clone());
+        }
+        let base_staged = self.plan_operand(base, ExpressionContext::value());
+        let (spread_setup, value) = if ctx.enum_ctx.is_some() {
+            let field_pairs = self.hoist_observable_fields(setup, fields);
+            self.plan_enum_variant_spread(
+                SpreadInput {
+                    base,
+                    base_staged,
+                    field_pairs,
+                },
+                ctx,
+                field_assignments,
+            )
+        } else {
+            let field_pairs = if base_staged.setup().is_empty() && base_staged.can_delay() {
+                fields.into_iter().map(StructCallField::into_pair).collect()
+            } else {
+                self.hoist_observable_fields(setup, fields)
+            };
+            self.plan_struct_update(base_staged, &field_pairs)
+        };
+        setup.extend(spread_setup);
+        value
     }
 
     pub(crate) fn coerce_struct_field(

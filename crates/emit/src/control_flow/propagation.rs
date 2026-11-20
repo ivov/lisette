@@ -8,6 +8,7 @@ use crate::abi::layout::ValueLayout;
 use crate::abi::transition;
 use crate::abi::wrapping::{is_nil, non_nil, unexpected_nil_error};
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
+use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::LoweredCall;
 use crate::calls::unwrap_or::{MapLambda, map_lambda};
@@ -437,11 +438,6 @@ impl Planner<'_> {
         if !fallible.is_result() || !self.returns_fallible() {
             return None;
         }
-        enum Mapped<'a> {
-            MapErr(ResultFusePlan<'a>, Vec<ErrorMapper<'a>>),
-            OkOr(OptionFusePlan<'a>, &'a Expression),
-            OkOrElse(OptionFusePlan<'a>, MapLambda<'a>),
-        }
         let mapped = if let Some((fuse, mappers)) = self.map_err_call(expression) {
             if !fuse.carries_payload() && !matches!(target, PropagateTarget::Discard) {
                 return None;
@@ -465,84 +461,14 @@ impl Planner<'_> {
             (None, _) => CommaOkValueSlot::Temp,
         };
 
-        let (mut statements, failure, payload, late_binding, mut failure_setup, error) =
-            match mapped {
-                Mapped::MapErr(fuse, mappers) => {
-                    let has_nil_guard = fuse.has_nil_guard();
-                    let pair = fuse.bind(self, slot, None);
-                    let failure = pair.failure_condition();
-                    let status = pair.status_identifier().clone();
-                    let mut failure_setup = Vec::new();
-                    if has_nil_guard && mappers[0].reads_error() {
-                        failure_setup.push(
-                            LoweredStatement::If(IfPlan::plain(
-                                is_nil(GoExpression::identifier(status.clone())),
-                                LoweredBlock {
-                                    statements: vec![assign(
-                                        GoExpression::identifier(status.clone()),
-                                        unexpected_nil_error(),
-                                    )],
-                                },
-                                ElseArm::None,
-                            ))
-                            .into(),
-                        );
-                    }
-                    let error = self.apply_error_mappers(
-                        &mut failure_setup,
-                        &mappers,
-                        GoExpression::identifier(status),
-                        Some(Stability::Fixed),
-                    );
-                    let payload = pair.payload();
-                    (
-                        pair.statements,
-                        failure,
-                        payload,
-                        None,
-                        failure_setup,
-                        error,
-                    )
-                }
-                Mapped::OkOr(fuse, error) => {
-                    let bound = fuse.bind(self, slot);
-                    let failure = bound.failure_condition();
-                    let late_binding = bound.late_binding();
-                    let payload = bound.payload();
-                    let mut statements = bound.statements;
-                    let value = self.plan_composite_value(error, ExpressionContext::value());
-                    let (error_setup, error) =
-                        self.eager_operand(error, value, "failure").into_parts();
-                    statements.extend(error_setup);
-                    (
-                        statements,
-                        failure,
-                        payload,
-                        late_binding,
-                        Vec::new(),
-                        error,
-                    )
-                }
-                Mapped::OkOrElse(fuse, map) => {
-                    let bound = fuse.bind(self, slot);
-                    let failure = bound.failure_condition();
-                    let late_binding = bound.late_binding();
-                    let payload = bound.payload();
-                    let (failure_setup, error) = self
-                        .with_binding_frame(|this| {
-                            this.plan_composite_value(map.body, ExpressionContext::value())
-                        })
-                        .into_parts();
-                    (
-                        bound.statements,
-                        failure,
-                        payload,
-                        late_binding,
-                        failure_setup,
-                        error,
-                    )
-                }
-            };
+        let MappedFailure {
+            mut statements,
+            failure,
+            payload,
+            late_binding,
+            mut failure_setup,
+            error,
+        } = self.bind_mapped_failure(mapped, slot);
         let (values_setup, failure_values) =
             self.propagate_failure_values(expression, fallible, error);
         failure_setup.extend(values_setup);
@@ -558,6 +484,85 @@ impl Planner<'_> {
         statements.extend(late_binding);
         let value = self.propagated_value(&mut statements, target, named, payload);
         Some((statements, value))
+    }
+
+    fn bind_mapped_failure(&mut self, mapped: Mapped<'_>, slot: CommaOkValueSlot) -> MappedFailure {
+        match mapped {
+            Mapped::MapErr(fuse, mappers) => {
+                let has_nil_guard = fuse.has_nil_guard();
+                let pair = fuse.bind(self, slot, None);
+                let failure = pair.failure_condition();
+                let status = pair.status_identifier().clone();
+                let mut failure_setup = Vec::new();
+                if has_nil_guard && mappers[0].reads_error() {
+                    failure_setup.push(
+                        LoweredStatement::If(IfPlan::plain(
+                            is_nil(GoExpression::identifier(status.clone())),
+                            LoweredBlock {
+                                statements: vec![assign(
+                                    GoExpression::identifier(status.clone()),
+                                    unexpected_nil_error(),
+                                )],
+                            },
+                            ElseArm::None,
+                        ))
+                        .into(),
+                    );
+                }
+                let error = self.apply_error_mappers(
+                    &mut failure_setup,
+                    &mappers,
+                    GoExpression::identifier(status),
+                    Some(Stability::Fixed),
+                );
+                let payload = pair.payload();
+                MappedFailure {
+                    statements: pair.statements,
+                    failure,
+                    payload,
+                    late_binding: None,
+                    failure_setup,
+                    error,
+                }
+            }
+            Mapped::OkOr(fuse, error) => {
+                let bound = fuse.bind(self, slot);
+                let failure = bound.failure_condition();
+                let late_binding = bound.late_binding();
+                let payload = bound.payload();
+                let mut statements = bound.statements;
+                let value = self.plan_composite_value(error, ExpressionContext::value());
+                let (error_setup, error) = self.eager_operand(error, value, "failure").into_parts();
+                statements.extend(error_setup);
+                MappedFailure {
+                    statements,
+                    failure,
+                    payload,
+                    late_binding,
+                    failure_setup: Vec::new(),
+                    error,
+                }
+            }
+            Mapped::OkOrElse(fuse, map) => {
+                let bound = fuse.bind(self, slot);
+                let failure = bound.failure_condition();
+                let late_binding = bound.late_binding();
+                let payload = bound.payload();
+                let (failure_setup, error) = self
+                    .with_binding_frame(|this| {
+                        this.plan_composite_value(map.body, ExpressionContext::value())
+                    })
+                    .into_parts();
+                MappedFailure {
+                    statements: bound.statements,
+                    failure,
+                    payload,
+                    late_binding,
+                    failure_setup,
+                    error,
+                }
+            }
+        }
     }
 
     pub(super) fn map_err_call<'a>(
@@ -876,4 +881,19 @@ impl Planner<'_> {
             define(name.clone(), ok_access)
         }
     }
+}
+
+enum Mapped<'a> {
+    MapErr(ResultFusePlan<'a>, Vec<ErrorMapper<'a>>),
+    OkOr(OptionFusePlan<'a>, &'a Expression),
+    OkOrElse(OptionFusePlan<'a>, MapLambda<'a>),
+}
+
+struct MappedFailure {
+    statements: Vec<Statement>,
+    failure: PairCondition,
+    payload: Option<GoExpression>,
+    late_binding: Option<Statement>,
+    failure_setup: Vec<Statement>,
+    error: GoExpression,
 }

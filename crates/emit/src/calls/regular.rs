@@ -158,40 +158,10 @@ impl<'a> Planner<'a> {
             return plan;
         }
 
-        if let Some(go_name) = self.facts.callee_go_name(function).map(str::to_string) {
-            let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
-                (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
-                    ExpressionContext::value().with_retired_receiver(retired)
-                }
-                _ => ExpressionContext::value(),
-            };
-            let stages: Vec<ValuePlan> =
-                args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
-            let spread_stage =
-                spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
-            let sequenced = self.sequence_with_spread_values(
-                stages,
-                spread_stage,
-                SpreadSequenceOptions {
-                    wrap_to_any: call_plan
-                        .resolved
-                        .abi
-                        .spread_wraps_to_any(&self.facts, spread),
-                    combine: call_plan.resolved.abi.variadic_combine(0),
-                    boundary: expression_ctx.capture_boundary(),
-                },
-            );
-            let callee = GoExpression::external_name(go_name);
-            let expression = if self.is_pure_constructor_callee(function) {
-                GoExpression::pure_call(callee, sequenced.values)
-            } else {
-                GoExpression::call(callee, sequenced.values)
-            };
-            return if self.callee_lowers_to_type_construction(function) {
-                ValuePlan::computed(sequenced.setup, expression)
-            } else {
-                ValuePlan::plain_call(sequenced.setup, expression)
-            };
+        if let Some(plan) =
+            self.try_plan_go_named_call(function, args, spread, call_plan, expression_ctx)
+        {
+            return plan;
         }
 
         let callee_staged = self.plan_operand(function, expression_ctx.callee());
@@ -287,6 +257,49 @@ impl<'a> Planner<'a> {
         } else {
             ValuePlan::plain_call(setup, expression)
         }
+    }
+
+    fn try_plan_go_named_call(
+        &mut self,
+        function: &Expression,
+        args: &[Expression],
+        spread: Option<&Expression>,
+        call_plan: &CallPlan<'a>,
+        expression_ctx: ExpressionContext<'_>,
+    ) -> Option<ValuePlan> {
+        let go_name = self.facts.callee_go_name(function)?.to_string();
+        let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
+            (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
+                ExpressionContext::value().with_retired_receiver(retired)
+            }
+            _ => ExpressionContext::value(),
+        };
+        let stages: Vec<ValuePlan> = args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
+        let spread_stage =
+            spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
+        let sequenced = self.sequence_with_spread_values(
+            stages,
+            spread_stage,
+            SpreadSequenceOptions {
+                wrap_to_any: call_plan
+                    .resolved
+                    .abi
+                    .spread_wraps_to_any(&self.facts, spread),
+                combine: call_plan.resolved.abi.variadic_combine(0),
+                boundary: expression_ctx.capture_boundary(),
+            },
+        );
+        let callee = GoExpression::external_name(go_name);
+        let expression = if self.is_pure_constructor_callee(function) {
+            GoExpression::pure_call(callee, sequenced.values)
+        } else {
+            GoExpression::call(callee, sequenced.values)
+        };
+        Some(if self.callee_lowers_to_type_construction(function) {
+            ValuePlan::computed(sequenced.setup, expression)
+        } else {
+            ValuePlan::plain_call(sequenced.setup, expression)
+        })
     }
 
     fn collapse_errors_new_format_arg(

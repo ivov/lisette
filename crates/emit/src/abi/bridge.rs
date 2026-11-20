@@ -510,72 +510,12 @@ impl Planner<'_> {
             ),
             None => GoExpression::identifier(index.clone()),
         };
-        let mut body = {
-            let slot = GoExpression::index(GoExpression::identifier(output.clone()), output_index);
-            let element = GoExpression::identifier(element.clone());
-            let bridge = element_bridge;
-            match bridge {
-                LayoutBridge::UnwrapNullableOption { payload, .. }
-                | LayoutBridge::UnwrapPointerOption { payload, .. } => {
-                    let pointer = matches!(bridge, LayoutBridge::UnwrapPointerOption { .. });
-                    let then_block =
-                        self.project_some_into(slot.clone(), element.clone(), payload, pointer);
-                    let needs_nil_else =
-                        matches!(source_layout, ValueLayout::Map { .. }) || pointer;
-                    let else_arm = if needs_nil_else {
-                        ElseArm::from_body(
-                            LoweredBlock {
-                                statements: vec![assign(slot, GoExpression::nil())],
-                            },
-                            false,
-                        )
-                    } else {
-                        ElseArm::None
-                    };
-                    LoweredBlock {
-                        statements: vec![
-                            LoweredStatement::If(IfPlan::plain(
-                                is_some(element),
-                                then_block,
-                                else_arm,
-                            ))
-                            .into(),
-                        ],
-                    }
-                }
-                LayoutBridge::WrapNullableOption {
-                    target, payload, ..
-                }
-                | LayoutBridge::WrapPointerOption {
-                    target, payload, ..
-                } => {
-                    let pointer = matches!(bridge, LayoutBridge::WrapPointerOption { .. });
-                    LoweredBlock {
-                        statements: vec![
-                            self.wrap_nilable_into(slot, element, target, payload, pointer)
-                                .into(),
-                        ],
-                    }
-                }
-                LayoutBridge::Conversion { .. }
-                | LayoutBridge::Aggregate { .. }
-                | LayoutBridge::Immutable { .. }
-                | LayoutBridge::NilablePayload { .. }
-                | LayoutBridge::Reference { .. }
-                | LayoutBridge::Function { .. } => {
-                    let mut inner_statements = Vec::new();
-                    let inner =
-                        self.plan_layout_bridge(&mut inner_statements, element, bridge, true);
-                    inner_statements.push(assign(slot, inner));
-                    LoweredBlock {
-                        statements: inner_statements,
-                    }
-                }
-                LayoutBridge::Identity => LoweredBlock {
-                    statements: vec![assign(slot, element)],
-                },
-            }
-        };
+        let mut body = self.plan_aggregate_element_body(
+            GoExpression::index(GoExpression::identifier(output.clone()), output_index),
+            GoExpression::identifier(element.clone()),
+            element_bridge,
+            source_layout,
+        );
         if !key_statements.is_empty() {
             key_statements.append(&mut body.statements);
             body.statements = key_statements;
@@ -593,6 +533,70 @@ impl Planner<'_> {
             .into(),
         );
         GoExpression::identifier(output)
+    }
+
+    fn plan_aggregate_element_body(
+        &mut self,
+        slot: GoExpression,
+        element: GoExpression,
+        bridge: &LayoutBridge,
+        source_layout: &ValueLayout,
+    ) -> LoweredBlock {
+        match bridge {
+            LayoutBridge::UnwrapNullableOption { payload, .. }
+            | LayoutBridge::UnwrapPointerOption { payload, .. } => {
+                let pointer = matches!(bridge, LayoutBridge::UnwrapPointerOption { .. });
+                let then_block =
+                    self.project_some_into(slot.clone(), element.clone(), payload, pointer);
+                let needs_nil_else = matches!(source_layout, ValueLayout::Map { .. }) || pointer;
+                let else_arm = if needs_nil_else {
+                    ElseArm::from_body(
+                        LoweredBlock {
+                            statements: vec![assign(slot, GoExpression::nil())],
+                        },
+                        false,
+                    )
+                } else {
+                    ElseArm::None
+                };
+                LoweredBlock {
+                    statements: vec![
+                        LoweredStatement::If(IfPlan::plain(is_some(element), then_block, else_arm))
+                            .into(),
+                    ],
+                }
+            }
+            LayoutBridge::WrapNullableOption {
+                target, payload, ..
+            }
+            | LayoutBridge::WrapPointerOption {
+                target, payload, ..
+            } => {
+                let pointer = matches!(bridge, LayoutBridge::WrapPointerOption { .. });
+                LoweredBlock {
+                    statements: vec![
+                        self.wrap_nilable_into(slot, element, target, payload, pointer)
+                            .into(),
+                    ],
+                }
+            }
+            LayoutBridge::Conversion { .. }
+            | LayoutBridge::Aggregate { .. }
+            | LayoutBridge::Immutable { .. }
+            | LayoutBridge::NilablePayload { .. }
+            | LayoutBridge::Reference { .. }
+            | LayoutBridge::Function { .. } => {
+                let mut inner_statements = Vec::new();
+                let inner = self.plan_layout_bridge(&mut inner_statements, element, bridge, true);
+                inner_statements.push(assign(slot, inner));
+                LoweredBlock {
+                    statements: inner_statements,
+                }
+            }
+            LayoutBridge::Identity => LoweredBlock {
+                statements: vec![assign(slot, element)],
+            },
+        }
     }
 
     pub(crate) fn plan_function_layout_bridge(

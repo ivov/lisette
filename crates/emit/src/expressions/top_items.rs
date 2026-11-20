@@ -7,6 +7,7 @@ use crate::ir::bodies::{
 };
 use crate::ir::declarations::GoDeclaration;
 use crate::ir::go_expression::{BinaryOp, GoParameter};
+use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::go_name::{self, testing_qualifier, testkit_qualifier};
@@ -161,6 +162,17 @@ impl Planner<'_> {
             first.documentation = doc_comment.to_string().into();
         }
         let handle = self.scope.new_local_identifier(handle);
+        declarations.push(self.emit_test_wrapper(name, function, callee, handle));
+        declarations
+    }
+
+    fn emit_test_wrapper(
+        &mut self,
+        name: &str,
+        function: FunctionDefinitionView<'_>,
+        callee: String,
+        handle: GoIdentifier,
+    ) -> GoDeclaration {
         let handle_value = GoExpression::identifier(handle.clone());
         let span = function.name_span;
         let location = || {
@@ -219,7 +231,7 @@ impl Planner<'_> {
         } else {
             statements.push(expression_statement(call));
         }
-        declarations.push(GoDeclaration::function(
+        GoDeclaration::function(
             None,
             go_name::go_test_function_name(name),
             Vec::new(),
@@ -233,8 +245,7 @@ impl Planner<'_> {
             )],
             GoType::default(),
             LoweredBlock { statements },
-        ));
-        declarations
+        )
     }
 }
 
