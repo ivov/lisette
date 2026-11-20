@@ -1,8 +1,8 @@
 use std::mem;
 
 use crate::ir::bodies::{
-    AssignForm, CompoundKind, ElseArm, IfPlan, LoopHeader, LoweredBlock, LoweredStatement,
-    SelectArmKind, Statement, SwitchKind,
+    AssignForm, CompoundKind, ElseArm, IfPlan, LoopHeader, LoopPlan, LoweredBlock,
+    LoweredStatement, SelectArmKind, Statement, SwitchKind,
 };
 use crate::ir::go_expression::{GoExpressionNode, TreeVisitor, verbatim_identifiers};
 use crate::ir::local::GoIdentifier;
@@ -41,30 +41,7 @@ fn reuse_in_list(list: &mut Vec<Statement>, parameters: &[GoIdentifier], scope: 
 fn reuse_in_statement(statement: &mut LoweredStatement, scope: &ScopeState) {
     match statement {
         LoweredStatement::If(plan) => reuse_in_if(plan, &[], scope),
-        LoweredStatement::Loop(plan) => {
-            let mut per_iteration: Vec<GoIdentifier> = Vec::new();
-            match &mut plan.header {
-                LoopHeader::Infinite => {}
-                LoopHeader::While(condition) => reuse_in_expression(condition.node_mut(), scope),
-                LoopHeader::Range {
-                    key,
-                    value,
-                    iterable,
-                } => {
-                    reuse_in_expression(iterable.node_mut(), scope);
-                    per_iteration.extend(key.iter().chain(value.iter()).cloned());
-                }
-                LoopHeader::Counted {
-                    start, condition, ..
-                } => {
-                    reuse_in_expression(start.node_mut(), scope);
-                    if let Some(condition) = condition {
-                        reuse_in_expression(condition.node_mut(), scope);
-                    }
-                }
-            }
-            reuse_in_list(&mut plan.body.statements, &per_iteration, scope);
-        }
+        LoweredStatement::Loop(plan) => reuse_in_loop(plan, scope),
         LoweredStatement::Block(body) => reuse_in_list(&mut body.statements, &[], scope),
         LoweredStatement::Body(body) => {
             for statement in &mut body.statements {
@@ -144,6 +121,31 @@ fn reuse_in_statement(statement: &mut LoweredStatement, scope: &ScopeState) {
             reuse_in_expression(expression.node_mut(), scope);
         }
     }
+}
+
+fn reuse_in_loop(plan: &mut LoopPlan, scope: &ScopeState) {
+    let mut per_iteration: Vec<GoIdentifier> = Vec::new();
+    match &mut plan.header {
+        LoopHeader::Infinite => {}
+        LoopHeader::While(condition) => reuse_in_expression(condition.node_mut(), scope),
+        LoopHeader::Range {
+            key,
+            value,
+            iterable,
+        } => {
+            reuse_in_expression(iterable.node_mut(), scope);
+            per_iteration.extend(key.iter().chain(value.iter()).cloned());
+        }
+        LoopHeader::Counted {
+            start, condition, ..
+        } => {
+            reuse_in_expression(start.node_mut(), scope);
+            if let Some(condition) = condition {
+                reuse_in_expression(condition.node_mut(), scope);
+            }
+        }
+    }
+    reuse_in_list(&mut plan.body.statements, &per_iteration, scope);
 }
 
 fn reuse_in_if(plan: &mut IfPlan, declared: &[GoIdentifier], scope: &ScopeState) {

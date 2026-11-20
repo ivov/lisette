@@ -246,6 +246,20 @@ impl Planner<'_> {
         statements
     }
 
+    fn lower_propagated_return(
+        &mut self,
+        expression: &Expression,
+        return_ty: &Type,
+    ) -> Vec<Statement> {
+        let (mut statements, value) = self.plan_propagate(expression);
+        let fallible = self
+            .facts
+            .fallible(return_ty)
+            .expect("a propagated return has a fallible return type");
+        statements.extend(self.success_return(&fallible, value));
+        statements
+    }
+
     fn lower_wrapped_passthrough_return(
         &mut self,
         expression: &Expression,
@@ -262,14 +276,7 @@ impl Planner<'_> {
                 Some(OptionFusePlan::Found { .. })
             )
         {
-            let (setup, value) = self.plan_propagate(expression);
-            statements.extend(setup);
-            let fallible = self
-                .facts
-                .fallible(return_ty)
-                .expect("an Option return has a fallible type");
-            statements.extend(self.success_return(&fallible, value));
-            return statements;
+            return self.lower_propagated_return(expression, return_ty);
         }
         if matches!(
             lowered,
@@ -281,14 +288,7 @@ impl Planner<'_> {
                 .map_err_call(expression)
                 .is_some_and(|(plan, _)| plan.carries_payload()))
         {
-            let (setup, value) = self.plan_propagate(expression);
-            statements.extend(setup);
-            let fallible = self
-                .facts
-                .fallible(return_ty)
-                .expect("a lowered Result shape has a fallible return type");
-            statements.extend(self.success_return(&fallible, value));
-            return statements;
+            return self.lower_propagated_return(expression, return_ty);
         }
         if let Some(shape) = lowered
             && self.callee_matches_lowered_shape(expression, shape)

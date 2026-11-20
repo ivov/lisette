@@ -1,5 +1,6 @@
 use super::*;
 use crate::EmitFacts;
+use syntax::ast::Generic;
 
 struct EnumVariantData<'a> {
     identifier: &'a str,
@@ -372,103 +373,25 @@ impl Planner<'_> {
             return;
         };
         if let Some(
-            layout @ (ValueLayout::NullableOption { payload, .. }
-            | ValueLayout::PointerOption { payload, .. }),
+            layout @ (ValueLayout::NullableOption { .. } | ValueLayout::PointerOption { .. }),
         ) = path_layout
         {
-            let some = unqualified_name(variant_name) == "Some";
-            assert!(
-                some || unqualified_name(variant_name) == "None",
-                "nilable option patterns require Some or None"
-            );
-            let pointer = matches!(layout, ValueLayout::PointerOption { .. });
-            collector.checks.push(Check::Nilable {
-                path: path.clone(),
-                guard: if pointer {
-                    NilGuard::Pointer
-                } else {
-                    self.facts.option_nil_guard(ty)
-                },
-                some,
-            });
-            if some {
-                let [field] = fields.as_slice() else {
-                    unreachable!("Some pattern has one payload");
-                };
-                let child_path = if pointer {
-                    path.push(PathSegment::Deref)
-                } else {
-                    path.clone()
-                };
-                self.collect_checks_and_bindings(
-                    &child_path,
-                    field,
-                    &ty.ok_type(),
-                    Some(payload),
-                    collector,
-                );
-            }
+            self.collect_nilable_option_checks(path, pattern, layout, collector);
             return;
         }
         let params = self.facts.pattern_type_args(ty);
-        let Some(definition) = self.facts.definition(enum_name) else {
+        let Some((declared_fields, generics)) =
+            self.facts.variant_declared_fields(enum_name, variant_name)
+        else {
             return;
-        };
-        let (declared_fields, generics) = match &definition.body {
-            DefinitionBody::Struct {
-                fields, generics, ..
-            } => (
-                fields.iter().map(|field| &field.ty).collect::<Vec<_>>(),
-                generics,
-            ),
-            DefinitionBody::Enum {
-                variants, generics, ..
-            } => {
-                let Some(variant) = variants
-                    .iter()
-                    .find(|variant| variant.name == unqualified_name(variant_name))
-                else {
-                    return;
-                };
-                (
-                    variant
-                        .fields
-                        .iter()
-                        .map(|field| &field.ty)
-                        .collect::<Vec<_>>(),
-                    generics,
-                )
-            }
-            _ => return,
         };
 
         let field_types: Vec<Type> = declared_fields
             .iter()
             .map(|ty| generics::resolve_field_type(generics, &params, ty))
             .collect();
-        let field_layouts: Vec<ValueLayout> = declared_fields
-            .iter()
-            .zip(&field_types)
-            .enumerate()
-            .map(|(index, (declared, ty))| {
-                let inherited = path_layout.and_then(|layout| match layout {
-                    ValueLayout::TaggedOption { payload, .. }
-                    | ValueLayout::NullableOption { payload, .. }
-                    | ValueLayout::PointerOption { payload, .. } => Some(payload.as_ref()),
-                    ValueLayout::Fallible { payload, error, .. } => {
-                        Some(if unqualified_name(variant_name) == "Err" || index == 1 {
-                            error.as_ref()
-                        } else {
-                            payload.as_ref()
-                        })
-                    }
-                    _ => None,
-                });
-                inherited.cloned().unwrap_or_else(|| {
-                    self.value_layout_with_declaration(ty, SlotOrigin::Lisette, declared)
-                })
-            })
-            .collect();
+        let field_layouts =
+            self.variant_field_layouts(path_layout, variant_name, &declared_fields, &field_types);
 
         let variant_data = EnumVariantData {
             identifier,
@@ -501,6 +424,92 @@ impl Planner<'_> {
         }
 
         self.collect_tagged_enum_checks(path, &variant_data, collector);
+    }
+
+    fn collect_nilable_option_checks(
+        &self,
+        path: &AccessPath,
+        pattern: &Pattern,
+        layout: &ValueLayout,
+        collector: &mut PatternInfo,
+    ) {
+        let (
+            Pattern::EnumVariant {
+                fields,
+                resolution: ConstructorPatternResolution::EnumVariant { variant_name, .. },
+                ty,
+                ..
+            },
+            ValueLayout::NullableOption { payload, .. }
+            | ValueLayout::PointerOption { payload, .. },
+        ) = (pattern, layout)
+        else {
+            unreachable!("nilable option checks read an option variant pattern");
+        };
+        let some = unqualified_name(variant_name) == "Some";
+        assert!(
+            some || unqualified_name(variant_name) == "None",
+            "nilable option patterns require Some or None"
+        );
+        let pointer = matches!(layout, ValueLayout::PointerOption { .. });
+        collector.checks.push(Check::Nilable {
+            path: path.clone(),
+            guard: if pointer {
+                NilGuard::Pointer
+            } else {
+                self.facts.option_nil_guard(ty)
+            },
+            some,
+        });
+        if some {
+            let [field] = fields.as_slice() else {
+                unreachable!("Some pattern has one payload");
+            };
+            let child_path = if pointer {
+                path.push(PathSegment::Deref)
+            } else {
+                path.clone()
+            };
+            self.collect_checks_and_bindings(
+                &child_path,
+                field,
+                &ty.ok_type(),
+                Some(payload),
+                collector,
+            );
+        }
+    }
+
+    fn variant_field_layouts(
+        &self,
+        path_layout: Option<&ValueLayout>,
+        variant_name: &str,
+        declared_fields: &[&Type],
+        field_types: &[Type],
+    ) -> Vec<ValueLayout> {
+        declared_fields
+            .iter()
+            .zip(field_types)
+            .enumerate()
+            .map(|(index, (declared, ty))| {
+                let inherited = path_layout.and_then(|layout| match layout {
+                    ValueLayout::TaggedOption { payload, .. }
+                    | ValueLayout::NullableOption { payload, .. }
+                    | ValueLayout::PointerOption { payload, .. } => Some(payload.as_ref()),
+                    ValueLayout::Fallible { payload, error, .. } => {
+                        Some(if unqualified_name(variant_name) == "Err" || index == 1 {
+                            error.as_ref()
+                        } else {
+                            payload.as_ref()
+                        })
+                    }
+                    _ => None,
+                });
+                inherited.cloned().unwrap_or_else(|| {
+                    self.value_layout_with_declaration(ty, SlotOrigin::Lisette, declared)
+                })
+            })
+            .collect()
     }
 
     fn collect_const_pattern_check(
@@ -727,6 +736,38 @@ impl Planner<'_> {
 }
 
 impl EmitFacts<'_> {
+    fn variant_declared_fields(
+        &self,
+        enum_name: &str,
+        variant_name: &str,
+    ) -> Option<(Vec<&Type>, &[Generic])> {
+        let definition = self.definition(enum_name)?;
+        match &definition.body {
+            DefinitionBody::Struct {
+                fields, generics, ..
+            } => Some((
+                fields.iter().map(|field| &field.ty).collect::<Vec<_>>(),
+                generics,
+            )),
+            DefinitionBody::Enum {
+                variants, generics, ..
+            } => {
+                let variant = variants
+                    .iter()
+                    .find(|variant| variant.name == unqualified_name(variant_name))?;
+                Some((
+                    variant
+                        .fields
+                        .iter()
+                        .map(|field| &field.ty)
+                        .collect::<Vec<_>>(),
+                    generics,
+                ))
+            }
+            _ => None,
+        }
+    }
+
     fn exact_switch_value(&self, path_ty: &Type, value: &Literal) -> Option<Literal> {
         let kind = self.underlying_simple_kind(path_ty)?;
         let exact = kind.is_integer() || matches!(kind, SimpleKind::Bool | SimpleKind::String);

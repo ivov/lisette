@@ -309,37 +309,7 @@ impl Planner<'_> {
         let callee = matches!(callback, LoopCallback::Value(_))
             .then(|| values.next().expect("a function value stages its callee"));
 
-        let planned = match target {
-            SliceLoopTarget::Found(sink) => PlannedLoop::FindInto(sink),
-            target => {
-                let result = match (target, &callback) {
-                    (SliceLoopTarget::Into(name), _) => name.clone(),
-                    (_, LoopCallback::Lambda { patterns, .. }) if kind == SliceLoop::Fold => {
-                        self.accumulator_slot_name(patterns[0], receiver)
-                    }
-                    _ => self.fresh_local(Some("result")),
-                };
-                self.declare(result.spelling());
-                match kind {
-                    SliceLoop::Map => {
-                        let index = self.fresh_local(Some("i"));
-                        self.declare(index.spelling());
-                        PlannedLoop::Map { result, index }
-                    }
-                    SliceLoop::Filter => PlannedLoop::Filter { result },
-                    SliceLoop::Fold => {
-                        let (init, go_type) = init.expect("fold stages its initial value");
-                        PlannedLoop::Fold {
-                            result,
-                            init,
-                            go_type,
-                        }
-                    }
-                    SliceLoop::Find => PlannedLoop::Find { result },
-                    SliceLoop::All => PlannedLoop::All { result },
-                }
-            }
-        };
+        let planned = self.planned_loop(target, kind, &callback, receiver, init);
         self.push_slice_loop_declaration(&mut setup, &planned, &result_ty, &element_ty, &source);
 
         let lowered_callback = match &callback {
@@ -372,35 +342,59 @@ impl Planner<'_> {
             None => lower_body(self),
         };
 
-        let header = LoopHeader::Range {
-            key: match (&planned, element_name.spelling()) {
-                (PlannedLoop::Map { index, .. }, _) => Some(index.clone()),
-                (_, "_") => None,
-                _ => Some(GoIdentifier::external("_".to_string())),
-            },
-            value: (element_name.spelling() != "_").then_some(element_name),
-            iterable: source,
-        };
-        setup.push(
-            LoweredStatement::Loop(LoopPlan {
-                kind: if matches!(planned, PlannedLoop::FindInto(_)) {
-                    LoopKind::FoundFlagSearch
-                } else {
-                    LoopKind::Generated { label: None }
-                },
-                header,
-                body: LoweredBlock {
-                    statements: body_statements,
-                },
-            })
-            .into(),
-        );
+        setup.push(slice_loop_statement(
+            &planned,
+            element_name,
+            source,
+            body_statements,
+        ));
 
         let result = planned
             .result()
             .cloned()
             .map_or_else(GoExpression::empty, GoExpression::identifier);
         Some(NativeCallResult::new(setup, result))
+    }
+
+    fn planned_loop<'t>(
+        &mut self,
+        target: SliceLoopTarget<'t>,
+        kind: SliceLoop,
+        callback: &LoopCallback<'_>,
+        receiver: &Expression,
+        init: Option<(GoExpression, Option<GoType>)>,
+    ) -> PlannedLoop<'t> {
+        match target {
+            SliceLoopTarget::Found(sink) => PlannedLoop::FindInto(sink),
+            target => {
+                let result = match (target, &callback) {
+                    (SliceLoopTarget::Into(name), _) => name.clone(),
+                    (_, LoopCallback::Lambda { patterns, .. }) if kind == SliceLoop::Fold => {
+                        self.accumulator_slot_name(patterns[0], receiver)
+                    }
+                    _ => self.fresh_local(Some("result")),
+                };
+                self.declare(result.spelling());
+                match kind {
+                    SliceLoop::Map => {
+                        let index = self.fresh_local(Some("i"));
+                        self.declare(index.spelling());
+                        PlannedLoop::Map { result, index }
+                    }
+                    SliceLoop::Filter => PlannedLoop::Filter { result },
+                    SliceLoop::Fold => {
+                        let (init, go_type) = init.expect("fold stages its initial value");
+                        PlannedLoop::Fold {
+                            result,
+                            init,
+                            go_type,
+                        }
+                    }
+                    SliceLoop::Find => PlannedLoop::Find { result },
+                    SliceLoop::All => PlannedLoop::All { result },
+                }
+            }
+        }
     }
 
     fn accumulator_init(
@@ -695,4 +689,33 @@ impl EmitFacts<'_> {
     fn first_type_argument(&self, ty: &Type) -> Option<Type> {
         self.strip_and_peel(ty).get_type_params()?.first().cloned()
     }
+}
+
+fn slice_loop_statement(
+    planned: &PlannedLoop<'_>,
+    element_name: GoIdentifier,
+    source: GoExpression,
+    body_statements: Vec<Statement>,
+) -> Statement {
+    let header = LoopHeader::Range {
+        key: match (planned, element_name.spelling()) {
+            (PlannedLoop::Map { index, .. }, _) => Some(index.clone()),
+            (_, "_") => None,
+            _ => Some(GoIdentifier::external("_".to_string())),
+        },
+        value: (element_name.spelling() != "_").then_some(element_name),
+        iterable: source,
+    };
+    LoweredStatement::Loop(LoopPlan {
+        kind: if matches!(planned, PlannedLoop::FindInto(_)) {
+            LoopKind::FoundFlagSearch
+        } else {
+            LoopKind::Generated { label: None }
+        },
+        header,
+        body: LoweredBlock {
+            statements: body_statements,
+        },
+    })
+    .into()
 }

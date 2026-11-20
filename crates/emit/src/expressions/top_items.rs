@@ -28,23 +28,7 @@ impl Planner<'_> {
                 visibility,
                 name,
                 ..
-            } => {
-                let is_public = matches!(visibility, Visibility::Public);
-                let function = item.function_definition_view();
-                let go_name = self.pick_go_function_name(function, false, is_public);
-                let doc_comment = item_doc_text(doc, name, &go_name);
-                let qualified_name = self.facts.qualified_current(name);
-
-                if self.facts.is_test(&qualified_name) {
-                    self.emit_test_function(name, function, is_public, &doc_comment)
-                } else {
-                    let mut declarations = self.emit_function(function, None, &go_name, None);
-                    if let Some(first) = declarations.first_mut() {
-                        first.documentation = doc_comment.into();
-                    }
-                    declarations
-                }
-            }
+            } => self.emit_function_item(item, doc, name, matches!(visibility, Visibility::Public)),
             Expression::Struct {
                 doc,
                 attributes,
@@ -128,17 +112,30 @@ impl Planner<'_> {
                 let Some(expression) = expression.value() else {
                     return Vec::new();
                 };
-                let mut declaration = self.emit_const(identifier, expression, ty);
-                let go_name = self
-                    .scope
-                    .bound_go_identifier(identifier)
-                    .expect("`emit_const` binds the identifier");
-                let doc_comment = item_doc_text(doc, identifier, go_name.spelling());
-                declaration.documentation = doc_comment.into();
-                vec![declaration]
+                vec![self.emit_const(identifier, expression, ty, doc)]
             }
             _ => Vec::new(),
         }
+    }
+
+    fn emit_function_item(
+        &mut self,
+        item: &Expression,
+        doc: &Option<String>,
+        name: &str,
+        is_public: bool,
+    ) -> Vec<GoDeclaration> {
+        let function = item.function_definition_view();
+        let go_name = self.pick_go_function_name(function, false, is_public);
+        let doc_comment = item_doc_text(doc, name, &go_name);
+        if self.facts.is_test(&self.facts.qualified_current(name)) {
+            return self.emit_test_function(name, function, is_public, &doc_comment);
+        }
+        let mut declarations = self.emit_function(function, None, &go_name, None);
+        if let Some(first) = declarations.first_mut() {
+            first.documentation = doc_comment.into();
+        }
+        declarations
     }
 
     fn emit_test_function(

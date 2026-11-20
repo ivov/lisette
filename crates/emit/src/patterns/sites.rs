@@ -13,8 +13,8 @@ use crate::Planner;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::ir::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
-    Statement, declare, define, discard, expression_statement,
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, PlacePlan, Statement,
+    declare, define, discard, expression_statement,
 };
 use crate::ir::go_expression::CompositeLayout;
 use crate::ir::local::GoIdentifier;
@@ -972,10 +972,7 @@ impl Planner<'_> {
     }
 
     fn loop_break(&self) -> LoweredStatement {
-        LoweredStatement::Break(
-            self.current_loop_id()
-                .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
-        )
+        LoweredStatement::Break(self.current_loop_transfer())
     }
 
     pub(crate) fn lower_none_arm_body(

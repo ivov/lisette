@@ -17,16 +17,7 @@ use syntax::program::SlotOrigin;
 use syntax::program::{
     ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
 };
-use syntax::types::{CompoundKind, Symbol, Type};
-
-struct NullableFieldAccess<'a> {
-    value: GoExpression,
-    member: &'a str,
-    expression_ty: &'a Type,
-    declaring_type: Option<&'a Symbol>,
-    result_ty: &'a Type,
-    callee: bool,
-}
+use syntax::types::{CompoundKind, Type};
 
 impl Planner<'_> {
     pub(crate) fn plan_dot_access(
@@ -61,16 +52,7 @@ impl Planner<'_> {
         else {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
-        let receiver_coercion =
-            self.facts
-                .checked(expression)
-                .receiver_change()
-                .filter(|coercion| {
-                    *coercion != ReceiverCoercion::AutoAddress
-                        || !self
-                            .facts
-                            .has_go_value_receiver(&expression.get_type(), member)
-                });
+        let receiver_coercion = self.facts.dot_receiver_coercion(expression, member);
         let tagged_twin = self.selects_tagged_twin(dot_access);
 
         if let Some(expression) = self.try_plan_pre_receiver_dot(dot_access, tagged_twin, ctx) {
@@ -87,14 +69,9 @@ impl Planner<'_> {
             if wrap_nullable
                 && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
-                    NullableFieldAccess {
-                        value: GoExpression::identifier(component.clone()),
-                        member,
-                        expression_ty: &expression_ty,
-                        declaring_type: resolution.declaring_type(),
-                        result_ty,
-                        callee: ctx.is_callee(),
-                    },
+                    dot_access,
+                    GoExpression::identifier(component.clone()),
+                    ctx,
                 )
             {
                 return ValuePlan::computed(setup, wrapped);
@@ -112,42 +89,20 @@ impl Planner<'_> {
             ),
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
-        let stability = if let Some(package) = expression_ty.as_import_namespace()
-            && self.facts.package_member_is_fixed(package, member)
-        {
-            Stability::Fixed
-        } else if self
-            .facts
-            .reads_value_member(resolution, expression, &expression_ty)
-        {
-            base_plan.stability()
-        } else {
-            Stability::Observable
-        };
-        let (mut setup, mut base) = base_plan.into_parts();
-        if let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) {
-            let receiver_type = self.facts.strip_and_peel(&expression_ty);
-            let adapter = self
-                .dynamic_interface_adapter(&receiver_type, &bound, None)
-                .expect("a dispatched bound has an adapter");
-            let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
-            setup.extend(adapter_setup);
-            base = adapted;
-        }
+        let stability =
+            self.facts
+                .dot_member_stability(dot_access, &expression_ty, base_plan.stability());
+        let (mut setup, base) = base_plan.into_parts();
+        let base = self.plan_bound_dispatch_receiver(&mut setup, dot_access, base, &expression_ty);
         if let Some(member_access) =
             self.try_plan_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
             if wrap_nullable
                 && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
-                    NullableFieldAccess {
-                        value: member_access.clone(),
-                        member,
-                        expression_ty: &expression_ty,
-                        declaring_type: resolution.declaring_type(),
-                        result_ty,
-                        callee: ctx.is_callee(),
-                    },
+                    dot_access,
+                    member_access.clone(),
+                    ctx,
                 )
             {
                 return ValuePlan::computed(setup, wrapped);
@@ -168,17 +123,8 @@ impl Planner<'_> {
             None => GoExpression::selector(base, field),
         };
         if wrap_nullable
-            && let Some(wrapped) = self.try_plan_nullable_field_access(
-                &mut setup,
-                NullableFieldAccess {
-                    value: selector.clone(),
-                    member,
-                    expression_ty: &expression_ty,
-                    declaring_type: resolution.declaring_type(),
-                    result_ty,
-                    callee: ctx.is_callee(),
-                },
-            )
+            && let Some(wrapped) =
+                self.try_plan_nullable_field_access(&mut setup, dot_access, selector.clone(), ctx)
         {
             return ValuePlan::computed(setup, wrapped);
         }
@@ -200,6 +146,25 @@ impl Planner<'_> {
                 expression
             };
         ValuePlan::computed(setup, expression).with_stability(stability)
+    }
+
+    fn plan_bound_dispatch_receiver(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        dot_access: &Expression,
+        base: GoExpression,
+        expression_ty: &Type,
+    ) -> GoExpression {
+        let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) else {
+            return base;
+        };
+        let receiver_type = self.facts.strip_and_peel(expression_ty);
+        let adapter = self
+            .dynamic_interface_adapter(&receiver_type, &bound, None)
+            .expect("a dispatched bound has an adapter");
+        let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
+        setup.extend(adapter_setup);
+        adapted
     }
 
     fn try_plan_pre_receiver_dot(
@@ -357,16 +322,23 @@ impl Planner<'_> {
     fn try_plan_nullable_field_access(
         &mut self,
         setup: &mut Vec<Statement>,
-        access: NullableFieldAccess<'_>,
+        dot_access: &Expression,
+        value: GoExpression,
+        ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
-        let NullableFieldAccess {
-            value,
+        let Expression::DotAccess {
+            expression,
             member,
-            expression_ty,
-            declaring_type,
-            result_ty,
-            callee,
-        } = access;
+            ty: result_ty,
+            resolution,
+            ..
+        } = dot_access
+        else {
+            unreachable!("a nullable field access reads a DotAccess expression");
+        };
+        let expression_ty = &expression.get_type();
+        let declaring_type = resolution.declaring_type();
+        let callee = ctx.is_callee();
         let source_layout =
             self.field_slot_layout(expression_ty, declaring_type, None, member, result_ty)?;
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
@@ -535,6 +507,43 @@ impl Planner<'_> {
 }
 
 impl EmitFacts<'_> {
+    fn dot_member_stability(
+        &self,
+        dot_access: &Expression,
+        expression_ty: &Type,
+        base_stability: Stability,
+    ) -> Stability {
+        let Expression::DotAccess {
+            expression,
+            member,
+            resolution,
+            ..
+        } = dot_access
+        else {
+            unreachable!("a member stability reads a DotAccess expression");
+        };
+        if let Some(package) = expression_ty.as_import_namespace()
+            && self.package_member_is_fixed(package, member)
+        {
+            Stability::Fixed
+        } else if self.reads_value_member(resolution, expression, expression_ty) {
+            base_stability
+        } else {
+            Stability::Observable
+        }
+    }
+
+    fn dot_receiver_coercion(
+        &self,
+        receiver: &Expression,
+        member: &str,
+    ) -> Option<ReceiverCoercion> {
+        self.checked(receiver).receiver_change().filter(|coercion| {
+            *coercion != ReceiverCoercion::AutoAddress
+                || !self.has_go_value_receiver(&receiver.get_type(), member)
+        })
+    }
+
     pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
         let peeled = self.peel_alias(ty);
         peeled.is_ref()

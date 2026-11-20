@@ -1,3 +1,5 @@
+#![deny(clippy::too_many_lines)]
+
 mod abi;
 mod analyze;
 pub(crate) mod calls;
@@ -35,7 +37,7 @@ use abi::ReturnSlot;
 use abi::callable::CallableReturnAbi;
 use abi::catalog::GoAbiCatalog;
 use diagnostics::LisetteDiagnostic;
-use ir::bodies::{LoopId, LoweredBlock, LoweredStatement, Statement, define};
+use ir::bodies::{LoopId, LoopTransfer, LoweredBlock, LoweredStatement, Statement, define};
 use ir::declarations::{DeclarationKind, GoDeclaration};
 use ir::go_expression::{GoExpressionNode, Position, TreeVisitor};
 use ir::local::GoIdentifier;
@@ -382,6 +384,11 @@ impl<'a> Planner<'a> {
 
     fn current_loop_id(&self) -> Option<LoopId> {
         self.scope.current_loop_id()
+    }
+
+    fn current_loop_transfer(&self) -> LoopTransfer {
+        self.current_loop_id()
+            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source)
     }
 
     fn return_ctx(&self) -> ReturnContext {

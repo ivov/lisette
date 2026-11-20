@@ -401,6 +401,44 @@ impl Planner<'_> {
 
         match (source, target) {
             (
+                TaggedOption { .. } | NullableOption { .. } | PointerOption { .. },
+                TaggedOption { .. } | NullableOption { .. } | PointerOption { .. },
+            ) => self.option_bridge(source, target),
+            (Fallible { .. }, Fallible { .. }) | (Tuple { .. }, Tuple { .. }) => {
+                self.immutable_bridge(source, target)
+            }
+            (Function { layout: source, .. }, Function { layout: target, .. }) => {
+                LayoutBridge::Function {
+                    source: Box::new(source.clone()),
+                    target: Box::new(target.clone()),
+                }
+            }
+            (Reference { .. }, Reference { .. }) => self.reference_bridge(source, target),
+            (Slice { .. }, Slice { .. })
+            | (Array { .. }, Array { .. })
+            | (Map { .. }, Map { .. }) => self.aggregate_bridge(source, target),
+            (
+                Named {
+                    underlying: source_underlying,
+                    ..
+                },
+                target,
+            ) => self.resolve_layout_bridge(source_underlying, target),
+            (
+                source,
+                Named {
+                    underlying: target_underlying,
+                    ..
+                },
+            ) => self.resolve_layout_bridge(source, target_underlying),
+            _ => LayoutBridge::Identity,
+        }
+    }
+
+    fn option_bridge(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutBridge {
+        use ValueLayout::{NullableOption, PointerOption, TaggedOption};
+        match (source, target) {
+            (
                 TaggedOption {
                     payload: source_payload,
                     ..
@@ -466,6 +504,36 @@ impl Planner<'_> {
                 elements: vec![self.resolve_layout_bridge(source_payload, target_payload)],
             },
             (
+                NullableOption {
+                    payload: source_payload,
+                    ..
+                },
+                NullableOption {
+                    payload: target_payload,
+                    ..
+                },
+            )
+            | (
+                PointerOption {
+                    payload: source_payload,
+                    ..
+                },
+                PointerOption {
+                    payload: target_payload,
+                    ..
+                },
+            ) => LayoutBridge::NilablePayload {
+                target: Box::new(target.clone()),
+                payload: Box::new(self.resolve_layout_bridge(source_payload, target_payload)),
+            },
+            _ => LayoutBridge::Identity,
+        }
+    }
+
+    fn immutable_bridge(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutBridge {
+        use ValueLayout::{Fallible, Tuple};
+        match (source, target) {
+            (
                 Fallible {
                     payload: source_payload,
                     error: source_error,
@@ -507,67 +575,51 @@ impl Planner<'_> {
                         .collect(),
                 }
             }
-            (
-                NullableOption {
-                    payload: source_payload,
-                    ..
-                },
-                NullableOption {
-                    payload: target_payload,
-                    ..
-                },
-            )
-            | (
-                PointerOption {
-                    payload: source_payload,
-                    ..
-                },
-                PointerOption {
-                    payload: target_payload,
-                    ..
-                },
-            ) => LayoutBridge::NilablePayload {
-                target: Box::new(target.clone()),
-                payload: Box::new(self.resolve_layout_bridge(source_payload, target_payload)),
+            _ => unreachable!("immutable_bridge takes a fallible or tuple pair"),
+        }
+    }
+
+    fn reference_bridge(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutBridge {
+        use ValueLayout::{Function, Reference};
+        let (
+            Reference {
+                pointee: source_pointee,
+                ..
             },
-            (Function { layout: source, .. }, Function { layout: target, .. }) => {
-                LayoutBridge::Function {
-                    source: Box::new(source.clone()),
-                    target: Box::new(target.clone()),
-                }
+            Reference {
+                pointee: target_pointee,
+                ..
+            },
+        ) = (source, target)
+        else {
+            unreachable!("reference_bridge takes a reference pair");
+        };
+        if let (
+            Function { layout: source, .. },
+            Function {
+                layout: target_layout,
+                ..
+            },
+        ) = (source_pointee.underlying(), target_pointee.underlying())
+            && source.same_representation(target_layout)
+        {
+            return LayoutBridge::Conversion {
+                target: Box::new(target.clone()),
+            };
+        }
+        let pointee = self.resolve_layout_bridge(source_pointee, target_pointee);
+        if pointee.is_identity() {
+            LayoutBridge::Identity
+        } else {
+            LayoutBridge::Reference {
+                pointee: Box::new(pointee),
             }
-            (
-                Reference {
-                    pointee: source_pointee,
-                    ..
-                },
-                Reference {
-                    pointee: target_pointee,
-                    ..
-                },
-            ) => {
-                if let (
-                    Function { layout: source, .. },
-                    Function {
-                        layout: target_layout,
-                        ..
-                    },
-                ) = (source_pointee.underlying(), target_pointee.underlying())
-                    && source.same_representation(target_layout)
-                {
-                    return LayoutBridge::Conversion {
-                        target: Box::new(target.clone()),
-                    };
-                }
-                let pointee = self.resolve_layout_bridge(source_pointee, target_pointee);
-                if pointee.is_identity() {
-                    LayoutBridge::Identity
-                } else {
-                    LayoutBridge::Reference {
-                        pointee: Box::new(pointee),
-                    }
-                }
-            }
+        }
+    }
+
+    fn aggregate_bridge(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutBridge {
+        use ValueLayout::{Array, Map, Slice};
+        let (key_layouts, source_element, target_element) = match (source, target) {
             (
                 Slice {
                     element: source_element,
@@ -587,7 +639,7 @@ impl Planner<'_> {
                     element: target_element,
                     ..
                 },
-            ) => self.aggregate_bridge(source, target, None, source_element, target_element),
+            ) => (None, source_element, target_element),
             (
                 Map {
                     key: source_key,
@@ -599,39 +651,13 @@ impl Planner<'_> {
                     value: target_value,
                     ..
                 },
-            ) => self.aggregate_bridge(
-                source,
-                target,
-                Some((source_key, target_key)),
+            ) => (
+                Some((source_key.as_ref(), target_key.as_ref())),
                 source_value,
                 target_value,
             ),
-            (
-                Named {
-                    underlying: source_underlying,
-                    ..
-                },
-                target,
-            ) => self.resolve_layout_bridge(source_underlying, target),
-            (
-                source,
-                Named {
-                    underlying: target_underlying,
-                    ..
-                },
-            ) => self.resolve_layout_bridge(source, target_underlying),
-            _ => LayoutBridge::Identity,
-        }
-    }
-
-    fn aggregate_bridge(
-        &self,
-        source: &ValueLayout,
-        target: &ValueLayout,
-        key_layouts: Option<(&ValueLayout, &ValueLayout)>,
-        source_element: &ValueLayout,
-        target_element: &ValueLayout,
-    ) -> LayoutBridge {
+            _ => unreachable!("aggregate_bridge takes a slice, array or map pair"),
+        };
         let key = key_layouts
             .map(|(source, target)| Box::new(self.resolve_layout_bridge(source, target)));
         let element = self.resolve_layout_bridge(source_element, target_element);

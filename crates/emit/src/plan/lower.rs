@@ -308,58 +308,12 @@ impl Planner<'_> {
 
     fn lower_focused_statement(&mut self, expression: &Expression) -> Statement {
         match expression {
-            Expression::If {
-                condition,
-                consequence,
-                alternative,
-                ..
-            } => {
-                let statement = self.lower_if(
-                    condition,
-                    consequence,
-                    alternative.as_deref(),
-                    &PlacePlan::Statement,
-                );
-                self.facts.directed_at(expression, statement)
-            }
-            Expression::Loop { body, .. } => {
-                let plan = self.lower_infinite_loop(body);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Loop(plan))
-            }
-            Expression::While {
-                condition, body, ..
-            } => {
-                let plan = self.lower_while(condition, body);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Loop(plan))
-            }
             Expression::Block { .. } => LoweredStatement::Block(
                 self.with_scope(|this| this.lower_block_as_body(expression)),
             )
             .into(),
             Expression::For { .. } => self.lower_for_statement(expression),
-            Expression::Continue { .. } => {
-                let target = self
-                    .current_loop_id()
-                    .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Continue(target))
-            }
-            Expression::Break { value: None, .. } => {
-                let target = self
-                    .current_loop_id()
-                    .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Break(target))
-            }
-            Expression::Break {
-                value: Some(value), ..
-            } => {
-                let plan = self.build_break_value_plan(value);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Body(plan))
-            }
+            Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
             Expression::Const {
                 binding,
                 identifier,
@@ -374,33 +328,62 @@ impl Planner<'_> {
                     self.lower_const(identifier, *binding, value, ty, ConstPlacement::Local);
                 self.facts.directed_at(expression, statement)
             }
+            Expression::Struct { .. }
+            | Expression::Enum { .. }
+            | Expression::TypeAlias { .. }
+            | Expression::Interface { .. }
+            | Expression::ImplBlock { .. } => {
+                unreachable!("the parser rejects item definitions inside function bodies")
+            }
+            _ => match self.try_lower_directed_statement(expression) {
+                Some(statement) => self.facts.directed_at(expression, statement),
+                None => self.lower_expression_statement(expression),
+            },
+        }
+    }
+
+    fn try_lower_directed_statement(
+        &mut self,
+        expression: &Expression,
+    ) -> Option<LoweredStatement> {
+        let statement = match expression {
+            Expression::If {
+                condition,
+                consequence,
+                alternative,
+                ..
+            } => self.lower_if(
+                condition,
+                consequence,
+                alternative.as_deref(),
+                &PlacePlan::Statement,
+            ),
+            Expression::Loop { body, .. } => LoweredStatement::Loop(self.lower_infinite_loop(body)),
+            Expression::While {
+                condition, body, ..
+            } => LoweredStatement::Loop(self.lower_while(condition, body)),
+            Expression::Continue { .. } => LoweredStatement::Continue(self.current_loop_transfer()),
+            Expression::Break { value: None, .. } => {
+                LoweredStatement::Break(self.current_loop_transfer())
+            }
+            Expression::Break {
+                value: Some(value), ..
+            } => LoweredStatement::Body(self.build_break_value_plan(value)),
             Expression::Return {
                 expression: value, ..
-            } => {
-                let plan = self.build_return_plan(value);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Body(plan))
-            }
+            } => LoweredStatement::Body(self.build_return_plan(value)),
             Expression::Let {
                 binding,
                 value,
                 mode,
                 ..
-            } => {
-                let plan = self.build_let_plan(binding, value, mode, None);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Body(plan))
-            }
+            } => LoweredStatement::Body(self.build_let_plan(binding, value, mode, None)),
             Expression::Assignment {
                 target,
                 value,
                 compound_operator,
                 ..
-            } => {
-                let statement =
-                    self.build_assignment_plan(target, value, compound_operator.as_ref());
-                self.facts.directed_at(expression, statement)
-            }
+            } => self.build_assignment_plan(target, value, compound_operator.as_ref()),
             Expression::IfLet {
                 pattern,
                 scrutinee,
@@ -412,37 +395,25 @@ impl Planner<'_> {
                 let implicit_unit = self.facts.checked(expression).implicit_unit();
                 let arms =
                     if_let_match_arms(pattern, consequence, alternative, *span, implicit_unit);
-                let body = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Statement);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Body(body))
+                LoweredStatement::Body(self.lower_match_to_block(
+                    scrutinee,
+                    &arms,
+                    &PlacePlan::Statement,
+                ))
             }
-            Expression::Match { subject, arms, .. } => {
-                let body = self.lower_match_to_block(subject, arms, &PlacePlan::Statement);
-                self.facts
-                    .directed_at(expression, LoweredStatement::Body(body))
-            }
+            Expression::Match { subject, arms, .. } => LoweredStatement::Body(
+                self.lower_match_to_block(subject, arms, &PlacePlan::Statement),
+            ),
             Expression::Select { arms, span, .. } => {
-                let statement = self.lower_select(arms, span, &PlacePlan::Statement);
-                self.facts.directed_at(expression, statement)
+                self.lower_select(arms, span, &PlacePlan::Statement)
             }
-            Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
-            Expression::Assert { .. } => {
-                let statement = self.lower_assert_statement(expression);
-                self.facts.directed_at(expression, statement)
-            }
-            Expression::Struct { .. }
-            | Expression::Enum { .. }
-            | Expression::TypeAlias { .. }
-            | Expression::Interface { .. }
-            | Expression::ImplBlock { .. } => {
-                unreachable!("the parser rejects item definitions inside function bodies")
-            }
+            Expression::Assert { .. } => self.lower_assert_statement(expression),
             Expression::Call { .. } if self.facts.is_test_log_call(expression) => {
-                let statement = self.lower_test_log_statement(expression);
-                self.facts.directed_at(expression, statement)
+                self.lower_test_log_statement(expression)
             }
-            _ => self.lower_expression_statement(expression),
-        }
+            _ => return None,
+        };
+        Some(statement)
     }
 
     fn lower_expression_statement(&mut self, expression: &Expression) -> Statement {

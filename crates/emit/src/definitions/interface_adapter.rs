@@ -629,26 +629,15 @@ impl Planner<'_> {
             )
         };
 
-        let selected_exported = checked.is_exported;
-        let source_go_name = match source_requirement {
-            Some(source) => self.facts.requirement_go_name(source),
-            None if source_go_method.is_none()
-                && self.facts.requirement_uses_tagged_twin(requirement) =>
-            {
-                go_name::tagged_twin(
-                    &self
-                        .facts
-                        .method_go_name(implementation_name, selected_exported),
-                )
-            }
-            None => self
-                .facts
-                .method_go_name(implementation_name, selected_exported),
-        };
         Some(AdapterMethod {
             go_name: self.facts.requirement_go_name(requirement),
             source_name: implementation_name.clone(),
-            source_go_name,
+            source_go_name: self.facts.adapter_source_go_name(
+                requirement,
+                source_requirement,
+                source_go_method.as_deref(),
+                checked,
+            ),
             alternate: None,
             source,
             target,
@@ -1009,6 +998,25 @@ impl EmitFacts<'_> {
         symbol
             .rsplit_once('.')
             .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
+    }
+
+    fn adapter_source_go_name(
+        &self,
+        requirement: &InterfaceRequirement,
+        source_requirement: Option<&InterfaceRequirement>,
+        source_go_method: Option<&str>,
+        checked: &CheckedMethod,
+    ) -> String {
+        let method_go_name = || self.method_go_name(&checked.selected_name, checked.is_exported);
+        match source_requirement {
+            Some(source) => self.requirement_go_name(source),
+            None if source_go_method.is_none()
+                && self.requirement_uses_tagged_twin(requirement) =>
+            {
+                go_name::tagged_twin(&method_go_name())
+            }
+            None => method_go_name(),
+        }
     }
 
     fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {

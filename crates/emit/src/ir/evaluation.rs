@@ -226,36 +226,40 @@ impl GoExpressionNode {
                 operator,
                 left,
                 right,
-            } => match operator {
-                BinaryOp::Add
-                | BinaryOp::Sub
-                | BinaryOp::Mul
-                | BinaryOp::BitAnd
-                | BinaryOp::BitOr
-                | BinaryOp::BitXor
-                | BinaryOp::BitAndNot
-                | BinaryOp::And
-                | BinaryOp::Or
-                | BinaryOp::Lt
-                | BinaryOp::Le
-                | BinaryOp::Gt
-                | BinaryOp::Ge => Effects::default(),
-                BinaryOp::Div | BinaryOp::Rem | BinaryOp::Shl | BinaryOp::Shr => Effects {
+            } => Self::binary_effects(*operator, left, right),
+        }
+    }
+
+    fn binary_effects(operator: BinaryOp, left: &Self, right: &Self) -> Effects {
+        match operator {
+            BinaryOp::Add
+            | BinaryOp::Sub
+            | BinaryOp::Mul
+            | BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::BitAndNot
+            | BinaryOp::And
+            | BinaryOp::Or
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge => Effects::default(),
+            BinaryOp::Div | BinaryOp::Rem | BinaryOp::Shl | BinaryOp::Shr => Effects {
+                may_panic: true,
+                ..Effects::default()
+            },
+            BinaryOp::Eq | BinaryOp::Ne
+                if !matches!(left, Self::Literal(_))
+                    && !matches!(right, Self::Literal(_))
+                    && !(left.is_unit_struct_literal() && right.is_unit_struct_literal()) =>
+            {
+                Effects {
                     may_panic: true,
                     ..Effects::default()
-                },
-                BinaryOp::Eq | BinaryOp::Ne
-                    if !matches!(left.as_ref(), Self::Literal(_))
-                        && !matches!(right.as_ref(), Self::Literal(_))
-                        && !(left.is_unit_struct_literal() && right.is_unit_struct_literal()) =>
-                {
-                    Effects {
-                        may_panic: true,
-                        ..Effects::default()
-                    }
                 }
-                BinaryOp::Eq | BinaryOp::Ne => Effects::default(),
-            },
+            }
+            BinaryOp::Eq | BinaryOp::Ne => Effects::default(),
         }
     }
 }

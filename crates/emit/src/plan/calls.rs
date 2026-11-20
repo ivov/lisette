@@ -248,28 +248,9 @@ impl<'a> Planner<'a> {
                     }),
             }
         };
-        let catalog_return = matches!(origin, CallableOrigin::GoInterop)
-            .then(|| {
-                id.as_deref()
-                    .and_then(|id| self.facts.go_callable_return_slot(id))
-            })
-            .flatten();
-        let return_origin = if matches!(origin, CallableOrigin::GoInterop) {
-            catalog_return.map_or_else(
-                || {
-                    SlotOrigin::go_return(
-                        self.facts
-                            .resolves_to_unknown(declared_return.unwrap_or(return_type)),
-                    )
-                },
-                |slot| slot.origin,
-            )
-        } else {
-            SlotOrigin::Lisette
-        };
-        let return_declaration = catalog_return
-            .map(|slot| &slot.declared_type)
-            .or(declared_return);
+        let (return_origin, return_declaration) =
+            self.facts
+                .callee_return_slot(&origin, id.as_deref(), declared_return, return_type);
         let return_layout =
             self.callable_result_layout(return_type, return_origin, return_declaration, &result);
         let is_prelude_dispatch = id.as_deref().is_some_and(go_name::is_prelude_id)
@@ -596,6 +577,27 @@ impl<'a> Planner<'a> {
 }
 
 impl<'a> EmitFacts<'a> {
+    fn callee_return_slot<'r>(
+        &'r self,
+        origin: &CallableOrigin<'_>,
+        id: Option<&str>,
+        declared_return: Option<&'r Type>,
+        return_type: &Type,
+    ) -> (SlotOrigin, Option<&'r Type>) {
+        if !matches!(origin, CallableOrigin::GoInterop) {
+            return (SlotOrigin::Lisette, declared_return);
+        }
+        match id.and_then(|id| self.go_callable_return_slot(id)) {
+            Some(slot) => (slot.origin, Some(&slot.declared_type)),
+            None => (
+                SlotOrigin::go_return(
+                    self.resolves_to_unknown(declared_return.unwrap_or(return_type)),
+                ),
+                declared_return,
+            ),
+        }
+    }
+
     pub(crate) fn callable_declaration(&self, id: &str) -> Option<CallableDeclaration<'a>> {
         self.definition(id)
             .map(CallableDeclaration::Definition)

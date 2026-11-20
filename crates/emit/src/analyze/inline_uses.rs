@@ -107,27 +107,6 @@ impl<'a> Walker<'a> {
             Expression::Block { items, .. } => {
                 self.walk_block(items, role);
             }
-            Expression::IfLet {
-                scrutinee,
-                consequence,
-                alternative,
-                ..
-            } => {
-                self.walk(scrutinee, role);
-                self.walk(consequence, role);
-                if let Some(alternative) = alternative.expression() {
-                    self.walk(alternative, role);
-                }
-            }
-            Expression::Match { subject, arms, .. } => {
-                self.walk(subject, role);
-                for arm in arms {
-                    if let Some(guard) = arm.guard.as_ref() {
-                        self.walk(guard, role);
-                    }
-                    self.walk(&arm.expression, role);
-                }
-            }
 
             Expression::StructCall {
                 field_assignments, ..

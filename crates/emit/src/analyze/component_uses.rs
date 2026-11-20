@@ -73,26 +73,7 @@ impl Walker {
             Expression::Reference { expression, .. } if self.names_the_local(expression) => {
                 return None;
             }
-            Expression::Match { subject, arms, .. } => {
-                if self.names_the_local(subject) {
-                    if !arms.iter().all(|arm| is_component_arm(&arm.pattern)) {
-                        return None;
-                    }
-                    self.supported |= !arms.iter().any(MatchArm::has_guard);
-                    let value = if arms.iter().any(MatchArm::has_guard) {
-                        ValueDemand::Whole
-                    } else if arms.iter().any(|arm| binds_payload(&arm.pattern)) {
-                        ValueDemand::Payload
-                    } else {
-                        ValueDemand::StatusOnly
-                    };
-                    self.demand.value = self.demand.value.max(value);
-                } else {
-                    self.walk(subject)?;
-                }
-                self.walk_arms(arms)?;
-                return Some(());
-            }
+            Expression::Match { subject, arms, .. } => return self.walk_match(subject, arms),
             Expression::IfLet {
                 pattern,
                 scrutinee,
@@ -161,6 +142,27 @@ impl Walker {
             _ => {}
         }
         self.walk_items(expression.children())
+    }
+
+    fn walk_match(&mut self, subject: &Expression, arms: &[MatchArm]) -> Option<()> {
+        if self.names_the_local(subject) {
+            if !arms.iter().all(|arm| is_component_arm(&arm.pattern)) {
+                return None;
+            }
+            let has_guard = arms.iter().any(MatchArm::has_guard);
+            self.supported |= !has_guard;
+            let value = if has_guard {
+                ValueDemand::Whole
+            } else if arms.iter().any(|arm| binds_payload(&arm.pattern)) {
+                ValueDemand::Payload
+            } else {
+                ValueDemand::StatusOnly
+            };
+            self.demand.value = self.demand.value.max(value);
+        } else {
+            self.walk(subject)?;
+        }
+        self.walk_arms(arms)
     }
 
     fn walk_items<'e>(&mut self, items: impl IntoIterator<Item = &'e Expression>) -> Option<()> {

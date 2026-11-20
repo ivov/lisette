@@ -281,6 +281,25 @@ impl Planner<'_> {
         (setup, values)
     }
 
+    fn propagate_error_status(
+        &mut self,
+        fallible: &Fallible,
+        opens_if: bool,
+        can_reuse_spent_error: bool,
+    ) -> GoIdentifier {
+        match fallible.err_ty() {
+            Some(error_ty) if !opens_if => {
+                let name = can_reuse_spent_error
+                    .then(|| self.scope.spent_error(error_ty))
+                    .flatten()
+                    .unwrap_or_else(|| self.pair_status(None, PairStatusKind::Error, false));
+                self.scope.declare_spent_error(&name, error_ty);
+                name
+            }
+            _ => self.pair_status(None, PairStatusKind::Error, opens_if),
+        }
+    }
+
     fn try_plan_fused_propagate(
         &mut self,
         expression: &Expression,
@@ -326,18 +345,7 @@ impl Planner<'_> {
             .then(|| named.cloned().unwrap_or_else(|| self.fresh_declared("ret")));
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
         let opens_if = value_var.is_none() && message_setup.is_empty();
-        let outcome_var = match fallible.err_ty() {
-            Some(error_ty) if !opens_if => {
-                let name = message_setup
-                    .is_empty()
-                    .then(|| self.scope.spent_error(error_ty))
-                    .flatten()
-                    .unwrap_or_else(|| self.pair_status(None, PairStatusKind::Error, false));
-                self.scope.declare_spent_error(&name, error_ty);
-                name
-            }
-            _ => self.pair_status(None, PairStatusKind::Error, opens_if),
-        };
+        let outcome_var = self.propagate_error_status(fallible, opens_if, message_setup.is_empty());
         let outcome = || GoExpression::identifier(outcome_var.clone());
         let binding = Definition {
             names: match &value_var {

@@ -1,8 +1,10 @@
 use crate::Planner;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::structs::SynthesizedMethod;
-use crate::ir::bodies::{ElseArm, IfPlan, LoweredStatement, SwitchKind, SwitchStatementPlan};
-use crate::ir::bodies::{LoweredBlock, SwitchCasePlan};
+use crate::ir::bodies::{
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, SwitchCasePlan, SwitchKind,
+    SwitchStatementPlan,
+};
 use crate::ir::declarations::GoDeclaration;
 use crate::ir::go_expression::BinaryOp;
 use crate::ir::go_expression::{CompositeLayout, GoParameter};
@@ -142,41 +144,7 @@ impl Planner<'_> {
             });
         }
 
-        let left = GoExpression::selector(
-            GoExpression::identifier(receiver.clone()),
-            ENUM_TAG_FIELD.to_string(),
-        );
-        let right = GoExpression::selector(
-            GoExpression::identifier(other.clone()),
-            ENUM_TAG_FIELD.to_string(),
-        );
-        let statements = if cases.is_empty() {
-            vec![plain_return(GoExpression::binary(
-                left,
-                BinaryOp::Eq,
-                right,
-            ))]
-        } else {
-            vec![
-                LoweredStatement::If(IfPlan::plain(
-                    GoExpression::binary(left.clone(), BinaryOp::Ne, right),
-                    LoweredBlock {
-                        statements: vec![plain_return(GoExpression::literal("false".to_string()))],
-                    },
-                    ElseArm::None,
-                ))
-                .into(),
-                LoweredStatement::Switch(SwitchStatementPlan {
-                    kind: SwitchKind::Value { subject: left },
-                    cases,
-                    default: Some(LoweredBlock {
-                        statements: vec![plain_return(GoExpression::literal("true".to_string()))],
-                    }),
-                    default_line: None,
-                })
-                .into(),
-            ]
-        };
+        let statements = lower_enum_equals_body(&receiver, &other, cases);
         let declaration = GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
             go_method,
@@ -244,5 +212,47 @@ impl Planner<'_> {
                 ))],
             },
         )
+    }
+}
+
+fn lower_enum_equals_body(
+    receiver: &GoIdentifier,
+    other: &GoIdentifier,
+    cases: Vec<SwitchCasePlan>,
+) -> Vec<Statement> {
+    let left = GoExpression::selector(
+        GoExpression::identifier(receiver.clone()),
+        ENUM_TAG_FIELD.to_string(),
+    );
+    let right = GoExpression::selector(
+        GoExpression::identifier(other.clone()),
+        ENUM_TAG_FIELD.to_string(),
+    );
+    if cases.is_empty() {
+        vec![plain_return(GoExpression::binary(
+            left,
+            BinaryOp::Eq,
+            right,
+        ))]
+    } else {
+        vec![
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::binary(left.clone(), BinaryOp::Ne, right),
+                LoweredBlock {
+                    statements: vec![plain_return(GoExpression::literal("false".to_string()))],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+            LoweredStatement::Switch(SwitchStatementPlan {
+                kind: SwitchKind::Value { subject: left },
+                cases,
+                default: Some(LoweredBlock {
+                    statements: vec![plain_return(GoExpression::literal("true".to_string()))],
+                }),
+                default_line: None,
+            })
+            .into(),
+        ]
     }
 }

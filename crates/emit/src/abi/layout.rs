@@ -800,46 +800,11 @@ impl Planner<'_> {
         physical_return: Option<&Type>,
     ) -> ValueLayout {
         if is_prelude_container_type(&ty) {
-            let declared_payload = declaration
-                .filter(|ty| is_prelude_container_type(ty))
-                .map(Type::ok_type);
-            let payload = Box::new(self.value_layout_with_hint(
-                &ty.ok_type(),
-                origin.nested(),
-                declared_payload.as_ref(),
-            ));
-            if !ty.is_option() {
-                let declared_error = declaration
-                    .filter(|ty| is_prelude_container_type(ty))
-                    .map(Type::err_type);
-                let error = Box::new(self.value_layout_with_hint(
-                    &ty.err_type(),
-                    origin.nested(),
-                    declared_error.as_ref(),
-                ));
-                return ValueLayout::Fallible {
-                    fallible_type: ty,
-                    payload,
-                    error,
-                };
-            }
-
-            return match go_option_representation(&ty, origin, |id| self.facts.definition(id)) {
-                GoOptionRepresentation::Tagged => ValueLayout::TaggedOption {
-                    option_type: ty,
-                    payload,
-                },
-                GoOptionRepresentation::Nullable => ValueLayout::NullableOption {
-                    option_type: ty,
-                    payload,
-                },
-                GoOptionRepresentation::Pointer => ValueLayout::PointerOption {
-                    option_type: ty,
-                    payload,
-                },
-            };
+            return self.container_value_layout(ty, origin, declaration);
         }
 
+        let nested =
+            |ty: &Type, hint: Option<&Type>| self.value_layout_with_hint(ty, origin.nested(), hint);
         match &ty {
             Type::Compound {
                 kind: CompoundKind::Ref,
@@ -851,9 +816,8 @@ impl Planner<'_> {
                 };
                 ValueLayout::Reference {
                     reference_type: ty.clone(),
-                    pointee: Box::new(self.value_layout_with_hint(
+                    pointee: Box::new(nested(
                         pointee,
-                        origin.nested(),
                         compound_hint(declaration, CompoundKind::Ref, 0),
                     )),
                 }
@@ -868,11 +832,7 @@ impl Planner<'_> {
                 };
                 ValueLayout::Slice {
                     collection_type: ty.clone(),
-                    element: Box::new(self.value_layout_with_hint(
-                        element,
-                        origin.nested(),
-                        compound_hint(declaration, *kind, 0),
-                    )),
+                    element: Box::new(nested(element, compound_hint(declaration, *kind, 0))),
                 }
             }
             Type::Compound {
@@ -885,14 +845,12 @@ impl Planner<'_> {
                 };
                 ValueLayout::Map {
                     collection_type: ty.clone(),
-                    key: Box::new(self.value_layout_with_hint(
+                    key: Box::new(nested(
                         key,
-                        origin.nested(),
                         compound_hint(declaration, CompoundKind::Map, 0),
                     )),
-                    value: Box::new(self.value_layout_with_hint(
+                    value: Box::new(nested(
                         value,
-                        origin.nested(),
                         compound_hint(declaration, CompoundKind::Map, 1),
                     )),
                 }
@@ -900,95 +858,137 @@ impl Planner<'_> {
             Type::Array { length, element } => ValueLayout::Array {
                 array_type: ty.clone(),
                 length: *length,
-                element: Box::new(self.value_layout_with_hint(
-                    element,
-                    origin.nested(),
-                    array_hint(declaration),
-                )),
+                element: Box::new(nested(element, array_hint(declaration))),
             },
             Type::Tuple(elements) => ValueLayout::Tuple {
                 tuple_type: ty.clone(),
                 elements: elements
                     .iter()
                     .enumerate()
-                    .map(|(index, element)| {
-                        self.value_layout_with_hint(
-                            element,
-                            origin.nested(),
-                            tuple_hint(declaration, index),
-                        )
-                    })
+                    .map(|(index, element)| nested(element, tuple_hint(declaration, index)))
                     .collect(),
             },
             _ => {
                 if let Some(function_type) = self.facts.resolve_to_function_type(&ty) {
-                    let component_layout = |ty: &Type, declaration: Option<&Type>| {
-                        if physical_return.is_some()
-                            && let Some(declaration) = declaration
-                        {
-                            self.value_layout_with_declaration(ty, origin.nested(), declaration)
-                        } else {
-                            self.value_layout_with_hint(ty, origin.nested(), declaration)
-                        }
-                    };
-                    let declared_function =
-                        declaration.and_then(|ty| self.facts.resolve_to_function_type(ty));
-                    let declared_parameters = declared_function
-                        .as_ref()
-                        .and_then(Type::get_function_params)
-                        .unwrap_or_default();
-                    let parameters = function_type
-                        .get_function_params()
-                        .unwrap_or_default()
-                        .iter()
-                        .enumerate()
-                        .map(|(index, parameter)| {
-                            component_layout(
-                                &parameter.ty,
-                                declared_parameters.get(index).map(|param| &param.ty),
-                            )
-                        })
-                        .collect();
-                    let result_type = function_type
-                        .get_function_ret()
-                        .cloned()
-                        .unwrap_or(Type::Never);
-                    let declared_result =
-                        declared_function.as_ref().and_then(Type::get_function_ret);
-                    let return_abi = self.facts.return_abi(
-                        physical_return.unwrap_or(&result_type),
-                        ReturnSlot::FunctionValue(origin),
+                    return self.function_value_layout(
+                        ty,
+                        &function_type,
+                        origin,
+                        declaration,
+                        physical_return,
                     );
-                    let result = self.callable_result_layout(
-                        &result_type,
-                        origin.nested(),
-                        physical_return.and(declared_result),
-                        &return_abi,
-                    );
-                    return ValueLayout::Function {
-                        function_type: ty,
-                        layout: self.function_layout(
-                            parameters,
-                            &result,
-                            return_abi,
-                            declared_result,
-                        ),
-                    };
                 }
                 if let Some(underlying) = self.facts.newtype_underlying(&ty) {
                     let declared_underlying =
                         declaration.and_then(|ty| self.facts.newtype_underlying(ty));
                     return ValueLayout::Named {
                         named_type: ty,
-                        underlying: Box::new(self.value_layout_with_hint(
-                            &underlying,
-                            origin.nested(),
-                            declared_underlying.as_ref(),
-                        )),
+                        underlying: Box::new(nested(&underlying, declared_underlying.as_ref())),
                     };
                 }
                 ValueLayout::Plain(ty)
             }
+        }
+    }
+
+    fn container_value_layout(
+        &self,
+        ty: Type,
+        origin: SlotOrigin,
+        declaration: Option<&Type>,
+    ) -> ValueLayout {
+        let declared_payload = declaration
+            .filter(|ty| is_prelude_container_type(ty))
+            .map(Type::ok_type);
+        let payload = Box::new(self.value_layout_with_hint(
+            &ty.ok_type(),
+            origin.nested(),
+            declared_payload.as_ref(),
+        ));
+        if !ty.is_option() {
+            let declared_error = declaration
+                .filter(|ty| is_prelude_container_type(ty))
+                .map(Type::err_type);
+            let error = Box::new(self.value_layout_with_hint(
+                &ty.err_type(),
+                origin.nested(),
+                declared_error.as_ref(),
+            ));
+            return ValueLayout::Fallible {
+                fallible_type: ty,
+                payload,
+                error,
+            };
+        }
+
+        match go_option_representation(&ty, origin, |id| self.facts.definition(id)) {
+            GoOptionRepresentation::Tagged => ValueLayout::TaggedOption {
+                option_type: ty,
+                payload,
+            },
+            GoOptionRepresentation::Nullable => ValueLayout::NullableOption {
+                option_type: ty,
+                payload,
+            },
+            GoOptionRepresentation::Pointer => ValueLayout::PointerOption {
+                option_type: ty,
+                payload,
+            },
+        }
+    }
+
+    fn function_value_layout(
+        &self,
+        ty: Type,
+        function_type: &Type,
+        origin: SlotOrigin,
+        declaration: Option<&Type>,
+        physical_return: Option<&Type>,
+    ) -> ValueLayout {
+        let component_layout = |ty: &Type, declaration: Option<&Type>| {
+            if physical_return.is_some()
+                && let Some(declaration) = declaration
+            {
+                self.value_layout_with_declaration(ty, origin.nested(), declaration)
+            } else {
+                self.value_layout_with_hint(ty, origin.nested(), declaration)
+            }
+        };
+        let declared_function = declaration.and_then(|ty| self.facts.resolve_to_function_type(ty));
+        let declared_parameters = declared_function
+            .as_ref()
+            .and_then(Type::get_function_params)
+            .unwrap_or_default();
+        let parameters = function_type
+            .get_function_params()
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+            .map(|(index, parameter)| {
+                component_layout(
+                    &parameter.ty,
+                    declared_parameters.get(index).map(|param| &param.ty),
+                )
+            })
+            .collect();
+        let result_type = function_type
+            .get_function_ret()
+            .cloned()
+            .unwrap_or(Type::Never);
+        let declared_result = declared_function.as_ref().and_then(Type::get_function_ret);
+        let return_abi = self.facts.return_abi(
+            physical_return.unwrap_or(&result_type),
+            ReturnSlot::FunctionValue(origin),
+        );
+        let result = self.callable_result_layout(
+            &result_type,
+            origin.nested(),
+            physical_return.and(declared_result),
+            &return_abi,
+        );
+        ValueLayout::Function {
+            function_type: ty,
+            layout: self.function_layout(parameters, &result, return_abi, declared_result),
         }
     }
 }

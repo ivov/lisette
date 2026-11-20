@@ -344,50 +344,8 @@ impl Planner<'_> {
             );
         }
 
-        if context.method == "equals"
-            && matches!(
-                context.native_type,
-                NativeTypeKind::Slice | NativeTypeKind::Map
-            )
-        {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
-            if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let staged = self.stage_native_method(context);
-                let recipe = self.facts.native_equality(context);
-                let body = self.equality_test(
-                    staged.receiver.clone(),
-                    staged.arguments[0].clone(),
-                    &recipe,
-                    false,
-                );
-                return staged.finish(body);
-            }
-        }
-
-        if context.method == "contains" && matches!(context.native_type, NativeTypeKind::Slice) {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
-            if receiver_ty.is_slice() {
-                let mut staged = self.stage_native_method(context);
-                let body = if let EqualityRecipe::Slice(Some(element)) =
-                    &self.facts.native_equality(context)
-                {
-                    let searched = staged.arguments[0].clone();
-                    let target =
-                        self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
-                    let predicate =
-                        self.contains_predicate(element, GoExpression::identifier(target));
-                    GoExpression::call(
-                        GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
-                        vec![staged.receiver.clone(), predicate],
-                    )
-                } else {
-                    GoExpression::read_only_call(
-                        GoExpression::generated(GeneratedPackage::Slices, "Contains"),
-                        vec![staged.receiver.clone(), staged.arguments[0].clone()],
-                    )
-                };
-                return staged.finish(body);
-            }
+        if let Some(result) = self.try_lower_native_equality(context, receiver_expression) {
+            return result;
         }
 
         if matches!(context.native_type, NativeTypeKind::Array)
@@ -447,6 +405,67 @@ impl Planner<'_> {
             return staged.finish(inlined);
         }
 
+        self.lower_prelude_native_call(context, staged)
+    }
+
+    fn try_lower_native_equality(
+        &mut self,
+        context: &NativeCallContext,
+        receiver_expression: &Expression,
+    ) -> Option<NativeCallResult> {
+        if context.method == "equals"
+            && matches!(
+                context.native_type,
+                NativeTypeKind::Slice | NativeTypeKind::Map
+            )
+        {
+            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
+            if receiver_ty.is_slice() || receiver_ty.is_map() {
+                let staged = self.stage_native_method(context);
+                let recipe = self.facts.native_equality(context);
+                let body = self.equality_test(
+                    staged.receiver.clone(),
+                    staged.arguments[0].clone(),
+                    &recipe,
+                    false,
+                );
+                return Some(staged.finish(body));
+            }
+        }
+
+        if context.method == "contains" && matches!(context.native_type, NativeTypeKind::Slice) {
+            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
+            if receiver_ty.is_slice() {
+                let mut staged = self.stage_native_method(context);
+                let body = if let EqualityRecipe::Slice(Some(element)) =
+                    &self.facts.native_equality(context)
+                {
+                    let searched = staged.arguments[0].clone();
+                    let target =
+                        self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
+                    let predicate =
+                        self.contains_predicate(element, GoExpression::identifier(target));
+                    GoExpression::call(
+                        GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
+                        vec![staged.receiver.clone(), predicate],
+                    )
+                } else {
+                    GoExpression::read_only_call(
+                        GoExpression::generated(GeneratedPackage::Slices, "Contains"),
+                        vec![staged.receiver.clone(), staged.arguments[0].clone()],
+                    )
+                };
+                return Some(staged.finish(body));
+            }
+        }
+        None
+    }
+
+    fn lower_prelude_native_call(
+        &mut self,
+        context: &NativeCallContext,
+        staged: StagedNativeMethod,
+    ) -> NativeCallResult {
         let fn_name = GoExpression::generated(
             GeneratedPackage::Prelude,
             format!(

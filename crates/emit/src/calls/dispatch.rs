@@ -156,61 +156,7 @@ impl<'a> Planner<'a> {
                     GoExpression::empty_composite(GoType::slice_of(&element)),
                 ))
             }
-            (NativeTypeKind::Slice, "make") => {
-                let element_ty = self
-                    .facts
-                    .checked(ctx.function)
-                    .callee()
-                    .first_type_argument()
-                    .clone();
-                let element = self.go_type(&element_ty);
-                let (setup, length) = self.stage_size_argument(ctx);
-                let value = if self.element_go_zero_ok(&element_ty) {
-                    GoExpression::call(
-                        GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(GoType::slice_of(&element)), length],
-                    )
-                } else {
-                    let zero = self.lisette_zero(&element_ty);
-                    let slice_type = GoType::slice_of(&element);
-                    let slice_name = self.scope.helper_local("s", self.package);
-                    let index_name = self.scope.helper_local("i", self.package);
-                    let slice = || GoExpression::identifier(slice_name.clone());
-                    let index = || GoExpression::identifier(index_name.clone());
-                    GoExpression::immediate_call(
-                        slice_type.clone(),
-                        LoweredBlock {
-                            statements: vec![
-                                define(
-                                    slice_name.clone(),
-                                    GoExpression::call(
-                                        GoExpression::external_name("make".to_string()),
-                                        vec![GoExpression::type_name(slice_type), length],
-                                    ),
-                                ),
-                                LoweredStatement::Loop(LoopPlan {
-                                    kind: LoopKind::Generated { label: None },
-                                    header: LoopHeader::Range {
-                                        key: Some(index_name.clone()),
-                                        value: None,
-                                        iterable: slice(),
-                                    },
-                                    body: LoweredBlock {
-                                        statements: vec![assign(
-                                            GoExpression::index(slice(), index()),
-                                            zero,
-                                        )],
-                                    },
-                                })
-                                .into(),
-                                plain_return(slice()),
-                            ],
-                        },
-                        FunctionLiteralLayout::MultiLine,
-                    )
-                };
-                Some(ValuePlan::computed(setup, value))
-            }
+            (NativeTypeKind::Slice, "make") => Some(self.plan_slice_make(ctx)),
             (NativeTypeKind::Array, "new") => {
                 let peeled = ctx.call_ty.map(|t| self.facts.peel_alias(t));
                 if let Some(Type::Array { length, element }) = &peeled {
@@ -225,6 +171,62 @@ impl<'a> Planner<'a> {
             (NativeTypeKind::Array, "from") => self.try_plan_array_from(ctx),
             _ => None,
         }
+    }
+
+    fn plan_slice_make(&mut self, ctx: &NativeCallContext) -> ValuePlan {
+        let element_ty = self
+            .facts
+            .checked(ctx.function)
+            .callee()
+            .first_type_argument()
+            .clone();
+        let element = self.go_type(&element_ty);
+        let (setup, length) = self.stage_size_argument(ctx);
+        let value = if self.element_go_zero_ok(&element_ty) {
+            GoExpression::call(
+                GoExpression::external_name("make".to_string()),
+                vec![GoExpression::type_name(GoType::slice_of(&element)), length],
+            )
+        } else {
+            let zero = self.lisette_zero(&element_ty);
+            let slice_type = GoType::slice_of(&element);
+            let slice_name = self.scope.helper_local("s", self.package);
+            let index_name = self.scope.helper_local("i", self.package);
+            let slice = || GoExpression::identifier(slice_name.clone());
+            let index = || GoExpression::identifier(index_name.clone());
+            GoExpression::immediate_call(
+                slice_type.clone(),
+                LoweredBlock {
+                    statements: vec![
+                        define(
+                            slice_name.clone(),
+                            GoExpression::call(
+                                GoExpression::external_name("make".to_string()),
+                                vec![GoExpression::type_name(slice_type), length],
+                            ),
+                        ),
+                        LoweredStatement::Loop(LoopPlan {
+                            kind: LoopKind::Generated { label: None },
+                            header: LoopHeader::Range {
+                                key: Some(index_name.clone()),
+                                value: None,
+                                iterable: slice(),
+                            },
+                            body: LoweredBlock {
+                                statements: vec![assign(
+                                    GoExpression::index(slice(), index()),
+                                    zero,
+                                )],
+                            },
+                        })
+                        .into(),
+                        plain_return(slice()),
+                    ],
+                },
+                FunctionLiteralLayout::MultiLine,
+            )
+        };
+        ValuePlan::computed(setup, value)
     }
 
     fn try_plan_array_from(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {

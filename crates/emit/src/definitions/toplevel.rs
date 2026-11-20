@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::expressions::top_items::item_doc_text;
 use crate::ir::bodies::{ConstPlan, LoweredStatement};
 use crate::ir::declarations::{DeclarationKind, GoDeclaration};
 use crate::ir::values::GoExpression;
@@ -95,8 +96,15 @@ impl Planner<'_> {
         identifier: &EcoString,
         expression: &Expression,
         ty: &Type,
+        doc: &Option<String>,
     ) -> GoDeclaration {
         let binding = self.lower_const(identifier, None, expression, ty, ConstPlacement::Package);
-        GoDeclaration::new(DeclarationKind::Binding(binding))
+        let mut declaration = GoDeclaration::new(DeclarationKind::Binding(binding));
+        let go_name = self
+            .scope
+            .bound_go_identifier(identifier)
+            .expect("`lower_const` binds the identifier");
+        declaration.documentation = item_doc_text(doc, identifier, go_name.spelling()).into();
+        declaration
     }
 }

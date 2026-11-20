@@ -6,8 +6,8 @@ use crate::control_flow::fallible::ConstructorKind;
 use crate::expressions::staging::{LaterStages, SpreadSequenceOptions};
 use crate::ir::bodies::with_setup;
 use crate::ir::bodies::{
-    AssignForm, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, assign, directed_first, discard, effect_statement, expression_statement,
+    AssignForm, Definition, ElseArm, LoopHeader, LoweredBlock, LoweredStatement, PlacePlan,
+    Statement, assign, directed_first, discard, effect_statement, expression_statement,
 };
 use crate::ir::evaluation::Effects;
 use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
@@ -801,10 +801,7 @@ impl<'p> Planner<'p> {
         } else if !value.is_empty() {
             statements.push(discard(value));
         }
-        let target = self
-            .current_loop_id()
-            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
-        statements.push(LoweredStatement::Break(target).into());
+        statements.push(LoweredStatement::Break(self.current_loop_transfer()).into());
         LoweredBlock { statements }
     }
 }

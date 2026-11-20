@@ -730,40 +730,7 @@ impl GoExpressionNode {
                 elements,
                 layout,
                 end,
-            } => {
-                if let Some(go_type) = go_type {
-                    output.push_str(&go_type.code);
-                }
-                match layout {
-                    _ if elements.is_empty() => output.push_str("{}"),
-                    CompositeLayout::Inline { padded } => {
-                        let padding = if *padded { " " } else { "" };
-                        output.push('{');
-                        output.push_str(padding);
-                        for (index, element) in elements.iter().enumerate() {
-                            if index > 0 {
-                                output.push_str(", ");
-                            }
-                            element.write(output);
-                        }
-                        output.push_str(padding);
-                        output.push('}');
-                    }
-                    CompositeLayout::MultiLine { indented } => {
-                        let start = output.line();
-                        output.push_str("{\n");
-                        for element in elements {
-                            if *indented {
-                                output.push('\t');
-                            }
-                            element.write(output);
-                            output.push_str(",\n");
-                        }
-                        output.push('}');
-                        output.close_literal(end, start);
-                    }
-                }
-            }
+            } => Self::write_composite_literal(output, go_type.as_deref(), elements, layout, end),
             Self::Call {
                 callee,
                 arguments,
@@ -781,6 +748,54 @@ impl GoExpressionNode {
                 }
                 output.push(')');
             }
+            Self::Instantiation { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::TypeAssertion { .. } => self.write_postfix(output, slot),
+            Self::Unary { operator, operand } => {
+                let sign = operator.sign();
+                output.push(sign);
+                Self::write_child(operand, slot.with(SlotKind::Prefix(sign)), output);
+            }
+            Self::AddressOf(operand) => {
+                output.push('&');
+                Self::write_child(operand, slot.with(SlotKind::Prefix('&')), output);
+            }
+            Self::Dereference(operand) => {
+                output.push('*');
+                Self::write_child(operand, slot.with(SlotKind::Prefix('*')), output);
+            }
+            Self::Binary {
+                operator,
+                left,
+                right,
+            } => {
+                let level = operator.level();
+                Self::write_child(left, slot.with(SlotKind::Left(level)), output);
+                output.push(' ');
+                output.push_str(operator.symbol());
+                output.push(' ');
+                Self::write_child(right, slot.with(SlotKind::Right(level)), output);
+            }
+            Self::Conversion { go_type, operand } => {
+                output.push_str(&conversion_prefix(&go_type.code));
+                operand.write(output, Slot::FREE);
+                output.push(')');
+            }
+            Self::Spread(_) => self.write_postfix(output, slot),
+            Self::FunctionLiteral {
+                parameters,
+                result,
+                body,
+                layout,
+                end,
+            } => Self::write_function_literal(output, parameters, result, body, layout, end),
+        }
+    }
+
+    fn write_postfix(&self, output: &mut GoWriter, slot: Slot) {
+        match self {
             Self::Instantiation {
                 base,
                 type_arguments,
@@ -826,76 +841,89 @@ impl GoExpressionNode {
                 output.push_str(&go_type.code);
                 output.push(')');
             }
-            Self::Unary { operator, operand } => {
-                let sign = operator.sign();
-                output.push(sign);
-                Self::write_child(operand, slot.with(SlotKind::Prefix(sign)), output);
-            }
-            Self::AddressOf(operand) => {
-                output.push('&');
-                Self::write_child(operand, slot.with(SlotKind::Prefix('&')), output);
-            }
-            Self::Dereference(operand) => {
-                output.push('*');
-                Self::write_child(operand, slot.with(SlotKind::Prefix('*')), output);
-            }
-            Self::Binary {
-                operator,
-                left,
-                right,
-            } => {
-                let level = operator.level();
-                Self::write_child(left, slot.with(SlotKind::Left(level)), output);
-                output.push(' ');
-                output.push_str(operator.symbol());
-                output.push(' ');
-                Self::write_child(right, slot.with(SlotKind::Right(level)), output);
-            }
-            Self::Conversion { go_type, operand } => {
-                output.push_str(&conversion_prefix(&go_type.code));
-                operand.write(output, Slot::FREE);
-                output.push(')');
-            }
             Self::Spread(operand) => {
                 Self::write_child(operand, slot.with(SlotKind::Postfix), output);
                 output.push_str("...");
             }
-            Self::FunctionLiteral {
-                parameters,
-                result,
-                body,
-                layout,
-                end,
-            } => {
-                output.push_str("func(");
-                let pairs: Vec<(String, String)> =
-                    parameters.iter().map(GoParameter::pair).collect();
-                output.push_str(&group_params(&pairs));
-                output.push(')');
-                if !result.is_empty() {
-                    output.push(' ');
-                    output.push_str(&result.code);
-                }
-                output.push_str(" {");
-                let single_line = Renderer.can_inline_block(body);
-                let start = output.line();
-                if matches!(layout, FunctionLiteralLayout::Inline) && single_line {
-                    if !body.renders_empty() {
-                        output.push(' ');
-                        let outer = output.set_inline(true);
-                        Renderer.render_lowered_block(output, body);
-                        output.set_inline(outer);
-                        output.push(' ');
+            _ => unreachable!("write_postfix takes a postfix expression"),
+        }
+    }
+
+    fn write_composite_literal(
+        output: &mut GoWriter,
+        go_type: Option<&GoType>,
+        elements: &[CompositeElement],
+        layout: &CompositeLayout,
+        end: &SourcePosition,
+    ) {
+        if let Some(go_type) = go_type {
+            output.push_str(&go_type.code);
+        }
+        match layout {
+            _ if elements.is_empty() => output.push_str("{}"),
+            CompositeLayout::Inline { padded } => {
+                let padding = if *padded { " " } else { "" };
+                output.push('{');
+                output.push_str(padding);
+                for (index, element) in elements.iter().enumerate() {
+                    if index > 0 {
+                        output.push_str(", ");
                     }
-                    output.push('}');
-                    output.close_literal(&SourcePosition::default(), start);
-                } else {
-                    output.push('\n');
-                    Renderer.render_lowered_block(output, body);
-                    output.push('}');
-                    output.close_literal(end, start);
+                    element.write(output);
                 }
+                output.push_str(padding);
+                output.push('}');
             }
+            CompositeLayout::MultiLine { indented } => {
+                let start = output.line();
+                output.push_str("{\n");
+                for element in elements {
+                    if *indented {
+                        output.push('\t');
+                    }
+                    element.write(output);
+                    output.push_str(",\n");
+                }
+                output.push('}');
+                output.close_literal(end, start);
+            }
+        }
+    }
+
+    fn write_function_literal(
+        output: &mut GoWriter,
+        parameters: &[GoParameter],
+        result: &GoType,
+        body: &LoweredBlock,
+        layout: &FunctionLiteralLayout,
+        end: &SourcePosition,
+    ) {
+        output.push_str("func(");
+        let pairs: Vec<(String, String)> = parameters.iter().map(GoParameter::pair).collect();
+        output.push_str(&group_params(&pairs));
+        output.push(')');
+        if !result.is_empty() {
+            output.push(' ');
+            output.push_str(&result.code);
+        }
+        output.push_str(" {");
+        let single_line = Renderer.can_inline_block(body);
+        let start = output.line();
+        if matches!(layout, FunctionLiteralLayout::Inline) && single_line {
+            if !body.renders_empty() {
+                output.push(' ');
+                let outer = output.set_inline(true);
+                Renderer.render_lowered_block(output, body);
+                output.set_inline(outer);
+                output.push(' ');
+            }
+            output.push('}');
+            output.close_literal(&SourcePosition::default(), start);
+        } else {
+            output.push('\n');
+            Renderer.render_lowered_block(output, body);
+            output.push('}');
+            output.close_literal(end, start);
         }
     }
 }

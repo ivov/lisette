@@ -7,6 +7,7 @@ use syntax::program::ReceiverCoercion;
 use crate::Planner;
 use crate::expressions::staging::LaterStages;
 use crate::expressions::staging::SpreadSequenceOptions;
+use crate::ir::bodies::Statement;
 use crate::ir::evaluation::Effects;
 use crate::ir::go_expression::{GoExpressionNode, Operand};
 use crate::ir::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
@@ -214,21 +215,9 @@ impl<'a> Planner<'a> {
             ..
         } = sequenced_args;
 
-        let arguments_effects = arguments
-            .iter()
-            .fold(Effects::default(), |effects, argument| {
-                effects.union(argument.effects())
-            });
-        let callee_needs_pin = type_args_string.is_empty()
-            && !self
-                .facts
-                .pointer_receiver_on_value_local(function, &call_plan.resolved)
-            && LaterStages::sequenced(
-                &args_setup,
-                arguments_effects.with_known_reads(arguments_effects.reads()),
-            )
-            .can_change(self.place_read_stability(function));
-        if callee_needs_pin {
+        if type_args_string.is_empty()
+            && self.callee_needs_pin(function, &call_plan.resolved, &args_setup, &arguments)
+        {
             let pinned = self.hoist_tmp_value_statement(&mut setup, "callee", callee);
             callee = GoExpression::identifier(pinned);
         }
@@ -257,6 +246,28 @@ impl<'a> Planner<'a> {
         } else {
             ValuePlan::plain_call(setup, expression)
         }
+    }
+
+    fn callee_needs_pin(
+        &self,
+        function: &Expression,
+        resolved: &ResolvedCallee<'_>,
+        args_setup: &[Statement],
+        arguments: &[GoExpression],
+    ) -> bool {
+        let arguments_effects = arguments
+            .iter()
+            .fold(Effects::default(), |effects, argument| {
+                effects.union(argument.effects())
+            });
+        !self
+            .facts
+            .pointer_receiver_on_value_local(function, resolved)
+            && LaterStages::sequenced(
+                args_setup,
+                arguments_effects.with_known_reads(arguments_effects.reads()),
+            )
+            .can_change(self.place_read_stability(function))
     }
 
     fn try_plan_go_named_call(

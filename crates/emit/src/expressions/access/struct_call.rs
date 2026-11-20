@@ -16,8 +16,9 @@ use crate::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, declare,
     discard,
 };
+use crate::ir::go_expression::Position;
 use crate::ir::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
-use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::state::expression::ExpressionContext;
@@ -47,6 +48,13 @@ struct EnumCallContext {
     pointer_fields: HashSet<String>,
 }
 
+struct PlannedStructFields {
+    setup: Vec<Statement>,
+    fields: Vec<StructCallField>,
+    positions: Vec<(String, Position)>,
+    stability: Stability,
+}
+
 struct StructCallField {
     name: String,
     value: GoExpression,
@@ -69,13 +77,55 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let ctx = self.analyze_struct_call(name, ty);
 
-        let tag_field = ctx.enum_ctx.as_ref().map(|e| {
-            (
-                enum_layout::ENUM_TAG_FIELD.to_string(),
-                e.tag_constant.clone(),
-            )
-        });
+        let is_go_struct = self.facts.is_go_abi_type(ty);
+        let PlannedStructFields {
+            mut setup,
+            fields,
+            positions,
+            stability: fields_stability,
+        } = self.planned_struct_fields(field_assignments, spread, ty, &ctx);
 
+        let built_from_fields = !matches!(spread, StructSpread::From(_));
+        let value = match spread {
+            StructSpread::From(base) => {
+                self.plan_struct_spread(&mut setup, base, fields, &ctx, field_assignments)
+            }
+            StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
+                Some(zero) => zero,
+                None => {
+                    let mut field_pairs =
+                        fields.into_iter().map(StructCallField::into_pair).collect();
+                    self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
+                    plan_struct_literal(&ctx.go_type, field_pairs)
+                }
+            },
+            StructSpread::None => {
+                let field_pairs: Vec<_> =
+                    fields.into_iter().map(StructCallField::into_pair).collect();
+                plan_struct_literal(&ctx.go_type, field_pairs)
+            }
+        };
+
+        let value = value.position_elements(|_, element| match &element.key {
+            Some(CompositeKey::Field(key)) => positions
+                .iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, position)| position.clone()),
+            _ => None,
+        });
+        if built_from_fields {
+            return ValuePlan::built_from(setup, value, fields_stability);
+        }
+        ValuePlan::computed(setup, value)
+    }
+
+    fn planned_struct_fields(
+        &mut self,
+        field_assignments: &[StructFieldAssignment],
+        spread: &StructSpread,
+        ty: &Type,
+        ctx: &StructCallContext<'_>,
+    ) -> PlannedStructFields {
         let is_go_struct = self.facts.is_go_abi_type(ty);
         let variant = ctx.enum_ctx.as_ref().map(|ctx| ctx.variant_name.as_str());
 
@@ -86,7 +136,7 @@ impl Planner<'_> {
                     let field_ty = self.lookup_field_ty(ty, variant, &f.name);
                     if self
                         .facts
-                        .omits_none_field(f, field_ty.as_ref(), &ctx, spread, is_go_struct)
+                        .omits_none_field(f, field_ty.as_ref(), ctx, spread, is_go_struct)
                     {
                         return None;
                     }
@@ -128,12 +178,19 @@ impl Planner<'_> {
             .unzip();
         let field_evaluations: Vec<bool> = stages.iter().map(|value| !value.can_delay()).collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
-        let fields_stability = sequenced.stability;
+        let sequenced_stability = sequenced.stability;
         let mut setup = sequenced.setup;
         let emitted_values = sequenced.values;
 
         let mut fields =
             Vec::with_capacity(kept_fields.len() + usize::from(ctx.enum_ctx.is_some()));
+        if let Some(enum_ctx) = &ctx.enum_ctx {
+            fields.push(StructCallField {
+                name: enum_layout::ENUM_TAG_FIELD.to_string(),
+                value: enum_ctx.tag_constant.clone(),
+                has_observable_evaluation: false,
+            });
+        }
         let mut positions = Vec::new();
         for (
             (((f, field_ty, field_layout), has_observable_evaluation), (mut value, source_layout)),
@@ -144,11 +201,11 @@ impl Planner<'_> {
             .zip(emitted_values.into_iter().zip(source_layouts))
             .zip(literal_slots)
         {
-            let field_name = self.resolve_struct_call_field_name(&f.name, &ctx);
+            let field_name = self.resolve_struct_call_field_name(&f.name, ctx);
             if let Some(position) = self.facts.source_position(&f.name_span) {
                 positions.push((field_name.clone(), position));
             }
-            value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
+            value = self.wrap_recursive_enum_field(&mut setup, value, f, ctx);
             value = self.coerce_struct_field(
                 &mut setup,
                 (&f.value, value),
@@ -163,49 +220,12 @@ impl Planner<'_> {
             });
         }
 
-        if let Some((name, value)) = tag_field {
-            fields.insert(
-                0,
-                StructCallField {
-                    name,
-                    value,
-                    has_observable_evaluation: false,
-                },
-            );
+        PlannedStructFields {
+            setup,
+            fields,
+            positions,
+            stability: sequenced_stability,
         }
-
-        let built_from_fields = !matches!(spread, StructSpread::From(_));
-        let value = match spread {
-            StructSpread::From(base) => {
-                self.plan_struct_spread(&mut setup, base, fields, &ctx, field_assignments)
-            }
-            StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
-                Some(zero) => zero,
-                None => {
-                    let mut field_pairs =
-                        fields.into_iter().map(StructCallField::into_pair).collect();
-                    self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
-                    plan_struct_literal(&ctx.go_type, field_pairs)
-                }
-            },
-            StructSpread::None => {
-                let field_pairs: Vec<_> =
-                    fields.into_iter().map(StructCallField::into_pair).collect();
-                plan_struct_literal(&ctx.go_type, field_pairs)
-            }
-        };
-
-        let value = value.position_elements(|_, element| match &element.key {
-            Some(CompositeKey::Field(key)) => positions
-                .iter()
-                .find(|(name, _)| name == key)
-                .map(|(_, position)| position.clone()),
-            _ => None,
-        });
-        if built_from_fields {
-            return ValuePlan::built_from(setup, value, fields_stability);
-        }
-        ValuePlan::computed(setup, value)
     }
 
     fn plan_struct_spread(

@@ -174,21 +174,7 @@ impl Planner<'_> {
             return Some(statements);
         };
 
-        let plan = if then_body.renders_empty() && !else_body.renders_empty() {
-            pair_if(err_condition, else_body, ElseArm::None)
-        } else if else_body.ends_with_diverge() && then_body.ends_with_diverge() {
-            pair_if(
-                err_condition,
-                else_body,
-                ElseArm::from_body(then_body, false),
-            )
-        } else {
-            pair_if(
-                ok_condition,
-                then_body,
-                ElseArm::from_body(else_body, false),
-            )
-        };
+        let plan = fused_result_if(ok_condition, err_condition, then_body, else_body);
         statements.push(LoweredStatement::If(plan).into());
         Some(statements)
     }
@@ -990,5 +976,28 @@ impl EmitFacts<'_> {
             return None;
         }
         simple_payload_binding(arm).flatten()
+    }
+}
+
+fn fused_result_if(
+    ok_condition: PairCondition,
+    err_condition: PairCondition,
+    then_body: LoweredBlock,
+    else_body: LoweredBlock,
+) -> IfPlan {
+    if then_body.renders_empty() && !else_body.renders_empty() {
+        pair_if(err_condition, else_body, ElseArm::None)
+    } else if else_body.ends_with_diverge() && then_body.ends_with_diverge() {
+        pair_if(
+            err_condition,
+            else_body,
+            ElseArm::from_body(then_body, false),
+        )
+    } else {
+        pair_if(
+            ok_condition,
+            then_body,
+            ElseArm::from_body(else_body, false),
+        )
     }
 }
