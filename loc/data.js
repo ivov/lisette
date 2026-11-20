@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795125958439,
+  "lastUpdate": 1795196855948,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -58846,6 +58846,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "syntax",
             "value": 17783,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14298,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9477,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7697,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2970,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1930,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11006,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d71b5ad929e696e9180ba0a5f8f2586bf4234f49",
+          "message": "refactor: tidy emit crate (#1716)",
+          "timestamp": "2026-11-20T18:47:11+01:00",
+          "tree_id": "516d71cea8f71a69561ad983454bf5436be6f4c6",
+          "url": "https://github.com/ivov/lisette/commit/d71b5ad929e696e9180ba0a5f8f2586bf4234f49"
+        },
+        "date": 1795196853422,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 163177,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43635,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 32910,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20130,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 17881,
             "unit": "lines"
           },
           {
