@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795209778034,
+  "lastUpdate": 1795268659219,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -59088,6 +59088,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/47da55fa305dac01749b51bd1a00108fd24b976c"
         },
         "date": 1795209775966,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 163506,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43227,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 33253,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20086,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 18319,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14298,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9477,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7697,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2970,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1930,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11006,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d63192eaa07efdea204103f0711c59cc4c4bce62",
+          "message": "ci: run satellite lints in their own job (#1719)",
+          "timestamp": "2026-11-21T14:43:37+01:00",
+          "tree_id": "5846472462e17d8f66611163a12d61a3c7856158",
+          "url": "https://github.com/ivov/lisette/commit/d63192eaa07efdea204103f0711c59cc4c4bce62"
+        },
+        "date": 1795268656537,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
