@@ -302,21 +302,36 @@ pub(crate) fn declare_reached_modules(
 
     let mut document = open_manifest_document(project_root)?;
     let mut added = Vec::new();
-    for (module, via) in transitives {
+    let mut changed = false;
+    for (module, parents) in transitives {
         let Some(version) = graph.version(&module) else {
             continue;
         };
-        if manifest.go_deps().contains_key(&module) {
-            continue;
-        }
-        let dependency = deps::GoDependency::Remote {
-            version: version.to_string(),
-            via: Some(via),
+        let dependency = match manifest.go_deps().get(&module) {
+            None => {
+                added.push(module.clone());
+                deps::GoDependency::Remote {
+                    version: version.to_string(),
+                    via: Some(parents),
+                }
+            }
+            Some(existing) => {
+                let Some(known) = existing.via() else {
+                    continue;
+                };
+                if parents.iter().all(|parent| known.contains(parent)) {
+                    continue;
+                }
+                let mut via: Vec<String> = known.iter().chain(&parents).cloned().collect();
+                via.sort();
+                via.dedup();
+                existing.with_via(Some(via))
+            }
         };
         write_dependency(&mut document.document, &module, &dependency)?;
-        added.push(module);
+        changed = true;
     }
-    if !added.is_empty() {
+    if changed {
         save_manifest_document(&document)?;
     }
     Ok(added)
@@ -704,7 +719,7 @@ fn report_unresolved_transitives(
     for entry in unresolved {
         if let Some(hint) = local_child_hint(workspace, &entry.import, locals) {
             return Err(undeclared_local_error(
-                &format!("`{}`", entry.import),
+                &format!("`{}`", entry.importer),
                 &hint,
             ));
         }

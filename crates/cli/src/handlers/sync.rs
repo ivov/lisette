@@ -65,8 +65,8 @@ pub fn sync(script: Option<&str>) -> i32 {
         Ok(added) => added,
         Err(code) => return code,
     };
-    let (prewarm_result, needs_separator) = if !non_blank_imports.is_empty() {
-        match prewarm_declaring_missing(&project, &non_blank_imports, &mut added) {
+    let (prewarm_result, needs_separator) = if !all_imports.is_empty() {
+        match prewarm_declaring_missing(&project, &non_blank_imports, &all_imports, &mut added) {
             Ok(prewarmed) => prewarmed,
             Err(code) => return code,
         }
@@ -99,18 +99,22 @@ fn read_manifest(project_root: &Path) -> Result<deps::Manifest, i32> {
     })
 }
 
-/// Prewarm, declaring missing modules into `added` until none are missing.
+/// Prewarm, declaring reached modules into `added` until none are missing.
 fn prewarm_declaring_missing(
     project: &MutationProject,
-    imports: &[String],
+    typedef_imports: &[String],
+    all_imports: &[String],
     added: &mut Vec<String>,
 ) -> Result<(Result<(), i32>, bool), i32> {
-    let (mut outcome, mut printed) = prewarm(project, imports)?;
-    while !outcome.missing_transitive.is_empty() {
+    let (mut outcome, mut printed) = prewarm(project, typedef_imports)?;
+    loop {
         let manifest = read_manifest(&project.root)?;
         let declared =
-            declare_reached_modules(&project.root, &project.target_dir, &manifest, imports)?;
+            declare_reached_modules(&project.root, &project.target_dir, &manifest, all_imports)?;
         if declared.is_empty() {
+            if outcome.missing_transitive.is_empty() {
+                break;
+            }
             let packages: Vec<String> = outcome
                 .missing_transitive
                 .iter()
@@ -127,7 +131,7 @@ fn prewarm_declaring_missing(
             return Err(1);
         }
         added.extend(declared);
-        let (next, next_printed) = prewarm(project, imports)?;
+        let (next, next_printed) = prewarm(project, typedef_imports)?;
         outcome = next;
         printed |= next_printed;
     }
