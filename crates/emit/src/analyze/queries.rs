@@ -354,7 +354,7 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
         let peeled = self.peel_alias(ty);
-        !self.is_function_alias(ty)
+        !self.is_go_named_function_type(ty)
             && !self.is_interface_or_unknown(&peeled)
             && !(matches!(peeled, Type::Nominal { .. })
                 && self.underlying_simple_kind(&peeled).is_some())

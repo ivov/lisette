@@ -265,8 +265,58 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
+    pub(crate) fn peel_go_alias(&self, ty: &Type) -> Type {
+        let mut current = ty.unwrap_forall().clone();
+        let mut seen: HashSet<Symbol> = HashSet::default();
+        while let Type::Nominal {
+            id,
+            params,
+            writable,
+        } = &current
+        {
+            if self.declares_go_function_type(&current) || !seen.insert(id.clone()) {
+                break;
+            }
+            let Some(target) = self
+                .definition(id)
+                .and_then(|definition| definition.instantiate_alias_target(params, *writable))
+            else {
+                break;
+            };
+            current = target.unwrap_forall().clone();
+        }
+        current
+    }
+
+    pub(crate) fn without_go_aliases(&self, ty: &Type) -> Type {
+        self.peel_go_alias(ty)
+            .map_children(|child| self.without_go_aliases(child))
+    }
+
+    pub(crate) fn is_transparent_alias(&self, ty: &Type) -> bool {
+        let peeled = self.peel_go_alias(ty);
+        peeled != *ty.unwrap_forall() && peeled == self.peel_alias(ty)
+    }
+
+    pub(crate) fn is_go_named_function_type(&self, ty: &Type) -> bool {
+        self.declares_go_function_type(&self.peel_go_alias(ty))
+    }
+
+    fn declares_go_function_type(&self, ty: &Type) -> bool {
+        matches!(ty, Type::Nominal { id, .. } if go_name::is_go_import(id))
+            && self.resolve_to_function_type(ty).is_some()
+    }
+
     pub(crate) fn same_type(&self, left: &Type, right: &Type) -> bool {
-        self.peel_alias(left) == self.peel_alias(right)
+        self.without_go_aliases(left) == self.without_go_aliases(right)
+    }
+
+    pub(crate) fn same_types(&self, left: &[Type], right: &[Type]) -> bool {
+        left.len() == right.len()
+            && left
+                .iter()
+                .zip(right)
+                .all(|(left, right)| self.same_type(left, right))
     }
 
     pub(crate) fn returns_go_void(&self, ty: &Type) -> bool {

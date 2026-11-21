@@ -796,9 +796,9 @@ impl InferCtx<'_> {
             return None;
         }
         if self.store.is_aliased_numeric_type(left) {
-            Some(OperandConversion::Right)
+            operand_needs_conversion(right, left, self.store).then_some(OperandConversion::Right)
         } else {
-            Some(OperandConversion::Left)
+            operand_needs_conversion(left, right, self.store).then_some(OperandConversion::Left)
         }
     }
 
@@ -1009,7 +1009,11 @@ impl InferCtx<'_> {
                             right_ty, left_ty, *span,
                         ));
                 }
-                Some((left_ty.clone(), Some(OperandConversion::Right)))
+                Some((
+                    left_ty.clone(),
+                    operand_needs_conversion(right_ty, left_ty, store)
+                        .then_some(OperandConversion::Right),
+                ))
             }
             (false, true) => {
                 if is_nominal_defined_type(right_ty, store) {
@@ -1023,7 +1027,11 @@ impl InferCtx<'_> {
                     ));
                     return None;
                 }
-                Some((right_ty.clone(), Some(OperandConversion::Left)))
+                Some((
+                    right_ty.clone(),
+                    operand_needs_conversion(left_ty, right_ty, store)
+                        .then_some(OperandConversion::Left),
+                ))
             }
         }
     }
@@ -1463,6 +1471,10 @@ fn literal_can_adapt_to(kind: &LiteralKind, target: &Type, store: &Store) -> boo
         LiteralKind::Boolean => named_backed_by(SimpleKind::Bool),
         LiteralKind::None => false,
     }
+}
+
+fn operand_needs_conversion(operand: &Type, alias: &Type, store: &Store) -> bool {
+    store.peel_alias(operand) != store.peel_alias(alias)
 }
 
 fn is_nominal_defined_type(ty: &Type, store: &Store) -> bool {

@@ -11,7 +11,7 @@ description: |
   }
   
   fn test() -> int {
-    let h: Handler = { make_handler }
+    let h: Handler = make_handler
     use_ref(&h)
   }
 ---
@@ -28,6 +28,6 @@ func useRef(r *Handler) int {
 }
 
 func test() int {
-	var h Handler = makeHandler
+	h := makeHandler
 	return useRef(&h)
 }

@@ -32,6 +32,6 @@ type Wrapper struct {
 }
 
 func main() {
-	_w := Wrapper{F: lisette.MakeOptionSome[Handler](double)}
+	_w := Wrapper{F: lisette.MakeOptionSome(double)}
 	_ = _w.F
 }

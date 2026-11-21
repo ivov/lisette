@@ -5250,7 +5250,7 @@ fn test() -> int {
 }
 
 #[test]
-fn typed_function_alias_from_named_function_declares_alias_type() {
+fn typed_function_alias_from_named_function_uses_short_declaration() {
     let input = r#"
 type Handler = fn() -> int
 
@@ -5269,7 +5269,7 @@ fn test() -> int {
 }
 
 #[test]
-fn typed_function_alias_from_block_declares_alias_type() {
+fn typed_function_alias_from_block_uses_short_declaration() {
     let input = r#"
 type Handler = fn() -> int
 

@@ -278,6 +278,7 @@ impl Planner<'_> {
     ) -> GoIdentifier {
         match fallible.err_ty() {
             Some(error_ty) if !opens_if => {
+                let error_ty = &self.facts.without_go_aliases(error_ty);
                 let name = can_reuse_spent_error
                     .then(|| self.scope.spent_error(error_ty))
                     .flatten()

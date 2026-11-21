@@ -7,6 +7,7 @@ use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
+use crate::EmitFacts;
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::ir::bodies::{
@@ -46,67 +47,69 @@ impl FlatCaseBody<'_> {
     }
 }
 
-fn guard_renders_inline(guard: &Expression) -> bool {
-    match guard {
-        Expression::Literal { literal, ty, .. } => {
-            matches!(
-                literal,
-                Literal::Integer { .. }
-                    | Literal::Float { .. }
-                    | Literal::Imaginary(_)
-                    | Literal::Boolean(_)
-                    | Literal::String { .. }
-                    | Literal::Char(_)
-            ) && ty.as_simple().is_some()
-        }
-        Expression::Identifier { ty, .. } => ty.as_simple().is_some(),
-        Expression::Unary {
-            operator,
-            expression,
-            ..
-        } => {
-            matches!(
+impl EmitFacts<'_> {
+    fn guard_renders_inline(&self, guard: &Expression) -> bool {
+        match guard {
+            Expression::Literal { literal, ty, .. } => {
+                matches!(
+                    literal,
+                    Literal::Integer { .. }
+                        | Literal::Float { .. }
+                        | Literal::Imaginary(_)
+                        | Literal::Boolean(_)
+                        | Literal::String { .. }
+                        | Literal::Char(_)
+                ) && self.peel_go_alias(ty).as_simple().is_some()
+            }
+            Expression::Identifier { ty, .. } => self.peel_go_alias(ty).as_simple().is_some(),
+            Expression::Unary {
                 operator,
-                UnaryOperator::Not | UnaryOperator::Negative | UnaryOperator::BitwiseNot
-            ) && guard_renders_inline(expression)
+                expression,
+                ..
+            } => {
+                matches!(
+                    operator,
+                    UnaryOperator::Not | UnaryOperator::Negative | UnaryOperator::BitwiseNot
+                ) && self.guard_renders_inline(expression)
+            }
+            Expression::Binary {
+                left,
+                operator,
+                right,
+                ..
+            } => {
+                !matches!(operator, BinaryOperator::Pipeline)
+                    && self.guard_renders_inline(left)
+                    && self.guard_renders_inline(right)
+            }
+            Expression::Call {
+                expression,
+                args,
+                spread: None,
+                ty,
+                ..
+            } => {
+                self.peel_go_alias(ty).as_simple().is_some()
+                    && self.callee_renders_inline(expression)
+                    && args.iter().all(|arg| self.guard_renders_inline(arg))
+            }
+            _ => false,
         }
-        Expression::Binary {
-            left,
-            operator,
-            right,
-            ..
-        } => {
-            !matches!(operator, BinaryOperator::Pipeline)
-                && guard_renders_inline(left)
-                && guard_renders_inline(right)
-        }
-        Expression::Call {
-            expression,
-            args,
-            spread: None,
-            ty,
-            ..
-        } => {
-            ty.as_simple().is_some()
-                && callee_renders_inline(expression)
-                && args.iter().all(guard_renders_inline)
-        }
-        _ => false,
     }
-}
 
-fn callee_renders_inline(callee: &Expression) -> bool {
-    match callee {
-        Expression::Identifier { .. } => true,
-        Expression::DotAccess {
-            expression,
-            resolution,
-            ..
-        } => {
-            matches!(resolution, DotAccessResolution::PackageMember { .. })
-                || guard_renders_inline(expression)
+    fn callee_renders_inline(&self, callee: &Expression) -> bool {
+        match callee {
+            Expression::Identifier { .. } => true,
+            Expression::DotAccess {
+                expression,
+                resolution,
+                ..
+            } => {
+                matches!(resolution, DotAccessResolution::PackageMember { .. })
+                    || self.guard_renders_inline(expression)
+            }
+            _ => false,
         }
-        _ => false,
     }
 }
 
@@ -481,7 +484,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return false;
         };
         let calls = contains_call(condition);
-        guard_renders_inline(condition)
+        self.planner.facts.guard_renders_inline(condition)
             && guard.leaf.bindings.iter().all(|binding| {
                 !binding.path.contains_deferred_evaluation()
                     && !(calls && binding.path.payload_is_index())

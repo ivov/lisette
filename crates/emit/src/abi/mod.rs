@@ -420,11 +420,6 @@ impl EmitFacts<'_> {
             )
     }
 
-    pub(crate) fn is_go_named_function_type(&self, ty: &Type) -> bool {
-        matches!(ty.unwrap_forall(), Type::Nominal { id, .. } if go_name::is_go_import(id))
-            && self.resolve_to_function_type(ty).is_some()
-    }
-
     fn err_slot_is_nilable(&self, fallible_ty: &Type) -> bool {
         let err = self.err_payload(fallible_ty);
         self.is_prelude_error(&err) || self.is_nilable_go_type(&err)

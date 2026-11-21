@@ -21,7 +21,7 @@ func lookup(routes map[string]func(int) string) int {
 }
 
 func main() {
-	var h Handler = func(n int) string {
+	h := func(n int) string {
 		return fmt.Sprint(n)
 	}
 	hs := []Handler{h}

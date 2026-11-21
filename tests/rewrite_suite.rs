@@ -1,8 +1,10 @@
 //! Rewrites each emit snapshot program in ways that keep its meaning, and
 //! checks that each variant compiles to Go that builds and vets whenever the
 //! original does. A variant that only adds parentheses or a block around one
-//! expression must compile to the Go of the original. Lisette errors on a
-//! variant are ignored. Runs nightly.
+//! expression must compile to the Go of the original. A variant that replaces
+//! an annotation with an alias of it must compile to the Go of the original,
+//! after the alias is replaced by its target. Lisette errors on a variant are
+//! ignored. Runs nightly.
 
 #[allow(dead_code, unused_imports)]
 mod _harness;
@@ -140,15 +142,19 @@ fn rewrite_suite() {
                 }
                 Compiled::Failed(message) => format!("compiler: {message}"),
                 Compiled::Written(variant_go_code) => {
+                    let variant_go_code = variant_go_code
+                        .replace(&format!("test_{}", variant.name), &format!("test_{name}"));
                     match go_errors.get(&format!("test_{}", variant.name)) {
                         Some(line) => format!("go: {line}"),
                         None if matches!(variant.rewrite, "paren" | "wrap")
-                            && variant_go_code.replace(
-                                &format!("test_{}", variant.name),
-                                &format!("test_{name}"),
-                            ) != *go_code =>
+                            && variant_go_code != *go_code =>
                         {
                             "Go differs from the Go of the original program".to_string()
+                        }
+                        None if variant.rewrite == "alias"
+                            && !same_go_after_alias(go_code, &variant_go_code) =>
+                        {
+                            "Go differs from the Go of the original program, with the alias replaced by its target".to_string()
                         }
                         None => continue,
                     }
@@ -181,7 +187,7 @@ fn rewrite_suite() {
     }
     assert!(
         failures.is_empty(),
-        "{} variant(s) crashed the compiler, failed go build or vet, or changed the Go of a parenthesized or wrapped expression (listed above)",
+        "{} variant(s) crashed the compiler, failed go build or vet, or changed the Go of a parenthesized, wrapped or aliased program (listed above)",
         failures.len()
     );
 }
@@ -403,4 +409,190 @@ fn record_first_errors(output: &str, errors: &mut HashMap<String, String>) -> bo
         }
     }
     found
+}
+
+fn same_go_after_alias(original: &str, variant: &str) -> bool {
+    let declaration = variant
+        .lines()
+        .find_map(|line| line.strip_prefix("type MmAlias = "));
+    let variant = match declaration {
+        Some(target) => replace_word(
+            &variant.replacen(&format!("type MmAlias = {target}\n"), "", 1),
+            "MmAlias",
+            target,
+        ),
+        None => variant.to_string(),
+    };
+    let (original_imports, original_body) = split_imports(&ungroup_parameters(original));
+    let (variant_imports, variant_body) = split_imports(&ungroup_parameters(&variant));
+    let target = declaration.unwrap_or_default();
+    original_body == variant_body
+        && original_imports
+            .iter()
+            .all(|import| variant_imports.contains(import))
+        && variant_imports.iter().all(|import| {
+            original_imports.contains(import)
+                || target.contains(&format!("{}.", import_qualifier(import)))
+        })
+}
+
+fn replace_word(text: &str, word: &str, replacement: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(word) {
+        let before = rest[..at].chars().next_back();
+        let after = rest[at + word.len()..].chars().next();
+        let is_word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        out.push_str(&rest[..at]);
+        out.push_str(if is_word(before) || is_word(after) {
+            word
+        } else {
+            replacement
+        });
+        rest = &rest[at + word.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn split_imports(code: &str) -> (Vec<String>, Vec<String>) {
+    let mut imports = Vec::new();
+    let mut body = Vec::new();
+    let mut in_block = false;
+    for line in code.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if in_block {
+            if line == ")" {
+                in_block = false;
+            } else {
+                imports.push(line.to_string());
+            }
+        } else if line == "import (" {
+            in_block = true;
+        } else if let Some(import) = line.strip_prefix("import ") {
+            imports.push(import.to_string());
+        } else {
+            body.push(line.to_string());
+        }
+    }
+    (imports, body)
+}
+
+fn import_qualifier(import: &str) -> &str {
+    match import.split_once(' ') {
+        Some((qualifier, _)) => qualifier,
+        None => import
+            .trim_matches('"')
+            .rsplit('/')
+            .next()
+            .unwrap_or_default(),
+    }
+}
+
+fn ungroup_parameters(code: &str) -> String {
+    let bytes = code.as_bytes();
+    let mut out = String::with_capacity(code.len());
+    let mut copied = 0;
+    let mut at = 0;
+    while let Some(found) = code[at..].find("func") {
+        let start = at + found;
+        at = start + 4;
+        if start > 0 && is_identifier_byte(bytes[start - 1]) {
+            continue;
+        }
+        let Some(open) = parameter_list_start(code, at) else {
+            continue;
+        };
+        let Some(close) = matching_close(code, open) else {
+            continue;
+        };
+        out.push_str(&code[copied..=open]);
+        out.push_str(&ungroup_list(&ungroup_parameters(&code[open + 1..close])));
+        copied = close;
+        at = close;
+    }
+    out.push_str(&code[copied..]);
+    out
+}
+
+fn parameter_list_start(code: &str, mut at: usize) -> Option<usize> {
+    let bytes = code.as_bytes();
+    if code[at..].starts_with(" (") {
+        at = matching_close(code, at + 1)? + 1;
+    }
+    if code[at..].starts_with(' ') {
+        at += 1;
+        while at < bytes.len() && is_identifier_byte(bytes[at]) {
+            at += 1;
+        }
+    }
+    if code[at..].starts_with('[') {
+        at = matching_close(code, at)? + 1;
+    }
+    code[at..].starts_with('(').then_some(at)
+}
+
+fn matching_close(code: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (offset, byte) in code.as_bytes()[open..].iter().enumerate() {
+        match byte {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open + offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn ungroup_list(list: &str) -> String {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut current = String::new();
+    for c in list.chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if c == ',' && depth == 0 {
+            parts.push(current.trim().to_string());
+            current.clear();
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    let named = |part: &String| {
+        let name_end = part
+            .bytes()
+            .position(|byte| !is_identifier_byte(byte))
+            .unwrap_or(part.len());
+        name_end > 0 && (name_end == part.len() || part.as_bytes()[name_end] == b' ')
+    };
+    if !parts.iter().all(named) || parts.iter().all(|part| !part.contains(' ')) {
+        return list.to_string();
+    }
+    let mut result = Vec::new();
+    let mut pending = Vec::new();
+    for part in parts {
+        match part.split_once(' ') {
+            Some((name, ty)) => {
+                result.extend(pending.drain(..).map(|pending| format!("{pending} {ty}")));
+                result.push(format!("{name} {ty}"));
+            }
+            None => pending.push(part),
+        }
+    }
+    result.extend(pending);
+    result.join(", ")
+}
+
+fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }

@@ -27,7 +27,5 @@ func apply(f func(int) MyOpt) (int, bool) {
 }
 
 func main() {
-	apply(func(arg0 int) MyOpt {
-		return lisette.MakeOptionSome[int](arg0)
-	})
+	apply(lisette.MakeOptionSome[int])
 }

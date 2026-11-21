@@ -196,6 +196,11 @@ impl GoType {
     pub(crate) fn is_empty(&self) -> bool {
         matches!(self.shape.as_ref(), GoTypeShape::Empty)
     }
+    pub(crate) fn compared_as(mut self, target: &GoType) -> Self {
+        self.shape = target.shape.clone();
+        self
+    }
+
     pub(crate) fn is_named(&self, name: &str) -> bool {
         matches!(self.shape.as_ref(), GoTypeShape::Name(actual) if actual == name)
     }
@@ -785,6 +790,13 @@ impl ValueLayout {
                     .collect();
                 GoType::prelude(&format!("Tuple{}", elements.len()), &types)
             }
+            Self::Named {
+                named_type,
+                underlying,
+                go_alias: true,
+            } => planner
+                .leaf_go_type(named_type)
+                .compared_as(&underlying.go_type(planner)),
             Self::Plain(ty) | Self::Named { named_type: ty, .. } => planner.leaf_go_type(ty),
         }
     }

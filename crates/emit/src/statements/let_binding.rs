@@ -100,7 +100,9 @@ impl Planner<'_> {
         if !self.shadows_declaration(&go_identifier)
             && !self.scope.is_active_assign_target(&go_identifier)
             && !self.scope.has_binding_for_go_name(&go_identifier)
-            && value.get_type().demoted() == binding_ty.demoted()
+            && self
+                .facts
+                .same_type(&value.get_type().demoted(), &binding_ty.demoted())
         {
             let local = go_identifier.clone();
             let into = self
@@ -902,7 +904,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
 impl EmitFacts<'_> {
     fn widens_to_interface(&self, value: &Expression, binding_ty: &Type) -> bool {
-        self.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type()
+        self.is_interface_or_unknown(binding_ty) && !self.same_type(binding_ty, &value.get_type())
     }
 
     fn resolve_let_temp_declaration_ty(&self, value: &Expression, binding_ty: &Type) -> Type {
@@ -916,7 +918,7 @@ impl EmitFacts<'_> {
         if self.widens_to_interface(value, binding_ty) {
             return true;
         }
-        if self.is_function_alias(binding_ty) {
+        if self.is_go_named_function_type(binding_ty) {
             let value_ty = value.get_type();
             if matches!(value_ty.unwrap_forall(), Type::Function(_)) {
                 return true;

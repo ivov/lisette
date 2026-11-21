@@ -769,7 +769,9 @@ impl<'a> Planner<'a> {
         }
         params
             .iter()
-            .any(|p| self.facts.is_interface_or_unknown(p) || self.facts.is_function_alias(p))
+            .any(|p| {
+                self.facts.is_interface_or_unknown(p) || self.facts.is_go_named_function_type(p)
+            })
             .then(|| self.format_type_args(&params))
     }
 }
@@ -905,7 +907,7 @@ impl Planner<'_> {
                 .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
         let parameters_support_go_inference = fn_params
             .iter()
-            .all(|param| !self.facts.is_function_alias(&param.ty));
+            .all(|param| !self.facts.is_go_named_function_type(&param.ty));
         if ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference {
             GoType::default()
         } else {
@@ -933,7 +935,7 @@ impl Planner<'_> {
                 && vars.iter().any(|var| {
                     mapping
                         .get(var)
-                        .is_some_and(|ty| self.facts.is_function_alias(ty))
+                        .is_some_and(|ty| self.facts.is_go_named_function_type(ty))
                 }))
         {
             return None;

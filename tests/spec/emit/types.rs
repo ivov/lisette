@@ -1473,6 +1473,18 @@ type UserId = int
 }
 
 #[test]
+fn numeric_alias_operand_converts_only_from_another_number_type() {
+    let input = r#"
+type Score = int
+
+fn total(a: Score, b: int, c: int32) -> Score {
+  a + b + c
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn type_alias_with_generic() {
     let input = r#"
 type IntBox = Box<int>

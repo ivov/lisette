@@ -114,6 +114,7 @@ pub(crate) enum ValueLayout {
     Named {
         named_type: Type,
         underlying: Box<ValueLayout>,
+        go_alias: bool,
     },
 }
 
@@ -171,6 +172,22 @@ impl ValueLayout {
     }
 
     pub(crate) fn same_representation(&self, other: &Self) -> bool {
+        if let Self::Named {
+            underlying,
+            go_alias: true,
+            ..
+        } = self
+        {
+            return underlying.same_representation(other);
+        }
+        if let Self::Named {
+            underlying,
+            go_alias: true,
+            ..
+        } = other
+        {
+            return self.same_representation(underlying);
+        }
         if self.function_name() != other.function_name() {
             return false;
         }
@@ -253,8 +270,14 @@ impl ValueLayout {
     pub(crate) fn function_name(&self) -> Option<&Type> {
         match self {
             Self::Named {
+                underlying,
+                go_alias: true,
+                ..
+            } => underlying.function_name(),
+            Self::Named {
                 named_type,
                 underlying,
+                go_alias: false,
             } if matches!(underlying.underlying(), Self::Function { .. }) => Some(named_type),
             Self::Function { function_type, .. }
                 if matches!(function_type.unwrap_forall(), Type::Nominal { .. }) =>
@@ -544,6 +567,7 @@ impl Planner<'_> {
             ValueLayout::Named {
                 named_type: ty.clone(),
                 underlying: Box::new(layout),
+                go_alias: self.facts.is_transparent_alias(ty),
             }
         } else {
             layout
@@ -728,6 +752,14 @@ impl Planner<'_> {
         origin: SlotOrigin,
         declaration: Option<&Type>,
     ) -> ValueLayout {
+        let go_target = self.facts.peel_go_alias(ty);
+        if go_target != *ty.unwrap_forall() && !self.facts.is_transparent_alias(ty) {
+            return ValueLayout::Named {
+                named_type: ty.clone(),
+                underlying: Box::new(self.value_layout_with_hint(&go_target, origin, declaration)),
+                go_alias: true,
+            };
+        }
         let alias_declaration = self.facts.function_alias_declaration(ty);
         let resolved_declaration = alias_declaration
             .clone()
@@ -771,6 +803,7 @@ impl Planner<'_> {
             return ValueLayout::Named {
                 named_type: ty.clone(),
                 underlying: Box::new(underlying),
+                go_alias: self.facts.is_transparent_alias(ty),
             };
         }
         self.value_layout_resolved(
@@ -873,6 +906,7 @@ impl Planner<'_> {
                     return ValueLayout::Named {
                         named_type: ty,
                         underlying: Box::new(nested(&underlying, declared_underlying.as_ref())),
+                        go_alias: false,
                     };
                 }
                 ValueLayout::Plain(ty)

@@ -35,7 +35,7 @@ func keep(f Search, x int) Search {
 }
 
 func withLambda(xs []int) Search {
-	var f Search = func(arg0, arg1 string) lisette.Option[int] {
+	f := func(arg0, arg1 string) lisette.Option[int] {
 		ret := strings.Index(arg0, arg1)
 		return lisette.OptionFromCommaOk[int](ret, ret != -1)
 	}
@@ -47,7 +47,7 @@ func withLambda(xs []int) Search {
 
 func test(xs []int) bool {
 	left := withLambda(xs)("abc", "c")
-	var result Search = func(arg0, arg1 string) lisette.Option[int] {
+	result := func(arg0, arg1 string) lisette.Option[int] {
 		ret := strings.Index(arg0, arg1)
 		return lisette.OptionFromCommaOk[int](ret, ret != -1)
 	}

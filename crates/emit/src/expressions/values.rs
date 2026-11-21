@@ -312,7 +312,11 @@ impl Planner<'_> {
         };
         let tuple_use = self.facts.checked(tuple).value_use();
         let placed = match &tuple_use.adaptation {
-            Adaptation::Tuple(adaptations) if self.facts.tuple_element_types(ty) != slot_types => {
+            Adaptation::Tuple(adaptations)
+                if !self
+                    .facts
+                    .same_types(&self.facts.tuple_element_types(ty), slot_types) =>
+            {
                 Some((adaptations, self.facts.tuple_element_types(&tuple_use.slot)))
             }
             _ => None,
@@ -524,7 +528,7 @@ impl Planner<'_> {
             self.plan_value(inner, ExpressionContext::value())
         };
         inner_plan.map_observable_expression(|setup, emitted| {
-            if inner.get_type() == *ty {
+            if self.facts.same_type(&inner.get_type(), ty) {
                 emitted
             } else if unaddressable {
                 let tmp = self.hoist_tmp_value_statement(setup, "ref", emitted);

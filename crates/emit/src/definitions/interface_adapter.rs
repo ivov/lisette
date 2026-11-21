@@ -813,13 +813,6 @@ impl EmitFacts<'_> {
             && self.emits_go_method(owner, member)
     }
 
-    pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal { .. } = ty else {
-            return false;
-        };
-        self.resolve_to_function_type(ty).is_some()
-    }
-
     fn callee_selects_tagged_twin(&self, callee: &CheckedCallee) -> bool {
         match callee.interface_requirement() {
             Some(requirement) => self.requirement_uses_tagged_twin(requirement),

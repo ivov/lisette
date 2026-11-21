@@ -36,13 +36,8 @@ func apply(f func(int) MyRes) (int, error) {
 }
 
 func main() {
-	cb := func(arg0 int) lisette.Result[int, error] {
+	apply(func(arg0 int) lisette.Result[int, error] {
 		return lisette.ResultFromPair[int](make_(arg0))
-	}
-	apply(func(arg0 int) MyRes {
-		return cb(arg0)
 	})
-	apply(func(arg0 int) MyRes {
-		return lisette.MakeResultOk[int, error](arg0)
-	})
+	apply(lisette.MakeResultOk[int, error])
 }
