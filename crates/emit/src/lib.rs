@@ -276,11 +276,26 @@ impl<'a> Planner<'a> {
     }
 
     pub fn emit(
-        analysis: &'a EmitInput,
+        analysis: &'a mut EmitInput,
         go_module: &str,
         entry_package_name: &'a str,
         options: EmitOptions,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
+        let cached_packages = &analysis.cached_packages;
+        for file in analysis.files.values_mut() {
+            if file.is_d_lis() || cached_packages.contains(&file.package_id) {
+                continue;
+            }
+            for item in &mut file.items {
+                item.strip_parens();
+            }
+            debug_assert!(
+                !file.items.iter().any(contains_paren),
+                "internal error: a parenthesized expression reached emit"
+            );
+        }
+        let analysis: &'a EmitInput = analysis;
+
         let line_indexes = options.sourcemap.then(|| {
             analysis
                 .files
@@ -783,4 +798,9 @@ impl EmitFacts<'_> {
     fn end_position(&self, span: &Span) -> Option<Position> {
         self.position_at(span, span.byte_offset + span.byte_length)
     }
+}
+
+fn contains_paren(expression: &Expression) -> bool {
+    matches!(expression, Expression::Paren { .. })
+        || expression.children().into_iter().any(contains_paren)
 }

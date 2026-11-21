@@ -54,7 +54,7 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn call_operation(&self, expression: &Expression) -> Option<&'a CallOperation> {
         let Expression::Call {
             expression: callee, ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return None;
         };

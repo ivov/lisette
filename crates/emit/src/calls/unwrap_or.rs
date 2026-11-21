@@ -39,7 +39,7 @@ fn escapes_lambda(expression: &Expression) -> bool {
 }
 
 fn is_literal_default(default: &Expression) -> bool {
-    let Expression::Literal { literal, .. } = default.unwrap_parens() else {
+    let Expression::Literal { literal, .. } = default else {
         return false;
     };
     match literal {
@@ -61,7 +61,6 @@ fn runs_no_code(expression: &Expression) -> bool {
         } => false,
         Expression::Literal { .. }
         | Expression::Identifier { .. }
-        | Expression::Paren { .. }
         | Expression::Unary { .. }
         | Expression::DotAccess { .. }
         | Expression::StructCall { .. } => expression.children().into_iter().all(runs_no_code),
@@ -74,7 +73,7 @@ fn runs_no_code(expression: &Expression) -> bool {
 }
 
 fn is_go_zero_literal(default: &Expression, kind: SimpleKind) -> bool {
-    let Expression::Literal { literal, .. } = default.unwrap_parens() else {
+    let Expression::Literal { literal, .. } = default else {
         return false;
     };
     match literal {
@@ -89,7 +88,7 @@ fn is_go_zero_literal(default: &Expression, kind: SimpleKind) -> bool {
 }
 
 pub(crate) fn map_lambda(function: &Expression) -> Option<MapLambda<'_>> {
-    let Expression::Lambda { params, body, .. } = function.unwrap_parens() else {
+    let Expression::Lambda { params, body, .. } = function else {
         return None;
     };
     let param = match params.as_slice() {
@@ -115,7 +114,7 @@ impl<'p> Planner<'p> {
             args,
             spread,
             ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return None;
         };
@@ -125,7 +124,7 @@ impl<'p> Planner<'p> {
         let Expression::DotAccess {
             expression: receiver,
             ..
-        } = callee.unwrap_parens()
+        } = &**callee
         else {
             return None;
         };

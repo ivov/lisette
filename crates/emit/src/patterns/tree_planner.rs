@@ -60,7 +60,6 @@ fn guard_renders_inline(guard: &Expression) -> bool {
             ) && ty.as_simple().is_some()
         }
         Expression::Identifier { ty, .. } => ty.as_simple().is_some(),
-        Expression::Paren { expression, .. } => guard_renders_inline(expression),
         Expression::Unary {
             operator,
             expression,
@@ -97,7 +96,7 @@ fn guard_renders_inline(guard: &Expression) -> bool {
 }
 
 fn callee_renders_inline(callee: &Expression) -> bool {
-    match callee.unwrap_parens() {
+    match callee {
         Expression::Identifier { .. } => true,
         Expression::DotAccess {
             expression,

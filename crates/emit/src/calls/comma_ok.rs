@@ -86,7 +86,7 @@ impl Planner<'_> {
     pub(crate) fn component_binding(&self, expression: &Expression) -> Option<ComponentBinding> {
         let Expression::Identifier {
             value, resolution, ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return None;
         };

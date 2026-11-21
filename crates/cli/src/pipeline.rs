@@ -172,7 +172,7 @@ pub fn compile(
     let failed = analysis.failed();
     let emit_result = (!failed).then(|| {
         Planner::emit(
-            &analysis.emit_input,
+            &mut analysis.emit_input,
             go_module,
             entry_package_name,
             emit_options,

@@ -345,6 +345,7 @@ struct Finalizer<'f, 's> {
 impl Finalizer<'_, '_> {
     /// Check one value use, in the slot that a delegating parent passes down if any.
     fn value_use(&mut self, expression: &Expression, inherited: Option<Type>) {
+        let expression = expression.unwrap_parens();
         let key = ValueUseKey::value(expression);
         let is_discarded = mem::take(&mut self.discards_next);
         let (recorded, mut witnesses) = match self.obligations.get(&key) {
@@ -582,6 +583,7 @@ impl Finalizer<'_, '_> {
 
     /// A method receiver whose address the method takes, or whose reference it reads through.
     fn receiver_use(&mut self, receiver: &Expression, change: ReceiverCoercion) {
+        let receiver = receiver.unwrap_parens();
         let key = ValueUseKey::value(receiver);
         if !self.obligations.contains_key(&key) {
             self.fail(receiver.get_span(), "this receiver has no checked slot");
@@ -753,11 +755,11 @@ impl Finalizer<'_, '_> {
                 if let Some(failure_slot) = self.failure_slots.last()
                     && self.store.peel_alias(failure_slot).demoted() == operand_ty.demoted()
                 {
-                    self.bodies.insert_forwarded_failure(operand.id());
+                    self.bodies.insert_forwarded_failure(operand);
                 }
                 if operand_ty.is_result() {
                     self.special_use(
-                        ValueUseKey::propagated_error(operand.id()),
+                        ValueUseKey::propagated_error(operand),
                         *span,
                         "this `?` has no checked error slot",
                         false,

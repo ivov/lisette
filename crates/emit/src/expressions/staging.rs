@@ -203,7 +203,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn place_read_stability(&self, place: &Expression) -> Stability {
-        match place.unwrap_parens() {
+        match place {
             Expression::Identifier { .. } => self.facts.identifier_read_stability(place),
             Expression::Call { .. } => Stability::StableAcrossCalls,
             Expression::DotAccess {
@@ -276,7 +276,7 @@ impl Planner<'_> {
         arg: &Expression,
         param_ty: Option<&Type>,
     ) -> Option<FunctionBridge> {
-        if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
+        if matches!(arg, Expression::Lambda { .. }) {
             return None;
         }
         let callee = self.resolve_callable_value(arg)?;

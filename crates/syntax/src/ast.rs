@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Display;
 use std::iter;
+use std::mem;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Index;
@@ -19,6 +20,14 @@ macro_rules! children {
     () => { Vec::new() };
     ($($expression:expr),+ $(,)?) => {{
         let __children: Vec<&Expression> = vec![$($expression),+];
+        __children
+    }};
+}
+
+macro_rules! children_mut {
+    () => { Vec::new() };
+    ($($expression:expr),+ $(,)?) => {{
+        let __children: Vec<&mut Expression> = vec![$($expression),+];
         __children
     }};
 }
@@ -980,6 +989,13 @@ impl StructSpread {
     }
 
     pub fn as_expression(&self) -> Option<&Expression> {
+        match self {
+            Self::From(e) => Some(e),
+            Self::None | Self::Autofill { .. } => None,
+        }
+    }
+
+    pub fn as_expression_mut(&mut self) -> Option<&mut Expression> {
         match self {
             Self::From(e) => Some(e),
             Self::None | Self::Autofill { .. } => None,
@@ -2071,6 +2087,56 @@ impl Expression {
         }
     }
 
+    pub fn set_span(&mut self, new_span: Span) {
+        match self {
+            Self::Literal { span, .. }
+            | Self::Function { span, .. }
+            | Self::Lambda { span, .. }
+            | Self::Block { span, .. }
+            | Self::Let { span, .. }
+            | Self::Identifier { span, .. }
+            | Self::Call { span, .. }
+            | Self::If { span, .. }
+            | Self::IfLet { span, .. }
+            | Self::Match { span, .. }
+            | Self::Tuple { span, .. }
+            | Self::Enum { span, .. }
+            | Self::Struct { span, .. }
+            | Self::StructCall { span, .. }
+            | Self::DotAccess { span, .. }
+            | Self::Assignment { span, .. }
+            | Self::Return { span, .. }
+            | Self::Propagate { span, .. }
+            | Self::TryBlock { span, .. }
+            | Self::RecoverBlock { span, .. }
+            | Self::ImplBlock { span, .. }
+            | Self::Binary { span, .. }
+            | Self::Paren { span, .. }
+            | Self::Unary { span, .. }
+            | Self::Const { span, .. }
+            | Self::VariableDeclaration { span, .. }
+            | Self::Defer { span, .. }
+            | Self::Assert { span, .. }
+            | Self::Reference { span, .. }
+            | Self::IndexedAccess { span, .. }
+            | Self::Task { span, .. }
+            | Self::Select { span, .. }
+            | Self::Loop { span, .. }
+            | Self::TypeAlias { span, .. }
+            | Self::PackageImport { span, .. }
+            | Self::Interface { span, .. }
+            | Self::Unit { span, .. }
+            | Self::While { span, .. }
+            | Self::WhileLet { span, .. }
+            | Self::For { span, .. }
+            | Self::Break { span, .. }
+            | Self::Continue { span, .. }
+            | Self::Range { span, .. }
+            | Self::Cast { span, .. } => *span = new_span,
+            Self::RawGo { .. } => {}
+        }
+    }
+
     pub fn contains_break(&self) -> bool {
         match self {
             Expression::Break { .. } => true,
@@ -2426,6 +2492,207 @@ impl Expression {
             | Expression::VariableDeclaration { .. }
             | Expression::PackageImport { .. }
             | Expression::RawGo { .. } => Vec::new(),
+        }
+    }
+
+    pub fn children_mut(&mut self) -> Vec<&mut Expression> {
+        match self {
+            Expression::Literal { literal, .. } => match literal {
+                Literal::Slice(elements) => elements.iter_mut().collect(),
+                Literal::FormatString(parts) => parts
+                    .iter_mut()
+                    .filter_map(|p| match p {
+                        FormatStringPart::Expression(e) => Some(e.as_mut()),
+                        FormatStringPart::Text(_) => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            },
+            Expression::Function { body, .. } => body.definition_mut().into_iter().collect(),
+            Expression::Lambda { body, .. } => children_mut![body],
+            Expression::Block { items, .. } => items.iter_mut().collect(),
+            Expression::Let { value, mode, .. } => {
+                let mut c = children_mut![value.as_mut()];
+                if let Some(eb) = mode.else_block_mut() {
+                    c.push(eb);
+                }
+                c
+            }
+            Expression::Identifier { .. } => Vec::new(),
+            Expression::Call {
+                expression,
+                args,
+                spread,
+                ..
+            } => {
+                let mut c = children_mut![expression.as_mut()];
+                c.extend(args);
+                if let Some(s) = spread.as_mut() {
+                    c.push(s);
+                }
+                c
+            }
+            Expression::If {
+                condition,
+                consequence,
+                alternative,
+                ..
+            } => {
+                let mut c = children_mut![condition, consequence];
+                if let Some(alternative) = alternative {
+                    c.push(alternative);
+                }
+                c
+            }
+            Expression::IfLet {
+                scrutinee,
+                consequence,
+                alternative,
+                ..
+            } => {
+                let mut c = children_mut![scrutinee, consequence];
+                if let Some(alternative) = alternative.expression_mut() {
+                    c.push(alternative);
+                }
+                c
+            }
+            Expression::Match { subject, arms, .. } => {
+                let mut c = children_mut![subject.as_mut()];
+                for arm in arms {
+                    if let Some(guard) = &mut arm.guard {
+                        c.push(guard);
+                    }
+                    c.push(&mut arm.expression);
+                }
+                c
+            }
+            Expression::Tuple { elements, .. } => elements.iter_mut().collect(),
+            Expression::StructCall {
+                field_assignments,
+                spread,
+                ..
+            } => {
+                let mut c: Vec<&mut Expression> = field_assignments
+                    .iter_mut()
+                    .map(|f| f.value.as_mut())
+                    .collect();
+                if let Some(s) = spread.as_expression_mut() {
+                    c.push(s);
+                }
+                c
+            }
+            Expression::DotAccess { expression, .. } => children_mut![expression],
+            Expression::Assignment { target, value, .. } => children_mut![target, value],
+            Expression::Return { expression, .. } => children_mut![expression],
+            Expression::Propagate { expression, .. } => children_mut![expression],
+            Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
+                items.iter_mut().collect()
+            }
+            Expression::ImplBlock { methods, .. } => methods.iter_mut().collect(),
+            Expression::Binary { left, right, .. } => children_mut![left, right],
+            Expression::Unary { expression, .. } => children_mut![expression],
+            Expression::Paren { expression, .. } => children_mut![expression],
+            Expression::Const { expression, .. } => expression.value_mut().into_iter().collect(),
+            Expression::Loop { body, .. } => children_mut![body],
+            Expression::While {
+                condition, body, ..
+            } => children_mut![condition, body],
+            Expression::WhileLet {
+                scrutinee, body, ..
+            } => children_mut![scrutinee, body],
+            Expression::For { iterable, body, .. } => children_mut![iterable, body],
+            Expression::Break { value, .. } => value
+                .as_mut()
+                .map(|v| children_mut![v.as_mut()])
+                .unwrap_or_default(),
+            Expression::Reference { expression, .. } => children_mut![expression],
+            Expression::IndexedAccess {
+                expression, index, ..
+            } => children_mut![expression, index],
+            Expression::Task { expression, .. } => children_mut![expression],
+            Expression::Defer { expression, .. } => children_mut![expression],
+            Expression::Assert { expression, .. } => children_mut![expression],
+            Expression::Select { arms, .. } => {
+                let mut c = Vec::new();
+                for arm in arms {
+                    match arm {
+                        SelectArm::Receive {
+                            receive_expression,
+                            body,
+                            ..
+                        } => {
+                            c.push(receive_expression.as_mut());
+                            c.push(body.as_mut());
+                        }
+                        SelectArm::Send {
+                            send_expression,
+                            body,
+                        } => {
+                            c.push(send_expression.as_mut());
+                            c.push(body.as_mut());
+                        }
+                        SelectArm::MatchReceive {
+                            receive_expression,
+                            arms: match_arms,
+                        } => {
+                            c.push(receive_expression.as_mut());
+                            for ma in match_arms {
+                                c.extend(ma.guard.as_deref_mut());
+                                c.push(&mut ma.expression);
+                            }
+                        }
+                        SelectArm::WildCard { body, .. } => {
+                            c.push(body.as_mut());
+                        }
+                    }
+                }
+                c
+            }
+            Expression::Range { start, end, .. } => {
+                let mut c = Vec::new();
+                if let Some(s) = start {
+                    c.push(s.as_mut());
+                }
+                if let Some(e) = end {
+                    c.push(e.as_mut());
+                }
+                c
+            }
+            Expression::Cast { expression, .. } => children_mut![expression],
+            Expression::Interface {
+                method_signatures, ..
+            } => method_signatures.iter_mut().collect(),
+            Expression::Unit { .. }
+            | Expression::Continue { .. }
+            | Expression::Enum { .. }
+            | Expression::Struct { .. }
+            | Expression::TypeAlias { .. }
+            | Expression::VariableDeclaration { .. }
+            | Expression::PackageImport { .. }
+            | Expression::RawGo { .. } => Vec::new(),
+        }
+    }
+
+    pub fn strip_parens(&mut self) {
+        while let Expression::Paren {
+            expression,
+            span,
+            id,
+            ..
+        } = self
+        {
+            let outer = *span;
+            let placeholder = Expression::Unit {
+                ty: Type::ignored(),
+                span: outer,
+                id: *id,
+            };
+            let mut inner = mem::replace(expression.as_mut(), placeholder);
+            inner.set_span(outer);
+            *self = inner;
+        }
+        for child in self.children_mut() {
+            child.strip_parens();
         }
     }
 

@@ -50,7 +50,7 @@ pub(super) fn receiver_type_binding(
     let Expression::DotAccess {
         expression: receiver,
         ..
-    } = callee_expression.unwrap_parens()
+    } = callee_expression
     else {
         return None;
     };
@@ -121,7 +121,7 @@ impl<'a> Planner<'a> {
         expression_ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let Expression::Call {
-            expression: callee,
+            expression: function,
             args,
             type_arguments,
             spread,
@@ -130,7 +130,6 @@ impl<'a> Planner<'a> {
         else {
             unreachable!("plan_regular_call requires a Call expression");
         };
-        let function = callee.unwrap_parens();
         let spread = spread.as_deref();
 
         if let Some(plan) =
@@ -312,7 +311,7 @@ impl<'a> Planner<'a> {
         let Expression::Literal {
             literal: Literal::FormatString(parts),
             ..
-        } = argument.unwrap_parens()
+        } = argument
         else {
             return None;
         };
@@ -344,7 +343,7 @@ impl<'a> Planner<'a> {
     }
 
     fn classify_fmt_argument(&self, expression: &Expression) -> Option<FmtArgument> {
-        match expression.unwrap_parens() {
+        match expression {
             Expression::Literal {
                 literal: Literal::FormatString(parts),
                 ..
@@ -435,11 +434,11 @@ impl EmitFacts<'_> {
             expression: receiver,
             member,
             ..
-        } = callee_expression.unwrap_parens()
+        } = callee_expression
         else {
             return false;
         };
-        matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
+        matches!(&**receiver, Expression::Identifier { .. })
             && self.dot_receiver_coercion(receiver, member) == Some(ReceiverCoercion::AutoAddress)
     }
 }

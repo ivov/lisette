@@ -604,6 +604,17 @@ fn get_value() -> Result<int, string> {
 }
 
 #[test]
+fn propagate_parenthesized_operand_returns_the_result_itself() {
+    let input = r#"
+fn get_value(r: Result<int, string>) -> Result<int, string> {
+  let x = (r)?
+  Ok(x + 1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn propagate_chained() {
     let input = r#"
 fn first() -> Result<int, string> {

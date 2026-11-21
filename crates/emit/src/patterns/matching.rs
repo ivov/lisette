@@ -317,7 +317,7 @@ impl Planner<'_> {
         arms: &[MatchArm],
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
-        let Expression::Tuple { elements, .. } = subject.unwrap_parens() else {
+        let Expression::Tuple { elements, .. } = subject else {
             return None;
         };
         if arms.iter().any(MatchArm::has_guard) {

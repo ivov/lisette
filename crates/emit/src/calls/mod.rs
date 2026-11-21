@@ -36,23 +36,22 @@ impl<'p> Planner<'p> {
             type_arguments,
             ty,
             ..
-        } = value.unwrap_parens()
+        } = value
         else {
             return None;
         };
-        let plan = self.plan_call(value.unwrap_parens())?;
+        let plan = self.plan_call(value)?;
         let CallableOrigin::Source(CallOperation::Native { kind, method }) = plan.resolved.origin
         else {
             return None;
         };
-        let function = callee.unwrap_parens();
-        let form = NativeCallForm::method(function);
+        let form = NativeCallForm::method(callee);
         form.split(args)?;
         Some(NativeCallContext {
             native_type: *kind,
             form,
             method,
-            function,
+            function: callee,
             args,
             spread: spread.as_deref(),
             written_type_arguments: type_arguments.annotations().len(),

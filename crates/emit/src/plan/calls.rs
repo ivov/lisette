@@ -151,17 +151,15 @@ impl<'a> Planner<'a> {
             return None;
         };
 
-        let function = callee.unwrap_parens();
-
-        let checked = self.facts.checked(function).callee();
-        let origin = if self.is_go_callable(function) {
+        let checked = self.facts.checked(callee).callee();
+        let origin = if self.is_go_callable(callee) {
             CallableOrigin::GoInterop
         } else {
             CallableOrigin::Source(&checked.operation)
         };
         let definition = checked.definition.as_ref().map(ToString::to_string);
 
-        let resolved = self.resolve_callee(function, origin, definition, checked.receiver_offset());
+        let resolved = self.resolve_callee(callee, origin, definition, checked.receiver_offset());
         let arguments = args
             .iter()
             .enumerate()
@@ -277,7 +275,7 @@ impl<'a> Planner<'a> {
         &self,
         function: &Expression,
     ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
-        let id = match function.unwrap_parens() {
+        let id = match function {
             Expression::Identifier { .. } | Expression::DotAccess { .. } => self
                 .facts
                 .checked(function)
@@ -308,7 +306,7 @@ impl<'a> Planner<'a> {
         matches!(
             expression,
             Expression::Call { expression: callee, .. }
-                if self.is_go_callable(callee.unwrap_parens())
+                if self.is_go_callable(callee)
         )
     }
 

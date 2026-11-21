@@ -211,7 +211,7 @@ impl Planner<'_> {
             }
             Some(shape)
                 if shape.has_flattened_payload()
-                    && let tuple @ Expression::Tuple { .. } = args[0].unwrap_parens() =>
+                    && let tuple @ Expression::Tuple { .. } = &args[0] =>
             {
                 let (setup, parts) = self.lowered_tuple_literal_values(tuple, fallible.ok_ty());
                 statements.extend(setup);

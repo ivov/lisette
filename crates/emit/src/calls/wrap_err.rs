@@ -14,13 +14,12 @@ pub(crate) struct WrapMessage {
 impl Planner<'_> {
     pub(crate) fn peel_wrap_err<'a>(
         &self,
-        expression: &'a Expression,
+        mut expression: &'a Expression,
     ) -> (&'a Expression, Vec<&'a Expression>) {
-        let mut expression = expression.unwrap_parens();
         let mut messages = Vec::new();
         while let Some((receiver, message)) = self.wrap_err_call(expression) {
             messages.push(message);
-            expression = receiver.unwrap_parens();
+            expression = receiver;
         }
         messages.reverse();
         (expression, messages)
@@ -49,7 +48,7 @@ impl Planner<'_> {
                 setup.extend(self.lower_discard_value(message));
                 continue;
             }
-            let (format, args) = match message.unwrap_parens() {
+            let (format, args) = match message {
                 Expression::Literal {
                     literal: Literal::String { value, raw: false },
                     ..

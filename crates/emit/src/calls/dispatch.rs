@@ -44,7 +44,7 @@ struct TupleStructTarget<'a> {
 fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKind>) -> bool {
     let Some(literals) = keys
         .iter()
-        .map(|key| match key.unwrap_parens() {
+        .map(|key| match key {
             Expression::Literal { literal, .. } => Some(literal),
             _ => None,
         })
@@ -315,13 +315,13 @@ impl<'a> Planner<'a> {
         let Expression::Literal {
             literal: Literal::Slice(entries),
             ..
-        } = argument.unwrap_parens()
+        } = argument
         else {
             return None;
         };
         let pairs = entries
             .iter()
-            .map(|entry| match entry.unwrap_parens() {
+            .map(|entry| match entry {
                 Expression::Tuple { elements, .. } => match elements.as_slice() {
                     [key, value] => Some((key, value)),
                     _ => None,
@@ -404,21 +404,19 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
-        let function = callee.unwrap_parens();
         let spread = spread.as_deref();
-        if self.is_local_binding(function) {
+        if self.is_local_binding(callee) {
             return None;
         }
-        let CallOperation::Native { kind, method } =
-            &self.facts.checked(function).callee().operation
+        let CallOperation::Native { kind, method } = &self.facts.checked(callee).callee().operation
         else {
             return None;
         };
         let kind = *kind;
         let plan = self.plan_call(call_expression)?;
         let native_ctx = NativeCallContext {
-            function,
-            form: NativeCallForm::method(function),
+            function: callee,
+            form: NativeCallForm::method(callee),
             args,
             spread,
             written_type_arguments: type_arguments.annotations().len(),
@@ -473,7 +471,6 @@ impl<'a> Planner<'a> {
         else {
             unreachable!("plan_call_expression requires a Call expression");
         };
-        let function = callee.unwrap_parens();
         let spread = spread.as_deref();
         let written_type_arguments = type_arguments.annotations().len();
 
@@ -497,7 +494,7 @@ impl<'a> Planner<'a> {
             CallableOrigin::Source(CallOperation::Zero) => {
                 let ty = self
                     .facts
-                    .checked(function)
+                    .checked(callee)
                     .callee()
                     .first_type_argument()
                     .clone();
@@ -509,11 +506,11 @@ impl<'a> Planner<'a> {
                 return ValuePlan::computed(Vec::new(), value);
             }
             CallableOrigin::Source(CallOperation::AssertType) => {
-                let (setup, value) = self.plan_assert_type(function, args);
+                let (setup, value) = self.plan_assert_type(callee, args);
                 return ValuePlan::plain_call(setup, value);
             }
             CallableOrigin::Source(CallOperation::UfcsFunction) => {
-                return self.plan_ufcs_call(function, args, written_type_arguments, spread, &plan);
+                return self.plan_ufcs_call(callee, args, written_type_arguments, spread, &plan);
             }
             CallableOrigin::Source(
                 operation @ (CallOperation::NativeConstructor { kind, method }
@@ -521,10 +518,10 @@ impl<'a> Planner<'a> {
             ) => {
                 let form = match operation {
                     CallOperation::NativeConstructor { .. } => NativeCallForm::Constructor,
-                    _ => NativeCallForm::method(function),
+                    _ => NativeCallForm::method(callee),
                 };
                 let native_ctx = NativeCallContext {
-                    function,
+                    function: callee,
                     form,
                     args,
                     spread,
@@ -539,7 +536,7 @@ impl<'a> Planner<'a> {
                 return self.plan_native_call(&native_ctx);
             }
             CallableOrigin::Source(CallOperation::ReceiverMethod { is_public }) => {
-                let method = extract_receiver_ufcs_method(function);
+                let method = extract_receiver_ufcs_method(callee);
                 let owner = plan
                     .resolved
                     .instantiated
@@ -550,7 +547,7 @@ impl<'a> Planner<'a> {
                     owner.as_ref().and_then(Type::get_qualified_id),
                     &method,
                     *is_public,
-                    self.selects_tagged_twin(function),
+                    self.selects_tagged_twin(callee),
                 );
                 return self.plan_receiver_method_ufcs(args, go_method, spread, &plan);
             }
@@ -680,7 +677,7 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
-        let ty = function.unwrap_parens().get_type();
+        let ty = function.get_type();
         let f = ty.as_function_type()?;
         let return_ty = call_ty
             .cloned()

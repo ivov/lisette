@@ -170,7 +170,7 @@ impl Planner<'_> {
         receiver: &Expression,
         stage: ValuePlan,
     ) -> ValuePlan {
-        match receiver.unwrap_parens() {
+        match receiver {
             Expression::Call { .. } => stage
                 .map_expression(|setup, value| {
                     let temp = self.hoist_tmp_value_statement(setup, "ref", value);
@@ -231,12 +231,12 @@ impl Planner<'_> {
 fn is_address_of_composite_literal(arg: Option<&Expression>) -> bool {
     let Some(Expression::Reference {
         expression: inner, ..
-    }) = arg.map(Expression::unwrap_parens)
+    }) = arg
     else {
         return false;
     };
     matches!(
-        inner.unwrap_parens(),
+        &**inner,
         Expression::StructCall { .. }
             | Expression::Literal {
                 literal: Literal::Slice(_),

@@ -141,7 +141,7 @@ pub fn try_compile_project_files_with_tests(
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
-    let analysis = analyze(AnalyzeInput {
+    let mut analysis = analyze(AnalyzeInput {
         load_siblings: true,
         scope: AnalysisScope::Directory,
         loader: &fs,
@@ -168,7 +168,7 @@ pub fn try_compile_project_files_with_tests(
     );
 
     Planner::emit(
-        &analysis.emit_input,
+        &mut analysis.emit_input,
         go_module,
         "main",
         EmitOptions {

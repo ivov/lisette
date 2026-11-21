@@ -27,11 +27,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn plan_raw_nullable_field(&mut self, dot_access: &Expression) -> ValuePlan {
-        self.plan_dot_access_with(
-            dot_access.unwrap_parens(),
-            ExpressionContext::value(),
-            false,
-        )
+        self.plan_dot_access_with(dot_access, ExpressionContext::value(), false)
     }
 
     fn plan_dot_access_with(
@@ -198,7 +194,7 @@ impl Planner<'_> {
     fn tuple_component_read(&self, expression: &Expression, member: &str) -> Option<GoIdentifier> {
         let Expression::Identifier {
             value, resolution, ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return None;
         };
@@ -275,7 +271,7 @@ impl Planner<'_> {
             member,
             ty: result_ty,
             ..
-        } = subject.unwrap_parens()
+        } = subject
         else {
             return None;
         };
@@ -398,7 +394,7 @@ impl Planner<'_> {
             if coercion != Some(ReceiverCoercion::AutoAddress) || had_explicit_deref {
                 return base;
             }
-            match expression.unwrap_parens() {
+            match expression {
                 Expression::Call { .. } => {
                     GoExpression::identifier(self.hoist_tmp_value_statement(setup, "ref", base))
                 }

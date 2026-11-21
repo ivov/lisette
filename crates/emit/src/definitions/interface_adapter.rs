@@ -60,7 +60,7 @@ impl AdapterMethod {
 impl Planner<'_> {
     pub(crate) fn selects_tagged_twin(&self, expression: &Expression) -> bool {
         matches!(
-            expression.unwrap_parens(),
+            expression,
             Expression::DotAccess {
                 resolution: DotAccessResolution::InstanceMethodValue { .. }
                     | DotAccessResolution::InstanceMethod { .. },

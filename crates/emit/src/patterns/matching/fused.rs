@@ -7,7 +7,7 @@ impl Planner<'_> {
         value: &Expression,
         go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
-        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+        let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
         self.try_lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
@@ -18,7 +18,7 @@ impl Planner<'_> {
         value: &Expression,
         go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
-        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+        let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
         let fuse = self.option_fuse_plan(subject)?;
@@ -48,7 +48,7 @@ impl Planner<'_> {
         value: &Expression,
         go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
-        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+        let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
         let arms = self.partial_outcome_arms(subject, arms)?;
@@ -871,7 +871,7 @@ fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
 }
 
 fn arm_body_is_noop(body: &Expression) -> bool {
-    match body.unwrap_parens() {
+    match body {
         Expression::Unit { .. } => true,
         Expression::Block { items, .. } => items.is_empty(),
         _ => false,
@@ -879,9 +879,9 @@ fn arm_body_is_noop(body: &Expression) -> bool {
 }
 
 fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
-    let body = match body.unwrap_parens() {
+    let body = match body {
         Expression::Block { items, .. } => match items.as_slice() {
-            [single] => single.unwrap_parens(),
+            [single] => single,
             _ => return None,
         },
         other => other,

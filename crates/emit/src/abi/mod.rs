@@ -176,7 +176,7 @@ impl Planner<'_> {
         if self
             .facts
             .is_prelude_dispatch(signature.id, signature.origin)
-            || prelude_constructor(callee.unwrap_parens()).is_some()
+            || prelude_constructor(callee).is_some()
         {
             return None;
         }
@@ -302,7 +302,7 @@ impl Planner<'_> {
             expression: inner,
             ty,
             ..
-        } = value.unwrap_parens()
+        } = value
         else {
             return value;
         };
@@ -392,7 +392,7 @@ impl Planner<'_> {
 
 pub(crate) fn is_closure_literal(expression: &Expression) -> bool {
     matches!(
-        expression.unwrap_parens(),
+        expression,
         Expression::Lambda { .. } | Expression::Function { .. }
     )
 }

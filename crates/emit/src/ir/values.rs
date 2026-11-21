@@ -849,7 +849,9 @@ impl Planner<'_> {
             return ValuePlan::plain_call(setup, call);
         }
         match expression {
-            Expression::Paren { expression, .. } => self.plan_operand(expression, ctx),
+            Expression::Paren { .. } => {
+                unreachable!("internal error: emit received a parenthesized expression")
+            }
             Expression::Cast {
                 expression: operand,
                 ty,

@@ -115,7 +115,7 @@ impl InferCtx<'_> {
             }
         }
 
-        let new_expression = self.infer_expression_at(*expression, expected_ty, is_subexpression);
+        let new_expression = self.infer_expression_kind(*expression, expected_ty, is_subexpression);
         let new_ty = new_expression.get_type();
 
         Expression::Paren {

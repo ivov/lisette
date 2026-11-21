@@ -181,7 +181,7 @@ fn emit_and_write(
     let lisette = render_lis_run(scenario, printed);
     let mut loader = MemoryLoader::new();
     loader.add_file(ENTRY_PACKAGE_ID, "main.lis", &lisette);
-    let output = analyze(AnalyzeInput {
+    let mut output = analyze(AnalyzeInput {
         load_siblings: true,
         scope: AnalysisScope::Directory,
         loader: &loader,
@@ -210,7 +210,7 @@ fn emit_and_write(
     }
 
     let files = Planner::emit(
-        &output.emit_input,
+        &mut output.emit_input,
         &package,
         "main",
         EmitOptions {

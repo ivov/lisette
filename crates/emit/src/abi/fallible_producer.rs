@@ -55,7 +55,7 @@ impl OptionFusePlan<'_> {
             Self::Bound(components) => planner.bind_component_pair(components, slot),
             Self::CommaOk { subject, source } => planner.bind_comma_ok_pair(subject, source, slot),
             Self::Nullable { subject, nil_guard } => {
-                let value = if matches!(subject.unwrap_parens(), Expression::DotAccess { .. }) {
+                let value = if matches!(subject, Expression::DotAccess { .. }) {
                     planner.plan_raw_nullable_field(subject)
                 } else {
                     planner.plan_call_expression(subject, None, ExpressionContext::value())
@@ -328,7 +328,7 @@ impl<'p> Planner<'p> {
         if needs_whole_value && kind.whole_value_constructor().is_none() {
             return None;
         }
-        let producer = if let Expression::TryBlock { items, ty, .. } = subject.unwrap_parens() {
+        let producer = if let Expression::TryBlock { items, ty, .. } = subject {
             FallibleProducer::TryBlock(self.try_block_pair_plan(items, ty)?)
         } else {
             self.fallible_producer(subject)?
@@ -369,7 +369,7 @@ impl<'p> Planner<'p> {
     }
 
     fn index_fuses(&self, receiver: &Expression, index: &Expression) -> bool {
-        match index.unwrap_parens() {
+        match index {
             Expression::Literal {
                 literal: Literal::Integer { value, .. },
                 ..

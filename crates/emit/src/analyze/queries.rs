@@ -97,7 +97,7 @@ pub(crate) struct ResolvedNominal<'a> {
 
 fn is_scalar_literal(expression: &Expression) -> bool {
     matches!(
-        expression.unwrap_parens(),
+        expression,
         Expression::Literal {
             literal: Literal::Integer { .. }
                 | Literal::Float { .. }
@@ -111,8 +111,7 @@ fn is_scalar_literal(expression: &Expression) -> bool {
 }
 
 pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
-    !(is_scalar_literal(expression)
-        || matches!(expression.unwrap_parens(), Expression::Identifier { .. }))
+    !(is_scalar_literal(expression) || matches!(expression, Expression::Identifier { .. }))
 }
 
 impl<'a> EmitFacts<'a> {

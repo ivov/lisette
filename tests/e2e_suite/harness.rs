@@ -81,7 +81,7 @@ pub fn compile_e2e_suite_test(
         file_comment: None,
     };
 
-    let input = EmitInput {
+    let mut input = EmitInput {
         checked_bodies: result.checked_bodies,
         files: FxHashMap::from_iter([(0, file)]),
         definitions: result.definitions,
@@ -98,7 +98,7 @@ pub fn compile_e2e_suite_test(
         sourcemap_base: None,
         emit_tests: false,
     };
-    let mut emitted_files = Planner::emit(&input, GO_MODULE, "main", options)
+    let mut emitted_files = Planner::emit(&mut input, GO_MODULE, "main", options)
         .map_err(|diagnostics| CompileError::Emit(format!("Emission failed: {diagnostics:?}")))?;
 
     if emitted_files.is_empty() {

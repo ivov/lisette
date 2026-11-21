@@ -245,7 +245,7 @@ fn join_boolean_branches(
 }
 
 pub(crate) fn peel_value_wrappers(expression: &Expression) -> &Expression {
-    match expression.unwrap_parens() {
+    match expression {
         Expression::Block { items, .. }
             if let [item] = items.as_slice()
                 && !matches!(item, Expression::Let { .. } | Expression::Const { .. }) =>
@@ -258,7 +258,7 @@ pub(crate) fn peel_value_wrappers(expression: &Expression) -> &Expression {
 
 pub(crate) fn requires_temp_var(expression: &Expression) -> bool {
     matches!(
-        expression.unwrap_parens(),
+        expression,
         Expression::If { .. }
             | Expression::IfLet { .. }
             | Expression::Match { .. }
@@ -342,15 +342,14 @@ impl<'p> Planner<'p> {
     }
 
     pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<Statement> {
-        let unwrapped = value.unwrap_parens();
-        self.record_discarded_value(unwrapped);
+        self.record_discarded_value(value);
 
-        if self.facts.is_side_effect_free_discard(unwrapped) {
-            self.record_dropped_code(unwrapped.get_span());
+        if self.facts.is_side_effect_free_discard(value) {
+            self.record_dropped_code(value.get_span());
             return Vec::new();
         }
 
-        if let Expression::Propagate { expression, .. } = unwrapped {
+        if let Expression::Propagate { expression, .. } = value {
             return self.lower_propagate_statement(expression);
         }
 
@@ -361,8 +360,7 @@ impl<'p> Planner<'p> {
             let effects = staged_value.effects();
             let reads_or_acts = !effects.can_erase() || effects.reads() != Stability::Fixed;
             if !staged_value.is_empty() && reads_or_acts {
-                if matches!(unwrapped, Expression::Call { .. })
-                    && staged_value.stands_as_a_statement()
+                if matches!(value, Expression::Call { .. }) && staged_value.stands_as_a_statement()
                 {
                     statements.push(
                         LoweredStatement::ExpressionStatement {
@@ -378,9 +376,9 @@ impl<'p> Planner<'p> {
             return statements;
         }
 
-        if let Expression::Call { .. } = unwrapped {
+        if let Expression::Call { .. } = value {
             let mut statements: Vec<Statement> = Vec::new();
-            if let Some(call) = self.try_plan_go_call_discarded(&mut statements, unwrapped) {
+            if let Some(call) = self.try_plan_go_call_discarded(&mut statements, value) {
                 statements.push(expression_statement(call));
                 return statements;
             }
@@ -388,8 +386,8 @@ impl<'p> Planner<'p> {
 
         let staged = self.plan_operand(value, ExpressionContext::value());
         let (mut statements, staged_value) = staged.into_parts();
-        if calls_a_function(self.facts.call_operation(unwrapped))
-            && matches!(unwrapped, Expression::Call { .. })
+        if calls_a_function(self.facts.call_operation(value))
+            && matches!(value, Expression::Call { .. })
             && staged_value.stands_as_a_statement()
         {
             statements.push(expression_statement(staged_value));
@@ -426,7 +424,6 @@ impl<'p> Planner<'p> {
         target: &GoExpression,
         target_ty: Option<&Type>,
     ) -> Vec<Statement> {
-        let expression = expression.unwrap_parens();
         if self.facts.is_option_or_result(&expression.get_type()) {
             return self.lower_option_result_assignment(target, target_ty, expression);
         }
@@ -621,7 +618,6 @@ impl<'p> Planner<'p> {
         target: &GoExpression,
         target_ty: Option<&Type>,
     ) -> Vec<Statement> {
-        let last = last.unwrap_parens();
         if matches!(
             last,
             Expression::Return { .. }
@@ -692,15 +688,14 @@ impl<'p> Planner<'p> {
         };
         let (method, receiver) = self.facts.slice_growth_method(func)?;
 
-        let unwrapped = receiver.unwrap_parens();
         let receiver_is_lvalue =
-            self.facts.is_lvalue_chain(unwrapped) && !self.facts.contains_newtype_access(unwrapped);
+            self.facts.is_lvalue_chain(receiver) && !self.facts.contains_newtype_access(receiver);
 
         let (value, mut statements) = if receiver_is_lvalue {
             let (arguments, ordering) = self.lower_growth_args(last, args, spread.as_deref());
             let mut capture: Vec<Statement> = Vec::new();
             let receiver_lv =
-                self.plan_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
+                self.plan_place(&mut capture, receiver, PlaceOrdering::before(&ordering));
             let target_differs = receiver_lv.node() != target.node();
             let receiver_read = ValuePlan::computed(Vec::new(), receiver_lv.clone())
                 .with_stability(self.path_read_stability(&receiver_lv));

@@ -120,7 +120,7 @@ fn run_pipeline(
         recover_target: RecoverTarget::None,
     };
 
-    let analysis = analyze(input);
+    let mut analysis = analyze(input);
     let mut diagnostics = analysis
         .diagnostics()
         .iter()
@@ -135,7 +135,7 @@ fn run_pipeline(
     }
 
     let go_files = match lisette_emit::Planner::emit(
-        &analysis.emit_input,
+        &mut analysis.emit_input,
         "",
         "main",
         lisette_emit::EmitOptions {

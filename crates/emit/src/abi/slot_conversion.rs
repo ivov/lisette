@@ -37,7 +37,7 @@ impl Planner<'_> {
         let Some(recorded) = self.facts.checked(operand).propagated_error() else {
             return CoercionPlan::Identity;
         };
-        self.record_applied_conversion(ValueUseKey::propagated_error(operand.id()));
+        self.record_applied_conversion(ValueUseKey::propagated_error(operand));
         if !recorded.adaptation.converts() {
             return CoercionPlan::Identity;
         }
@@ -45,12 +45,11 @@ impl Planner<'_> {
     }
 
     pub(crate) fn applied_element_adaptations(&self, value: &Expression) -> Vec<Adaptation> {
-        let producer = value.unwrap_parens();
-        let Adaptation::Tuple(adaptations) = &self.facts.checked(producer).value_use().adaptation
+        let Adaptation::Tuple(adaptations) = &self.facts.checked(value).value_use().adaptation
         else {
             return Vec::new();
         };
-        self.record_applied_conversion(ValueUseKey::value(producer));
+        self.record_applied_conversion(ValueUseKey::value(value));
         adaptations.clone()
     }
 
@@ -59,7 +58,7 @@ impl Planner<'_> {
         value: &Expression,
         plan: ValuePlan,
     ) -> ValuePlan {
-        let Some(slot) = self.facts.value_use_slot(value.unwrap_parens()) else {
+        let Some(slot) = self.facts.value_use_slot(value) else {
             return plan;
         };
         let coercion = self.value_slot_coercion(value, slot);
@@ -74,7 +73,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn record_bridged_conversion(&self, value: &Expression) {
-        self.record_applied_conversion(ValueUseKey::value(value.unwrap_parens()));
+        self.record_applied_conversion(ValueUseKey::value(value));
     }
 
     pub(crate) fn record_dropped_code(&self, span: Span) {
@@ -82,7 +81,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn record_discarded_value(&self, value: &Expression) {
-        self.record_applied_conversion(ValueUseKey::value(value.unwrap_parens()));
+        self.record_applied_conversion(ValueUseKey::value(value));
     }
 
     pub(crate) fn value_slot_coercion(&self, value: &Expression, layout: &Type) -> CoercionPlan {
@@ -95,10 +94,9 @@ impl Planner<'_> {
         layout: &Type,
         go_layout: Option<&ValueLayout>,
     ) -> CoercionPlan {
-        let producer = value.unwrap_parens();
-        let value_use = self.facts.checked(producer).value_use();
+        let value_use = self.facts.checked(value).value_use();
         self.adapted_slot_coercion(
-            producer,
+            value,
             &value_use.adaptation,
             &value_use.slot,
             layout,
@@ -185,7 +183,6 @@ impl Planner<'_> {
         elements: [&Expression; 2],
         layouts: [&Type; 2],
     ) -> [CoercionPlan; 2] {
-        let pair = pair.unwrap_parens();
         let value_use = self.facts.checked(pair).value_use();
         let Adaptation::Tuple(adaptations) = &value_use.adaptation else {
             return [0, 1].map(|index| self.value_slot_coercion(elements[index], layouts[index]));

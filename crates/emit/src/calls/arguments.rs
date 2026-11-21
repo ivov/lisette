@@ -288,7 +288,7 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> Option<ArgumentSlotBridge> {
-        let value_use = self.facts.checked(argument.unwrap_parens()).value_use();
+        let value_use = self.facts.checked(argument).value_use();
         if matches!(
             CoercionPlan::adapted(
                 self,
@@ -344,9 +344,9 @@ impl Planner<'_> {
         }
         let value = match plan.source {
             ArgumentValueSource::GoPhysical => {
-                if matches!(argument.unwrap_parens(), Expression::Call { .. }) {
+                if matches!(argument, Expression::Call { .. }) {
                     self.plan_call_expression(
-                        argument.unwrap_parens(),
+                        argument,
                         Some(&argument.get_type()),
                         ExpressionContext::value(),
                     )
@@ -361,11 +361,7 @@ impl Planner<'_> {
             ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
             ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
         };
-        let slot = &self
-            .facts
-            .checked(argument.unwrap_parens())
-            .value_use()
-            .slot;
+        let slot = &self.facts.checked(argument).value_use().slot;
         let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
         value.map_expression(|setup, value| {
             let mut coercion_setup = Vec::new();
@@ -383,7 +379,7 @@ impl Planner<'_> {
             member,
             ty,
             ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return None;
         };
@@ -408,7 +404,6 @@ impl Planner<'_> {
         &self,
         expression: &Expression,
     ) -> Option<ValueLayout> {
-        let expression = expression.unwrap_parens();
         if self.call_target_is_go(expression)
             && let Some(plan) = self.plan_call(expression)
             && matches!(plan.resolved.abi.result, CallableReturnAbi::Value)
@@ -477,8 +472,8 @@ impl EmitFacts<'_> {
         if pins_type_args || receiver_bound.contains(name.as_str()) {
             return false;
         }
-        let checked = self.checked(argument.unwrap_parens());
-        let value_use = match argument.unwrap_parens() {
+        let checked = self.checked(argument);
+        let value_use = match argument {
             Expression::Cast { .. } => checked.cast_operand(),
             _ => checked.value_use(),
         };

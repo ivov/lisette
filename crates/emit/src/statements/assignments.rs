@@ -125,7 +125,7 @@ impl Planner<'_> {
     }
 
     fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
-        match target.unwrap_parens() {
+        match target {
             Expression::DotAccess {
                 expression,
                 member,
@@ -145,7 +145,7 @@ impl Planner<'_> {
     }
 
     fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {
-        match target.unwrap_parens() {
+        match target {
             Expression::Identifier { .. } | Expression::Literal { .. } => Vec::new(),
             Expression::DotAccess { expression, .. }
             | Expression::Unary {
@@ -232,7 +232,7 @@ impl Planner<'_> {
     fn target_binds_to_discard(&self, target: &Expression) -> bool {
         let Expression::Identifier {
             value, resolution, ..
-        } = target.unwrap_parens()
+        } = target
         else {
             return false;
         };
@@ -251,7 +251,6 @@ impl Planner<'_> {
         expression: &Expression,
         ordering: PlaceOrdering,
     ) -> GoExpression {
-        let expression = expression.unwrap_parens();
         match expression {
             Expression::Identifier {
                 value, resolution, ..
@@ -409,8 +408,8 @@ impl Planner<'_> {
         ordering: PlaceOrdering,
     ) -> GoExpression {
         let pointee_plan = self.plan_operand(pointee, ExpressionContext::value());
-        let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
-            || ordering.pins(&pointee_plan);
+        let needs_capture =
+            matches!(pointee, Expression::Call { .. }) || ordering.pins(&pointee_plan);
         let (pointee_setup, pointee_value) = pointee_plan.into_parts();
         setup.extend(pointee_setup);
         if needs_capture {
@@ -446,7 +445,7 @@ fn detect_compound_assignment<'a>(
 
 fn is_literal_one(expression: &Expression) -> bool {
     matches!(
-        expression.unwrap_parens(),
+        expression,
         Expression::Literal {
             literal: Literal::Integer { value: 1, .. },
             ..
@@ -455,8 +454,6 @@ fn is_literal_one(expression: &Expression) -> bool {
 }
 
 pub(crate) fn lvalues_match(a: &Expression, b: &Expression) -> bool {
-    let a = a.unwrap_parens();
-    let b = b.unwrap_parens();
     match (a, b) {
         (
             Expression::Identifier {
@@ -509,7 +506,6 @@ fn is_compound_eligible(op: &BinaryOperator) -> bool {
 
 impl EmitFacts<'_> {
     fn is_place_expression(&self, expression: &Expression) -> bool {
-        let expression = expression.unwrap_parens();
         match expression {
             Expression::Identifier { .. }
             | Expression::DotAccess { .. }
@@ -524,12 +520,10 @@ impl EmitFacts<'_> {
     }
 
     fn reads_through_reference(&self, base: &Expression) -> bool {
-        matches!(base.unwrap_parens(), Expression::Identifier { .. })
-            && self.is_reference(&base.get_type())
+        matches!(base, Expression::Identifier { .. }) && self.is_reference(&base.get_type())
     }
 
     pub(crate) fn is_lvalue_chain(&self, expression: &Expression) -> bool {
-        let expression = expression.unwrap_parens();
         match expression {
             Expression::Identifier { .. } => true,
             Expression::Unary {

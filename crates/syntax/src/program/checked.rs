@@ -28,15 +28,15 @@ impl ValueUseKey {
     /// The value of `expression` where it goes into its slot.
     pub fn value(expression: &Expression) -> Self {
         Self {
-            expression: expression.id(),
+            expression: expression.unwrap_parens().id(),
             role: ValueUseRole::Value,
         }
     }
 
-    /// The error that the `?` applied to the occurrence `operand` returns from its function or `try` block.
-    pub fn propagated_error(operand: ExpressionId) -> Self {
+    /// The error that the `?` applied to `operand` returns from its function or `try` block.
+    pub fn propagated_error(operand: &Expression) -> Self {
         Self {
-            expression: operand,
+            expression: operand.unwrap_parens().id(),
             role: ValueUseRole::PropagatedError,
         }
     }
@@ -393,7 +393,11 @@ impl CheckedBodiesBuilder {
         insert_unique(&mut self.records.range_kinds, range, kind);
     }
 
-    pub fn insert_forwarded_failure(&mut self, operand: ExpressionId) {
+    pub fn insert_forwarded_failure(&mut self, operand: &Expression) {
+        self.insert_forwarded_failure_id(operand.unwrap_parens().id());
+    }
+
+    fn insert_forwarded_failure_id(&mut self, operand: ExpressionId) {
         let inserted = self.records.forwarded_failures.insert(operand);
         assert!(
             inserted,
@@ -451,7 +455,7 @@ impl CheckedBodiesBuilder {
             self.insert_range_kind(range, kind);
         }
         for operand in forwarded_failures {
-            self.insert_forwarded_failure(operand);
+            self.insert_forwarded_failure_id(operand);
         }
         for (impl_block, generics) in receiver_generics {
             self.insert_receiver_generics(impl_block, generics);
@@ -504,7 +508,7 @@ impl<'a> CheckedExpression<'_, 'a> {
     /// The error that a `?` on this operand returns, converted to the error slot of its function or `try` block.
     pub fn propagated_error(&self) -> Option<&'a CheckedValueUse> {
         self.bodies
-            .value_use(&ValueUseKey::propagated_error(self.expression.id()))
+            .value_use(&ValueUseKey::propagated_error(self.expression))
     }
 
     /// The reference change that this method receiver takes, as the checker recorded it.

@@ -1,6 +1,7 @@
 //! Rewrites each emit snapshot program in ways that keep its meaning, and
 //! checks that each variant compiles to Go that builds and vets whenever the
-//! original does. Lisette errors on a variant are ignored. Runs nightly.
+//! original does. A variant that only adds parentheses must compile to the Go
+//! of the original. Lisette errors on a variant are ignored. Runs nightly.
 
 #[allow(dead_code, unused_imports)]
 mod _harness;
@@ -52,8 +53,14 @@ struct Variant {
     source: String,
 }
 
+struct Program {
+    name: String,
+    go_code: String,
+    variants: Vec<(Variant, Compiled)>,
+}
+
 enum Compiled {
-    Written,
+    Written(String),
     Rejected,
     Failed(String),
 }
@@ -75,12 +82,12 @@ fn rewrite_suite() {
     assert!(!harvested.is_empty(), "no snapshots harvested");
     let skip_list = read_skip_list("rewrite_suite/skip.txt");
 
-    let programs: Vec<(String, Vec<(Variant, Compiled)>)> = harvested
+    let programs: Vec<Program> = harvested
         .par_iter()
         .filter(|test| skip_reason_for_imports(&test.input, &test.snap_body).is_none())
         .filter_map(|test| {
             let source = wrap(&test.input);
-            let Compiled::Written = compile(&target, &test.name, &source) else {
+            let Compiled::Written(go_code) = compile(&target, &test.name, &source) else {
                 return None;
             };
             let variants = variants(&test.name, &source)
@@ -91,7 +98,11 @@ fn rewrite_suite() {
                     (variant, compiled)
                 })
                 .collect();
-            Some((test.name.clone(), variants))
+            Some(Program {
+                name: test.name.clone(),
+                go_code,
+                variants,
+            })
         })
         .collect();
 
@@ -109,7 +120,12 @@ fn rewrite_suite() {
     let mut rejected = 0;
     let mut skipped = 0;
     let mut failures = Vec::new();
-    for (name, variants) in &programs {
+    for Program {
+        name,
+        go_code,
+        variants,
+    } in &programs
+    {
         if go_errors.contains_key(&format!("test_{name}")) {
             skipped += 1;
             continue;
@@ -122,10 +138,20 @@ fn rewrite_suite() {
                     continue;
                 }
                 Compiled::Failed(message) => format!("compiler: {message}"),
-                Compiled::Written => match go_errors.get(&format!("test_{}", variant.name)) {
-                    Some(line) => format!("go: {line}"),
-                    None => continue,
-                },
+                Compiled::Written(variant_go_code) => {
+                    match go_errors.get(&format!("test_{}", variant.name)) {
+                        Some(line) => format!("go: {line}"),
+                        None if variant.rewrite == "paren"
+                            && variant_go_code.replace(
+                                &format!("test_{}", variant.name),
+                                &format!("test_{name}"),
+                            ) != *go_code =>
+                        {
+                            "Go differs from the Go of the original program".to_string()
+                        }
+                        None => continue,
+                    }
+                }
             };
             failures.push(format!(
                 "{} ({}): {}\n  {error}\n  repro: {}",
@@ -154,7 +180,7 @@ fn rewrite_suite() {
     }
     assert!(
         failures.is_empty(),
-        "{} variant(s) crashed the compiler or failed go build or vet (listed above)",
+        "{} variant(s) crashed the compiler, failed go build or vet, or changed the Go of a parenthesized expression (listed above)",
         failures.len()
     );
 }
@@ -170,7 +196,7 @@ fn compile(target: &Path, name: &str, source: &str) -> Compiled {
     match result {
         Ok(Ok(emitted)) => {
             write_subpackage(target, name, &emitted.go_code, None).expect("write subpackage");
-            Compiled::Written
+            Compiled::Written(emitted.go_code)
         }
         Ok(Err(CompileError::Inference(_))) => Compiled::Rejected,
         Ok(Err(CompileError::Emit(message))) => Compiled::Failed(message),

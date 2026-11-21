@@ -96,7 +96,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         if self.is_unit_call(expression)
             || (self.facts.resolves_to_unit(&expression.get_type())
-                && matches!(expression.unwrap_parens(), Expression::Block { .. }))
+                && matches!(expression, Expression::Block { .. }))
         {
             return self
                 .plan_value(expression, context)
@@ -108,7 +108,7 @@ impl Planner<'_> {
                 });
         }
         let ty = expression.get_type();
-        let filtered_out = match expression.unwrap_parens() {
+        let filtered_out = match expression {
             Expression::Function { .. } => true,
             Expression::Lambda { .. } => context
                 .generic_result_slot()
@@ -435,7 +435,6 @@ impl Planner<'_> {
             return converted;
         }
 
-        let expression = expression.unwrap_parens();
         let inner = self.plan_value(expression, ctx);
         let go_type = self.go_type(ty);
 
@@ -496,7 +495,7 @@ impl Planner<'_> {
 
     pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
         if self.is_unit_call(inner) {
-            let staged = self.plan_operand(inner.unwrap_parens(), ExpressionContext::value());
+            let staged = self.plan_operand(inner, ExpressionContext::value());
             return staged.map_observable_expression(|setup, staged_value| {
                 if !staged_value.is_empty() {
                     setup.push(effect_statement(staged_value));
@@ -512,9 +511,9 @@ impl Planner<'_> {
             .resolve_to_function_type(&inner.get_type())
             .is_some()
             && (!unaddressable
-                || matches!(inner.unwrap_parens(), Expression::DotAccess { resolution, .. } if resolution.is_field_read()))
+                || matches!(inner, Expression::DotAccess { resolution, .. } if resolution.is_field_read()))
         {
-            if matches!(inner.unwrap_parens(), Expression::Identifier { .. }) {
+            if matches!(inner, Expression::Identifier { .. }) {
                 self.plan_operand(inner, ExpressionContext::value())
             } else {
                 let mut setup = Vec::new();
@@ -651,7 +650,7 @@ impl Planner<'_> {
             .resolve_to_function_type(&expression.get_type())
             .is_some()
         {
-            return match expression.unwrap_parens() {
+            return match expression {
                 Expression::Identifier {
                     resolution: IdentifierResolution::Definition { name, .. },
                     ..
@@ -684,7 +683,7 @@ impl Planner<'_> {
                 _ => true,
             };
         }
-        match expression.unwrap_parens() {
+        match expression {
             Expression::Call { .. } => true,
             Expression::Identifier {
                 value,
@@ -731,12 +730,11 @@ fn needs_iife_for_async(
             ..
         },
         Some(CallOperation::Native { kind, method }),
-    ) = (expression.unwrap_parens(), operation)
+    ) = (expression, operation)
     else {
         return false;
     };
-    let function = callee.unwrap_parens();
-    let arity = split_native_receiver(function, args).map_or(0, |(_, arguments)| arguments.len());
+    let arity = split_native_receiver(callee, args).map_or(0, |(_, arguments)| arguments.len());
     !matches!(value.syntax_form(), OperandForm::Call)
         || !NativeOperation::new(*kind, method).lowers_to_plain_call(arity)
 }

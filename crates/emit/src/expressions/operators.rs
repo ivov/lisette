@@ -221,26 +221,25 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let target = expression.unwrap_parens();
         if let Expression::Binary {
             operator: cmp,
             left,
             right,
             ..
-        } = target
+        } = expression
             && let Some(flipped) = flip_comparison(cmp)
             && self.facts.flip_preserves_nan(cmp, left, right)
         {
-            let conversion = self.facts.checked(target).operand_conversion();
+            let conversion = self.facts.checked(expression).operand_conversion();
             return self.plan_binary(&flipped, left, right, conversion, ctx);
         }
         let (innermost, inner_negated) = strip_negations(expression);
         if let Some(predicate) = self.try_plan_fused_predicate_value(innermost, !inner_negated) {
             return predicate;
         }
-        if matches!(target, Expression::Call { .. }) {
+        if matches!(expression, Expression::Call { .. }) {
             let mut setup: Vec<Statement> = Vec::new();
-            if let Some(negated) = self.try_plan_negated_call(&mut setup, target) {
+            if let Some(negated) = self.try_plan_negated_call(&mut setup, expression) {
                 return ValuePlan::computed(setup, negated);
             }
         }
@@ -260,7 +259,6 @@ impl Planner<'_> {
             Expression::DotAccess { resolution, .. } => {
                 self.facts.imported_member_is_const(resolution)
             }
-            Expression::Paren { expression, .. } => self.is_go_constant_expression(expression),
             Expression::Unary {
                 operator: UnaryOperator::Negative | UnaryOperator::Not | UnaryOperator::BitwiseNot,
                 expression,
@@ -294,7 +292,7 @@ impl Planner<'_> {
 
     pub(crate) fn contains_untyped_constant_shift(&self, expression: &Expression) -> bool {
         match expression {
-            Expression::Paren { expression, .. } | Expression::Unary { expression, .. } => {
+            Expression::Unary { expression, .. } => {
                 self.contains_untyped_constant_shift(expression)
             }
             Expression::Binary {
@@ -333,7 +331,6 @@ pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperato
 fn is_literal_expression(expression: &Expression) -> bool {
     match expression {
         Expression::Literal { .. } => true,
-        Expression::Paren { expression, .. } => is_literal_expression(expression),
         Expression::Unary {
             operator: UnaryOperator::Negative,
             expression,

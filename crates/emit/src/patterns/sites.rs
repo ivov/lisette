@@ -117,13 +117,12 @@ impl ResolvedSubject {
     }
 }
 
-fn field_path_root(expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
-    let mut expression = expression.unwrap_parens();
+fn field_path_root(mut expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
     while let Expression::DotAccess {
         expression: inner, ..
     } = expression
     {
-        expression = inner.unwrap_parens();
+        expression = inner;
     }
     match expression {
         Expression::Identifier {

@@ -396,11 +396,10 @@ impl Planner<'_> {
             shape,
             Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
         ) {
-            let producer = expression.unwrap_parens();
-            let adaptation = &self.facts.checked(producer).value_use().adaptation;
+            let adaptation = &self.facts.checked(expression).value_use().adaptation;
             if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
                 let (mut statements, value) = self
-                    .plan_nullable_slot_value(producer, adaptation, &return_ty)
+                    .plan_nullable_slot_value(expression, adaptation, &return_ty)
                     .into_parts();
                 statements.push(plain_return(value));
                 return Some(statements);

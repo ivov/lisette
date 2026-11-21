@@ -99,7 +99,7 @@ fn collect(
             expression: receiver,
             member,
             ..
-        } = callee.unwrap_parens() =>
+        } = &**callee =>
         {
             if facts.dot_receiver_coercion(receiver, member) == Some(ReceiverCoercion::AutoAddress)
             {

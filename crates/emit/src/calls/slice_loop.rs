@@ -192,7 +192,7 @@ impl Planner<'_> {
         if args.len() != kind.argument_count() || ctx.spread.is_some() {
             return None;
         }
-        let callback = match args.last()?.unwrap_parens() {
+        let callback = match args.last()? {
             Expression::Lambda { params, body, .. } => {
                 let body = peel_single_expression_block(body);
                 let patterns: Vec<&Pattern> = params.iter().filter_map(identifier_of).collect();

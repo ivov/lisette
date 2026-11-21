@@ -57,7 +57,6 @@ impl Planner<'_> {
             } => (payload, Some(target_payload)),
             _ => return None,
         };
-        let expression = expression.unwrap_parens();
         if prelude_constructor(expression) == Some(PreludeVariant::None) {
             return Some(ValuePlan::literal("nil".to_string()));
         }
@@ -81,7 +80,7 @@ impl Planner<'_> {
             let value = self.peel_go_slot_alias_cast(inner, context);
             let emitted = self.emitted_value_layout(value, context);
             let direct = CoercionPlan::bridge(self, &emitted, target_payload);
-            if matches!(value.unwrap_parens(), Expression::Lambda { .. }) && direct.is_identity() {
+            if matches!(value, Expression::Lambda { .. }) && direct.is_identity() {
                 return Some(self.plan_composite_value(value, context));
             }
             if self.go_slot_declaration_layout(value, context).is_some() {

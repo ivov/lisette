@@ -77,7 +77,7 @@ impl InferCtx<'_> {
             }
 
             let ty = self.infer_propagate_in_block(
-                new_expression.id(),
+                &new_expression,
                 &resolved_tried_ty,
                 &try_types,
                 span,
@@ -101,7 +101,7 @@ impl InferCtx<'_> {
 
     fn infer_propagate_in_block(
         &mut self,
-        operand: ExpressionId,
+        operand: &Expression,
         tried_ty: &Type,
         try_types: &TryBlockTypes,
         span: Span,
@@ -151,7 +151,7 @@ impl InferCtx<'_> {
 
             if resolved_fn_return.is_result() {
                 self.check_propagated_error(
-                    new_expression.id(),
+                    &new_expression,
                     &resolved_fn_return.err_type(),
                     &tried_ty.err_type(),
                     &span,
@@ -202,7 +202,7 @@ impl InferCtx<'_> {
 
     fn check_propagated_error(
         &mut self,
-        operand: ExpressionId,
+        operand: &Expression,
         declared_err: &Type,
         operand_err: &Type,
         span: &Span,

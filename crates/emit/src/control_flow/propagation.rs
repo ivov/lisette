@@ -590,7 +590,7 @@ impl Planner<'_> {
         if let Some(lambda) = map_lambda(function) {
             return Some(ErrorMapper::Lambda(lambda));
         }
-        let named = match function.unwrap_parens() {
+        let named = match function {
             Expression::Identifier { .. } => true,
             Expression::DotAccess { resolution, .. } => matches!(
                 resolution,
@@ -703,8 +703,8 @@ impl Planner<'_> {
         let (receiver, mappers) = self.error_mapper_chain(expression)?;
         let receiver_ty = receiver.get_type();
         let plan = self.plan_operand(receiver, ExpressionContext::value());
-        let local = matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
-            && plan.effects().can_duplicate();
+        let local =
+            matches!(receiver, Expression::Identifier { .. }) && plan.effects().can_duplicate();
         let staged = self.plan_rests_in_stable_name(&plan);
         let (mut statements, value) = plan.into_parts();
         let (check, stability) = if staged {
@@ -770,7 +770,7 @@ impl Planner<'_> {
     ) -> Option<ForwardedTail<'a>> {
         let Expression::Propagate {
             expression: inner, ..
-        } = check.unwrap_parens()
+        } = check
         else {
             return None;
         };
@@ -778,7 +778,7 @@ impl Planner<'_> {
             expression: callee,
             args,
             ..
-        } = last.unwrap_parens()
+        } = last
         else {
             return None;
         };
