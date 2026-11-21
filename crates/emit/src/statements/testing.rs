@@ -136,6 +136,7 @@ impl Planner<'_> {
         };
         let handle = self.plan_value(receiver, ExpressionContext::value());
         let value = self.plan_value(&arguments[0], ExpressionContext::value());
+        let value = self.convert_to_recorded_slot(&arguments[0], value);
         let sequenced =
             self.sequence_values(vec![handle, value], CaptureBoundary::SiblingSequence, "log");
         let statements = sequenced.setup;

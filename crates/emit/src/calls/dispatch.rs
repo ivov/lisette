@@ -362,14 +362,13 @@ impl<'a> Planner<'a> {
 
         let mut lowered = Vec::with_capacity(pairs.len());
         let mut widest = 0;
-        for (key, value) in &pairs {
+        for (entry, (key, value)) in entries.iter().zip(&pairs) {
             let staged_key = values.next().expect("each pair stages a key");
             let staged_value = values.next().expect("each pair stages a value");
-            let (key_setup, coerced_key) = self
-                .value_slot_coercion(key, &key_ty)
-                .lower(self, staged_key);
+            let [key_coercion, value_coercion] =
+                self.pair_slot_coercions(entry, [key, value], [&key_ty, &value_ty]);
+            let (key_setup, coerced_key) = key_coercion.lower(self, staged_key);
             setup.extend(key_setup);
-            let value_coercion = self.value_slot_coercion(value, &value_ty);
             let is_whole_literal =
                 value_coercion.is_identity() && staged_value.is_composite_literal();
             let (value_setup, coerced_value) = value_coercion.lower(self, staged_value);

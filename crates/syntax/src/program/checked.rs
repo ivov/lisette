@@ -311,6 +311,10 @@ impl CheckedBodies {
         self.callees.iter()
     }
 
+    pub fn uses(&self) -> impl Iterator<Item = (&ValueUseKey, &CheckedValueUse)> {
+        self.uses.iter()
+    }
+
     pub fn pattern_field(&self, name_span: Span) -> &FieldSelection {
         self.field_selections
             .get(&FieldKey::Pattern(name_span))

@@ -1,5 +1,4 @@
 use crate::names::go_name;
-use syntax::ast::Expression;
 use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
@@ -264,22 +263,6 @@ impl CoercionPlan {
 }
 
 impl Planner<'_> {
-    pub(crate) fn apply_type_coercion(
-        &mut self,
-        statements: &mut Vec<Statement>,
-        target_ty: Option<&Type>,
-        expression: &Expression,
-        emitted: GoExpression,
-    ) -> GoExpression {
-        let Some(target) = target_ty else {
-            return emitted;
-        };
-        let coercion = self.value_slot_coercion(expression, target);
-        let (setup, value) = coercion.lower(self, emitted);
-        statements.extend(setup);
-        value
-    }
-
     fn plan_array_rebuild(
         &mut self,
         statements: &mut Vec<Statement>,

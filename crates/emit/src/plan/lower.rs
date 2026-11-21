@@ -13,7 +13,9 @@ use crate::ir::bodies::{
 use crate::ir::go_expression::{BinaryOp, UnaryOp};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, ValuePlan};
-use crate::plan::placement::{ElidableTail, collapse_declared_temp, requires_temp_var};
+use crate::plan::placement::{
+    ElidableTail, collapse_declared_temp, peel_value_wrappers, requires_temp_var,
+};
 use crate::state::expression::ExpressionContext;
 use std::iter;
 use std::slice;
@@ -124,6 +126,7 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> ValuePlan {
+        let ty = self.facts.value_use_slot(expression).unwrap_or(ty);
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let target = GoExpression::identifier(result_var.clone());
         let block = self.lower_branching_to_block(
@@ -308,6 +311,7 @@ impl Planner<'_> {
     }
 
     fn lower_focused_statement(&mut self, expression: &Expression) -> Statement {
+        let expression = expression.unwrap_parens();
         match expression {
             Expression::Block { .. } => LoweredStatement::Block(
                 self.with_scope(|this| this.lower_block_as_body(expression)),
@@ -724,11 +728,11 @@ impl Planner<'_> {
     fn lower_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
         let mut statements = Vec::new();
         let return_span = last.get_span();
-        let last = if let Expression::Return { expression, .. } = last {
+        let last = peel_value_wrappers(if let Expression::Return { expression, .. } = last {
             expression.as_ref()
         } else {
             last
-        };
+        });
 
         if self.facts.resolves_to_unit(&last.get_type()) {
             if !matches!(last, Expression::Unit { .. }) {

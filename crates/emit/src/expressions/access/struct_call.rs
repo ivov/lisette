@@ -7,7 +7,6 @@ use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
-use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::ValueLayout;
 use crate::analyze::queries::is_order_sensitive;
 use crate::control_flow::propagation::plain_return;
@@ -258,31 +257,6 @@ impl Planner<'_> {
         };
         setup.extend(spread_setup);
         value
-    }
-
-    pub(crate) fn coerce_into_slot(
-        &mut self,
-        statements: &mut Vec<Statement>,
-        (value_expression, value): (&Expression, GoExpression),
-        slot_ty: &Type,
-        go_slot: Option<(&ValueLayout, &ValueLayout)>,
-    ) -> GoExpression {
-        let layout_bridge = go_slot.map_or(CoercionPlan::Identity, |(source, target)| {
-            CoercionPlan::bridge(self, source, target)
-        });
-        let (bridge_setup, value) = layout_bridge.lower(self, value);
-        statements.extend(bridge_setup);
-        let value_use = self.facts.checked(value_expression).value_use();
-        let coercion = self.adapted_slot_coercion(
-            value_expression,
-            &value_use.adaptation,
-            &value_use.slot,
-            slot_ty,
-            go_slot.map(|(_, target)| target),
-        );
-        let (coercion_setup, coerced) = coercion.lower(self, value);
-        statements.extend(coercion_setup);
-        coerced
     }
 
     fn append_autofills(

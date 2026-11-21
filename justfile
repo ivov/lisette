@@ -62,6 +62,9 @@ test-e2e-suite:
 test-embed-diff:
     cargo test -p tests --test embed_diff -- --nocapture
 
+test-conversion-shapes:
+    cargo test -p tests --test conversion_shapes -- --nocapture
+
 test-cov:
     cargo llvm-cov -p tests -p lisette-lsp --test suite --test lsp --html --open
 

@@ -317,6 +317,9 @@ impl Planner<'_> {
             }
             _ => None,
         };
+        if placed.is_some() {
+            self.applied_element_adaptations(tuple);
+        }
         let slot_layouts = if lowered_return {
             self.lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec()))
         } else {
@@ -419,11 +422,8 @@ impl Planner<'_> {
         let slot_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
         let ctx = ctx.with_function_slot_origin(slot_origin);
 
-        let adaptation = &self.facts.checked(cast).cast_operand().adaptation;
-        if matches!(adaptation, Adaptation::Interface(_)) {
+        if let Some(coercion) = self.cast_operand_coercion(cast, &expression.get_type(), ty) {
             let inner = self.plan_value(expression, ctx);
-            let source_ty = expression.get_type();
-            let coercion = CoercionPlan::adapted(self, adaptation, &source_ty, ty, None);
             let mut converted = inner.map_expression(|setup, value| {
                 let (coercion_setup, coerced) = coercion.lower(self, value);
                 setup.extend(coercion_setup);

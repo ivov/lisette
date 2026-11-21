@@ -5,6 +5,7 @@ pub(crate) mod coercion;
 pub(crate) mod fallible_producer;
 #[allow(clippy::disallowed_methods)]
 pub(crate) mod layout;
+pub(crate) mod slot_conversion;
 pub(crate) mod transition;
 pub(crate) mod wrapping;
 
@@ -19,8 +20,8 @@ use coercion::CoercionPlan;
 use layout::{FunctionLayout, ValueLayout};
 use syntax::ast::Expression;
 use syntax::program::{
-    Adaptation, CallOperation, CheckedCallee, Definition, GoHint, GoReturnContract, Method,
-    NativeTypeKind, SlotOrigin, go_return_contract,
+    CallOperation, CheckedCallee, Definition, GoHint, GoReturnContract, Method, NativeTypeKind,
+    SlotOrigin, go_return_contract,
 };
 use syntax::types::{self, Type};
 
@@ -386,55 +387,6 @@ impl Planner<'_> {
             && self.facts.resolve_to_function_type(value_ty).is_some()
             && self.facts.resolve_to_function_type(target_ty).is_some())
         .then_some(slot_origin)
-    }
-
-    pub(crate) fn value_slot_coercion(&self, value: &Expression, layout: &Type) -> CoercionPlan {
-        let value_use = self.facts.checked(value).value_use();
-        self.adapted_slot_coercion(value, &value_use.adaptation, &value_use.slot, layout, None)
-    }
-
-    pub(crate) fn adapted_slot_coercion(
-        &self,
-        value: &Expression,
-        adaptation: &Adaptation,
-        slot: &Type,
-        layout: &Type,
-        go_layout: Option<&ValueLayout>,
-    ) -> CoercionPlan {
-        if go_layout.is_some() {
-            return CoercionPlan::adapted(self, adaptation, &value.get_type(), slot, go_layout);
-        }
-        let bridge = self.function_slot_bridge(value, layout);
-        if bridge.is_identity() {
-            let internal = CoercionPlan::adapted(self, adaptation, &value.get_type(), slot, None);
-            if !internal.is_identity() {
-                return internal;
-            }
-            let target = self.value_layout(layout, SlotOrigin::Lisette);
-            if matches!(
-                target.underlying(),
-                ValueLayout::TaggedOption { .. }
-                    | ValueLayout::Fallible { .. }
-                    | ValueLayout::Tuple { .. }
-                    | ValueLayout::Reference { .. }
-            ) {
-                let source = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
-                let bridge = CoercionPlan::bridge(self, &source, &target);
-                let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
-                if !bridge.is_identity()
-                    && (!reference
-                        || matches!(
-                            bridge,
-                            CoercionPlan::Layout(coercion::LayoutBridge::Conversion { .. })
-                        ))
-                {
-                    return bridge;
-                }
-            }
-            internal
-        } else {
-            bridge
-        }
     }
 }
 

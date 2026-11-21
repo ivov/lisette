@@ -223,6 +223,7 @@ impl Planner<'_> {
         let candidate = name.preferred();
         if self.scope.has_binding_for_go_name(&candidate)
             || self.package.is_package_block_name(&candidate)
+            || self.scope.declares_type_param(&candidate)
         {
             self.fresh_source(name)
         } else {

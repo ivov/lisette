@@ -311,6 +311,7 @@ jobs:
           restore-keys: |
             go-build-e2e-suite-${{ runner.os }}-
       - run: just test-e2e-suite
+      - run: just test-conversion-shapes
       - if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6
         with:

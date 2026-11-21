@@ -94,7 +94,9 @@ impl Planner<'_> {
                 ));
             }
         }
-        let inner = self.plan_nullable_payload(inner, &expression.get_type().ok_type());
+        let payload_ty = expression.get_type().ok_type();
+        let conversion = self.value_slot_coercion(inner, &payload_ty);
+        let inner = self.plan_nullable_payload(inner, &payload_ty, conversion);
         Some(inner.map_expression(|setup, value| {
             let value = if payload.is_identity() {
                 value
@@ -122,13 +124,13 @@ impl Planner<'_> {
         &mut self,
         payload: &Expression,
         payload_ty: &Type,
+        conversion: CoercionPlan,
     ) -> ValuePlan {
-        let slot = self.function_slot_bridge(payload, payload_ty);
         let origin = self.function_type_origin(payload_ty, SlotOrigin::Lisette);
         let context = ExpressionContext::value().with_function_slot_origin(origin);
         self.plan_composite_value(payload, context)
             .map_expression(|setup, value| {
-                let (slot_setup, value) = slot.lower(self, value);
+                let (slot_setup, value) = conversion.lower(self, value);
                 setup.extend(slot_setup);
                 value
             })

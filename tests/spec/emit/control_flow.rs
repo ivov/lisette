@@ -4915,7 +4915,7 @@ fn test() {
 }
 
 #[test]
-fn an_initializer_stays_when_moving_it_would_redeclare_a_type_parameter() {
+fn a_binding_named_like_a_type_parameter_gets_a_fresh_name() {
     let input = r#"
 import "go:strconv"
 
@@ -4929,14 +4929,14 @@ fn check<t>(value: t, text: string) -> t {
 }
 
 fn test() {
-  if check(7, "4") != 7 || check(8, "x") != 8 { panic("the generic header should stay in place") }
+  if check(7, "4") != 7 || check(8, "x") != 8 { panic("the renamed binding should keep the parsed number") }
 }
 "#;
     assert_emit_snapshot!(input);
 }
 
 #[test]
-fn an_initializer_stays_when_moving_it_would_shadow_a_type_parameter() {
+fn a_nested_binding_named_like_a_type_parameter_gets_a_fresh_name() {
     let input = r#"
 import "go:strconv"
 
@@ -4953,7 +4953,7 @@ fn check<t>(value: t, text: string, enter: bool) -> t {
 }
 
 fn test() {
-  if check(7, "4", true) != 7 || check(8, "x", true) != 8 { panic("the nested generic header should stay in place") }
+  if check(7, "4", true) != 7 || check(8, "x", true) != 8 { panic("the nested renamed binding should keep the parsed number") }
 }
 "#;
     assert_emit_snapshot!(input);
@@ -5186,6 +5186,51 @@ type ValuesRef = Ref<iter.Seq<int>>
 fn walk(p: PairsRef, v: ValuesRef) {
   for (k, n) in p { fmt.Println(k, n) }
   for x in v { fmt.Println(x) }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn parenthesized_breakless_loop_tail_needs_no_return() {
+    let input = r#"
+fn serve(n: int) -> int {
+  (loop {
+    if n > 0 {
+      return n
+    }
+  })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn parenthesized_returning_block_in_let_keeps_the_later_code() {
+    let input = r#"
+fn f() -> int {
+  let x = ({
+    return 1
+  })
+  x
+}
+
+fn test() -> int {
+  f()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn single_expression_block_tail_returns_the_value_directly() {
+    let input = r#"
+import "go:net/http"
+
+struct Wrapper { srv: http.Server }
+
+fn test() -> Wrapper {
+  { Wrapper { .. } }
 }
 "#;
     assert_emit_snapshot!(input);

@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::abi::coercion::CoercionPlan;
 use crate::abi::transition;
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::Statement;
@@ -231,15 +230,9 @@ impl Planner<'_> {
         else {
             return value;
         };
-        let Some(recorded) = self.facts.checked(operand).propagated_error() else {
-            return value;
-        };
-        let adaptation = &recorded.adaptation;
-        if !adaptation.converts() {
-            return value;
-        }
-        let (setup, value) =
-            CoercionPlan::adapted(self, adaptation, &from, &to, None).lower(self, value);
+        let (setup, value) = self
+            .propagated_error_coercion(operand, &from, &to)
+            .lower(self, value);
         statements.extend(setup);
         value
     }

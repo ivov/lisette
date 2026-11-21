@@ -1,5 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::program::{CallOperation, CheckedExpression, EqualityRecipe, FieldSelection};
+use syntax::program::{
+    CallOperation, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection, ValueUseKey,
+};
 
 use ecow::EcoString;
 use syntax::ast::{BindingId, Expression, Pattern, RestPattern, Span};
@@ -61,6 +63,20 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn checked<'e>(&self, expression: &'e Expression) -> CheckedExpression<'e, 'a> {
         self.input.checked_bodies.occurrence(expression)
+    }
+
+    pub(crate) fn value_use_slot(&self, expression: &Expression) -> Option<&'a Type> {
+        self.input
+            .checked_bodies
+            .value_use(&ValueUseKey::value(expression))
+            .map(|value_use| &value_use.slot)
+            .filter(|slot| !slot.is_ignored())
+    }
+
+    pub(crate) fn value_uses(
+        &self,
+    ) -> impl Iterator<Item = (&'a ValueUseKey, &'a CheckedValueUse)> {
+        self.input.checked_bodies.uses()
     }
 
     pub(crate) fn pattern_field(&self, name_span: Span) -> &'a FieldSelection {

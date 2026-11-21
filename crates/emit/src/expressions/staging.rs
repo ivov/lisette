@@ -250,7 +250,7 @@ impl Planner<'_> {
             });
         }
 
-        staged
+        self.convert_to_recorded_slot(expression, staged)
     }
 
     pub(crate) fn prelude_callback_stages_as_is(

@@ -396,10 +396,11 @@ impl Planner<'_> {
             shape,
             Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
         ) {
-            let adaptation = &self.facts.checked(expression).value_use().adaptation;
+            let producer = expression.unwrap_parens();
+            let adaptation = &self.facts.checked(producer).value_use().adaptation;
             if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
                 let (mut statements, value) = self
-                    .plan_nullable_slot_value(expression, adaptation, &return_ty)
+                    .plan_nullable_slot_value(producer, adaptation, &return_ty)
                     .into_parts();
                 statements.push(plain_return(value));
                 return Some(statements);
@@ -419,6 +420,7 @@ impl Planner<'_> {
             );
             let coercion = CoercionPlan::bridge(self, &source, &target);
             if !coercion.is_identity() {
+                self.record_bridged_conversion(expression);
                 let (mut statements, value) = self
                     .plan_value(expression, ExpressionContext::value())
                     .into_parts();
@@ -479,10 +481,7 @@ impl Planner<'_> {
         let tup =
             GoExpression::identifier(self.hoist_tmp_value_statement(&mut statements, "tup", value));
         let source_ty = expression.get_type();
-        let adaptations = match &self.facts.checked(expression).value_use().adaptation {
-            Adaptation::Tuple(adaptations) => adaptations.clone(),
-            _ => Vec::new(),
-        };
+        let adaptations = self.applied_element_adaptations(expression);
         let adapted = (!adaptations.is_empty()).then_some((&source_ty, adaptations.as_slice()));
         let (projection, fields) = self.lowered_tuple_values(&tup, &return_ty, adapted);
         statements.extend(projection);
@@ -554,8 +553,11 @@ impl Planner<'_> {
         slot_ty: &Type,
     ) -> ValuePlan {
         use Expression;
-        if matches!(adaptation, Adaptation::ImplicitSome { .. }) {
-            return self.plan_nullable_payload(expression, &self.facts.ok_payload(slot_ty));
+        if let Adaptation::ImplicitSome { payload } = adaptation {
+            let payload_ty = self.facts.ok_payload(slot_ty);
+            let conversion =
+                self.adapted_slot_coercion(expression, payload, &payload_ty, &payload_ty, None);
+            return self.plan_nullable_payload(expression, &payload_ty, conversion);
         }
         if let Expression::Call {
             expression: callee,
@@ -565,8 +567,10 @@ impl Planner<'_> {
             && prelude_constructor(callee) == Some(PreludeVariant::Some)
         {
             debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
+            let payload_ty = self.facts.ok_payload(slot_ty);
+            let conversion = self.value_slot_coercion(&args[0], &payload_ty);
             return self
-                .plan_nullable_payload(&args[0], &self.facts.ok_payload(slot_ty))
+                .plan_nullable_payload(&args[0], &payload_ty, conversion)
                 .with_constructor_stability();
         }
         if prelude_constructor(expression) == Some(PreludeVariant::None) {

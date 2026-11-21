@@ -735,7 +735,7 @@ impl Planner<'_> {
         args: &[Expression],
         capture_boundary: CaptureBoundary,
     ) -> NativeCallResult {
-        let arg = &args[0];
+        let arg = args[0].unwrap_parens();
         let is_ref_receiver = self.facts.is_reference(&receiver_expr.get_type());
         let deref = |raw: GoExpression| -> GoExpression {
             if is_ref_receiver {

@@ -374,7 +374,10 @@ impl Planner<'_> {
                     ElseArm::from_body(both_body, false),
                 )))
             }
-            None => ElseArm::from_body(both_body, false),
+            None => {
+                self.record_dropped_code(err_arm.expression.get_span());
+                ElseArm::from_body(both_body, false)
+            }
         };
 
         statements.push(
@@ -495,6 +498,7 @@ impl Planner<'_> {
             .into_parts();
 
         if !arms.selects_both && nil_guard.is_none() {
+            self.record_dropped_code(arms.selected.expression.get_span());
             statements.push(expression_statement(call));
             let fallback = self
                 .lower_fused_arm(&[], &arms.fallback.expression, place)

@@ -623,6 +623,7 @@ impl<'a> Planner<'a> {
         facts: EmitFacts<'a>,
         files: &[&File],
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
+        let source_files = files;
         let mut package = PackageState::default();
         let mut adapters = AdapterRegistry::default();
         let plan = Planner::new(
@@ -656,6 +657,12 @@ impl<'a> Planner<'a> {
             });
         }
 
+        abi::slot_conversion::check_applied_conversions(
+            &facts,
+            source_files,
+            &package.applied_conversions(),
+            &package.dropped_code(),
+        );
         if all_diagnostics.is_empty() {
             Ok(output_files)
         } else {

@@ -622,6 +622,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 return self.lower_simple_identifier(identifier, *binding);
             }
             Pattern::WildCard { .. } => return self.lower_discard(),
+            _ if let Some(block) = self.try_lower_converted_destructuring() => return block,
             Pattern::Tuple { elements, .. } => {
                 let all_unused = elements.iter().all(|element| match element {
                     Pattern::WildCard { .. } => true,
@@ -654,6 +655,30 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 &value_ty,
             ),
         }
+    }
+
+    fn try_lower_converted_destructuring(&mut self) -> Option<LoweredBlock> {
+        let coercion = self
+            .planner
+            .value_slot_coercion(self.value, &self.binding.ty);
+        if coercion.is_identity() {
+            return None;
+        }
+        let (mut statements, value) = self
+            .planner
+            .plan_value(self.value, ExpressionContext::value())
+            .into_parts();
+        let (coercion_setup, converted) = coercion.lower(self.planner, value);
+        statements.extend(coercion_setup);
+        let subject = self
+            .planner
+            .stable_source(&mut statements, "subject", converted);
+        statements.extend(self.planner.lower_irrefutable_pattern_site(
+            PatternSubject::Existing { var: subject },
+            &self.binding.pattern,
+            &self.binding.ty,
+        ));
+        Some(LoweredBlock { statements })
     }
 
     fn try_lower_channel_split(&mut self, elements: &[Pattern]) -> Option<LoweredBlock> {
@@ -793,7 +818,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         {
             raw_go_name = Some(self.planner.fresh_source(&SourceName::new(identifier)));
         }
-        let statements = if matches!(self.value, Expression::Propagate { .. }) {
+        let statements = if matches!(self.value, Expression::Propagate { .. })
+            && self
+                .planner
+                .value_slot_coercion(self.value, &self.binding.ty)
+                .is_identity()
+        {
             self.planner
                 .lower_let_propagate(let_spec, raw_go_name.as_ref())
         } else {

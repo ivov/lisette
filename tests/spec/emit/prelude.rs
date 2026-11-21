@@ -2544,3 +2544,39 @@ fn doubled(xs: Slice<int>) -> Slice<int> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn string_substring_parenthesized_range() {
+    let input = r#"
+fn test(s: string) -> string {
+  s.substring((0..5))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_append_in_block_converts_to_unknown_element() {
+    let input = r#"
+fn test() -> Slice<Unknown> {
+  let mut s = Slice.new<Unknown>()
+  s = { s.append("Lilian") }
+  s
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn parenthesized_go_call_into_nullable_option_argument() {
+    let input = r#"
+import "go:iter"
+import "go:slices"
+
+fn test() {
+  let s: Option<iter.Seq<int>> = Some((slices.Values([1, 2, 3])))
+  let _ = s.map(iter.Pull)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

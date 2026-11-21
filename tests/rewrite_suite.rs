@@ -31,7 +31,18 @@ const SITES_PER_REWRITE: usize = 3;
 #[derive(Default)]
 struct Sites {
     wrap: Vec<Range<usize>>,
+    paren: Vec<Range<usize>>,
     alias: Vec<Range<usize>>,
+}
+
+impl Sites {
+    fn add_value(&mut self, value: &Expression) {
+        let range = range_of(value.get_span());
+        if !range.is_empty() {
+            self.wrap.push(range.clone());
+            self.paren.push(range);
+        }
+    }
 }
 
 struct Variant {
@@ -198,6 +209,16 @@ fn variants(name: &str, source: &str) -> Vec<Variant> {
             source: splice(source, range, &replacement),
         });
     }
+    for (i, range) in pick(&sites.paren).enumerate() {
+        let expression = &source[range.clone()];
+        let replacement = format!("({expression})");
+        variants.push(Variant {
+            name: format!("{name}__paren{}", i + 1),
+            rewrite: "paren",
+            change: describe(source, range, &replacement),
+            source: splice(source, range, &replacement),
+        });
+    }
     for (i, range) in pick(&sites.alias).enumerate() {
         let annotation = &source[range.clone()];
         let declaration = format!("type MmAlias = {annotation}");
@@ -230,6 +251,7 @@ fn visit<'a>(
             generics: own,
             params,
             return_annotation,
+            body,
             ..
         } => {
             generics.extend(own.iter().map(|generic| generic.name.as_str()));
@@ -237,6 +259,21 @@ fn visit<'a>(
                 add_alias_site(annotation, source, generics, sites);
             }
             add_alias_site(return_annotation, source, generics, sites);
+            let returns_value = source
+                .get(range_of(return_annotation.get_span()))
+                .is_some_and(|text| !text.is_empty());
+            if returns_value
+                && let Some(Expression::Block { items, .. }) = body.definition()
+                && let Some(tail) = items.last()
+                && !matches!(
+                    tail,
+                    Expression::Let { .. }
+                        | Expression::Return { .. }
+                        | Expression::Assignment { .. }
+                )
+            {
+                sites.add_value(tail);
+            }
         }
         Expression::Lambda {
             params,
@@ -255,10 +292,24 @@ fn visit<'a>(
             ..
         } => {
             if matches!(mode, LetMode::Plain) {
-                sites.wrap.push(range_of(value.get_span()));
+                sites.add_value(value);
             }
             if let Some(annotation) = &binding.annotation {
                 add_alias_site(annotation, source, generics, sites);
+            }
+        }
+        Expression::Return { expression, .. } => sites.add_value(expression),
+        Expression::Assignment {
+            value,
+            compound_operator: None,
+            ..
+        } => sites.add_value(value),
+        Expression::Call { args, .. } => {
+            for argument in args {
+                let range = range_of(argument.get_span());
+                if !range.is_empty() {
+                    sites.paren.push(range);
+                }
             }
         }
         _ => {}

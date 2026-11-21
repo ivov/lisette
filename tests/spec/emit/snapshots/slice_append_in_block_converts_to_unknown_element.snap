@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Slice<Unknown> {
+    let mut s = Slice.new<Unknown>()
+    s = { s.append("Lilian") }
+    s
+  }
+---
+package main
+
+import "slices"
+
+func test() []any {
+	s := []any{}
+	var tmp []any
+	tmp = append(slices.Clip(s), "Lilian")
+	s = tmp
+	return s
+}

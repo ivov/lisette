@@ -96,6 +96,23 @@ impl Planner<'_> {
             return Some(statements);
         }
 
+        if !matches!(
+            expression,
+            Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
+        ) {
+            let coercion = self.value_slot_coercion(expression, &written_ty);
+            if !coercion.is_identity() {
+                let (setup, value) = self
+                    .plan_value(expression, ExpressionContext::value())
+                    .into_parts();
+                statements.extend(setup);
+                let (coercion_setup, value) = coercion.lower(self, value);
+                statements.extend(coercion_setup);
+                statements.extend(self.wrapped_value_return(value, &written_ty));
+                return Some(statements);
+            }
+        }
+
         if matches!(expression, Expression::Call { .. }) {
             statements.extend(self.lower_wrapped_call_return(expression, &fallible, &written_ty));
             return Some(statements);

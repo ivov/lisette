@@ -203,16 +203,9 @@ impl Planner<'_> {
         }
         let argument = self.plan_composite_value(arg, arg_ctx);
         let Some(param) = param else {
-            return argument;
+            return self.convert_to_recorded_slot(arg, argument);
         };
-        let value_use = self.facts.checked(arg).value_use();
-        let coercion = self.adapted_slot_coercion(
-            arg,
-            &value_use.adaptation,
-            &value_use.slot,
-            &param.instantiated,
-            Some(&param.layout),
-        );
+        let coercion = self.slot_coercion(arg, &param.instantiated, Some(&param.layout));
         let inferred = self.facts.converts_for_inference(
             arg,
             param,
@@ -295,7 +288,7 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> Option<ArgumentSlotBridge> {
-        let value_use = self.facts.checked(argument).value_use();
+        let value_use = self.facts.checked(argument.unwrap_parens()).value_use();
         if matches!(
             CoercionPlan::adapted(
                 self,
@@ -353,7 +346,7 @@ impl Planner<'_> {
             ArgumentValueSource::GoPhysical => {
                 if matches!(argument.unwrap_parens(), Expression::Call { .. }) {
                     self.plan_call_expression(
-                        argument,
+                        argument.unwrap_parens(),
                         Some(&argument.get_type()),
                         ExpressionContext::value(),
                     )
@@ -368,10 +361,18 @@ impl Planner<'_> {
             ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
             ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
         };
+        let slot = &self
+            .facts
+            .checked(argument.unwrap_parens())
+            .value_use()
+            .slot;
+        let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
         value.map_expression(|setup, value| {
             let mut coercion_setup = Vec::new();
-            let coerced = self.plan_layout_bridge(&mut coercion_setup, value, &plan.bridge, true);
+            let bridged = self.plan_layout_bridge(&mut coercion_setup, value, &plan.bridge, true);
+            let (conversion_setup, coerced) = coercion.lower(self, bridged);
             setup.extend(coercion_setup);
+            setup.extend(conversion_setup);
             coerced
         })
     }
@@ -407,6 +408,7 @@ impl Planner<'_> {
         &self,
         expression: &Expression,
     ) -> Option<ValueLayout> {
+        let expression = expression.unwrap_parens();
         if self.call_target_is_go(expression)
             && let Some(plan) = self.plan_call(expression)
             && matches!(plan.resolved.abi.result, CallableReturnAbi::Value)

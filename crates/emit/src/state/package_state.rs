@@ -1,6 +1,9 @@
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
+use std::cell::RefCell;
+use syntax::ast::Span;
 use syntax::go_names::is_go_reserved_word;
+use syntax::program::ValueUseKey;
 
 use crate::names::go_name;
 
@@ -10,6 +13,8 @@ pub(crate) struct PackageState {
     generic_renames: HashMap<String, String>,
     declared_names: HashSet<String>,
     import_qualifiers: HashSet<String>,
+    applied_conversions: RefCell<HashSet<ValueUseKey>>,
+    dropped_code: RefCell<Vec<Span>>,
 }
 
 impl PackageState {
@@ -33,6 +38,26 @@ impl PackageState {
     ) {
         self.generic_renames
             .insert(source_name.into(), go_name.into());
+    }
+
+    pub(crate) fn record_applied_conversion(&self, key: ValueUseKey) {
+        if cfg!(debug_assertions) {
+            self.applied_conversions.borrow_mut().insert(key);
+        }
+    }
+
+    pub(crate) fn applied_conversions(&self) -> HashSet<ValueUseKey> {
+        self.applied_conversions.borrow().clone()
+    }
+
+    pub(crate) fn record_dropped_code(&self, span: Span) {
+        if cfg!(debug_assertions) {
+            self.dropped_code.borrow_mut().push(span);
+        }
+    }
+
+    pub(crate) fn dropped_code(&self) -> Vec<Span> {
+        self.dropped_code.borrow().clone()
     }
 
     pub(crate) fn generic_rename(&self, source_name: &str) -> Option<&str> {
