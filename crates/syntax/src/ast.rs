@@ -2693,20 +2693,37 @@ impl Expression {
         }
     }
 
+    pub fn contains_wrapper(&self) -> bool {
+        let slots = self.block_slots();
+        let is_statement_list = matches!(self, Expression::Block { .. });
+        matches!(self, Expression::Paren { .. })
+            || self.reads_reference_once()
+            || self.children().into_iter().any(|child| {
+                let keeps_block = slots.iter().any(|slot| ptr::eq(*slot, child));
+                (!keeps_block && child.removable_block(is_statement_list))
+                    || child.contains_wrapper()
+            })
+    }
+
+    fn removable_block(&self, is_statement: bool) -> bool {
+        match self {
+            Expression::Block { items, .. } => match items.as_slice() {
+                [item] => item.is_plain_block_item() && (is_statement || item.is_value_form()),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     fn peel_wrappers(&mut self, blocks: Option<bool>) {
         loop {
+            let removes_block =
+                blocks.is_some_and(|is_statement| self.removable_block(is_statement));
             let (inner, outer_span) = match self {
                 Expression::Paren {
                     expression, span, ..
                 } => (expression.as_mut(), Some(*span)),
-                Expression::Block { items, .. }
-                    if let Some(is_statement) = blocks
-                        && let [item] = items.as_slice()
-                        && item.is_plain_block_item()
-                        && (is_statement || item.is_value_form()) =>
-                {
-                    (&mut items[0], None)
-                }
+                Expression::Block { items, .. } if removes_block => (&mut items[0], None),
                 _ => return,
             };
             let placeholder = Expression::Unit {

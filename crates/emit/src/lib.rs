@@ -1,7 +1,6 @@
 #![deny(clippy::too_many_lines)]
 
 mod abi;
-#[allow(clippy::disallowed_methods)]
 mod analyze;
 pub(crate) mod calls;
 pub(crate) mod control_flow;
@@ -15,7 +14,6 @@ mod plan;
 mod render;
 mod state;
 pub(crate) mod statements;
-#[allow(clippy::disallowed_methods)]
 pub(crate) mod types;
 
 pub(crate) use analyze::facts::EmitFacts;
@@ -290,8 +288,8 @@ impl<'a> Planner<'a> {
                 item.strip_wrappers();
             }
             debug_assert!(
-                !file.items.iter().any(contains_wrapper),
-                "internal error: a parenthesized expression or a reference read once reached emit"
+                !file.items.iter().any(Expression::contains_wrapper),
+                "internal error: a parenthesized expression, a single-expression block or a reference read once reached emit"
             );
         }
         let analysis: &'a EmitInput = analysis;
@@ -798,10 +796,4 @@ impl EmitFacts<'_> {
     fn end_position(&self, span: &Span) -> Option<Position> {
         self.position_at(span, span.byte_offset + span.byte_length)
     }
-}
-
-fn contains_wrapper(expression: &Expression) -> bool {
-    matches!(expression, Expression::Paren { .. })
-        || expression.reads_reference_once()
-        || expression.children().into_iter().any(contains_wrapper)
 }
