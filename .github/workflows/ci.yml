@@ -101,6 +101,21 @@ jobs:
         with:
           just: 'true'
       - run: just lint
+
+  clippy-satellites:
+    name: Clippy satellites
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+          cache-workspaces: |
+            playground/wasm -> target
+            editors/zed -> target
+            fuzz -> target
       - run: just lint-satellites
 
   go-checks:
@@ -424,6 +439,7 @@ jobs:
       - snapshot-style
       - go-versions-sync
       - clippy
+      - clippy-satellites
       - go-checks
       - test-suite
       - test-unit

@@ -18,6 +18,10 @@ inputs:
     description: Restore the Swatinem/rust-cache
     required: false
     default: 'true'
+  cache-workspaces:
+    description: Cargo workspaces for the Rust cache, one `path -> target` per line
+    required: false
+    default: '. -> target'
 
 runs:
   using: composite
@@ -36,4 +40,5 @@ runs:
     - if: inputs.cache == 'true'
       uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
       with:
+        workspaces: ${{ inputs.cache-workspaces }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
