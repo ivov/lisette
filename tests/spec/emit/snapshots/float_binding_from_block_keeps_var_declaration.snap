@@ -10,7 +10,6 @@ description: |
 package main
 
 func test() float64 {
-	var scaled float64
-	scaled = 42
+	var scaled float64 = 42
 	return scaled
 }

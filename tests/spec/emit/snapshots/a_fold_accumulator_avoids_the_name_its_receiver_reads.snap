@@ -22,12 +22,10 @@ package main
 func test() {
 	x := 7
 	f := func() int {
-		var x2 int
-		x3 := 0
+		x2 := 0
 		for _, y := range []int{x, x + 1} {
-			x3 += y
+			x2 += y
 		}
-		x2 = x3
 		return x2
 	}
 	if f() != 15 {
@@ -35,12 +33,10 @@ func test() {
 	}
 	rng := 7
 	g := func() int {
-		var rng2 int
-		rng3 := 0
+		rng2 := 0
 		for _, y := range []int{rng, rng + 1} {
-			rng3 += y
+			rng2 += y
 		}
-		rng2 = rng3
 		return rng2
 	}
 	if g() != 15 {

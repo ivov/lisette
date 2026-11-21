@@ -287,7 +287,7 @@ impl<'a> Planner<'a> {
                 continue;
             }
             for item in &mut file.items {
-                item.strip_parens();
+                item.strip_wrappers();
             }
             debug_assert!(
                 !file.items.iter().any(contains_paren),

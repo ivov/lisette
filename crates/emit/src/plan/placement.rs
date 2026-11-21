@@ -244,18 +244,6 @@ fn join_boolean_branches(
     })
 }
 
-pub(crate) fn peel_value_wrappers(expression: &Expression) -> &Expression {
-    match expression {
-        Expression::Block { items, .. }
-            if let [item] = items.as_slice()
-                && !matches!(item, Expression::Let { .. } | Expression::Const { .. }) =>
-        {
-            peel_value_wrappers(item)
-        }
-        unwrapped => unwrapped,
-    }
-}
-
 pub(crate) fn requires_temp_var(expression: &Expression) -> bool {
     matches!(
         expression,

@@ -87,31 +87,27 @@ func test() (any, lisette.Option[int]) {
 	concrete := lisette.MakeTuple2[Boom, int](Boom{}, 1)
 	booms := [1]Boom{{}}
 	var inBlock lisette.Tuple2[error, int]
-	var tmp lisette.Tuple2[error, int]
 	for {
-		tmp = lisette.MakeTuple2[error, int](concrete.First, concrete.Second)
+		inBlock = lisette.MakeTuple2[error, int](concrete.First, concrete.Second)
 		break
 	}
-	inBlock = tmp
 	reassigned := [1]error{Boom{}}
-	var tmp2 [1]error
+	var tmp [1]error
 	for {
 		var boxed [1]error
 		for i := range booms {
 			boxed[i] = booms[i]
 		}
-		tmp2 = boxed
+		tmp = boxed
 		break
 	}
-	reassigned = tmp2
-	var tmp3 lisette.Tuple2[error, int]
-	var tmp4 lisette.Tuple2[error, int]
+	reassigned = tmp
+	var tmp2 lisette.Tuple2[error, int]
 	for {
-		tmp4 = lisette.MakeTuple2[error, int](concrete.First, concrete.Second)
+		tmp2 = lisette.MakeTuple2[error, int](concrete.First, concrete.Second)
 		break
 	}
-	tmp3 = tmp4
-	element := lisette.MakeTuple2[lisette.Tuple2[error, int], int](tmp3, 2)
+	element := lisette.MakeTuple2[lisette.Tuple2[error, int], int](tmp2, 2)
 	var fromBlock lisette.Tuple2[error, int]
 	for {
 		fromBlock = lisette.MakeTuple2[error, int](concrete.First, concrete.Second)
@@ -127,16 +123,16 @@ func test() (any, lisette.Option[int]) {
 		break
 	}
 	var payload lisette.Option[[1]error]
-	var tmp5 lisette.Option[[1]error]
+	var tmp3 lisette.Option[[1]error]
 	for {
 		var boxed3 [1]error
 		for i3 := range booms {
 			boxed3[i3] = booms[i3]
 		}
-		tmp5 = lisette.MakeOptionSome[[1]error](boxed3)
+		tmp3 = lisette.MakeOptionSome[[1]error](boxed3)
 		break
 	}
-	payload = tmp5
+	payload = tmp3
 	var callback any
 	for {
 		cb := func() struct{} {
@@ -149,12 +145,12 @@ func test() (any, lisette.Option[int]) {
 		break
 	}
 	var fallible lisette.Option[int]
-	var tmp6 lisette.Option[int]
+	var tmp4 lisette.Option[int]
 	for {
-		tmp6 = lisette.MakeOptionSome[int](1)
+		tmp4 = lisette.MakeOptionSome[int](1)
 		break
 	}
-	fallible = tmp6
+	fallible = tmp4
 	_ = inBlock
 	_ = reassigned
 	_ = element

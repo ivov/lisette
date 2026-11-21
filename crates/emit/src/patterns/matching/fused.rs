@@ -879,13 +879,6 @@ fn arm_body_is_noop(body: &Expression) -> bool {
 }
 
 fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
-    let body = match body {
-        Expression::Block { items, .. } => match items.as_slice() {
-            [single] => single,
-            _ => return None,
-        },
-        other => other,
-    };
     match body {
         Expression::Identifier { value, .. } => Some(value.as_str()),
         _ => None,

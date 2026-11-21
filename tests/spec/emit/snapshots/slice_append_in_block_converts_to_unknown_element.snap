@@ -10,12 +10,8 @@ description: |
 ---
 package main
 
-import "slices"
-
 func test() []any {
 	s := []any{}
-	var tmp []any
-	tmp = append(slices.Clip(s), "Lilian")
-	s = tmp
+	s = append(s, "Lilian")
 	return s
 }

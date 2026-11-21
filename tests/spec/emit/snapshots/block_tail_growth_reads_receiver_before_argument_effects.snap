@@ -70,14 +70,13 @@ func main() {
 			base = []int{3, 4}
 			return n
 		}
-		var result []int
-		recv := base
+		arg := base
 		added := count()
-		result = func() []int {
+		result := func() []int {
 			if added == 0 {
-				return slices.Clone(recv)
+				return slices.Clone(arg)
 			}
-			return slices.Grow(slices.Clip(recv), added)
+			return slices.Grow(slices.Clip(arg), added)
 		}()
 		if calls != 1 || result[0] != 1 {
 			panic("reserve must read the receiver before evaluating the count once")
@@ -91,14 +90,13 @@ func main() {
 			holder.slc = []int{3, 4}
 			return extra
 		}
-		var result []int
-		recv2 := holder.slc
+		arg2 := holder.slc
 		added2 := makeExtra()
-		result = func() []int {
+		result := func() []int {
 			if len(added2) == 0 {
-				return slices.Clone(recv2)
+				return slices.Clone(arg2)
 			}
-			return append(slices.Clip(recv2), added2...)
+			return append(slices.Clip(arg2), added2...)
 		}()
 		if calls != 1 || result[0] != 1 || len(result) != 2+len(extra) {
 			panic("append must read the receiver before evaluating the spread once")
@@ -110,14 +108,13 @@ func main() {
 			os.Args = []string{"after"}
 			return n
 		}
-		var result []string
-		recv3 := os.Args
+		arg3 := os.Args
 		added3 := count()
-		result = func() []string {
+		result := func() []string {
 			if added3 == 0 {
-				return slices.Clone(recv3)
+				return slices.Clone(arg3)
 			}
-			return slices.Grow(slices.Clip(recv3), added3)
+			return slices.Grow(slices.Clip(arg3), added3)
 		}()
 		if result[0] != "before" {
 			panic("reserve must read a package receiver before argument effects")

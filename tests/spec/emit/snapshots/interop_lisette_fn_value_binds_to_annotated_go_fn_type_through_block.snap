@@ -44,8 +44,7 @@ func splitWords(data []byte, atEof bool) (lisette.Tuple2[int, []byte], error) {
 }
 
 func main() {
-	var annotated bufio.SplitFunc
-	annotated = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+	var annotated bufio.SplitFunc = func(arg0 []byte, arg1 bool) (int, []byte, error) {
 		ret, ret2 := splitWords(arg0, arg1)
 		return ret.First, ret.Second, ret2
 	}
@@ -68,8 +67,7 @@ func main() {
 		}
 		staged = adapted
 	}
-	var literal bufio.SplitFunc
-	literal = func(data []byte, atEof bool) (int, []byte, error) {
+	var literal bufio.SplitFunc = func(data []byte, atEof bool) (int, []byte, error) {
 		return bufio.ScanWords(data, atEof)
 	}
 	_ = annotated

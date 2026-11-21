@@ -26,8 +26,7 @@ func get() *Wrap {
 }
 
 func main() {
-	var x []int
 	recv := ([]int)(*get())
-	x = append(slices.Clip(recv), 2)
+	x := append(slices.Clip(recv), 2)
 	_ = x[0]
 }

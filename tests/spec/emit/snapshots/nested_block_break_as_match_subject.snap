@@ -19,10 +19,8 @@ func test() {
 	for {
 		var tmp2 int
 		{
-			{
-				tmp = 1
-				break
-			}
+			tmp = 1
+			break
 		}
 		_ = tmp2
 	}

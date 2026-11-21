@@ -34,10 +34,9 @@ func main() {
 		h.slc = []struct{}{{}, {}, {}}
 		return struct{}{}
 	}
-	var ys []struct{}
-	recv := h.slc
+	arg := h.slc
 	bump()
-	ys = append(slices.Clip(recv), struct{}{})
+	ys := append(slices.Clip(arg), struct{}{})
 	if len(ys) != 1 {
 		panic("the receiver must be read before argument effects run")
 	}

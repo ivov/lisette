@@ -153,15 +153,6 @@ impl PlannedLoop<'_> {
     }
 }
 
-fn peel_single_expression_block(body: &Expression) -> &Expression {
-    match body {
-        Expression::Block { items, .. } if items.len() == 1 => {
-            peel_single_expression_block(&items[0])
-        }
-        _ => body,
-    }
-}
-
 struct SliceLoopShape<'a> {
     kind: SliceLoop,
     callback: LoopCallback<'a>,
@@ -194,7 +185,6 @@ impl Planner<'_> {
         }
         let callback = match args.last()? {
             Expression::Lambda { params, body, .. } => {
-                let body = peel_single_expression_block(body);
                 let patterns: Vec<&Pattern> = params.iter().filter_map(identifier_of).collect();
                 if patterns.len() != params.len() || !body_moves_into_a_loop(body) {
                     return None;

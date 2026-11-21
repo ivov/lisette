@@ -1,7 +1,8 @@
 //! Rewrites each emit snapshot program in ways that keep its meaning, and
 //! checks that each variant compiles to Go that builds and vets whenever the
-//! original does. A variant that only adds parentheses must compile to the Go
-//! of the original. Lisette errors on a variant are ignored. Runs nightly.
+//! original does. A variant that only adds parentheses or a block around one
+//! expression must compile to the Go of the original. Lisette errors on a
+//! variant are ignored. Runs nightly.
 
 #[allow(dead_code, unused_imports)]
 mod _harness;
@@ -141,7 +142,7 @@ fn rewrite_suite() {
                 Compiled::Written(variant_go_code) => {
                     match go_errors.get(&format!("test_{}", variant.name)) {
                         Some(line) => format!("go: {line}"),
-                        None if variant.rewrite == "paren"
+                        None if matches!(variant.rewrite, "paren" | "wrap")
                             && variant_go_code.replace(
                                 &format!("test_{}", variant.name),
                                 &format!("test_{name}"),
@@ -180,7 +181,7 @@ fn rewrite_suite() {
     }
     assert!(
         failures.is_empty(),
-        "{} variant(s) crashed the compiler, failed go build or vet, or changed the Go of a parenthesized expression (listed above)",
+        "{} variant(s) crashed the compiler, failed go build or vet, or changed the Go of a parenthesized or wrapped expression (listed above)",
         failures.len()
     );
 }

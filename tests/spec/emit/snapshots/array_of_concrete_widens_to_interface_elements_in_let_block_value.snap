@@ -36,12 +36,11 @@ func first(errs [2]error) string {
 
 func test() {
 	concrete := [2]Boom{{}, {}}
-	var widened [2]error
 	var boxed [2]error
 	for i := range concrete {
 		boxed[i] = concrete[i]
 	}
-	widened = boxed
+	widened := boxed
 	if first(widened) != "boom" {
 		panic("annotated array binding lost its interface elements")
 	}

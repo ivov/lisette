@@ -13,6 +13,7 @@ use std::mem;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Index;
+use std::ptr;
 use std::slice::Iter;
 use std::slice::IterMut;
 
@@ -2673,26 +2674,118 @@ impl Expression {
         }
     }
 
-    pub fn strip_parens(&mut self) {
-        while let Expression::Paren {
-            expression,
-            span,
-            id,
-            ..
-        } = self
-        {
-            let outer = *span;
+    pub fn strip_wrappers(&mut self) {
+        self.peel_wrappers(None);
+        self.strip_child_wrappers();
+    }
+
+    fn strip_child_wrappers(&mut self) {
+        let slots = self.block_slots();
+        let keeps_block: Vec<bool> = self
+            .children()
+            .into_iter()
+            .map(|child| slots.iter().any(|slot| ptr::eq(*slot, child)))
+            .collect();
+        let is_statement_list = matches!(self, Expression::Block { .. });
+        for (child, keeps_block) in self.children_mut().into_iter().zip(keeps_block) {
+            child.peel_wrappers((!keeps_block).then_some(is_statement_list));
+            child.strip_child_wrappers();
+        }
+    }
+
+    fn peel_wrappers(&mut self, blocks: Option<bool>) {
+        loop {
+            let (inner, outer_span) = match self {
+                Expression::Paren {
+                    expression, span, ..
+                } => (expression.as_mut(), Some(*span)),
+                Expression::Block { items, .. }
+                    if let Some(is_statement) = blocks
+                        && let [item] = items.as_slice()
+                        && item.is_plain_block_item()
+                        && (is_statement || item.is_value_form()) =>
+                {
+                    (&mut items[0], None)
+                }
+                _ => return,
+            };
             let placeholder = Expression::Unit {
                 ty: Type::ignored(),
-                span: outer,
-                id: *id,
+                span: inner.get_span(),
+                id: inner.id(),
             };
-            let mut inner = mem::replace(expression.as_mut(), placeholder);
-            inner.set_span(outer);
+            let mut inner = mem::replace(inner, placeholder);
+            if let Some(span) = outer_span {
+                inner.set_span(span);
+            }
             *self = inner;
         }
-        for child in self.children_mut() {
-            child.strip_parens();
+    }
+
+    fn is_plain_block_item(&self) -> bool {
+        !matches!(
+            self,
+            Expression::Let { .. }
+                | Expression::Const { .. }
+                | Expression::Function { .. }
+                | Expression::Struct { .. }
+                | Expression::Enum { .. }
+                | Expression::Interface { .. }
+                | Expression::TypeAlias { .. }
+                | Expression::ImplBlock { .. }
+                | Expression::VariableDeclaration { .. }
+                | Expression::PackageImport { .. }
+                | Expression::Defer { .. }
+        )
+    }
+
+    fn is_value_form(&self) -> bool {
+        !matches!(
+            self,
+            Expression::For { .. }
+                | Expression::While { .. }
+                | Expression::WhileLet { .. }
+                | Expression::Assignment { .. }
+                | Expression::Return { .. }
+                | Expression::Break { .. }
+                | Expression::Continue { .. }
+                | Expression::Task { .. }
+                | Expression::Assert { .. }
+                | Expression::Select { .. }
+        )
+    }
+
+    fn block_slots(&self) -> Vec<&Expression> {
+        match self {
+            Expression::Function { body, .. } => body.definition().into_iter().collect(),
+            Expression::If {
+                consequence,
+                alternative,
+                ..
+            } => {
+                let mut slots = vec![consequence.as_ref()];
+                slots.extend(alternative.as_deref());
+                slots
+            }
+            Expression::IfLet {
+                consequence,
+                alternative,
+                ..
+            } => {
+                let mut slots = vec![consequence.as_ref()];
+                slots.extend(alternative.expression());
+                slots
+            }
+            Expression::Let { mode, .. } => mode.else_block().into_iter().collect(),
+            Expression::Loop { body, .. }
+            | Expression::While { body, .. }
+            | Expression::WhileLet { body, .. }
+            | Expression::For { body, .. } => vec![body],
+            Expression::Task { expression, .. } | Expression::Defer { expression, .. } => {
+                vec![expression]
+            }
+            Expression::Select { .. } => self.children(),
+            _ => Vec::new(),
         }
     }
 

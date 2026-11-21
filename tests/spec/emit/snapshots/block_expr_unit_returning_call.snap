@@ -14,8 +14,5 @@ package main
 func doNothing() {}
 
 func main() {
-	var x struct{}
 	doNothing()
-	x = struct{}{}
-	_ = x
 }

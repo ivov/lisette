@@ -28,7 +28,6 @@ func useRef(r *Handler) int {
 }
 
 func test() int {
-	var h Handler
-	h = makeHandler
+	var h Handler = makeHandler
 	return useRef(&h)
 }
