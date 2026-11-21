@@ -22,9 +22,16 @@ inputs:
 runs:
   using: composite
   steps:
+    # CI needs only clippy and rustfmt. The directory override outranks
+    # `rust-toolchain.toml`, so rustup does not also install the editor
+    # components that the file lists.
     - name: Install Rust toolchain
       shell: bash
-      run: rustup show
+      run: |
+        channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+        rustup toolchain install "$channel" --profile minimal --component clippy,rustfmt --no-self-update
+        rustup override set "$channel"
+        rustup show active-toolchain
     - if: inputs.just == 'true'
       uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # ratchet:extractions/setup-just@v4
     - if: inputs.go == 'true'
