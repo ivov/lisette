@@ -312,11 +312,7 @@ impl Planner<'_> {
                 ..
             } => self.plan_deref_lvalue(setup, pointee, ordering),
             Expression::Call { .. } if self.facts.is_reference(&expression.get_type()) => {
-                let (call_setup, call) = self
-                    .plan_composite_value(expression, ExpressionContext::value())
-                    .into_parts();
-                setup.extend(call_setup);
-                GoExpression::identifier(self.hoist_tmp_value_statement(setup, "ref", call))
+                self.place_operand(setup, expression, "ref", ordering)
             }
             _ => unreachable!(
                 "assignment target has no Go place at {:?}: {:?}",

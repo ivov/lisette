@@ -4,7 +4,7 @@ use crate::store::Store;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
-use syntax::program::DefinitionBody;
+use syntax::program::{ConformanceWitness, DefinitionBody};
 use syntax::types::CompoundKind;
 use syntax::types::Type;
 
@@ -15,6 +15,29 @@ use super::super::context::UseContext;
 use super::calls::phantom_type_params;
 use super::operators::InferredOperand;
 use crate::checker::infer::InferCtx;
+
+pub(super) struct CheckedReference {
+    pub(super) operand: Expression,
+    pub(super) operand_ty: Type,
+    witnesses: Vec<ConformanceWitness>,
+    pub(super) kind: ReferenceKind,
+}
+
+pub(super) enum ReferenceKind {
+    Collapsed,
+    Fresh(Type),
+    Failed(Type),
+}
+
+pub(super) fn into_reference_operand(expression: Expression) -> (Expression, Span) {
+    match expression {
+        Expression::Paren { expression, .. } => into_reference_operand(*expression),
+        Expression::Reference {
+            expression, span, ..
+        } => (*expression, span),
+        _ => unreachable!("only a reference has a reference operand"),
+    }
+}
 
 /// Checks whether an expression contains a stored Reference (`&var_name`) to a specific variable.
 /// Used to detect self-referential assignment patterns like `x = Foo { field: &x }`.
@@ -177,95 +200,142 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        let checked = self.check_reference(*expression, span);
+        self.finish_reference(checked, span, expected_ty)
+    }
+
+    pub(super) fn check_reference(&mut self, operand: Expression, span: Span) -> CheckedReference {
         let store = self.store;
-        let inner_ty = self.new_type_var();
-        let new_expression = self.infer_expression(*expression, &inner_ty);
+        let operand_ty = self.new_type_var();
+        let (operand, witnesses) = self.selecting_witnesses(|this| {
+            this.with_dot_access_base(false, |this| {
+                let operand = this.infer_expression_kind(operand, &operand_ty, true);
+                if operand.get_type().resolve_in(&this.env).is_error() {
+                    this.unify(&operand_ty, &Type::Error, &operand.get_span());
+                }
+                operand
+            })
+        });
 
-        let resolved_inner = inner_ty.resolve_in(&self.env);
-        let is_already_ref = resolved_inner.is_ref();
-
-        if !is_already_ref
-            && matches!(resolved_inner.unwrap_forall(), Type::Nominal { .. })
+        let resolved_inner = operand_ty.resolve_in(&self.env);
+        let kind = if resolved_inner.is_ref() {
+            self.facts
+                .add_overused_reference(span, operand.get_var_name());
+            ReferenceKind::Collapsed
+        } else if matches!(resolved_inner.unwrap_forall(), Type::Nominal { .. })
             && store.is_interface(&store.peel_alias(&resolved_inner))
         {
             self.sink.push(diagnostics::infer::ref_of_interface_value(
                 &resolved_inner,
                 span,
             ));
-            self.unify(expected_ty, &Type::Error, &span);
-            return Expression::Reference {
-                id: self.fresh_expression_id(),
-                expression: new_expression.into(),
-                ty: Type::Error,
-                span,
-            };
-        }
-
-        // Collapse &ref_var to ref_var, adding another reference layer is a no-op
-        let ref_ty = if is_already_ref {
-            self.facts
-                .add_overused_reference(span, new_expression.get_var_name());
-            resolved_inner
+            ReferenceKind::Failed(Type::Error)
         } else {
             // A construction or a call result is a fresh cell that no binding shares.
-            let writable = match new_expression.unwrap_parens() {
+            let writable = match operand.unwrap_parens() {
                 Expression::StructCall { .. } | Expression::Call { .. } => true,
                 other => self.place_permits_write(other),
             };
-            let constructed = new_expression.unwrap_parens().get_span();
-            match self.read_only_constructions.remove(&constructed) {
-                Some(components) => {
-                    self.read_only_constructions.insert(span, components);
-                }
-                None => {
-                    self.read_only_constructions.remove(&span);
-                }
-            }
-            Type::qualified_compound(CompoundKind::Ref, vec![inner_ty.clone()], writable)
-        };
-
-        // Addressability and const diagnostics come before any qualifier mismatch.
-        let mut not_addressable = false;
-        if !is_already_ref {
-            let restricted = restricted_package_value(&new_expression, store);
-            let is_local_const = matches!(new_expression.unwrap_parens(), Expression::Identifier { resolution, .. }
-                if resolution.definition().is_some_and(|qname| self.is_const_name(store, qname)));
-            if let Some(kind) = check_is_non_addressable(&new_expression, &self.env, self.store) {
+            let ref_ty =
+                Type::qualified_compound(CompoundKind::Ref, vec![operand_ty.clone()], writable);
+            let restricted = restricted_package_value(&operand, store);
+            let is_const = matches!(operand.unwrap_parens(), Expression::Identifier { value, .. }
+                if self.is_const_var(store, value));
+            if let Some(kind) = check_is_non_addressable(&operand, &self.env, self.store) {
                 self.sink
                     .push(diagnostics::infer::non_addressable_expression(kind, span));
-                not_addressable = true;
-            } else if restricted == Some("constant") || is_local_const {
+                ReferenceKind::Failed(ref_ty)
+            } else if restricted == Some("constant") || is_const {
                 self.sink
                     .push(diagnostics::infer::non_addressable_const(span));
-                not_addressable = true;
+                ReferenceKind::Failed(ref_ty)
             } else if let Some(kind) = restricted {
                 self.sink
                     .push(diagnostics::infer::non_addressable_expression(kind, span));
-                not_addressable = true;
+                ReferenceKind::Failed(ref_ty)
+            } else {
+                ReferenceKind::Fresh(ref_ty)
             }
+        };
+        CheckedReference {
+            operand,
+            operand_ty,
+            witnesses,
+            kind,
+        }
+    }
 
-            if let Some(var_name) = new_expression.get_var_name()
-                && let Some(binding_id) = self.scopes.lookup_binding_id(&var_name)
-            {
-                self.facts.mark_alias_mutated(binding_id);
-                if ref_ty.is_writable() && expected_ty.resolve_in(&self.env).is_writable() {
-                    self.record_loop_copy_write(&var_name, span);
+    pub(super) fn finish_reference(
+        &mut self,
+        checked: CheckedReference,
+        span: Span,
+        expected_ty: &Type,
+    ) -> Expression {
+        let CheckedReference {
+            operand,
+            operand_ty,
+            witnesses,
+            kind,
+        } = checked;
+        let ty = match kind {
+            ReferenceKind::Collapsed => {
+                self.facts.value_uses.selected_witnesses.extend(witnesses);
+                self.unify(expected_ty, &operand_ty, &span);
+                return operand;
+            }
+            ReferenceKind::Fresh(ref_ty) => {
+                let constructed = operand.unwrap_parens().get_span();
+                match self.read_only_constructions.remove(&constructed) {
+                    Some(components) => {
+                        self.read_only_constructions.insert(span, components);
+                    }
+                    None => {
+                        self.read_only_constructions.remove(&span);
+                    }
                 }
+                if let Some(var_name) = operand.get_var_name()
+                    && let Some(binding_id) = self.scopes.lookup_binding_id(&var_name)
+                {
+                    self.facts.mark_alias_mutated(binding_id);
+                    if ref_ty.is_writable() && expected_ty.resolve_in(&self.env).is_writable() {
+                        self.record_loop_copy_write(&var_name, span);
+                    }
+                }
+                self.unify(expected_ty, &ref_ty, &span);
+                ref_ty
             }
-        }
-
-        if not_addressable {
-            self.unify(expected_ty, &Type::Error, &span);
-        } else {
-            self.unify(expected_ty, &ref_ty, &span);
-        }
-
+            ReferenceKind::Failed(ty) => {
+                self.unify(expected_ty, &Type::Error, &span);
+                ty
+            }
+        };
+        self.record_value_use(&operand, &operand_ty, witnesses);
         Expression::Reference {
             id: self.fresh_expression_id(),
-            expression: new_expression.into(),
-            ty: ref_ty,
+            expression: operand.into(),
+            ty,
             span,
         }
+    }
+
+    pub(super) fn finish_reference_value(&mut self, checked: CheckedReference) -> Expression {
+        self.facts
+            .value_uses
+            .selected_witnesses
+            .extend(checked.witnesses);
+        checked.operand
+    }
+
+    pub(super) fn finish_reference_recorded(
+        &mut self,
+        checked: CheckedReference,
+        span: Span,
+        slot: &Type,
+    ) -> Expression {
+        let (expression, witnesses) =
+            self.selecting_witnesses(|this| this.finish_reference(checked, span, slot));
+        self.record_value_use(&expression, slot, witnesses);
+        expression
     }
 
     pub(super) fn infer_identifier(

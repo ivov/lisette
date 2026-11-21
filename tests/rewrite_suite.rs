@@ -3,7 +3,9 @@
 //! original does. A variant that only adds parentheses or a block around one
 //! expression must compile to the Go of the original. A variant that replaces
 //! an annotation with an alias of it must compile to the Go of the original,
-//! after the alias is replaced by its target. Lisette errors on a variant are
+//! after the alias is replaced by its target. A variant that reads a place
+//! `p` as `(&p).*`, a receiver `p` as `(&p)`, or a receiver `r.*` as `r` must
+//! compile to the Go of the original. Lisette errors on a variant are
 //! ignored. Runs nightly.
 
 #[allow(dead_code, unused_imports)]
@@ -21,8 +23,9 @@ use std::path::Path;
 use std::process::Command;
 
 use rayon::prelude::*;
-use syntax::ast::{Annotation, Expression, LetMode, Span};
+use syntax::ast::{Annotation, Expression, LetMode, Span, UnaryOperator};
 
+use _harness::pipeline::TestPipeline;
 use _harness::wrap::wrap;
 use harness::{
     CompileError, compile_e2e_suite_test, harvest_snapshots, prelude_dir, read_go_toolchain,
@@ -37,9 +40,20 @@ struct Sites {
     wrap: Vec<Range<usize>>,
     paren: Vec<Range<usize>>,
     alias: Vec<Range<usize>>,
+    reference: Vec<(Range<usize>, String, bool)>,
 }
 
 impl Sites {
+    fn add_place_read(&mut self, value: &Expression, source: &str) {
+        if is_place(value) {
+            let range = range_of(value.get_span());
+            if let Some(text) = source.get(range.clone()) {
+                let replacement = format!("(&{text}).*");
+                self.reference.push((range, replacement, true));
+            }
+        }
+    }
+
     fn add_value(&mut self, value: &Expression) {
         let range = range_of(value.get_span());
         if !range.is_empty() {
@@ -146,7 +160,7 @@ fn rewrite_suite() {
                         .replace(&format!("test_{}", variant.name), &format!("test_{name}"));
                     match go_errors.get(&format!("test_{}", variant.name)) {
                         Some(line) => format!("go: {line}"),
-                        None if matches!(variant.rewrite, "paren" | "wrap")
+                        None if matches!(variant.rewrite, "paren" | "wrap" | "ref")
                             && variant_go_code != *go_code =>
                         {
                             "Go differs from the Go of the original program".to_string()
@@ -265,6 +279,21 @@ fn variants(name: &str, source: &str) -> Vec<Variant> {
             source: format!("{}\n{declaration}\n", splice(source, range, "MmAlias")),
         });
     }
+    let count = sites.reference.len().min(SITES_PER_REWRITE);
+    for i in 0..count {
+        let (range, replacement, reads_through) =
+            &sites.reference[i * sites.reference.len() / count];
+        let variant_source = splice(source, range, replacement);
+        if *reads_through && reads_a_reference(source, range) {
+            continue;
+        }
+        variants.push(Variant {
+            name: format!("{name}__ref{}", i + 1),
+            rewrite: "ref",
+            change: describe(source, range, replacement),
+            source: variant_source,
+        });
+    }
     variants.retain(|variant| !syntax::build_ast(&variant.source, 0).has_errors());
     variants
 }
@@ -326,19 +355,55 @@ fn visit<'a>(
         } => {
             if matches!(mode, LetMode::Plain) {
                 sites.add_value(value);
+                sites.add_place_read(value, source);
             }
             if let Some(annotation) = &binding.annotation {
                 add_alias_site(annotation, source, generics, sites);
             }
         }
-        Expression::Return { expression, .. } => sites.add_value(expression),
+        Expression::Return { expression, .. } => {
+            sites.add_value(expression);
+            sites.add_place_read(expression, source);
+        }
         Expression::Assignment {
             value,
             compound_operator: None,
             ..
-        } => sites.add_value(value),
+        } => {
+            sites.add_value(value);
+            sites.add_place_read(value, source);
+        }
+        Expression::Binary { left, right, .. } => {
+            sites.add_place_read(left, source);
+            sites.add_place_read(right, source);
+        }
+        Expression::DotAccess {
+            expression: receiver,
+            ..
+        } => {
+            let range = range_of(receiver.get_span());
+            match &**receiver {
+                Expression::Unary {
+                    operator: UnaryOperator::Deref,
+                    expression: inner,
+                    ..
+                } => {
+                    if let Some(text) = source.get(range_of(inner.get_span())) {
+                        sites.reference.push((range, text.to_string(), false));
+                    }
+                }
+                place if is_place(place) => {
+                    if let Some(text) = source.get(range.clone()) {
+                        let replacement = format!("(&{text})");
+                        sites.reference.push((range, replacement, false));
+                    }
+                }
+                _ => {}
+            }
+        }
         Expression::Call { args, .. } => {
             for argument in args {
+                sites.add_place_read(argument, source);
                 let range = range_of(argument.get_span());
                 if !range.is_empty() {
                     sites.paren.push(range);
@@ -351,6 +416,16 @@ fn visit<'a>(
         visit(child, source, generics, sites);
     }
     generics.truncate(mark);
+}
+
+fn is_place(expression: &Expression) -> bool {
+    match expression {
+        Expression::Identifier { .. } => true,
+        Expression::DotAccess { expression, .. } | Expression::IndexedAccess { expression, .. } => {
+            is_place(expression)
+        }
+        _ => false,
+    }
 }
 
 fn add_alias_site(annotation: &Annotation, source: &str, generics: &[&str], sites: &mut Sites) {
@@ -595,4 +670,33 @@ fn ungroup_list(list: &str) -> String {
 
 fn is_identifier_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+fn reads_a_reference(source: &str, range: &Range<usize>) -> bool {
+    if syntax::build_ast(source, 0).has_errors() {
+        return false;
+    }
+    let inferred = TestPipeline::new(source)
+        .wrapped()
+        .e2e_suite_mode()
+        .compile()
+        .run_inference();
+    inferred
+        .ast
+        .iter()
+        .any(|item| reference_place_at(item, range))
+}
+
+fn reference_place_at(expression: &Expression, range: &Range<usize>) -> bool {
+    let span = expression.get_span();
+    if span.byte_offset as usize == range.start
+        && span.byte_length as usize == range.len()
+        && expression.get_type().is_ref()
+    {
+        return true;
+    }
+    expression
+        .children()
+        .into_iter()
+        .any(|child| reference_place_at(child, range))
 }

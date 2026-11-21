@@ -1456,6 +1456,30 @@ fn main() {
 }
 
 #[test]
+fn cannot_take_address_of_block_local_constant() {
+    let input = r#"
+fn main() {
+  const MAX = 100
+  let _ = &MAX
+  let _ = (&MAX).*
+}
+"#;
+    infer(input).assert_infer_code_count("non_addressable_const", 2);
+}
+
+#[test]
+fn a_reference_read_once_checks_like_its_operand() {
+    let input = r#"
+fn test(m: mut Map<string, int>, key: string) {
+  (&m).delete(key)
+  let xs = [1, 2]
+  let _ = (&xs).append(3)
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
 fn cannot_assign_to_read_only_go_variable() {
     let input = r#"
 import "go:example.com/order"

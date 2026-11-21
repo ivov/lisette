@@ -8,6 +8,7 @@ use syntax::types::{self, NumericFamily, ScaledImaginary, SimpleKind, Type};
 use BinaryOperator::*;
 use UnaryOperator::*;
 
+use super::primitives::{ReferenceKind, into_reference_operand};
 use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
 use syntax::ast::Annotation;
@@ -126,7 +127,19 @@ impl InferCtx<'_> {
             self.new_type_var()
         };
 
-        let new_expression = if operator == Negative && is_numeric_literal(&operand) {
+        let new_expression = if operator == Deref
+            && matches!(operand.unwrap_parens(), Expression::Reference { .. })
+        {
+            let (operand, reference_span) = into_reference_operand(*operand);
+            let checked =
+                self.with_value_context(|this| this.check_reference(operand, reference_span));
+            if let ReferenceKind::Fresh(_) = checked.kind {
+                let value = self.finish_reference_value(checked);
+                self.unify(expected_ty, &value.get_type(), &span);
+                return value;
+            }
+            self.finish_reference_recorded(checked, reference_span, &operand_expected_ty)
+        } else if operator == Negative && is_numeric_literal(&operand) {
             self.in_negation(|this| {
                 this.with_value_context(|this| {
                     this.infer_expression(*operand, &operand_expected_ty)

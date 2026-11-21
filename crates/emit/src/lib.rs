@@ -290,8 +290,8 @@ impl<'a> Planner<'a> {
                 item.strip_wrappers();
             }
             debug_assert!(
-                !file.items.iter().any(contains_paren),
-                "internal error: a parenthesized expression reached emit"
+                !file.items.iter().any(contains_wrapper),
+                "internal error: a parenthesized expression or a reference read once reached emit"
             );
         }
         let analysis: &'a EmitInput = analysis;
@@ -800,7 +800,8 @@ impl EmitFacts<'_> {
     }
 }
 
-fn contains_paren(expression: &Expression) -> bool {
+fn contains_wrapper(expression: &Expression) -> bool {
     matches!(expression, Expression::Paren { .. })
-        || expression.children().into_iter().any(contains_paren)
+        || expression.reads_reference_once()
+        || expression.children().into_iter().any(contains_wrapper)
 }

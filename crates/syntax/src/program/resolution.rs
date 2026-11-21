@@ -153,6 +153,17 @@ pub enum DotAccessResolution {
 }
 
 impl DotAccessResolution {
+    pub fn reads_receiver(&self) -> bool {
+        matches!(
+            self,
+            Self::StructField { .. }
+                | Self::TupleStructField { .. }
+                | Self::TupleElement
+                | Self::InstanceMethod { .. }
+                | Self::InstanceMethodValue { .. }
+        )
+    }
+
     pub fn is_field_read(&self) -> bool {
         matches!(
             self,

@@ -2789,6 +2789,37 @@ impl Expression {
         }
     }
 
+    pub fn reads_reference_once(&self) -> bool {
+        match self {
+            Expression::Reference { expression, ty, .. } => *ty == expression.get_type(),
+            Expression::Unary {
+                operator: UnaryOperator::Deref,
+                expression,
+                ..
+            } => matches!(expression.unwrap_parens(), Expression::Reference { .. }),
+            Expression::DotAccess {
+                expression,
+                resolution,
+                ..
+            } => resolution.reads_receiver() && expression.is_reference_receiver(),
+            _ => false,
+        }
+    }
+
+    pub fn is_reference_receiver(&self) -> bool {
+        matches!(
+            self.unwrap_parens(),
+            Expression::Reference { expression, .. } if !expression.is_fresh_value()
+        )
+    }
+
+    fn is_fresh_value(&self) -> bool {
+        matches!(
+            self.unwrap_parens(),
+            Expression::Call { .. } | Expression::StructCall { .. }
+        )
+    }
+
     pub fn unwrap_parens(&self) -> &Expression {
         match self {
             Expression::Paren { expression, .. } => expression.unwrap_parens(),

@@ -3923,6 +3923,91 @@ fn main() {
 }
 
 #[test]
+fn reference_read_once_emits_its_operand() {
+    let input = r#"
+struct Point { x: int }
+
+impl Point {
+  fn bump(self: mut Ref<Point>) {
+    self.x += 1
+  }
+}
+
+fn test(r: Ref<Point>) -> int {
+  let mut p = Point { x: 1 }
+  (&p).bump()
+  let copy = (&p).*
+  let same = &r
+  copy.x + (&p).x + same.x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_write_through_reference_read_once_pins_receiver() {
+    let input = r#"
+struct Holder {
+  slc: Slice<()>,
+}
+
+fn main() {
+  let mut h = Holder { slc: [] }
+  let bump = || { (&h).slc = [(), (), ()] }
+  let ys = {
+    h.slc.append(bump())
+  }
+  if ys.length() != 1 {
+    panic("the receiver must be read before argument effects run")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn explicit_and_implicit_dereference_name_one_field() {
+    let input = r#"
+struct Counter { value: int }
+
+impl Counter {
+  fn increment(self: mut Ref<Counter>) {
+    self.*.value = self.value + 1
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_receiver_of_component_binding_reads_the_binding() {
+    let input = r#"
+fn lookup(m: Map<string, int>) -> Result<int, PanicValue> {
+  recover {
+    let v = m.get("a")
+    (&v).unwrap_or(4)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn dereferenced_reference_to_tuple_field_reads_the_field() {
+    let input = r#"
+fn use_f(f: fn(int) -> ()) { f(3) }
+
+fn main() {
+  let mut n = 0
+  let p = (|x: int| { n += x }, 7)
+  let f = (&p.0).*
+  use_f(f)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn deref_dot_assignment_on_call_result() {
     let input = r#"
 struct Box { x: int }

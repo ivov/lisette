@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{
-    Expression, ExpressionId, IdentifierResolution, Span, StructFields, StructKind,
+    Expression, ExpressionId, IdentifierResolution, Span, StructFields, StructKind, UnaryOperator,
     tuple_field_name,
 };
 use syntax::go_names;
@@ -12,6 +12,7 @@ use syntax::program::{
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 use super::calls::phantom_type_params;
+use super::primitives::{ReferenceKind, into_reference_operand};
 use crate::checker::infer::InferCtx;
 use crate::checker::promotion::{self, MemberKind, Resolution};
 use crate::loader;
@@ -73,9 +74,26 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let expression_ty = self.new_type_var();
-        let new_expression = self.with_dot_access_base(true, |state| {
-            state.infer_expression(*expression, &expression_ty)
-        });
+        let new_expression = if expression.is_reference_receiver() {
+            let (operand, reference_span) = into_reference_operand(*expression);
+            let checked = self.check_reference(operand, reference_span);
+            if let ReferenceKind::Fresh(_) = checked.kind
+                && !self.is_type_level_receiver(&checked.operand)
+            {
+                let operand_ty = checked.operand_ty.clone();
+                let (receiver, witnesses) =
+                    self.selecting_witnesses(|this| this.finish_reference_value(checked));
+                self.unify(&expression_ty, &operand_ty, &reference_span);
+                self.record_value_use(&receiver, &expression_ty, witnesses);
+                receiver
+            } else {
+                self.finish_reference_recorded(checked, reference_span, &expression_ty)
+            }
+        } else {
+            self.with_dot_access_base(true, |state| {
+                state.infer_expression(*expression, &expression_ty)
+            })
+        };
         let resolved_expression_ty =
             self.normalize_aliased_ref(expression_ty.resolve_in(&self.env));
 
@@ -165,7 +183,7 @@ impl InferCtx<'_> {
                 }
                 return args.build_dot_access(Type::Error, DotAccessResolution::Unresolved);
             }
-            return expression;
+            return self.normalize_receiver(expression);
         }
 
         if promotion::has_direct_embed(self.store, &args.deref_ty)
@@ -215,6 +233,56 @@ impl InferCtx<'_> {
         ));
 
         args.build_dot_access(Type::Error, DotAccessResolution::Unresolved)
+    }
+
+    fn normalize_receiver(&self, expression: Expression) -> Expression {
+        let Expression::DotAccess {
+            id,
+            expression: receiver,
+            member,
+            ty,
+            span,
+            resolution,
+        } = expression
+        else {
+            return expression;
+        };
+        let receiver = match *receiver {
+            Expression::Unary {
+                operator: UnaryOperator::Deref,
+                expression: operand,
+                ..
+            } if matches!(
+                resolution,
+                DotAccessResolution::StructField { .. }
+                    | DotAccessResolution::TupleStructField { .. }
+            ) && self.is_single_reference(&operand.get_type()) =>
+            {
+                operand
+            }
+            Expression::Reference {
+                expression: operand,
+                ..
+            } if !resolution.reads_receiver() => operand,
+            receiver => receiver.into(),
+        };
+        Expression::DotAccess {
+            id,
+            expression: receiver,
+            member,
+            ty,
+            span,
+            resolution,
+        }
+    }
+
+    fn is_single_reference(&self, ty: &Type) -> bool {
+        let ty = self.normalize_aliased_ref(ty.resolve_in(&self.env));
+        ty.is_ref()
+            && !ty.inner().is_some_and(|inner| {
+                self.normalize_aliased_ref(inner.resolve_in(&self.env))
+                    .is_ref()
+            })
     }
 
     /// Whether a type's owning package is foreign (not current, prelude, or Go stdlib).
