@@ -2830,6 +2830,13 @@ impl Expression {
         )
     }
 
+    pub fn is_fresh_reference(&self) -> bool {
+        matches!(
+            self.unwrap_parens(),
+            Expression::Reference { expression, .. } if expression.is_fresh_value()
+        )
+    }
+
     fn is_fresh_value(&self) -> bool {
         matches!(
             self.unwrap_parens(),

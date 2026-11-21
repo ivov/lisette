@@ -57,6 +57,13 @@ fn brace_on_next_line() {
 }
 
 #[test]
+fn semicolon_after_deref_at_line_end() {
+    let input = "let m = r.*
+    -1";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
 fn no_semicolon_before_closing_brace() {
     let input = "struct Box<T> {
     value: T

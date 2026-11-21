@@ -74,7 +74,9 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let expression_ty = self.new_type_var();
-        let new_expression = if expression.is_reference_receiver() {
+        let new_expression = if expression.is_reference_receiver()
+            || (self.is_callee_context() && expression.is_fresh_reference())
+        {
             let (operand, reference_span) = into_reference_operand(*expression);
             let checked = self.check_reference(operand, reference_span);
             if let ReferenceKind::Fresh(_) = checked.kind

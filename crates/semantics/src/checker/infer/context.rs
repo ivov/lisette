@@ -626,6 +626,18 @@ impl<'a> InferCtx<'a> {
         self.with_speculation(|this| (f(this), SpeculationOutcome::Rollback))
     }
 
+    pub(crate) fn attempt<T>(&mut self, f: impl FnOnce(&mut Self) -> Option<T>) -> Option<T> {
+        self.with_speculation(|this| {
+            let value = f(this);
+            let outcome = if value.is_some() {
+                SpeculationOutcome::Commit
+            } else {
+                SpeculationOutcome::Rollback
+            };
+            (value, outcome)
+        })
+    }
+
     fn with_speculation<T>(&mut self, f: impl FnOnce(&mut Self) -> (T, SpeculationOutcome)) -> T {
         let Self {
             state,

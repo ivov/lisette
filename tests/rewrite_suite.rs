@@ -24,6 +24,8 @@ use std::process::Command;
 
 use rayon::prelude::*;
 use syntax::ast::{Annotation, Expression, LetMode, Span, UnaryOperator};
+use syntax::program::{DotAccessResolution, ReceiverCoercion};
+use syntax::types::Type;
 
 use _harness::pipeline::TestPipeline;
 use _harness::wrap::wrap;
@@ -160,7 +162,7 @@ fn rewrite_suite() {
                         .replace(&format!("test_{}", variant.name), &format!("test_{name}"));
                     match go_errors.get(&format!("test_{}", variant.name)) {
                         Some(line) => format!("go: {line}"),
-                        None if matches!(variant.rewrite, "paren" | "wrap" | "ref")
+                        None if matches!(variant.rewrite, "paren" | "wrap" | "ref" | "call")
                             && variant_go_code != *go_code =>
                         {
                             "Go differs from the Go of the original program".to_string()
@@ -294,8 +296,106 @@ fn variants(name: &str, source: &str) -> Vec<Variant> {
             source: variant_source,
         });
     }
+    let calls = call_sites(source);
+    let count = calls.len().min(SITES_PER_REWRITE);
+    for i in 0..count {
+        let (range, replacement) = &calls[i * calls.len() / count];
+        variants.push(Variant {
+            name: format!("{name}__call{}", i + 1),
+            rewrite: "call",
+            change: describe(source, range, replacement),
+            source: splice(source, range, replacement),
+        });
+    }
     variants.retain(|variant| !syntax::build_ast(&variant.source, 0).has_errors());
     variants
+}
+
+fn call_sites(source: &str) -> Vec<(Range<usize>, String)> {
+    let inferred = TestPipeline::new(source)
+        .wrapped()
+        .e2e_suite_mode()
+        .compile()
+        .run_inference();
+    let mut sites = Vec::new();
+    for item in &inferred.ast {
+        collect_calls(item, source, &mut sites);
+    }
+    sites
+}
+
+fn collect_calls(expression: &Expression, source: &str, sites: &mut Vec<(Range<usize>, String)>) {
+    if let Expression::Call {
+        expression: callee,
+        args,
+        spread: None,
+        type_arguments,
+        span,
+        ..
+    } = expression
+        && type_arguments.annotations().len() == 0
+        && let Some(arguments) = args
+            .iter()
+            .map(|argument| source.get(range_of(argument.get_span())))
+            .collect::<Option<Vec<_>>>()
+        && let Some(replacement) = call_rewrite(callee, &arguments, source)
+    {
+        sites.push((range_of(*span), replacement));
+    }
+    for child in expression.children() {
+        collect_calls(child, source, sites);
+    }
+}
+
+fn call_rewrite(callee: &Expression, arguments: &[&str], source: &str) -> Option<String> {
+    match callee {
+        Expression::DotAccess {
+            expression: receiver,
+            member,
+            resolution:
+                DotAccessResolution::InstanceMethod {
+                    receiver_coercion,
+                    definition: Some(definition),
+                    ..
+                },
+            ..
+        } => {
+            let (owner_id, _) = definition.as_str().rsplit_once('.')?;
+            if let Type::Nominal { id, .. } = receiver.get_type().strip_refs()
+                && id.as_str() != owner_id
+            {
+                return None;
+            }
+            let owner = match owner_id.strip_prefix("go:") {
+                Some(path) => path.rsplit('/').next()?.to_string(),
+                None => owner_id.rsplit('.').next()?.to_string(),
+            };
+            let receiver = source.get(range_of(receiver.get_span()))?;
+            let receiver = match receiver_coercion {
+                Some(ReceiverCoercion::AutoAddress) => format!("&{receiver}"),
+                Some(ReceiverCoercion::AutoDeref) => format!("({receiver}).*"),
+                None => receiver.to_string(),
+            };
+            let mut all = vec![receiver];
+            all.extend(arguments.iter().map(|argument| argument.to_string()));
+            Some(format!("{owner}.{member}({})", all.join(", ")))
+        }
+        Expression::Identifier { .. }
+        | Expression::DotAccess {
+            resolution: DotAccessResolution::PackageMember { .. },
+            ..
+        } => {
+            let (first, rest) = arguments.split_first()?;
+            let callee = source.get(range_of(callee.get_span()))?;
+            let rest = if rest.is_empty() {
+                String::new()
+            } else {
+                format!("({})", rest.join(", "))
+            };
+            Some(format!("(({first}) |> {callee}{rest})"))
+        }
+        _ => None,
+    }
 }
 
 fn visit<'a>(

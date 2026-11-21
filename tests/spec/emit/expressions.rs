@@ -481,6 +481,124 @@ fn main() {
 }
 
 #[test]
+fn deref_at_line_end_ends_the_statement() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let n = 5
+  let r = &n
+  let m = r.*
+  (|| fmt.Println(m))()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_emits_as_method_call() {
+    let input = r#"
+import "go:fmt"
+
+struct Counter { n: int }
+
+impl Counter {
+  fn get(self) -> int { self.n }
+  fn add(self: mut Ref<Counter>, k: int) { self.n += k }
+}
+
+fn main() {
+  let m = Map.from([("a", 1)])
+  let x = Map.get(m, "a")
+  let y = Option.unwrap_or(x, 0)
+  let mut c = Counter { n: 1 }
+  Counter.add(&c, 2)
+  let r = &c
+  let z = Counter.get(r.*)
+  fmt.Println(y, z, Counter.get(c))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_with_spread_and_alias() {
+    let input = r#"
+import "go:fmt"
+
+type MyString = string
+
+struct Logger { lines: Slice<string> }
+
+impl Logger {
+  fn push(self: mut Ref<Logger>, parts: VarArgs<string>) {
+    self.lines = self.lines.append(parts...)
+  }
+}
+
+fn main() {
+  let mut l = Logger { lines: [] }
+  let parts = ["a", "b"]
+  Logger.push(&l, parts...)
+  fmt.Println(l.lines, MyString.length("hi"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_on_reference_to_call_result() {
+    let input = r#"
+import "go:fmt"
+
+struct Foo { v: int }
+
+impl Foo {
+  fn inc(self: mut Ref<Foo>) -> int {
+    self.v += 1
+    self.v
+  }
+  fn get(self) -> int { self.v }
+}
+
+fn make() -> Foo { Foo { v: 1 } }
+
+fn main() {
+  let a = Foo.inc(&make())
+  let b = make().inc()
+  let c = (&make()).inc()
+  let d = (&make()).get()
+  fmt.Println(a, b, c, d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_with_reference_to_assignment_target() {
+    let input = r#"
+struct H { ptr: mut Ref<int> }
+
+impl H {
+  fn repoint(self: mut Ref<H>, q: mut Ref<int>) -> int {
+    self.ptr = q
+    9
+  }
+}
+
+fn main() {
+  let mut a = 1
+  let mut b = 2
+  let mut h = H { ptr: &a }
+  h.ptr.* += H.repoint(&h, &b)
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn deref_field_access() {
     let input = r#"
 struct Counter { value: int }

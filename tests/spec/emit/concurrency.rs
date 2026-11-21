@@ -1447,7 +1447,7 @@ fn main() {
 }
 
 #[test]
-fn select_send_hoisted_temp_no_redeclare() {
+fn select_send_through_reference_to_call() {
     let input = r#"
 fn get(ch: Channel<int>) -> Channel<int> {
   ch
