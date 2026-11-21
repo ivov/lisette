@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795268659219,
+  "lastUpdate": 1795287508699,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -59237,6 +59237,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 11006,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f70f099bae678345c74c4003f636dcce7e713605",
+          "message": "fix: declare platform-specific Go dependencies (#1720)",
+          "timestamp": "2026-11-21T19:58:04+01:00",
+          "tree_id": "3ffc17d76da2e5edddde104e59c296dbe330a045",
+          "url": "https://github.com/ivov/lisette/commit/f70f099bae678345c74c4003f636dcce7e713605"
+        },
+        "date": 1795287506519,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 164073,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43227,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 33253,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20086,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 18319,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14494,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9477,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7697,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2970,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1930,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11377,
             "unit": "lines"
           },
           {
