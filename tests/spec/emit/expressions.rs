@@ -861,6 +861,26 @@ fn main() {
 }
 
 #[test]
+fn const_of_runtime_value_is_a_var() {
+    let input = r#"
+import "go:fmt"
+
+fn double(x: int) -> int { x * 2 }
+
+const N: Option<int> = None
+const EMPTY: bool = N == None
+const HANDLER: fn(int) -> int = double
+const LIMIT = 10
+const NEXT = LIMIT + 1
+
+fn main() {
+  fmt.Println(N, EMPTY, HANDLER(NEXT))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn const_bitwise_not_stays_const() {
     let input = r#"
 const MASK = ^1
@@ -969,6 +989,19 @@ import "go:fmt"
 fn test() {
   let name = "Alice";
   fmt.Print(f"Hello, {name}!")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_function_value_prints_its_address() {
+    let input = r#"
+fn double(x: int) -> int { x * 2 }
+
+fn describe() -> string {
+  let f = double
+  f"fn={f} {double}"
 }
 "#;
     assert_emit_snapshot!(input);

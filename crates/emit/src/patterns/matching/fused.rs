@@ -292,21 +292,13 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn fusable_partial(&self, subject: &Expression, plan: &CallPlan<'_>) -> bool {
-        let is_partial = matches!(
+    fn fusable_partial(&self, subject: &Expression, plan: &CallPlan<'_>, selective: bool) -> bool {
+        matches!(
             plan.resolved.abi.result.lowered(),
             Some(LoweredReturnAbi::Partial { .. })
-        );
-        if !is_partial {
-            return false;
-        }
-        if self
-            .go_result_bridge(&plan.resolved.abi, &subject.get_type())
-            .is_some()
-        {
-            return false;
-        }
-        !self.facts.has_tuple_payload(&subject.get_type())
+        ) && (!selective || matches!(plan.resolved.origin, CallableOrigin::GoInterop))
+            && self.call_result_unbridged(plan, &subject.get_type())
+            && !self.facts.has_tuple_payload(&subject.get_type())
     }
 
     pub(super) fn try_lower_fused_partial_match(
@@ -316,7 +308,7 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
         let plan = self.plan_call(subject)?;
-        if !self.fusable_partial(subject, &plan) {
+        if !self.fusable_partial(subject, &plan, false) {
             return None;
         }
         let (ok_arm, both_arm, err_arm) = classify_partial_arms(arms)?;
@@ -405,7 +397,7 @@ impl Planner<'_> {
         arms: &'a [MatchArm],
     ) -> Option<PartialOutcomeArms<'a>> {
         let plan = self.plan_call(subject)?;
-        if !self.fusable_partial(subject, &plan) {
+        if !self.fusable_partial(subject, &plan, false) {
             return None;
         }
         classify_partial_outcome_arms(arms)
@@ -489,9 +481,7 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
         let plan = self.plan_call(subject)?;
-        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop)
-            || !self.fusable_partial(subject, &plan)
-        {
+        if !self.fusable_partial(subject, &plan, true) {
             return None;
         }
         let arms = classify_selective_partial_arms(arms)?;

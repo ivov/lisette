@@ -5156,3 +5156,37 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn string_view_loops_dereference_a_ref_receiver() {
+    let input = r#"
+import "go:fmt"
+
+type StrRef = Ref<string>
+
+fn walk(s: Ref<string>, t: StrRef) {
+  for b in s.bytes() { fmt.Print(b) }
+  for r in s.runes() { fmt.Print(r) }
+  for b in t.bytes() { fmt.Print(b) }
+  for r in t.runes() { fmt.Print(r) }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_over_alias_of_ref_iter_seq_dereferences() {
+    let input = r#"
+import "go:fmt"
+import "go:iter"
+
+type PairsRef = Ref<iter.Seq2<string, int>>
+type ValuesRef = Ref<iter.Seq<int>>
+
+fn walk(p: PairsRef, v: ValuesRef) {
+  for (k, n) in p { fmt.Println(k, n) }
+  for x in v { fmt.Println(x) }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1,5 +1,5 @@
 use super::Definition;
-use crate::types::{self, Type};
+use crate::types::{self, CompoundKind, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -144,20 +144,20 @@ pub enum SlotOrigin {
 }
 
 impl SlotOrigin {
-    pub fn go_parameter(is_any: bool) -> Self {
-        Self::go_slot(Self::GoParameter, is_any)
-    }
-
-    pub fn go_return(is_any: bool) -> Self {
-        Self::go_slot(Self::GoReturn, is_any)
-    }
-
-    pub fn go_field(is_any: bool) -> Self {
-        Self::go_slot(Self::GoField, is_any)
-    }
-
-    fn go_slot(origin: Self, is_any: bool) -> Self {
-        if is_any { Self::GoAny } else { origin }
+    pub fn of_go_declaration<'a>(
+        origin: Self,
+        declared: &Type,
+        lookup: impl Fn(&str) -> Option<&'a Definition>,
+    ) -> Self {
+        let slot = match declared.as_compound() {
+            Some((CompoundKind::VarArgs, [element])) => element,
+            _ => declared,
+        };
+        if types::resolves_to_unknown(slot, lookup) {
+            Self::GoAny
+        } else {
+            origin
+        }
     }
 
     pub fn nested(self) -> Self {
@@ -214,10 +214,7 @@ pub fn go_boundary_converts_container<'a>(
         }
         match ty {
             Type::Compound {
-                kind:
-                    types::CompoundKind::Slice
-                    | types::CompoundKind::EnumeratedSlice
-                    | types::CompoundKind::Map,
+                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
                 args: arguments,
                 ..
             } => arguments.iter().any(|ty| converts(ty, origin, lookup)),

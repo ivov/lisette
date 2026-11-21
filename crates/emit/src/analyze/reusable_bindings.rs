@@ -97,10 +97,12 @@ fn collect(
             ..
         } if let Expression::DotAccess {
             expression: receiver,
+            member,
             ..
         } = callee.unwrap_parens() =>
         {
-            if facts.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoAddress) {
+            if facts.dot_receiver_coercion(receiver, member) == Some(ReceiverCoercion::AutoAddress)
+            {
                 shared.extend(receiver.root_binding_id());
             }
             for child in iter::once(receiver.as_ref())

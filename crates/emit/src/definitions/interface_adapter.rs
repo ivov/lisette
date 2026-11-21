@@ -2,7 +2,7 @@ use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
-use crate::abi::layout::{FunctionLayout, ValueLayout};
+use crate::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::BodyOrigin;
 use crate::ir::bodies::{
@@ -89,12 +89,15 @@ impl Planner<'_> {
             .map(|param| self.value_layout(&param.ty, SlotOrigin::Lisette))
             .collect();
         let result = self.value_layout(return_ty, SlotOrigin::Lisette);
-        let source = self.function_layout(
-            parameters.clone(),
-            &result,
-            self.facts.return_abi(return_ty, ReturnSlot::Method),
-            Some(return_ty),
-        );
+        let source = FunctionLayout {
+            producer: ResultProducer::Lisette,
+            ..self.function_layout(
+                parameters.clone(),
+                &result,
+                self.facts.return_abi(return_ty, ReturnSlot::Method),
+                Some(return_ty),
+            )
+        };
         let target = self.function_layout(
             parameters,
             &result,
@@ -146,7 +149,14 @@ impl Planner<'_> {
 
     pub(crate) fn bound_dispatch_layout(&self, expression: &Expression) -> Option<FunctionLayout> {
         let (_, requirement) = self.bound_dispatch_requirement(expression)?;
-        let layout = self.requirement_layout(&requirement, false)?;
+        self.requirement_value_layout(&requirement)
+    }
+
+    fn requirement_value_layout(
+        &self,
+        requirement: &InterfaceRequirement,
+    ) -> Option<FunctionLayout> {
+        let layout = self.requirement_layout(requirement, false)?;
         Some(layout.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette))
     }
 
@@ -167,7 +177,9 @@ impl Planner<'_> {
             .zip(&declared.params)
             .map(|(parameter, declared)| {
                 let origin = if go {
-                    SlotOrigin::go_parameter(self.facts.resolves_to_unknown(&declared.ty))
+                    SlotOrigin::of_go_declaration(SlotOrigin::GoParameter, &declared.ty, |id| {
+                        self.facts.definition(id)
+                    })
                 } else {
                     SlotOrigin::Lisette
                 };
@@ -175,7 +187,9 @@ impl Planner<'_> {
             })
             .collect();
         let origin = if go {
-            SlotOrigin::go_return(self.facts.resolves_to_unknown(&declared.return_type))
+            SlotOrigin::of_go_declaration(SlotOrigin::GoReturn, &declared.return_type, |id| {
+                self.facts.definition(id)
+            })
         } else {
             SlotOrigin::Lisette
         };
@@ -185,11 +199,13 @@ impl Planner<'_> {
             &declared.return_type,
         );
         let abi = if go {
-            self.facts.return_abi(
+            self.facts.go_callable_return_abi(
+                &format!(
+                    "{}.{}",
+                    requirement.declaring_interface, requirement.method.source_name
+                ),
                 &declared.return_type,
-                ReturnSlot::Go {
-                    hints: &requirement.method.go_hints,
-                },
+                &requirement.method.go_hints,
             )
         } else {
             self.facts.requirement_return_abi(requirement)
@@ -228,7 +244,7 @@ impl Planner<'_> {
                     &requirement,
                     go_name::is_go_import(&requirement.declaring_interface),
                 )?,
-                None => local.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette),
+                None => self.requirement_value_layout(&selected)?,
             };
             methods.push(AdapterMethod {
                 source_go_name: self.facts.requirement_go_name(&selected),
@@ -446,10 +462,11 @@ impl Planner<'_> {
             .and_then(|source| source.method.ty.get_function_ret())
             .unwrap_or(&function.return_type);
         let user_abi = if let Some(id) = &source_go_method {
-            self.facts.go_callable_return(id).cloned().map_or_else(
-                || CallableReturnAbi::unlowered(source_return),
-                CallableReturnAbi::Lowered,
-            )
+            let hints = self
+                .facts
+                .method(source_owner, implementation_name)
+                .map_or(&[][..], |method| method.go_hints.as_slice());
+            self.facts.go_callable_return_abi(id, source_return, hints)
         } else if let Some(source) = source_requirement {
             self.facts.requirement_return_abi(source)
         } else if self.facts.requirement_uses_tagged_twin(requirement) {
@@ -459,16 +476,24 @@ impl Planner<'_> {
                 .return_abi(&function.return_type, ReturnSlot::Method)
         };
         let user_result = self.interface_result_layout(source_go_method.as_deref(), &return_type);
-        let source = self.function_layout(
-            self.interface_parameter_layouts(
-                source_go_method.as_deref(),
-                &param_types,
-                usize::from(source_requirement.is_none()),
-            ),
-            &user_result,
-            user_abi,
-            Some(source_return),
-        );
+        let producer = if source_go_method.is_none() && source_requirement.is_none() {
+            ResultProducer::Lisette
+        } else {
+            ResultProducer::Go
+        };
+        let source = FunctionLayout {
+            producer,
+            ..self.function_layout(
+                self.interface_parameter_layouts(
+                    source_go_method.as_deref(),
+                    &param_types,
+                    usize::from(source_requirement.is_none()),
+                ),
+                &user_result,
+                user_abi,
+                Some(source_return),
+            )
+        };
 
         let interface_return = &requirement.method.ty.as_function_type()?.return_type;
         let go_method = go_name::is_go_import(&requirement.declaring_interface).then(|| {
@@ -478,18 +503,15 @@ impl Planner<'_> {
             )
         });
         let interface_abi = match &go_method {
-            Some(go_method) => self
-                .facts
-                .go_callable_return(go_method)
-                .cloned()
-                .map_or_else(
-                    || CallableReturnAbi::unlowered(interface_return),
-                    CallableReturnAbi::Lowered,
-                ),
+            Some(go_method) => self.facts.go_callable_return_abi(
+                go_method,
+                interface_return,
+                &requirement.method.go_hints,
+            ),
             None => self.facts.requirement_return_abi(requirement),
         };
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
-        let target = if abi_matches_type(&self.facts, &interface_abi, &return_type) {
+        let target = if interface_abi.fits_return_type(&self.facts, &return_type) {
             let result = self.interface_result_layout(go_method.as_deref(), &return_type);
             self.function_layout(parameters, &result, interface_abi, Some(interface_return))
         } else {
@@ -507,7 +529,7 @@ impl Planner<'_> {
             source_go_name: self.facts.adapter_source_go_name(
                 requirement,
                 source_requirement,
-                source_go_method.as_deref(),
+                Some(source_owner),
                 checked,
             ),
             alternate: None,
@@ -557,7 +579,7 @@ impl Planner<'_> {
                 }
                 name
             });
-        let generic_parameters = self.plan_generics(&plan.generic_context);
+        let generic_parameters = self.plan_generics(&plan.generic_context, None);
         let receiver_type = GoType::named(
             &base_name,
             &plan
@@ -752,19 +774,19 @@ fn adapter_uses_type_parameter(
         })
 }
 
-fn abi_matches_type(facts: &EmitFacts<'_>, abi: &CallableReturnAbi, ty: &Type) -> bool {
-    match abi.lowered() {
-        None => true,
-        Some(LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. }) => facts.is_result(ty),
-        Some(LoweredReturnAbi::Partial { .. }) => facts.is_partial(ty),
-        Some(LoweredReturnAbi::Option(_)) => facts.is_option(ty),
-        Some(LoweredReturnAbi::Tuple { .. }) => facts
-            .tuple_elements(ty)
-            .is_some_and(|elements| elements.len() >= 2),
-    }
-}
-
 impl EmitFacts<'_> {
+    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
+        interface_requirements(bound, |id| self.definition(id))
+            .iter()
+            .any(|requirement| {
+                !go_name::is_go_import(&requirement.declaring_interface)
+                    && matches!(
+                        self.requirement_return_abi(requirement),
+                        CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
+                    )
+            })
+    }
+
     fn requirement_return_abi(&self, requirement: &InterfaceRequirement) -> CallableReturnAbi {
         self.return_abi(
             requirement
@@ -784,7 +806,7 @@ impl EmitFacts<'_> {
             && self.method_uses_tagged_return(&requirement.name)
     }
 
-    fn has_tagged_twin(&self, owner: &str, member: &str) -> bool {
+    pub(crate) fn has_tagged_twin(&self, owner: &str, member: &str) -> bool {
         !go_name::is_go_import(owner)
             && !go_name::is_prelude_id(owner)
             && self.method_uses_tagged_return(member)
@@ -818,28 +840,28 @@ impl EmitFacts<'_> {
         &self,
         requirement: &InterfaceRequirement,
         source_requirement: Option<&InterfaceRequirement>,
-        source_go_method: Option<&str>,
+        source_owner: Option<&str>,
         checked: &CheckedMethod,
     ) -> String {
-        let method_go_name = || self.method_go_name(&checked.selected_name, checked.is_exported);
         match source_requirement {
             Some(source) => self.requirement_go_name(source),
-            None if source_go_method.is_none()
-                && self.requirement_uses_tagged_twin(requirement) =>
-            {
-                go_name::tagged_twin(&method_go_name())
-            }
-            None => method_go_name(),
+            None => self.method_selector_go_name(
+                source_owner,
+                &checked.selected_name,
+                checked.is_exported,
+                !source_owner.is_some_and(go_name::is_go_import)
+                    && self.requirement_uses_tagged_twin(requirement),
+            ),
         }
     }
 
     fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
-        let name = self.method_go_name(&requirement.name, false);
-        if self.requirement_uses_tagged_twin(requirement) {
-            go_name::tagged_twin(&name)
-        } else {
-            name
-        }
+        self.method_selector_go_name(
+            Some(&requirement.declaring_interface),
+            &requirement.name,
+            false,
+            self.requirement_uses_tagged_twin(requirement),
+        )
     }
 
     fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<Position> {

@@ -1,6 +1,6 @@
 use crate::Planner;
-use crate::abi::bridge::GoResultBridge;
-use crate::abi::callable::{LoweredReturnAbi, PayloadLayout};
+
+use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::fallible_producer::GuardedPayload;
 use crate::abi::fallible_producer::{OptionFusePlan, ResultFusePlan};
@@ -10,7 +10,7 @@ use crate::abi::wrapping::{nil_condition, non_nil_condition, unexpected_nil_erro
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::calls::go_interop::LoweredCall;
+use crate::calls::go_interop::{LoweredCall, RawPair};
 use crate::calls::unwrap_or::{MapLambda, map_lambda};
 use crate::control_flow::fallible as tags;
 use crate::control_flow::fallible::Fallible;
@@ -18,16 +18,14 @@ use crate::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
     effect_statement,
 };
-use crate::ir::go_expression::{BinaryOp, GoExpressionNode};
+use crate::ir::go_expression::GoExpressionNode;
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, Stability};
-use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{FusedName, PreludeVariant, prelude_constructor};
 use crate::state::bindings::InlineExpr;
 use crate::state::expression::ExpressionContext;
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
-use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::DotAccessResolution;
 use syntax::program::SlotOrigin;
 
@@ -228,8 +226,10 @@ impl Planner<'_> {
         } else {
             let mut setup = Vec::new();
             let err_expr = if fallible.is_result() {
-                let error =
-                    GoExpression::value_field(check.clone(), tags::RESULT_ERR_FIELD.to_string());
+                let error = GoExpression::value_field(
+                    check.clone(),
+                    tags::result_variant("Err").fields[0].to_string(),
+                );
                 let ValueLayout::Fallible { error: source, .. } = source_layout.underlying() else {
                     unreachable!("Result propagation requires an error layout")
                 };
@@ -246,15 +246,7 @@ impl Planner<'_> {
             setup.extend(failure_setup);
             (setup, values)
         };
-        transition::tag_check(
-            GoExpression::binary(
-                GoExpression::value_field(check.clone(), ENUM_TAG_FIELD.to_string()),
-                BinaryOp::Ne,
-                GoExpression::generated(GeneratedPackage::Prelude, fallible.success_tag()),
-            ),
-            setup,
-            values,
-        )
+        transition::tag_check(fallible.failure_condition(check), setup, values)
     }
 
     fn returns_tagged_type(&self, operand: &Expression) -> bool {
@@ -303,28 +295,19 @@ impl Planner<'_> {
         fallible: &Fallible,
         target: PropagateTarget<'_>,
     ) -> Option<(Vec<Statement>, Option<GoExpression>)> {
-        let LoweredCall {
-            call,
-            wraps,
-            shape,
-            ok_ty,
+        let lowered = self.lowered_call(expression)?;
+        let RawPair {
+            has_value_slot,
             nil_guard,
-            bridge,
-            ..
-        } = self.lowered_call(expression)?;
-        let payload_bridge = match bridge {
-            Some(GoResultBridge::Payload { value, error }) if error.is_identity() => Some(value),
-            Some(GoResultBridge::Payload { .. }) => return None,
-            _ => None,
-        };
-        match shape {
-            LoweredReturnAbi::Result {
-                payload: PayloadLayout::Packed,
-            } if !ok_ty.is_unit() => {}
-            LoweredReturnAbi::BareError => {}
-            _ => return None,
+            payload_bridge,
+        } = lowered.raw_pair()?;
+        if !matches!(
+            lowered.shape,
+            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::BareError
+        ) {
+            return None;
         }
-        let has_value_slot = !matches!(shape, LoweredReturnAbi::BareError);
+        let LoweredCall { call, wraps, .. } = lowered;
         if !self.returns_fallible() {
             return None;
         }
@@ -746,7 +729,10 @@ impl Planner<'_> {
         let error_target = self.value_layout(error_layout.logical_type(), SlotOrigin::Lisette);
         let (error_setup, error) = CoercionPlan::bridge(self, error_layout, &error_target).lower(
             self,
-            GoExpression::value_field(check.clone(), tags::RESULT_ERR_FIELD.to_string()),
+            GoExpression::value_field(
+                check.clone(),
+                tags::result_variant("Err").fields[0].to_string(),
+            ),
         );
         failure_setup.extend(error_setup);
         let error = self.apply_error_mappers(&mut failure_setup, &mappers, error, Some(stability));
@@ -755,11 +741,7 @@ impl Planner<'_> {
         failure_setup.extend(values_setup);
         statements.push(
             transition::tag_check(
-                GoExpression::binary(
-                    GoExpression::value_field(check.clone(), ENUM_TAG_FIELD.to_string()),
-                    BinaryOp::Ne,
-                    GoExpression::generated(GeneratedPackage::Prelude, fallible.success_tag()),
-                ),
+                fallible.failure_condition(&check),
                 failure_setup,
                 failure_values,
             )

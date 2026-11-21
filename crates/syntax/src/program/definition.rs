@@ -99,6 +99,7 @@ pub enum ValueKind {
     Variable,
     ConstantDeclaration,
     Constant(ConstantValue),
+    RuntimeConstant,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -390,6 +391,17 @@ impl Definition {
     }
 
     pub fn is_const(&self) -> bool {
+        self.is_compile_time_const()
+            || matches!(
+                self.body,
+                DefinitionBody::Value {
+                    kind: ValueKind::RuntimeConstant,
+                    ..
+                }
+            )
+    }
+
+    pub fn is_compile_time_const(&self) -> bool {
         matches!(
             self.body,
             DefinitionBody::Value {

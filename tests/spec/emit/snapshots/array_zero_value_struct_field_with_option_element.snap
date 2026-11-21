@@ -29,11 +29,5 @@ type Stable struct {
 }
 
 func empty() Stable {
-	return Stable{horses: func() [2]Horse {
-		var arr [2]Horse
-		for i := range arr {
-			arr[i] = Horse{}
-		}
-		return arr
-	}()}
+	return Stable{}
 }

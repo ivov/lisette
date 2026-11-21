@@ -268,12 +268,10 @@ impl<'a> Planner<'a> {
     }
 
     fn return_context_from_abi(return_ty: Type, abi: CallableReturnAbi) -> ReturnContext {
-        if types::go_type::returns_go_void(&return_ty) {
-            return ReturnContext::Void(return_ty);
-        }
         match abi {
+            CallableReturnAbi::Void => ReturnContext::Void(return_ty),
             CallableReturnAbi::Lowered(shape) => ReturnContext::Lowered { return_ty, shape },
-            _ => ReturnContext::Tagged(return_ty),
+            CallableReturnAbi::Value => ReturnContext::Tagged(return_ty),
         }
     }
 

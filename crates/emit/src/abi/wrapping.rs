@@ -1,12 +1,10 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::callable::PayloadLayout;
+use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::LayoutBridge;
-use crate::abi::layout::ValueLayout;
-use crate::calls::go_interop::build_tuple_literal;
-use crate::control_flow::fallible::{
-    PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
-};
+use crate::abi::layout::{ResultProducer, ValueLayout};
+use crate::calls::go_interop::{LoweredProducer, build_tuple_literal};
+use crate::control_flow::fallible::{partial_variant, prelude_call};
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, declare, define,
@@ -17,6 +15,7 @@ use crate::ir::local::GoIdentifier;
 use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::types::go_type::GoType;
+use syntax::program::SlotOrigin;
 use syntax::types::{GoNilForm, Type};
 
 pub(crate) fn nil_condition(value: GoExpression) -> GoExpression {
@@ -128,11 +127,11 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         call: GoExpression,
-        ok_ty: &Type,
+        payload: &ValueLayout,
         layout: PayloadLayout,
     ) -> (GoIdentifier, GoExpression) {
         if layout.is_flattened()
-            && let Type::Tuple(elements) = ok_ty
+            && let Some(elements) = payload.tuple_elements()
         {
             let tuple_arity = elements.len();
             let temp_vars = self.create_temp_vars("ret", tuple_arity + 1);
@@ -197,7 +196,7 @@ impl Planner<'_> {
 
         let mut statements = Vec::new();
         let (error_variable, val_value) =
-            self.push_go_returns(&mut statements, call, ok_ty, layout);
+            self.push_go_returns(&mut statements, call, payload, layout);
         let error_value = || GoExpression::identifier(error_variable.clone());
         let val = || val_value.clone();
         let nil_check = self.partial_ok_nil_check(ok_ty, val());
@@ -213,7 +212,7 @@ impl Planner<'_> {
             self.plan_optional_payload_bridge(error_value(), error_bridge);
         both_setup.extend(error_setup);
         let both = prelude_call(
-            PARTIAL_BOTH_CTOR,
+            partial_variant("Both").constructor,
             type_params.clone(),
             vec![both_value, both_error],
         );
@@ -225,7 +224,11 @@ impl Planner<'_> {
         let (mut ok_setup, ok_value) = self.plan_optional_payload_bridge(val(), payload_bridge);
         ok_setup.push(leaf_statement(
             &sink,
-            prelude_call(PARTIAL_OK_CTOR, type_params.clone(), vec![ok_value]),
+            prelude_call(
+                partial_variant("Ok").constructor,
+                type_params.clone(),
+                vec![ok_value],
+            ),
         ));
         let ok_body = LoweredBlock {
             statements: ok_setup,
@@ -236,7 +239,7 @@ impl Planner<'_> {
                 self.plan_optional_payload_bridge(error_value(), error_bridge);
             error_setup.push(leaf_statement(
                 &sink,
-                prelude_call(PARTIAL_ERR_CTOR, type_params, vec![error]),
+                prelude_call(partial_variant("Err").constructor, type_params, vec![error]),
             ));
             let inner = IfPlan::plain(
                 check,
@@ -274,7 +277,35 @@ impl Planner<'_> {
         Some(guard.nil_condition(value))
     }
 
-    pub(crate) fn result_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
+    pub(crate) fn layout_nil_guard(&self, layout: &ValueLayout) -> Option<NilGuard> {
+        match layout.underlying() {
+            ValueLayout::PointerOption { .. } => Some(NilGuard::Pointer),
+            ValueLayout::NullableOption { option_type, .. } => {
+                Some(self.facts.option_nil_guard(option_type))
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn lowered_payload_nil_guard(
+        &self,
+        shape: &LoweredReturnAbi,
+        producer: ResultProducer,
+        result_ty: &Type,
+    ) -> Option<NilGuard> {
+        match shape {
+            LoweredReturnAbi::Result { .. } if producer == ResultProducer::Go => {
+                self.result_nil_guard(&self.facts.ok_payload(result_ty))
+            }
+            LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
+                Some(NilGuard::Sentinel(*value))
+            }
+            LoweredReturnAbi::Option(_) => self.facts.nullable_option_nil_guard(result_ty),
+            _ => None,
+        }
+    }
+
+    fn result_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
         match self.facts.nil_guard(ok_ty)? {
             NilGuard::Pointer => self
                 .facts
@@ -293,6 +324,7 @@ impl Planner<'_> {
         result_layout: &ValueLayout,
         layout: PayloadLayout,
         payload_bridge: Option<&LayoutBridge>,
+        nil_guard: Option<NilGuard>,
     ) -> Result<GoExpression, GoExpression> {
         let Some(fallible) = self
             .facts
@@ -307,7 +339,7 @@ impl Planner<'_> {
         if !err_is_error
             || payload_bridge.is_some()
             || (layout.is_flattened() && ok_ty.is_tuple())
-            || self.result_nil_guard(ok_ty).is_some()
+            || nil_guard.is_some()
         {
             return Err(call);
         }
@@ -325,10 +357,17 @@ impl Planner<'_> {
         &mut self,
         call: GoExpression,
         result_layout: &ValueLayout,
-        layout: PayloadLayout,
+        producer: LoweredProducer<'_>,
         bridges: Option<(&LayoutBridge, &LayoutBridge)>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
+        let Some(shape @ LoweredReturnAbi::Result { payload: layout }) = producer.abi.lowered()
+        else {
+            unreachable!("Result wrapping requires a lowered Result ABI")
+        };
+        let layout = *layout;
+        let nil_guard =
+            self.lowered_payload_nil_guard(shape, producer.producer, result_layout.logical_type());
         let (payload_bridge, error_bridge) = bridges.unzip();
         let ValueLayout::Fallible {
             fallible_type,
@@ -344,23 +383,22 @@ impl Planner<'_> {
             .expect("Result type expected");
 
         let mut statements = Vec::new();
-        let call = match self.result_from_pair(call, result_layout, layout, payload_bridge) {
-            Ok(value) => {
-                let outcome =
-                    self.push_simple_wrapper_value(&mut statements, target, "result", value);
-                return (statements, outcome);
-            }
-            Err(call) => call,
-        };
-        let ok_ty = fallible.ok_ty();
-        let (error_variable, ok_value) = self.push_go_returns(&mut statements, call, ok_ty, layout);
+        let call =
+            match self.result_from_pair(call, result_layout, layout, payload_bridge, nil_guard) {
+                Ok(value) => {
+                    let outcome =
+                        self.push_simple_wrapper_value(&mut statements, target, "result", value);
+                    return (statements, outcome);
+                }
+                Err(call) => call,
+            };
+        let (error_variable, ok_value) =
+            self.push_go_returns(&mut statements, call, payload, layout);
         let error_value = || GoExpression::identifier(error_variable.clone());
         let ok = || ok_value.clone();
 
         let result_ty_str = result_layout.underlying().go_type(self);
         let type_params = GoType::type_arguments(&[payload.go_type(self), error.go_type(self)]);
-
-        let nil_guard = self.result_nil_guard(ok_ty);
 
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
@@ -508,7 +546,11 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call);
         let raw = || GoExpression::identifier(raw.clone());
-        let inner_ty_str = self.go_type(&option_ty.ok_type());
+        let option_layout = self.value_layout(option_ty, SlotOrigin::Lisette);
+        let inner_ty_str = option_layout
+            .payload()
+            .expect("a sentinel Option has a payload")
+            .go_type(self);
         let value = prelude_call(
             "OptionFromCommaOk",
             GoType::type_argument(&inner_ty_str),
@@ -537,7 +579,10 @@ impl Planner<'_> {
             .payload()
             .expect("Option wrapping requires a payload layout");
         if payload_bridge.is_some()
-            || self.facts.is_nullable_option(option_ty)
+            || matches!(
+                self.value_layout(option_ty, SlotOrigin::GoReturn),
+                ValueLayout::NullableOption { .. }
+            )
             || (layout.is_flattened() && payload.logical_type().tuple_arity().is_some())
         {
             return Err(call);
@@ -695,7 +740,7 @@ impl EmitFacts<'_> {
         })
     }
 
-    pub(crate) fn nullable_option_nil_guard(&self, option_ty: &Type) -> Option<NilGuard> {
+    fn nullable_option_nil_guard(&self, option_ty: &Type) -> Option<NilGuard> {
         if !self.is_option(option_ty) {
             return None;
         }

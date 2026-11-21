@@ -17,13 +17,7 @@ type s struct {
 }
 
 func main() {
-	values := func() []lisette.Option[s] {
-		s2 := make([]lisette.Option[s], 2)
-		for i := range s2 {
-			s2[i] = lisette.MakeOptionNone[s]()
-		}
-		return s2
-	}()
+	values := make([]lisette.Option[s], 2)
 	for _, value := range values {
 		if value.IsSome() {
 			panic("zero")

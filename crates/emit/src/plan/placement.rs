@@ -16,7 +16,7 @@ use crate::ir::values::Stability;
 use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::state::expression::ExpressionContext;
-use crate::statements::assignments::{PlaceOrdering, is_lvalue_chain};
+use crate::statements::assignments::PlaceOrdering;
 use crate::types::go_type::GoType;
 use std::slice;
 use syntax::ast::Pattern;
@@ -171,12 +171,6 @@ fn infers_declared_type(
         return kind.is_default_go_type(go_type);
     }
     match value.node() {
-        GoExpressionNode::Literal(text) => {
-            ["int", "string", "bool"]
-                .iter()
-                .any(|name| go_type.is_named(name))
-                && text != "nil"
-        }
         GoExpressionNode::CompositeLiteral {
             go_type: Some(literal_type),
             ..
@@ -678,7 +672,7 @@ impl<'p> Planner<'p> {
 
         let unwrapped = receiver.unwrap_parens();
         let receiver_is_lvalue =
-            is_lvalue_chain(unwrapped) && !self.facts.contains_newtype_access(unwrapped);
+            self.facts.is_lvalue_chain(unwrapped) && !self.facts.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
             let (arguments, ordering) = self.lower_growth_args(last, args, spread.as_deref());

@@ -19,5 +19,5 @@ type Wrapper struct {
 }
 
 func test() Wrapper {
-	return Wrapper{s: sort.StringSlice(nil)}
+	return Wrapper{}
 }

@@ -11,11 +11,5 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func flags() [2]lisette.Option[*bool] {
-	return func() [2]lisette.Option[*bool] {
-		var arr [2]lisette.Option[*bool]
-		for i := range arr {
-			arr[i] = lisette.MakeOptionNone[*bool]()
-		}
-		return arr
-	}()
+	return [2]lisette.Option[*bool]{}
 }

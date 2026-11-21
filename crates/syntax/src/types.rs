@@ -1950,7 +1950,7 @@ where
         }
         seen.push(id.clone());
         let next = lookup(id.as_str())?.instantiate_alias_target(params, *writable)?;
-        current = next.unwrap_forall().clone();
+        current = next.unwrap_forall().strip_refs();
     }
 }
 

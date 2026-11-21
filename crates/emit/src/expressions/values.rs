@@ -1,6 +1,7 @@
 use crate::EmitFacts;
 use crate::abi::ReturnSlot;
 use crate::abi::is_closure_literal;
+use crate::abi::layout::ValueLayout;
 use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::plan_struct_literal;
 use crate::ir::bodies::AsyncKind;
@@ -11,7 +12,7 @@ use syntax::program::NativeOperation;
 use crate::abi::bridge::GoResultBridge;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::ValueLayout;
+use crate::abi::layout::FunctionLayout;
 use crate::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, discard, effect_statement, expression_statement,
 };
@@ -23,7 +24,6 @@ use crate::state::bindings::BindingValue;
 use crate::state::expression::ExpressionContext;
 use crate::statements::assignments::PlaceOrdering;
 use crate::types::go_type::GoType;
-use crate::types::go_type::returns_go_void;
 use crate::{Planner, ReturnContext};
 use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;
@@ -80,22 +80,13 @@ impl Planner<'_> {
         } else {
             SlotOrigin::Lisette
         };
-        let target = self.value_layout(&expression.get_type(), origin);
-        let ValueLayout::Function { layout, .. } = target.underlying() else {
-            if from_go {
-                return None;
-            }
-            unreachable!("a resolved function value has a function layout");
+        let return_abi = if from_go {
+            Some(self.go_fn_slot_abi(expression, context)?)
+        } else {
+            None
         };
-        let mut target = layout.clone();
-        if from_go {
-            let return_abi = self.go_fn_slot_abi(expression, context)?;
-            if target.return_abi != return_abi {
-                target = target.with_return_abi(self, return_abi, SlotOrigin::Lisette);
-            }
-        }
-        let source = callee.abi.function_layout(self);
-        (!source.same_representation(&target)).then_some(FunctionBridge { source, target })
+        let source = callee.function_layout(self);
+        self.callable_slot_bridge(source, &expression.get_type(), return_abi, origin)
     }
 
     pub(crate) fn plan_composite_value(
@@ -117,45 +108,15 @@ impl Planner<'_> {
                 });
         }
         let ty = expression.get_type();
-        if let Some(slot) = context.generic_result_slot()
-            && match expression.unwrap_parens() {
-                Expression::Function { .. } => false,
-                Expression::Lambda { .. } => slot
-                    .get_function_ret()
-                    .is_some_and(|return_type| !returns_go_void(return_type)),
-                _ => true,
-            }
-            && ty.get_function_ret().is_some_and(Type::is_never)
-        {
-            let return_type = slot
-                .get_function_ret()
-                .filter(|return_type| !returns_go_void(return_type));
-            let (source_result, target_result, return_abi) = match return_type {
-                Some(return_type) => (
-                    self.value_layout(&Type::Never, SlotOrigin::Lisette),
-                    self.value_layout(return_type, SlotOrigin::Lisette),
-                    self.facts
-                        .return_abi(return_type, ReturnSlot::FunctionExpression(context)),
-                ),
-                None => (
-                    self.value_layout(&Type::unit(), SlotOrigin::Lisette),
-                    self.value_layout(&Type::unit(), SlotOrigin::Lisette),
-                    CallableReturnAbi::Value,
-                ),
-            };
-            let parameters = ty
-                .get_function_params()
-                .expect("a function has parameters")
-                .iter()
-                .map(|parameter| self.value_layout(&parameter.ty, SlotOrigin::Lisette))
-                .collect::<Vec<_>>();
-            let source = self.function_layout(
-                parameters.clone(),
-                &source_result,
-                CallableReturnAbi::Void,
-                None,
-            );
-            let target = self.function_layout(parameters, &target_result, return_abi, None);
+        let filtered_out = match expression.unwrap_parens() {
+            Expression::Function { .. } => true,
+            Expression::Lambda { .. } => context
+                .generic_result_slot()
+                .and_then(Type::get_function_ret)
+                .is_none_or(|return_type| self.facts.returns_go_void(return_type)),
+            _ => false,
+        };
+        if !filtered_out && let Some((source, target)) = self.never_result_bridge(&ty, context) {
             return self
                 .plan_value(expression, context)
                 .map_expression(|statements, value| {
@@ -163,6 +124,47 @@ impl Planner<'_> {
                 });
         }
         self.plan_value(expression, context)
+    }
+
+    pub(crate) fn never_result_bridge(
+        &self,
+        function_ty: &Type,
+        context: ExpressionContext<'_>,
+    ) -> Option<(FunctionLayout, FunctionLayout)> {
+        let slot = context.generic_result_slot()?;
+        if !function_ty.get_function_ret().is_some_and(Type::is_never) {
+            return None;
+        }
+        let return_type = slot
+            .get_function_ret()
+            .filter(|return_type| !self.facts.returns_go_void(return_type));
+        let (source_result, target_result, return_abi) = match return_type {
+            Some(return_type) => (
+                self.value_layout(&Type::Never, SlotOrigin::Lisette),
+                self.value_layout(return_type, SlotOrigin::Lisette),
+                self.facts
+                    .return_abi(return_type, ReturnSlot::FunctionExpression(context)),
+            ),
+            None => (
+                self.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                self.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                CallableReturnAbi::Value,
+            ),
+        };
+        let parameters = function_ty
+            .get_function_params()
+            .expect("a function has parameters")
+            .iter()
+            .map(|parameter| self.value_layout(&parameter.ty, SlotOrigin::Lisette))
+            .collect::<Vec<_>>();
+        let source = self.function_layout(
+            parameters.clone(),
+            &source_result,
+            CallableReturnAbi::Void,
+            None,
+        );
+        let target = self.function_layout(parameters, &target_result, return_abi, None);
+        Some((source, target))
     }
 
     fn plan_call_value(
@@ -188,7 +190,12 @@ impl Planner<'_> {
         }
 
         if wraps_result {
-            self.plan_go_abi_wrapped_call(expression, &plan.resolved.abi, result_type)
+            self.plan_go_abi_wrapped_call(
+                expression,
+                &plan.resolved.abi,
+                plan.resolved.origin,
+                result_type,
+            )
         } else {
             self.plan_call_with_plan(expression, Some(result_type), context, plan)
         }
@@ -310,12 +317,19 @@ impl Planner<'_> {
             }
             _ => None,
         };
+        let slot_layouts = if lowered_return {
+            self.lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec()))
+        } else {
+            Vec::new()
+        };
         let mut coerced_elements = Vec::with_capacity(values.len());
         for (index, (element, value)) in elements.iter().zip(values).enumerate() {
-            let Some(slot) = slot_types
-                .get(index)
-                .filter(|slot| !(lowered_return && self.facts.is_nullable_option(slot)))
-            else {
+            let Some(slot) = slot_types.get(index).filter(|_| {
+                !matches!(
+                    slot_layouts.get(index),
+                    Some(ValueLayout::NullableOption { .. })
+                )
+            }) else {
                 coerced_elements.push(value);
                 continue;
             };
@@ -324,7 +338,7 @@ impl Planner<'_> {
                 .and_then(|(adaptations, slots)| adaptations.get(index).zip(slots.get(index)))
             {
                 Some((adaptation, semantic)) => {
-                    self.adapted_slot_coercion(element, adaptation, semantic, slot)
+                    self.adapted_slot_coercion(element, adaptation, semantic, slot, None)
                 }
                 None => self.value_slot_coercion(element, slot),
             };
@@ -336,8 +350,10 @@ impl Planner<'_> {
     }
 
     pub(crate) fn make_tuple_callee(&mut self, slot_types: &[Type], arity: usize) -> GoExpression {
-        let callee =
-            GoExpression::generated(GeneratedPackage::Prelude, format!("MakeTuple{arity}"));
+        let callee = GoExpression::generated(
+            GeneratedPackage::Prelude,
+            go_name::make_tuple_constructor(arity),
+        );
         if slot_types.len() != arity {
             return callee;
         }
@@ -353,11 +369,8 @@ impl Planner<'_> {
         else {
             return None;
         };
-        let return_ctx = self.return_ctx();
-        let Some(Type::Tuple(slots)) = return_ctx.ty() else {
-            return None;
-        };
-        (slots.len() == inferred.len()).then(|| slots.clone())
+        let slots = self.facts.tuple_elements(self.return_ctx().ty()?)?;
+        (slots.len() == inferred.len()).then_some(slots)
     }
 
     pub(crate) fn plan_tuple_value(&mut self, tuple: &Expression, in_tail: bool) -> ValuePlan {
@@ -406,10 +419,10 @@ impl Planner<'_> {
         let slot_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
         let ctx = ctx.with_function_slot_origin(slot_origin);
 
-        if self.facts.is_interface(ty) {
+        let adaptation = &self.facts.checked(cast).cast_operand().adaptation;
+        if matches!(adaptation, Adaptation::Interface(_)) {
             let inner = self.plan_value(expression, ctx);
             let source_ty = expression.get_type();
-            let adaptation = &self.facts.checked(cast).cast_operand().adaptation;
             let coercion = CoercionPlan::adapted(self, adaptation, &source_ty, ty, None);
             let mut converted = inner.map_expression(|setup, value| {
                 let (coercion_setup, coerced) = coercion.lower(self, value);

@@ -29,6 +29,16 @@ impl<'a> NativeOperation<'a> {
         )
     }
 
+    pub fn indexes_receiver(self) -> bool {
+        matches!(
+            (self.kind, self.method),
+            (
+                NativeTypeKind::Slice | NativeTypeKind::Array | NativeTypeKind::Map,
+                "get"
+            )
+        )
+    }
+
     pub fn read_only_without_callbacks(self) -> bool {
         let Self {
             kind: native_type,
@@ -265,6 +275,13 @@ static INLINE_METHODS: &[NativeInlineRule] = &[
         arity: RuleArity::Exact(1),
         form: NativeInlineForm::Call("Grow"),
         package: NativeInlinePackage::Slices,
+    },
+    NativeInlineRule {
+        types: &[NativeTypeKind::Slice],
+        method: "append",
+        arity: RuleArity::Exact(0),
+        form: NativeInlineForm::Receiver,
+        package: NativeInlinePackage::None,
     },
     NativeInlineRule {
         types: &[NativeTypeKind::Slice],

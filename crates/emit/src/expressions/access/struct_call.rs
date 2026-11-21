@@ -1,4 +1,5 @@
 use crate::EmitFacts;
+use crate::control_flow::fallible::option_variant;
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
@@ -201,12 +202,14 @@ impl Planner<'_> {
                 positions.push((field_name.clone(), position));
             }
             value = self.wrap_recursive_enum_field(&mut setup, value, f, ctx);
-            value = self.coerce_struct_field(
+            value = self.coerce_into_slot(
                 &mut setup,
                 (&f.value, value),
-                &source_layout,
-                Some(&field_ty),
-                field_layout.as_ref().filter(|_| !literal_slot),
+                &field_ty,
+                field_layout
+                    .as_ref()
+                    .filter(|_| !literal_slot)
+                    .map(|target| (&source_layout, target)),
             );
             fields.push(StructCallField {
                 name: field_name,
@@ -257,37 +260,29 @@ impl Planner<'_> {
         value
     }
 
-    pub(crate) fn coerce_struct_field(
+    pub(crate) fn coerce_into_slot(
         &mut self,
         statements: &mut Vec<Statement>,
-        (value_expression, mut value): (&Expression, GoExpression),
-        source_layout: &ValueLayout,
-        field_ty: Option<&Type>,
-        field_layout: Option<&ValueLayout>,
+        (value_expression, value): (&Expression, GoExpression),
+        slot_ty: &Type,
+        go_slot: Option<(&ValueLayout, &ValueLayout)>,
     ) -> GoExpression {
-        if let Some(field_layout) = field_layout {
-            let coercion = CoercionPlan::bridge(self, source_layout, field_layout);
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            statements.extend(coercion_setup);
-            value = coerced;
-        }
-        if let Some(field_ty) = field_ty {
-            let value_ty = source_layout.logical_type();
-            let bridge = if field_layout.is_some() {
-                CoercionPlan::Identity
-            } else {
-                self.function_type_slot_bridge(value_ty, field_ty)
-            };
-            let coercion = if bridge.is_identity() {
-                CoercionPlan::checked(self, value_expression, field_layout)
-            } else {
-                bridge
-            };
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            statements.extend(coercion_setup);
-            value = coerced;
-        }
-        value
+        let layout_bridge = go_slot.map_or(CoercionPlan::Identity, |(source, target)| {
+            CoercionPlan::bridge(self, source, target)
+        });
+        let (bridge_setup, value) = layout_bridge.lower(self, value);
+        statements.extend(bridge_setup);
+        let value_use = self.facts.checked(value_expression).value_use();
+        let coercion = self.adapted_slot_coercion(
+            value_expression,
+            &value_use.adaptation,
+            &value_use.slot,
+            slot_ty,
+            go_slot.map(|(_, target)| target),
+        );
+        let (coercion_setup, coerced) = coercion.lower(self, value);
+        statements.extend(coercion_setup);
+        coerced
     }
 
     fn append_autofills(
@@ -304,9 +299,6 @@ impl Planner<'_> {
                     None => continue,
                 }
             } else {
-                if matches!(field_ty, Type::Parameter(_)) {
-                    continue;
-                }
                 let Some(zero) = self.lisette_zero_expression(field_ty, true) else {
                     continue;
                 };
@@ -343,17 +335,36 @@ impl Planner<'_> {
         self.go_newtype_zero(go_ty, &underlying)
     }
 
+    fn go_newtype_zero(&mut self, go_ty: GoType, underlying: &Type) -> Option<GoExpression> {
+        let layout = self.value_layout(underlying, SlotOrigin::Lisette);
+        match layout.underlying() {
+            ValueLayout::Map { .. } | ValueLayout::Array { .. } => {
+                Some(GoExpression::empty_composite(go_ty))
+            }
+            ValueLayout::Slice { .. } => Some(GoExpression::conversion(go_ty, GoExpression::nil())),
+            ValueLayout::Plain(simple @ Type::Simple(_)) => {
+                let inner = self.lisette_zero(simple);
+                Some(GoExpression::conversion(go_ty, inner))
+            }
+            ValueLayout::Plain(nominal @ Type::Nominal { id, .. })
+                if go_name::is_go_import(id.as_str())
+                    && self
+                        .facts
+                        .definition(id.as_str())
+                        .is_some_and(|definition| {
+                            definition.is_newtype()
+                                || matches!(definition.body, DefinitionBody::Struct { .. })
+                        }) =>
+            {
+                let inner = self.lisette_zero(nominal);
+                Some(GoExpression::conversion(go_ty, inner))
+            }
+            _ => None,
+        }
+    }
+
     fn go_imported_zero(&mut self, ty: &Type, id: &str) -> GoExpression {
         let go_ty = self.go_type(ty);
-        let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
-        if is_newtype {
-            if let Some(underlying) = self.facts.newtype_underlying(ty)
-                && let Some(zero) = self.go_newtype_zero(go_ty.clone(), &underlying)
-            {
-                return zero;
-            }
-            return dereferenced_new(go_ty);
-        }
         let is_struct = matches!(
             self.facts.definition(id).map(|d| &d.body),
             Some(DefinitionBody::Struct { .. })
@@ -366,7 +377,7 @@ impl Planner<'_> {
             })
         );
         if !is_struct && !is_opaque {
-            return dereferenced_new(go_ty);
+            return GoExpression::new_zero(go_ty);
         }
         if is_struct && let Some(fields) = self.facts.struct_fields(ty) {
             let mut pairs: Vec<(String, GoExpression)> = Vec::new();
@@ -388,12 +399,12 @@ impl Planner<'_> {
     }
 
     fn lisette_zero_expression(&mut self, ty: &Type, omit_go_zero: bool) -> Option<GoExpression> {
+        if omit_go_zero && self.facts.go_zero_is_lisette_zero(ty) {
+            return None;
+        }
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
         let zero = match (ty, &layout) {
             (Type::Simple(kind), _) => {
-                if omit_go_zero {
-                    return None;
-                }
                 let zero = match kind {
                     SimpleKind::Bool => {
                         GoExpression::constant("false".to_string(), ConstantKind::Bool)
@@ -413,9 +424,6 @@ impl Planner<'_> {
                 },
                 ValueLayout::Slice { element, .. },
             ) => {
-                if omit_go_zero {
-                    return None;
-                }
                 let element = element.go_type(self);
                 let go_type = GoType::slice_of(&element);
                 GoExpression::conversion(go_type, GoExpression::nil())
@@ -451,14 +459,9 @@ impl Planner<'_> {
             ) => self.array_zero(*length, element.logical_type()),
             (Type::Parameter(name), _) => {
                 let go_name = self.generic_go_name(name);
-                dereferenced_new(GoType::new(go_name.to_string()))
+                GoExpression::new_zero(GoType::new(go_name.to_string()))
             }
-            _ => {
-                if omit_go_zero && self.facts.empty_composite_is_go_zero(ty) {
-                    return None;
-                }
-                GoExpression::empty_composite(self.go_type(ty))
-            }
+            _ => GoExpression::empty_composite(self.go_type(ty)),
         };
         Some(zero)
     }
@@ -471,32 +474,41 @@ impl Planner<'_> {
         omit_go_zero: bool,
     ) -> Option<GoExpression> {
         if id == "prelude.Option" {
-            if omit_go_zero {
-                return None;
-            }
             let inner = params
                 .first()
                 .map(|a| self.go_type(a))
                 .unwrap_or_else(|| GoType::new("any"));
             let zero = GoExpression::call(
                 GoExpression::instantiation(
-                    GoExpression::generated(GeneratedPackage::Prelude, "MakeOptionNone"),
+                    GoExpression::generated(
+                        GeneratedPackage::Prelude,
+                        option_variant("None").constructor,
+                    ),
                     GoType::type_arguments(&[inner]),
                 ),
                 Vec::new(),
             );
             return Some(zero);
         }
-        if go_name::is_go_import(id) {
-            if self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some() {
-                return (!omit_go_zero).then(GoExpression::nil);
-            }
-            return Some(self.go_imported_zero(ty, id));
+        let go_import = go_name::is_go_import(id);
+        if go_import
+            && (self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some())
+        {
+            return Some(self.go_zero(ty));
         }
         if let Some(underlying) = self.facts.newtype_underlying(ty) {
             let go_ty = self.go_type(ty);
+            if go_import {
+                let zero = self
+                    .go_newtype_zero(go_ty.clone(), &underlying)
+                    .unwrap_or_else(|| GoExpression::new_zero(go_ty));
+                return Some(zero);
+            }
             let inner = self.lisette_zero(&underlying);
             return Some(GoExpression::conversion(go_ty, inner));
+        }
+        if go_import {
+            return Some(self.go_imported_zero(ty, id));
         }
         if let Some(fields) = self.facts.struct_fields(ty) {
             let is_tuple = self.facts.is_tuple_struct_type(ty);
@@ -504,7 +516,6 @@ impl Planner<'_> {
                 .into_iter()
                 .enumerate()
                 .map(|(index, (name, selection))| (index, name, selection.field_ty()))
-                .filter(|(_, _, field_ty)| !field_ty.is_slice())
                 .filter_map(|(index, name, field_ty)| {
                     let zero = self.lisette_zero_expression(&field_ty, !is_tuple)?;
                     let go_name = if is_tuple {
@@ -515,24 +526,18 @@ impl Planner<'_> {
                     Some((go_name, zero))
                 })
                 .collect();
-            if omit_go_zero && pairs.is_empty() && self.facts.is_plain_struct(ty) {
-                return None;
-            }
             return Some(plan_struct_literal(&self.go_type(ty), pairs));
         }
         if let Some(underlying) = self.facts.underlying_type(ty) {
             return self.lisette_zero_expression(&underlying, omit_go_zero);
         }
-        if omit_go_zero && self.facts.empty_composite_is_go_zero(ty) {
-            return None;
-        }
         Some(GoExpression::empty_composite(self.go_type(ty)))
     }
 
-    pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
+    fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
         let elem_go = self.go_type(elem);
         let array_type = GoType::array_of(len, &elem_go);
-        if len == 0 || self.element_go_zero_ok(elem) {
+        if len == 0 || self.facts.go_zero_is_lisette_zero(elem) {
             return GoExpression::empty_composite(array_type);
         }
         let zero = self.lisette_zero(elem);
@@ -562,27 +567,6 @@ impl Planner<'_> {
             },
             FunctionLiteralLayout::MultiLine,
         )
-    }
-
-    pub(crate) fn element_go_zero_ok(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Simple(_) => true,
-            Type::Compound {
-                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
-                ..
-            } => true,
-            Type::Array { element, .. } => self.element_go_zero_ok(element),
-            Type::Tuple(elements) => elements.iter().all(|e| self.element_go_zero_ok(e)),
-            Type::Parameter(_) => true,
-            Type::Nominal { id, .. } => matches!(
-                &self.facts.definition(id.as_str()).map(|d| &d.body),
-                Some(DefinitionBody::Enum {
-                    default_variant: Some(_),
-                    ..
-                })
-            ),
-            _ => false,
-        }
     }
 
     fn wrap_recursive_enum_field(
@@ -635,9 +619,12 @@ impl Planner<'_> {
         is_enum: bool,
     ) -> GoType {
         if let Type::Nominal { id, .. } = ty
-            && let Some(go) = self.anon_struct_go_type(id)
+            && self
+                .facts
+                .definition(id)
+                .is_some_and(|definition| definition.is_anon_struct())
         {
-            return go;
+            return self.go_type(ty);
         }
 
         if !is_prelude {
@@ -704,7 +691,7 @@ impl Planner<'_> {
         if let Some(ref enum_ctx) = ctx.enum_ctx {
             self.facts
                 .enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
-                .unwrap_or_else(|| go_name::exported_member(ctx.ty, field_name))
+                .unwrap_or_else(|| self.struct_field_go_name(ctx.ty, field_name, true))
         } else {
             self.struct_field_go_name(ctx.ty, field_name, false)
         }
@@ -791,13 +778,6 @@ impl Planner<'_> {
     }
 }
 
-fn dereferenced_new(go_type: GoType) -> GoExpression {
-    GoExpression::dereference(GoExpression::call(
-        GoExpression::external_name("new".to_string()),
-        vec![GoExpression::type_name(go_type)],
-    ))
-}
-
 fn layout_is_map(layout: &ValueLayout) -> bool {
     match layout {
         ValueLayout::Map { .. } => true,
@@ -831,6 +811,6 @@ impl EmitFacts<'_> {
             && ctx.enum_ctx.is_none()
             && matches!(spread, StructSpread::None | StructSpread::Autofill { .. })
             && prelude_constructor(&field.value) == Some(PreludeVariant::None)
-            && self.is_option(field_ty)
+            && self.go_zero_is_lisette_zero(field_ty)
     }
 }

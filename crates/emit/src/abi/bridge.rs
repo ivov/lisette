@@ -4,8 +4,9 @@ use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::abi::transition::multi_value_return;
 use crate::abi::wrapping::{WrapperTarget, non_nil_condition};
+use crate::calls::go_interop::LoweredProducer;
 use crate::control_flow::fallible as tags;
-use crate::control_flow::fallible::{OPTION_SOME_TAG, prelude_call};
+use crate::control_flow::fallible::prelude_call;
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement,
@@ -14,6 +15,7 @@ use crate::ir::bodies::{
 use crate::ir::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{GoExpression, ValuePlan};
+use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
@@ -21,7 +23,6 @@ use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::go_names::ENUM_TAG_FIELD;
-use syntax::parse::TUPLE_FIELDS;
 use syntax::program::SlotOrigin;
 use syntax::types::{CompoundKind, Type};
 
@@ -29,12 +30,12 @@ fn some_condition(option: GoExpression) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(option, ENUM_TAG_FIELD.to_string()),
         BinaryOp::Eq,
-        GoExpression::generated(GeneratedPackage::Prelude, OPTION_SOME_TAG),
+        GoExpression::generated(GeneratedPackage::Prelude, tags::option_variant("Some").tag),
     )
 }
 
 fn some_payload(option: GoExpression) -> GoExpression {
-    GoExpression::selector(option, tags::OPTION_SOME_FIELD.to_string())
+    GoExpression::selector(option, tags::option_variant("Some").fields[0].to_string())
 }
 
 impl Planner<'_> {
@@ -122,11 +123,8 @@ impl Planner<'_> {
         payload: &Expression,
         payload_ty: &Type,
     ) -> ValuePlan {
-        let origin = self.function_type_origin(payload_ty, SlotOrigin::Lisette);
-        if !origin.declared_by_go() {
-            return self.plan_composite_value(payload, ExpressionContext::value());
-        }
         let slot = self.function_slot_bridge(payload, payload_ty);
+        let origin = self.function_type_origin(payload_ty, SlotOrigin::Lisette);
         let context = ExpressionContext::value().with_function_slot_origin(origin);
         self.plan_composite_value(payload, context)
             .map_expression(|setup, value| {
@@ -199,9 +197,17 @@ impl Planner<'_> {
         let mut then_statements = Vec::new();
         let payload =
             self.plan_layout_bridge(&mut then_statements, raw_payload, payload_bridge, true);
-        let some = prelude_call("MakeOptionSome", type_args.clone(), vec![payload]);
+        let some = prelude_call(
+            tags::option_variant("Some").constructor,
+            type_args.clone(),
+            vec![payload],
+        );
         then_statements.push(assign(slot.clone(), some));
-        let none = prelude_call("MakeOptionNone", type_args, Vec::new());
+        let none = prelude_call(
+            tags::option_variant("None").constructor,
+            type_args,
+            Vec::new(),
+        );
         let condition = if pointer {
             non_nil_condition(raw)
         } else {
@@ -682,13 +688,19 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) -> Vec<GoExpression> {
+        let spread_index = source
+            .parameters
+            .last()
+            .filter(|last| last.logical_type().is_native(CompoundKind::VarArgs))
+            .map(|_| source.parameters.len() - 1);
         parameters
             .into_iter()
             .zip(source.parameters.iter().zip(&target.parameters))
-            .map(|(parameter, (source, target))| {
+            .enumerate()
+            .map(|(index, (parameter, (source, target)))| {
                 let bridge = self.resolve_layout_bridge(target, source);
                 let argument = self.plan_layout_bridge(statements, parameter, &bridge, true);
-                if source.logical_type().is_native(CompoundKind::VarArgs) {
+                if Some(index) == spread_index {
                     GoExpression::spread(argument)
                 } else {
                     argument
@@ -768,7 +780,10 @@ impl Planner<'_> {
                 .collect();
             let (body, _) = self.plan_abi_wrapping(
                 call,
-                &source.return_abi,
+                LoweredProducer {
+                    abi: &source.return_abi,
+                    producer: source.producer,
+                },
                 source.result_layout.logical_type(),
                 Some(GoResultBridge::Tuple(bridges)),
                 WrapperTarget::Return,
@@ -776,15 +791,9 @@ impl Planner<'_> {
             statements.extend(body);
             return;
         }
-        if matches!(
-            source.return_abi.lowered(),
-            Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
-        ) && target.return_abi == CallableReturnAbi::Value
+        if target.return_abi == CallableReturnAbi::Value
+            && let Some(source) = source.single_result_layout()
         {
-            let source = ValueLayout::NullableOption {
-                option_type: source.result_layout.logical_type().clone(),
-                payload: Box::new(source.results[0].clone()),
-            };
             let bridge = self.resolve_layout_bridge(&source, &target.results[0]);
             let raw = self.hoist_tmp_value_statement(statements, "raw", call);
             let raw = GoExpression::identifier(raw);
@@ -795,7 +804,10 @@ impl Planner<'_> {
         if let Some(bridge) = self.fallible_payload_bridge(source, target) {
             let (body, _) = self.plan_abi_wrapping(
                 call,
-                &source.return_abi,
+                LoweredProducer {
+                    abi: &source.return_abi,
+                    producer: source.producer,
+                },
                 source.result_layout.logical_type(),
                 Some(bridge),
                 WrapperTarget::Return,
@@ -823,12 +835,7 @@ impl Planner<'_> {
             let intermediate =
                 self.function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
             if !intermediate.same_result_representation(target) {
-                let body = self.reencode_return(
-                    call,
-                    &source.return_abi,
-                    &intermediate.return_abi,
-                    source.result_layout.logical_type(),
-                );
+                let body = self.reencode_return(call, source, &intermediate.return_abi);
                 let result = intermediate
                     .result_go_type(self)
                     .expect("a lowered result has a Go signature");
@@ -845,12 +852,7 @@ impl Planner<'_> {
                 return;
             }
         }
-        statements.extend(self.reencode_return(
-            call,
-            &source.return_abi,
-            &target.return_abi,
-            source.result_layout.logical_type(),
-        ));
+        statements.extend(self.reencode_return(call, source, &target.return_abi));
     }
 
     fn plan_same_contract_result_bridge(
@@ -968,13 +970,7 @@ impl Planner<'_> {
             }
         }
 
-        let mut values = self.bridge_payload_slots(
-            statements,
-            names(&values),
-            &source.results,
-            &target.results,
-            target.return_abi.has_flattened_payload(),
-        );
+        let mut values = self.bridge_payload_slots(statements, names(&values), source, target);
         values.push(GoExpression::identifier(auxiliary));
         statements.push(multi_value_return(values));
     }
@@ -983,11 +979,12 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         values: Vec<GoExpression>,
-        source: &[ValueLayout],
-        target: &[ValueLayout],
-        target_flat: bool,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
     ) -> Vec<GoExpression> {
-        let source_flat = values.len() > 1;
+        let source_flat = source.return_abi.has_flattened_payload();
+        let target_flat = target.return_abi.has_flattened_payload();
+        let (source, target) = (source.results.as_slice(), target.results.as_slice());
         if !source_flat && !target_flat {
             let bridge = self.resolve_layout_bridge(&source[0], &target[0]);
             let [value] = <[GoExpression; 1]>::try_from(values)
@@ -1010,7 +1007,7 @@ impl Planner<'_> {
             let packed = &values[0];
             (0..source_slots.len())
                 .map(|index| {
-                    GoExpression::selector(packed.clone(), TUPLE_FIELDS[index].to_string())
+                    GoExpression::selector(packed.clone(), go_name::tuple_field(index).to_string())
                 })
                 .collect()
         };
@@ -1066,38 +1063,24 @@ fn immutable_bridge_fields(
     target: &ValueLayout,
 ) -> Vec<(&'static str, Option<(&'static str, BinaryOp)>)> {
     match target {
-        ValueLayout::Tuple { elements, .. } => TUPLE_FIELDS[..elements.len()]
-            .iter()
-            .map(|field| (*field, None))
+        ValueLayout::Tuple { elements, .. } => (0..elements.len())
+            .map(|index| (go_name::tuple_field(index), None))
             .collect(),
         ValueLayout::TaggedOption { .. } => {
-            vec![(
-                tags::OPTION_SOME_FIELD,
-                Some((OPTION_SOME_TAG, BinaryOp::Eq)),
-            )]
+            let some = tags::option_variant("Some");
+            vec![(some.fields[0], Some((some.tag, BinaryOp::Eq)))]
         }
         ValueLayout::Fallible { fallible_type, .. } if fallible_type.is_partial() => {
+            let (ok, err) = (tags::partial_variant("Ok"), tags::partial_variant("Err"));
             vec![
-                (
-                    tags::PARTIAL_OK_FIELD,
-                    Some((tags::PARTIAL_ERR_TAG, BinaryOp::Ne)),
-                ),
-                (
-                    tags::PARTIAL_ERR_FIELD,
-                    Some((tags::PARTIAL_OK_TAG, BinaryOp::Ne)),
-                ),
+                (ok.fields[0], Some((err.tag, BinaryOp::Ne))),
+                (err.fields[0], Some((ok.tag, BinaryOp::Ne))),
             ]
         }
-        ValueLayout::Fallible { .. } => vec![
-            (
-                tags::RESULT_OK_FIELD,
-                Some((tags::RESULT_OK_TAG, BinaryOp::Eq)),
-            ),
-            (
-                tags::RESULT_ERR_FIELD,
-                Some((tags::RESULT_ERR_TAG, BinaryOp::Eq)),
-            ),
-        ],
+        ValueLayout::Fallible { .. } => [tags::result_variant("Ok"), tags::result_variant("Err")]
+            .into_iter()
+            .map(|variant| (variant.fields[0], Some((variant.tag, BinaryOp::Eq))))
+            .collect(),
         _ => unreachable!("immutable bridges require a tuple or tagged container"),
     }
 }

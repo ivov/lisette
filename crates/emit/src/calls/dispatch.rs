@@ -20,17 +20,19 @@ use crate::ir::go_expression::{
 use crate::ir::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::patterns::matching::{PreludeVariant, prelude_constructor};
+use crate::plan::calls::{CallPlan, CallableOrigin, ResolvedCallee};
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use crate::{Planner, written_span};
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal};
+use syntax::program::GoTypeRecipe;
 use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, FieldSelection};
-use syntax::types::{CompoundKind, FunctionParameter, Type};
+use syntax::types::{CompoundKind, FunctionParameter, SubstitutionMap, Type};
 
 struct TupleStructTarget<'a> {
     go_ty: GoType,
@@ -63,13 +65,23 @@ fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKin
                     .all(|literal| matches!(literal, Literal::Char(_))))
 }
 
+pub(crate) struct CallTypeArgsRequest<'e, 'c> {
+    pub(crate) function: &'e Expression,
+    pub(crate) callee: &'e ResolvedCallee<'c>,
+    pub(crate) written_type_arguments: usize,
+    pub(crate) call_ty: Option<&'e Type>,
+    pub(crate) arg_shape: CallArgShape,
+    pub(crate) slot: Option<&'e Type>,
+    pub(crate) receiver_passed: bool,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct CallArgShape {
     pub value_count: usize,
     pub has_spread: bool,
 }
 
-pub(crate) fn all_type_params_inferrable(
+fn all_type_params_inferrable(
     vars: &[EcoString],
     params: &[FunctionParameter],
     receiver_count: usize,
@@ -158,15 +170,10 @@ impl<'a> Planner<'a> {
             }
             (NativeTypeKind::Slice, "make") => Some(self.plan_slice_make(ctx)),
             (NativeTypeKind::Array, "new") => {
-                if let Some((length, element)) = ctx.call_ty.and_then(|t| self.facts.array_parts(t))
-                {
-                    Some(ValuePlan::computed(
-                        Vec::new(),
-                        self.array_zero(length, &element),
-                    ))
-                } else {
-                    None
-                }
+                let array_ty = ctx
+                    .call_ty
+                    .filter(|ty| self.facts.array_parts(ty).is_some())?;
+                Some(ValuePlan::computed(Vec::new(), self.lisette_zero(array_ty)))
             }
             (NativeTypeKind::Array, "from") => self.try_plan_array_from(ctx),
             _ => None,
@@ -182,7 +189,7 @@ impl<'a> Planner<'a> {
             .clone();
         let element = self.go_type(&element_ty);
         let (setup, length) = self.stage_size_argument(ctx);
-        let value = if self.element_go_zero_ok(&element_ty) {
+        let value = if self.facts.go_zero_is_lisette_zero(&element_ty) {
             GoExpression::call(
                 GoExpression::external_name("make".to_string()),
                 vec![GoExpression::type_name(GoType::slice_of(&element)), length],
@@ -243,13 +250,14 @@ impl<'a> Planner<'a> {
         let (length, element) = self.facts.array_parts(&inner)?;
         let argument = ctx.args.first()?;
         let abi = self.facts.return_abi(returned, ReturnSlot::Function);
-        if !matches!(
-            abi,
-            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }))
-        ) {
+        let CallableReturnAbi::Lowered(
+            shape @ LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }),
+        ) = &abi
+        else {
             return None;
-        }
+        };
         let result_list = self.return_go_type(&abi, returned);
+        let none_values = self.lowered_none_values(shape, returned);
 
         let element_go = self.go_type(&element);
         let array_go = GoType::array_of(length, &element_go);
@@ -279,18 +287,14 @@ impl<'a> Planner<'a> {
                                 literal(length.to_string()),
                             ),
                             LoweredBlock {
-                                statements: vec![multi_value_return(vec![
-                                    GoExpression::empty_composite(array_go.clone()),
-                                    literal("false".to_string()),
-                                ])],
+                                statements: vec![multi_value_return(none_values)],
                             },
                             ElseArm::None,
                         ))
                         .into(),
-                        multi_value_return(vec![
-                            GoExpression::conversion(array_go, slice()),
-                            literal("true".to_string()),
-                        ]),
+                        multi_value_return(
+                            shape.ok_values(vec![GoExpression::conversion(array_go, slice())]),
+                        ),
                     ],
                 },
                 FunctionLiteralLayout::MultiLine,
@@ -498,11 +502,7 @@ impl<'a> Planner<'a> {
                     .callee()
                     .first_type_argument()
                     .clone();
-                let value = if self.facts.is_plain_struct(&ty) {
-                    GoExpression::empty_composite(self.go_type(&ty))
-                } else {
-                    self.lisette_zero(&ty)
-                };
+                let value = self.lisette_zero(&ty);
                 let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {
                     Some(go_type) => GoExpression::conversion(go_type, value),
                     None => value,
@@ -541,10 +541,18 @@ impl<'a> Planner<'a> {
             }
             CallableOrigin::Source(CallOperation::ReceiverMethod { is_public }) => {
                 let method = extract_receiver_ufcs_method(function);
-                let mut go_method = self.facts.method_go_name(&method, *is_public);
-                if self.selects_tagged_twin(function) {
-                    go_method = go_name::tagged_twin(&go_method);
-                }
+                let owner = plan
+                    .resolved
+                    .instantiated
+                    .as_function_type()
+                    .and_then(|f| f.params.first())
+                    .map(|receiver| self.facts.without_references(&receiver.ty));
+                let go_method = self.facts.method_selector_go_name(
+                    owner.as_ref().and_then(Type::get_qualified_id),
+                    &method,
+                    *is_public,
+                    self.selects_tagged_twin(function),
+                );
                 return self.plan_receiver_method_ufcs(args, go_method, spread, &plan);
             }
             CallableOrigin::GoInterop
@@ -602,46 +610,6 @@ impl<'a> Planner<'a> {
         }
     }
 
-    pub(super) fn infer_return_only_type_args(
-        &mut self,
-        function: &Expression,
-        declared: Option<&Type>,
-        arg_shape: CallArgShape,
-    ) -> Option<GoType> {
-        let Type::Forall { vars, body } = declared? else {
-            return None;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return None;
-        };
-        let generic_params = &f.params;
-        let all_inferrable = all_type_params_inferrable(vars, generic_params, 0, arg_shape);
-
-        let mapping = &self.facts.checked(function).callee().type_arguments;
-
-        if all_inferrable {
-            let any_needs_explicit = vars.iter().any(|v| {
-                mapping
-                    .get(v)
-                    .is_some_and(|t| self.facts.is_function_alias(t))
-            });
-            if !any_needs_explicit {
-                return None;
-            }
-        }
-
-        let resolved: Vec<Type> = vars
-            .iter()
-            .filter_map(|v| mapping.get(v).cloned())
-            .collect();
-
-        if resolved.len() != vars.len() {
-            return None;
-        }
-
-        Some(self.format_type_args(&resolved))
-    }
-
     fn try_plan_tuple_struct_call(
         &mut self,
         call_expression: &Expression,
@@ -681,12 +649,13 @@ impl<'a> Planner<'a> {
 
         let mut field_pairs = Vec::with_capacity(target.field_tys.len());
         for (i, (field_ty, value)) in target.field_tys.iter().zip(sequenced.values).enumerate() {
-            let coerced = self.coerce_struct_field(
+            let coerced = self.coerce_into_slot(
                 &mut setup,
                 (&args[i], value),
-                &source_layouts[i],
-                Some(field_ty),
-                field_layouts[i].as_ref(),
+                field_ty,
+                field_layouts[i]
+                    .as_ref()
+                    .map(|target| (&source_layouts[i], target)),
             );
             field_pairs.push((go_name::tuple_struct_field(i), coerced));
         }
@@ -843,5 +812,203 @@ impl<'a> EmitFacts<'a> {
             .as_deref()
             .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
             .and_then(|qualified| qualified.strip_prefix("prelude."))
+    }
+}
+
+impl Planner<'_> {
+    pub(crate) fn call_type_arguments(&mut self, request: CallTypeArgsRequest<'_, '_>) -> GoType {
+        let CallTypeArgsRequest {
+            function,
+            callee,
+            written_type_arguments,
+            call_ty,
+            arg_shape,
+            slot,
+            receiver_passed,
+        } = request;
+        if !receiver_passed && callee_curries_receiver(callee) {
+            return GoType::default();
+        }
+        let receiver_count = if receiver_passed {
+            callee.receiver_offset.min(1)
+        } else {
+            0
+        };
+        if let Some(recipe) = self.facts.callee_collapsed_recipe(callee) {
+            let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
+            if has_value_args
+                && self
+                    .facts
+                    .callee_fully_inferable(callee, receiver_count, arg_shape)
+            {
+                return GoType::default();
+            }
+            let type_arguments = &self.facts.checked(function).callee().type_arguments;
+            return self
+                .reconstruct_collapsed_type_args(&recipe, type_arguments)
+                .unwrap_or_default();
+        }
+
+        if written_type_arguments > 0 {
+            if receiver_passed {
+                let type_arguments = &self.facts.checked(function).callee().type_arguments;
+                return callee
+                    .declared_type()
+                    .and_then(|declared| {
+                        self.format_generic_instantiation(declared, type_arguments)
+                    })
+                    .unwrap_or_default();
+            }
+            let written = self
+                .facts
+                .checked(function)
+                .callee()
+                .written_type_arguments(written_type_arguments);
+            return self.format_type_arg_iter(written);
+        }
+
+        if let Some(inferred) = self.uninferable_type_args(
+            function,
+            callee.declared_type(),
+            receiver_count,
+            arg_shape,
+            !receiver_passed,
+        ) {
+            return match slot.filter(|_| !receiver_passed) {
+                Some(slot) => self.prelude_container_type_args(slot).unwrap_or(inferred),
+                None => inferred,
+            };
+        }
+
+        if matches!(
+            prelude_constructor(function),
+            Some(
+                PreludeVariant::Some
+                    | PreludeVariant::Ok
+                    | PreludeVariant::Err
+                    | PreludeVariant::Partial(_)
+            )
+        ) {
+            return call_ty
+                .and_then(|ty| self.prelude_container_type_args(ty))
+                .or_else(|| slot.and_then(|ty| self.prelude_container_type_args(ty)))
+                .unwrap_or_default();
+        }
+        GoType::default()
+    }
+
+    pub(crate) fn constructor_reference_type_arguments(
+        &mut self,
+        fn_params: &[FunctionParameter],
+        ret_params: &[Type],
+        ctx: ExpressionContext<'_>,
+    ) -> GoType {
+        let return_params_are_inferrable = ret_params.len() <= fn_params.len()
+            && ret_params
+                .iter()
+                .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
+        let parameters_support_go_inference = fn_params
+            .iter()
+            .all(|param| !self.facts.is_function_alias(&param.ty));
+        if ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference {
+            GoType::default()
+        } else {
+            self.format_type_args(ret_params)
+        }
+    }
+
+    fn uninferable_type_args(
+        &mut self,
+        function: &Expression,
+        declared: Option<&Type>,
+        receiver_count: usize,
+        arg_shape: CallArgShape,
+        function_alias_pins: bool,
+    ) -> Option<GoType> {
+        let Type::Forall { vars, body } = declared? else {
+            return None;
+        };
+        let Type::Function(f) = body.as_ref() else {
+            return None;
+        };
+        let mapping = &self.facts.checked(function).callee().type_arguments;
+        if all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
+            && !(function_alias_pins
+                && vars.iter().any(|var| {
+                    mapping
+                        .get(var)
+                        .is_some_and(|ty| self.facts.is_function_alias(ty))
+                }))
+        {
+            return None;
+        }
+        let resolved: Vec<Type> = vars
+            .iter()
+            .filter_map(|var| mapping.get(var).cloned())
+            .collect();
+        (resolved.len() == vars.len()).then(|| self.format_type_args(&resolved))
+    }
+
+    pub(crate) fn format_value_type_args(&mut self, expression: &Expression) -> Option<GoType> {
+        let recorded = self.facts.checked(expression).function_value()?;
+        let declaration = self
+            .facts
+            .callable_declaration(recorded.definition.as_deref()?)?;
+        let instantiation = &recorded.type_arguments;
+        match declaration.go_type_param_recipe() {
+            Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
+            None => self.format_generic_instantiation(declaration.ty(), instantiation),
+        }
+    }
+
+    fn format_generic_instantiation(
+        &mut self,
+        definition_ty: &Type,
+        mapping: &SubstitutionMap,
+    ) -> Option<GoType> {
+        let Type::Forall { vars, .. } = definition_ty else {
+            return None;
+        };
+        if vars.is_empty() {
+            return None;
+        }
+        let arguments: Vec<GoType> = vars
+            .iter()
+            .filter_map(|var| Some(self.go_type(mapping.get(var.as_str())?)))
+            .collect();
+        (arguments.len() == vars.len()).then(|| GoType::type_arguments(&arguments))
+    }
+}
+
+fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
+    let Some(Type::Forall { body, .. }) = callee.declared_type() else {
+        return false;
+    };
+    matches!(body.as_ref(), Type::Function(_))
+        && callee.instantiated.as_function_type().is_some()
+        && callee.receiver_offset > 0
+}
+
+impl EmitFacts<'_> {
+    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
+        callee
+            .declaration?
+            .go_type_param_recipe()
+            .map(<[_]>::to_vec)
+    }
+
+    fn callee_fully_inferable(
+        &self,
+        callee: &ResolvedCallee<'_>,
+        receiver_count: usize,
+        arg_shape: CallArgShape,
+    ) -> bool {
+        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
+            return false;
+        };
+        let Type::Function(f) = body.as_ref() else {
+            return false;
+        };
+        all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
     }
 }

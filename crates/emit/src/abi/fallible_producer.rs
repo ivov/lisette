@@ -18,6 +18,7 @@ use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
+use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
 
@@ -393,10 +394,8 @@ impl<'p> Planner<'p> {
         }
         if let Some(call) = self.native_method_call(subject) {
             let (receiver, arguments) = call.receiver_and_arguments()?;
-            let indexes = matches!(
-                call.native_type,
-                NativeTypeKind::Slice | NativeTypeKind::Array
-            ) && call.method == "get"
+            let indexes = call.native_type != NativeTypeKind::Map
+                && NativeOperation::new(call.native_type, call.method).indexes_receiver()
                 && arguments.len() == 1
                 && call.spread.is_none()
                 && self.index_fuses(receiver, &arguments[0]);

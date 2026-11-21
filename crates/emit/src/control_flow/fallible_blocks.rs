@@ -242,10 +242,11 @@ impl Planner<'_> {
         let result_var = self.fresh_declared("recoverResult");
         let inner_ty_str = self.go_type(fallible.ok_ty());
 
-        let body_return_ctx = if fallible.ok_ty().is_unit() {
-            ReturnContext::Tagged(Type::unit())
+        let ok_ty = fallible.ok_ty().clone();
+        let body_return_ctx = if ok_ty.is_never() {
+            ReturnContext::Void(ok_ty)
         } else {
-            self.return_context_for_type(fallible.ok_ty().clone())
+            ReturnContext::Tagged(ok_ty)
         };
         let body = self.with_isolated_function(body_return_ctx, |planner| {
             planner.lower_recover_body_block(items, &fallible)

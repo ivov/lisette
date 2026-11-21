@@ -148,7 +148,9 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
+            let receiver_ty = receiver.get_type();
             let receiver = this.capture_operand_into(&mut prologue, receiver);
+            let receiver = this.facts.dereference_refs(&receiver_ty, receiver);
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = range_header(None, Some(&loop_var), receiver);
             let lowered_body = this.lower_block_as_body(body);
@@ -164,7 +166,12 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
-            let receiver_var = if this.facts.is_unmutated_identifier(receiver) {
+            let receiver_ty = receiver.get_type();
+            let receiver_var = if this.facts.is_reference(&receiver_ty) {
+                let reference = this.capture_operand_into(&mut prologue, receiver);
+                let value = this.facts.dereference_refs(&receiver_ty, reference);
+                GoExpression::identifier(this.hoist_tmp_value_statement(&mut prologue, "s", value))
+            } else if this.facts.is_unmutated_identifier(receiver) {
                 this.capture_operand_into(&mut prologue, receiver)
             } else {
                 this.capture_value_at_boundary(

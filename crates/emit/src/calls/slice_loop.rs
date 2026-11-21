@@ -8,7 +8,7 @@ use super::NativeCallContext;
 use super::native::NativeCallResult;
 use crate::Planner;
 use crate::abi::is_closure_literal;
-use crate::control_flow::fallible::prelude_call;
+use crate::control_flow::fallible::{option_variant, prelude_call};
 use crate::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, declare, define, directed_first,
@@ -525,7 +525,7 @@ impl Planner<'_> {
                 define(
                     result.clone(),
                     prelude_call(
-                        "MakeOptionNone",
+                        option_variant("None").constructor,
                         GoType::type_argument(&payload),
                         Vec::new(),
                     ),
@@ -606,7 +606,7 @@ impl Planner<'_> {
                     assign(
                         local(result),
                         prelude_call(
-                            "MakeOptionSome",
+                            option_variant("Some").constructor,
                             GoType::type_argument(&payload),
                             vec![local(element_name)],
                         ),

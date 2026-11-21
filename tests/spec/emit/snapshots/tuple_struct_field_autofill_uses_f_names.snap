@@ -24,8 +24,5 @@ type Holder struct {
 }
 
 func make_() Holder {
-	return Holder{P: MP{
-		F0: 0,
-		F1: "",
-	}}
+	return Holder{}
 }

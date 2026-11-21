@@ -41,7 +41,7 @@ impl ImportPlan {
                 import.effective_alias(go_package_names)
             };
             let qualifier = source_import_qualifier(&import, go_package_names);
-            let path = import_go_path(&import, go_module);
+            let path = go_name::package_go_path(go_module, &import.name);
             let package = import.name.to_string();
             let span = match &import.alias {
                 Some(ImportAlias::Named(_, span)) => *span,
@@ -166,14 +166,6 @@ pub(crate) fn rendered_qualifier(path: &str, name: String) -> String {
     } else {
         name
     }
-}
-
-fn import_go_path(import: &FileImport, go_module: &str) -> String {
-    import
-        .name
-        .strip_prefix(go_name::GO_IMPORT_PREFIX)
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("{}/{}", go_module, import.name))
 }
 
 fn import_group(path: &str, go_module: &str) -> ImportGroup {

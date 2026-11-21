@@ -7,10 +7,9 @@ use crate::ir::bodies::{
 use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
-use crate::names::go_name;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
-use syntax::program::{DefinitionBody, DotAccessResolution, OperandConversion};
+use syntax::program::{DotAccessResolution, OperandConversion};
 use syntax::types::{self, ScaledImaginary, Type};
 
 struct NumericBinaryEmitInfo {
@@ -289,7 +288,7 @@ impl Planner<'_> {
             Some(binding) => binding.is_go_const(),
             None => resolution
                 .definition()
-                .is_some_and(|symbol| self.package.is_go_const_binding(symbol)),
+                .is_some_and(|symbol| self.facts.const_emits_go_const(symbol)),
         }
     }
 
@@ -423,14 +422,7 @@ impl EmitFacts<'_> {
         else {
             return false;
         };
-        match self.definition(definition) {
-            Some(found) if !matches!(found.body, DefinitionBody::Value { .. }) => false,
-            Some(_) if definition.starts_with(go_name::GO_IMPORT_PREFIX) => {
-                self.is_const(definition)
-            }
-            Some(found) => !matches!(found.ty.unwrap_forall(), Type::Function(_)),
-            None => false,
-        }
+        self.const_emits_go_const(definition)
     }
 
     pub(crate) fn flip_preserves_nan(

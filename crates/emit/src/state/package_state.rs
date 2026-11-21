@@ -8,7 +8,6 @@ use crate::names::go_name;
 pub(crate) struct PackageState {
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
-    go_const_bindings: HashSet<String>,
     declared_names: HashSet<String>,
     import_qualifiers: HashSet<String>,
 }
@@ -71,13 +70,5 @@ impl PackageState {
                 || is_go_reserved_word(candidate)
                 || also_taken(candidate)
         })
-    }
-
-    pub(crate) fn extend_go_const_bindings(&mut self, names: impl IntoIterator<Item = String>) {
-        self.go_const_bindings.extend(names);
-    }
-
-    pub(crate) fn is_go_const_binding(&self, symbol: &str) -> bool {
-        self.go_const_bindings.contains(symbol)
     }
 }

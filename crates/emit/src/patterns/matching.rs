@@ -26,7 +26,6 @@ use crate::state::expression::ExpressionContext;
 use crate::state::scope::PairStatusKind;
 use syntax::EcoString;
 use syntax::ast::{BindingId, ConstructorPatternResolution, Expression, MatchArm, Pattern};
-use syntax::parse::TUPLE_FIELDS;
 use syntax::program;
 use syntax::types::{Type, unqualified_name};
 
@@ -321,7 +320,7 @@ impl Planner<'_> {
         let Expression::Tuple { elements, .. } = subject.unwrap_parens() else {
             return None;
         };
-        if elements.len() > TUPLE_FIELDS.len() || arms.iter().any(MatchArm::has_guard) {
+        if arms.iter().any(MatchArm::has_guard) {
             return None;
         }
         let subject_ty = subject.get_type();

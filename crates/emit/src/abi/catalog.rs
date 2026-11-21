@@ -7,7 +7,6 @@ use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::go_return_abi;
 use crate::names::go_name;
 use syntax::program::SlotOrigin;
-use syntax::types;
 
 #[derive(Debug, Default)]
 pub(crate) struct GoAbiCatalog {
@@ -72,7 +71,10 @@ impl GoAbiCatalog {
             .map(|callable| &callable.return_slot)
     }
 
-    pub(crate) fn callable_return_abi(&self, qualified_name: &str) -> Option<&LoweredReturnAbi> {
+    pub(in crate::abi) fn callable_return_abi(
+        &self,
+        qualified_name: &str,
+    ) -> Option<&LoweredReturnAbi> {
         self.callables.get(qualified_name)?.return_abi.as_ref()
     }
 
@@ -102,17 +104,20 @@ impl GoAbiCatalog {
             .params
             .iter()
             .map(|parameter| GoSlotDescriptor {
-                origin: SlotOrigin::go_parameter(types::resolves_to_unknown(&parameter.ty, |id| {
-                    definitions.get(id)
-                })),
+                origin: SlotOrigin::of_go_declaration(
+                    SlotOrigin::GoParameter,
+                    &parameter.ty,
+                    |id| definitions.get(id),
+                ),
                 declared_type: parameter.ty.clone(),
             })
             .collect();
         let return_slot = GoSlotDescriptor {
-            origin: SlotOrigin::go_return(types::resolves_to_unknown(
+            origin: SlotOrigin::of_go_declaration(
+                SlotOrigin::GoReturn,
                 &function.return_type,
                 |id| definitions.get(id),
-            )),
+            ),
             declared_type: (*function.return_type).clone(),
         };
         let return_abi = go_return_abi(&function.return_type, go_hints, |id| definitions.get(id));
@@ -140,9 +145,9 @@ impl GoAbiCatalog {
             slots.insert(
                 field.name.to_string(),
                 GoSlotDescriptor {
-                    origin: SlotOrigin::go_field(types::resolves_to_unknown(&field.ty, |id| {
+                    origin: SlotOrigin::of_go_declaration(SlotOrigin::GoField, &field.ty, |id| {
                         definitions.get(id)
-                    })),
+                    }),
                     declared_type: field.ty.clone(),
                 },
             );
@@ -162,15 +167,15 @@ impl GoAbiCatalog {
         else {
             return;
         };
-        if types::resolve_to_function_type(&definition.ty, |id| definitions.get(id)).is_some() {
+        if matches!(definition.ty.unwrap_forall(), Type::Function(_)) {
             return;
         }
         self.variables.insert(
             qualified_name.to_string(),
             GoSlotDescriptor {
-                origin: SlotOrigin::go_field(types::resolves_to_unknown(&definition.ty, |id| {
+                origin: SlotOrigin::of_go_declaration(SlotOrigin::GoField, &definition.ty, |id| {
                     definitions.get(id)
-                })),
+                }),
                 declared_type: definition.ty.clone(),
             },
         );

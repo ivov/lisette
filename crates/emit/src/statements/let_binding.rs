@@ -3,10 +3,12 @@ use crate::OuterBindings;
 use crate::Planner;
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::ValueLayout;
 use crate::abi::wrapping::WrapperTarget;
 use crate::analyze::component_uses::ComponentDemand;
 use crate::analyze::component_uses::ValueDemand;
 use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::control_flow::fallible::Fallible;
 use crate::escape_local;
 use crate::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, assign, declare, define, define_many,
@@ -209,14 +211,13 @@ impl Planner<'_> {
         demand: ComponentDemand,
     ) -> Option<Vec<Statement>> {
         let value = let_spec.value;
-        let kind = if ty.is_option() {
-            ComponentKind::Option
-        } else if !ty.is_result() {
-            return None;
-        } else if self.facts.is_prelude_error(&ty.err_type()) {
-            ComponentKind::ErrorResult
-        } else {
-            ComponentKind::OtherResult
+        let fallible = self.facts.fallible(ty)?;
+        let kind = match &fallible {
+            Fallible::Option { .. } => ComponentKind::Option,
+            Fallible::Result { err_ty, .. } if self.facts.is_prelude_error(err_ty) => {
+                ComponentKind::ErrorResult
+            }
+            Fallible::Result { .. } => ComponentKind::OtherResult,
         };
         let source = self.component_producer(value, demand.value == ValueDemand::Whole, kind)?;
         let slot = if demand.value != ValueDemand::StatusOnly {
@@ -225,8 +226,13 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Discarded
         };
-        let (statements, components) =
-            source.components(self, slot, ty.ok_type(), kind, demand.defaults > 1)?;
+        let (statements, components) = source.components(
+            self,
+            slot,
+            fallible.ok_ty().clone(),
+            kind,
+            demand.defaults > 1,
+        )?;
         self.scope.set_component_binding(
             let_spec.identifier,
             let_spec.binding_id.as_slice(),
@@ -467,8 +473,13 @@ impl Planner<'_> {
         }
         let local = go_identifier.clone();
         let target = WrapperTarget::Slot(&local);
-        let statements =
-            self.try_lower_abi_wrapped_call_to(value, &plan.resolved.abi, binding_ty, target)?;
+        let statements = self.try_lower_abi_wrapped_call_to(
+            value,
+            &plan.resolved.abi,
+            plan.resolved.origin,
+            binding_ty,
+            target,
+        )?;
         self.scope
             .bind_identifier(identifier, binding_id.as_slice(), local);
         Some(statements)
@@ -744,10 +755,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
         let slots_read_in_place = self
             .planner
-            .facts
-            .tuple_element_types(&value_ty)
+            .lowered_tuple_slot_layouts(&value_ty)
             .iter()
-            .all(|slot_ty| !self.planner.facts.is_nullable_option(slot_ty));
+            .all(|layout| !matches!(layout, ValueLayout::NullableOption { .. }));
         slots_read_in_place && self.planner.tuple_call_arity(self.value).is_some()
     }
 

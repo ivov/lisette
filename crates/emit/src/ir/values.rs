@@ -286,6 +286,13 @@ impl GoExpression {
         Self::new(GoExpressionNode::Dereference(operand.into_operand()))
     }
 
+    pub(crate) fn new_zero(go_type: GoType) -> Self {
+        Self::dereference(Self::call(
+            Self::external_name("new".to_string()),
+            vec![Self::type_name(go_type)],
+        ))
+    }
+
     pub(crate) fn spread(operand: GoExpression) -> Self {
         Self::new(GoExpressionNode::Spread(operand.into_operand()))
     }
@@ -920,5 +927,23 @@ impl EmitFacts<'_> {
             value.node_mut().fill_positions(&start, &end);
             value.positioned(start.clone())
         })
+    }
+}
+
+impl GoExpressionNode {
+    pub(crate) fn new_zero_type(&self) -> Option<&GoType> {
+        if let Self::Dereference(operand) = self
+            && let Self::Call {
+                callee, arguments, ..
+            } = operand.as_ref()
+            && let Self::Identifier(name) = callee.as_ref()
+            && name.id().is_none()
+            && name.spelling() == "new"
+            && let [argument] = arguments.as_slice()
+            && let Self::Type(go_type) = argument.as_ref()
+        {
+            return Some(go_type);
+        }
+        None
     }
 }

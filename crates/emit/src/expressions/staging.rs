@@ -1,8 +1,6 @@
 use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
-use crate::abi::callable::CallableReturnAbi;
-use crate::abi::layout::ValueLayout;
 use crate::ir::bodies::direct_first;
 use crate::ir::bodies::{Definition, LoweredStatement, Statement};
 use crate::ir::evaluation::Effects;
@@ -262,12 +260,10 @@ impl Planner<'_> {
         param_ty: Option<&Type>,
     ) -> bool {
         let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
-        let returns_never = callback
-            .get_type()
-            .get_function_ret()
-            .is_some_and(Type::is_never);
         suppress
-            && !(arg_ctx.result_fills_type_parameter() && returns_never)
+            && self
+                .never_result_bridge(&callback.get_type(), arg_ctx)
+                .is_none()
             && (!self.is_go_callable(callback)
                 || self.function_value_bridge(callback, arg_ctx).is_none())
             && self
@@ -290,19 +286,12 @@ impl Planner<'_> {
         if !callee.abi.result.is_lowered() {
             return None;
         }
-        let function = param_ty?.unwrap_forall();
-        let signature = function.as_function_type()?;
-        let source = callee.abi.function_layout(self);
-        let layout = self.value_layout(function, SlotOrigin::Lisette);
-        let ValueLayout::Function { layout, .. } = layout.underlying() else {
-            return None;
-        };
-        let target = layout.with_return_abi(
-            self,
-            CallableReturnAbi::unlowered(&signature.return_type),
+        self.callable_slot_bridge(
+            callee.function_layout(self),
+            param_ty?.unwrap_forall(),
+            None,
             SlotOrigin::Lisette,
-        );
-        Some(FunctionBridge { source, target })
+        )
     }
 
     pub(crate) fn stage_native_method_args_from(

@@ -5,9 +5,11 @@ use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::fallible_producer::OptionFusePlan;
 use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::calls::go_interop::LoweredProducer;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::ir::bodies::{LoweredBlock, LoweredStatement, PlacePlan, Statement};
 use crate::ir::values::GoExpression;
+use crate::plan::calls::CallPlan;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -316,33 +318,7 @@ impl Planner<'_> {
         if let Some(plan) = self.plan_call(expression)
             && plan.resolved.abi.result.is_lowered()
         {
-            if let Some(shape) = lowered {
-                let (setup, result_var) = self
-                    .plan_go_abi_wrapped_call(expression, &plan.resolved.abi, return_ty)
-                    .into_parts();
-                statements.extend(setup);
-                statements.extend(self.lower_result_return(result_var, "res", return_ty, shape));
-            } else {
-                let abi = plan.resolved.abi.clone();
-                if self.go_result_bridge(&abi, return_ty).is_none() {
-                    let (setup, call) = self
-                        .plan_call_expression(expression, None, ExpressionContext::value())
-                        .into_parts();
-                    statements.extend(setup);
-                    statements.extend(self.lower_abi_to_tagged_return(
-                        call,
-                        &abi.result,
-                        return_ty,
-                    ));
-                } else {
-                    let (setup, result_var) = self
-                        .plan_go_abi_wrapped_call(expression, &abi, return_ty)
-                        .into_parts();
-                    statements.extend(setup);
-                    statements.push(plain_return(result_var));
-                }
-            }
-            return statements;
+            return self.lower_lowered_call_return(expression, &plan, lowered, return_ty);
         }
         if let Some(shape) = lowered {
             let (setup, value) = self
@@ -360,6 +336,51 @@ impl Planner<'_> {
         statements
     }
 
+    fn lower_lowered_call_return(
+        &mut self,
+        expression: &Expression,
+        plan: &CallPlan<'_>,
+        lowered: Option<&LoweredReturnAbi>,
+        return_ty: &Type,
+    ) -> Vec<Statement> {
+        let mut statements = Vec::new();
+        if let Some(shape) = lowered {
+            let (setup, result_var) = self
+                .plan_go_abi_wrapped_call(
+                    expression,
+                    &plan.resolved.abi,
+                    plan.resolved.origin,
+                    return_ty,
+                )
+                .into_parts();
+            statements.extend(setup);
+            statements.extend(self.lower_result_return(result_var, "res", return_ty, shape));
+        } else {
+            let abi = plan.resolved.abi.clone();
+            if self.go_result_bridge(&abi, return_ty).is_none() {
+                let (setup, call) = self
+                    .plan_call_expression(expression, None, ExpressionContext::value())
+                    .into_parts();
+                statements.extend(setup);
+                statements.extend(self.lower_abi_to_tagged_return(
+                    call,
+                    LoweredProducer {
+                        abi: &abi.result,
+                        producer: plan.resolved.origin.producer(),
+                    },
+                    return_ty,
+                ));
+            } else {
+                let (setup, result_var) = self
+                    .plan_go_abi_wrapped_call(expression, &abi, plan.resolved.origin, return_ty)
+                    .into_parts();
+                statements.extend(setup);
+                statements.push(plain_return(result_var));
+            }
+        }
+        statements
+    }
+
     fn callee_matches_lowered_shape(
         &self,
         call_expression: &Expression,
@@ -369,8 +390,6 @@ impl Planner<'_> {
             return false;
         };
         plan.resolved.abi.result.lowered() == Some(enclosing_shape)
-            && self
-                .go_result_bridge(&plan.resolved.abi, &call_expression.get_type())
-                .is_none()
+            && self.call_result_unbridged(&plan, &call_expression.get_type())
     }
 }

@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/other"
+  
+  interface Foo<T: other.Foo> {
+    fn item() -> T
+  }
+  
+  interface Ranked<T: Ranked<T>> {
+    fn next() -> T
+  }
+---
+package main
+
+import "example.com/other"
+
+type Foo[T other.Foo] interface {
+	item() T
+}
+
+type Ranked[T any] interface {
+	next_() T
+}

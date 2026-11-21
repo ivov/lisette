@@ -1863,3 +1863,50 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn partial_bound_with_tagged_twin_name_calls_the_twin() {
+    let input = r#"
+import "go:fmt"
+import "go:errors"
+
+interface Getter<T> {
+  fn get() -> T
+}
+
+interface Loader {
+  fn get() -> Partial<int, error>
+}
+
+struct Cell { v: int }
+
+impl Cell {
+  fn get(self) -> int { self.v }
+}
+
+struct Src { n: int }
+
+impl Src {
+  fn get(self) -> Partial<int, error> {
+    if self.n > 0 { Partial.Ok(self.n) } else { Partial.Both(1, errors.New("low")) }
+  }
+}
+
+fn read<G: Getter<int>>(g: G) -> int { g.get() }
+
+fn load<L: Loader>(l: L) -> string {
+  match l.get() {
+    Partial.Ok(n) => f"ok {n}",
+    Partial.Err(e) => f"err {e}",
+    Partial.Both(n, e) => f"both {n} {e}",
+  }
+}
+
+fn main() {
+  fmt.Println(read(Cell { v: 4 }))
+  fmt.Println(load(Src { n: 2 }))
+  fmt.Println(load(Src { n: 0 }))
+}
+"#;
+    assert_emit_snapshot!(input);
+}

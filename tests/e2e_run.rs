@@ -1086,6 +1086,49 @@ fn main() {
 }
 
 #[test]
+fn package_in_major_version_folder_keeps_its_name() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/lib/v2")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"versioned\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/lib/v2/v2.lis"),
+        r#"
+pub struct Thing { pub n: int }
+pub fn make(n: int) -> Thing { Thing { n } }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"
+import "go:fmt"
+import "lib/v2"
+fn main() {
+  let make = v2.make
+  fmt.Println(v2.make(2).n, make(3).n)
+}
+"#,
+    )
+    .unwrap();
+    let output = lis_run(&project, scratch.path(), &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(stdout.trim(), "2 3", "stderr: {stderr}");
+}
+
+#[test]
 fn generic_type_alias_static_method_value_runs() {
     assert_generic_program_runs(
         r#"import "go:fmt"
@@ -4613,4 +4656,60 @@ fn main() {
 "#,
         "true false",
     );
+}
+
+#[test]
+fn const_of_runtime_const_from_another_package_is_a_var() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/a")).unwrap();
+    fs::create_dir_all(project.join("src/b")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"consts\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/a/a.lis"),
+        r#"
+pub const N: Option<int> = None
+pub const K: int = 4
+pub const B: bool = N == None
+pub const J: int = K * 2 + 1
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/b/b.lis"),
+        r#"
+import "a"
+
+pub const M = a.N
+pub const C = a.B
+pub const Q = a.J << 1
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"
+import "go:fmt"
+import "b"
+fn main() {
+  fmt.Println(b.M, b.C, b.Q)
+}
+"#,
+    )
+    .unwrap();
+    let output = lis_run(&project, scratch.path(), &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(stdout.trim(), "None true 18", "stderr: {stderr}");
 }

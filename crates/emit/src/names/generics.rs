@@ -10,50 +10,10 @@ use crate::names::go_name;
 use crate::state::scope::TypeParam;
 use crate::types::go_type::GoType;
 use syntax::EcoString;
-use syntax::ast::{Expression, Generic};
-use syntax::types::{SubstitutionMap, Type};
+use syntax::ast::Generic;
+use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(crate) fn format_value_type_args(&mut self, expression: &Expression) -> Option<GoType> {
-        let recorded = self.facts.checked(expression).function_value()?;
-        let declaration = self
-            .facts
-            .callable_declaration(recorded.definition.as_deref()?)?;
-        let instantiation = &recorded.type_arguments;
-        match declaration.go_type_param_recipe() {
-            Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
-            None => self.format_generic_instantiation(declaration.ty(), instantiation),
-        }
-    }
-
-    pub(crate) fn format_generic_instantiation(
-        &mut self,
-        definition_ty: &Type,
-        mapping: &SubstitutionMap,
-    ) -> Option<GoType> {
-        let Type::Forall { vars, .. } = definition_ty else {
-            return None;
-        };
-        if vars.is_empty() {
-            return None;
-        }
-
-        let arguments: Vec<GoType> = vars
-            .iter()
-            .filter_map(|var| Some(self.go_type(mapping.get(var.as_str())?)))
-            .collect();
-
-        if arguments.len() != vars.len()
-            || arguments
-                .iter()
-                .any(|argument| argument.contains_empty_interface())
-        {
-            return None;
-        }
-
-        Some(GoType::type_arguments(&arguments))
-    }
-
     pub(crate) fn set_type_params(&mut self, generics: &[(EcoString, Vec<Type>)]) {
         let type_params = generics
             .iter()
@@ -85,14 +45,21 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn plan_generics(&self, generics: &[(EcoString, Vec<Type>)]) -> Vec<TypeParameter> {
+    pub(crate) fn plan_generics(
+        &self,
+        generics: &[(EcoString, Vec<Type>)],
+        declaring: Option<&str>,
+    ) -> Vec<TypeParameter> {
         generics
             .iter()
             .map(|(name, bounds)| {
                 let has_ordered = bounds.iter().any(is_ordered_bound);
                 let mut planned = Vec::new();
                 for bound in bounds {
-                    if self.facts.bound_needs_dispatch(bound) || is_zeroable_bound(bound) {
+                    if self.facts.bound_needs_dispatch(bound)
+                        || is_zeroable_bound(bound)
+                        || declaring.is_some() && bound.get_qualified_id() == declaring
+                    {
                         continue;
                     }
                     let ty = if is_comparable_bound(bound) {

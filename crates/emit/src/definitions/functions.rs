@@ -230,8 +230,10 @@ impl Planner<'_> {
                 statements.insert(0, recover.into());
             }
             let mut body = LoweredBlock { statements };
-            let unit_result =
-                return_info.should_return() && ty.get_function_ret().is_some_and(Type::is_unit);
+            let unit_result = return_info.should_return()
+                && ty
+                    .get_function_ret()
+                    .is_some_and(|ret| this.facts.resolves_to_unit(ret));
             if unit_result && !body.go_terminates() {
                 body.statements.push(plain_return(GoExpression::unit()));
             }
@@ -340,7 +342,7 @@ impl Planner<'_> {
 
         let receiver =
             self_param.map(|parameter| self.receiver_parameter(params_to_process, parameter));
-        let generics = self.plan_generics(&signature_generics);
+        let generics = self.plan_generics(&signature_generics, None);
         let (signature_parameters, deferred_patterns) =
             self.lower_signature_params(params_to_process);
         let return_ty = self.render_return_ty(function_definition, return_shape.as_ref());
@@ -383,11 +385,9 @@ impl Planner<'_> {
         let mut declaration = GoDeclaration::new(DeclarationKind::Function { signature, body });
         declaration.position = position;
         let mut declarations = vec![declaration];
-        if receiver_ty.is_some()
-            && signature_generics.is_empty()
-            && self
-                .facts
-                .method_uses_tagged_return(function_definition.name)
+        if receiver_ty
+            .and_then(Type::get_qualified_id)
+            .is_some_and(|owner| self.facts.has_tagged_twin(owner, function_definition.name))
         {
             let twin = self.emit_tagged_twin(
                 function_definition,

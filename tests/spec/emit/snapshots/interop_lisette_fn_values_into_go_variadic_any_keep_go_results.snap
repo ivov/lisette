@@ -1,0 +1,64 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn get() -> Result<int, error> { Ok(1) }
+  
+  fn opt() -> Option<int> { Some(1) }
+  
+  fn main() {
+    fmt.Printf("%T %T\n", get, opt)
+    fmt.Printf("%T\n", |s: string| strconv.Atoi(s + ""))
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func get() (int, error) {
+	return 1, nil
+}
+
+func opt() (int, bool) {
+	return 1, true
+}
+
+func main() {
+	cb := func() lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](get())
+	}
+	cb2 := func() lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](opt())
+	}
+	fmt.Printf("%T %T\n", func() (int, error) {
+		res := cb()
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return 0, res.ErrVal
+	}, func() (int, bool) {
+		res2 := cb2()
+		if res2.Tag == lisette.OptionSome {
+			return res2.SomeVal, true
+		}
+		return 0, false
+	})
+	cb3 := func(s string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(s + ""))
+	}
+	fmt.Printf("%T\n", func(arg0 string) (int, error) {
+		res3 := cb3(arg0)
+		if res3.Tag == lisette.ResultOk {
+			return res3.OkVal, nil
+		}
+		return 0, res3.ErrVal
+	})
+}

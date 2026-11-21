@@ -84,12 +84,10 @@ impl Planner<'_> {
     fn plan_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
         let element_lisette_ty = match ty {
             Type::Array { element, .. } => element.as_ref().clone(),
-            _ => ty
-                .get_type_params()
-                .expect("Slice type must have type args")
-                .first()
-                .expect("Slice type must have element type")
-                .clone(),
+            _ => self
+                .facts
+                .first_type_argument(ty)
+                .expect("Slice type must have element type"),
         };
         let element_ty = self.go_type(&element_lisette_ty);
         let go_type = self.go_type(ty);

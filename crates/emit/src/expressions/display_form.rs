@@ -43,7 +43,8 @@ impl DisplayForm {
             DisplayForm::Bool => "%t",
             DisplayForm::Integer => "%d",
             DisplayForm::Float => "%g",
-            DisplayForm::Function | DisplayForm::Value => "%v",
+            DisplayForm::Function => "%p",
+            DisplayForm::Value => "%v",
         }
     }
 }

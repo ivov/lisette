@@ -27,20 +27,8 @@ func main() {
 	i := 7
 	arr := []int{9}
 	f := func() int {
-		s2 := func() []lisette.Option[int] {
-			s := make([]lisette.Option[int], s)
-			for i := range s {
-				s[i] = lisette.MakeOptionNone[int]()
-			}
-			return s
-		}()
-		arr2 := func() [2]lisette.Option[int] {
-			var arr [2]lisette.Option[int]
-			for i := range arr {
-				arr[i] = lisette.MakeOptionNone[int]()
-			}
-			return arr
-		}()
+		s2 := make([]lisette.Option[int], s)
+		arr2 := [2]lisette.Option[int]{}
 		count := 0
 		for _, i2 := range s2 {
 			if i2.IsNone() {

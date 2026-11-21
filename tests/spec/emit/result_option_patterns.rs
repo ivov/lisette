@@ -2798,6 +2798,84 @@ fn main() {
 }
 
 #[test]
+fn nil_ref_in_ok_from_lisette_function_reads_as_ok_on_every_path() {
+    let input = r#"
+import "go:cmp"
+
+fn get() -> Result<Ref<int>, error> {
+  Ok(cmp.Or<Ref<int>>())
+}
+
+fn is_ok(r: Result<Ref<int>, error>) -> bool {
+  r.is_ok()
+}
+
+fn main() {
+  let stored = get()
+  if !is_ok(stored) { panic("stored result reads as Err") }
+  match get() {
+    Ok(_) => {},
+    Err(_) => panic("matched result reads as Err"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nil_ref_in_ok_from_lisette_function_value_reads_as_ok() {
+    let input = r#"
+import "go:cmp"
+
+fn get() -> Result<Ref<int>, error> {
+  Ok(cmp.Or<Ref<int>>())
+}
+
+fn get_at(x: int) -> Result<Ref<int>, error> {
+  let _ = x
+  get()
+}
+
+fn call<T>(f: fn() -> T) -> T { f() }
+
+fn main() {
+  if !call(get).is_ok() { panic("generic call reads as Err") }
+  let fs = [get]
+  if !fs[0]().is_ok() { panic("stored function reads as Err") }
+  let at = [1].map(get_at)
+  if !at[0].is_ok() { panic("prelude callback reads as Err") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nil_ref_in_ok_from_lisette_method_tagged_twin_reads_as_ok() {
+    let input = r#"
+import "go:cmp"
+
+interface Getter<T> {
+  fn get() -> T
+}
+
+struct Src {}
+
+impl Src {
+  fn get(self) -> Result<Ref<int>, error> {
+    Ok(cmp.Or<Ref<int>>())
+  }
+}
+
+fn read<G: Getter<Result<Ref<int>, error>>>(g: G) -> bool { g.get().is_ok() }
+
+fn main() {
+  if !read(Src {}) { panic("bound call reads as Err") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn err_constructor_wrap_err_in_return_position() {
     let input = r#"
 import "go:errors"

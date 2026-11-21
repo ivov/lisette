@@ -1,4 +1,5 @@
 use crate::assert_emit_snapshot;
+use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
 fn zero_of_type_parameter() {
@@ -393,4 +394,28 @@ fn maker<T: Zeroable>() -> fn() -> T {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn autofill_of_go_newtype_over_struct_builds_its_maps() {
+    let input = r#"
+import "go:example.com/lib"
+
+struct Outer { w: lib.Wrapper, s: lib.Settings }
+
+fn main() {
+  let o = Outer { .. }
+  let x = lib.Settings { .. }
+  let _ = (o, x)
+}
+"#;
+    let typedef = r#"
+pub struct Settings {
+  pub Tags: Map<string, int>,
+  pub Name: string,
+}
+
+pub struct Wrapper(Settings)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
 }

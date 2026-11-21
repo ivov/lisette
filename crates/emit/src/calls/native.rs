@@ -14,6 +14,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::state::expression::ExpressionContext;
 use crate::statements::assignments::lvalues_match;
 use crate::types::go_type::GoType;
+use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::program::{
     CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
@@ -79,14 +80,9 @@ fn is_fresh_slice_value(operation: Option<&CallOperation>, receiver: &Expression
             kind: NativeTypeKind::Slice,
             ..
         }) => true,
-        Some(CallOperation::Native {
-            kind: NativeTypeKind::Slice,
-            method,
-        }) => NativeOperation::new(NativeTypeKind::Slice, method).returns_fresh_slice(),
-        Some(CallOperation::Native {
-            kind: NativeTypeKind::Array,
-            method,
-        }) => method == "to_slice",
+        Some(CallOperation::Native { kind, method }) => {
+            NativeOperation::new(*kind, method).returns_fresh_slice()
+        }
         _ => false,
     }
 }
@@ -171,9 +167,6 @@ pub(super) fn try_inline_native_method(
     arguments: &[GoExpression],
     negated: bool,
 ) -> Option<GoExpression> {
-    if !negated && method == "append" && arguments.is_empty() {
-        return Some(receiver.clone());
-    }
     let rule = NativeOperation::new(*native_type, method).inline_rule(arguments.len())?;
     if negated && !matches!(rule.form, NativeInlineForm::IsEmpty) {
         return None;
@@ -348,9 +341,7 @@ impl Planner<'_> {
             return result;
         }
 
-        if matches!(context.native_type, NativeTypeKind::Array)
-            && NativeOperation::new(context.native_type, context.method).reads_array_in_place()
-        {
+        if NativeOperation::new(context.native_type, context.method).reads_array_in_place() {
             let mut staged = self.stage_native_method(context);
             let index = staged.arguments.first().cloned();
             let body = self.plan_array_method_body(
@@ -486,7 +477,12 @@ impl Planner<'_> {
             let parameter = context.abi.param(first_param + index);
             match argument_expressions.get(index).zip(parameter) {
                 Some((argument, parameter))
-                    if self.facts.converts_for_inference(argument, parameter) =>
+                    if self.facts.converts_for_inference(
+                        argument,
+                        parameter,
+                        !type_args.is_empty(),
+                        &HashSet::default(),
+                    ) =>
                 {
                     GoExpression::conversion(self.go_type(&parameter.instantiated), value.clone())
                 }
@@ -661,7 +657,7 @@ impl Planner<'_> {
         let first_unstaged = if is_dot { 0 } else { stages.len() };
         stages.extend(self.stage_native_method_args_from(&ctx.abi, ctx.args, first_unstaged));
         let spread_stage = ctx.spread.map(|spread| {
-            if matches!(ctx.native_type, NativeTypeKind::Slice) && ctx.method == "append" {
+            if NativeOperation::new(ctx.native_type, ctx.method).grows_slice() {
                 self.plan_copied_spread(spread)
             } else {
                 self.plan_operand(spread, ExpressionContext::value())

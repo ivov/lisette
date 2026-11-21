@@ -1,16 +1,15 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::ReturnSlot;
-use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::control_flow::fallible;
 use crate::control_flow::fallible::Fallible;
+use crate::definitions::enum_layout::VariantLayout;
 use crate::ir::values::GoExpression;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use syntax::ast::{Expression, Literal, Pattern, RestPattern, StructFieldDefinition, StructFields};
 use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, DotAccessResolution, constructor_fields};
-use syntax::program::{FieldSelection, GoHint, interface_requirements};
+use syntax::program::{FieldSelection, GoHint};
 use syntax::types::{CompoundKind, build_substitution_map};
 use syntax::types::{Symbol, Type};
 
@@ -19,7 +18,7 @@ impl Planner<'_> {
         self.facts.receiver_shape(ty)
     }
 
-    pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
+    fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
         let Some(resolved) = self.facts.resolve_nominal(struct_ty) else {
             return false;
         };
@@ -43,23 +42,34 @@ impl Planner<'_> {
                 .method(id, field_name)
                 .map(|method| method.visibility.is_public())
                 .unwrap_or(false),
-            DefinitionBody::Interface { definition } => {
-                resolved.definition.visibility.is_public()
-                    && definition.methods.contains_key(field_name)
-            }
             _ => false,
         }
     }
 
-    pub(crate) fn type_uses_exported_members(&self, ty: &Type) -> bool {
+    fn type_uses_exported_members(&self, ty: &Type) -> bool {
         let Type::Nominal { id, .. } = ty.strip_refs() else {
             return false;
         };
-        go_name::is_prelude_id(&id)
-            || self
-                .facts
-                .package_for_qualified_name(id.as_str())
-                .is_some_and(|m| self.facts.is_foreign_package(m))
+        go_name::is_prelude_id(&id) || go_name::is_go_import(&id)
+    }
+
+    pub(crate) fn resolve_is_exported(
+        &self,
+        expression: &Expression,
+        expression_ty: &Type,
+        member: &str,
+    ) -> bool {
+        self.compute_is_exported_context(expression, expression_ty)
+            || self.field_is_public(expression_ty, member)
+            || self.facts.method_needs_export(member)
+    }
+
+    fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
+        let is_import_namespace_identifier = matches!(
+            expression,
+            Expression::Identifier { ty, .. } if ty.as_import_namespace().is_some()
+        );
+        is_import_namespace_identifier || self.type_uses_exported_members(expression_ty)
     }
 
     fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {
@@ -72,11 +82,10 @@ impl Planner<'_> {
         field: &str,
         semantic_exported: bool,
     ) -> String {
-        go_name::member_go_name(
+        self.facts.member_go_name(
             ty,
             field,
             semantic_exported || self.struct_field_is_exported(ty, field),
-            self.facts.embedded_field(ty, field),
         )
     }
 }
@@ -152,14 +161,16 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_enum_field_recursive(&self, ty: &Type, variant: &str, index: usize) -> bool {
-        if let Type::Nominal { id, .. } = ty
-            && let Some(layout) = self.enum_layout(id.as_ref())
-            && let Some(variant_layout) = layout.variant(variant)
-            && let Some(field) = variant_layout.fields.get(index)
-        {
-            return field.is_recursive();
-        }
-        false
+        self.enum_variant_layout(ty, variant)
+            .and_then(|variant_layout| variant_layout.fields.get(index))
+            .is_some_and(|field| field.is_recursive())
+    }
+
+    fn enum_variant_layout(&self, ty: &Type, variant: &str) -> Option<&'a VariantLayout> {
+        let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
+            return None;
+        };
+        self.enum_layout(&id)?.variant(variant)
     }
 
     pub(crate) fn enum_struct_field_index(
@@ -239,36 +250,19 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn enum_tuple_field_name(&self, ty: &Type, variant: &str, index: usize) -> String {
         let ty = &self.receiver_shape(ty);
-        if ty.is_option() {
-            return match variant {
-                "Some" => fallible::OPTION_SOME_FIELD.to_string(),
-                _ => variant.to_string(),
-            };
+        if let Some(variants) = fallible::tagged_payload_fields(ty) {
+            return variants
+                .iter()
+                .find(|tagged| tagged.name == variant)
+                .and_then(|tagged| tagged.fields.get(index))
+                .map_or_else(|| variant.to_string(), |field| field.to_string());
         }
 
-        if ty.is_result() {
-            return match (variant, index) {
-                ("Ok", 0) => fallible::RESULT_OK_FIELD.to_string(),
-                ("Err", 0) => fallible::RESULT_ERR_FIELD.to_string(),
-                _ => variant.to_string(),
-            };
-        }
-
-        if ty.is_partial() {
-            return match (variant, index) {
-                ("Ok", 0) => fallible::PARTIAL_OK_FIELD.to_string(),
-                ("Err", 0) => fallible::PARTIAL_ERR_FIELD.to_string(),
-                ("Both", 0) => fallible::PARTIAL_OK_FIELD.to_string(),
-                ("Both", 1) => fallible::PARTIAL_ERR_FIELD.to_string(),
-                _ => variant.to_string(),
-            };
-        }
-
-        if let Type::Nominal { id, .. } = ty
-            && let Some(layout) = self.enum_layout(id)
-            && let Some(name) = layout.tuple_field_name(variant, index)
+        if let Some(field) = self
+            .enum_variant_layout(ty, variant)
+            .and_then(|variant_layout| variant_layout.fields.get(index))
         {
-            return name;
+            return field.go_name.clone();
         }
 
         unreachable!("enum `{ty:?}` has no layout for field {index} of `{variant}`")
@@ -297,19 +291,6 @@ impl<'a> EmitFacts<'a> {
         )
     }
 
-    pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
-        let ty = &self.peel_alias(ty);
-        let Type::Nominal { id, .. } = ty else {
-            return false;
-        };
-        !go_name::is_go_import(id.as_str())
-            && self.newtype_underlying(ty).is_none()
-            && matches!(
-                self.definition(id.as_str()).map(|d| &d.body),
-                Some(DefinitionBody::Struct { .. })
-            )
-    }
-
     pub(crate) fn first_type_argument(&self, ty: &Type) -> Option<Type> {
         self.receiver_shape(ty).get_type_params()?.first().cloned()
     }
@@ -328,29 +309,6 @@ impl<'a> EmitFacts<'a> {
         value
     }
 
-    pub(crate) fn bound_needs_dispatch(&self, bound: &Type) -> bool {
-        interface_requirements(bound, |id| self.definition(id))
-            .iter()
-            .any(|requirement| {
-                !go_name::is_go_import(&requirement.declaring_interface)
-                    && requirement.ty.get_function_ret().is_some_and(|ty| {
-                        matches!(
-                            self.return_abi(ty, ReturnSlot::Method),
-                            CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
-                        )
-                    })
-            })
-    }
-
-    pub(crate) fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
-        let qualified = self.qualified_current(name);
-        self.definition(qualified.as_str())
-            .and_then(Definition::methods)
-            .and_then(|methods| methods.get(method_name))
-            .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
-            && self.emits_go_method(&qualified, method_name)
-    }
-
     pub(crate) fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
         let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
         receiver_ty
@@ -358,6 +316,12 @@ impl<'a> EmitFacts<'a> {
             .filter(|owner| go_name::is_go_import(owner))
             .and_then(|owner| self.method(owner, method))
             .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
+    }
+
+    pub(crate) fn has_stringer_signature(&self, id: &str, method_name: &str) -> bool {
+        self.method(id, method_name)
+            .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
+            && self.emits_go_method(id, method_name)
     }
 
     pub(crate) fn struct_fields(
@@ -387,11 +351,6 @@ impl<'a> EmitFacts<'a> {
                 })
                 .collect(),
         )
-    }
-
-    pub(crate) fn empty_composite_is_go_zero(&self, ty: &Type) -> bool {
-        let ty = self.peel_alias(ty);
-        self.is_plain_struct(&ty) || self.is_lisette_enum(&ty)
     }
 
     pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {

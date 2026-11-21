@@ -35,7 +35,10 @@ impl Planner<'_> {
             .and_then(|definition| definition.instantiate_alias_target(&params, false));
         let underlying_type = self.go_type(declared_target.as_ref().unwrap_or(ty));
 
-        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
+        let generics = self.plan_generics(
+            &generics.iter().map(generic_bounds).collect::<Vec<_>>(),
+            None,
+        );
 
         GoDeclaration::new(DeclarationKind::Alias {
             name: go_name::escape_type_name(name).into_owned(),
@@ -61,7 +64,12 @@ impl Planner<'_> {
         } else {
             self.fresh_declared_source(&name)
         };
-        let is_const = self.is_go_constant_expression(expression);
+        let is_const = match placement {
+            ConstPlacement::Package => self
+                .facts
+                .const_emits_go_const(&self.facts.qualified_current(identifier)),
+            ConstPlacement::Local => self.is_go_constant_expression(expression),
+        };
         let go_type = (!is_const
             || !matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
         .then(|| self.go_type(ty));

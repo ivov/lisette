@@ -10,9 +10,6 @@ use crate::abi::callable::{CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::ValueLayout;
 use crate::expressions::staging::{SpreadSequenceOptions, takes_prelude_callback};
-use crate::ir::bodies::{
-    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
-};
 use crate::ir::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
 use crate::names::generics::extract_type_mapping;
 use crate::plan::calls::{
@@ -20,7 +17,6 @@ use crate::plan::calls::{
     FunctionBridge, ResolvedCallee,
 };
 use crate::state::expression::ExpressionContext;
-use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
@@ -62,8 +58,7 @@ impl Planner<'_> {
         let stages: Vec<ValuePlan> = leading.into_iter().chain(stages).collect();
         let variadic = ctx.plan.resolved.abi.variadic_param();
         let spread_stage = ctx.spread.map(|spread| {
-            self.try_plan_variadic_spread_adapter(spread, variadic)
-                .or_else(|| self.try_plan_variadic_spread_slot_bridge(spread, variadic))
+            self.try_plan_variadic_spread_slot_bridge(spread, variadic)
                 .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()))
         });
         self.sequence_with_spread_values(
@@ -210,12 +205,20 @@ impl Planner<'_> {
         let Some(param) = param else {
             return argument;
         };
-        let coercion = CoercionPlan::checked(self, arg, Some(&param.layout));
-        let receiver_binds = matches!(&param.declared, Some(Type::Parameter(name))
-            if ctx.receiver_bound_parameters().contains(name.as_str()));
-        let inferred = !ctx.callee_pins_type_args
-            && !receiver_binds
-            && self.facts.converts_for_inference(arg, param);
+        let value_use = self.facts.checked(arg).value_use();
+        let coercion = self.adapted_slot_coercion(
+            arg,
+            &value_use.adaptation,
+            &value_use.slot,
+            &param.instantiated,
+            Some(&param.layout),
+        );
+        let inferred = self.facts.converts_for_inference(
+            arg,
+            param,
+            ctx.callee_pins_type_args,
+            &ctx.receiver_bound_parameters(),
+        );
         if coercion.is_identity() && !inferred {
             return argument;
         }
@@ -245,89 +248,6 @@ impl Planner<'_> {
                 param.and_then(|param| param.declared.as_ref()),
                 param.map(|param| &param.instantiated),
             )
-    }
-
-    fn try_plan_variadic_spread_adapter(
-        &mut self,
-        spread: &Expression,
-        parameter: Option<&CallableParamAbi>,
-    ) -> Option<ValuePlan> {
-        if self.go_physical_expression_layout(spread).is_some() {
-            return None;
-        }
-        let parameter = parameter?;
-        let element_ty = spread.get_type().unwrap_forall().inner()?;
-        let element = self.value_layout(&element_ty, SlotOrigin::Lisette);
-        let LayoutBridge::Function {
-            source: source_layout,
-            target: target_layout,
-        } = self.resolve_layout_bridge(&element, &parameter.layout)
-        else {
-            return None;
-        };
-        if source_layout.return_abi.lowered().is_none()
-            || source_layout.return_abi == target_layout.return_abi
-        {
-            return None;
-        }
-
-        let source = self
-            .plan_value(spread, ExpressionContext::value())
-            .map_expression(|setup, source_value| {
-                GoExpression::identifier(self.hoist_tmp_value_statement(setup, "src", source_value))
-            });
-        let source_variable = source.expression().clone();
-
-        let target_element_ty = target_layout.go_type(self);
-
-        let adapted = self.fresh_declared("adapted");
-        let loop_cb = self.fresh_local(Some("cb"));
-
-        let index = self.scope.helper_local("i", self.package);
-        let mut body = Vec::new();
-        let closure = self.plan_function_layout_bridge(
-            &mut body,
-            GoExpression::identifier(loop_cb.clone()),
-            &source_layout,
-            &target_layout,
-            false,
-        );
-        body.push(assign(
-            GoExpression::index(
-                GoExpression::identifier(adapted.clone()),
-                GoExpression::identifier(index.clone()),
-            ),
-            closure,
-        ));
-
-        Some(source.map_expression(|setup, _source_value| {
-            setup.push(define(
-                adapted.clone(),
-                GoExpression::call(
-                    GoExpression::external_name("make".to_string()),
-                    vec![
-                        GoExpression::type_name(GoType::slice_of(&target_element_ty)),
-                        GoExpression::call(
-                            GoExpression::external_name("len".to_string()),
-                            vec![source_variable.clone()],
-                        ),
-                    ],
-                ),
-            ));
-            setup.push(
-                LoweredStatement::Loop(LoopPlan {
-                    kind: LoopKind::Generated { label: None },
-                    header: LoopHeader::Range {
-                        key: Some(index),
-                        value: Some(loop_cb),
-                        iterable: source_variable,
-                    },
-                    body: LoweredBlock { statements: body },
-                })
-                .into(),
-            );
-            GoExpression::identifier(adapted)
-        }))
     }
 
     fn detect_callback_wrapper(
@@ -375,12 +295,16 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> Option<ArgumentSlotBridge> {
+        let value_use = self.facts.checked(argument).value_use();
         if matches!(
-            self.facts.checked(argument).value_use().adaptation,
-            Adaptation::ImplicitSome { .. }
-        ) && matches!(
-            parameter.layout.underlying(),
-            ValueLayout::TaggedOption { .. }
+            CoercionPlan::adapted(
+                self,
+                &value_use.adaptation,
+                &argument.get_type(),
+                &value_use.slot,
+                Some(&parameter.layout),
+            ),
+            CoercionPlan::WrapSome { .. }
         ) {
             return None;
         }
@@ -471,13 +395,11 @@ impl Planner<'_> {
         let ValueLayout::NullableOption { payload, .. } = raw.underlying() else {
             return None;
         };
-        let passes_unchanged = !matches!(
-            self.facts.nullable_option_nil_guard(ty),
-            Some(NilGuard::Interface)
-        ) && self
-            .value_layout(ty, SlotOrigin::Lisette)
-            .payload()
-            .is_some_and(|lisette| lisette.same_representation(payload));
+        let passes_unchanged = !matches!(self.layout_nil_guard(&raw), Some(NilGuard::Interface))
+            && self
+                .value_layout(ty, SlotOrigin::Lisette)
+                .payload()
+                .is_some_and(|lisette| lisette.same_representation(payload));
         passes_unchanged.then_some(raw)
     }
 
@@ -497,7 +419,7 @@ impl Planner<'_> {
         let callable = self.resolve_callable_value(expression)?;
         matches!(callable.origin, CallableOrigin::GoInterop).then(|| ValueLayout::Function {
             function_type: expression.get_type(),
-            layout: callable.abi.function_layout(self),
+            layout: callable.function_layout(self),
         })
     }
 
@@ -544,8 +466,13 @@ impl EmitFacts<'_> {
         &self,
         argument: &Expression,
         parameter: &CallableParamAbi,
+        pins_type_args: bool,
+        receiver_bound: &HashSet<String>,
     ) -> bool {
-        if !matches!(parameter.declared, Some(Type::Parameter(_))) {
+        let Some(Type::Parameter(name)) = &parameter.declared else {
+            return false;
+        };
+        if pins_type_args || receiver_bound.contains(name.as_str()) {
             return false;
         }
         let checked = self.checked(argument.unwrap_parens());

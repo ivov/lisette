@@ -1015,3 +1015,56 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+const UNDERSCORE_METHOD_TYPEDEF: &str = r#"
+pub struct Msg {}
+
+impl Msg {
+  pub fn XXX_Size(self) -> int
+  pub fn Reset(self: Ref<Msg>)
+}
+
+pub fn New() -> Ref<Msg>
+"#;
+
+#[test]
+fn go_method_with_underscore_name_keeps_its_name() {
+    let input = r#"
+import pb "go:example.com/pb"
+
+fn sizes() -> int {
+  let m = pb.New()
+  let f = pb.Msg.XXX_Size
+  let g = m.XXX_Size
+  let reset = m.Reset
+  reset()
+  f(m.*) + g() + m.XXX_Size()
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[("go:example.com/pb", UNDERSCORE_METHOD_TYPEDEF)]
+    );
+}
+
+#[test]
+fn go_method_with_underscore_name_satisfies_interface() {
+    let input = r#"
+import pb "go:example.com/pb"
+
+interface Sized {
+  fn XXX_Size() -> int
+}
+
+fn measure(s: Sized) -> int { s.XXX_Size() }
+
+fn sizes() -> int {
+  let m = pb.New()
+  measure(m.*)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[("go:example.com/pb", UNDERSCORE_METHOD_TYPEDEF)]
+    );
+}

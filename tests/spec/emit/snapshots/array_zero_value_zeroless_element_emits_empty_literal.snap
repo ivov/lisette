@@ -19,8 +19,5 @@ type S struct {
 }
 
 func make_() S {
-	return S{
-		n:    1,
-		refs: [0]*int{},
-	}
+	return S{n: 1}
 }

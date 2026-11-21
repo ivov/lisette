@@ -1,13 +1,11 @@
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::ir::values::GoExpression;
-use crate::names::go_name;
 use crate::state::bindings::BindingValue;
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::CallOperation;
-use syntax::types::FunctionParameter;
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -62,15 +60,12 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        if let Some(make_function) = self.facts.variant_make_function(symbol) {
+        if let Some(make_function) = self.variant_make_reference(symbol) {
             match ty {
                 Type::Nominal { params, .. } => {
                     let type_args = self.variant_value_type_args(params, ctx);
                     return GoExpression::pure_call(
-                        GoExpression::instantiation(
-                            self.facts.resolve_go_name(&make_function),
-                            type_args,
-                        ),
+                        GoExpression::instantiation(make_function, type_args),
                         Vec::new(),
                     );
                 }
@@ -79,11 +74,9 @@ impl Planner<'_> {
                         params: ret_params, ..
                     } = f.return_type.as_ref()
                     {
-                        let type_args = self.constructor_fn_type_args(&f.params, ret_params, ctx);
-                        return GoExpression::instantiation(
-                            self.facts.resolve_go_name(&make_function),
-                            type_args,
-                        );
+                        let type_args =
+                            self.constructor_reference_type_arguments(&f.params, ret_params, ctx);
+                        return GoExpression::instantiation(make_function, type_args);
                     }
                 }
                 _ => {}
@@ -113,28 +106,6 @@ impl Planner<'_> {
             .unwrap_or_else(|| self.format_type_args(params))
     }
 
-    pub(super) fn constructor_fn_type_args(
-        &mut self,
-        fn_params: &[FunctionParameter],
-        ret_params: &[Type],
-        ctx: ExpressionContext<'_>,
-    ) -> GoType {
-        let return_params_are_inferrable = ret_params.len() <= fn_params.len()
-            && ret_params
-                .iter()
-                .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
-        let parameters_support_go_inference = fn_params
-            .iter()
-            .all(|param| !self.facts.is_function_alias(&param.ty));
-        let inferred_at_call_site =
-            ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference;
-        if inferred_at_call_site {
-            GoType::default()
-        } else {
-            self.format_type_args(ret_params)
-        }
-    }
-
     fn try_plan_method_expression(
         &mut self,
         identifier: &Expression,
@@ -147,10 +118,13 @@ impl Planner<'_> {
         let symbol = recorded.definition.as_deref()?;
         let (_, method) = symbol.rsplit_once('.')?;
         let first = id_ty.as_function_type()?.params.first()?;
-        let mut go_method = self.facts.method_go_name(method, is_public);
-        if self.facts.definition_selects_tagged_twin(symbol) {
-            go_method = go_name::tagged_twin(&go_method);
-        }
+        let owner = self.facts.without_references(&first.ty);
+        let go_method = self.facts.method_selector_go_name(
+            owner.get_qualified_id(),
+            method,
+            is_public,
+            self.facts.definition_selects_tagged_twin(symbol),
+        );
         Some(self.method_expression(&first.ty, go_method))
     }
 
@@ -160,7 +134,7 @@ impl Planner<'_> {
         go_method: String,
     ) -> GoExpression {
         let receiver_type = self.go_type(&self.facts.without_references(receiver_param));
-        let receiver = if receiver_param.is_ref() {
+        let receiver = if self.facts.is_reference(receiver_param) {
             GoType::pointer_to(&receiver_type).parenthesized()
         } else {
             receiver_type

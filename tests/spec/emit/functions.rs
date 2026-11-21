@@ -2826,6 +2826,31 @@ fn test(xs: VarArgs<int>) -> int {
 
 // Zero variadic args, so `T` must be forwarded explicitly: `first[int]()`.
 #[test]
+fn unknown_type_argument_keeps_the_go_instantiation() {
+    let input = r#"
+struct Store<T> { items: Slice<T> }
+
+impl<T> Store<T> {
+  fn get<U>(self, i: int) -> Option<U> {
+    let _ = (self.items, i)
+    None
+  }
+}
+
+fn ident<T>(x: T) -> T { x }
+
+fn main() {
+  let s = Store { items: [1, 2] }
+  let missing = s.get<Unknown>(0)
+  let f: fn(Unknown) -> Unknown = ident
+  let _ = f(1)
+  if missing.is_some() { panic("wrong value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn empty_varargs_call_forwards_inferred_type_arg() {
     let input = r#"
 fn first<T>(xs: VarArgs<T>) -> Option<T> { None }
