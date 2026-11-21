@@ -225,6 +225,7 @@ jobs:
           restore-keys: |
             go-build-e2e-smoke-${{ runner.os }}-
       - run: cargo build -p lisette --locked
+      - run: cd bindgen && go build -o bin/bindgen .
       - run: cargo test -p tests --test e2e_smoke --locked -- --format terse
       - run: cargo test -p tests --test e2e_learn --locked -- --format terse
       - run: cargo test -p tests --test e2e_run --locked -- --format terse

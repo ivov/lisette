@@ -17,7 +17,7 @@ use std::sync::{Mutex, OnceLock};
 use deps::{
     Bindgen, BindgenFailure, BindgenSession, BindgenSetup, GoModule, GoPackage, TypedefLocator,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use syntax::ast::{Expression, ImportAlias};
 use syntax::parse::Parser;
 
@@ -64,6 +64,7 @@ pub struct ReplaceResolution {
 pub struct GoModuleInfo {
     pub path: String,
     pub version: String,
+    pub dir: String,
 }
 
 /// A directory with a `go.mod` that `go` commands run against.
@@ -137,6 +138,7 @@ impl<'a> GoWorkspace<'a> {
         Ok(GoModuleInfo {
             path: value["Path"].as_str().unwrap_or("").to_string(),
             version: value["Version"].as_str().unwrap_or("").to_string(),
+            dir: value["Dir"].as_str().unwrap_or("").to_string(),
         })
     }
 
@@ -253,6 +255,12 @@ impl<'a> GoWorkspace<'a> {
     /// The tool runs here, so it is built for the host, and `-target` carries
     /// the typedefs' target instead.
     fn bindgen_command(&self, sub: &str) -> Command {
+        let mut cmd = self.bindgen_tool(sub);
+        cmd.args(["-target", &self.target.to_string()]);
+        cmd
+    }
+
+    fn bindgen_tool(&self, sub: &str) -> Command {
         let mut cmd = if let Some(bin) = dev_bindgen_path() {
             let mut c = Command::new(bin);
             c.arg(sub);
@@ -263,7 +271,6 @@ impl<'a> GoWorkspace<'a> {
             c.args(["run", &bindgen_at_version, sub]);
             c
         };
-        cmd.args(["-target", &self.target.to_string()]);
         cmd.current_dir(self.root);
         cmd
     }
@@ -371,50 +378,34 @@ impl<'a> GoWorkspace<'a> {
         Ok(extract_go_imports(&content))
     }
 
-    /// Return every module that the public packages matching `patterns` reach,
-    /// plus their non-benign package errors.
+    /// Return every module that the public packages matching `patterns` reach
+    /// on any target, plus their non-benign package errors.
     pub fn find_reachable_modules(&self, patterns: &[String]) -> Result<ReachableModules, String> {
-        let mut args = vec!["list", "-mod=mod", "-e", "-deps", "-json"];
-        args.extend(patterns.iter().map(String::as_str));
-        let stdout = self.run_go(&args)?;
-
-        let mut packages: HashMap<String, ListedPackage> = HashMap::new();
-        let mut roots: Vec<String> = Vec::new();
-        let mut package_errors: Vec<PackageError> = Vec::new();
-
-        let stream = serde_json::Deserializer::from_str(&stdout).into_iter::<ListedPackage>();
-        for entry in stream {
-            let package = entry.map_err(|e| {
-                format!(
-                    "Failed to parse `go list -deps -json {}` output: {}",
-                    patterns.join(" "),
-                    e
-                )
-            })?;
-
-            let owner = package.module.as_ref().map_or("", |module| &module.path);
-            let relative = package
-                .import_path
-                .strip_prefix(owner)
-                .unwrap_or(&package.import_path);
-            let is_public_root =
-                !package.dep_only && !relative.split('/').any(|seg| seg == "internal");
-
-            if is_public_root {
-                for error in package.error.iter().chain(&package.deps_errors) {
-                    if !is_benign_package_error(&error.err) {
-                        package_errors.push(PackageError {
-                            package: package.import_path.clone(),
-                            message: error.err.clone(),
-                        });
-                    }
+        let (packages, mut roots) = loop {
+            let mut packages: HashMap<String, ListedPackage> = HashMap::new();
+            let mut roots: Vec<String> = Vec::new();
+            for package in self.list_dependencies(patterns)? {
+                if !package.dep_only {
+                    roots.push(package.import_path.clone());
                 }
-                roots.push(package.import_path.clone());
+                packages.insert(package.import_path.clone(), package);
             }
+            let go_mod = self.read_go_mod();
+            self.add_imports_of_every_target(patterns, &mut packages, &mut roots)?;
+            // A newly listed package can raise the version of a module listed before it.
+            if self.read_go_mod() == go_mod {
+                break (packages, roots);
+            }
+        };
 
-            packages.insert(package.import_path.clone(), package);
-        }
+        roots.retain(|root| {
+            let package = &packages[root];
+            let owner = package.module.as_ref().map_or("", |module| &module.path);
+            let relative = root.strip_prefix(owner).unwrap_or(root);
+            !relative.split('/').any(|segment| segment == "internal")
+        });
 
+        let mut package_errors: Vec<PackageError> = Vec::new();
         let mut modules: BTreeMap<String, ReachedModule> = BTreeMap::new();
         let mut unresolved: BTreeMap<String, UnresolvedTransitive> = BTreeMap::new();
         let mut visited: HashSet<&str> = HashSet::new();
@@ -427,6 +418,7 @@ impl<'a> GoWorkspace<'a> {
             let Some(package) = packages.get(path) else {
                 continue;
             };
+            record_package_errors(&mut package_errors, path, package);
             let Some(owner) = &package.module else {
                 continue;
             };
@@ -439,10 +431,13 @@ impl<'a> GoWorkspace<'a> {
                 });
 
             for import in &package.imports {
+                let imported = packages.get(import);
                 if !deps::is_third_party(import) {
+                    if let Some(standard) = imported {
+                        record_package_errors(&mut package_errors, import, standard);
+                    }
                     continue;
                 }
-                let imported = packages.get(import);
                 let Some(module) = imported.and_then(|p| p.module.as_ref()) else {
                     let message = imported
                         .and_then(|p| p.error.as_ref())
@@ -452,6 +447,7 @@ impl<'a> GoWorkspace<'a> {
                         .entry(import.clone())
                         .or_insert_with(|| UnresolvedTransitive {
                             import: import.clone(),
+                            importer: path.to_string(),
                             message,
                         });
                     continue;
@@ -468,6 +464,146 @@ impl<'a> GoWorkspace<'a> {
             package_errors,
             unresolved: unresolved.into_values().collect(),
         })
+    }
+
+    fn read_go_mod(&self) -> Option<String> {
+        fs::read_to_string(self.root.join("go.mod")).ok()
+    }
+
+    fn list_dependencies(&self, patterns: &[String]) -> Result<Vec<ListedPackage>, String> {
+        let mut args = vec!["list", "-mod=mod", "-e", "-deps", "-json"];
+        args.extend(patterns.iter().map(String::as_str));
+        let stdout = self.run_go(&args)?;
+        serde_json::Deserializer::from_str(&stdout)
+            .into_iter::<ListedPackage>()
+            .map(|entry| {
+                entry.map_err(|e| {
+                    format!(
+                        "Failed to parse `go list -deps -json {}` output: {}",
+                        patterns.join(" "),
+                        e
+                    )
+                })
+            })
+            .collect()
+    }
+
+    /// Add the imports that `go mod tidy` reads from files for other targets and tags.
+    fn add_imports_of_every_target(
+        &self,
+        patterns: &[String],
+        packages: &mut HashMap<String, ListedPackage>,
+        roots: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let mut modules = Vec::new();
+        for pattern in patterns {
+            if let Some(module) = pattern.strip_suffix("/...") {
+                let dir = self.query_module(module)?.dir;
+                if !dir.is_empty() {
+                    modules.push(ScanLocation {
+                        path: module.to_string(),
+                        dir,
+                    });
+                }
+            }
+        }
+
+        let new_roots: Vec<String> = self
+            .scan_imports(&modules, &[])?
+            .into_iter()
+            .map(|scanned| scanned.path)
+            .filter(|path| !packages.contains_key(path))
+            .collect();
+        self.list_new_packages(packages, &new_roots)?;
+        roots.extend(
+            new_roots
+                .into_iter()
+                .filter(|root| packages.contains_key(root)),
+        );
+
+        let mut scanned: HashSet<String> = HashSet::new();
+        loop {
+            let pending: Vec<ScanLocation> = packages
+                .values()
+                .filter(|package| package.module.is_some() && !package.dir.is_empty())
+                .filter(|package| !scanned.contains(&package.import_path))
+                .map(|package| ScanLocation {
+                    path: package.import_path.clone(),
+                    dir: package.dir.clone(),
+                })
+                .collect();
+            if pending.is_empty() {
+                return Ok(());
+            }
+
+            let mut missing: BTreeSet<String> = BTreeSet::new();
+            for result in self.scan_imports(&[], &pending)? {
+                scanned.insert(result.path.clone());
+                missing.extend(
+                    result
+                        .imports
+                        .iter()
+                        .filter(|import| !packages.contains_key(*import))
+                        .cloned(),
+                );
+                if let Some(package) = packages.get_mut(&result.path) {
+                    package.add_scan(result);
+                }
+            }
+            let missing: Vec<String> = missing.into_iter().collect();
+            self.list_new_packages(packages, &missing)?;
+        }
+    }
+
+    fn list_new_packages(
+        &self,
+        packages: &mut HashMap<String, ListedPackage>,
+        paths: &[String],
+    ) -> Result<(), String> {
+        if paths.is_empty() {
+            return Ok(());
+        }
+        for package in self.list_dependencies(paths)? {
+            packages
+                .entry(package.import_path.clone())
+                .or_insert(package);
+        }
+        Ok(())
+    }
+
+    fn scan_imports(
+        &self,
+        modules: &[ScanLocation],
+        packages: &[ScanLocation],
+    ) -> Result<Vec<ScannedPackage>, String> {
+        if modules.is_empty() && packages.is_empty() {
+            return Ok(Vec::new());
+        }
+        let request = serde_json::to_vec(&ScanRequest { modules, packages })
+            .map_err(|e| format!("Failed to encode import scan request: {}", e))?;
+        let mut child = self
+            .bindgen_tool("imports")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn bindgen: {}", e))?;
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| "Failed to open bindgen stdin".to_string())?
+            .write_all(&request)
+            .map_err(|e| format!("Failed to write import scan request: {}", e))?;
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to wait for bindgen: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Import scan failed: {}", stderr.trim()));
+        }
+        let response: ScanResponse = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Bindgen produced an unparseable import scan: {}", e))?;
+        Ok(response.packages)
     }
 
     pub fn read_go_mod_summary(&self, go_mod: &Path) -> Result<GoModSummary, String> {
@@ -528,6 +664,8 @@ pub struct ReachedModule {
 struct ListedPackage {
     import_path: String,
     #[serde(default)]
+    dir: String,
+    #[serde(default)]
     dep_only: bool,
     module: Option<ListedModule>,
     #[serde(default)]
@@ -535,6 +673,46 @@ struct ListedPackage {
     error: Option<ListedError>,
     #[serde(default)]
     deps_errors: Vec<ListedError>,
+}
+
+impl ListedPackage {
+    fn add_scan(&mut self, scan: ScannedPackage) {
+        if let Some(err) = scan.error
+            && self.error.is_none()
+        {
+            self.error = Some(ListedError { err });
+        }
+        for import in scan.imports {
+            if !self.imports.contains(&import) {
+                self.imports.push(import);
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ScanLocation {
+    path: String,
+    dir: String,
+}
+
+#[derive(Serialize)]
+struct ScanRequest<'a> {
+    modules: &'a [ScanLocation],
+    packages: &'a [ScanLocation],
+}
+
+#[derive(Deserialize)]
+struct ScanResponse {
+    packages: Vec<ScannedPackage>,
+}
+
+#[derive(Deserialize)]
+struct ScannedPackage {
+    path: String,
+    #[serde(default)]
+    imports: Vec<String>,
+    error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -553,12 +731,26 @@ struct ListedError {
 
 pub struct UnresolvedTransitive {
     pub import: String,
+    pub importer: String,
     pub message: String,
 }
 
 pub struct PackageError {
     pub package: String,
     pub message: String,
+}
+
+fn record_package_errors(errors: &mut Vec<PackageError>, path: &str, package: &ListedPackage) {
+    for error in package.error.iter().chain(&package.deps_errors) {
+        if !is_benign_package_error(&error.err)
+            && !errors.iter().any(|known| known.message == error.err)
+        {
+            errors.push(PackageError {
+                package: path.to_string(),
+                message: error.err.clone(),
+            });
+        }
+    }
 }
 
 fn is_benign_package_error(message: &str) -> bool {

@@ -24,6 +24,8 @@ func main() {
 		cli.RunPkg(os.Args[2:], defaultCfgJSON, stdlibCfgJSON)
 	case "pkgs":
 		cli.RunPkgs(os.Args[2:], defaultCfgJSON, stdlibCfgJSON)
+	case "imports":
+		cli.RunImports(os.Args[2:])
 	case "stdlib":
 		cli.RunStd(os.Args[2:], defaultCfgJSON)
 	default:

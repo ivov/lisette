@@ -47,7 +47,250 @@ const MODULES: &[(&str, &[(&str, &str)])] = &[
             ),
         ],
     ),
+    (
+        "lisette.test/platform",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/platform\n\ngo 1.21\n\nrequire (\n\tlisette.test/windowsonly v1.0.0\n\tlisette.test/tagonly v1.0.0\n\tlisette.test/subpackageonly v1.0.0\n)\n",
+            ),
+            (
+                "platform.go",
+                "package platform\n\nfunc Hello() string { return \"hi\" }\n",
+            ),
+            (
+                "platform_windows.go",
+                "package platform\n\nimport \"lisette.test/windowsonly\"\n\nfunc Handle() windowsonly.Value { return windowsonly.Value{} }\n",
+            ),
+            (
+                "platform_purego.go",
+                "//go:build purego\n\npackage platform\n\nimport \"lisette.test/tagonly\"\n\nfunc Pure() tagonly.Value { return tagonly.Value{} }\n",
+            ),
+            (
+                "generate.go",
+                "//go:build ignore\n\npackage main\n\nimport _ \"lisette.test/ignored\"\n\nfunc main() {}\n",
+            ),
+            (
+                "win/win_windows.go",
+                "package win\n\nimport \"lisette.test/subpackageonly\"\n\nfunc Make() subpackageonly.Value { return subpackageonly.Value{} }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/windowsonly",
+        &[
+            ("go.mod", "module lisette.test/windowsonly\n\ngo 1.21\n"),
+            (
+                "windowsonly.go",
+                "package windowsonly\n\ntype Value struct{ N int }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/tagonly",
+        &[
+            ("go.mod", "module lisette.test/tagonly\n\ngo 1.21\n"),
+            (
+                "tagonly.go",
+                "package tagonly\n\ntype Value struct{ N int }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/subpackageonly",
+        &[
+            ("go.mod", "module lisette.test/subpackageonly\n\ngo 1.21\n"),
+            (
+                "subpackageonly.go",
+                "package subpackageonly\n\ntype Value struct{ N int }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/diamond",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/diamond\n\ngo 1.21\n\nrequire (\n\tlisette.test/left v1.0.0\n\tlisette.test/right v1.0.0\n)\n",
+            ),
+            (
+                "diamond.go",
+                "package diamond\n\nimport \"lisette.test/left\"\n\nfunc Hello() string { return left.Name() }\n",
+            ),
+            (
+                "diamond_windows.go",
+                "package diamond\n\nimport \"lisette.test/right\"\n\nfunc Other() string { return right.Name() }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/left",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/left\n\ngo 1.21\n\nrequire lisette.test/leaf v1.0.0\n",
+            ),
+            (
+                "left.go",
+                "package left\n\nimport \"lisette.test/leaf\"\n\nfunc Name() string { return leaf.Name() }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/right",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/right\n\ngo 1.21\n\nrequire lisette.test/leaf v1.0.0\n",
+            ),
+            (
+                "right.go",
+                "package right\n\nimport \"lisette.test/leaf\"\n\nfunc Name() string { return leaf.Name() }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/leaf",
+        &[
+            ("go.mod", "module lisette.test/leaf\n\ngo 1.21\n"),
+            (
+                "leaf.go",
+                "package leaf\n\nfunc Name() string { return \"leaf\" }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/drift",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/drift\n\ngo 1.21\n\nrequire (\n\tlisette.test/shared v1.0.0\n\tlisette.test/tagged v1.0.0\n)\n",
+            ),
+            (
+                "drift.go",
+                "package drift\n\nimport \"lisette.test/shared\"\n\nfunc Hello() string { return shared.Name() }\n",
+            ),
+            (
+                "drift_purego.go",
+                "//go:build purego\n\npackage drift\n\nimport \"lisette.test/tagged\"\n\nfunc Tagged() string { return tagged.Name() }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/tagged",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/tagged\n\ngo 1.21\n\nrequire lisette.test/shared v1.1.0\n",
+            ),
+            (
+                "tagged.go",
+                "package tagged\n\nimport \"lisette.test/shared\"\n\nfunc Name() string { return shared.Name() }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/shared",
+        &[
+            ("go.mod", "module lisette.test/shared\n\ngo 1.21\n"),
+            (
+                "shared.go",
+                "package shared\n\nfunc Name() string { return \"shared\" }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/child",
+        &[
+            ("go.mod", "module lisette.test/child\n\ngo 1.21\n"),
+            (
+                "child.go",
+                "package child\n\nfunc Name() string { return \"child\" }\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/taggedbroken",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/taggedbroken\n\ngo 1.21\n\nrequire lisette.test/broken v1.0.0\n",
+            ),
+            (
+                "taggedbroken.go",
+                "package taggedbroken\n\nfunc Hello() string { return \"hi\" }\n",
+            ),
+            (
+                "taggedbroken_purego.go",
+                "//go:build purego\n\npackage taggedbroken\n\nimport _ \"lisette.test/broken\"\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/broken",
+        &[
+            ("go.mod", "module lisette.test/broken\n\ngo 1.21\n"),
+            ("broken.go", "package broken\n\nimport \"unterminated\n"),
+        ],
+    ),
+    (
+        "lisette.test/taggedstdtypo",
+        &[
+            (
+                "go.mod",
+                "module lisette.test/taggedstdtypo\n\ngo 1.21\n\nrequire lisette.test/stdtypo v1.0.0\n",
+            ),
+            (
+                "taggedstdtypo.go",
+                "package taggedstdtypo\n\nfunc Hello() string { return \"hi\" }\n",
+            ),
+            (
+                "taggedstdtypo_purego.go",
+                "//go:build purego\n\npackage taggedstdtypo\n\nimport _ \"lisette.test/stdtypo\"\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/stdtypo",
+        &[
+            ("go.mod", "module lisette.test/stdtypo\n\ngo 1.21\n"),
+            (
+                "stdtypo.go",
+                "package stdtypo\n\nimport _ \"encoding/doesnotexist\"\n",
+            ),
+        ],
+    ),
+    (
+        "lisette.test/windowsstdtypo",
+        &[
+            ("go.mod", "module lisette.test/windowsstdtypo\n\ngo 1.21\n"),
+            (
+                "windowsstdtypo.go",
+                "package windowsstdtypo\n\nfunc Hello() string { return \"hi\" }\n",
+            ),
+            (
+                "windowsstdtypo_windows.go",
+                "package windowsstdtypo\n\nimport _ \"encoding/doesnotexist\"\n",
+            ),
+        ],
+    ),
 ];
+
+/// `lisette.test/shared` v1.1.0 imports `lisette.test/child`, which v1.0.0 does not.
+const SHARED_UPGRADE: (&str, &str, &[(&str, &str)]) = (
+    "lisette.test/shared",
+    "v1.1.0",
+    &[
+        (
+            "go.mod",
+            "module lisette.test/shared\n\ngo 1.21\n\nrequire lisette.test/child v1.0.0\n",
+        ),
+        (
+            "shared.go",
+            "package shared\n\nimport \"lisette.test/child\"\n\nfunc Name() string { return child.Name() }\n",
+        ),
+    ],
+);
 
 const VERSION: &str = "v1.0.0";
 
@@ -80,8 +323,10 @@ fn go_env() -> &'static (PathBuf, PathBuf) {
         let _ = fs::remove_dir_all(&proxy);
 
         for (module, files) in MODULES {
-            write_proxy_module(&proxy, module, files);
+            write_proxy_module(&proxy, module, VERSION, files);
         }
+        let (module, version, files) = SHARED_UPGRADE;
+        write_proxy_module(&proxy, module, version, files);
         (proxy, modcache)
     })
 }
@@ -103,23 +348,24 @@ fn make_writable(path: &Path) {
     }
 }
 
-fn write_proxy_module(proxy: &Path, module: &str, files: &[(&str, &str)]) {
+fn write_proxy_module(proxy: &Path, module: &str, version: &str, files: &[(&str, &str)]) {
     let dir = proxy.join(module).join("@v");
     fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join("list"), format!("{VERSION}\n")).unwrap();
+    let list = fs::read_to_string(dir.join("list")).unwrap_or_default();
+    fs::write(dir.join("list"), format!("{list}{version}\n")).unwrap();
     fs::write(
-        dir.join(format!("{VERSION}.info")),
-        format!("{{\"Version\":\"{VERSION}\",\"Time\":\"2026-01-01T00:00:00Z\"}}"),
+        dir.join(format!("{version}.info")),
+        format!("{{\"Version\":\"{version}\",\"Time\":\"2026-01-01T00:00:00Z\"}}"),
     )
     .unwrap();
     let go_mod = files.iter().find(|(name, _)| *name == "go.mod").unwrap().1;
-    fs::write(dir.join(format!("{VERSION}.mod")), go_mod).unwrap();
+    fs::write(dir.join(format!("{version}.mod")), go_mod).unwrap();
 
     let entries: Vec<(String, &[u8])> = files
         .iter()
-        .map(|(name, content)| (format!("{module}@{VERSION}/{name}"), content.as_bytes()))
+        .map(|(name, content)| (format!("{module}@{version}/{name}"), content.as_bytes()))
         .collect();
-    fs::write(dir.join(format!("{VERSION}.zip")), stored_zip(&entries)).unwrap();
+    fs::write(dir.join(format!("{version}.zip")), stored_zip(&entries)).unwrap();
 }
 
 fn stored_zip(entries: &[(String, &[u8])]) -> Vec<u8> {
@@ -358,4 +604,223 @@ fn sync_repeats_until_newly_declared_imports_resolve() {
     let run = lis(&project, &["run"]);
     assert!(run.status.success(), "{}", combined(&run));
     assert_eq!(String::from_utf8_lossy(&run.stdout), "10\n");
+}
+
+const PLATFORM_MAIN: &str = "import \"go:fmt\"\nimport \"go:lisette.test/platform\"\n\nfn main() {\n  fmt.Println(platform.Hello())\n}\n";
+
+#[test]
+fn add_declares_modules_that_other_targets_and_tags_import() {
+    if !go_available() {
+        return;
+    }
+    let (_dir, project) = scaffold("", PLATFORM_MAIN);
+
+    let added = lis(&project, &["add", "lisette.test/platform"]);
+    let output = combined(&added);
+    assert!(added.status.success(), "{output}");
+    assert!(!output.contains("lisette.test/ignored"), "{output}");
+    assert_eq!(
+        go_dependencies(&project),
+        "[dependencies.go]
+\"lisette.test/platform\" = \"v1.0.0\"
+\"lisette.test/subpackageonly\" = { version = \"v1.0.0\", via = [\"lisette.test/platform\"] }
+\"lisette.test/tagonly\" = { version = \"v1.0.0\", via = [\"lisette.test/platform\"] }
+\"lisette.test/windowsonly\" = { version = \"v1.0.0\", via = [\"lisette.test/platform\"] }
+"
+    );
+
+    let windows = lis(&project, &["check", "--target", "windows/amd64"]);
+    assert!(windows.status.success(), "{}", combined(&windows));
+
+    let run = lis(&project, &["run"]);
+    assert!(run.status.success(), "{}", combined(&run));
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "hi\n");
+}
+
+#[test]
+fn sync_declares_modules_that_other_targets_and_tags_import() {
+    if !go_available() {
+        return;
+    }
+    let (_dir, project) = scaffold(
+        "\n[dependencies.go]\n\"lisette.test/platform\" = \"v1.0.0\"\n",
+        PLATFORM_MAIN,
+    );
+
+    let synced = lis(&project, &["sync"]);
+    let output = combined(&synced);
+    assert!(synced.status.success(), "{output}");
+    assert!(!output.contains("lisette.test/ignored"), "{output}");
+    assert_eq!(
+        go_dependencies(&project),
+        "[dependencies.go]
+\"lisette.test/platform\" = \"v1.0.0\"
+\"lisette.test/tagonly\" = { version = \"v1.0.0\", via = [\"lisette.test/platform\"] }
+\"lisette.test/windowsonly\" = { version = \"v1.0.0\", via = [\"lisette.test/platform\"] }
+"
+    );
+
+    let windows = lis(&project, &["check", "--target", "windows/amd64"]);
+    assert!(windows.status.success(), "{}", combined(&windows));
+}
+
+#[test]
+fn add_names_a_local_module_that_only_a_windows_file_imports() {
+    if !go_available() {
+        return;
+    }
+    let main = "import \"go:fmt\"\nimport \"go:lisette.test/locala\"\n\nfn main() {\n  fmt.Println(locala.Hello())\n}\n";
+    let (dir, project) = scaffold("", main);
+    let files: &[(&str, &str)] = &[
+        ("b/go.mod", "module lisette.test/localb\n\ngo 1.21\n"),
+        ("b/b.go", "package localb\n\ntype Value struct{ N int }\n"),
+        (
+            "a/go.mod",
+            "module lisette.test/locala\n\ngo 1.21\n\nrequire lisette.test/localb v0.0.0\n\nreplace lisette.test/localb => ../b\n",
+        ),
+        (
+            "a/a.go",
+            "package locala\n\nfunc Hello() string { return \"hi\" }\n",
+        ),
+        (
+            "a/a_windows.go",
+            "package locala\n\nimport \"lisette.test/localb\"\n\nfunc Handle() localb.Value { return localb.Value{} }\n",
+        ),
+    ];
+    for (name, content) in files {
+        let path = dir.path().join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    let rejected = lis(&project, &["add", "--path", "../a"]);
+    let output = combined(&rejected);
+    assert!(!rejected.status.success(), "{output}");
+    assert!(
+        output.contains("`lisette.test/locala` needs `lisette.test/localb`"),
+        "{output}"
+    );
+
+    for path in ["../b", "../a"] {
+        let added = lis(&project, &["add", "--path", path]);
+        assert!(added.status.success(), "{}", combined(&added));
+    }
+
+    let windows = lis(&project, &["check", "--target", "windows/amd64"]);
+    assert!(windows.status.success(), "{}", combined(&windows));
+
+    let run = lis(&project, &["run"]);
+    assert!(run.status.success(), "{}", combined(&run));
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "hi\n");
+}
+
+#[test]
+fn sync_adds_a_parent_that_only_another_target_reaches() {
+    if !go_available() {
+        return;
+    }
+    let main = "import \"go:fmt\"\nimport \"go:lisette.test/diamond\"\n\nfn main() {\n  fmt.Println(diamond.Hello())\n}\n";
+    let (_dir, project) = scaffold(
+        "\n[dependencies.go]
+\"lisette.test/diamond\" = \"v1.0.0\"
+\"lisette.test/leaf\" = { version = \"v1.0.0\", via = [\"lisette.test/left\"] }
+\"lisette.test/left\" = { version = \"v1.0.0\", via = [\"lisette.test/diamond\"] }
+",
+        main,
+    );
+
+    let synced = lis(&project, &["sync"]);
+    assert!(synced.status.success(), "{}", combined(&synced));
+    assert_eq!(
+        go_dependencies(&project),
+        "[dependencies.go]
+\"lisette.test/diamond\" = \"v1.0.0\"
+\"lisette.test/leaf\" = { version = \"v1.0.0\", via = [\"lisette.test/left\", \"lisette.test/right\"] }
+\"lisette.test/left\" = { version = \"v1.0.0\", via = [\"lisette.test/diamond\"] }
+\"lisette.test/right\" = { version = \"v1.0.0\", via = [\"lisette.test/diamond\"] }
+"
+    );
+}
+
+#[test]
+fn sync_records_a_version_that_a_tagged_import_raises() {
+    if !go_available() {
+        return;
+    }
+    let main = "import \"go:fmt\"\nimport \"go:lisette.test/drift\"\n\nfn main() {\n  fmt.Println(drift.Hello())\n}\n";
+    let (_dir, project) = scaffold(
+        "\n[dependencies.go]\n\"lisette.test/drift\" = \"v1.0.0\"\n",
+        main,
+    );
+
+    let synced = lis(&project, &["sync"]);
+    assert!(synced.status.success(), "{}", combined(&synced));
+    assert_eq!(
+        go_dependencies(&project),
+        "[dependencies.go]
+\"lisette.test/drift\" = \"v1.0.0\"
+\"lisette.test/child\" = { version = \"v1.0.0\", via = [\"lisette.test/shared\"] }
+\"lisette.test/shared\" = { version = \"v1.1.0\", via = [\"lisette.test/drift\", \"lisette.test/tagged\"] }
+\"lisette.test/tagged\" = { version = \"v1.0.0\", via = [\"lisette.test/drift\"] }
+"
+    );
+
+    let run = lis(&project, &["run"]);
+    assert!(run.status.success(), "{}", combined(&run));
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "child\n");
+}
+
+#[test]
+fn sync_follows_blank_imports() {
+    if !go_available() {
+        return;
+    }
+    let main = "import _ \"go:lisette.test/platform\"\n\nfn main() {}\n";
+    let (_dir, project) = scaffold(
+        "\n[dependencies.go]\n\"lisette.test/platform\" = \"v1.0.0\"\n",
+        main,
+    );
+
+    let synced = lis(&project, &["sync"]);
+    assert!(synced.status.success(), "{}", combined(&synced));
+    assert_eq!(
+        go_dependencies(&project),
+        "[dependencies.go]
+\"lisette.test/platform\" = \"v1.0.0\"
+\"lisette.test/tagonly\" = { version = \"v1.0.0\", via = [\"lisette.test/platform\"] }
+\"lisette.test/windowsonly\" = { version = \"v1.0.0\", via = [\"lisette.test/platform\"] }
+"
+    );
+}
+
+#[test]
+fn add_reports_an_error_in_a_package_that_only_a_tag_reaches() {
+    if !go_available() {
+        return;
+    }
+    let main = "import \"go:fmt\"\nimport \"go:lisette.test/taggedbroken\"\n\nfn main() {\n  fmt.Println(taggedbroken.Hello())\n}\n";
+    let (_dir, project) = scaffold("", main);
+
+    let added = lis(&project, &["add", "lisette.test/taggedbroken"]);
+    let output = combined(&added);
+    assert!(!added.status.success(), "{output}");
+    assert!(output.contains("lisette.test/broken"), "{output}");
+}
+
+#[test]
+fn add_reports_a_missing_standard_package_that_only_another_target_imports() {
+    if !go_available() {
+        return;
+    }
+    for module in ["lisette.test/taggedstdtypo", "lisette.test/windowsstdtypo"] {
+        let (_dir, project) = scaffold("", MAIN);
+
+        let added = lis(&project, &["add", module]);
+        let output = combined(&added);
+        assert!(!added.status.success(), "{module}: {output}");
+        assert!(
+            output.contains("encoding/doesnotexist"),
+            "{module}: {output}"
+        );
+    }
 }

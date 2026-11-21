@@ -45,6 +45,7 @@ func PrintUsage() {
 	fmt.Fprintf(os.Stderr, "  pkg <package>  Generate bindings for a single package\n")
 	fmt.Fprintf(os.Stderr, "  pkgs           Generate bindings for many packages (paths on stdin)\n")
 	fmt.Fprintf(os.Stderr, "  stdlib -outdir <dir>  Generate bindings for all Go stdlib packages\n")
+	fmt.Fprintf(os.Stderr, "  imports        List package imports for every target (JSON request on stdin)\n")
 }
 
 func RunPkg(args []string, defaultCfgJSON, stdlibCfgJSON []byte) {
