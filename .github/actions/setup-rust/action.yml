@@ -41,4 +41,4 @@ runs:
       uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
       with:
         workspaces: ${{ inputs.cache-workspaces }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        save-if: ${{ github.ref == 'refs/heads/main' || (startsWith(github.ref, 'refs/heads/ci-exp-') && github.job == 'clippy-satellites') }}
