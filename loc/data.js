@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795347338860,
+  "lastUpdate": 1795368477910,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -59415,6 +59415,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 11377,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1d150de3579077a9c6d43870e766e8eba2933f40",
+          "message": "fix: enforce Go union constraints (#1722)",
+          "timestamp": "2026-11-22T18:27:31+01:00",
+          "tree_id": "0396a360549371ba77ba46c797c316b195cdd81a",
+          "url": "https://github.com/ivov/lisette/commit/1d150de3579077a9c6d43870e766e8eba2933f40"
+        },
+        "date": 1795368475766,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 165775,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43620,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 33713,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20278,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 18862,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14494,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9507,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7697,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2970,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1930,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11461,
             "unit": "lines"
           },
           {
