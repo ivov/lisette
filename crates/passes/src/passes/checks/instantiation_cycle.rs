@@ -1,502 +1,710 @@
-//! Rejects recursion that regrows a generic type argument, mirroring the Go
-//! compiler's instantiation-cycle rule so the failure surfaces as a Lisette
-//! diagnostic instead of leaking from `go build`.
+//! Adapted from src/go/types/mono.go in the Go source tree.
+//!
+//! Copyright 2021 The Go Authors. All rights reserved.
+//! Use of this source code is governed by a BSD-style
+//! license that can be found at https://go.dev/LICENSE.
+//!
+//! Rejects generic code that Go cannot instantiate in a finite number of steps.
+//!
+//! For each instantiation, the check records which type parameters the type
+//! argument uses, and whether the argument wraps them, as `Slice<T>` wraps `T`.
+//! Go rejects the program when a chain of instantiations leads back to its
+//! start and one step wraps a parameter, because each pass makes the type larger.
+
+use std::ptr;
 
 use diagnostics::LocalSink;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::{Binding, Expression, IdentifierResolution, Pattern, Span};
-use syntax::program::DotAccessResolution;
-use syntax::types::{CompoundKind, FunctionType, Symbol, Type};
-
 use semantics::store::Store;
-use std::iter;
-use syntax::ast::Generic;
+use syntax::ast::{Binding, EnumVariant, Expression, Generic, Pattern, Span};
+use syntax::program::{AliasKind, DefinitionBody};
+use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
 
 pub(crate) fn run(store: &Store, sink: &LocalSink) {
-    let call_cycles = check_calls(store, sink);
-    declarations::check_type_declarations(store, sink, &call_cycles);
+    let mut graph = Graph::new(store);
+    graph.add_type_definitions();
+    for (body, scope, span) in graph.add_functions() {
+        graph.add_body(body, &scope, span);
+    }
+    graph.report(sink);
 }
 
-pub(super) struct CallCycle {
+#[derive(Clone)]
+enum Site {
+    Call {
+        function: EcoString,
+        parameter: EcoString,
+    },
+    Declaration {
+        owner: EcoString,
+        inferred: bool,
+    },
+}
+
+struct Growing {
+    source: usize,
+    target: usize,
+    parameter: EcoString,
+    argument: Type,
     span: Span,
+    site: Site,
 }
 
-fn check_calls(store: &Store, sink: &LocalSink) -> Vec<CallCycle> {
-    let targets = collect_generic_targets(store);
-    if targets.list.is_empty() {
-        return Vec::new();
-    }
+struct AliasUse {
+    used: Vec<bool>,
+    identity: Option<usize>,
+}
 
-    let mut collector = EdgeCollector {
-        targets: &targets,
-        adjacency: vec![Vec::new(); targets.node_count],
-        growing: Vec::new(),
-        current: 0,
-    };
-    for index in 0..targets.list.len() {
-        collector.current = index;
-        collector.walk(targets.list[index].body);
-    }
+type Scope = HashMap<EcoString, usize>;
 
-    let components = graph::components(&collector.adjacency);
-    let mut reported_spans: HashSet<Span> = HashSet::default();
-    for edge in &collector.growing {
-        if components[edge.target] != components[edge.source] {
-            continue;
+struct Graph<'a> {
+    store: &'a Store,
+    vertices: HashMap<(EcoString, usize), usize>,
+    edges: Vec<Vec<usize>>,
+    growing: Vec<Growing>,
+    functions: HashMap<EcoString, Scope>,
+    ordered_parameters: HashMap<EcoString, (Vec<(EcoString, usize)>, usize)>,
+    aliases: HashMap<Symbol, Option<AliasUse>>,
+    summarizing: HashSet<Symbol>,
+}
+
+impl<'a> Graph<'a> {
+    fn new(store: &'a Store) -> Self {
+        Self {
+            store,
+            vertices: HashMap::default(),
+            edges: Vec::new(),
+            growing: Vec::new(),
+            functions: HashMap::default(),
+            ordered_parameters: HashMap::default(),
+            aliases: HashMap::default(),
+            summarizing: HashSet::default(),
         }
-        if !reported_spans.insert(edge.span) {
-            continue;
+    }
+
+    fn vertex(&mut self, owner: &EcoString, position: usize) -> usize {
+        let next = self.edges.len();
+        let vertex = *self
+            .vertices
+            .entry((owner.clone(), position))
+            .or_insert(next);
+        if vertex == next {
+            self.edges.push(Vec::new());
         }
-        sink.push(diagnostics::infer::growing_call_type_argument(
-            &edge.var,
-            &edge.type_arg,
-            &edge.target_name,
-            edge.span,
-        ));
+        vertex
     }
-    reported_spans
-        .into_iter()
-        .map(|span| CallCycle { span })
-        .collect()
-}
 
-struct GenericTarget<'a> {
-    name: &'a EcoString,
-    vars: Vec<&'a EcoString>,
-    declared_self: Option<&'a Type>,
-    declared_params: Vec<&'a Type>,
-    declared_return: &'a Type,
-    body: &'a Expression,
-    first_node: usize,
-}
-
-#[derive(Default)]
-struct Targets<'a> {
-    list: Vec<GenericTarget<'a>>,
-    functions: HashMap<EcoString, usize>,
-    methods: HashMap<(EcoString, EcoString), usize>,
-    node_count: usize,
-}
-
-impl<'a> Targets<'a> {
-    fn add(&mut self, mut target: GenericTarget<'a>) -> usize {
-        let index = self.list.len();
-        target.first_node = self.node_count;
-        self.node_count += target.vars.len();
-        self.list.push(target);
-        index
+    fn type_vertex(&mut self, id: &Symbol, position: usize) -> Option<usize> {
+        let generics = self.store.get_definition(id)?.body.generics()?;
+        (!id.as_str().starts_with(GO_IMPORT_PREFIX) && position < generics.len())
+            .then(|| self.vertex(id.as_eco(), position))
     }
-}
 
-fn collect_generic_targets(store: &Store) -> Targets<'_> {
-    let mut package_ids: Vec<&str> = store.packages().keys().map(String::as_str).collect();
-    package_ids.sort_unstable();
-
-    let mut targets = Targets::default();
-    for package_id in package_ids {
-        let package = &store.packages()[package_id];
-        let mut files: Vec<_> = package.source_files().collect();
-        files.sort_unstable_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
-        for file in files {
-            for item in &file.items {
-                match item {
-                    Expression::Function {
-                        name,
-                        generics,
-                        params,
-                        return_type,
-                        body,
+    fn add_type_definitions(&mut self) {
+        let store = self.store;
+        let packages = store.packages().values();
+        for package in packages.filter(|package| !package.id.starts_with(GO_IMPORT_PREFIX)) {
+            for (id, definition) in &package.definitions {
+                let generics = definition.body.generics().unwrap_or_default();
+                if generics.is_empty() || embeds_itself(store, id) {
+                    continue;
+                }
+                let scope: Scope = (0..generics.len())
+                    .filter_map(|position| {
+                        let vertex = self.type_vertex(id, position)?;
+                        Some((generics[position].name.clone(), vertex))
+                    })
+                    .collect();
+                let span = definition.name_span.unwrap_or_else(Span::dummy);
+                let is_interface = matches!(definition.body, DefinitionBody::Interface { .. });
+                let mut types: Vec<(&Type, Span)> = generics
+                    .iter()
+                    .filter_map(Generic::resolved_bounds)
+                    .flatten()
+                    .filter(|bound| !is_interface || bound.get_qualified_id() != Some(id))
+                    .map(|bound| (bound, span))
+                    .collect();
+                match &definition.body {
+                    DefinitionBody::Struct { fields, .. } => {
+                        types.extend(fields.iter().map(|field| (&field.ty, field.name_span)));
+                    }
+                    DefinitionBody::Enum { variants, .. } => {
+                        types.extend(variants.iter().flat_map(variant_field_types));
+                    }
+                    DefinitionBody::Interface { definition } => {
+                        types.extend(definition.parents.iter().map(|parent| (parent, span)));
+                        types.extend(
+                            definition
+                                .methods
+                                .values()
+                                .map(|method| (&method.ty, method.name_span.unwrap_or(span))),
+                        );
+                    }
+                    DefinitionBody::TypeAlias {
+                        alias: AliasKind::Transparent { target, .. },
                         ..
-                    } if !generics.is_empty() => {
-                        let Some(body) = body.definition() else {
-                            continue;
-                        };
-                        let index = targets.add(GenericTarget {
-                            name,
-                            vars: generics.iter().map(|g| &g.name).collect(),
-                            declared_self: None,
-                            declared_params: params.iter().map(|p| &p.ty).collect(),
-                            declared_return: return_type,
-                            body,
-                            first_node: 0,
-                        });
-                        let qualified = Symbol::from_parts(package_id, name).as_eco().clone();
-                        targets.functions.insert(qualified, index);
+                    } => types.push((target, span)),
+                    _ => {}
+                }
+                for (ty, span) in types {
+                    self.add_type(ty, &scope, span, false);
+                }
+            }
+        }
+    }
+
+    fn add_functions(&mut self) -> Vec<(&'a Expression, Scope, Span)> {
+        let store = self.store;
+        let mut bodies = Vec::new();
+        for package in store.packages().values() {
+            for item in package.source_files().flat_map(|file| &file.items) {
+                match item {
+                    Expression::Function { name, generics, .. } => {
+                        let symbol = Symbol::from_parts(&package.id, name);
+                        let scope = self.add_function(&symbol, generics.iter(), 0);
+                        bodies.extend(self.add_signature(item, &[], scope));
                     }
                     Expression::ImplBlock {
-                        receiver_name,
-                        generics: impl_generics,
+                        ty,
+                        generics,
                         methods,
                         ..
-                    } => {
-                        for method in methods {
-                            collect_method(
-                                method,
-                                impl_generics,
-                                receiver_name,
-                                package_id,
-                                &mut targets,
-                            );
-                        }
-                    }
+                    } => self.add_impl_block(ty, generics, methods, &mut bodies),
                     _ => {}
                 }
             }
         }
-    }
-    targets
-}
-
-fn collect_method<'a>(
-    method: &'a Expression,
-    impl_generics: &'a [Generic],
-    receiver_name: &EcoString,
-    package_id: &str,
-    targets: &mut Targets<'a>,
-) {
-    let Expression::Function {
-        name,
-        generics,
-        params,
-        return_type,
-        body,
-        ..
-    } = method
-    else {
-        return;
-    };
-    let vars: Vec<&EcoString> = impl_generics
-        .iter()
-        .chain(generics)
-        .map(|g| &g.name)
-        .collect();
-    if vars.is_empty() {
-        return;
-    }
-    let Some(body) = body.definition() else {
-        return;
-    };
-    let (declared_self, declared_params) = split_self_param(params);
-    let receiver_id = declared_self.and_then(receiver_type_id).unwrap_or_else(|| {
-        Symbol::from_parts(package_id, receiver_name)
-            .as_eco()
-            .clone()
-    });
-    let index = targets.add(GenericTarget {
-        name,
-        vars,
-        declared_self,
-        declared_params,
-        declared_return: return_type,
-        body,
-        first_node: 0,
-    });
-    // Static-style references collapse to a plain identifier qualified as
-    // `package.Type.method`.
-    let qualified = Symbol::from_raw(receiver_id.clone())
-        .with_segment(name)
-        .as_eco()
-        .clone();
-    targets.functions.insert(qualified, index);
-    targets.methods.insert((receiver_id, name.clone()), index);
-}
-
-fn split_self_param(params: &[Binding]) -> (Option<&Type>, Vec<&Type>) {
-    match params.split_first() {
-        Some((first, rest)) if is_self_binding(first) => {
-            (Some(&first.ty), rest.iter().map(|p| &p.ty).collect())
-        }
-        _ => (None, params.iter().map(|p| &p.ty).collect()),
-    }
-}
-
-fn is_self_binding(binding: &Binding) -> bool {
-    matches!(&binding.pattern, Pattern::Identifier { identifier, .. } if identifier == "self")
-}
-
-fn receiver_type_id(ty: &Type) -> Option<EcoString> {
-    match ty {
-        Type::Compound {
-            kind: CompoundKind::Ref,
-            args,
-            ..
-        } => args.first().and_then(receiver_type_id),
-        Type::Nominal { id, .. } => Some(id.as_eco().clone()),
-        _ => None,
-    }
-}
-
-struct GrowingEdge {
-    source: usize,
-    target: usize,
-    span: Span,
-    var: EcoString,
-    type_arg: Type,
-    target_name: EcoString,
-}
-
-struct EdgeCollector<'s, 'a> {
-    targets: &'s Targets<'a>,
-    adjacency: Vec<Vec<usize>>,
-    growing: Vec<GrowingEdge>,
-    current: usize,
-}
-
-impl<'a> EdgeCollector<'_, 'a> {
-    fn walk(&mut self, expression: &'a Expression) {
-        match expression {
-            // A nested function declaration is a hard error elsewhere, and its
-            // type parameters shadow the enclosing ones, so references in its
-            // body must not be attributed to the enclosing generic context.
-            Expression::Function { .. } => {}
-            Expression::Call {
-                expression: callee,
-                args,
-                spread,
-                span,
-                ..
-            } => {
-                match callee.as_ref() {
-                    reference @ (Expression::Identifier { .. } | Expression::DotAccess { .. }) => {
-                        self.process_reference(reference, *span);
-                        if let Expression::DotAccess {
-                            expression: base, ..
-                        } = reference
-                        {
-                            self.walk(base);
-                        }
-                    }
-                    other => self.walk(other),
-                }
-                for argument in args {
-                    self.walk(argument);
-                }
-                if let Some(spread) = spread.as_ref() {
-                    self.walk(spread);
-                }
-            }
-            Expression::Identifier { span, .. } => self.process_reference(expression, *span),
-            Expression::DotAccess {
-                expression: base,
-                span,
-                ..
-            } => {
-                self.process_reference(expression, *span);
-                self.walk(base);
-            }
-            _ => {
-                for child in expression.children() {
-                    self.walk(child);
-                }
-            }
-        }
+        bodies
     }
 
-    fn process_reference(&mut self, reference: &'a Expression, span: Span) {
-        match reference {
-            Expression::Identifier {
-                resolution:
-                    IdentifierResolution::Definition {
-                        name: qualified, ..
-                    },
-                ty,
-                ..
-            } => {
-                if let Some(&target_index) = self.targets.functions.get(qualified)
-                    && let Type::Function(instantiated) = ty
-                {
-                    self.match_and_emit(target_index, None, instantiated, span);
-                }
-            }
-            Expression::DotAccess {
-                expression: base,
-                member,
-                ty,
-                resolution,
-                ..
-            } => self.process_method_reference(base, member, ty, resolution, span),
-            _ => {}
-        }
-    }
-
-    fn process_method_reference(
+    fn add_impl_block(
         &mut self,
-        base: &'a Expression,
-        member: &EcoString,
-        ty: &'a Type,
-        resolution: &DotAccessResolution,
-        span: Span,
+        ty: &Type,
+        generics: &[Generic],
+        methods: &'a [Expression],
+        bodies: &mut Vec<(&'a Expression, Scope, Span)>,
     ) {
-        let is_instance = match resolution {
-            DotAccessResolution::InstanceMethod { .. }
-            | DotAccessResolution::InstanceMethodValue { .. } => true,
-            DotAccessResolution::StaticMethod { .. } => false,
-            _ => return,
-        };
-        let base_ty = base.get_type();
-        let receiver_id = receiver_type_id(&base_ty).or_else(|| match base {
-            Expression::Identifier {
-                resolution:
-                    IdentifierResolution::Definition {
-                        name: qualified, ..
-                    },
-                ..
-            } => Some(qualified.clone()),
-            _ => None,
-        });
-        let Some(receiver_id) = receiver_id else {
+        let store = self.store;
+        let is_alias = ty
+            .get_qualified_id()
+            .and_then(|id| store.get_definition(id))
+            .is_some_and(|d| matches!(d.body, DefinitionBody::TypeAlias { .. }));
+        let (receiver, _) = store.peel_refs_and_aliases(ty);
+        let Type::Nominal { id, params, .. } = &receiver else {
             return;
         };
-        let Some(&target_index) = self.targets.methods.get(&(receiver_id, member.clone())) else {
+        if is_alias {
             return;
-        };
-        let Type::Function(instantiated) = ty else {
-            return;
-        };
-        let receiver = is_instance.then_some(&base_ty);
-        self.match_and_emit(target_index, receiver, instantiated, span);
-    }
-
-    fn match_and_emit(
-        &mut self,
-        target_index: usize,
-        receiver: Option<&Type>,
-        instantiated: &FunctionType,
-        span: Span,
-    ) {
-        let targets = self.targets;
-        let target = &targets.list[target_index];
-        let declared_self = target.declared_self.map(Type::strip_refs);
-        let receiver = receiver.map(Type::strip_refs);
-
-        let mut bindings: HashMap<EcoString, &Type> = HashMap::default();
-        let actual_params = if instantiated.params.len() == target.declared_params.len() {
-            if let (Some(declared_self), Some(receiver)) = (&declared_self, &receiver) {
-                bind_type_arguments(declared_self, receiver, &target.vars, &mut bindings);
-            }
-            &instantiated.params
-        } else if instantiated.params.len() == target.declared_params.len() + 1
-            && declared_self.is_some()
-        {
-            // Method used with an explicit receiver slot, for example as a
-            // first-class value. The receiver is the first parameter.
-            if let Some(declared_self) = &declared_self {
-                bind_type_arguments(
-                    declared_self,
-                    &instantiated.params[0].ty,
-                    &target.vars,
-                    &mut bindings,
-                );
-            }
-            &instantiated.params[1..]
-        } else {
-            return;
-        };
-        for (declared, actual) in target.declared_params.iter().zip(actual_params) {
-            bind_type_arguments(declared, &actual.ty, &target.vars, &mut bindings);
         }
-        bind_type_arguments(
-            target.declared_return,
-            &instantiated.return_type,
-            &target.vars,
-            &mut bindings,
-        );
-
-        let source = &targets.list[self.current];
-        for (target_position, var) in target.vars.iter().enumerate() {
-            let Some(&type_arg) = bindings.get(*var) else {
+        for method in methods {
+            let Expression::Function {
+                name,
+                generics: own,
+                params: parameters,
+                ..
+            } = method
+            else {
                 continue;
             };
-            let target_node = target.first_node + target_position;
-            for (source_position, source_var) in source.vars.iter().enumerate() {
-                let is_same = matches!(type_arg, Type::Parameter(name) if name == *source_var);
-                if !is_same && !mentions_parameter(type_arg, source_var) {
-                    continue;
+            let symbol = id.with_segment(name);
+            let (scope, impl_generics) = if is_go_method(store, id, name, parameters) {
+                (self.add_go_method(&symbol, id, params), &[][..])
+            } else {
+                let scope = self.add_function(&symbol, generics.iter().chain(own), generics.len());
+                match receiver_generics(store, id, params, generics) {
+                    Some(declared) => {
+                        self.add_receiver_bounds(declared, generics, &scope, method);
+                        (scope, &[][..])
+                    }
+                    None => (scope, generics),
                 }
-                let source_node = source.first_node + source_position;
-                self.adjacency[source_node].push(target_node);
-                if !is_same {
-                    self.growing.push(GrowingEdge {
-                        source: source_node,
-                        target: target_node,
-                        span,
-                        var: (*var).clone(),
-                        type_arg: type_arg.clone(),
-                        target_name: target.name.clone(),
-                    });
+            };
+            bodies.extend(self.add_signature(method, impl_generics, scope));
+        }
+    }
+
+    fn add_receiver_bounds(
+        &mut self,
+        declared: &[Generic],
+        generics: &[Generic],
+        scope: &Scope,
+        method: &Expression,
+    ) {
+        let Expression::Function { name_span, .. } = method else {
+            return;
+        };
+        let renamed: Scope = declared
+            .iter()
+            .zip(generics)
+            .filter_map(|(declared, generic)| {
+                Some((declared.name.clone(), *scope.get(&generic.name)?))
+            })
+            .collect();
+        for bound in declared
+            .iter()
+            .filter_map(Generic::resolved_bounds)
+            .flatten()
+        {
+            self.add_type(bound, &renamed, *name_span, false);
+        }
+    }
+
+    fn add_function<'g>(
+        &mut self,
+        symbol: &Symbol,
+        generics: impl Iterator<Item = &'g Generic>,
+        own_start: usize,
+    ) -> Scope {
+        let parameters: Vec<(EcoString, usize)> = generics
+            .enumerate()
+            .map(|(position, generic)| {
+                let vertex = self.vertex(symbol.as_eco(), position);
+                (generic.name.clone(), vertex)
+            })
+            .collect();
+        let scope: Scope = parameters.iter().cloned().collect();
+        self.ordered_parameters
+            .insert(symbol.as_eco().clone(), (parameters, own_start));
+        self.functions
+            .insert(symbol.as_eco().clone(), scope.clone());
+        scope
+    }
+
+    fn add_go_method(&mut self, symbol: &Symbol, receiver: &Symbol, arguments: &[Type]) -> Scope {
+        let mut scope = Scope::default();
+        for (position, argument) in arguments.iter().enumerate() {
+            if let Type::Parameter(name) = argument
+                && let Some(vertex) = self.type_vertex(receiver, position)
+            {
+                scope.insert(name.clone(), vertex);
+            }
+        }
+        self.functions
+            .insert(symbol.as_eco().clone(), scope.clone());
+        scope
+    }
+
+    fn add_signature(
+        &mut self,
+        function: &'a Expression,
+        impl_generics: &[Generic],
+        scope: Scope,
+    ) -> Option<(&'a Expression, Scope, Span)> {
+        let Expression::Function {
+            name_span,
+            generics,
+            params: parameters,
+            return_type,
+            body,
+            ..
+        } = function
+        else {
+            return None;
+        };
+        if scope.is_empty() {
+            return None;
+        }
+        let bounds = impl_generics
+            .iter()
+            .chain(generics)
+            .filter_map(Generic::resolved_bounds)
+            .flatten();
+        for ty in parameters
+            .iter()
+            .map(|p| &p.ty)
+            .chain([return_type])
+            .chain(bounds)
+        {
+            self.add_type(ty, &scope, *name_span, false);
+        }
+        Some((body.definition()?, scope, *name_span))
+    }
+
+    fn add_body(&mut self, body: &Expression, scope: &Scope, span: Span) {
+        let mut pending = vec![(body, None)];
+        while let Some((expression, call_span)) = pending.pop() {
+            let reference = match expression {
+                Expression::Function { .. } => continue,
+                Expression::Identifier { resolution, .. } => {
+                    resolution.definition().zip(resolution.instantiation())
+                }
+                Expression::DotAccess { resolution, .. } => {
+                    resolution.definition().zip(resolution.instantiation())
+                }
+                _ => None,
+            };
+            if let Some((definition, instantiation)) = reference {
+                let span = call_span.unwrap_or_else(|| expression.get_span());
+                for (parameter, argument) in instantiation.iter() {
+                    self.add_call(definition, parameter, argument, scope, span);
+                }
+            }
+            if let Some(ty) = expression.type_ref() {
+                self.add_type(ty, scope, span, true);
+            }
+            if let Expression::Call {
+                expression: callee,
+                type_arguments,
+                span,
+                ..
+            } = expression
+                && let Some(arguments) = type_arguments.resolved_types()
+            {
+                self.add_type_arguments(callee, arguments.iter(), scope, *span);
+            }
+            let callee = match expression {
+                Expression::Call {
+                    expression: callee,
+                    span,
+                    ..
+                } => Some((callee.as_ref(), *span)),
+                _ => None,
+            };
+            for child in expression.children().into_iter().rev() {
+                let call_span = callee.filter(|(callee, _)| ptr::eq(*callee, child));
+                pending.push((child, call_span.map(|(_, span)| span)));
+            }
+        }
+    }
+
+    fn add_type_arguments<'t>(
+        &mut self,
+        callee: &Expression,
+        arguments: impl Iterator<Item = &'t Type>,
+        scope: &Scope,
+        span: Span,
+    ) {
+        let definition = match callee.unwrap_parens() {
+            Expression::Identifier { resolution, .. } => resolution.definition(),
+            Expression::DotAccess { resolution, .. } => resolution.definition(),
+            _ => None,
+        };
+        let arguments: Vec<&Type> = arguments.collect();
+        let (all, own_start) = definition
+            .and_then(|definition| self.ordered_parameters.get(definition))
+            .cloned()
+            .unwrap_or_default();
+        let parameters = if arguments.len() == all.len() {
+            &all[..]
+        } else {
+            &all[own_start.min(all.len())..]
+        };
+        let function = definition.map_or("", |definition| {
+            definition
+                .rsplit_once('.')
+                .map_or(definition, |(_, member)| member)
+        });
+        for (position, argument) in arguments.into_iter().enumerate() {
+            self.add_type(argument, scope, span, true);
+            if let Some((parameter, target)) = parameters.get(position) {
+                let site = Site::Call {
+                    function: function.into(),
+                    parameter: parameter.clone(),
+                };
+                self.assign(*target, argument, scope, span, &site);
+            }
+        }
+    }
+
+    fn add_call(
+        &mut self,
+        definition: &str,
+        parameter: &EcoString,
+        argument: &Type,
+        scope: &Scope,
+        span: Span,
+    ) {
+        let (owner, member) = definition.rsplit_once('.').unwrap_or(("", definition));
+        let function = self.functions.get(definition).or_else(|| {
+            let owner = self.store.peel_alias_name(owner)?;
+            self.functions.get(owner.with_segment(member).as_eco())
+        });
+        let Some(&target) = function.and_then(|function| function.get(parameter)) else {
+            return;
+        };
+        let site = Site::Call {
+            function: member.into(),
+            parameter: parameter.clone(),
+        };
+        self.assign(target, argument, scope, span, &site);
+    }
+
+    fn add_type(&mut self, ty: &Type, scope: &Scope, span: Span, inferred: bool) {
+        let mut pending = vec![ty];
+        while let Some(ty) = pending.pop() {
+            pending.extend(ty.children().into_iter().rev());
+            let Type::Nominal { id, params, .. } = ty else {
+                continue;
+            };
+            if self
+                .alias_use(id)
+                .is_some_and(|alias| alias.identity.is_some())
+            {
+                continue;
+            }
+            let site = Site::Declaration {
+                owner: unqualified_name(id).into(),
+                inferred,
+            };
+            for (position, argument) in params.iter().enumerate() {
+                if let Some(target) = self.type_vertex(id, position) {
+                    self.assign(target, argument, scope, span, &site);
                 }
             }
         }
     }
+
+    fn assign(&mut self, target: usize, argument: &Type, scope: &Scope, span: Span, site: &Site) {
+        let mut parameters = Vec::new();
+        self.mentioned_parameters(argument, &mut parameters);
+        let bare = match self.without_identity_aliases(argument) {
+            Type::Parameter(name) => Some(name.clone()),
+            _ => None,
+        };
+        let mut seen = HashSet::default();
+        for parameter in parameters {
+            let Some(&source) = scope.get(&parameter) else {
+                continue;
+            };
+            if !seen.insert(source) {
+                continue;
+            }
+            self.edges[source].push(target);
+            if bare.as_ref() != Some(&parameter) {
+                self.growing.push(Growing {
+                    source,
+                    target,
+                    parameter,
+                    argument: argument.clone(),
+                    span,
+                    site: site.clone(),
+                });
+            }
+        }
+    }
+
+    fn mentioned_parameters(&mut self, ty: &Type, parameters: &mut Vec<EcoString>) {
+        let mut pending = vec![ty];
+        while let Some(ty) = pending.pop() {
+            match ty {
+                Type::Parameter(name) => parameters.push(name.clone()),
+                Type::Nominal { id, params, .. } if self.alias_use(id).is_some() => {
+                    let alias = self.alias_use(id).expect("the alias is summarized");
+                    let used = params.iter().zip(&alias.used);
+                    pending.extend(used.filter_map(|(argument, &used)| used.then_some(argument)));
+                }
+                _ => pending.extend(ty.children()),
+            }
+        }
+    }
+
+    fn without_identity_aliases<'t>(&mut self, mut ty: &'t Type) -> &'t Type {
+        while let Type::Nominal { id, params, .. } = ty
+            && let Some(position) = self.alias_use(id).and_then(|alias| alias.identity)
+        {
+            ty = &params[position];
+        }
+        ty
+    }
+
+    fn alias_use(&mut self, id: &Symbol) -> Option<&AliasUse> {
+        if !self.aliases.contains_key(id) && !self.summarizing.contains(id) {
+            self.summarize_aliases(id);
+        }
+        self.aliases.get(id)?.as_ref()
+    }
+
+    fn summarize_aliases(&mut self, id: &Symbol) {
+        let store = self.store;
+        let mut pending = vec![(id.clone(), false)];
+        while let Some((current, ready)) = pending.pop() {
+            if self.aliases.contains_key(&current) {
+                continue;
+            }
+            let Some(DefinitionBody::TypeAlias {
+                generics,
+                alias: AliasKind::Transparent { target, .. },
+                ..
+            }) = store
+                .get_definition(&current)
+                .map(|definition| &definition.body)
+            else {
+                self.aliases.insert(current, None);
+                continue;
+            };
+            if !ready {
+                if self.summarizing.insert(current.clone()) {
+                    pending.push((current, true));
+                    self.push_unsummarized(target, &mut pending);
+                }
+                continue;
+            }
+            let mut mentioned = Vec::new();
+            self.mentioned_parameters(target, &mut mentioned);
+            let identity = match self.without_identity_aliases(target) {
+                Type::Parameter(name) => generics.iter().position(|g| &g.name == name),
+                _ => None,
+            };
+            let used = generics
+                .iter()
+                .map(|g| mentioned.contains(&g.name))
+                .collect();
+            self.summarizing.remove(&current);
+            self.aliases
+                .insert(current, Some(AliasUse { used, identity }));
+        }
+    }
+
+    fn push_unsummarized(&self, target: &Type, pending: &mut Vec<(Symbol, bool)>) {
+        let mut nested = vec![target];
+        while let Some(ty) = nested.pop() {
+            if let Type::Nominal { id, .. } = ty
+                && !self.aliases.contains_key(id)
+                && !self.summarizing.contains(id)
+            {
+                pending.push((id.clone(), false));
+            }
+            nested.extend(ty.children());
+        }
+    }
+
+    fn report(mut self, sink: &LocalSink) {
+        let components = components(&self.edges);
+        self.growing.sort_by_key(|edge| {
+            let is_declaration = matches!(edge.site, Site::Declaration { .. });
+            (is_declaration, edge.span.file_id, edge.span.byte_offset)
+        });
+        let mut reported = HashSet::default();
+        let mut reported_spans = HashSet::default();
+        for edge in &self.growing {
+            let component = components[edge.source];
+            if component != components[edge.target]
+                || reported_spans.contains(&edge.span)
+                || !reported.insert(component)
+            {
+                continue;
+            }
+            reported_spans.insert(edge.span);
+            sink.push(match &edge.site {
+                Site::Call {
+                    function,
+                    parameter,
+                } => diagnostics::infer::growing_call_type_argument(
+                    parameter,
+                    &edge.argument,
+                    function,
+                    edge.span,
+                ),
+                Site::Declaration { owner, inferred } => {
+                    let argument = if *inferred {
+                        edge.argument.without_permissions()
+                    } else {
+                        edge.argument.clone()
+                    };
+                    diagnostics::infer::growing_declaration_type_argument(
+                        &edge.parameter,
+                        &argument,
+                        owner,
+                        edge.span,
+                    )
+                }
+            });
+        }
+    }
 }
 
-/// Recovers the type argument bound to each of the target's type parameters
-/// by walking the declared and instantiated signatures in parallel.
-fn bind_type_arguments<'t>(
-    declared: &Type,
-    actual: &'t Type,
-    vars: &[&EcoString],
-    bindings: &mut HashMap<EcoString, &'t Type>,
-) {
-    if let Type::Parameter(name) = declared {
-        if vars.contains(&name) {
-            bindings.entry(name.clone()).or_insert(actual);
-        }
-        return;
-    }
-    if !same_shape(declared, actual) {
-        return;
-    }
-    let declared_children = structural_children(declared);
-    let actual_children = structural_children(actual);
-    if declared_children.len() == actual_children.len() {
-        for (declared, actual) in declared_children.into_iter().zip(actual_children) {
-            bind_type_arguments(declared, actual, vars, bindings);
-        }
-    }
-}
-
-fn same_shape(declared: &Type, actual: &Type) -> bool {
-    match (declared, actual) {
-        (Type::Compound { kind: declared, .. }, Type::Compound { kind: actual, .. }) => {
-            declared == actual
-        }
-        (Type::Nominal { id: declared, .. }, Type::Nominal { id: actual, .. }) => {
-            declared == actual
-        }
-        (Type::Function(_), Type::Function(_)) | (Type::Tuple(_), Type::Tuple(_)) => true,
-        _ => false,
-    }
-}
-
-/// Child positions matched pairwise between the declared and instantiated
-/// sides. A nominal occurrence contains only its type arguments; its alias
-/// target lives in the definition store and is not part of this shape.
-fn structural_children(ty: &Type) -> Vec<&Type> {
-    match ty {
-        Type::Compound { args, .. } => args.iter().collect(),
-        Type::Nominal { params, .. } => params.iter().collect(),
-        Type::Function(function) => function
-            .params
+fn receiver_generics<'s>(
+    store: &'s Store,
+    receiver: &Symbol,
+    arguments: &[Type],
+    generics: &[Generic],
+) -> Option<&'s [Generic]> {
+    let declared = store.get_definition(receiver)?.body.generics()?;
+    let matches = declared.len() == generics.len()
+        && arguments.len() == generics.len()
+        && arguments
             .iter()
-            .map(|param| &param.ty)
-            .chain(iter::once(function.return_type.as_ref()))
-            .collect(),
-        Type::Tuple(elements) => elements.iter().collect(),
-        _ => Vec::new(),
-    }
+            .zip(generics)
+            .all(|(argument, generic)| matches!(argument, Type::Parameter(name) if name == &generic.name));
+    matches.then_some(declared)
 }
 
-fn mentions_parameter(ty: &Type, name: &EcoString) -> bool {
-    match ty {
-        Type::Parameter(parameter) => parameter == name,
-        _ => ty
-            .children()
-            .iter()
-            .any(|child| mentions_parameter(child, name)),
-    }
+fn is_go_method(store: &Store, receiver: &Symbol, name: &str, parameters: &[Binding]) -> bool {
+    let has_receiver = parameters.first().is_some_and(|first| {
+        matches!(&first.pattern, Pattern::Identifier { identifier, .. } if identifier == "self")
+    });
+    has_receiver && !store.is_ufcs_method(receiver, name)
 }
 
-mod declarations;
-mod graph;
+fn embeds_itself(store: &Store, name: &Symbol) -> bool {
+    let parents = |name: &str| {
+        let interface = store.get_interface(name);
+        let parents = interface
+            .into_iter()
+            .flat_map(|interface| &interface.parents);
+        parents
+            .filter_map(Type::get_qualified_id)
+            .collect::<Vec<_>>()
+    };
+    let mut pending = parents(name);
+    let mut visited = HashSet::default();
+    while let Some(parent) = pending.pop() {
+        if parent == name.as_str() {
+            return true;
+        }
+        if visited.insert(parent) {
+            pending.extend(parents(parent));
+        }
+    }
+    false
+}
+
+fn variant_field_types(variant: &EnumVariant) -> impl Iterator<Item = (&Type, Span)> {
+    variant.fields.iter().map(|field| {
+        let span = [field.name_span, field.annotation.get_span()]
+            .into_iter()
+            .find(|span| !span.is_dummy());
+        (&field.ty, span.unwrap_or(variant.name_span))
+    })
+}
+
+fn components(edges: &[Vec<usize>]) -> Vec<usize> {
+    let mut visited = vec![false; edges.len()];
+    let mut order = Vec::with_capacity(edges.len());
+    for root in 0..edges.len() {
+        let mut pending = vec![(root, false)];
+        while let Some((node, finished)) = pending.pop() {
+            if finished {
+                order.push(node);
+            } else if !visited[node] {
+                visited[node] = true;
+                pending.push((node, true));
+                pending.extend(edges[node].iter().map(|&next| (next, false)));
+            }
+        }
+    }
+    let mut reverse = vec![Vec::new(); edges.len()];
+    for (from, targets) in edges.iter().enumerate() {
+        for &to in targets {
+            reverse[to].push(from);
+        }
+    }
+    let mut components = vec![usize::MAX; edges.len()];
+    for root in order.into_iter().rev() {
+        if components[root] != usize::MAX {
+            continue;
+        }
+        components[root] = root;
+        let mut pending = vec![root];
+        while let Some(node) = pending.pop() {
+            for &next in &reverse[node] {
+                if components[next] == usize::MAX {
+                    components[next] = root;
+                    pending.push(next);
+                }
+            }
+        }
+    }
+    components
+}
