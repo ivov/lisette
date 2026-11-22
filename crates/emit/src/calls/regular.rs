@@ -1,7 +1,6 @@
 use super::arguments::CallArgsContext;
 use crate::EmitFacts;
-use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
-use syntax::program::GoTypeRecipe;
+use crate::calls::dispatch::{CallArgShape, CallTypeArgsRequest};
 use syntax::program::ReceiverCoercion;
 
 use crate::Planner;
@@ -12,21 +11,11 @@ use crate::ir::evaluation::Effects;
 use crate::ir::go_expression::{GoExpressionNode, Operand};
 use crate::ir::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
-use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
-
-struct CallTypeArgsRequest<'e, 'c> {
-    function: &'e Expression,
-    callee: &'e ResolvedCallee<'c>,
-    written_type_arguments: usize,
-    call_ty: Option<&'e Type>,
-    arg_shape: CallArgShape,
-    ctx: ExpressionContext<'e>,
-}
 
 fn builtin_constant(builtin: &str, values: &[GoExpression]) -> Option<ConstantKind> {
     let mut kinds = values.iter().map(GoExpression::constant_kind);
@@ -61,7 +50,7 @@ pub(super) fn receiver_type_binding(
     let Expression::DotAccess {
         expression: receiver,
         ..
-    } = callee_expression.unwrap_parens()
+    } = callee_expression
     else {
         return None;
     };
@@ -72,7 +61,10 @@ pub(super) fn receiver_type_binding(
         .first()?
         .ty
         .clone();
-    Some((declared, facts.without_references(&receiver.get_type())))
+    Some((
+        declared,
+        facts.peel_go_alias(&facts.without_references(&receiver.get_type())),
+    ))
 }
 
 fn find_go_string_literal_close(s: &str) -> Option<usize> {
@@ -89,16 +81,6 @@ fn find_go_string_literal_close(s: &str) -> Option<usize> {
         }
     }
     None
-}
-
-fn is_errors_new_callee(function: &Expression) -> bool {
-    let Expression::DotAccess {
-        expression, member, ..
-    } = function
-    else {
-        return false;
-    };
-    member == "New" && expression.get_type().as_import_namespace() == Some("go:errors")
 }
 
 enum FmtArgument {
@@ -142,7 +124,7 @@ impl<'a> Planner<'a> {
         expression_ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let Expression::Call {
-            expression: callee,
+            expression: function,
             args,
             type_arguments,
             spread,
@@ -151,7 +133,6 @@ impl<'a> Planner<'a> {
         else {
             unreachable!("plan_regular_call requires a Call expression");
         };
-        let function = callee.unwrap_parens();
         let spread = spread.as_deref();
 
         if let Some(plan) =
@@ -169,7 +150,7 @@ impl<'a> Planner<'a> {
         let callee_staged = self.plan_operand(function, expression_ctx.callee());
         let (mut setup, mut callee) = callee_staged.into_parts();
 
-        let mut type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
+        let mut type_args_string = self.call_type_arguments(CallTypeArgsRequest {
             function,
             callee: &call_plan.resolved,
             written_type_arguments: type_arguments.annotations().len(),
@@ -178,7 +159,8 @@ impl<'a> Planner<'a> {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
-            ctx: expression_ctx,
+            slot: expression_ctx.expected_slot_type(),
+            receiver_passed: false,
         });
         let builtin_conversion = self
             .facts
@@ -321,7 +303,9 @@ impl<'a> Planner<'a> {
         spread: Option<&Expression>,
         expression_ctx: ExpressionContext<'_>,
     ) -> Option<ValuePlan> {
-        if spread.is_some() || !is_errors_new_callee(function) {
+        if spread.is_some()
+            || self.facts.checked(function).callee().definition.as_deref() != Some("go:errors.New")
+        {
             return None;
         }
         let [argument] = args else {
@@ -330,7 +314,7 @@ impl<'a> Planner<'a> {
         let Expression::Literal {
             literal: Literal::FormatString(parts),
             ..
-        } = argument.unwrap_parens()
+        } = argument
         else {
             return None;
         };
@@ -361,76 +345,8 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::plain_call(sequenced.setup, call))
     }
 
-    fn resolve_call_type_args(&mut self, request: CallTypeArgsRequest<'_, '_>) -> GoType {
-        let CallTypeArgsRequest {
-            function,
-            callee,
-            written_type_arguments,
-            call_ty,
-            arg_shape,
-            ctx,
-        } = request;
-        if callee_curries_receiver(callee) {
-            return GoType::default();
-        }
-
-        let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
-        if let Some(recipe) = self.facts.callee_collapsed_recipe(callee) {
-            if has_value_args
-                && self
-                    .facts
-                    .collapsed_callee_fully_inferable(callee, arg_shape)
-            {
-                return GoType::default();
-            }
-            let type_arguments = &self.facts.checked(function).callee().type_arguments;
-            return self
-                .reconstruct_collapsed_type_args(&recipe, type_arguments)
-                .unwrap_or_default();
-        }
-
-        let written = self
-            .facts
-            .checked(function)
-            .callee()
-            .written_type_arguments(written_type_arguments);
-        let mut type_args_string = self.format_type_arg_iter(written);
-
-        let slot_ty = ctx.expected_slot_type();
-
-        if type_args_string.is_empty()
-            && let Some(inferred) =
-                self.infer_return_only_type_args(function, callee.declared_type(), arg_shape)
-        {
-            type_args_string = match slot_ty {
-                Some(t) => self.prelude_container_type_args(t).unwrap_or(inferred),
-                None => inferred,
-            };
-        }
-
-        if type_args_string.is_empty()
-            && matches!(
-                prelude_constructor(function),
-                Some(
-                    PreludeVariant::Some
-                        | PreludeVariant::Ok
-                        | PreludeVariant::Err
-                        | PreludeVariant::Partial(_)
-                )
-            )
-        {
-            let mut candidate = call_ty.and_then(|t| self.prelude_container_type_args(t));
-            if candidate.is_none() {
-                candidate = slot_ty.and_then(|t| self.prelude_container_type_args(t));
-            }
-            type_args_string = candidate.unwrap_or_default();
-        }
-
-        type_args_string
-    }
-
     fn classify_fmt_argument(&self, expression: &Expression) -> Option<FmtArgument> {
-        match expression.unwrap_parens() {
+        match expression {
             Expression::Literal {
                 literal: Literal::FormatString(parts),
                 ..
@@ -499,15 +415,6 @@ impl<'a> Planner<'a> {
     }
 }
 
-fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
-    let Some(Type::Forall { body, .. }) = callee.declared_type() else {
-        return false;
-    };
-    matches!(body.as_ref(), Type::Function(_))
-        && callee.instantiated.as_function_type().is_some()
-        && callee.receiver_offset > 0
-}
-
 fn fmt_member(node: &GoExpressionNode) -> Option<&str> {
     match node {
         GoExpressionNode::Qualified { package, name } if package.package().path() == "fmt" => {
@@ -518,27 +425,6 @@ fn fmt_member(node: &GoExpressionNode) -> Option<&str> {
 }
 
 impl EmitFacts<'_> {
-    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
-        callee
-            .declaration?
-            .go_type_param_recipe()
-            .map(<[_]>::to_vec)
-    }
-
-    fn collapsed_callee_fully_inferable(
-        &self,
-        callee: &ResolvedCallee<'_>,
-        arg_shape: CallArgShape,
-    ) -> bool {
-        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
-            return false;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return false;
-        };
-        all_type_params_inferrable(vars, &f.params, 0, arg_shape)
-    }
-
     fn pointer_receiver_on_value_local(
         &self,
         callee_expression: &Expression,
@@ -549,12 +435,13 @@ impl EmitFacts<'_> {
         }
         let Expression::DotAccess {
             expression: receiver,
+            member,
             ..
-        } = callee_expression.unwrap_parens()
+        } = callee_expression
         else {
             return false;
         };
-        matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
-            && self.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoAddress)
+        matches!(&**receiver, Expression::Identifier { .. })
+            && self.dot_receiver_coercion(receiver, member) == Some(ReceiverCoercion::AutoAddress)
     }
 }

@@ -102,7 +102,9 @@ impl<'source> Lexer<'source> {
             let token = tokens[i];
             result.push(token);
 
-            if !Self::triggers_asi(token.kind) {
+            let is_deref =
+                token.kind == TokenKind::Star && i > 0 && tokens[i - 1].kind == TokenKind::Dot;
+            if !Self::triggers_asi(token.kind) && !is_deref {
                 continue;
             }
 

@@ -4742,6 +4742,65 @@ fn test() {
 }
 
 #[test]
+fn qualified_method_call_keeps_receiver_type_check() {
+    infer(
+        r#"
+    struct Counter { n: int }
+
+    impl Counter {
+      fn get(self) -> int { self.n }
+      fn add(self: mut Ref<Counter>, k: int) { self.n += k }
+    }
+
+    fn main() {
+      let mut c = Counter { n: 1 }
+      Counter.add(c, 2)
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn qualified_method_call_keeps_value_receiver_type_check() {
+    infer(
+        r#"
+    struct Counter { n: int }
+
+    impl Counter {
+      fn get(self) -> int { self.n }
+    }
+
+    fn main() {
+      let c = Counter { n: 1 }
+      let r = &c
+      let _ = Counter.get(r)
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn qualified_method_call_keeps_write_permission_check() {
+    infer(
+        r#"
+    struct Counter { n: int }
+
+    impl Counter {
+      fn add(self: mut Ref<Counter>, k: int) { self.n += k }
+    }
+
+    fn main() {
+      let c = Counter { n: 1 }
+      Counter.add(&c, 2)
+    }
+        "#,
+    )
+    .assert_infer_code("needs_writable");
+}
+
+#[test]
 fn ufcs_method_infers_closure_param_type() {
     infer(
         r#"

@@ -16,7 +16,7 @@ use crate::ir::values::Stability;
 use crate::ir::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::state::expression::ExpressionContext;
-use crate::statements::assignments::{PlaceOrdering, is_lvalue_chain};
+use crate::statements::assignments::PlaceOrdering;
 use crate::types::go_type::GoType;
 use std::slice;
 use syntax::ast::Pattern;
@@ -171,12 +171,6 @@ fn infers_declared_type(
         return kind.is_default_go_type(go_type);
     }
     match value.node() {
-        GoExpressionNode::Literal(text) => {
-            ["int", "string", "bool"]
-                .iter()
-                .any(|name| go_type.is_named(name))
-                && text != "nil"
-        }
         GoExpressionNode::CompositeLiteral {
             go_type: Some(literal_type),
             ..
@@ -336,13 +330,14 @@ impl<'p> Planner<'p> {
     }
 
     pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<Statement> {
-        let unwrapped = value.unwrap_parens();
+        self.record_converted_value(value);
 
-        if self.facts.is_side_effect_free_discard(unwrapped) {
+        if self.facts.is_side_effect_free_discard(value) {
+            self.package.record_dropped_code(value.get_span());
             return Vec::new();
         }
 
-        if let Expression::Propagate { expression, .. } = unwrapped {
+        if let Expression::Propagate { expression, .. } = value {
             return self.lower_propagate_statement(expression);
         }
 
@@ -353,8 +348,7 @@ impl<'p> Planner<'p> {
             let effects = staged_value.effects();
             let reads_or_acts = !effects.can_erase() || effects.reads() != Stability::Fixed;
             if !staged_value.is_empty() && reads_or_acts {
-                if matches!(unwrapped, Expression::Call { .. })
-                    && staged_value.stands_as_a_statement()
+                if matches!(value, Expression::Call { .. }) && staged_value.stands_as_a_statement()
                 {
                     statements.push(
                         LoweredStatement::ExpressionStatement {
@@ -370,9 +364,9 @@ impl<'p> Planner<'p> {
             return statements;
         }
 
-        if let Expression::Call { .. } = unwrapped {
+        if let Expression::Call { .. } = value {
             let mut statements: Vec<Statement> = Vec::new();
-            if let Some(call) = self.try_plan_go_call_discarded(&mut statements, unwrapped) {
+            if let Some(call) = self.try_plan_go_call_discarded(&mut statements, value) {
                 statements.push(expression_statement(call));
                 return statements;
             }
@@ -380,8 +374,8 @@ impl<'p> Planner<'p> {
 
         let staged = self.plan_operand(value, ExpressionContext::value());
         let (mut statements, staged_value) = staged.into_parts();
-        if calls_a_function(self.facts.call_operation(unwrapped))
-            && matches!(unwrapped, Expression::Call { .. })
+        if calls_a_function(self.facts.call_operation(value))
+            && matches!(value, Expression::Call { .. })
             && staged_value.stands_as_a_statement()
         {
             statements.push(expression_statement(staged_value));
@@ -418,7 +412,6 @@ impl<'p> Planner<'p> {
         target: &GoExpression,
         target_ty: Option<&Type>,
     ) -> Vec<Statement> {
-        let expression = expression.unwrap_parens();
         if self.facts.is_option_or_result(&expression.get_type()) {
             return self.lower_option_result_assignment(target, target_ty, expression);
         }
@@ -443,9 +436,14 @@ impl<'p> Planner<'p> {
     fn lower_plain_assign(
         &mut self,
         target: &GoExpression,
+        target_ty: Option<&Type>,
         expression: &Expression,
     ) -> Vec<Statement> {
-        let value = self.plan_operand(expression, ExpressionContext::value());
+        let value = self
+            .plan_operand(expression, ExpressionContext::value())
+            .map_expression(|setup, value| {
+                self.apply_type_coercion(setup, target_ty, expression, value)
+            });
         vec![simple_assign(target, value).into()]
     }
 
@@ -460,7 +458,7 @@ impl<'p> Planner<'p> {
             .cloned()
             .unwrap_or_else(|| expression.get_type());
         let Some(fallible) = self.facts.fallible(&written_ty) else {
-            return self.lower_plain_assign(target, expression);
+            return self.lower_plain_assign(target, target_ty, expression);
         };
 
         let actual_expression = match expression {
@@ -493,7 +491,10 @@ impl<'p> Planner<'p> {
                     ),
                     Some(ConstructorKind::Failure) => (fallible.err_constructor(), None),
                     None => {
-                        return directed_first(line, self.lower_plain_assign(target, expression));
+                        return directed_first(
+                            line,
+                            self.lower_plain_assign(target, target_ty, expression),
+                        );
                     }
                 };
                 if let Some((constructor_arg, payload_ty)) = constructor_arg {
@@ -522,10 +523,10 @@ impl<'p> Planner<'p> {
                         self.fallible_call(&fallible, fallible.err_constructor(), Vec::new());
                     vec![simple_assign(target, ValuePlan::computed(Vec::new(), call)).into()]
                 } else {
-                    self.lower_plain_assign(target, expression)
+                    self.lower_plain_assign(target, target_ty, expression)
                 }
             }
-            _ => self.lower_block_to_var(expression, target, None, false),
+            _ => self.lower_block_to_var(expression, target, target_ty, false),
         };
         directed_first(line, statements)
     }
@@ -605,7 +606,6 @@ impl<'p> Planner<'p> {
         target: &GoExpression,
         target_ty: Option<&Type>,
     ) -> Vec<Statement> {
-        let last = last.unwrap_parens();
         if matches!(
             last,
             Expression::Return { .. }
@@ -676,15 +676,14 @@ impl<'p> Planner<'p> {
         };
         let (method, receiver) = self.facts.slice_growth_method(func)?;
 
-        let unwrapped = receiver.unwrap_parens();
         let receiver_is_lvalue =
-            is_lvalue_chain(unwrapped) && !self.facts.contains_newtype_access(unwrapped);
+            self.facts.is_lvalue_chain(receiver) && !self.facts.contains_newtype_access(receiver);
 
         let (value, mut statements) = if receiver_is_lvalue {
             let (arguments, ordering) = self.lower_growth_args(last, args, spread.as_deref());
             let mut capture: Vec<Statement> = Vec::new();
             let receiver_lv =
-                self.plan_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
+                self.plan_place(&mut capture, receiver, PlaceOrdering::before(&ordering));
             let target_differs = receiver_lv.node() != target.node();
             let receiver_read = ValuePlan::computed(Vec::new(), receiver_lv.clone())
                 .with_stability(self.path_read_stability(&receiver_lv));
@@ -741,7 +740,10 @@ impl<'p> Planner<'p> {
     ) -> (Vec<GoExpression>, ValuePlan) {
         let stages: Vec<ValuePlan> = args
             .iter()
-            .map(|a| self.plan_composite_value(a, ExpressionContext::value()))
+            .map(|argument| {
+                let plan = self.plan_composite_value(argument, ExpressionContext::value());
+                self.convert_to_recorded_slot(argument, plan)
+            })
             .collect();
         let spread_stage = spread.map(|spread| self.plan_copied_spread(spread));
         let plan = spread.and_then(|_| self.plan_call(call));
@@ -785,10 +787,11 @@ impl<'p> Planner<'p> {
                     GoExpression::empty(),
                 );
             }
-            let (result_var, declaration) = self.operand_temp_declaration(ty);
+            let slot = self.facts.value_use_slot(expression).unwrap_or(ty);
+            let (result_var, declaration) = self.operand_temp_declaration(slot);
             let needs_braces = items.len() > 1;
             let target = GoExpression::identifier(result_var.clone());
-            let body = self.lower_block_to_var(expression, &target, None, needs_braces);
+            let body = self.lower_block_to_var(expression, &target, Some(slot), needs_braces);
             let mut statements = vec![declaration];
             if needs_braces {
                 statements.push(LoweredStatement::Block(LoweredBlock { statements: body }).into());

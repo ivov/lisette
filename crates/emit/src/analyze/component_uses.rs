@@ -43,7 +43,7 @@ struct Walker {
 
 impl Walker {
     fn names_the_local(&self, expression: &Expression) -> bool {
-        match expression.unwrap_parens() {
+        match expression {
             Expression::Identifier {
                 resolution: IdentifierResolution::Binding(id),
                 ..
@@ -123,7 +123,7 @@ impl Walker {
                     expression: receiver,
                     member,
                     ..
-                } = callee.unwrap_parens()
+                } = &**callee
                     && self.names_the_local(receiver)
                     && (STATUS_METHODS.contains(&member.as_str())
                         || PAYLOAD_METHODS.contains(&member.as_str()))

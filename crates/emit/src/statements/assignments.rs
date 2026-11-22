@@ -1,5 +1,5 @@
+use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::ValueLayout;
 use crate::expressions::staging::LaterStages;
 use crate::ir::bodies::with_setup;
@@ -92,29 +92,29 @@ impl Planner<'_> {
         } else {
             self.function_type_origin(&target.get_type(), SlotOrigin::Lisette)
         };
-        let right_hand_side = literal_slot.unwrap_or_else(|| {
-            self.plan_composite_value(
-                value,
-                ExpressionContext::value()
-                    .with_function_slot_origin(origin)
-                    .with_retired_receiver(target),
-            )
-        });
+        let value_context = ExpressionContext::value()
+            .with_function_slot_origin(origin)
+            .with_retired_receiver(target);
+        let right_hand_side =
+            literal_slot.unwrap_or_else(|| self.plan_composite_value(value, value_context));
         let (target_capture, target_place) =
             self.capture_assignment_target(target, PlaceOrdering::before(&right_hand_side));
-        let coercion = if is_literal_slot {
-            CoercionPlan::Identity
-        } else if let Some(target_layout) = go_field_slot {
-            let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
-            CoercionPlan::bridge(self, &source_layout, &target_layout)
-        } else {
-            self.value_slot_coercion(value, &target.get_type())
-        };
-        let (value_setup, value) = right_hand_side.into_parts();
-        let (coercion_setup, value) = coercion.lower(self, value);
+        let (value_setup, value_go) = right_hand_side.into_parts();
         let mut setup = target_capture;
         setup.extend(value_setup);
-        setup.extend(coercion_setup);
+        let value = if is_literal_slot {
+            value_go
+        } else {
+            let go_slot = go_field_slot
+                .as_ref()
+                .map(|target| (self.emitted_value_layout(value, value_context), target));
+            self.coerce_into_slot(
+                &mut setup,
+                (value, value_go),
+                &target.get_type(),
+                go_slot.as_ref().map(|(source, target)| (source, *target)),
+            )
+        };
         with_setup(
             setup,
             LoweredStatement::Assign(AssignForm::Simple {
@@ -125,7 +125,7 @@ impl Planner<'_> {
     }
 
     fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
-        match target.unwrap_parens() {
+        match target {
             Expression::DotAccess {
                 expression,
                 member,
@@ -138,18 +138,14 @@ impl Planner<'_> {
                 ty,
             ),
             Expression::IndexedAccess { expression, .. } => {
-                let layout = self.go_place_layout(expression)?;
-                match layout.underlying() {
-                    ValueLayout::Map { value, .. } => Some(value.as_ref().clone()),
-                    _ => layout.element().cloned(),
-                }
+                self.go_place_layout(expression)?.indexed_element().cloned()
             }
             _ => None,
         }
     }
 
     fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {
-        match target.unwrap_parens() {
+        match target {
             Expression::Identifier { .. } | Expression::Literal { .. } => Vec::new(),
             Expression::DotAccess { expression, .. }
             | Expression::Unary {
@@ -236,7 +232,7 @@ impl Planner<'_> {
     fn target_binds_to_discard(&self, target: &Expression) -> bool {
         let Expression::Identifier {
             value, resolution, ..
-        } = target.unwrap_parens()
+        } = target
         else {
             return false;
         };
@@ -255,7 +251,6 @@ impl Planner<'_> {
         expression: &Expression,
         ordering: PlaceOrdering,
     ) -> GoExpression {
-        let expression = expression.unwrap_parens();
         match expression {
             Expression::Identifier {
                 value, resolution, ..
@@ -281,7 +276,8 @@ impl Planner<'_> {
             } => {
                 let expression_ty = base.get_type();
                 if let Some(package) = expression_ty.as_import_namespace() {
-                    let field = self.dot_member_go_name(base, &expression_ty, member, resolution);
+                    let field =
+                        self.dot_member_go_name(base, &expression_ty, member, resolution, false);
                     return GoExpression::qualified(self.package_use_for_package(package), field);
                 }
                 let elided_deref = base
@@ -289,7 +285,9 @@ impl Planner<'_> {
                     .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
                 let base_value = if let Some(inner) = elided_deref {
                     self.place_operand(setup, inner, "ref", ordering)
-                } else if reads_through_reference(base) || !is_place_expression(base) {
+                } else if self.facts.reads_through_reference(base)
+                    || !self.facts.is_place_expression(base)
+                {
                     self.place_operand(setup, base, "ref", ordering)
                 } else {
                     self.plan_place(setup, base, ordering)
@@ -299,7 +297,8 @@ impl Planner<'_> {
                 {
                     return access;
                 }
-                let field = self.dot_member_go_name(base, &expression_ty, member, resolution);
+                let field =
+                    self.dot_member_go_name(base, &expression_ty, member, resolution, false);
                 self.facts.field_access(base_value, &expression_ty, field)
             }
             Expression::IndexedAccess {
@@ -313,11 +312,7 @@ impl Planner<'_> {
                 ..
             } => self.plan_deref_lvalue(setup, pointee, ordering),
             Expression::Call { .. } if self.facts.is_reference(&expression.get_type()) => {
-                let (call_setup, call) = self
-                    .plan_composite_value(expression, ExpressionContext::value())
-                    .into_parts();
-                setup.extend(call_setup);
-                GoExpression::identifier(self.hoist_tmp_value_statement(setup, "ref", call))
+                self.place_operand(setup, expression, "ref", ordering)
             }
             _ => unreachable!(
                 "assignment target has no Go place at {:?}: {:?}",
@@ -336,7 +331,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         let base_expression = if let Some(inner) = base.deref_inner() {
             GoExpression::dereference(self.place_operand(setup, inner, "ref", ordering))
-        } else if is_place_expression(base) {
+        } else if self.facts.is_place_expression(base) {
             self.plan_place(setup, base, ordering)
         } else {
             self.place_operand(setup, base, "base", ordering)
@@ -409,8 +404,8 @@ impl Planner<'_> {
         ordering: PlaceOrdering,
     ) -> GoExpression {
         let pointee_plan = self.plan_operand(pointee, ExpressionContext::value());
-        let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
-            || ordering.pins(&pointee_plan);
+        let needs_capture =
+            matches!(pointee, Expression::Call { .. }) || ordering.pins(&pointee_plan);
         let (pointee_setup, pointee_value) = pointee_plan.into_parts();
         setup.extend(pointee_setup);
         if needs_capture {
@@ -419,25 +414,6 @@ impl Planner<'_> {
         }
         GoExpression::dereference(pointee_value)
     }
-}
-
-fn is_place_expression(expression: &Expression) -> bool {
-    let expression = expression.unwrap_parens();
-    match expression {
-        Expression::Identifier { .. }
-        | Expression::DotAccess { .. }
-        | Expression::IndexedAccess { .. } => true,
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            ..
-        } => true,
-        Expression::Call { .. } => expression.get_type().is_ref(),
-        _ => false,
-    }
-}
-
-fn reads_through_reference(base: &Expression) -> bool {
-    matches!(base.unwrap_parens(), Expression::Identifier { .. }) && base.get_type().is_ref()
 }
 
 fn detect_compound_assignment<'a>(
@@ -465,7 +441,7 @@ fn detect_compound_assignment<'a>(
 
 fn is_literal_one(expression: &Expression) -> bool {
     matches!(
-        expression.unwrap_parens(),
+        expression,
         Expression::Literal {
             literal: Literal::Integer { value: 1, .. },
             ..
@@ -474,8 +450,6 @@ fn is_literal_one(expression: &Expression) -> bool {
 }
 
 pub(crate) fn lvalues_match(a: &Expression, b: &Expression) -> bool {
-    let a = a.unwrap_parens();
-    let b = b.unwrap_parens();
     match (a, b) {
         (
             Expression::Identifier {
@@ -526,17 +500,36 @@ fn is_compound_eligible(op: &BinaryOperator) -> bool {
     )
 }
 
-pub(crate) fn is_lvalue_chain(expression: &Expression) -> bool {
-    let expression = expression.unwrap_parens();
-    match expression {
-        Expression::Identifier { .. } => true,
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            ..
-        } => true,
-        Expression::IndexedAccess { expression, .. } => is_lvalue_chain(expression),
-        Expression::DotAccess { expression, .. } => is_lvalue_chain(expression),
-        Expression::Call { .. } if expression.get_type().is_ref() => true,
-        _ => false,
+impl EmitFacts<'_> {
+    fn is_place_expression(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier { .. }
+            | Expression::DotAccess { .. }
+            | Expression::IndexedAccess { .. } => true,
+            Expression::Unary {
+                operator: UnaryOperator::Deref,
+                ..
+            } => true,
+            Expression::Call { .. } => self.is_reference(&expression.get_type()),
+            _ => false,
+        }
+    }
+
+    fn reads_through_reference(&self, base: &Expression) -> bool {
+        matches!(base, Expression::Identifier { .. }) && self.is_reference(&base.get_type())
+    }
+
+    pub(crate) fn is_lvalue_chain(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier { .. } => true,
+            Expression::Unary {
+                operator: UnaryOperator::Deref,
+                ..
+            } => true,
+            Expression::IndexedAccess { expression, .. }
+            | Expression::DotAccess { expression, .. } => self.is_lvalue_chain(expression),
+            Expression::Call { .. } => self.is_reference(&expression.get_type()),
+            _ => false,
+        }
     }
 }

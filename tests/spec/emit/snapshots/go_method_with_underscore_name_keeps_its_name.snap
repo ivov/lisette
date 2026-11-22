@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import pb "go:example.com/pb"
+  
+  fn sizes() -> int {
+    let m = pb.New()
+    let f = pb.Msg.XXX_Size
+    let g = m.XXX_Size
+    let reset = m.Reset
+    reset()
+    f(m.*) + g() + m.XXX_Size()
+  }
+---
+package main
+
+import "example.com/pb"
+
+func sizes() int {
+	m := pb.New()
+	f := pb.Msg.XXX_Size
+	g := m.XXX_Size
+	cb := m.Reset
+	var adapted func() struct{}
+	if cb != nil {
+		adapted = func() struct{} {
+			cb()
+			return struct{}{}
+		}
+	}
+	reset := adapted
+	reset()
+	return f(*m) + g() + m.XXX_Size()
+}

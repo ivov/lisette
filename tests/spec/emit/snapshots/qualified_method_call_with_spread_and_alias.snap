@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  type MyString = string
+  
+  struct Logger { lines: Slice<string> }
+  
+  impl Logger {
+    fn push(self: mut Ref<Logger>, parts: VarArgs<string>) {
+      self.lines = self.lines.append(parts...)
+    }
+  }
+  
+  fn main() {
+    let mut l = Logger { lines: [] }
+    let parts = ["a", "b"]
+    Logger.push(&l, parts...)
+    fmt.Println(l.lines, MyString.length("hi"))
+  }
+---
+package main
+
+import "fmt"
+
+type MyString = string
+
+type Logger struct {
+	lines []string
+}
+
+func (l *Logger) push(parts ...string) {
+	l.lines = append(l.lines, parts...)
+}
+
+func main() {
+	l := Logger{lines: []string{}}
+	parts := []string{"a", "b"}
+	l.push(parts...)
+	fmt.Println(l.lines, len("hi"))
+}

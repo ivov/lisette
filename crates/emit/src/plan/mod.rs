@@ -3,6 +3,7 @@ pub(crate) mod lower;
 pub(crate) mod placement;
 
 use crate::Planner;
+use crate::names::go_name;
 use crate::render::imports::ImportPlan;
 use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashSet as HashSet;
@@ -48,7 +49,6 @@ impl Planner<'_> {
         let collected = self.collect_names(files);
         self.package
             .record_package_block_names(collected.declared_names(), qualifier_names);
-        self.derive_package_go_consts(files);
         self.collect_generic_renames(files);
         let collision_diagnostics =
             self.name_collision_diagnostics(files, collected, &import_qualifiers);
@@ -57,7 +57,7 @@ impl Planner<'_> {
         let package_name = if self.facts.is_entry_package(package_id) {
             self.facts.entry_package_name().to_string()
         } else {
-            crate::root_package_name(package_id)
+            go_name::sanitize_package_name(go_name::go_package_name(package_id)).into_owned()
         };
 
         PackagePlan {

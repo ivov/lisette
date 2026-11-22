@@ -70,7 +70,7 @@ fn is_fresh_slice_value(operation: Option<&CallOperation>, receiver: &Expression
     if let Expression::Literal {
         literal: Literal::Slice(_),
         ..
-    } = receiver.unwrap_parens()
+    } = receiver
     {
         return true;
     }
@@ -79,26 +79,21 @@ fn is_fresh_slice_value(operation: Option<&CallOperation>, receiver: &Expression
             kind: NativeTypeKind::Slice,
             ..
         }) => true,
-        Some(CallOperation::Native {
-            kind: NativeTypeKind::Slice,
-            method,
-        }) => NativeOperation::new(NativeTypeKind::Slice, method).returns_fresh_slice(),
-        Some(CallOperation::Native {
-            kind: NativeTypeKind::Array,
-            method,
-        }) => method == "to_slice",
+        Some(CallOperation::Native { kind, method }) => {
+            NativeOperation::new(*kind, method).returns_fresh_slice()
+        }
         _ => false,
     }
 }
 
 fn retired_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
-    let mut current = receiver.unwrap_parens();
+    let mut current = receiver;
     loop {
         if lvalues_match(target, current) {
             return true;
         }
         match current {
-            Expression::DotAccess { expression, .. } => current = expression.unwrap_parens(),
+            Expression::DotAccess { expression, .. } => current = expression,
             _ => return false,
         }
     }
@@ -171,9 +166,6 @@ pub(super) fn try_inline_native_method(
     arguments: &[GoExpression],
     negated: bool,
 ) -> Option<GoExpression> {
-    if !negated && method == "append" && arguments.is_empty() {
-        return Some(receiver.clone());
-    }
     let rule = NativeOperation::new(*native_type, method).inline_rule(arguments.len())?;
     if negated && !matches!(rule.form, NativeInlineForm::IsEmpty) {
         return None;
@@ -207,11 +199,10 @@ fn array_to_slice_receiver<'e>(
         args,
         spread,
         ..
-    } = expression.unwrap_parens()
+    } = expression
     else {
         return None;
     };
-    let function = callee.unwrap_parens();
     if spread.is_some()
         || !matches!(
             operation,
@@ -223,7 +214,7 @@ fn array_to_slice_receiver<'e>(
     {
         return None;
     }
-    match split_native_receiver(function, args)? {
+    match split_native_receiver(callee, args)? {
         (receiver, []) => Some(receiver),
         _ => None,
     }
@@ -348,9 +339,7 @@ impl Planner<'_> {
             return result;
         }
 
-        if matches!(context.native_type, NativeTypeKind::Array)
-            && NativeOperation::new(context.native_type, context.method).reads_array_in_place()
-        {
+        if NativeOperation::new(context.native_type, context.method).reads_array_in_place() {
             let mut staged = self.stage_native_method(context);
             let index = staged.arguments.first().cloned();
             let body = self.plan_array_method_body(
@@ -486,7 +475,9 @@ impl Planner<'_> {
             let parameter = context.abi.param(first_param + index);
             match argument_expressions.get(index).zip(parameter) {
                 Some((argument, parameter))
-                    if self.facts.converts_for_inference(argument, parameter) =>
+                    if self
+                        .facts
+                        .converts_for_inference(argument, parameter, |_| !type_args.is_empty()) =>
                 {
                     GoExpression::conversion(self.go_type(&parameter.instantiated), value.clone())
                 }
@@ -544,7 +535,7 @@ impl Planner<'_> {
         if self.facts.is_reference(&expression.get_type()) {
             return true;
         }
-        match expression.unwrap_parens() {
+        match expression {
             Expression::Identifier { .. } => true,
             Expression::Unary {
                 operator: UnaryOperator::Deref,
@@ -561,9 +552,8 @@ impl Planner<'_> {
                 ) {
                     return false;
                 }
-                let origin = base.unwrap_parens();
-                let fresh_value = matches!(origin, Expression::StructCall { .. })
-                    || (matches!(origin, Expression::Call { .. })
+                let fresh_value = matches!(&**base, Expression::StructCall { .. })
+                    || (matches!(&**base, Expression::Call { .. })
                         && !self.facts.is_reference(&base.get_type()));
                 !fresh_value && self.receiver_is_addressable(base)
             }
@@ -661,7 +651,7 @@ impl Planner<'_> {
         let first_unstaged = if is_dot { 0 } else { stages.len() };
         stages.extend(self.stage_native_method_args_from(&ctx.abi, ctx.args, first_unstaged));
         let spread_stage = ctx.spread.map(|spread| {
-            if matches!(ctx.native_type, NativeTypeKind::Slice) && ctx.method == "append" {
+            if NativeOperation::new(ctx.native_type, ctx.method).grows_slice() {
                 self.plan_copied_spread(spread)
             } else {
                 self.plan_operand(spread, ExpressionContext::value())
@@ -710,7 +700,6 @@ impl Planner<'_> {
             unreachable!("plan_map_index_pair requires a Call expression");
         };
         let native_type = NativeTypeKind::Map;
-        let function = function.unwrap_parens();
         let plan = self
             .plan_call(expression)
             .expect("plan_call yields Some for a Call expression");

@@ -6,7 +6,10 @@ use ecow::EcoString;
 use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
-use syntax::program::{CallOperation, DefinitionBody, NativeTypeKind, resolved_instantiation};
+use syntax::program::{
+    AliasKind, CallOperation, DefinitionBody, DotAccessResolution, NativeTypeKind,
+    ReceiverCoercion, resolved_instantiation,
+};
 use syntax::types::{
     Bound, CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, substitute,
     unqualified_name,
@@ -43,6 +46,14 @@ struct PseudoConstructorCall {
     args: Vec<Expression>,
     spread: Option<Box<Expression>>,
     type_args: Vec<Annotation>,
+}
+
+struct QualifiedCall<'a> {
+    callee: &'a Expression,
+    args: &'a [Expression],
+    spread: Option<&'a Expression>,
+    type_args: &'a [Annotation],
+    span: Span,
 }
 
 struct CallSignature {
@@ -196,6 +207,17 @@ impl InferCtx<'_> {
                 },
                 span,
             );
+        }
+
+        let qualified = QualifiedCall {
+            callee: &expression,
+            args: &args,
+            spread: spread.as_deref(),
+            type_args: &type_args,
+            span,
+        };
+        if let Some(call) = self.infer_as_method_call(qualified, expected_ty) {
+            return call;
         }
 
         let store = self.store;
@@ -453,6 +475,78 @@ impl InferCtx<'_> {
             ty: call_ty,
             span,
         }
+    }
+
+    fn infer_as_method_call(
+        &mut self,
+        qualified: QualifiedCall<'_>,
+        expected_ty: &Type,
+    ) -> Option<Expression> {
+        let QualifiedCall {
+            callee,
+            args,
+            spread,
+            type_args,
+            span,
+        } = qualified;
+        let (receiver, rest) = args.split_first()?;
+        let path = callee.unwrap_parens().as_dotted_path()?;
+        let (owner, member) = path.split_once('.')?;
+        if member.contains('.') || self.scopes.lookup_binding_id(owner).is_some() {
+            return None;
+        }
+        let owner_id =
+            self.method_owner(&self.lookup_qualified_name(self.store, owner)?, member)?;
+        let definition = Symbol::from_raw(format!("{owner_id}.{member}"));
+        let receiver = receiver.unwrap_parens();
+        let call = Expression::Call {
+            id: self.fresh_expression_id(),
+            expression: Box::new(Expression::DotAccess {
+                id: self.fresh_expression_id(),
+                expression: Box::new(receiver.clone()),
+                member: member.into(),
+                ty: Type::uninferred(),
+                span: callee.get_span(),
+                resolution: DotAccessResolution::Unresolved,
+            }),
+            args: rest.to_vec(),
+            spread: spread.cloned().map(Box::new),
+            type_arguments: CallTypeArguments::unresolved(type_args.to_vec()),
+            ty: Type::uninferred(),
+            span,
+        };
+        self.attempt(|this| {
+            let (inferred, reported) =
+                this.tracking_diagnostics(|this| this.infer_function_call(call, expected_ty));
+            (!reported && calls_method_as_written(&inferred, &definition, receiver))
+                .then_some(inferred)
+        })
+    }
+
+    fn method_owner(&self, owner_id: &str, member: &str) -> Option<String> {
+        let definition = self.store.get_definition(owner_id)?;
+        if self.store.get_method(owner_id, member).is_some() {
+            return (!matches!(definition.body, DefinitionBody::Interface { .. }))
+                .then(|| owner_id.to_string());
+        }
+        let DefinitionBody::TypeAlias {
+            alias: AliasKind::Transparent { target, .. },
+            generics,
+            ..
+        } = &definition.body
+        else {
+            return None;
+        };
+        let target_id = match target {
+            Type::Nominal { id, .. } => id.to_string(),
+            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()),
+            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()),
+            _ => return None,
+        };
+        if !generics.is_empty() || target_id == owner_id {
+            return None;
+        }
+        self.method_owner(&target_id, member)
     }
 
     fn constructor_call_grants_write(
@@ -1496,6 +1590,47 @@ fn receiver_inferred_prefix_count(body: &Type, vars: &[EcoString]) -> usize {
     vars.iter()
         .take_while(|var| self_ty.contains_type(&Type::Parameter((*var).clone())))
         .count()
+}
+
+fn calls_method_as_written(call: &Expression, definition: &Symbol, written: &Expression) -> bool {
+    let Expression::Call { expression, .. } = call else {
+        return false;
+    };
+    let Expression::DotAccess {
+        expression: receiver,
+        resolution:
+            DotAccessResolution::InstanceMethod {
+                receiver_coercion,
+                definition: Some(found),
+                ..
+            },
+        ..
+    } = &**expression
+    else {
+        return false;
+    };
+    let coerced_depth = match receiver_coercion {
+        None => 0,
+        Some(ReceiverCoercion::AutoAddress) => 1,
+        Some(ReceiverCoercion::AutoDeref) => -1,
+    };
+    found == definition && reference_depth_to(written, receiver.get_span()) == Some(coerced_depth)
+}
+
+fn reference_depth_to(written: &Expression, span: Span) -> Option<i32> {
+    if written.get_span() == span {
+        return Some(0);
+    }
+    match written {
+        Expression::Paren { expression, .. } => reference_depth_to(expression, span),
+        Expression::Reference { expression, .. } => Some(reference_depth_to(expression, span)? + 1),
+        Expression::Unary {
+            operator: UnaryOperator::Deref,
+            expression,
+            ..
+        } => Some(reference_depth_to(expression, span)? - 1),
+        _ => None,
+    }
 }
 
 pub(super) fn callee_label(expr: &Expression) -> String {

@@ -1,9 +1,8 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::callable::CallableReturnAbi;
-use crate::abi::layout::ValueLayout;
-use crate::definitions::structs::struct_field_go_name;
-use crate::ir::values::GoExpression;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
+use crate::abi::layout::{FunctionLayout, ValueLayout};
+use crate::ir::values::{ConstantKind, GoExpression};
 use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use std::borrow::Cow;
@@ -13,7 +12,9 @@ use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{CompoundKind, SimpleKind, SubstitutionMap, Type, peel_underlying};
+use syntax::types::{
+    CompoundKind, SimpleKind, SubstitutionMap, Type, peel_underlying, unqualified_name,
+};
 
 pub(crate) fn is_prelude_type(name: &str) -> bool {
     matches!(
@@ -195,6 +196,11 @@ impl GoType {
     pub(crate) fn is_empty(&self) -> bool {
         matches!(self.shape.as_ref(), GoTypeShape::Empty)
     }
+    pub(crate) fn compared_as(mut self, target: GoType) -> Self {
+        self.shape = target.shape;
+        self
+    }
+
     pub(crate) fn is_named(&self, name: &str) -> bool {
         matches!(self.shape.as_ref(), GoTypeShape::Name(actual) if actual == name)
     }
@@ -225,39 +231,6 @@ impl GoType {
         match self.shape.as_ref() {
             GoTypeShape::Arguments(arguments) => arguments,
             _ => &[],
-        }
-    }
-    pub(crate) fn contains_empty_interface(&self) -> bool {
-        match self.shape.as_ref() {
-            GoTypeShape::EmptyInterface => true,
-            GoTypeShape::Instantiated { base, arguments } => {
-                base.contains_empty_interface()
-                    || arguments.iter().any(Self::contains_empty_interface)
-            }
-            GoTypeShape::Arguments(arguments) | GoTypeShape::Results(arguments) => {
-                arguments.iter().any(Self::contains_empty_interface)
-            }
-            GoTypeShape::Slice(inner)
-            | GoTypeShape::Pointer(inner)
-            | GoTypeShape::Array(_, inner)
-            | GoTypeShape::Channel(_, inner)
-            | GoTypeShape::Variadic(inner) => inner.contains_empty_interface(),
-            GoTypeShape::Map(key, value) => {
-                key.contains_empty_interface() || value.contains_empty_interface()
-            }
-            GoTypeShape::Function(parameters, result) => {
-                parameters.iter().any(Self::contains_empty_interface)
-                    || result
-                        .as_ref()
-                        .is_some_and(|result| result.contains_empty_interface())
-            }
-            GoTypeShape::Struct(fields) | GoTypeShape::Interface(fields) => {
-                fields.iter().any(|(_, ty)| ty.contains_empty_interface())
-            }
-            GoTypeShape::Empty
-            | GoTypeShape::Name(_)
-            | GoTypeShape::Qualified { .. }
-            | GoTypeShape::Raw(_) => false,
         }
     }
 
@@ -450,6 +423,10 @@ impl Planner<'_> {
     }
 
     pub(crate) fn go_type(&self, ty: &Type) -> GoType {
+        self.value_layout(ty, SlotOrigin::Lisette).go_type(self)
+    }
+
+    fn leaf_go_type(&self, ty: &Type) -> GoType {
         match ty {
             Type::Nominal {
                 id,
@@ -468,26 +445,22 @@ impl Planner<'_> {
                 args: arguments,
                 ..
             } => self.compound_go_type(*kind, arguments, ty),
-            Type::Function(_) => self.value_layout(ty, SlotOrigin::Lisette).go_type(self),
             Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
             Type::Never => GoType::new("struct{}"),
             Type::Error => self.reject_untyped_position("an error type"),
-            Type::Tuple(elements) => self.tuple_go_type(elements),
-            Type::Array { length, element } => GoType::array_of(length, &self.go_type(element)),
             Type::ImportNamespace(_) => self.reject_untyped_position("a package name"),
             Type::ReceiverPlaceholder => GoType::new("any"),
+            Type::Function(_) | Type::Tuple(_) | Type::Array { .. } => {
+                unreachable!("the value layout renders a structural type")
+            }
         }
     }
 
     fn compound_go_type(&self, kind: CompoundKind, arguments: &[Type], ty: &Type) -> GoType {
-        use syntax::types::CompoundKind;
-
         match kind {
-            CompoundKind::Ref => GoType::pointer_to(
-                &self.go_type(arguments.first().expect("a reference has a pointee type")),
-            ),
+            CompoundKind::Ref => unreachable!("the value layout renders a reference"),
             CompoundKind::VarArgs => {
                 let element =
                     self.go_type(arguments.first().expect("varargs have an element type"));
@@ -547,11 +520,6 @@ impl Planner<'_> {
                 &self.render_recipe_entry(element, mapping)?,
             ),
         })
-    }
-
-    fn tuple_go_type(&self, elements: &[Type]) -> GoType {
-        let element_types: Vec<GoType> = elements.iter().map(|e| self.go_type(e)).collect();
-        GoType::prelude(&format!("Tuple{}", elements.len()), &element_types)
     }
 
     fn constructor_go_type(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
@@ -667,52 +635,31 @@ impl Planner<'_> {
     }
 
     pub(crate) fn return_go_type(&self, abi: &CallableReturnAbi, return_ty: &Type) -> GoType {
-        match abi {
-            CallableReturnAbi::Void => return GoType::default(),
-            CallableReturnAbi::Value => return self.go_type(return_ty),
-            CallableReturnAbi::Lowered(_) => {}
-        }
-        let peeled = self.facts.peel_alias(return_ty);
-        let result = self.value_layout(&peeled, SlotOrigin::Lisette);
+        let result_ty = if abi.is_lowered() {
+            self.facts.peel_alias(return_ty)
+        } else {
+            return_ty.clone()
+        };
+        let result = self.value_layout(&result_ty, SlotOrigin::Lisette);
         self.function_layout(Vec::new(), &result, abi.clone(), None)
             .result_go_type(self)
-            .unwrap_or_else(|| self.go_type(&peeled))
-    }
-
-    pub(crate) fn go_newtype_zero(
-        &mut self,
-        go_ty: GoType,
-        underlying: &Type,
-    ) -> Option<GoExpression> {
-        let underlying = self.facts.underlying(underlying);
-        if underlying.is_map() || matches!(underlying, Type::Array { .. }) {
-            return Some(GoExpression::empty_composite(go_ty));
-        }
-        if underlying.is_slice() {
-            return Some(GoExpression::conversion(go_ty, GoExpression::nil()));
-        }
-        matches!(underlying, Type::Simple(_)).then(|| {
-            let inner = self.lisette_zero(&underlying);
-            GoExpression::conversion(go_ty, inner)
-        })
+            .unwrap_or_default()
     }
 
     pub(crate) fn go_zero(&self, ty: &Type) -> GoExpression {
-        if self.facts.is_interface(ty) {
+        self.go_zero_of_layout(&self.value_layout(ty, SlotOrigin::Lisette))
+    }
+
+    pub(crate) fn go_zero_of_layout(&self, layout: &ValueLayout) -> GoExpression {
+        if self.facts.is_interface(layout.logical_type()) {
             return GoExpression::nil();
         }
 
-        let go_ty = self.go_type(ty);
+        let go_ty = layout.go_type(self);
 
         let literal = |text: &str| GoExpression::literal(text.to_string());
-        let dereferenced_new = |go_ty: &GoType| {
-            GoExpression::dereference(GoExpression::call(
-                GoExpression::external_name("new".to_string()),
-                vec![GoExpression::type_name(go_ty.clone())],
-            ))
-        };
+        let constant = |text: &str, kind| GoExpression::constant(text.to_string(), kind);
 
-        let layout = self.value_layout(ty, SlotOrigin::Lisette);
         match layout {
             ValueLayout::Plain(Type::Simple(kind)) => match kind {
                 SimpleKind::Int
@@ -727,12 +674,12 @@ impl Planner<'_> {
                 | SimpleKind::Uint64
                 | SimpleKind::Uintptr
                 | SimpleKind::Byte
-                | SimpleKind::Rune => literal("0"),
-                SimpleKind::Float32 | SimpleKind::Float64 => literal("0.0"),
-                SimpleKind::Bool => literal("false"),
-                SimpleKind::String => literal("\"\""),
+                | SimpleKind::Rune => constant("0", ConstantKind::Int),
+                SimpleKind::Float32 | SimpleKind::Float64 => constant("0.0", ConstantKind::Float),
+                SimpleKind::Bool => constant("false", ConstantKind::Bool),
+                SimpleKind::String => constant("\"\"", ConstantKind::String),
                 SimpleKind::Unit => GoExpression::unit(),
-                SimpleKind::Complex64 | SimpleKind::Complex128 => dereferenced_new(&go_ty),
+                SimpleKind::Complex64 | SimpleKind::Complex128 => GoExpression::new_zero(go_ty),
             },
             ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty),
             ValueLayout::Slice { .. }
@@ -765,11 +712,11 @@ impl Planner<'_> {
             {
                 GoExpression::empty_composite(go_ty)
             }
-            _ => dereferenced_new(&go_ty),
+            _ => GoExpression::new_zero(go_ty),
         }
     }
 
-    pub(crate) fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {
+    fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {
         let definition = self.facts.definition(id)?;
         if !definition.is_anon_struct() {
             return None;
@@ -780,9 +727,125 @@ impl Planner<'_> {
         Some(GoType::structure(
             fields
                 .iter()
-                .map(|field| (struct_field_go_name(field, &[]), self.go_type(&field.ty)))
+                .map(|field| {
+                    (
+                        self.facts.declared_field_go_name(id, field),
+                        self.go_type(&field.ty),
+                    )
+                })
                 .collect(),
         ))
+    }
+}
+
+impl ValueLayout {
+    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> GoType {
+        match self {
+            Self::NullableOption { payload, .. } => payload.go_type(planner),
+            Self::PointerOption { payload, .. } => GoType::pointer_to(&payload.go_type(planner)),
+            Self::Reference { pointee, .. } => GoType::pointer_to(&pointee.go_type(planner)),
+            Self::Slice { element, .. } => GoType::slice_of(&element.go_type(planner)),
+            Self::Map { key, value, .. } => {
+                let key = key.go_type(planner);
+                let value = value.go_type(planner);
+                GoType::map_of(&key, &value)
+            }
+            Self::Array {
+                length, element, ..
+            } => GoType::array_of(length, &element.go_type(planner)),
+            Self::Function {
+                function_type,
+                layout,
+            } => {
+                if self.function_name().is_some()
+                    && self.same_representation(
+                        &planner.value_layout(function_type, SlotOrigin::Lisette),
+                    )
+                {
+                    planner.leaf_go_type(function_type)
+                } else {
+                    layout.go_type(planner)
+                }
+            }
+            Self::TaggedOption { payload, .. } => {
+                GoType::prelude("Option", &[payload.go_type(planner)])
+            }
+            Self::Fallible {
+                fallible_type,
+                payload,
+                error,
+            } => {
+                let Type::Nominal { id, .. } = fallible_type else {
+                    unreachable!("a fallible layout holds a prelude container")
+                };
+                GoType::prelude(
+                    unqualified_name(id),
+                    &[payload.go_type(planner), error.go_type(planner)],
+                )
+            }
+            Self::Tuple { elements, .. } => {
+                let types: Vec<_> = elements
+                    .iter()
+                    .map(|element| element.go_type(planner))
+                    .collect();
+                GoType::prelude(&format!("Tuple{}", elements.len()), &types)
+            }
+            Self::Named {
+                named_type,
+                underlying,
+                go_alias: true,
+            } => planner
+                .leaf_go_type(named_type)
+                .compared_as(underlying.go_type(planner)),
+            Self::Plain(ty) | Self::Named { named_type: ty, .. } => planner.leaf_go_type(ty),
+        }
+    }
+}
+
+impl FunctionLayout {
+    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> GoType {
+        let parameters: Vec<GoType> = self
+            .parameters
+            .iter()
+            .map(|parameter| parameter.go_type(planner))
+            .collect();
+        let result = self.result_go_type(planner);
+        GoType::function(&parameters, result.as_ref())
+    }
+
+    fn result_err_type(&self, planner: &Planner<'_>) -> Type {
+        planner.facts.err_payload(self.result_layout.logical_type())
+    }
+
+    pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> Option<GoType> {
+        if self.return_abi == CallableReturnAbi::Void {
+            return None;
+        }
+        let mut slots: Vec<GoType> = self
+            .results
+            .iter()
+            .map(|result| result.go_type(planner))
+            .collect();
+        Some(match self.return_abi.lowered() {
+            None
+            | Some(LoweredReturnAbi::Option(
+                OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
+            )) => {
+                let [slot] = <[GoType; 1]>::try_from(slots)
+                    .unwrap_or_else(|_| unreachable!("a single-result ABI has one result slot"));
+                slot
+            }
+            Some(LoweredReturnAbi::BareError) => planner.go_type(&self.result_err_type(planner)),
+            Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. }) => {
+                slots.push(planner.go_type(&self.result_err_type(planner)));
+                GoType::result_list(&slots)
+            }
+            Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })) => {
+                slots.push(GoType::new("bool"));
+                GoType::result_list(&slots)
+            }
+            Some(LoweredReturnAbi::Tuple { .. }) => GoType::result_list(&slots),
+        })
     }
 }
 

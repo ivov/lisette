@@ -32,13 +32,10 @@ func first(f PairFn) int {
 }
 
 func main() {
-	cb := func(arg0 PairFn) lisette.Tuple2[int, int] {
+	gs := []func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]{func(arg0 PairFn) lisette.Tuple2[int, int] {
 		ret, ret2 := invoke(arg0)
 		tup := lisette.MakeTuple2(ret, ret2)
 		return tup
-	}
-	gs := []func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]{func(arg0 func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int] {
-		return cb(arg0)
 	}}
 	tmp := gs[0](func(x int) lisette.Tuple2[int, int] {
 		return lisette.MakeTuple2[int, int](x, x+1)
@@ -48,9 +45,7 @@ func main() {
 	if a != 4 || b != 5 {
 		panic("tuple")
 	}
-	hs := []func(func(int) lisette.Tuple2[int, int]) int{func(arg0 func(int) lisette.Tuple2[int, int]) int {
-		return first(arg0)
-	}}
+	hs := []func(func(int) lisette.Tuple2[int, int]) int{first}
 	if hs[0](func(x int) lisette.Tuple2[int, int] {
 		return lisette.MakeTuple2[int, int](x, x)
 	}) != 4 {

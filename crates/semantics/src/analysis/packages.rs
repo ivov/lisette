@@ -6,6 +6,7 @@ use crate::cache::{
     CacheKey, CacheKeyInputs, DiagnosticMode, compute_emit_artifact_hash, global_emit_context,
 };
 use crate::checker::InferredFile;
+use crate::checker::infer::runtime_constants;
 use crate::loader;
 use crate::path::DisplayPathBase;
 use rayon::prelude::*;
@@ -412,7 +413,12 @@ pub(super) fn infer_all_packages(
     }
 
     checker.finalize_tests(store);
+    let inferred_package_ids: Vec<String> = registered
+        .iter()
+        .map(|package| package.id.clone())
+        .collect();
     infer_packages(&mut checker, store, registered);
+    mark_runtime_constants_in_dependency_order(store, &inferred_package_ids, dependencies);
 
     if !input.cache.is_disabled() {
         let all_go_packages: Vec<String> = store
@@ -750,6 +756,39 @@ fn register_packages(
     }
     debug_assert!(inputs.is_empty());
     all_registered
+}
+
+fn mark_runtime_constants_in_dependency_order(
+    store: &mut Store,
+    package_ids: &[String],
+    dependencies: &DependencyGraph,
+) {
+    fn visit(
+        store: &mut Store,
+        package_id: &str,
+        batch: &HashSet<&str>,
+        dependencies: &DependencyGraph,
+        marked: &mut HashSet<String>,
+    ) {
+        if !marked.insert(package_id.to_string()) {
+            return;
+        }
+        let pending: Vec<String> = dependencies
+            .dependencies(package_id)
+            .filter(|dependency| batch.contains(dependency.as_str()))
+            .map(ToString::to_string)
+            .collect();
+        for dependency in pending {
+            visit(store, &dependency, batch, dependencies, marked);
+        }
+        runtime_constants::mark_runtime_constants(store, package_id);
+    }
+
+    let batch: HashSet<&str> = package_ids.iter().map(String::as_str).collect();
+    let mut marked = HashSet::default();
+    for package_id in package_ids {
+        visit(store, package_id, &batch, dependencies, &mut marked);
+    }
 }
 
 fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<RegisteredPackage>) {

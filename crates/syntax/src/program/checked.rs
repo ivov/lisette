@@ -28,15 +28,15 @@ impl ValueUseKey {
     /// The value of `expression` where it goes into its slot.
     pub fn value(expression: &Expression) -> Self {
         Self {
-            expression: expression.id(),
+            expression: expression.unwrap_parens().id(),
             role: ValueUseRole::Value,
         }
     }
 
-    /// The error that the `?` applied to the occurrence `operand` returns from its function or `try` block.
-    pub fn propagated_error(operand: ExpressionId) -> Self {
+    /// The error that the `?` applied to `operand` returns from its function or `try` block.
+    pub fn propagated_error(operand: &Expression) -> Self {
         Self {
-            expression: operand,
+            expression: operand.unwrap_parens().id(),
             role: ValueUseRole::PropagatedError,
         }
     }
@@ -311,6 +311,10 @@ impl CheckedBodies {
         self.callees.iter()
     }
 
+    pub fn uses(&self) -> impl Iterator<Item = (&ValueUseKey, &CheckedValueUse)> {
+        self.uses.iter()
+    }
+
     pub fn pattern_field(&self, name_span: Span) -> &FieldSelection {
         self.field_selections
             .get(&FieldKey::Pattern(name_span))
@@ -389,7 +393,11 @@ impl CheckedBodiesBuilder {
         insert_unique(&mut self.records.range_kinds, range, kind);
     }
 
-    pub fn insert_forwarded_failure(&mut self, operand: ExpressionId) {
+    pub fn insert_forwarded_failure(&mut self, operand: &Expression) {
+        self.insert_forwarded_failure_id(operand.unwrap_parens().id());
+    }
+
+    fn insert_forwarded_failure_id(&mut self, operand: ExpressionId) {
         let inserted = self.records.forwarded_failures.insert(operand);
         assert!(
             inserted,
@@ -447,7 +455,7 @@ impl CheckedBodiesBuilder {
             self.insert_range_kind(range, kind);
         }
         for operand in forwarded_failures {
-            self.insert_forwarded_failure(operand);
+            self.insert_forwarded_failure_id(operand);
         }
         for (impl_block, generics) in receiver_generics {
             self.insert_receiver_generics(impl_block, generics);
@@ -500,7 +508,7 @@ impl<'a> CheckedExpression<'_, 'a> {
     /// The error that a `?` on this operand returns, converted to the error slot of its function or `try` block.
     pub fn propagated_error(&self) -> Option<&'a CheckedValueUse> {
         self.bodies
-            .value_use(&ValueUseKey::propagated_error(self.expression.id()))
+            .value_use(&ValueUseKey::propagated_error(self.expression))
     }
 
     /// The reference change that this method receiver takes, as the checker recorded it.
@@ -518,13 +526,12 @@ impl<'a> CheckedExpression<'_, 'a> {
 
     /// The definition and type arguments of this function value, or None when the checker records none for it.
     pub fn function_value(&self) -> Option<&'a CheckedCallee> {
-        self.bodies
-            .callee(&ValueUseKey::value(self.expression.unwrap_parens()))
+        self.bodies.callee(&ValueUseKey::value(self.expression))
     }
 
     /// The equality that this comparison tests with, as the checker selected it, or None when it selects none.
     pub fn equality(&self) -> Option<&'a EqualityRecipe> {
-        self.bodies.equality(self.expression.unwrap_parens().id())
+        self.bodies.equality(self.expression.id())
     }
 
     /// The unit value that this `if let` produces when its pattern does not match, or None when it has an `else`.
@@ -539,7 +546,7 @@ impl<'a> CheckedExpression<'_, 'a> {
     pub fn operand_conversion(&self) -> Option<OperandConversion> {
         self.bodies
             .operand_conversions
-            .get(&self.expression.unwrap_parens().id())
+            .get(&self.expression.id())
             .copied()
     }
 
@@ -554,23 +561,18 @@ impl<'a> CheckedExpression<'_, 'a> {
     }
 
     pub fn range_kind(&self) -> Option<RangeKind> {
-        self.bodies
-            .range_kinds
-            .get(&self.expression.unwrap_parens().id())
-            .copied()
+        self.bodies.range_kinds.get(&self.expression.id()).copied()
     }
 
     pub fn forwards_failure(&self) -> bool {
         self.bodies
             .forwarded_failures
-            .contains(&self.expression.unwrap_parens().id())
+            .contains(&self.expression.id())
     }
 
     pub fn iterable_kind(&self) -> IterableKind {
         *self.expect(
-            self.bodies
-                .iterable_kinds
-                .get(&self.expression.unwrap_parens().id()),
+            self.bodies.iterable_kinds.get(&self.expression.id()),
             format_args!("checked iterable kind"),
         )
     }
@@ -578,34 +580,30 @@ impl<'a> CheckedExpression<'_, 'a> {
     pub fn field_selection(&self) -> Option<&'a FieldSelection> {
         self.bodies
             .field_selections
-            .get(&FieldKey::Access(self.expression.unwrap_parens().id()))
+            .get(&FieldKey::Access(self.expression.id()))
     }
 
     pub fn positional_field(&self, index: usize) -> &'a FieldSelection {
         self.expect(
-            self.bodies.field_selections.get(&FieldKey::Positional(
-                self.expression.unwrap_parens().id(),
-                index,
-            )),
+            self.bodies
+                .field_selections
+                .get(&FieldKey::Positional(self.expression.id(), index)),
             format_args!("checked field selection for field {index}"),
         )
     }
 
     pub fn literal_field(&self, name: &str) -> &'a FieldSelection {
         self.expect(
-            self.bodies.field_selections.get(&FieldKey::Literal(
-                self.expression.unwrap_parens().id(),
-                name.into(),
-            )),
+            self.bodies
+                .field_selections
+                .get(&FieldKey::Literal(self.expression.id(), name.into())),
             format_args!("checked field selection for `{name}`"),
         )
     }
 
     pub fn struct_literal(&self) -> &'a CheckedStructLiteral {
         self.expect(
-            self.bodies
-                .struct_literals
-                .get(&self.expression.unwrap_parens().id()),
+            self.bodies.struct_literals.get(&self.expression.id()),
             format_args!("checked struct literal"),
         )
     }

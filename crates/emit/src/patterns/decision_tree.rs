@@ -11,7 +11,6 @@ use syntax::ast::{
     RestPattern, SequencePatternResolution, StructFieldPattern, expand_or_patterns,
 };
 use syntax::lex::{rune_codepoint, string_bytes};
-use syntax::parse::TUPLE_FIELDS;
 use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
@@ -50,10 +49,7 @@ fn element_index(segments: &[PathSegment]) -> usize {
     else {
         unreachable!("a tuple-element subject only resolves field paths")
     };
-    TUPLE_FIELDS
-        .iter()
-        .position(|tuple_field| tuple_field == field)
-        .expect("a tuple-element subject only resolves tuple fields")
+    go_name::tuple_field_index(field).expect("a tuple-element subject only resolves tuple fields")
 }
 
 #[derive(Clone, Copy)]
@@ -156,10 +152,7 @@ impl AccessPath {
         else {
             return None;
         };
-        TUPLE_FIELDS
-            .iter()
-            .take(arity)
-            .position(|tuple_field| tuple_field == field)
+        go_name::tuple_field_index(field).filter(|index| *index < arity)
     }
 }
 

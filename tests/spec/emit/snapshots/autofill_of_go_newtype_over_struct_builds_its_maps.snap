@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  import "go:example.com/lib"
+  
+  struct Outer { w: lib.Wrapper, s: lib.Settings }
+  
+  fn main() {
+    let o = Outer { .. }
+    let x = lib.Settings { .. }
+    let _ = (o, x)
+  }
+---
+package main
+
+import (
+	"example.com/lib"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Outer struct {
+	w lib.Wrapper
+	s lib.Settings
+}
+
+func main() {
+	o := Outer{
+		w: lib.Wrapper(lib.Settings{Tags: map[string]int{}}),
+		s: lib.Settings{Tags: map[string]int{}},
+	}
+	x := lib.Settings{Tags: map[string]int{}}
+	_ = lisette.MakeTuple2[Outer, lib.Settings](o, x)
+}

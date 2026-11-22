@@ -1,7 +1,6 @@
 #![deny(clippy::too_many_lines)]
 
 mod abi;
-#[allow(clippy::disallowed_methods)]
 mod analyze;
 pub(crate) mod calls;
 pub(crate) mod control_flow;
@@ -15,7 +14,6 @@ mod plan;
 mod render;
 mod state;
 pub(crate) mod statements;
-#[allow(clippy::disallowed_methods)]
 pub(crate) mod types;
 
 pub(crate) use analyze::facts::EmitFacts;
@@ -268,21 +266,34 @@ impl<'a> Planner<'a> {
     }
 
     fn return_context_from_abi(return_ty: Type, abi: CallableReturnAbi) -> ReturnContext {
-        if types::go_type::returns_go_void(&return_ty) {
-            return ReturnContext::Void(return_ty);
-        }
         match abi {
+            CallableReturnAbi::Void => ReturnContext::Void(return_ty),
             CallableReturnAbi::Lowered(shape) => ReturnContext::Lowered { return_ty, shape },
-            _ => ReturnContext::Tagged(return_ty),
+            CallableReturnAbi::Value => ReturnContext::Tagged(return_ty),
         }
     }
 
     pub fn emit(
-        analysis: &'a EmitInput,
+        analysis: &'a mut EmitInput,
         go_module: &str,
         entry_package_name: &'a str,
         options: EmitOptions,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
+        let cached_packages = &analysis.cached_packages;
+        for file in analysis.files.values_mut() {
+            if !is_emitted(file, cached_packages) {
+                continue;
+            }
+            for item in &mut file.items {
+                item.strip_wrappers();
+            }
+            debug_assert!(
+                !file.items.iter().any(Expression::contains_wrapper),
+                "internal error: a parenthesized expression, a single-expression block or a reference read once reached emit"
+            );
+        }
+        let analysis: &'a EmitInput = analysis;
+
         let line_indexes = options.sourcemap.then(|| {
             analysis
                 .files
@@ -307,8 +318,8 @@ impl<'a> Planner<'a> {
         };
 
         let mut files_by_package: HashMap<&str, Vec<&File>> = HashMap::default();
-        for file in analysis.files.values().filter(|file| !file.is_d_lis()) {
-            if !analysis.cached_packages.contains(&file.package_id) {
+        for file in analysis.files.values() {
+            if is_emitted(file, &analysis.cached_packages) {
                 files_by_package
                     .entry(file.package_id.as_str())
                     .or_default()
@@ -637,12 +648,12 @@ impl<'a> Planner<'a> {
         let PackagePlan {
             package_name,
             collision_diagnostics,
-            files,
+            files: file_plans,
         } = plan;
         let mut output_files = Vec::new();
         let mut all_diagnostics = collision_diagnostics;
 
-        for plan in files {
+        for plan in file_plans {
             let file = plan.file;
             let mut namespace = FileNamespace::new(plan.imports);
             let source = Planner::new(facts.clone(), &mut package, &mut adapters, &mut namespace)
@@ -658,6 +669,8 @@ impl<'a> Planner<'a> {
             });
         }
 
+        let (applied, dropped_code) = package.conversion_record();
+        abi::slot_conversion::check_applied_conversions(&facts, files, applied, dropped_code);
         if all_diagnostics.is_empty() {
             Ok(output_files)
         } else {
@@ -778,4 +791,8 @@ impl EmitFacts<'_> {
     fn end_position(&self, span: &Span) -> Option<Position> {
         self.position_at(span, span.byte_offset + span.byte_length)
     }
+}
+
+fn is_emitted(file: &File, cached_packages: &HashSet<String>) -> bool {
+    !file.is_d_lis() && !cached_packages.contains(&file.package_id)
 }

@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:cmp"
+  
+  interface Getter<T> {
+    fn get() -> T
+  }
+  
+  struct Src {}
+  
+  impl Src {
+    fn get(self) -> Result<Ref<int>, error> {
+      Ok(cmp.Or<Ref<int>>())
+    }
+  }
+  
+  fn read<G: Getter<Result<Ref<int>, error>>>(g: G) -> bool { g.get().is_ok() }
+  
+  fn main() {
+    if !read(Src {}) { panic("bound call reads as Err") }
+  }
+---
+package main
+
+import (
+	"cmp"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Getter[T any] interface {
+	get_() T
+}
+
+type Src struct{}
+
+func (s Src) get() (*int, error) {
+	return cmp.Or[*int](), nil
+}
+
+func (s Src) get_() lisette.Result[*int, error] {
+	return lisette.ResultFromPair[*int](s.get())
+}
+
+func read[G Getter[lisette.Result[*int, error]]](g G) bool {
+	return g.get_().IsOk()
+}
+
+func main() {
+	if !read(Src{}) {
+		panic("bound call reads as Err")
+	}
+}

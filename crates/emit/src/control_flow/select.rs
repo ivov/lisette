@@ -184,7 +184,7 @@ impl Planner<'_> {
         let operations: Vec<_> = arms.iter().map(|arm| {
             let (plan, span, capture, send_value) = match arm {
                 SelectArm::Send { send_expression, .. } => {
-                    let operation = channel_operation(send_expression.unwrap_parens());
+                    let operation = channel_operation(send_expression);
                     let plan = if let Some(operation) = &operation {
                         let channel = operation.channel();
                         let plan = self.plan_value(channel, ExpressionContext::value());
@@ -275,8 +275,7 @@ impl Planner<'_> {
     }
 
     fn plan_channel_operand(&mut self, receive_expression: &Expression) -> ValuePlan {
-        let unwrapped = receive_expression.unwrap_parens();
-        if let Some(ChannelOperation::Receive { channel }) = channel_operation(unwrapped) {
+        if let Some(ChannelOperation::Receive { channel }) = channel_operation(receive_expression) {
             let plan = self.plan_value(channel, ExpressionContext::value());
             if self.facts.is_reference(&channel.get_type()) {
                 return plan.map_expression(|_, value| cancel_deref_of_address(value));

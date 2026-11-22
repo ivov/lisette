@@ -15,12 +15,9 @@ func test() {
 	for {
 		var tmp int
 		if true {
-			{
-				continue
-			}
-		} else {
-			tmp = 1
+			continue
 		}
+		tmp = 1
 		_ = tmp
 		break
 	}

@@ -63,6 +63,10 @@ name = "rewrite_suite"
 path = "rewrite_suite.rs"
 
 [[test]]
+name = "conversion_shapes"
+path = "conversion_shapes.rs"
+
+[[test]]
 name = "embed_diff"
 path = "embed_diff.rs"
 

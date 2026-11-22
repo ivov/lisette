@@ -481,6 +481,124 @@ fn main() {
 }
 
 #[test]
+fn deref_at_line_end_ends_the_statement() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let n = 5
+  let r = &n
+  let m = r.*
+  (|| fmt.Println(m))()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_emits_as_method_call() {
+    let input = r#"
+import "go:fmt"
+
+struct Counter { n: int }
+
+impl Counter {
+  fn get(self) -> int { self.n }
+  fn add(self: mut Ref<Counter>, k: int) { self.n += k }
+}
+
+fn main() {
+  let m = Map.from([("a", 1)])
+  let x = Map.get(m, "a")
+  let y = Option.unwrap_or(x, 0)
+  let mut c = Counter { n: 1 }
+  Counter.add(&c, 2)
+  let r = &c
+  let z = Counter.get(r.*)
+  fmt.Println(y, z, Counter.get(c))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_with_spread_and_alias() {
+    let input = r#"
+import "go:fmt"
+
+type MyString = string
+
+struct Logger { lines: Slice<string> }
+
+impl Logger {
+  fn push(self: mut Ref<Logger>, parts: VarArgs<string>) {
+    self.lines = self.lines.append(parts...)
+  }
+}
+
+fn main() {
+  let mut l = Logger { lines: [] }
+  let parts = ["a", "b"]
+  Logger.push(&l, parts...)
+  fmt.Println(l.lines, MyString.length("hi"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_on_reference_to_call_result() {
+    let input = r#"
+import "go:fmt"
+
+struct Foo { v: int }
+
+impl Foo {
+  fn inc(self: mut Ref<Foo>) -> int {
+    self.v += 1
+    self.v
+  }
+  fn get(self) -> int { self.v }
+}
+
+fn make() -> Foo { Foo { v: 1 } }
+
+fn main() {
+  let a = Foo.inc(&make())
+  let b = make().inc()
+  let c = (&make()).inc()
+  let d = (&make()).get()
+  fmt.Println(a, b, c, d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn qualified_method_call_with_reference_to_assignment_target() {
+    let input = r#"
+struct H { ptr: mut Ref<int> }
+
+impl H {
+  fn repoint(self: mut Ref<H>, q: mut Ref<int>) -> int {
+    self.ptr = q
+    9
+  }
+}
+
+fn main() {
+  let mut a = 1
+  let mut b = 2
+  let mut h = H { ptr: &a }
+  h.ptr.* += H.repoint(&h, &b)
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn deref_field_access() {
     let input = r#"
 struct Counter { value: int }
@@ -598,6 +716,17 @@ fn might_fail() -> Result<int, string> {
 fn get_value() -> Result<int, string> {
   let result = might_fail()?;
   Ok(result)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_parenthesized_operand_returns_the_result_itself() {
+    let input = r#"
+fn get_value(r: Result<int, string>) -> Result<int, string> {
+  let x = (r)?
+  Ok(x + 1)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -861,6 +990,26 @@ fn main() {
 }
 
 #[test]
+fn const_of_runtime_value_is_a_var() {
+    let input = r#"
+import "go:fmt"
+
+fn double(x: int) -> int { x * 2 }
+
+const N: Option<int> = None
+const EMPTY: bool = N == None
+const HANDLER: fn(int) -> int = double
+const LIMIT = 10
+const NEXT = LIMIT + 1
+
+fn main() {
+  fmt.Println(N, EMPTY, HANDLER(NEXT))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn const_bitwise_not_stays_const() {
     let input = r#"
 const MASK = ^1
@@ -969,6 +1118,19 @@ import "go:fmt"
 fn test() {
   let name = "Alice";
   fmt.Print(f"Hello, {name}!")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_function_value_prints_its_address() {
+    let input = r#"
+fn double(x: int) -> int { x * 2 }
+
+fn describe() -> string {
+  let f = double
+  f"fn={f} {double}"
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3879,6 +4041,91 @@ fn main() {
 }
 
 #[test]
+fn reference_read_once_emits_its_operand() {
+    let input = r#"
+struct Point { x: int }
+
+impl Point {
+  fn bump(self: mut Ref<Point>) {
+    self.x += 1
+  }
+}
+
+fn test(r: Ref<Point>) -> int {
+  let mut p = Point { x: 1 }
+  (&p).bump()
+  let copy = (&p).*
+  let same = &r
+  copy.x + (&p).x + same.x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_write_through_reference_read_once_pins_receiver() {
+    let input = r#"
+struct Holder {
+  slc: Slice<()>,
+}
+
+fn main() {
+  let mut h = Holder { slc: [] }
+  let bump = || { (&h).slc = [(), (), ()] }
+  let ys = {
+    h.slc.append(bump())
+  }
+  if ys.length() != 1 {
+    panic("the receiver must be read before argument effects run")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn explicit_and_implicit_dereference_name_one_field() {
+    let input = r#"
+struct Counter { value: int }
+
+impl Counter {
+  fn increment(self: mut Ref<Counter>) {
+    self.*.value = self.value + 1
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_receiver_of_component_binding_reads_the_binding() {
+    let input = r#"
+fn lookup(m: Map<string, int>) -> Result<int, PanicValue> {
+  recover {
+    let v = m.get("a")
+    (&v).unwrap_or(4)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn dereferenced_reference_to_tuple_field_reads_the_field() {
+    let input = r#"
+fn use_f(f: fn(int) -> ()) { f(3) }
+
+fn main() {
+  let mut n = 0
+  let p = (|x: int| { n += x }, 7)
+  let f = (&p.0).*
+  use_f(f)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn deref_dot_assignment_on_call_result() {
     let input = r#"
 struct Box { x: int }
@@ -5206,7 +5453,7 @@ fn test() -> int {
 }
 
 #[test]
-fn typed_function_alias_from_named_function_declares_alias_type() {
+fn typed_function_alias_from_named_function_uses_short_declaration() {
     let input = r#"
 type Handler = fn() -> int
 
@@ -5225,7 +5472,7 @@ fn test() -> int {
 }
 
 #[test]
-fn typed_function_alias_from_block_declares_alias_type() {
+fn typed_function_alias_from_block_uses_short_declaration() {
     let input = r#"
 type Handler = fn() -> int
 

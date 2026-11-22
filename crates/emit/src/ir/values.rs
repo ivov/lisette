@@ -286,6 +286,13 @@ impl GoExpression {
         Self::new(GoExpressionNode::Dereference(operand.into_operand()))
     }
 
+    pub(crate) fn new_zero(go_type: GoType) -> Self {
+        Self::dereference(Self::call(
+            Self::external_name("new".to_string()),
+            vec![Self::type_name(go_type)],
+        ))
+    }
+
     pub(crate) fn spread(operand: GoExpression) -> Self {
         Self::new(GoExpressionNode::Spread(operand.into_operand()))
     }
@@ -842,7 +849,9 @@ impl Planner<'_> {
             return ValuePlan::plain_call(setup, call);
         }
         match expression {
-            Expression::Paren { expression, .. } => self.plan_operand(expression, ctx),
+            Expression::Paren { .. } => {
+                unreachable!("internal error: emit received a parenthesized expression")
+            }
             Expression::Cast {
                 expression: operand,
                 ty,
@@ -869,10 +878,8 @@ impl Planner<'_> {
             Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
             Expression::StructCall { .. } => self.plan_struct_call(expression),
             Expression::Reference {
-                expression: inner,
-                ty,
-                ..
-            } => self.plan_reference(inner, ty),
+                expression: inner, ..
+            } => self.plan_reference(inner),
             Expression::DotAccess { .. } => self.plan_dot_access(expression, ctx),
             Expression::Task {
                 expression: inner, ..
@@ -920,5 +927,23 @@ impl EmitFacts<'_> {
             value.node_mut().fill_positions(&start, &end);
             value.positioned(start.clone())
         })
+    }
+}
+
+impl GoExpressionNode {
+    pub(crate) fn new_zero_type(&self) -> Option<&GoType> {
+        if let Self::Dereference(operand) = self
+            && let Self::Call {
+                callee, arguments, ..
+            } = operand.as_ref()
+            && let Self::Identifier(name) = callee.as_ref()
+            && name.id().is_none()
+            && name.spelling() == "new"
+            && let [argument] = arguments.as_slice()
+            && let Self::Type(go_type) = argument.as_ref()
+        {
+            return Some(go_type);
+        }
+        None
     }
 }

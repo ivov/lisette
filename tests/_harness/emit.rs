@@ -140,7 +140,7 @@ fn plan_inner(
         file_comment: None,
     };
 
-    let input = EmitInput {
+    let mut input = EmitInput {
         checked_bodies: result.checked_bodies,
         files: HashMap::from_iter([(0, file)]),
         definitions: result.definitions,
@@ -157,7 +157,7 @@ fn plan_inner(
         sourcemap_base: None,
         emit_tests: false,
     };
-    Planner::emit(&input, "myproject", "main", options)
+    Planner::emit(&mut input, "myproject", "main", options)
 }
 
 pub struct EmitResult {

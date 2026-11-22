@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  import "go:fmt"
+  
+  fn double(x: int) -> Result<int, error> {
+    if x < 0 { return Err(fmt.Errorf("neg")) }
+    Ok(x * 2)
+  }
+  
+  fn main() {
+    let fs: Slice<fn(int) -> Result<int, error>> = [double, Ok]
+    aws.UseMany(fs...)
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func double(x int) (int, error) {
+	if x < 0 {
+		return 0, fmt.Errorf("neg")
+	}
+	return x * 2, nil
+}
+
+func main() {
+	fs := []func(int) lisette.Result[int, error]{
+		func(arg0 int) lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](double(arg0))
+		},
+		lisette.MakeResultOk[int, error],
+	}
+	adapted := make([]func(int) (int, error), len(fs))
+	for i, v := range fs {
+		cb := v
+		var adapted2 func(int) (int, error)
+		if cb != nil {
+			adapted2 = func(arg0 int) (int, error) {
+				res := cb(arg0)
+				if res.Tag == lisette.ResultOk {
+					return res.OkVal, nil
+				}
+				return 0, res.ErrVal
+			}
+		}
+		adapted[i] = adapted2
+	}
+	aws.UseMany(adapted...)
+}

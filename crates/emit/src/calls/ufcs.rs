@@ -1,5 +1,5 @@
 use crate::calls::arguments::CallArgsContext;
-use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
+use crate::calls::dispatch::{CallArgShape, CallTypeArgsRequest};
 use crate::calls::regular::receiver_type_binding;
 
 use crate::Planner;
@@ -17,32 +17,6 @@ use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    fn ufcs_type_args(
-        &mut self,
-        function: &Expression,
-        callee: &ResolvedCallee<'_>,
-        written_type_arguments: usize,
-        arg_shape: CallArgShape,
-    ) -> Option<GoType> {
-        let definition_ty = callee.declared_type()?;
-
-        let Type::Forall { vars, body } = &definition_ty else {
-            return None;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return None;
-        };
-
-        let receiver_count = callee.receiver_offset.min(1);
-        if written_type_arguments == 0
-            && all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
-        {
-            return None;
-        }
-        let type_arguments = &self.facts.checked(function).callee().type_arguments;
-        self.format_generic_instantiation(definition_ty, type_arguments)
-    }
-
     pub(super) fn plan_ufcs_call(
         &mut self,
         function: &Expression,
@@ -60,18 +34,19 @@ impl Planner<'_> {
             unreachable!("plan_ufcs_call called on non-DotAccess");
         };
 
-        let mut coercion = self.facts.checked(receiver).receiver_change();
-        let type_args_string = self
-            .ufcs_type_args(
-                function,
-                &call_plan.resolved,
-                written_type_arguments,
-                CallArgShape {
-                    value_count: args.len(),
-                    has_spread: spread.is_some(),
-                },
-            )
-            .unwrap_or_default();
+        let mut coercion = self.facts.dot_receiver_coercion(receiver, member);
+        let type_args_string = self.call_type_arguments(CallTypeArgsRequest {
+            function,
+            callee: &call_plan.resolved,
+            written_type_arguments,
+            call_ty: None,
+            arg_shape: CallArgShape {
+                value_count: args.len(),
+                has_spread: spread.is_some(),
+            },
+            slot: None,
+            receiver_passed: true,
+        });
 
         let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
         if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
@@ -195,7 +170,7 @@ impl Planner<'_> {
         receiver: &Expression,
         stage: ValuePlan,
     ) -> ValuePlan {
-        match receiver.unwrap_parens() {
+        match receiver {
             Expression::Call { .. } => stage
                 .map_expression(|setup, value| {
                     let temp = self.hoist_tmp_value_statement(setup, "ref", value);
@@ -256,12 +231,12 @@ impl Planner<'_> {
 fn is_address_of_composite_literal(arg: Option<&Expression>) -> bool {
     let Some(Expression::Reference {
         expression: inner, ..
-    }) = arg.map(Expression::unwrap_parens)
+    }) = arg
     else {
         return false;
     };
     matches!(
-        inner.unwrap_parens(),
+        &**inner,
         Expression::StructCall { .. }
             | Expression::Literal {
                 literal: Literal::Slice(_),

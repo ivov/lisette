@@ -1,3 +1,4 @@
+use crate::expressions::literals::raw_string_literal;
 use syntax::ast::{Attribute, AttributeArg, StructFieldDefinition};
 use syntax::attributes::{is_serialization_key, struct_attribute_forces_field_export};
 
@@ -292,7 +293,7 @@ pub(super) fn format_tag_string(
     if parts.is_empty() {
         None
     } else {
-        Some(format!("`{}`", parts.join(" ")))
+        Some(raw_string_literal(&parts.join(" ")))
     }
 }
 

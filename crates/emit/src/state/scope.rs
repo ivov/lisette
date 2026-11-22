@@ -135,7 +135,7 @@ impl ScopeState {
         &self.type_params
     }
 
-    fn declares_type_param(&self, go_name: &str) -> bool {
+    pub(crate) fn declares_type_param(&self, go_name: &str) -> bool {
         self.type_params
             .iter()
             .any(|param| param.go_name == go_name)

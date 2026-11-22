@@ -46,6 +46,6 @@ func makeBox[T any](x T) Box[T] {
 }
 
 func main() {
-	_w := Wrap{B: makeBox[Handler](double)}
+	_w := Wrap{B: makeBox(double)}
 	_ = _w.B
 }

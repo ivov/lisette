@@ -1,0 +1,84 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import h "go:example.com/h"
+  
+  fn call(f: fn(string) -> Result<string, error>) -> bool { f("z").is_ok() }
+  
+  fn find(f: fn(string) -> Option<Ref<int>>) -> bool { f("k").is_some() }
+  
+  fn main() {
+    let f = h.Primary
+    let r = f("y")
+    let g = h.Find
+    match g("k") {
+      Some(n) => fmt.Println(n.*),
+      None => fmt.Println("none"),
+    }
+    fmt.Println(r.is_ok(), call(h.Primary), find(h.Find), call(f), find(g))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	"example.com/h"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func call(f func(string) lisette.Result[string, error]) bool {
+	return f("z").IsOk()
+}
+
+func find(f func(string) lisette.Option[*int]) bool {
+	return f("k").IsSome()
+}
+
+func main() {
+	f := h.Primary
+	_, err := f("y")
+	g := h.Find
+	if n := g("k"); n != nil {
+		fmt.Println(*n)
+	} else {
+		fmt.Println("none")
+	}
+	arg := err == nil
+	cb := h.Primary
+	var adapted func(string) lisette.Result[string, error]
+	if cb != nil {
+		adapted = func(arg0 string) lisette.Result[string, error] {
+			return lisette.ResultFromPair[string](cb(arg0))
+		}
+	}
+	arg2 := call(adapted)
+	cb2 := h.Find
+	var adapted2 func(string) lisette.Option[*int]
+	if cb2 != nil {
+		adapted2 = func(arg0 string) lisette.Option[*int] {
+			raw := cb2(arg0)
+			return lisette.OptionFromNilable[*int](raw, raw == nil)
+		}
+	}
+	arg3 := find(adapted2)
+	cb3 := f
+	var adapted3 func(string) lisette.Result[string, error]
+	if cb3 != nil {
+		adapted3 = func(arg0 string) lisette.Result[string, error] {
+			return lisette.ResultFromPair[string](cb3(arg0))
+		}
+	}
+	arg4 := call(adapted3)
+	cb4 := g
+	var adapted4 func(string) lisette.Option[*int]
+	if cb4 != nil {
+		adapted4 = func(arg0 string) lisette.Option[*int] {
+			raw2 := cb4(arg0)
+			return lisette.OptionFromNilable[*int](raw2, raw2 == nil)
+		}
+	}
+	fmt.Println(arg, arg2, arg3, arg4, find(adapted4))
+}

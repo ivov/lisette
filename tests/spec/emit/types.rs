@@ -1473,6 +1473,18 @@ type UserId = int
 }
 
 #[test]
+fn numeric_alias_operand_converts_only_from_another_number_type() {
+    let input = r#"
+type Score = int
+
+fn total(a: Score, b: int, c: int32) -> Score {
+  a + b + c
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn type_alias_with_generic() {
     let input = r#"
 type IntBox = Box<int>
@@ -2657,6 +2669,24 @@ struct Cb(fn(int) -> ())
 }
 
 #[test]
+fn newtype_over_func_keeps_name_in_function_parameter() {
+    let input = r#"
+#[display]
+struct Cb(fn(int) -> ())
+
+fn apply(g: fn(Cb) -> string, c: Cb) -> string {
+  g(c)
+}
+
+fn main() {
+  let cb = Cb(|_| {})
+  let _ = apply(|c| c.to_string(), cb)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn newtype_over_type_named_like_func_keyword() {
     let input = r#"
 struct funcRegistry { pub n: int }
@@ -3021,6 +3051,17 @@ fn struct_with_tag_raw_mode() {
 struct User {
   #[tag(`json:"name,omitempty" validate:"required"`)]
   name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_tag_value_with_backtick_is_an_interpreted_string() {
+    let input = r#"
+struct Row {
+  #[tag("note", "a`b")]
+  pub name: string,
 }
 "#;
     assert_emit_snapshot!(input);
@@ -6403,6 +6444,23 @@ struct Holder {
   r: Ref<int>,
   s: Slice<int>,
   m: Map<string, int>,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn serialized_anon_struct_spells_exported_field_names() {
+    let input = r#"
+import "go:fmt"
+
+#[json]
+#[go(anon_struct)]
+struct Point { x: int, y: int }
+
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  fmt.Println(p.x + p.y)
 }
 "#;
     assert_emit_snapshot!(input);

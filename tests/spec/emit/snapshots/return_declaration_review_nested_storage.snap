@@ -64,35 +64,11 @@ func make_(n int) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Resul
 	if n == 0 {
 		return nil, lisette.MakeResultErr[F[lisette.Result[int, error]], string]("none")
 	}
-	src := lisette.MakeTuple2[lisette.Option[func(int) lisette.Result[int, error]], lisette.Result[func(int) lisette.Result[int, error], string]](lisette.MakeOptionSome(func(arg0 int) lisette.Result[int, error] {
-		return lisette.ResultFromPair[int](source(arg0))
-	}), lisette.MakeResultOk[func(int) lisette.Result[int, error], string](func(x int) lisette.Result[int, error] {
-		return lisette.ResultFromPair[int](source(x))
-	}))
-	var adapted lisette.Tuple2[lisette.Option[F[lisette.Result[int, error]]], lisette.Result[F[lisette.Result[int, error]], string]]
-	src2 := src.First
-	var adapted2 lisette.Option[F[lisette.Result[int, error]]]
-	adapted2.Tag = src2.Tag
-	if src2.Tag == lisette.OptionSome {
-		adapted2.SomeVal = src2.SomeVal
-	}
-	adapted.First = adapted2
-	src3 := src.Second
-	var adapted3 lisette.Result[F[lisette.Result[int, error]], string]
-	adapted3.Tag = src3.Tag
-	if src3.Tag == lisette.ResultOk {
-		adapted3.OkVal = src3.OkVal
-	}
-	if src3.Tag == lisette.ResultErr {
-		adapted3.ErrVal = src3.ErrVal
-	}
-	adapted.Second = adapted3
-	opt := adapted.First
-	var unwrap F[lisette.Result[int, error]]
-	if opt.Tag == lisette.OptionSome {
-		unwrap = opt.SomeVal
-	}
-	return unwrap, adapted.Second
+	return func(arg0 int) lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](source(arg0))
+		}, lisette.MakeResultOk[func(int) lisette.Result[int, error], string](func(x int) lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](source(x))
+		})
 }
 
 func forward(x Alias[lisette.Result[int, error]]) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Result[int, error]], string]) {

@@ -1112,6 +1112,66 @@ fn make_pair(c: Counter, positive: bool) -> (fmt.Stringer, int) {
 }
 
 #[test]
+fn interop_aliased_tuple_tail_literal_converts_each_element() {
+    let input = r#"
+import "go:fmt"
+import "go:net/http"
+
+struct Counter {
+  count: int,
+}
+
+impl Counter {
+  fn String(self) -> string {
+    f"{self.count}"
+  }
+}
+
+type Pair = (Option<http.Handler>, int)
+type Shown = (fmt.Stringer, int)
+
+fn handler_pair() -> Pair {
+  (http.FileServer(http.Dir(".")), 1)
+}
+
+fn shown_pair(c: Counter) -> Shown {
+  (c, c.count)
+}
+
+fn main() {
+  let (handler, n) = handler_pair()
+  let (shown, m) = shown_pair(Counter { count: 2 })
+  if !handler.is_some() || n != 1 || shown.String() != "2" || m != 2 {
+    panic("wrong tuple")
+  }
+  fmt.Println("ok")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interface_bound_named_like_the_interface_from_another_package_is_kept() {
+    let input = r#"
+import "go:example.com/other"
+
+interface Foo<T: other.Foo> {
+  fn item() -> T
+}
+
+interface Ranked<T: Ranked<T>> {
+  fn next() -> T
+}
+"#;
+    let typedef = r#"
+pub interface Foo {
+  fn Name() -> string
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/other", typedef)]);
+}
+
+#[test]
 fn interop_aliased_import_type_reference() {
     let input = r#"
 import t "go:time"
@@ -2748,6 +2808,50 @@ pub fn UseMany(fs: VarArgs<fn(int) -> Result<int, error>>)
 }
 
 #[test]
+fn interop_lisette_fn_slice_spread_into_go_variadic_callback_param() {
+    let input = r#"
+import "go:example.com/aws"
+import "go:fmt"
+
+fn double(x: int) -> Result<int, error> {
+  if x < 0 { return Err(fmt.Errorf("neg")) }
+  Ok(x * 2)
+}
+
+fn main() {
+  let fs: Slice<fn(int) -> Result<int, error>> = [double, Ok]
+  aws.UseMany(fs...)
+}
+"#;
+    let typedef = r#"
+pub fn UseMany(fs: VarArgs<fn(int) -> Result<int, error>>)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_closure_into_go_flattened_result_with_nilable_element() {
+    let input = r#"
+import "go:example.com/aws"
+import "go:errors"
+
+fn main() {
+  aws.Use(|n| {
+    if n < 0 {
+      return Err(errors.New("negative"))
+    }
+    let v = n
+    Ok((Some(&v), n))
+  })
+}
+"#;
+    let typedef = r#"
+pub fn Use(f: fn(int) -> Result<(Option<Ref<int>>, int), error>)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
 fn interop_go_fn_into_lisette_fn_param() {
     let input = r#"
 import "go:example.com/aws"
@@ -3982,6 +4086,56 @@ fn walker(n: int) -> filepath.WalkFunc {
 fn main() {
   let w = walker(1)
   let _ = filepath.Walk(".", w)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+const NAMED_FUNC_VAR_TYPEDEF: &str = r#"
+pub type Handler = fn(string) -> Result<string, error>
+pub type Lookup = fn(string) -> Option<Ref<int>>
+
+pub var Primary: Handler
+pub var Find: Lookup
+"#;
+
+#[test]
+fn go_variable_of_named_function_type_lowers_its_results() {
+    let input = r#"
+import "go:fmt"
+import h "go:example.com/h"
+
+fn call(f: fn(string) -> Result<string, error>) -> bool { f("z").is_ok() }
+
+fn find(f: fn(string) -> Option<Ref<int>>) -> bool { f("k").is_some() }
+
+fn main() {
+  let f = h.Primary
+  let r = f("y")
+  let g = h.Find
+  match g("k") {
+    Some(n) => fmt.Println(n.*),
+    None => fmt.Println("none"),
+  }
+  fmt.Println(r.is_ok(), call(h.Primary), find(h.Find), call(f), find(g))
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/h", NAMED_FUNC_VAR_TYPEDEF)]);
+}
+
+#[test]
+fn interop_lisette_fn_values_into_go_variadic_any_keep_go_results() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn get() -> Result<int, error> { Ok(1) }
+
+fn opt() -> Option<int> { Some(1) }
+
+fn main() {
+  fmt.Printf("%T %T\n", get, opt)
+  fmt.Printf("%T\n", |s: string| strconv.Atoi(s + ""))
 }
 "#;
     assert_emit_snapshot!(input);

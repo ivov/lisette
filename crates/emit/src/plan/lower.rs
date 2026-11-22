@@ -92,7 +92,7 @@ fn collect_conjuncts<'e>(condition: &'e Expression, conjuncts: &mut Vec<&'e Expr
         left,
         right,
         ..
-    } = condition.unwrap_parens()
+    } = condition
     {
         collect_conjuncts(left, conjuncts);
         collect_conjuncts(right, conjuncts);
@@ -103,7 +103,7 @@ fn collect_conjuncts<'e>(condition: &'e Expression, conjuncts: &mut Vec<&'e Expr
 
 pub(crate) fn is_conjunction(condition: &Expression) -> bool {
     matches!(
-        condition.unwrap_parens(),
+        condition,
         Expression::Binary {
             operator: BinaryOperator::And,
             ..
@@ -124,6 +124,7 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> ValuePlan {
+        let ty = self.facts.value_use_slot(expression).unwrap_or(ty);
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let target = GoExpression::identifier(result_var.clone());
         let block = self.lower_branching_to_block(
@@ -430,25 +431,24 @@ impl Planner<'_> {
     }
 
     fn lower_expression_statement(&mut self, expression: &Expression) -> Statement {
-        let unwrapped = expression.unwrap_parens();
         let statement = if matches!(
-            unwrapped,
+            expression,
             Expression::Task { .. } | Expression::Defer { .. }
         ) {
-            let value = self.plan_operand(unwrapped, ExpressionContext::value());
+            let value = self.plan_operand(expression, ExpressionContext::value());
             LoweredStatement::Body(LoweredBlock {
                 statements: value.into_parts().0,
             })
         } else if let Expression::Propagate {
             expression: inner, ..
-        } = unwrapped
+        } = expression
         {
             LoweredStatement::Body(LoweredBlock {
                 statements: self.lower_propagate_statement(inner),
             })
         } else {
             LoweredStatement::Body(LoweredBlock {
-                statements: self.lower_discard_value(unwrapped),
+                statements: self.lower_discard_value(expression),
             })
         };
         self.facts.directed_at(expression, statement)
@@ -554,7 +554,7 @@ impl Planner<'_> {
                 return this.lower_loop_with_exit_test(setup, exit, body);
             }
             let header = if matches!(
-                condition.unwrap_parens(),
+                condition,
                 Expression::Literal {
                     literal: Literal::Boolean(true),
                     ..

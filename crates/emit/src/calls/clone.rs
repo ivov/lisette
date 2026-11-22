@@ -1,4 +1,4 @@
-use syntax::parse::TUPLE_FIELDS;
+use crate::names::go_name;
 use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
@@ -70,10 +70,8 @@ impl Planner<'_> {
     fn tuple_clone_statements(&mut self, place: &GoExpression, elems: &[Type]) -> Vec<Statement> {
         let mut statements = Vec::new();
         for (index, elem) in elems.iter().enumerate() {
-            let Some(field) = TUPLE_FIELDS.get(index) else {
-                break;
-            };
-            let field_place = GoExpression::selector(place.clone(), field.to_string());
+            let field_place =
+                GoExpression::selector(place.clone(), go_name::tuple_field(index).to_string());
             if self.facts.is_clone_container(elem) {
                 let clone = self.clone_expression(field_place.clone(), elem);
                 statements.push(assign(field_place, clone));

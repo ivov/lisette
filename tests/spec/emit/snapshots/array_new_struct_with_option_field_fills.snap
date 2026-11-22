@@ -21,11 +21,5 @@ type Horse struct {
 }
 
 func herd() [2]Horse {
-	return func() [2]Horse {
-		var arr [2]Horse
-		for i := range arr {
-			arr[i] = Horse{}
-		}
-		return arr
-	}()
+	return [2]Horse{}
 }

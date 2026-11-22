@@ -117,13 +117,12 @@ impl ResolvedSubject {
     }
 }
 
-fn field_path_root(expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
-    let mut expression = expression.unwrap_parens();
+fn field_path_root(mut expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
     while let Expression::DotAccess {
         expression: inner, ..
     } = expression
     {
-        expression = inner.unwrap_parens();
+        expression = inner;
     }
     match expression {
         Expression::Identifier {
@@ -578,6 +577,12 @@ impl Planner<'_> {
         })
     }
 
+    fn record_dropped_fail(&self, fail: &RefutableFail) {
+        if let RefutableFail::ElseBlock(else_block) = fail {
+            self.package.record_dropped_code(else_block.get_span());
+        }
+    }
+
     fn lower_refutable_fail(
         &mut self,
         fail: RefutableFail,
@@ -644,6 +649,7 @@ impl Planner<'_> {
         }
 
         if asserted.is_irrefutable() {
+            self.record_dropped_fail(&fail);
             self.tree_binding_statements(
                 &mut statements,
                 &asserted.bindings,
@@ -717,10 +723,11 @@ impl Planner<'_> {
             .collect();
         let mut bindings: Vec<_> = infos.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);
-        let failure = infos
-            .iter()
-            .all(|info| !info.is_irrefutable())
-            .then(|| self.lower_refutable_fail(fail, subject_var));
+        let refutable = infos.iter().all(|info| !info.is_irrefutable());
+        if !refutable {
+            self.record_dropped_fail(&fail);
+        }
+        let failure = refutable.then(|| self.lower_refutable_fail(fail, subject_var));
 
         let mut statements = Vec::new();
         let failure_uses = failure

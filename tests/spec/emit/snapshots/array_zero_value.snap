@@ -17,5 +17,5 @@ type Buf struct {
 }
 
 func empty() Buf {
-	return Buf{data: [4]int{}}
+	return Buf{}
 }

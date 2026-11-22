@@ -10023,7 +10023,7 @@ fn assert_relation_applies_numeric_alias_cast() {
     fs.add_file(
         "math",
         "core.test.lis",
-        "#[test]\nfn cmp() {\n  let s: Score = 3\n  let n: int = 3\n  assert s == n\n}",
+        "#[test]\nfn cmp() {\n  let s: Score = 3\n  let n: int32 = 3\n  assert s == n\n}",
     );
 
     let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
@@ -10049,7 +10049,7 @@ fn assert_relation_casts_a_bound_operand_but_not_a_literal() {
     fs.add_file(
         "math",
         "core.lis",
-        "pub type Score = int\n\npub fn add(a: int, b: int) -> int { a + b }",
+        "pub type Score = int\n\npub fn add(a: int32, b: int32) -> int32 { a + b }",
     );
     fs.add_file(
         "math",

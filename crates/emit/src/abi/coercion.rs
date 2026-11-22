@@ -1,10 +1,9 @@
-use syntax::ast::Expression;
-use syntax::parse::TUPLE_FIELDS;
+use crate::names::go_name;
 use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::control_flow::fallible::prelude_call;
+use crate::control_flow::fallible::{option_variant, prelude_call};
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, declare,
@@ -115,29 +114,6 @@ impl LayoutBridge {
 }
 
 impl CoercionPlan {
-    pub(crate) fn checked(
-        planner: &Planner<'_>,
-        value: &Expression,
-        layout: Option<&ValueLayout>,
-    ) -> Self {
-        let value_use = planner.facts.checked(value).value_use();
-        let plan = Self::adapted(
-            planner,
-            &value_use.adaptation,
-            &value.get_type(),
-            &value_use.slot,
-            layout,
-        );
-        if plan.is_identity()
-            && let Some(layout) = layout
-            && planner.facts.is_interface_or_unknown(layout.logical_type())
-            && let Some((stored, lisette)) = planner.any_slot_function_layouts(&value.get_type())
-        {
-            return Self::bridge(planner, &lisette, &stored);
-        }
-        plan
-    }
-
     pub(crate) fn adapted(
         planner: &Planner<'_>,
         adaptation: &Adaptation,
@@ -264,7 +240,11 @@ impl CoercionPlan {
                 let (payload_setup, payload) = payload.lower(planner, value);
                 statements.extend(payload_setup);
                 let type_arguments = GoType::type_argument(&planner.go_type(&payload_type));
-                prelude_call("MakeOptionSome", type_arguments, vec![payload])
+                prelude_call(
+                    option_variant("Some").constructor,
+                    type_arguments,
+                    vec![payload],
+                )
             }
             Self::Layout(bridge) => {
                 planner.plan_layout_bridge(&mut statements, value, &bridge, true)
@@ -283,22 +263,6 @@ impl CoercionPlan {
 }
 
 impl Planner<'_> {
-    pub(crate) fn apply_type_coercion(
-        &mut self,
-        statements: &mut Vec<Statement>,
-        target_ty: Option<&Type>,
-        expression: &Expression,
-        emitted: GoExpression,
-    ) -> GoExpression {
-        let Some(target) = target_ty else {
-            return emitted;
-        };
-        let coercion = self.value_slot_coercion(expression, target);
-        let (setup, value) = coercion.lower(self, emitted);
-        statements.extend(setup);
-        value
-    }
-
     fn plan_array_rebuild(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -348,8 +312,8 @@ impl Planner<'_> {
 
         let mut arguments = Vec::with_capacity(elements.len());
         for (index, element) in elements.into_iter().enumerate() {
-            let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-            let slot_read = GoExpression::selector(source.clone(), field.to_string());
+            let slot_read =
+                GoExpression::selector(source.clone(), go_name::tuple_field(index).to_string());
             let (element_setup, coerced) = element.lower(self, slot_read);
             statements.extend(element_setup);
             arguments.push(coerced);

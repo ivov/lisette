@@ -1,6 +1,9 @@
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
+use std::cell::RefCell;
+use syntax::ast::Span;
 use syntax::go_names::is_go_reserved_word;
+use syntax::program::ValueUseKey;
 
 use crate::names::go_name;
 
@@ -8,9 +11,10 @@ use crate::names::go_name;
 pub(crate) struct PackageState {
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
-    go_const_bindings: HashSet<String>,
     declared_names: HashSet<String>,
     import_qualifiers: HashSet<String>,
+    applied_conversions: RefCell<HashSet<ValueUseKey>>,
+    dropped_code: RefCell<Vec<Span>>,
 }
 
 impl PackageState {
@@ -34,6 +38,25 @@ impl PackageState {
     ) {
         self.generic_renames
             .insert(source_name.into(), go_name.into());
+    }
+
+    pub(crate) fn record_applied_conversion(&self, key: ValueUseKey) {
+        if cfg!(debug_assertions) {
+            self.applied_conversions.borrow_mut().insert(key);
+        }
+    }
+
+    pub(crate) fn conversion_record(&mut self) -> (&HashSet<ValueUseKey>, &[Span]) {
+        (
+            self.applied_conversions.get_mut(),
+            self.dropped_code.get_mut(),
+        )
+    }
+
+    pub(crate) fn record_dropped_code(&self, span: Span) {
+        if cfg!(debug_assertions) {
+            self.dropped_code.borrow_mut().push(span);
+        }
     }
 
     pub(crate) fn generic_rename(&self, source_name: &str) -> Option<&str> {
@@ -71,13 +94,5 @@ impl PackageState {
                 || is_go_reserved_word(candidate)
                 || also_taken(candidate)
         })
-    }
-
-    pub(crate) fn extend_go_const_bindings(&mut self, names: impl IntoIterator<Item = String>) {
-        self.go_const_bindings.extend(names);
-    }
-
-    pub(crate) fn is_go_const_binding(&self, symbol: &str) -> bool {
-        self.go_const_bindings.contains(symbol)
     }
 }

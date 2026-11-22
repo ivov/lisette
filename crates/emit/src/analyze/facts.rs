@@ -1,5 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::program::{CallOperation, CheckedExpression, EqualityRecipe, FieldSelection};
+use syntax::program::{
+    CallOperation, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection, ValueUseKey,
+};
 
 use ecow::EcoString;
 use syntax::ast::{BindingId, Expression, Pattern, RestPattern, Span};
@@ -12,8 +14,7 @@ use syntax::types::{Symbol, Type};
 
 use crate::EnumLayout;
 use crate::SharedEmitContext;
-use crate::abi::callable::LoweredReturnAbi;
-use crate::abi::catalog::GoSlotDescriptor;
+use crate::abi::catalog::{GoAbiCatalog, GoSlotDescriptor};
 use crate::abi::is_prelude_container_type;
 use crate::names::go_name;
 use crate::state::lowering::LineIndex;
@@ -53,7 +54,7 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn call_operation(&self, expression: &Expression) -> Option<&'a CallOperation> {
         let Expression::Call {
             expression: callee, ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return None;
         };
@@ -62,6 +63,20 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn checked<'e>(&self, expression: &'e Expression) -> CheckedExpression<'e, 'a> {
         self.input.checked_bodies.occurrence(expression)
+    }
+
+    pub(crate) fn value_use_slot(&self, expression: &Expression) -> Option<&'a Type> {
+        self.input
+            .checked_bodies
+            .value_use(&ValueUseKey::value(expression))
+            .map(|value_use| &value_use.slot)
+            .filter(|slot| !slot.is_ignored())
+    }
+
+    pub(crate) fn value_uses(
+        &self,
+    ) -> impl Iterator<Item = (&'a ValueUseKey, &'a CheckedValueUse)> {
+        self.input.checked_bodies.uses()
     }
 
     pub(crate) fn pattern_field(&self, name_span: Span) -> &'a FieldSelection {
@@ -76,6 +91,11 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
         self.definition(owner)?.methods()?.get(name)
+    }
+
+    pub(crate) fn const_emits_go_const(&self, symbol: &str) -> bool {
+        self.definition(symbol)
+            .is_some_and(Definition::is_compile_time_const)
     }
 
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
@@ -152,6 +172,44 @@ impl<'a> EmitFacts<'a> {
         types::is_lisette_enum(ty, |id| self.definition(id))
     }
 
+    pub(crate) fn go_zero_is_lisette_zero(&self, ty: &Type) -> bool {
+        let ty = self.peel_alias(ty);
+        match &ty {
+            Type::Simple(_) | Type::Parameter(_) => true,
+            Type::Compound { kind, .. } => {
+                matches!(kind, CompoundKind::Slice | CompoundKind::EnumeratedSlice)
+            }
+            Type::Tuple(elements) => elements.iter().all(|e| self.go_zero_is_lisette_zero(e)),
+            Type::Array { length, element } => {
+                *length == 0 || self.go_zero_is_lisette_zero(element)
+            }
+            Type::Nominal { id, .. } => {
+                if self.is_option(&ty)
+                    || self.is_lisette_enum(&ty)
+                    || go_name::is_go_import(id.as_str())
+                        && (self.is_interface(&ty) || self.resolve_to_function_type(&ty).is_some())
+                {
+                    return true;
+                }
+                if let Some(underlying) = self.newtype_underlying(&ty) {
+                    return self.go_zero_is_lisette_zero(&underlying);
+                }
+                if matches!(
+                    self.definition(id.as_str()).map(|d| &d.body),
+                    Some(DefinitionBody::Struct { .. })
+                ) && let Some(fields) = self.struct_fields(&ty)
+                {
+                    return fields
+                        .iter()
+                        .all(|(_, selection)| self.go_zero_is_lisette_zero(&selection.field_ty()));
+                }
+                self.underlying_type(&ty)
+                    .is_some_and(|underlying| self.go_zero_is_lisette_zero(&underlying))
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn converts(&self, expression: &Expression) -> bool {
         self.checked(expression).value_use().adaptation.converts()
     }
@@ -207,8 +265,61 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
+    pub(crate) fn peel_go_alias(&self, ty: &Type) -> Type {
+        let mut current = ty.unwrap_forall().clone();
+        let mut seen: HashSet<Symbol> = HashSet::default();
+        while let Type::Nominal {
+            id,
+            params,
+            writable,
+        } = &current
+        {
+            if self.declares_go_function_type(&current) {
+                break;
+            }
+            let Some(target) = self
+                .definition(id)
+                .and_then(|definition| definition.instantiate_alias_target(params, *writable))
+            else {
+                break;
+            };
+            if !seen.insert(id.clone()) {
+                break;
+            }
+            current = target.unwrap_forall().clone();
+        }
+        current
+    }
+
+    pub(crate) fn without_go_aliases(&self, ty: &Type) -> Type {
+        self.peel_go_alias(ty)
+            .map_children(|child| self.without_go_aliases(child))
+    }
+
+    pub(crate) fn is_transparent_alias(&self, ty: &Type) -> bool {
+        let peeled = self.peel_go_alias(ty);
+        peeled != *ty.unwrap_forall() && peeled == self.peel_alias(ty)
+    }
+
+    pub(crate) fn is_go_named_function_type(&self, ty: &Type) -> bool {
+        self.declares_go_function_type(&self.peel_go_alias(ty))
+    }
+
+    fn declares_go_function_type(&self, ty: &Type) -> bool {
+        matches!(ty, Type::Nominal { id, .. } if go_name::is_go_import(id))
+            && self.resolve_to_function_type(ty).is_some()
+    }
+
     pub(crate) fn same_type(&self, left: &Type, right: &Type) -> bool {
-        self.peel_alias(left) == self.peel_alias(right)
+        left == right || self.without_go_aliases(left) == self.without_go_aliases(right)
+    }
+
+    pub(crate) fn same_types(&self, left: &[Type], right: &[Type]) -> bool {
+        left.len() == right.len()
+            && left
+                .iter()
+                .zip(right)
+                .all(|(left, right)| self.same_type(left, right))
     }
 
     pub(crate) fn returns_go_void(&self, ty: &Type) -> bool {
@@ -282,6 +393,14 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
+    pub(crate) fn is_ref_to_type_parameter(&self, ty: &Type) -> bool {
+        let peeled = self.peel_alias(ty);
+        peeled.is_ref()
+            && peeled
+                .inner()
+                .is_some_and(|inner| matches!(self.peel_alias(&inner), Type::Parameter(_)))
+    }
+
     pub(crate) fn is_option_or_result(&self, ty: &Type) -> bool {
         types::is_option_or_result(ty, |id| self.definition(id))
     }
@@ -331,10 +450,6 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn partial_ok_is_nilable(&self, ty: &Type) -> bool {
         types::partial_ok_is_nilable(ty, |id| self.input.definitions.get(id))
-    }
-
-    pub(crate) fn is_nullable_option(&self, ty: &Type) -> bool {
-        is_nullable_option(&self.input.definitions, ty)
     }
 
     pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
@@ -450,11 +565,7 @@ impl<'a> EmitFacts<'a> {
         if self.is_entry_package(package) {
             return self.shared.go_module.to_string();
         }
-        format!("{}/{}", self.shared.go_module, package)
-    }
-
-    pub(crate) fn go_package_name(&self, package: &str) -> Option<&str> {
-        self.input.go_package_names.get(package).map(String::as_str)
+        go_name::package_go_path(self.shared.go_module, package)
     }
 
     pub(crate) fn go_package_names(&self) -> &'a HashMap<String, String> {
@@ -476,7 +587,11 @@ impl<'a> EmitFacts<'a> {
         self.shared.globals.enum_layouts.get(enum_id)
     }
 
-    fn make_function_name(&self, enum_id: &str, variant_name: &str) -> Option<String> {
+    fn make_function_name<'e>(
+        &self,
+        enum_id: &'e str,
+        variant_name: &str,
+    ) -> Option<(&'e str, String)> {
         let definition = self.definition(enum_id)?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;
@@ -486,16 +601,17 @@ impl<'a> EmitFacts<'a> {
             .any(|variant| variant.name == variant_name)
             .then(|| {
                 let enum_name = types::unqualified_name(enum_id);
-                let make_function = go_name::enum_make_function(enum_name, variant_name);
-                if go_name::is_prelude_id(enum_id) {
-                    format!("{}{}", go_name::PRELUDE_PREFIX, make_function)
-                } else {
-                    make_function
-                }
+                (
+                    enum_id,
+                    go_name::enum_make_function(enum_name, variant_name),
+                )
             })
     }
 
-    pub(crate) fn variant_make_function(&self, symbol: &str) -> Option<String> {
+    pub(crate) fn variant_make_function<'e>(&self, symbol: &'e str) -> Option<(&'e str, String)>
+    where
+        'a: 'e,
+    {
         if let Some((enum_id, variant)) = symbol.rsplit_once('.')
             && let Some(make_function) = self.make_function_name(enum_id, variant)
         {
@@ -513,14 +629,11 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id: enum_id, .. } = enum_ty else {
             return None;
         };
-        self.make_function_name(enum_id, variant)
+        self.make_function_name(enum_id.as_str(), variant)
     }
 
-    pub(crate) fn go_callable_return(&self, qualified_name: &str) -> Option<&LoweredReturnAbi> {
-        self.shared
-            .globals
-            .go_abi_catalog
-            .callable_return_abi(qualified_name)
+    pub(crate) fn go_abi_catalog(&self) -> &'a GoAbiCatalog {
+        &self.shared.globals.go_abi_catalog
     }
 
     pub(crate) fn go_callable_parameter(
@@ -570,11 +683,6 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {
         self.shared.line_indexes.as_ref()?.get(&file_id)
     }
-}
-
-pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
-    let ty = peel_alias(definitions, ty);
-    ty.is_option() && is_nilable_go_type(definitions, &ty.ok_type())
 }
 
 fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {

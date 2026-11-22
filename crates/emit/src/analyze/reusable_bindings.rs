@@ -70,7 +70,7 @@ fn collect(
                     ..
                 } = item
                 {
-                    pair_let(&mut bindings, binding, value, mode, hidden);
+                    pair_let(&mut bindings, binding, value, mode, hidden, facts);
                 }
             }
             captured
@@ -97,10 +97,12 @@ fn collect(
             ..
         } if let Expression::DotAccess {
             expression: receiver,
+            member,
             ..
-        } = callee.unwrap_parens() =>
+        } = &**callee =>
         {
-            if facts.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoAddress) {
+            if facts.dot_receiver_coercion(receiver, member) == Some(ReceiverCoercion::AutoAddress)
+            {
                 shared.extend(receiver.root_binding_id());
             }
             for child in iter::once(receiver.as_ref())
@@ -134,11 +136,15 @@ fn pair_let(
     value: &Expression,
     mode: &LetMode,
     hidden: &mut HashMap<BindingId, BindingId>,
+    facts: &EmitFacts<'_>,
 ) {
     match simple_binding(binding) {
-        Some((name, id)) if matches!(mode, LetMode::Plain) && value.get_type() == binding.ty => {
+        Some((name, id))
+            if matches!(mode, LetMode::Plain)
+                && facts.same_type(&value.get_type(), &binding.ty) =>
+        {
             if let Some((hidden_id, ty)) = bindings.get(name)
-                && *ty == binding.ty
+                && facts.same_type(ty, &binding.ty)
             {
                 hidden.insert(id, *hidden_id);
             }

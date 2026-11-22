@@ -1,33 +1,105 @@
 use crate::Planner;
-use crate::abi::coercion::CoercionPlan;
 use crate::abi::transition;
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::Statement;
+use crate::ir::go_expression::BinaryOp;
 use crate::ir::values::GoExpression;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
+use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::types::Type;
 
-pub(crate) const OPTION_SOME_FIELD: &str = "SomeVal";
-pub(crate) const RESULT_OK_FIELD: &str = "OkVal";
-pub(crate) const RESULT_ERR_FIELD: &str = "ErrVal";
-pub(crate) const PARTIAL_OK_FIELD: &str = "OkVal";
-pub(crate) const PARTIAL_ERR_FIELD: &str = "ErrVal";
+#[derive(Clone, Copy)]
+pub(crate) struct TaggedVariant {
+    pub(crate) name: &'static str,
+    pub(crate) tag: &'static str,
+    pub(crate) constructor: &'static str,
+    pub(crate) fields: &'static [&'static str],
+}
 
-pub(crate) const RESULT_OK_TAG: &str = "ResultOk";
-pub(crate) const RESULT_ERR_TAG: &str = "ResultErr";
-pub(crate) const OPTION_SOME_TAG: &str = "OptionSome";
-pub(crate) const PARTIAL_OK_TAG: &str = "PartialOk";
-pub(crate) const PARTIAL_ERR_TAG: &str = "PartialErr";
-const RESULT_OK_CTOR: &str = "MakeResultOk";
-const OPTION_SOME_CTOR: &str = "MakeOptionSome";
-const RESULT_ERR_CTOR: &str = "MakeResultErr";
-const OPTION_NONE_CTOR: &str = "MakeOptionNone";
-pub(crate) const PARTIAL_OK_CTOR: &str = "MakePartialOk";
-pub(crate) const PARTIAL_BOTH_CTOR: &str = "MakePartialBoth";
-pub(crate) const PARTIAL_ERR_CTOR: &str = "MakePartialErr";
+const OPTION_VARIANTS: &[TaggedVariant] = &[
+    TaggedVariant {
+        name: "Some",
+        tag: "OptionSome",
+        constructor: "MakeOptionSome",
+        fields: &["SomeVal"],
+    },
+    TaggedVariant {
+        name: "None",
+        tag: "OptionNone",
+        constructor: "MakeOptionNone",
+        fields: &[],
+    },
+];
+
+const RESULT_VARIANTS: &[TaggedVariant] = &[
+    TaggedVariant {
+        name: "Ok",
+        tag: "ResultOk",
+        constructor: "MakeResultOk",
+        fields: &["OkVal"],
+    },
+    TaggedVariant {
+        name: "Err",
+        tag: "ResultErr",
+        constructor: "MakeResultErr",
+        fields: &["ErrVal"],
+    },
+];
+
+const PARTIAL_VARIANTS: &[TaggedVariant] = &[
+    TaggedVariant {
+        name: "Ok",
+        tag: "PartialOk",
+        constructor: "MakePartialOk",
+        fields: &["OkVal"],
+    },
+    TaggedVariant {
+        name: "Err",
+        tag: "PartialErr",
+        constructor: "MakePartialErr",
+        fields: &["ErrVal"],
+    },
+    TaggedVariant {
+        name: "Both",
+        tag: "PartialBoth",
+        constructor: "MakePartialBoth",
+        fields: &["OkVal", "ErrVal"],
+    },
+];
+
+pub(crate) fn tagged_payload_fields(ty: &Type) -> Option<&'static [TaggedVariant]> {
+    if ty.is_option() {
+        Some(OPTION_VARIANTS)
+    } else if ty.is_result() {
+        Some(RESULT_VARIANTS)
+    } else if ty.is_partial() {
+        Some(PARTIAL_VARIANTS)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn option_variant(name: &str) -> &'static TaggedVariant {
+    variant_named(OPTION_VARIANTS, name)
+}
+
+pub(crate) fn result_variant(name: &str) -> &'static TaggedVariant {
+    variant_named(RESULT_VARIANTS, name)
+}
+
+pub(crate) fn partial_variant(name: &str) -> &'static TaggedVariant {
+    variant_named(PARTIAL_VARIANTS, name)
+}
+
+fn variant_named(variants: &'static [TaggedVariant], name: &str) -> &'static TaggedVariant {
+    variants
+        .iter()
+        .find(|variant| variant.name == name)
+        .expect("prelude containers declare this variant")
+}
 
 pub(crate) enum Fallible {
     Result { ok_ty: Type, err_ty: Type },
@@ -86,32 +158,39 @@ impl Fallible {
         }
     }
 
-    pub(crate) fn success_tag(&self) -> &'static str {
+    fn variants(&self) -> &'static [TaggedVariant] {
         match self {
-            Self::Result { .. } => RESULT_OK_TAG,
-            Self::Option { .. } => OPTION_SOME_TAG,
+            Self::Result { .. } => RESULT_VARIANTS,
+            Self::Option { .. } => OPTION_VARIANTS,
         }
+    }
+
+    fn success(&self) -> &'static TaggedVariant {
+        &self.variants()[0]
+    }
+
+    fn failure(&self) -> &'static TaggedVariant {
+        &self.variants()[1]
+    }
+
+    pub(crate) fn failure_condition(&self, value: &GoExpression) -> GoExpression {
+        GoExpression::binary(
+            GoExpression::value_field(value.clone(), ENUM_TAG_FIELD.to_string()),
+            BinaryOp::Ne,
+            GoExpression::generated(GeneratedPackage::Prelude, self.success().tag),
+        )
     }
 
     pub(crate) fn ok_field(&self) -> &'static str {
-        match self {
-            Self::Result { .. } => RESULT_OK_FIELD,
-            Self::Option { .. } => OPTION_SOME_FIELD,
-        }
+        self.success().fields[0]
     }
 
     pub(crate) fn ok_constructor(&self) -> &'static str {
-        match self {
-            Self::Result { .. } => RESULT_OK_CTOR,
-            Self::Option { .. } => OPTION_SOME_CTOR,
-        }
+        self.success().constructor
     }
 
     pub(crate) fn err_constructor(&self) -> &'static str {
-        match self {
-            Self::Result { .. } => RESULT_ERR_CTOR,
-            Self::Option { .. } => OPTION_NONE_CTOR,
-        }
+        self.failure().constructor
     }
 }
 
@@ -151,15 +230,9 @@ impl Planner<'_> {
         else {
             return value;
         };
-        let Some(recorded) = self.facts.checked(operand).propagated_error() else {
-            return value;
-        };
-        let adaptation = &recorded.adaptation;
-        if !adaptation.converts() {
-            return value;
-        }
-        let (setup, value) =
-            CoercionPlan::adapted(self, adaptation, &from, &to, None).lower(self, value);
+        let (setup, value) = self
+            .propagated_error_coercion(operand, &from, &to)
+            .lower(self, value);
         statements.extend(setup);
         value
     }
@@ -211,22 +284,17 @@ impl Planner<'_> {
         statements
     }
 
-    fn fallible_type_args(&self, ok_ty: &Type, err_ty: Option<&Type>) -> GoType {
-        let arguments: Vec<GoType> = [Some(ok_ty), err_ty]
-            .into_iter()
-            .flatten()
-            .map(|ty| self.go_type(ty))
-            .collect();
-        GoType::type_arguments(&arguments)
-    }
-
     pub(crate) fn fallible_call(
         &mut self,
         fallible: &Fallible,
         constructor: &str,
         arguments: Vec<GoExpression>,
     ) -> GoExpression {
-        let type_args = self.fallible_type_args(fallible.ok_ty(), fallible.err_ty());
+        let type_args = self.format_type_arg_iter(
+            [Some(fallible.ok_ty()), fallible.err_ty()]
+                .into_iter()
+                .flatten(),
+        );
         prelude_call(constructor, type_args, arguments)
     }
 
@@ -247,7 +315,8 @@ impl Planner<'_> {
             self.contextual_err_ty(fallible)
                 .expect("Result must have error type")
         });
-        let type_args = self.fallible_type_args(&ok_ty, err_ty.as_ref());
+        let type_args =
+            self.format_type_arg_iter([Some(&ok_ty), err_ty.as_ref()].into_iter().flatten());
         let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
         prelude_call(fallible.err_constructor(), type_args, arguments)
     }

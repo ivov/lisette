@@ -47,7 +47,21 @@ pub(crate) enum LoweredReturnAbi {
 }
 
 impl CallableReturnAbi {
-    pub(crate) fn unlowered(return_type: &Type) -> Self {
+    pub(crate) fn fits_return_type(&self, facts: &EmitFacts<'_>, ty: &Type) -> bool {
+        match self.lowered() {
+            None => true,
+            Some(LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. }) => {
+                facts.is_result(ty)
+            }
+            Some(LoweredReturnAbi::Partial { .. }) => facts.is_partial(ty),
+            Some(LoweredReturnAbi::Option(_)) => facts.is_option(ty),
+            Some(LoweredReturnAbi::Tuple { .. }) => facts
+                .tuple_elements(ty)
+                .is_some_and(|elements| elements.len() >= 2),
+        }
+    }
+
+    pub(super) fn unlowered(return_type: &Type) -> Self {
         if returns_go_void(return_type) {
             Self::Void
         } else {

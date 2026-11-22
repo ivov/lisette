@@ -1,14 +1,12 @@
 use crate::EmitFacts;
 use crate::Planner;
-use crate::abi::ReturnSlot;
-use crate::abi::callable::{CallableAbi, CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
+use crate::abi::CalleeSignature;
+use crate::abi::callable::{CallableAbi, CallableParamAbi};
 use crate::abi::coercion::LayoutBridge;
-use crate::abi::layout::{FunctionLayout, ValueLayout};
+use crate::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::names::go_name;
-use crate::patterns::matching::prelude_constructor;
 use syntax::ast::Expression;
 use syntax::program::GoTypeRecipe;
-use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{
     CallOperation, CheckedCallee, Definition, Method, Visibility, resolved_definition,
@@ -40,6 +38,13 @@ pub(crate) struct ResolvedCallee<'a> {
 impl ResolvedCallee<'_> {
     pub(crate) fn declared_type(&self) -> Option<&Type> {
         self.declaration.map(CallableDeclaration::ty)
+    }
+
+    pub(crate) fn function_layout(&self, planner: &Planner<'_>) -> FunctionLayout {
+        FunctionLayout {
+            producer: self.origin.producer(),
+            ..self.abi.function_layout(planner)
+        }
     }
 }
 
@@ -80,6 +85,15 @@ impl<'a> CallableDeclaration<'a> {
 pub(crate) enum CallableOrigin<'a> {
     GoInterop,
     Source(&'a CallOperation),
+}
+
+impl CallableOrigin<'_> {
+    pub(crate) fn producer(self) -> ResultProducer {
+        match self {
+            CallableOrigin::GoInterop => ResultProducer::Go,
+            CallableOrigin::Source(_) => ResultProducer::Lisette,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -131,35 +145,21 @@ impl<'a> Planner<'a> {
         let Expression::Call {
             expression: callee,
             args,
-            ty,
             ..
         } = expression
         else {
             return None;
         };
 
-        let function = callee.unwrap_parens();
-        let go_return = self.resolve_go_call_abi(expression);
-
-        let checked = self.facts.checked(function).callee();
-        let origin = if self.is_go_callable(function) {
+        let checked = self.facts.checked(callee).callee();
+        let origin = if self.is_go_callable(callee) {
             CallableOrigin::GoInterop
         } else {
             CallableOrigin::Source(&checked.operation)
         };
         let definition = checked.definition.as_ref().map(ToString::to_string);
 
-        let resolved = self.resolve_callee(
-            function,
-            origin,
-            definition,
-            go_return.as_ref(),
-            checked.receiver_offset(),
-        );
-        debug_assert!(
-            !resolved.abi.result.is_lowered() || self.facts.is_lowered_result_type(ty),
-            "a lowered call result wraps into its tagged Lisette value"
-        );
+        let resolved = self.resolve_callee(callee, origin, definition, checked.receiver_offset());
         let arguments = args
             .iter()
             .enumerate()
@@ -180,10 +180,8 @@ impl<'a> Planner<'a> {
         function: &Expression,
         origin: CallableOrigin<'a>,
         id: Option<String>,
-        go_return: Option<&LoweredReturnAbi>,
         receiver_offset: usize,
     ) -> ResolvedCallee<'a> {
-        let bound_layout = self.bound_dispatch_layout(function);
         let declaration = id
             .as_deref()
             .and_then(|id| self.facts.callable_declaration(id));
@@ -221,46 +219,20 @@ impl<'a> Planner<'a> {
                 variadic: None,
             }];
         }
-        let result = if let Some(layout) = bound_layout {
-            layout.return_abi
-        } else {
-            match go_return {
-                Some(result) => CallableReturnAbi::Lowered(result.clone()),
-                None if matches!(
-                    origin,
-                    CallableOrigin::Source(CallOperation::NativeConstructor {
-                        kind: NativeTypeKind::Array,
-                        ..
-                    })
-                ) =>
-                {
-                    self.facts.return_abi(return_type, ReturnSlot::Function)
-                }
-                None => self
-                    .classify_callee_abi(
-                        function,
-                        &origin,
-                        id.as_deref(),
-                        declaration,
-                        declared_return,
-                    )
-                    .unwrap_or_else(|| {
-                        CallableReturnAbi::unlowered(declared_return.unwrap_or(return_type))
-                    }),
-            }
-        };
+        let result = self.callee_return_abi(CalleeSignature {
+            callee: function,
+            origin: &origin,
+            id: id.as_deref(),
+            declaration,
+            declared_return,
+            return_type,
+        });
         let (return_origin, return_declaration) =
             self.facts
                 .callee_return_slot(&origin, id.as_deref(), declared_return, return_type);
         let return_layout =
             self.callable_result_layout(return_type, return_origin, return_declaration, &result);
-        let is_prelude_dispatch = id.as_deref().is_some_and(go_name::is_prelude_id)
-            || matches!(
-                origin,
-                CallableOrigin::Source(
-                    CallOperation::NativeConstructor { .. } | CallOperation::Native { .. }
-                )
-            );
+        let is_prelude_dispatch = self.facts.is_prelude_dispatch(id.as_deref(), &origin);
 
         ResolvedCallee {
             origin,
@@ -284,8 +256,7 @@ impl<'a> Planner<'a> {
         let instantiated = self
             .facts
             .resolve_to_function_type(expression.get_type().unwrap_forall())?;
-        let return_ty = instantiated.get_function_ret()?;
-        let go_return = self.resolve_go_callee_abi(expression, return_ty);
+        instantiated.get_function_ret()?;
         let origin = if self.is_go_callable(expression) {
             CallableOrigin::GoInterop
         } else {
@@ -297,14 +268,14 @@ impl<'a> Planner<'a> {
             .checked(expression)
             .function_value()
             .map_or(0, CheckedCallee::receiver_offset);
-        Some(self.resolve_callee(expression, origin, id, go_return.as_ref(), receiver_offset))
+        Some(self.resolve_callee(expression, origin, id, receiver_offset))
     }
 
     pub(crate) fn resolve_callee_definition(
         &self,
         function: &Expression,
     ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
-        let id = match function.unwrap_parens() {
+        let id = match function {
             Expression::Identifier { .. } | Expression::DotAccess { .. } => self
                 .facts
                 .checked(function)
@@ -318,133 +289,6 @@ impl<'a> Planner<'a> {
             .as_deref()
             .and_then(|id| self.facts.callable_declaration(id));
         (id, declaration)
-    }
-
-    fn classify_callee_abi(
-        &self,
-        callee: &Expression,
-        origin: &CallableOrigin<'a>,
-        id: Option<&str>,
-        declaration: Option<CallableDeclaration<'a>>,
-        declared_return: Option<&Type>,
-    ) -> Option<CallableReturnAbi> {
-        let callee_ty = callee.get_type();
-        let unwrapped = callee_ty.unwrap_forall();
-        let resolved = self
-            .facts
-            .resolve_to_function_type(unwrapped)
-            .unwrap_or_else(|| unwrapped.clone());
-        let Type::Function(f) = resolved else {
-            return None;
-        };
-        let inner = callee.unwrap_parens();
-        if id.is_some_and(|id| go_name::is_go_import(id) || go_name::is_prelude_id(id))
-            || matches!(origin, CallableOrigin::Source(CallOperation::Native { .. }))
-        {
-            return None;
-        }
-        if prelude_constructor(inner).is_some() {
-            return None;
-        }
-        if let Some(requirement) = self
-            .facts
-            .checked(callee)
-            .function_value()
-            .and_then(CheckedCallee::interface_requirement)
-        {
-            let method = &requirement.method;
-            return Some(self.facts.return_abi(
-                method.ty.get_function_ret().unwrap_or(&Type::Never),
-                ReturnSlot::InterfaceMethod {
-                    name: &method.source_name,
-                    method,
-                },
-            ));
-        }
-        if self.selects_tagged_twin(callee) {
-            return Some(CallableReturnAbi::Value);
-        }
-        let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
-        if let Some(CallableDeclaration::Method(_)) = declaration {
-            let go_method = id
-                .and_then(|id| id.rsplit_once('.'))
-                .is_none_or(|(owner, name)| self.facts.emits_go_method(owner, name));
-            return Some(if go_method {
-                self.facts.return_abi(classify_ty, ReturnSlot::Method)
-            } else {
-                self.facts.return_abi(classify_ty, ReturnSlot::Function)
-            });
-        }
-        if declaration.is_some_and(|declaration| !declaration.is_type_definition()) {
-            return Some(self.facts.return_abi(classify_ty, ReturnSlot::Function));
-        }
-        let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
-        Some(
-            self.facts
-                .return_abi(classify_ty, ReturnSlot::FunctionValue(origin)),
-        )
-    }
-
-    fn resolve_go_call_abi(&self, expression: &Expression) -> Option<LoweredReturnAbi> {
-        let Expression::Call {
-            expression: callee,
-            ty,
-            ..
-        } = expression
-        else {
-            return None;
-        };
-
-        self.resolve_go_callee_abi(callee, ty)
-    }
-
-    fn resolve_go_callee_abi(
-        &self,
-        callee: &Expression,
-        return_ty: &Type,
-    ) -> Option<LoweredReturnAbi> {
-        if self.bound_dispatch_requirement(callee).is_some() {
-            return None;
-        }
-        if let Some(requirement) = self.go_bound_requirement(callee) {
-            return self
-                .facts
-                .return_abi(
-                    return_ty,
-                    ReturnSlot::Go {
-                        hints: &requirement.method.go_hints,
-                    },
-                )
-                .lowered()
-                .cloned();
-        }
-        let qualified_name = self
-            .facts
-            .checked(callee)
-            .function_value()?
-            .definition
-            .as_deref()?;
-        if !go_name::is_go_import(qualified_name) {
-            return None;
-        }
-        if self.facts.go_callable_return_slot(qualified_name).is_some() {
-            return self.facts.go_callable_return(qualified_name).cloned();
-        }
-        let go_hints = self
-            .facts
-            .definition(qualified_name)
-            .map(Definition::go_hints)
-            .or_else(|| {
-                let (owner, name) = qualified_name.rsplit_once('.')?;
-                self.facts
-                    .method(owner, name)
-                    .map(|method| method.go_hints.as_slice())
-            })
-            .unwrap_or_default();
-        self.facts
-            .return_abi(return_ty, ReturnSlot::Go { hints: go_hints })
-            .lowered()
-            .cloned()
     }
 
     pub(crate) fn is_go_callable(&self, expression: &Expression) -> bool {
@@ -462,7 +306,7 @@ impl<'a> Planner<'a> {
         matches!(
             expression,
             Expression::Call { expression: callee, .. }
-                if self.is_go_callable(callee.unwrap_parens())
+                if self.is_go_callable(callee)
         )
     }
 
@@ -474,9 +318,9 @@ impl<'a> Planner<'a> {
         callee_id: Option<&str>,
         callable_origin: &CallableOrigin<'_>,
     ) -> Vec<CallableParamAbi> {
-        instantiated
-            .get_function_params()
-            .unwrap_or(&[])
+        let parameters = instantiated.get_function_params().unwrap_or(&[]);
+        let variadic_element = instantiated.is_variadic();
+        parameters
             .iter()
             .enumerate()
             .map(|(index, instantiated)| {
@@ -491,19 +335,20 @@ impl<'a> Planner<'a> {
                 } else {
                     None
                 };
-                let origin =
-                    catalog_slot.map_or_else(
-                        || {
-                            if matches!(callable_origin, CallableOrigin::GoInterop) {
-                                SlotOrigin::go_parameter(self.facts.resolves_to_unknown(
-                                    declared.as_ref().unwrap_or(&instantiated.ty),
-                                ))
-                            } else {
-                                SlotOrigin::Lisette
-                            }
-                        },
-                        |slot| slot.origin,
-                    );
+                let origin = catalog_slot.map_or_else(
+                    || {
+                        if matches!(callable_origin, CallableOrigin::GoInterop) {
+                            SlotOrigin::of_go_declaration(
+                                SlotOrigin::GoParameter,
+                                declared.as_ref().unwrap_or(&instantiated.ty),
+                                |id| self.facts.definition(id),
+                            )
+                        } else {
+                            SlotOrigin::Lisette
+                        }
+                    },
+                    |slot| slot.origin,
+                );
                 let layout = catalog_slot
                     .map(|slot| {
                         self.value_layout_with_declaration(
@@ -518,10 +363,8 @@ impl<'a> Planner<'a> {
                         })
                     })
                     .unwrap_or_else(|| self.value_layout(&instantiated.ty, origin));
-                let element = instantiated
-                    .ty
-                    .is_native(CompoundKind::VarArgs)
-                    .then(|| instantiated.ty.inner())
+                let element = (index + 1 == parameters.len())
+                    .then(|| variadic_element.clone())
                     .flatten();
                 let Some(element) = element else {
                     return CallableParamAbi {
@@ -569,12 +412,28 @@ impl<'a> EmitFacts<'a> {
         match id.and_then(|id| self.go_callable_return_slot(id)) {
             Some(slot) => (slot.origin, Some(&slot.declared_type)),
             None => (
-                SlotOrigin::go_return(
-                    self.resolves_to_unknown(declared_return.unwrap_or(return_type)),
+                SlotOrigin::of_go_declaration(
+                    SlotOrigin::GoReturn,
+                    declared_return.unwrap_or(return_type),
+                    |id| self.definition(id),
                 ),
                 declared_return,
             ),
         }
+    }
+
+    pub(crate) fn is_prelude_dispatch(
+        &self,
+        id: Option<&str>,
+        origin: &CallableOrigin<'_>,
+    ) -> bool {
+        id.is_some_and(go_name::is_prelude_id)
+            || matches!(
+                origin,
+                CallableOrigin::Source(
+                    CallOperation::NativeConstructor { .. } | CallOperation::Native { .. }
+                )
+            )
     }
 
     pub(crate) fn callable_declaration(&self, id: &str) -> Option<CallableDeclaration<'a>> {

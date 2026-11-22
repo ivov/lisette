@@ -207,11 +207,6 @@ impl EnumLayout {
             .map(|field| field.go_name.clone())
     }
 
-    pub(crate) fn tuple_field_name(&self, variant_name: &str, index: usize) -> Option<String> {
-        let variant = self.variant(variant_name)?;
-        variant.fields.get(index).map(|f| f.go_name.clone())
-    }
-
     pub(crate) fn emit_definition(
         &self,
         planner: &mut Planner,

@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::wrapping::NilGuard;
 use crate::calls::bound_value::{BoundValue, LoweredPair, PairValue};
 use crate::ir::bodies::{Statement, define, define_many};
@@ -12,6 +12,7 @@ use crate::state::expression::ExpressionContext;
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
 use syntax::program::CallOperation;
+use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 
 pub(crate) enum CommaOkSource {
@@ -85,7 +86,7 @@ impl Planner<'_> {
     pub(crate) fn component_binding(&self, expression: &Expression) -> Option<ComponentBinding> {
         let Expression::Identifier {
             value, resolution, ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return None;
         };
@@ -123,9 +124,9 @@ impl Planner<'_> {
                 (asserts_on_interface && !asserts_function).then_some(CommaOkSource::TypeAssert)
             }
             CallableOrigin::Source(CallOperation::Native {
-                kind: NativeTypeKind::Map,
+                kind: kind @ NativeTypeKind::Map,
                 method,
-            }) if method == "get"
+            }) if NativeOperation::new(*kind, method).indexes_receiver()
                 && matches!(**function, Expression::DotAccess { .. })
                 && args.len() == 1
                 && spread.is_none() =>
@@ -134,18 +135,16 @@ impl Planner<'_> {
             }
             _ => {
                 let lowered = self.lowered_call_of(expression, Vec::new(), &plan)?;
+                let pair = lowered.raw_pair()?;
                 if !matches!(
                     lowered.shape,
-                    LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
-                        payload: PayloadLayout::Packed,
-                    })
-                ) || lowered.ok_ty.is_unit()
-                    || lowered.is_bridged()
+                    LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })
+                ) || pair.payload_bridge.is_some()
                 {
                     return None;
                 }
                 Some(CommaOkSource::LoweredCall {
-                    nil_guard: lowered.nil_guard,
+                    nil_guard: pair.nil_guard,
                 })
             }
         }
@@ -224,6 +223,7 @@ impl Planner<'_> {
         let candidate = name.preferred();
         if self.scope.has_binding_for_go_name(&candidate)
             || self.package.is_package_block_name(&candidate)
+            || self.scope.declares_type_param(&candidate)
         {
             self.fresh_source(name)
         } else {

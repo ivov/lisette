@@ -24,7 +24,7 @@ type Cancel = context.CancelFunc
 type Second = Cancel
 
 func view(f *Second) *context.CancelFunc {
-	return (*context.CancelFunc)(f)
+	return f
 }
 
 func main() {

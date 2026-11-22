@@ -7,10 +7,9 @@ use crate::ir::bodies::{
 use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
-use crate::names::go_name;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
-use syntax::program::{DefinitionBody, DotAccessResolution, OperandConversion};
+use syntax::program::{DotAccessResolution, OperandConversion};
 use syntax::types::{self, ScaledImaginary, Type};
 
 struct NumericBinaryEmitInfo {
@@ -222,26 +221,25 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let target = expression.unwrap_parens();
         if let Expression::Binary {
             operator: cmp,
             left,
             right,
             ..
-        } = target
+        } = expression
             && let Some(flipped) = flip_comparison(cmp)
             && self.facts.flip_preserves_nan(cmp, left, right)
         {
-            let conversion = self.facts.checked(target).operand_conversion();
+            let conversion = self.facts.checked(expression).operand_conversion();
             return self.plan_binary(&flipped, left, right, conversion, ctx);
         }
         let (innermost, inner_negated) = strip_negations(expression);
         if let Some(predicate) = self.try_plan_fused_predicate_value(innermost, !inner_negated) {
             return predicate;
         }
-        if matches!(target, Expression::Call { .. }) {
+        if matches!(expression, Expression::Call { .. }) {
             let mut setup: Vec<Statement> = Vec::new();
-            if let Some(negated) = self.try_plan_negated_call(&mut setup, target) {
+            if let Some(negated) = self.try_plan_negated_call(&mut setup, expression) {
                 return ValuePlan::computed(setup, negated);
             }
         }
@@ -261,7 +259,6 @@ impl Planner<'_> {
             Expression::DotAccess { resolution, .. } => {
                 self.facts.imported_member_is_const(resolution)
             }
-            Expression::Paren { expression, .. } => self.is_go_constant_expression(expression),
             Expression::Unary {
                 operator: UnaryOperator::Negative | UnaryOperator::Not | UnaryOperator::BitwiseNot,
                 expression,
@@ -289,13 +286,13 @@ impl Planner<'_> {
             Some(binding) => binding.is_go_const(),
             None => resolution
                 .definition()
-                .is_some_and(|symbol| self.package.is_go_const_binding(symbol)),
+                .is_some_and(|symbol| self.facts.const_emits_go_const(symbol)),
         }
     }
 
     pub(crate) fn contains_untyped_constant_shift(&self, expression: &Expression) -> bool {
         match expression {
-            Expression::Paren { expression, .. } | Expression::Unary { expression, .. } => {
+            Expression::Unary { expression, .. } => {
                 self.contains_untyped_constant_shift(expression)
             }
             Expression::Binary {
@@ -334,7 +331,6 @@ pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperato
 fn is_literal_expression(expression: &Expression) -> bool {
     match expression {
         Expression::Literal { .. } => true,
-        Expression::Paren { expression, .. } => is_literal_expression(expression),
         Expression::Unary {
             operator: UnaryOperator::Negative,
             expression,
@@ -423,14 +419,7 @@ impl EmitFacts<'_> {
         else {
             return false;
         };
-        match self.definition(definition) {
-            Some(found) if !matches!(found.body, DefinitionBody::Value { .. }) => false,
-            Some(_) if definition.starts_with(go_name::GO_IMPORT_PREFIX) => {
-                self.is_const(definition)
-            }
-            Some(found) => !matches!(found.ty.unwrap_forall(), Type::Function(_)),
-            None => false,
-        }
+        self.const_emits_go_const(definition)
     }
 
     pub(crate) fn flip_preserves_nan(

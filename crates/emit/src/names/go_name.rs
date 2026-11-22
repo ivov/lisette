@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use syntax::ast::StructFieldDefinition;
 use syntax::go_names::{ENUM_TAG_FIELD, struct_field_go_name};
+use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
 use crate::ir::values::GoExpression;
@@ -67,15 +68,18 @@ fn make_exported(name: &str) -> String {
     escape_keyword(&snake_to_camel(name)).into_owned()
 }
 
-pub(crate) fn exported_member(owner: &Type, member: &str) -> String {
-    if owner.get_qualified_id().is_some_and(is_go_import) && member.starts_with(char::is_uppercase)
-    {
+pub(in crate::names) fn keeps_go_spelling(owner_id: Option<&str>, member: &str) -> bool {
+    owner_id.is_some_and(is_go_import) && member.starts_with(char::is_uppercase)
+}
+
+fn exported_member(owner: &Type, member: &str) -> String {
+    if keeps_go_spelling(owner.get_qualified_id(), member) {
         return member.to_string();
     }
     make_exported(member)
 }
 
-pub(crate) fn member_go_name(
+pub(in crate::names) fn member_go_name(
     owner: &Type,
     member: &str,
     is_exported: bool,
@@ -134,6 +138,13 @@ fn lowercase_first_word(type_name: &str) -> String {
         .collect()
 }
 
+pub(crate) fn package_go_path(go_module: &str, package: &str) -> String {
+    match package.strip_prefix(GO_IMPORT_PREFIX) {
+        Some(path) => path.to_string(),
+        None => format!("{go_module}/{package}"),
+    }
+}
+
 pub(crate) fn go_package_name(package: &str) -> &str {
     package.rsplit('/').next().unwrap_or(package)
 }
@@ -189,48 +200,25 @@ pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
     Cow::Owned(result)
 }
 
-pub(crate) struct ResolvedName {
-    name: String,
-    package: Option<PackageUse>,
-}
-
-impl ResolvedName {
-    pub(crate) fn stdlib(name: String) -> Self {
-        Self {
-            name,
-            package: Some(PackageUse::generated(GeneratedPackage::Prelude)),
-        }
-    }
-
-    pub(crate) fn local(name: String) -> Self {
-        Self {
-            name,
-            package: None,
-        }
-    }
-
-    pub(crate) fn foreign(name: String, package: PackageUse) -> Self {
-        Self {
-            name,
-            package: Some(package),
-        }
-    }
-
-    pub(crate) fn into_expression(self) -> GoExpression {
-        match self.package {
-            Some(package) => GoExpression::qualified(package, self.name),
-            None => GoExpression::external_name(self.name),
-        }
-    }
-}
-
-pub(crate) fn resolve(name: &str) -> ResolvedName {
+pub(crate) fn resolve(name: &str) -> GoExpression {
     if let Some(rest) = name.strip_prefix(PRELUDE_PREFIX) {
         let go_name: String = rest.split('.').map(snake_to_camel).collect();
-        ResolvedName::stdlib(go_name)
+        GoExpression::qualified(PackageUse::generated(GeneratedPackage::Prelude), go_name)
     } else {
-        ResolvedName::local(escape_reserved(&name.replace('.', "_")).into_owned())
+        GoExpression::external_name(escape_reserved(&name.replace('.', "_")).into_owned())
     }
+}
+
+pub(crate) fn tuple_field(index: usize) -> &'static str {
+    TUPLE_FIELDS
+        .get(index)
+        .expect("the parser limits tuple arity to the tuple field names")
+}
+
+pub(crate) fn tuple_field_index(field: &str) -> Option<usize> {
+    TUPLE_FIELDS
+        .iter()
+        .position(|tuple_field| *tuple_field == field)
 }
 
 pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {
@@ -247,6 +235,10 @@ pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {
 
 pub(crate) fn enum_make_function(enum_name: &str, variant_name: &str) -> String {
     format!("Make{}{}", escape_type_name(enum_name), variant_name)
+}
+
+pub(crate) fn make_tuple_constructor(arity: usize) -> String {
+    format!("MakeTuple{arity}")
 }
 
 const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];

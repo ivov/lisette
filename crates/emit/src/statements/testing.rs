@@ -49,7 +49,6 @@ impl Planner<'_> {
         else {
             unreachable!("lower_assert_statement requires an Assert expression");
         };
-        let operand = operand.unwrap_parens();
         self.require_testkit();
 
         let mut statements = Vec::new();
@@ -58,7 +57,7 @@ impl Planner<'_> {
             left,
             right,
             ..
-        } = operand
+        } = &**operand
             && is_assert_relation(operator)
         {
             let conversion = self.facts.checked(operand).operand_conversion();
@@ -123,19 +122,20 @@ impl Planner<'_> {
             expression: callee,
             args: arguments,
             ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             unreachable!("plan_test_log_call requires a call");
         };
         let Expression::DotAccess {
             expression: receiver,
             ..
-        } = callee.unwrap_parens()
+        } = &**callee
         else {
             unreachable!("plan_test_log_call requires a method receiver");
         };
         let handle = self.plan_value(receiver, ExpressionContext::value());
         let value = self.plan_value(&arguments[0], ExpressionContext::value());
+        let value = self.convert_to_recorded_slot(&arguments[0], value);
         let sequenced =
             self.sequence_values(vec![handle, value], CaptureBoundary::SiblingSequence, "log");
         let statements = sequenced.setup;
@@ -343,14 +343,14 @@ fn equals_decomposition(operand: &Expression) -> Option<(&Expression, &Expressio
         expression: recv,
         member,
         ..
-    } = callee.unwrap_parens()
+    } = &**callee
     else {
         return None;
     };
     if member != "equals" || args.len() != 1 {
         return None;
     }
-    Some((recv.unwrap_parens(), &args[0]))
+    Some((recv, &args[0]))
 }
 
 struct AssertShape {
@@ -406,7 +406,7 @@ impl EmitFacts<'_> {
     pub(crate) fn is_test_log_call(&self, expression: &Expression) -> bool {
         let Expression::Call {
             expression: callee, ..
-        } = expression.unwrap_parens()
+        } = expression
         else {
             return false;
         };

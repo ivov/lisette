@@ -14,9 +14,7 @@ package main
 func test() {
 	for {
 		{
-			{
-				continue
-			}
+			continue
 		}
 		break
 	}

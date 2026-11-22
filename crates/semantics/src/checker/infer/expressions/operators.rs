@@ -8,6 +8,7 @@ use syntax::types::{self, NumericFamily, ScaledImaginary, SimpleKind, Type};
 use BinaryOperator::*;
 use UnaryOperator::*;
 
+use super::primitives::{ReferenceKind, into_reference_operand};
 use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
 use syntax::ast::Annotation;
@@ -126,7 +127,19 @@ impl InferCtx<'_> {
             self.new_type_var()
         };
 
-        let new_expression = if operator == Negative && is_numeric_literal(&operand) {
+        let new_expression = if operator == Deref
+            && matches!(operand.unwrap_parens(), Expression::Reference { .. })
+        {
+            let (operand, reference_span) = into_reference_operand(*operand);
+            let checked =
+                self.with_value_context(|this| this.check_reference(operand, reference_span));
+            if let ReferenceKind::Fresh(_) = checked.kind {
+                let value = self.finish_reference_value(checked);
+                self.unify(expected_ty, &value.get_type(), &span);
+                return value;
+            }
+            self.finish_reference_recorded(checked, reference_span, &operand_expected_ty)
+        } else if operator == Negative && is_numeric_literal(&operand) {
             self.in_negation(|this| {
                 this.with_value_context(|this| {
                     this.infer_expression(*operand, &operand_expected_ty)
@@ -796,9 +809,9 @@ impl InferCtx<'_> {
             return None;
         }
         if self.store.is_aliased_numeric_type(left) {
-            Some(OperandConversion::Right)
+            operand_needs_conversion(right, left, self.store).then_some(OperandConversion::Right)
         } else {
-            Some(OperandConversion::Left)
+            operand_needs_conversion(left, right, self.store).then_some(OperandConversion::Left)
         }
     }
 
@@ -1009,7 +1022,11 @@ impl InferCtx<'_> {
                             right_ty, left_ty, *span,
                         ));
                 }
-                Some((left_ty.clone(), Some(OperandConversion::Right)))
+                Some((
+                    left_ty.clone(),
+                    operand_needs_conversion(right_ty, left_ty, store)
+                        .then_some(OperandConversion::Right),
+                ))
             }
             (false, true) => {
                 if is_nominal_defined_type(right_ty, store) {
@@ -1023,7 +1040,11 @@ impl InferCtx<'_> {
                     ));
                     return None;
                 }
-                Some((right_ty.clone(), Some(OperandConversion::Left)))
+                Some((
+                    right_ty.clone(),
+                    operand_needs_conversion(left_ty, right_ty, store)
+                        .then_some(OperandConversion::Left),
+                ))
             }
         }
     }
@@ -1463,6 +1484,10 @@ fn literal_can_adapt_to(kind: &LiteralKind, target: &Type, store: &Store) -> boo
         LiteralKind::Boolean => named_backed_by(SimpleKind::Bool),
         LiteralKind::None => false,
     }
+}
+
+fn operand_needs_conversion(operand: &Type, alias: &Type, store: &Store) -> bool {
+    store.peel_alias(operand) != store.peel_alias(alias)
 }
 
 fn is_nominal_defined_type(ty: &Type, store: &Store) -> bool {

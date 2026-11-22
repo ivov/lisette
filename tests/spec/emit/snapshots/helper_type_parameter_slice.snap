@@ -11,23 +11,11 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func count[s any](_ s) int {
-	return len(func() []lisette.Option[s] {
-		s2 := make([]lisette.Option[s], 2)
-		for i := range s2 {
-			s2[i] = lisette.MakeOptionNone[s]()
-		}
-		return s2
-	}())
+	return len(make([]lisette.Option[s], 2))
 }
 
 func countIndex[i any](_ i) int {
-	return len(func() []lisette.Option[i] {
-		s := make([]lisette.Option[i], 3)
-		for i2 := range s {
-			s[i2] = lisette.MakeOptionNone[i]()
-		}
-		return s
-	}())
+	return len(make([]lisette.Option[i], 3))
 }
 
 func main() {

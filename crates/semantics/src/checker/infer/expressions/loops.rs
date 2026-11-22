@@ -27,12 +27,6 @@ fn collect_nested_loop_and_lambda_spans(
     }
 }
 
-fn span_contains(outer: &Span, inner: &Span) -> bool {
-    outer.file_id == inner.file_id
-        && outer.byte_offset <= inner.byte_offset
-        && inner.end() <= outer.end()
-}
-
 impl InferCtx<'_> {
     pub(super) fn infer_loop(
         &mut self,
@@ -263,10 +257,10 @@ impl InferCtx<'_> {
         collect_nested_loop_and_lambda_spans(body, &mut nested_loops, &mut lambdas);
         let observes = |read: &Span, write: &Span| {
             read.byte_offset >= write.end()
-                || lambdas.iter().any(|lambda| span_contains(lambda, read))
-                || nested_loops.iter().any(|nested_loop| {
-                    span_contains(nested_loop, read) && span_contains(nested_loop, write)
-                })
+                || lambdas.iter().any(|lambda| lambda.contains(read))
+                || nested_loops
+                    .iter()
+                    .any(|nested_loop| nested_loop.contains(read) && nested_loop.contains(write))
         };
         let dead_write = writes
             .iter()

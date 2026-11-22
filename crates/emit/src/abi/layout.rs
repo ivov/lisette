@@ -8,7 +8,6 @@ use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::is_prelude_container_type;
-use crate::types::go_type::GoType;
 
 use syntax::program::SlotOrigin;
 
@@ -18,9 +17,28 @@ pub(crate) struct FunctionLayout {
     pub(crate) result_layout: Box<ValueLayout>,
     pub(crate) results: Vec<ValueLayout>,
     pub(crate) return_abi: CallableReturnAbi,
+    pub(crate) producer: ResultProducer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResultProducer {
+    Go,
+    Lisette,
 }
 
 impl FunctionLayout {
+    pub(crate) fn single_result_layout(&self) -> Option<ValueLayout> {
+        match self.return_abi.lowered() {
+            Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
+                Some(ValueLayout::NullableOption {
+                    option_type: self.result_layout.logical_type().clone(),
+                    payload: Box::new(self.results.first()?.clone()),
+                })
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn with_return_abi(
         &self,
         planner: &Planner<'_>,
@@ -28,7 +46,10 @@ impl FunctionLayout {
         origin: SlotOrigin,
     ) -> Self {
         let result = planner.value_layout(self.result_layout.logical_type(), origin);
-        planner.function_layout(self.parameters.clone(), &result, return_abi, None)
+        FunctionLayout {
+            producer: self.producer,
+            ..planner.function_layout(self.parameters.clone(), &result, return_abi, None)
+        }
     }
 
     pub(crate) fn same_representation(&self, other: &Self) -> bool {
@@ -41,54 +62,6 @@ impl FunctionLayout {
 
     pub(crate) fn same_result_representation(&self, other: &Self) -> bool {
         self.return_abi == other.return_abi && layouts_match(&self.results, &other.results)
-    }
-
-    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> GoType {
-        let parameters: Vec<GoType> = self
-            .parameters
-            .iter()
-            .map(|parameter| parameter.go_type(planner))
-            .collect();
-        let result = self.result_go_type(planner);
-        GoType::function(&parameters, result.as_ref())
-    }
-
-    fn result_err_type(&self, planner: &Planner<'_>) -> Type {
-        planner
-            .facts
-            .peel_alias(self.result_layout.logical_type())
-            .err_type()
-    }
-
-    pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> Option<GoType> {
-        if self.return_abi == CallableReturnAbi::Void {
-            return None;
-        }
-        let mut slots: Vec<GoType> = self
-            .results
-            .iter()
-            .map(|result| result.go_type(planner))
-            .collect();
-        Some(match self.return_abi.lowered() {
-            None
-            | Some(LoweredReturnAbi::Option(
-                OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
-            )) => {
-                let [slot] = <[GoType; 1]>::try_from(slots)
-                    .unwrap_or_else(|_| unreachable!("a single-result ABI has one result slot"));
-                slot
-            }
-            Some(LoweredReturnAbi::BareError) => planner.go_type(&self.result_err_type(planner)),
-            Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. }) => {
-                slots.push(planner.go_type(&self.result_err_type(planner)));
-                GoType::result_list(&slots)
-            }
-            Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })) => {
-                slots.push(GoType::new("bool"));
-                GoType::result_list(&slots)
-            }
-            Some(LoweredReturnAbi::Tuple { .. }) => GoType::result_list(&slots),
-        })
     }
 }
 
@@ -141,6 +114,7 @@ pub(crate) enum ValueLayout {
     Named {
         named_type: Type,
         underlying: Box<ValueLayout>,
+        go_alias: bool,
     },
 }
 
@@ -169,6 +143,27 @@ impl ValueLayout {
         }
     }
 
+    pub(crate) fn variant_field(&self, variant: &str, index: usize) -> Option<&Self> {
+        match self {
+            Self::TaggedOption { payload, .. }
+            | Self::NullableOption { payload, .. }
+            | Self::PointerOption { payload, .. } => Some(payload),
+            Self::Fallible { payload, error, .. } => Some(if variant == "Err" || index == 1 {
+                error
+            } else {
+                payload
+            }),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn indexed_element(&self) -> Option<&Self> {
+        match self.underlying() {
+            Self::Map { value, .. } => Some(value),
+            _ => self.element(),
+        }
+    }
+
     pub(crate) fn tuple_elements(&self) -> Option<&[Self]> {
         match self.underlying() {
             Self::Tuple { elements, .. } => Some(elements),
@@ -177,6 +172,22 @@ impl ValueLayout {
     }
 
     pub(crate) fn same_representation(&self, other: &Self) -> bool {
+        if let Self::Named {
+            underlying,
+            go_alias: true,
+            ..
+        } = self
+        {
+            return underlying.same_representation(other);
+        }
+        if let Self::Named {
+            underlying,
+            go_alias: true,
+            ..
+        } = other
+        {
+            return self.same_representation(underlying);
+        }
         if self.function_name() != other.function_name() {
             return false;
         }
@@ -259,8 +270,14 @@ impl ValueLayout {
     pub(crate) fn function_name(&self) -> Option<&Type> {
         match self {
             Self::Named {
+                underlying,
+                go_alias: true,
+                ..
+            } => underlying.function_name(),
+            Self::Named {
                 named_type,
                 underlying,
+                go_alias: false,
             } if matches!(underlying.underlying(), Self::Function { .. }) => Some(named_type),
             Self::Function { function_type, .. }
                 if matches!(function_type.unwrap_forall(), Type::Nominal { .. }) =>
@@ -305,50 +322,16 @@ impl ValueLayout {
             | Self::Named { named_type: ty, .. } => ty,
         }
     }
-
-    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> GoType {
-        match self {
-            Self::NullableOption { payload, .. } => payload.go_type(planner),
-            Self::PointerOption { payload, .. } => GoType::pointer_to(&payload.go_type(planner)),
-            Self::Reference { pointee, .. } => GoType::pointer_to(&pointee.go_type(planner)),
-            Self::Slice { element, .. } => GoType::slice_of(&element.go_type(planner)),
-            Self::Map { key, value, .. } => {
-                let key = key.go_type(planner);
-                let value = value.go_type(planner);
-                GoType::map_of(&key, &value)
-            }
-            Self::Array {
-                length, element, ..
-            } => GoType::array_of(length, &element.go_type(planner)),
-            Self::Function { layout, .. } => layout.go_type(planner),
-            Self::TaggedOption { payload, .. } => {
-                GoType::prelude("Option", &[payload.go_type(planner)])
-            }
-            Self::Fallible {
-                fallible_type,
-                payload,
-                error,
-            } => {
-                let name = if fallible_type.is_partial() {
-                    "Partial"
-                } else {
-                    "Result"
-                };
-                GoType::prelude(name, &[payload.go_type(planner), error.go_type(planner)])
-            }
-            Self::Tuple { elements, .. } => {
-                let types: Vec<_> = elements
-                    .iter()
-                    .map(|element| element.go_type(planner))
-                    .collect();
-                GoType::prelude(&format!("Tuple{}", elements.len()), &types)
-            }
-            Self::Plain(ty) | Self::Named { named_type: ty, .. } => planner.go_type(ty),
-        }
-    }
 }
 
 impl Planner<'_> {
+    pub(crate) fn lowered_tuple_slot_layouts(&self, tuple_ty: &Type) -> Vec<ValueLayout> {
+        self.tuple_result_slots(
+            &self.value_layout(tuple_ty, SlotOrigin::Lisette),
+            Some(tuple_ty),
+        )
+    }
+
     pub(crate) fn prelude_receiver_method_layouts(
         &self,
         expression: &Expression,
@@ -380,7 +363,7 @@ impl Planner<'_> {
             .iter()
             .zip(slots)
             .collect();
-        let mut target = callee.abi.function_layout(self);
+        let mut target = callee.function_layout(self);
         let instantiated = callee.instantiated.as_function_type()?;
         let canonical_receiver = self.value_layout(
             &self.facts.receiver_shape(&receiver.get_type()),
@@ -492,7 +475,10 @@ impl Planner<'_> {
                 *layout = self.function_layout(
                     parameters,
                     &result,
-                    CallableReturnAbi::unlowered(&declared.return_type),
+                    self.facts.return_abi(
+                        &declared.return_type,
+                        ReturnSlot::FunctionValue(SlotOrigin::Lisette),
+                    ),
                     Some(&declared.return_type),
                 );
             }
@@ -577,6 +563,7 @@ impl Planner<'_> {
             ValueLayout::Named {
                 named_type: ty.clone(),
                 underlying: Box::new(layout),
+                go_alias: self.facts.is_transparent_alias(ty),
             }
         } else {
             layout
@@ -720,6 +707,7 @@ impl Planner<'_> {
             result_layout: Box::new(result.clone()),
             results,
             return_abi,
+            producer: ResultProducer::Go,
         }
     }
 
@@ -760,6 +748,14 @@ impl Planner<'_> {
         origin: SlotOrigin,
         declaration: Option<&Type>,
     ) -> ValueLayout {
+        let go_target = self.facts.peel_go_alias(ty);
+        if go_target != *ty.unwrap_forall() && go_target != self.facts.peel_alias(ty) {
+            return ValueLayout::Named {
+                named_type: ty.clone(),
+                underlying: Box::new(self.value_layout_with_hint(&go_target, origin, declaration)),
+                go_alias: true,
+            };
+        }
         let alias_declaration = self.facts.function_alias_declaration(ty);
         let resolved_declaration = alias_declaration
             .clone()
@@ -803,6 +799,7 @@ impl Planner<'_> {
             return ValueLayout::Named {
                 named_type: ty.clone(),
                 underlying: Box::new(underlying),
+                go_alias: self.facts.is_transparent_alias(ty),
             };
         }
         self.value_layout_resolved(
@@ -905,6 +902,7 @@ impl Planner<'_> {
                     return ValueLayout::Named {
                         named_type: ty,
                         underlying: Box::new(nested(&underlying, declared_underlying.as_ref())),
+                        go_alias: false,
                     };
                 }
                 ValueLayout::Plain(ty)
@@ -1048,6 +1046,11 @@ fn tuple_hint(declaration: Option<&Type>, index: usize) -> Option<&Type> {
 }
 
 impl EmitFacts<'_> {
+    pub(in crate::abi) fn is_nullable_option(&self, ty: &Type) -> bool {
+        let ty = self.peel_alias(ty);
+        ty.is_option() && self.is_nilable_go_type(&ty.ok_type())
+    }
+
     pub(crate) fn is_go_abi_type(&self, ty: &Type) -> bool {
         self.resolve_nominal(ty)
             .is_some_and(|resolved| self.is_go_imported_type(resolved.id.as_str()))

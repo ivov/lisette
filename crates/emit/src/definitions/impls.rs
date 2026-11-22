@@ -7,11 +7,13 @@ use syntax::EcoString;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Visibility};
 use syntax::types::{Type, type_args_match_params};
 
+type ReceiverGenerics<'a> = &'a [(EcoString, Vec<Type>)];
+
 struct ImplContext<'a> {
     receiver_name: &'a str,
     ty: &'a Type,
     generics: &'a [Generic],
-    receiver_generics: &'a [(EcoString, Vec<Type>)],
+    receiver_generics: ReceiverGenerics<'a>,
     qualified_type: String,
 }
 
@@ -56,7 +58,6 @@ impl Planner<'_> {
 
         let is_public = matches!(visibility, Visibility::Public);
 
-        let should_export = is_public || self.facts.method_needs_export(function.name);
         let is_free_function = !self
             .facts
             .emits_go_method(&context.qualified_type, function.name);
@@ -68,22 +69,18 @@ impl Planner<'_> {
                 is_public,
             )
             .into();
-            let mut combined_generics = context.generics.to_vec();
-            combined_generics.extend(function.generics.iter().cloned());
-            let (generics, owner) = if self.facts.impl_generics_match_receiver(context) {
-                (function.generics, Some(context.receiver_generics))
-            } else {
-                (combined_generics.as_slice(), None)
-            };
+            let (generics, owner) = self
+                .facts
+                .free_function_type_parameters(context, function.generics);
             let free_function = FunctionDefinitionView {
                 name: &free_name,
-                generics,
+                generics: &generics,
                 ..function
             };
             let declarations = self.emit_function(free_function, None, &free_name, owner);
             (free_name.to_string(), declarations)
         } else {
-            let go_name = self.pick_go_function_name(function, true, should_export);
+            let go_name = self.pick_go_function_name(function, true, is_public);
             let declarations = self.emit_function(
                 function,
                 Some(context.ty),
@@ -103,6 +100,23 @@ impl Planner<'_> {
 }
 
 impl EmitFacts<'_> {
+    fn free_function_type_parameters<'c>(
+        &self,
+        context: &ImplContext<'c>,
+        function_generics: &[Generic],
+    ) -> (Vec<Generic>, Option<ReceiverGenerics<'c>>) {
+        if self.impl_generics_match_receiver(context) {
+            return (function_generics.to_vec(), Some(context.receiver_generics));
+        }
+        let combined = context
+            .generics
+            .iter()
+            .chain(function_generics)
+            .cloned()
+            .collect();
+        (combined, None)
+    }
+
     fn impl_generics_match_receiver(&self, ctx: &ImplContext<'_>) -> bool {
         self.definition(&ctx.qualified_type)
             .and_then(|definition| definition.body.generics())

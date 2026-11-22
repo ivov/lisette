@@ -27,9 +27,7 @@ func arg() int {
 }
 
 func main() {
-	var x []int
-	ref := get()
-	recv := *ref
-	x = append(slices.Clip(recv), arg())
+	recv := *get()
+	x := append(slices.Clip(recv), arg())
 	_ = x[1]
 }

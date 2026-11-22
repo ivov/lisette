@@ -88,7 +88,7 @@ impl Planner<'_> {
     pub(crate) fn plan_copied_spread(&mut self, spread: &Expression) -> ValuePlan {
         if let Expression::IndexedAccess {
             expression, index, ..
-        } = spread.unwrap_parens()
+        } = spread
             && let Expression::Range {
                 start,
                 end,

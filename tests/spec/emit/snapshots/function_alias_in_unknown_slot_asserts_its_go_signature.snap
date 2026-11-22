@@ -33,7 +33,7 @@ func make_() ast.Node {
 }
 
 func main() {
-	var maker Maker = func() MaybeNode {
+	maker := func() MaybeNode {
 		raw := make_()
 		return lisette.OptionFromNilable[ast.Node](raw, lisette.IsNilInterface(raw))
 	}

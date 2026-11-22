@@ -29,9 +29,7 @@ func main() {
 	if !ok {
 		return
 	}
-	var tmp []int
 	recv := *o.items
-	tmp = append(slices.Clip(recv), 2)
-	_ = tmp
+	_ = append(slices.Clip(recv), 2)
 	_ = items
 }

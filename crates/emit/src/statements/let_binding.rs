@@ -3,10 +3,12 @@ use crate::OuterBindings;
 use crate::Planner;
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::ValueLayout;
 use crate::abi::wrapping::WrapperTarget;
 use crate::analyze::component_uses::ComponentDemand;
 use crate::analyze::component_uses::ValueDemand;
 use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::control_flow::fallible::Fallible;
 use crate::escape_local;
 use crate::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, assign, declare, define, define_many,
@@ -98,7 +100,9 @@ impl Planner<'_> {
         if !self.shadows_declaration(&go_identifier)
             && !self.scope.is_active_assign_target(&go_identifier)
             && !self.scope.has_binding_for_go_name(&go_identifier)
-            && value.get_type().demoted() == binding_ty.demoted()
+            && self
+                .facts
+                .same_type(&value.get_type().demoted(), &binding_ty.demoted())
         {
             let local = go_identifier.clone();
             let into = self
@@ -209,14 +213,13 @@ impl Planner<'_> {
         demand: ComponentDemand,
     ) -> Option<Vec<Statement>> {
         let value = let_spec.value;
-        let kind = if ty.is_option() {
-            ComponentKind::Option
-        } else if !ty.is_result() {
-            return None;
-        } else if self.facts.is_prelude_error(&ty.err_type()) {
-            ComponentKind::ErrorResult
-        } else {
-            ComponentKind::OtherResult
+        let fallible = self.facts.fallible(ty)?;
+        let kind = match &fallible {
+            Fallible::Option { .. } => ComponentKind::Option,
+            Fallible::Result { err_ty, .. } if self.facts.is_prelude_error(err_ty) => {
+                ComponentKind::ErrorResult
+            }
+            Fallible::Result { .. } => ComponentKind::OtherResult,
         };
         let source = self.component_producer(value, demand.value == ValueDemand::Whole, kind)?;
         let slot = if demand.value != ValueDemand::StatusOnly {
@@ -225,8 +228,13 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Discarded
         };
-        let (statements, components) =
-            source.components(self, slot, ty.ok_type(), kind, demand.defaults > 1)?;
+        let (statements, components) = source.components(
+            self,
+            slot,
+            fallible.ok_ty().clone(),
+            kind,
+            demand.defaults > 1,
+        )?;
         self.scope.set_component_binding(
             let_spec.identifier,
             let_spec.binding_id.as_slice(),
@@ -467,8 +475,13 @@ impl Planner<'_> {
         }
         let local = go_identifier.clone();
         let target = WrapperTarget::Slot(&local);
-        let statements =
-            self.try_lower_abi_wrapped_call_to(value, &plan.resolved.abi, binding_ty, target)?;
+        let statements = self.try_lower_abi_wrapped_call_to(
+            value,
+            &plan.resolved.abi,
+            plan.resolved.origin,
+            binding_ty,
+            target,
+        )?;
         self.scope
             .bind_identifier(identifier, binding_id.as_slice(), local);
         Some(statements)
@@ -611,6 +624,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 return self.lower_simple_identifier(identifier, *binding);
             }
             Pattern::WildCard { .. } => return self.lower_discard(),
+            _ if let Some(block) = self.try_lower_converted_destructuring() => return block,
             Pattern::Tuple { elements, .. } => {
                 let all_unused = elements.iter().all(|element| match element {
                     Pattern::WildCard { .. } => true,
@@ -643,6 +657,30 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 &value_ty,
             ),
         }
+    }
+
+    fn try_lower_converted_destructuring(&mut self) -> Option<LoweredBlock> {
+        let coercion = self
+            .planner
+            .value_slot_coercion(self.value, &self.binding.ty);
+        if coercion.is_identity() {
+            return None;
+        }
+        let (mut statements, value) = self
+            .planner
+            .plan_value(self.value, ExpressionContext::value())
+            .into_parts();
+        let (coercion_setup, converted) = coercion.lower(self.planner, value);
+        statements.extend(coercion_setup);
+        let subject = self
+            .planner
+            .stable_source(&mut statements, "subject", converted);
+        statements.extend(self.planner.lower_irrefutable_pattern_site(
+            PatternSubject::Existing { var: subject },
+            &self.binding.pattern,
+            &self.binding.ty,
+        ));
+        Some(LoweredBlock { statements })
     }
 
     fn try_lower_channel_split(&mut self, elements: &[Pattern]) -> Option<LoweredBlock> {
@@ -744,10 +782,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
         let slots_read_in_place = self
             .planner
-            .facts
-            .tuple_element_types(&value_ty)
+            .lowered_tuple_slot_layouts(&value_ty)
             .iter()
-            .all(|slot_ty| !self.planner.facts.is_nullable_option(slot_ty));
+            .all(|layout| !matches!(layout, ValueLayout::NullableOption { .. }));
         slots_read_in_place && self.planner.tuple_call_arity(self.value).is_some()
     }
 
@@ -783,7 +820,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         {
             raw_go_name = Some(self.planner.fresh_source(&SourceName::new(identifier)));
         }
-        let statements = if matches!(self.value, Expression::Propagate { .. }) {
+        let statements = if matches!(self.value, Expression::Propagate { .. })
+            && self
+                .planner
+                .value_slot_coercion(self.value, &self.binding.ty)
+                .is_identity()
+        {
             self.planner
                 .lower_let_propagate(let_spec, raw_go_name.as_ref())
         } else {
@@ -862,7 +904,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
 impl EmitFacts<'_> {
     fn widens_to_interface(&self, value: &Expression, binding_ty: &Type) -> bool {
-        self.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type()
+        self.is_interface_or_unknown(binding_ty) && !self.same_type(binding_ty, &value.get_type())
     }
 
     fn resolve_let_temp_declaration_ty(&self, value: &Expression, binding_ty: &Type) -> Type {
@@ -876,7 +918,7 @@ impl EmitFacts<'_> {
         if self.widens_to_interface(value, binding_ty) {
             return true;
         }
-        if self.is_function_alias(binding_ty) {
+        if self.is_go_named_function_type(binding_ty) {
             let value_ty = value.get_type();
             if matches!(value_ty.unwrap_forall(), Type::Function(_)) {
                 return true;

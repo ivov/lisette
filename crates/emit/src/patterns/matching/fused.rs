@@ -7,7 +7,7 @@ impl Planner<'_> {
         value: &Expression,
         go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
-        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+        let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
         self.try_lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
@@ -18,7 +18,7 @@ impl Planner<'_> {
         value: &Expression,
         go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
-        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+        let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
         let fuse = self.option_fuse_plan(subject)?;
@@ -48,7 +48,7 @@ impl Planner<'_> {
         value: &Expression,
         go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
-        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+        let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
         let arms = self.partial_outcome_arms(subject, arms)?;
@@ -293,20 +293,11 @@ impl Planner<'_> {
     }
 
     fn fusable_partial(&self, subject: &Expression, plan: &CallPlan<'_>) -> bool {
-        let is_partial = matches!(
+        matches!(
             plan.resolved.abi.result.lowered(),
             Some(LoweredReturnAbi::Partial { .. })
-        );
-        if !is_partial {
-            return false;
-        }
-        if self
-            .go_result_bridge(&plan.resolved.abi, &subject.get_type())
-            .is_some()
-        {
-            return false;
-        }
-        !self.facts.has_tuple_payload(&subject.get_type())
+        ) && self.call_result_unbridged(plan, &subject.get_type())
+            && !self.facts.has_tuple_payload(&subject.get_type())
     }
 
     pub(super) fn try_lower_fused_partial_match(
@@ -382,7 +373,11 @@ impl Planner<'_> {
                     ElseArm::from_body(both_body, false),
                 )))
             }
-            None => ElseArm::from_body(both_body, false),
+            None => {
+                self.package
+                    .record_dropped_code(err_arm.expression.get_span());
+                ElseArm::from_body(both_body, false)
+            }
         };
 
         statements.push(
@@ -505,6 +500,8 @@ impl Planner<'_> {
             .into_parts();
 
         if !arms.selects_both && nil_guard.is_none() {
+            self.package
+                .record_dropped_code(arms.selected.expression.get_span());
             statements.push(expression_statement(call));
             let fallback = self
                 .lower_fused_arm(&[], &arms.fallback.expression, place)
@@ -877,7 +874,7 @@ fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
 }
 
 fn arm_body_is_noop(body: &Expression) -> bool {
-    match body.unwrap_parens() {
+    match body {
         Expression::Unit { .. } => true,
         Expression::Block { items, .. } => items.is_empty(),
         _ => false,
@@ -885,13 +882,6 @@ fn arm_body_is_noop(body: &Expression) -> bool {
 }
 
 fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
-    let body = match body.unwrap_parens() {
-        Expression::Block { items, .. } => match items.as_slice() {
-            [single] => single.unwrap_parens(),
-            _ => return None,
-        },
-        other => other,
-    };
     match body {
         Expression::Identifier { value, .. } => Some(value.as_str()),
         _ => None,

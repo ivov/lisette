@@ -456,15 +456,9 @@ fn redundant_alternatives(rows: &[TestedRow]) -> Vec<Span> {
         .filter(|inner| {
             !redundant
                 .iter()
-                .any(|outer| outer != inner && span_contains(*outer, *inner))
+                .any(|outer| outer != inner && outer.contains(inner))
         })
         .collect()
-}
-
-fn span_contains(outer: Span, inner: Span) -> bool {
-    outer.file_id == inner.file_id
-        && outer.byte_offset <= inner.byte_offset
-        && inner.byte_offset + inner.byte_length <= outer.byte_offset + outer.byte_length
 }
 
 fn covered_by_earlier_arm_help(

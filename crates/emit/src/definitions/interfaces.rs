@@ -4,9 +4,9 @@ use crate::ir::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
 use crate::names::generics::generic_bounds;
 use crate::names::go_name;
 use crate::types::go_type::GoType;
-use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
+use syntax::ast::{Expression, Generic, ParentInterface};
 use syntax::program::Definition;
-use syntax::types::{Type, unqualified_name};
+use syntax::types::Type;
 
 impl Planner<'_> {
     pub(crate) fn emit_interface(
@@ -25,11 +25,22 @@ impl Planner<'_> {
                 fields: Vec::new(),
             });
         }
-        let filtered = strip_self_referential_bounds(generics, name);
+        let interface_id = self.facts.qualified_current(name);
         GoDeclaration::new(DeclarationKind::Interface {
             name: name_go,
-            parameters: self
-                .plan_generics(&filtered.iter().map(generic_bounds).collect::<Vec<_>>()),
+            parameters: self.plan_generics(
+                &generics
+                    .iter()
+                    .map(|generic| {
+                        let (name, bounds) = generic_bounds(generic);
+                        let bounds = bounds
+                            .into_iter()
+                            .filter(|bound| bound.get_qualified_id() != Some(&interface_id))
+                            .collect();
+                        (name, bounds)
+                    })
+                    .collect::<Vec<_>>(),
+            ),
             parents: parents
                 .iter()
                 .map(|parent| self.go_type(&parent.ty))
@@ -88,22 +99,4 @@ impl Planner<'_> {
             result: self.return_go_type(&return_abi, &raw_return_ty),
         }
     }
-}
-
-fn bound_references_interface(annotation: &Annotation, interface_name: &str) -> bool {
-    let Annotation::Constructor { name, .. } = annotation else {
-        return false;
-    };
-    unqualified_name(name) == interface_name
-}
-
-fn strip_self_referential_bounds(generics: &[Generic], interface_name: &str) -> Vec<Generic> {
-    generics
-        .iter()
-        .cloned()
-        .map(|mut generic| {
-            generic.retain_bounds(|bound| !bound_references_interface(bound, interface_name));
-            generic
-        })
-        .collect()
 }

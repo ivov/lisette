@@ -10,7 +10,7 @@ use syntax::program::File;
 
 use crate::Planner;
 use crate::definitions::enum_layout::ENUM_TAG_FIELD;
-use crate::definitions::structs::{StructShape, struct_field_go_name};
+use crate::definitions::structs::StructShape;
 use crate::names::go_name;
 
 type SpanMap = HashMap<String, Vec<Span>>;
@@ -189,8 +189,9 @@ impl Planner<'_> {
         let members = selectors.entry(type_go).or_default();
         match fields {
             StructFields::Record(fields) => {
+                let qualified = self.facts.qualified_current(name);
                 for field in fields {
-                    let field_go = struct_field_go_name(field, attributes);
+                    let field_go = self.facts.declared_field_go_name(&qualified, field);
                     members.entry(field_go).or_default().push(field.name_span);
                 }
             }

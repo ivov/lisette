@@ -4,6 +4,7 @@ mod equality;
 pub(crate) mod expressions;
 mod generic_obligations;
 pub(crate) mod interface;
+pub(crate) mod runtime_constants;
 mod unify;
 mod validation;
 mod value_uses;
@@ -37,8 +38,10 @@ impl TaskState {
 
     /// Infer one registered package and install its typed ASTs.
     pub fn infer_package(&mut self, store: &mut Store, package: RegisteredPackage) {
+        let package_id = package.id.clone();
         let inferred_files = self.infer_registered_package(store, package);
         Self::install_inferred_files(store, inferred_files);
+        runtime_constants::mark_runtime_constants(store, &package_id);
     }
 
     pub(crate) fn infer_registered_package(

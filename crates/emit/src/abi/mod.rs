@@ -5,20 +5,23 @@ pub(crate) mod coercion;
 pub(crate) mod fallible_producer;
 #[allow(clippy::disallowed_methods)]
 pub(crate) mod layout;
+pub(crate) mod slot_conversion;
 pub(crate) mod transition;
 pub(crate) mod wrapping;
 
 use crate::EmitFacts;
 use crate::Planner;
 use crate::names::go_name;
-use crate::plan::calls::CallableOrigin;
+use crate::patterns::matching::prelude_constructor;
+use crate::plan::calls::{CallableDeclaration, CallableOrigin, FunctionBridge};
 use crate::state::expression::ExpressionContext;
 use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;
 use layout::{FunctionLayout, ValueLayout};
 use syntax::ast::Expression;
 use syntax::program::{
-    Adaptation, Definition, GoHint, GoReturnContract, Method, SlotOrigin, go_return_contract,
+    CallOperation, CheckedCallee, Definition, GoHint, GoReturnContract, Method, NativeTypeKind,
+    SlotOrigin, go_return_contract,
 };
 use syntax::types::{self, Type};
 
@@ -62,7 +65,154 @@ pub(crate) enum ReturnSlot<'a> {
     Go { hints: &'a [GoHint] },
 }
 
+pub(crate) struct CalleeSignature<'s, 'a> {
+    pub(crate) callee: &'s Expression,
+    pub(crate) origin: &'s CallableOrigin<'a>,
+    pub(crate) id: Option<&'s str>,
+    pub(crate) declaration: Option<CallableDeclaration<'a>>,
+    pub(crate) declared_return: Option<&'s Type>,
+    pub(crate) return_type: &'s Type,
+}
+
 impl Planner<'_> {
+    pub(crate) fn callee_return_abi(
+        &self,
+        signature: CalleeSignature<'_, '_>,
+    ) -> CallableReturnAbi {
+        let abi = self.callee_return_abi_by_origin(&signature);
+        debug_assert!(
+            !abi.is_lowered() || self.facts.is_lowered_result_type(signature.return_type),
+            "a lowered call result wraps into its tagged Lisette value"
+        );
+        abi
+    }
+
+    fn callee_return_abi_by_origin(
+        &self,
+        signature: &CalleeSignature<'_, '_>,
+    ) -> CallableReturnAbi {
+        if let Some(layout) = self.bound_dispatch_layout(signature.callee) {
+            return layout.return_abi;
+        }
+        if let Some(abi) = self.go_callee_return_abi(signature) {
+            return abi;
+        }
+        if matches!(
+            signature.origin,
+            CallableOrigin::Source(CallOperation::NativeConstructor {
+                kind: NativeTypeKind::Array,
+                ..
+            })
+        ) {
+            return self
+                .facts
+                .return_abi(signature.return_type, ReturnSlot::Function);
+        }
+        self.lisette_callee_return_abi(signature)
+            .unwrap_or_else(|| {
+                CallableReturnAbi::unlowered(
+                    signature.declared_return.unwrap_or(signature.return_type),
+                )
+            })
+    }
+
+    fn go_callee_return_abi(
+        &self,
+        signature: &CalleeSignature<'_, '_>,
+    ) -> Option<CallableReturnAbi> {
+        if self.bound_dispatch_requirement(signature.callee).is_some() {
+            return None;
+        }
+        if let Some(requirement) = self.go_bound_requirement(signature.callee) {
+            let declared_return = requirement.method.ty.get_function_ret()?;
+            let abi = self
+                .facts
+                .requirement_go_return_abi(&requirement, declared_return);
+            return abi.is_lowered().then_some(abi);
+        }
+        let id = signature.id.filter(|id| go_name::is_go_import(id))?;
+        if signature
+            .declaration
+            .is_some_and(CallableDeclaration::is_type_definition)
+        {
+            return Some(CallableReturnAbi::Value);
+        }
+        let hints = self
+            .facts
+            .definition(id)
+            .map(Definition::go_hints)
+            .or_else(|| {
+                let (owner, name) = id.rsplit_once('.')?;
+                self.facts
+                    .method(owner, name)
+                    .map(|method| method.go_hints.as_slice())
+            })
+            .unwrap_or_default();
+        Some(self.facts.go_callable_return_abi(
+            id,
+            signature.declared_return.unwrap_or(signature.return_type),
+            hints,
+        ))
+    }
+
+    fn lisette_callee_return_abi(
+        &self,
+        signature: &CalleeSignature<'_, '_>,
+    ) -> Option<CallableReturnAbi> {
+        let callee = signature.callee;
+        let callee_ty = callee.get_type();
+        let function = self
+            .facts
+            .resolve_to_function_type(callee_ty.unwrap_forall())
+            .unwrap_or_else(|| callee_ty.unwrap_forall().clone());
+        let Type::Function(function) = function else {
+            return None;
+        };
+        if self
+            .facts
+            .is_prelude_dispatch(signature.id, signature.origin)
+            || prelude_constructor(callee).is_some()
+        {
+            return None;
+        }
+        if let Some(requirement) = self
+            .facts
+            .checked(callee)
+            .function_value()
+            .and_then(CheckedCallee::interface_requirement)
+        {
+            let method = &requirement.method;
+            return Some(self.facts.return_abi(
+                method.ty.get_function_ret().unwrap_or(&Type::Never),
+                ReturnSlot::InterfaceMethod {
+                    name: &method.source_name,
+                    method,
+                },
+            ));
+        }
+        if self.selects_tagged_twin(callee) {
+            return Some(CallableReturnAbi::Value);
+        }
+        let return_ty = signature
+            .declared_return
+            .unwrap_or(function.return_type.as_ref());
+        let slot = match signature.declaration {
+            Some(CallableDeclaration::Method(_))
+                if signature
+                    .id
+                    .and_then(|id| id.rsplit_once('.'))
+                    .is_none_or(|(owner, name)| self.facts.emits_go_method(owner, name)) =>
+            {
+                ReturnSlot::Method
+            }
+            Some(declaration) if !declaration.is_type_definition() => ReturnSlot::Function,
+            _ => ReturnSlot::FunctionValue(
+                self.function_type_origin(&callee_ty, SlotOrigin::Lisette),
+            ),
+        };
+        Some(self.facts.return_abi(return_ty, slot))
+    }
+
     pub(crate) fn function_type_origin(&self, fn_ty: &Type, origin: SlotOrigin) -> SlotOrigin {
         if origin.declared_by_go() {
             origin
@@ -135,7 +285,7 @@ impl Planner<'_> {
         if callee.is_prelude_dispatch || matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
         }
-        Some(callee.abi.function_layout(self))
+        Some(callee.function_layout(self))
     }
 
     pub(crate) fn peel_go_slot_alias_cast<'e>(
@@ -147,7 +297,7 @@ impl Planner<'_> {
             expression: inner,
             ty,
             ..
-        } = value.unwrap_parens()
+        } = value
         else {
             return value;
         };
@@ -155,18 +305,34 @@ impl Planner<'_> {
         {
             return value;
         }
-        let Some(target) = self.facts.resolve_to_function_type(ty) else {
+        if self.facts.resolve_to_function_type(ty).is_none()
+            || !self
+                .function_type_slot_bridge(&inner.get_type(), ty)
+                .is_identity()
+        {
             return value;
-        };
-        let inner_ty = inner.get_type();
-        match self.facts.resolve_to_function_type(&inner_ty) {
-            Some(source)
-                if source == target && !self.facts.is_go_named_function_type(&inner_ty) =>
-            {
-                self.peel_go_slot_alias_cast(inner, ctx)
-            }
-            _ => value,
         }
+        self.peel_go_slot_alias_cast(inner, ctx)
+    }
+
+    pub(crate) fn callable_slot_bridge(
+        &self,
+        source: FunctionLayout,
+        slot_function: &Type,
+        return_abi: Option<CallableReturnAbi>,
+        origin: SlotOrigin,
+    ) -> Option<FunctionBridge> {
+        let slot = self.value_layout(slot_function, origin);
+        let ValueLayout::Function { layout, .. } = slot.underlying() else {
+            return None;
+        };
+        let target = match return_abi {
+            Some(return_abi) if layout.return_abi != return_abi => {
+                layout.with_return_abi(self, return_abi, SlotOrigin::Lisette)
+            }
+            _ => layout.clone(),
+        };
+        (!source.same_representation(&target)).then_some(FunctionBridge { source, target })
     }
 
     pub(crate) fn function_slot_bridge(
@@ -185,7 +351,7 @@ impl Planner<'_> {
         CoercionPlan::bridge(self, &source, &target)
     }
 
-    pub(crate) fn function_type_slot_bridge(
+    pub(in crate::abi) fn function_type_slot_bridge(
         &self,
         value_ty: &Type,
         target_ty: &Type,
@@ -217,56 +383,11 @@ impl Planner<'_> {
             && self.facts.resolve_to_function_type(target_ty).is_some())
         .then_some(slot_origin)
     }
-
-    pub(crate) fn value_slot_coercion(&self, value: &Expression, layout: &Type) -> CoercionPlan {
-        let value_use = self.facts.checked(value).value_use();
-        self.adapted_slot_coercion(value, &value_use.adaptation, &value_use.slot, layout)
-    }
-
-    pub(crate) fn adapted_slot_coercion(
-        &self,
-        value: &Expression,
-        adaptation: &Adaptation,
-        slot: &Type,
-        layout: &Type,
-    ) -> CoercionPlan {
-        let bridge = self.function_slot_bridge(value, layout);
-        if bridge.is_identity() {
-            let internal = CoercionPlan::adapted(self, adaptation, &value.get_type(), slot, None);
-            if !internal.is_identity() {
-                return internal;
-            }
-            let target = self.value_layout(layout, SlotOrigin::Lisette);
-            if matches!(
-                target.underlying(),
-                ValueLayout::TaggedOption { .. }
-                    | ValueLayout::Fallible { .. }
-                    | ValueLayout::Tuple { .. }
-                    | ValueLayout::Reference { .. }
-            ) {
-                let source = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
-                let bridge = CoercionPlan::bridge(self, &source, &target);
-                let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
-                if !bridge.is_identity()
-                    && (!reference
-                        || matches!(
-                            bridge,
-                            CoercionPlan::Layout(coercion::LayoutBridge::Conversion { .. })
-                        ))
-                {
-                    return bridge;
-                }
-            }
-            internal
-        } else {
-            bridge
-        }
-    }
 }
 
 pub(crate) fn is_closure_literal(expression: &Expression) -> bool {
     matches!(
-        expression.unwrap_parens(),
+        expression,
         Expression::Lambda { .. } | Expression::Function { .. }
     )
 }
@@ -276,9 +397,22 @@ pub(crate) fn is_prelude_container_type(ty: &Type) -> bool {
 }
 
 impl EmitFacts<'_> {
-    pub(crate) fn is_go_named_function_type(&self, ty: &Type) -> bool {
-        matches!(ty.unwrap_forall(), Type::Nominal { id, .. } if go_name::is_go_import(id))
-            && self.resolve_to_function_type(ty).is_some()
+    pub(crate) fn go_callable_return_abi(
+        &self,
+        qualified_name: &str,
+        declared_return: &Type,
+        hints: &[GoHint],
+    ) -> CallableReturnAbi {
+        if self.go_callable_return_slot(qualified_name).is_none() {
+            return self.return_abi(declared_return, ReturnSlot::Go { hints });
+        }
+        self.go_abi_catalog()
+            .callable_return_abi(qualified_name)
+            .cloned()
+            .map_or_else(
+                || CallableReturnAbi::unlowered(declared_return),
+                CallableReturnAbi::Lowered,
+            )
     }
 
     fn err_slot_is_nilable(&self, fallible_ty: &Type) -> bool {
@@ -407,7 +541,10 @@ impl EmitFacts<'_> {
             }
             ReturnSlot::FunctionValue(origin) => self.slot_return_abi(return_ty, origin),
             ReturnSlot::FunctionExpression(ctx) => {
-                if ctx.forces_tagged_go_function() || ctx.result_fills_type_parameter() {
+                if ctx.forces_tagged_go_function()
+                    || ctx.result_fills_type_parameter()
+                    || ctx.function_slot_origin() == SlotOrigin::GoAny
+                {
                     CallableReturnAbi::Value
                 } else {
                     self.slot_return_abi(return_ty, ctx.function_slot_origin())

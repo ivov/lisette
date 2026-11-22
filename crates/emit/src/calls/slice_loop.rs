@@ -8,7 +8,7 @@ use super::NativeCallContext;
 use super::native::NativeCallResult;
 use crate::Planner;
 use crate::abi::is_closure_literal;
-use crate::control_flow::fallible::prelude_call;
+use crate::control_flow::fallible::{option_variant, prelude_call};
 use crate::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, declare, define, directed_first,
@@ -153,15 +153,6 @@ impl PlannedLoop<'_> {
     }
 }
 
-fn peel_single_expression_block(body: &Expression) -> &Expression {
-    match body {
-        Expression::Block { items, .. } if items.len() == 1 => {
-            peel_single_expression_block(&items[0])
-        }
-        _ => body,
-    }
-}
-
 struct SliceLoopShape<'a> {
     kind: SliceLoop,
     callback: LoopCallback<'a>,
@@ -192,9 +183,8 @@ impl Planner<'_> {
         if args.len() != kind.argument_count() || ctx.spread.is_some() {
             return None;
         }
-        let callback = match args.last()?.unwrap_parens() {
+        let callback = match args.last()? {
             Expression::Lambda { params, body, .. } => {
-                let body = peel_single_expression_block(body);
                 let patterns: Vec<&Pattern> = params.iter().filter_map(identifier_of).collect();
                 if patterns.len() != params.len() || !body_moves_into_a_loop(body) {
                     return None;
@@ -525,7 +515,7 @@ impl Planner<'_> {
                 define(
                     result.clone(),
                     prelude_call(
-                        "MakeOptionNone",
+                        option_variant("None").constructor,
                         GoType::type_argument(&payload),
                         Vec::new(),
                     ),
@@ -606,7 +596,7 @@ impl Planner<'_> {
                     assign(
                         local(result),
                         prelude_call(
-                            "MakeOptionSome",
+                            option_variant("Some").constructor,
                             GoType::type_argument(&payload),
                             vec![local(element_name)],
                         ),

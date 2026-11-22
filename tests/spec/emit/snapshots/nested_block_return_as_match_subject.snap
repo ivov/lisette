@@ -15,9 +15,7 @@ package main
 func test() int {
 	var tmp int
 	{
-		{
-			return 1
-		}
+		return 1
 	}
 	_ = tmp
 	return 3

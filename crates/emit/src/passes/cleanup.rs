@@ -44,7 +44,7 @@ pub(crate) fn declare_zero_values(
         for mut statement in mem::take(block) {
             if let LoweredStatement::Define(Definition { names, value }) = &statement.kind
                 && let [name] = names.as_slice()
-                && let Some(go_type) = dereferenced_new_type(value.node())
+                && let Some(go_type) = value.node().new_zero_type().cloned()
             {
                 statement.kind = LoweredStatement::VarDecl {
                     name: name.clone(),
@@ -103,7 +103,7 @@ fn name_zero_values(
     scope: &mut ScopeState,
     package: &PackageState,
 ) {
-    if let Some(go_type) = dereferenced_new_type(node) {
+    if let Some(go_type) = node.new_zero_type().cloned() {
         let name = match zeros.iter().find(|(declared, _)| *declared == go_type) {
             Some((_, name)) => name.clone(),
             None => {
@@ -119,22 +119,6 @@ fn name_zero_values(
         return;
     }
     node.visit_children_mut(&mut |child| name_zero_values(child, zeros, scope, package));
-}
-
-fn dereferenced_new_type(node: &GoExpressionNode) -> Option<GoType> {
-    if let GoExpressionNode::Dereference(operand) = node
-        && let GoExpressionNode::Call {
-            callee, arguments, ..
-        } = operand.as_ref()
-        && let GoExpressionNode::Identifier(name) = callee.as_ref()
-        && name.id().is_none()
-        && name.spelling() == "new"
-        && let [argument] = arguments.as_slice()
-        && let GoExpressionNode::Type(go_type) = argument.as_ref()
-    {
-        return Some(go_type.clone());
-    }
-    None
 }
 
 fn return_found_elements_directly(statements: &mut Vec<Statement>) {

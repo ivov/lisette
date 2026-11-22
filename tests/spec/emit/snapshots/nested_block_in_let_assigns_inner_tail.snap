@@ -22,9 +22,7 @@ package main
 func doNothing() {}
 
 func test() {
-	var unit struct{}
 	doNothing()
-	unit = struct{}{}
 	var value int
 	{
 		k := 2
@@ -33,7 +31,6 @@ func test() {
 			value = m + 1
 		}
 	}
-	_ = unit
 	if value != 7 {
 		panic("wrong")
 	}

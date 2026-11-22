@@ -13,8 +13,7 @@ struct FusedPredicate<'a> {
     succeeds: bool,
 }
 
-pub(crate) fn strip_negations(expression: &Expression) -> (&Expression, bool) {
-    let mut expression = expression.unwrap_parens();
+pub(crate) fn strip_negations(mut expression: &Expression) -> (&Expression, bool) {
     let mut negated = false;
     while let Expression::Unary {
         operator: UnaryOperator::Not,
@@ -23,7 +22,7 @@ pub(crate) fn strip_negations(expression: &Expression) -> (&Expression, bool) {
     } = expression
     {
         negated = !negated;
-        expression = inner.unwrap_parens();
+        expression = inner;
     }
     (expression, negated)
 }
@@ -54,7 +53,7 @@ impl<'p> Planner<'p> {
         let Expression::DotAccess {
             expression: receiver,
             ..
-        } = callee.unwrap_parens()
+        } = &**callee
         else {
             return None;
         };

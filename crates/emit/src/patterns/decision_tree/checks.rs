@@ -4,6 +4,7 @@ use syntax::program::FieldSelection;
 
 struct EnumVariantData<'a> {
     identifier: &'a str,
+    enum_id: &'a str,
     fields: &'a [Pattern],
     ty: &'a Type,
     field_types: &'a [Type],
@@ -134,7 +135,7 @@ impl Planner<'_> {
             .unwrap_or_else(|| unreachable!("tuple pattern on a non-tuple type: {path_ty:?}"));
 
         for (i, element) in elements.iter().enumerate() {
-            let field_name = TUPLE_FIELDS.get(i).expect("oversize tuple arity");
+            let field_name = go_name::tuple_field(i);
             let field_path = path.push(self.facts.field_segment(path_ty, field_name.to_string()));
             self.collect_checks_and_bindings(
                 &field_path,
@@ -208,37 +209,50 @@ impl Planner<'_> {
 
         if let RestPattern::Bind { name, binding, .. } = rest {
             let go_name = self.facts.go_name_for_rest_binding(rest);
-            let (segment, rest_ty) = match &array_info {
+            let (segment, rest_ty, rest_layout) = match &array_info {
                 Some((length, element_type)) => {
                     let sub_length = length.saturating_sub(prefix.len() as u64);
                     let sub_ty = Type::Array {
                         length: sub_length,
                         element: Box::new((*element_type).clone()),
                     };
-                    let go_type = self.go_type(&sub_ty);
+                    let sub_layout = path_layout.and_then(ValueLayout::element).map(|element| {
+                        ValueLayout::Array {
+                            array_type: sub_ty.clone(),
+                            length: sub_length,
+                            element: Box::new(element.clone()),
+                        }
+                    });
+                    let go_type = sub_layout
+                        .as_ref()
+                        .map_or_else(|| self.go_type(&sub_ty), |layout| layout.go_type(self));
                     (
                         PathSegment::ArraySliceFrom {
                             offset: prefix.len(),
                             go_type,
                         },
                         sub_ty,
+                        sub_layout,
                     )
                 }
-                None => (PathSegment::SliceFrom(prefix.len()), path_ty.clone()),
+                None => (
+                    PathSegment::SliceFrom(prefix.len()),
+                    path_ty.clone(),
+                    path_layout.cloned(),
+                ),
             };
             collector.bindings.push(PatternBinding {
                 lisette_name: name.to_string(),
                 binding_ids: binding.as_slice().to_vec(),
                 target: BindingTarget::from_go_name(go_name, &rest_ty),
                 path: path.push(segment),
-                coercion: match (&array_info, path_layout) {
-                    (None, Some(source)) => CoercionPlan::bridge(
+                coercion: rest_layout.map_or(CoercionPlan::Identity, |source| {
+                    CoercionPlan::bridge(
                         self,
-                        source,
+                        &source,
                         &self.value_layout(&rest_ty, SlotOrigin::Lisette),
-                    ),
-                    _ => CoercionPlan::Identity,
-                },
+                    )
+                }),
             });
         }
     }
@@ -366,7 +380,11 @@ impl Planner<'_> {
             _ => {}
         }
 
-        let ConstructorPatternResolution::EnumVariant { variant_name, .. } = resolution else {
+        let ConstructorPatternResolution::EnumVariant {
+            enum_name,
+            variant_name,
+        } = resolution
+        else {
             return;
         };
         if let Some(
@@ -386,6 +404,7 @@ impl Planner<'_> {
 
         let variant_data = EnumVariantData {
             identifier,
+            enum_id: enum_name,
             fields,
             ty,
             field_types: &field_types,
@@ -445,11 +464,9 @@ impl Planner<'_> {
         let pointer = matches!(layout, ValueLayout::PointerOption { .. });
         collector.checks.push(Check::Nilable {
             path: path.clone(),
-            guard: if pointer {
-                NilGuard::Pointer
-            } else {
-                self.facts.option_nil_guard(ty)
-            },
+            guard: self
+                .layout_nil_guard(layout)
+                .expect("a nilable option layout has a nil guard"),
             some,
         });
         if some {
@@ -483,19 +500,8 @@ impl Planner<'_> {
             .zip(field_types)
             .enumerate()
             .map(|(index, (selection, ty))| {
-                let inherited = path_layout.and_then(|layout| match layout {
-                    ValueLayout::TaggedOption { payload, .. }
-                    | ValueLayout::NullableOption { payload, .. }
-                    | ValueLayout::PointerOption { payload, .. } => Some(payload.as_ref()),
-                    ValueLayout::Fallible { payload, error, .. } => {
-                        Some(if unqualified_name(variant_name) == "Err" || index == 1 {
-                            error.as_ref()
-                        } else {
-                            payload.as_ref()
-                        })
-                    }
-                    _ => None,
-                });
+                let inherited = path_layout
+                    .and_then(|layout| layout.variant_field(unqualified_name(variant_name), index));
                 inherited.cloned().unwrap_or_else(|| {
                     self.value_layout_with_declaration(
                         ty,
@@ -533,10 +539,9 @@ impl Planner<'_> {
         }
         let go_literal = match identifier.split_once('.') {
             Some((package, member)) if self.facts.is_foreign_package(package) => {
-                GoExpression::qualified(
-                    self.package_use_for_package(&self.canonical_package(package)),
-                    member,
-                )
+                let package = self.canonical_package(package);
+                let member = self.facts.package_member_go_name(&package, member);
+                self.package_member_reference(&package, member)
             }
             _ => GoExpression::external_name(identifier.to_string()),
         };
@@ -590,13 +595,6 @@ impl Planner<'_> {
         }
     }
 
-    fn enum_tag_constant(&self, identifier: &str, ty: &Type) -> GoExpression {
-        match ty {
-            Type::Nominal { id, .. } => self.resolve_variant(identifier, id),
-            _ => GoExpression::external_name(identifier.replace('.', "_")),
-        }
-    }
-
     fn collect_tagged_enum_checks(
         &self,
         path: &AccessPath,
@@ -605,7 +603,7 @@ impl Planner<'_> {
     ) {
         collector.checks.push(Check::EnumTag {
             path: path.clone(),
-            tag_constant: self.enum_tag_constant(variant.identifier, variant.ty),
+            tag_constant: self.resolve_variant(variant.identifier, variant.enum_id),
         });
 
         let variant_name = variant
@@ -707,10 +705,10 @@ impl Planner<'_> {
         let child_path = self
             .interface_assert_child_path(path, ty, path_ty, collector)
             .unwrap_or_else(|| path.clone());
-        if enum_info.is_some() {
+        if let Some((enum_id, _)) = &enum_info {
             collector.checks.push(Check::EnumTag {
                 path: child_path.clone(),
-                tag_constant: self.enum_tag_constant(identifier, ty),
+                tag_constant: self.resolve_variant(identifier, enum_id),
             });
         }
         (enum_info, child_path)
