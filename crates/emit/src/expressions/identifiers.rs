@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::ir::values::GoExpression;
+use crate::names::go_name;
 use crate::state::bindings::BindingValue;
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
@@ -47,7 +48,7 @@ impl Planner<'_> {
                     resolution.binding_id().is_none(),
                     "source binding has no emitted value: {value}"
                 );
-                return self.facts.resolve_go_name(value);
+                return go_name::resolve(value);
             }
         };
         GoExpression::identifier(local)
@@ -118,9 +119,8 @@ impl Planner<'_> {
         let symbol = recorded.definition.as_deref()?;
         let (_, method) = symbol.rsplit_once('.')?;
         let first = id_ty.as_function_type()?.params.first()?;
-        let owner = self.facts.without_references(&first.ty);
-        let go_method = self.facts.method_selector_go_name(
-            owner.get_qualified_id(),
+        let go_method = self.facts.receiver_method_go_name(
+            &first.ty,
             method,
             is_public,
             self.facts.definition_selects_tagged_twin(symbol),

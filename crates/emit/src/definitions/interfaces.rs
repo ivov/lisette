@@ -29,8 +29,17 @@ impl Planner<'_> {
         GoDeclaration::new(DeclarationKind::Interface {
             name: name_go,
             parameters: self.plan_generics(
-                &generics.iter().map(generic_bounds).collect::<Vec<_>>(),
-                Some(&interface_id),
+                &generics
+                    .iter()
+                    .map(|generic| {
+                        let (name, bounds) = generic_bounds(generic);
+                        let bounds = bounds
+                            .into_iter()
+                            .filter(|bound| bound.get_qualified_id() != Some(&interface_id))
+                            .collect();
+                        (name, bounds)
+                    })
+                    .collect::<Vec<_>>(),
             ),
             parents: parents
                 .iter()

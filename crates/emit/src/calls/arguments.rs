@@ -206,12 +206,9 @@ impl Planner<'_> {
             return self.convert_to_recorded_slot(arg, argument);
         };
         let coercion = self.slot_coercion(arg, &param.instantiated, Some(&param.layout));
-        let inferred = self.facts.converts_for_inference(
-            arg,
-            param,
-            ctx.callee_pins_type_args,
-            &ctx.receiver_bound_parameters(),
-        );
+        let inferred = self.facts.converts_for_inference(arg, param, |name| {
+            ctx.callee_pins_type_args || ctx.receiver_bound_parameters().contains(name)
+        });
         if coercion.is_identity() && !inferred {
             return argument;
         }
@@ -463,13 +460,12 @@ impl EmitFacts<'_> {
         &self,
         argument: &Expression,
         parameter: &CallableParamAbi,
-        pins_type_args: bool,
-        receiver_bound: &HashSet<String>,
+        pinned: impl FnOnce(&str) -> bool,
     ) -> bool {
         let Some(Type::Parameter(name)) = &parameter.declared else {
             return false;
         };
-        if pins_type_args || receiver_bound.contains(name.as_str()) {
+        if pinned(name) {
             return false;
         }
         let checked = self.checked(argument);

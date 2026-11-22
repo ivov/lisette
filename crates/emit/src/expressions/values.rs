@@ -322,7 +322,7 @@ impl Planner<'_> {
             _ => None,
         };
         if placed.is_some() {
-            self.applied_element_adaptations(tuple);
+            self.record_converted_value(tuple);
         }
         let slot_layouts = if lowered_return {
             self.lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec()))
@@ -345,7 +345,7 @@ impl Planner<'_> {
                 .and_then(|(adaptations, slots)| adaptations.get(index).zip(slots.get(index)))
             {
                 Some((adaptation, semantic)) => {
-                    self.adapted_slot_coercion(element, adaptation, semantic, slot, None)
+                    self.adapted_slot_coercion(element, adaptation, semantic, slot)
                 }
                 None => self.value_slot_coercion(element, slot),
             };
@@ -497,7 +497,7 @@ impl Planner<'_> {
             .then(|| self.go_type(&source_ty))
     }
 
-    pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
+    pub(crate) fn plan_reference(&mut self, inner: &Expression) -> ValuePlan {
         if self.is_unit_call(inner) {
             let staged = self.plan_operand(inner, ExpressionContext::value());
             return staged.map_observable_expression(|setup, staged_value| {
@@ -528,9 +528,7 @@ impl Planner<'_> {
             self.plan_value(inner, ExpressionContext::value())
         };
         inner_plan.map_observable_expression(|setup, emitted| {
-            if self.facts.same_type(&inner.get_type(), ty) {
-                emitted
-            } else if unaddressable {
+            if unaddressable {
                 let tmp = self.hoist_tmp_value_statement(setup, "ref", emitted);
                 GoExpression::address_of(GoExpression::identifier(tmp))
             } else {

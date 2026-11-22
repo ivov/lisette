@@ -373,23 +373,20 @@ impl Planner<'_> {
             statements.extend(setup);
             statements.extend(self.lower_result_return(result_var, "res", return_ty, shape));
         } else {
-            let abi = plan.resolved.abi.clone();
-            if self.go_result_bridge(&abi, return_ty).is_none() {
+            let abi = &plan.resolved.abi;
+            if self.go_result_bridge(abi, return_ty).is_none() {
                 let (setup, call) = self
                     .plan_call_expression(expression, None, ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
                 statements.extend(self.lower_abi_to_tagged_return(
                     call,
-                    LoweredProducer {
-                        abi: &abi.result,
-                        producer: plan.resolved.origin.producer(),
-                    },
+                    LoweredProducer::of_call(abi, plan.resolved.origin),
                     return_ty,
                 ));
             } else {
                 let (setup, result_var) = self
-                    .plan_go_abi_wrapped_call(expression, &abi, plan.resolved.origin, return_ty)
+                    .plan_go_abi_wrapped_call(expression, abi, plan.resolved.origin, return_ty)
                     .into_parts();
                 statements.extend(setup);
                 statements.push(plain_return(result_var));

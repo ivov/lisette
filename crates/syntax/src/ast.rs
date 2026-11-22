@@ -26,7 +26,6 @@ macro_rules! children {
 }
 
 macro_rules! children_mut {
-    () => { Vec::new() };
     ($($expression:expr),+ $(,)?) => {{
         let __children: Vec<&mut Expression> = vec![$($expression),+];
         __children
@@ -1465,6 +1464,12 @@ impl Span {
         self.byte_offset + self.byte_length
     }
 
+    pub fn contains(&self, inner: &Span) -> bool {
+        self.file_id == inner.file_id
+            && self.byte_offset <= inner.byte_offset
+            && inner.end() <= self.end()
+    }
+
     pub fn merge(self, other: Span) -> Span {
         assert_eq!(
             self.file_id, other.file_id,
@@ -2681,13 +2686,17 @@ impl Expression {
 
     fn strip_child_wrappers(&mut self) {
         let slots = self.block_slots();
-        let keeps_block: Vec<bool> = self
-            .children()
-            .into_iter()
-            .map(|child| slots.iter().any(|slot| ptr::eq(*slot, child)))
-            .collect();
-        let is_statement_list = matches!(self, Expression::Block { .. });
-        for (child, keeps_block) in self.children_mut().into_iter().zip(keeps_block) {
+        let keeps_block: Vec<bool> = if slots.is_empty() {
+            Vec::new()
+        } else {
+            self.children()
+                .into_iter()
+                .map(|child| slots.iter().any(|slot| ptr::eq(*slot, child)))
+                .collect()
+        };
+        let is_statement_list = self.is_block();
+        for (index, child) in self.children_mut().into_iter().enumerate() {
+            let keeps_block = keeps_block.get(index).copied().unwrap_or(false);
             child.peel_wrappers((!keeps_block).then_some(is_statement_list));
             child.strip_child_wrappers();
         }
@@ -2695,7 +2704,7 @@ impl Expression {
 
     pub fn contains_wrapper(&self) -> bool {
         let slots = self.block_slots();
-        let is_statement_list = matches!(self, Expression::Block { .. });
+        let is_statement_list = self.is_block();
         matches!(self, Expression::Paren { .. })
             || self.reads_reference_once()
             || self.children().into_iter().any(|child| {

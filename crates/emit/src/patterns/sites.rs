@@ -579,7 +579,7 @@ impl Planner<'_> {
 
     fn record_dropped_fail(&self, fail: &RefutableFail) {
         if let RefutableFail::ElseBlock(else_block) = fail {
-            self.record_dropped_code(else_block.get_span());
+            self.package.record_dropped_code(else_block.get_span());
         }
     }
 

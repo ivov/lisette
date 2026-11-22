@@ -12,17 +12,14 @@ use super::coercion::{self, CoercionPlan};
 use super::layout::ValueLayout;
 
 impl Planner<'_> {
-    fn record_applied_conversion(&self, key: ValueUseKey) {
-        self.package.record_applied_conversion(key);
-    }
-
     pub(crate) fn cast_operand_coercion(
         &self,
         cast: &Expression,
         source_ty: &Type,
         target_ty: &Type,
     ) -> Option<CoercionPlan> {
-        self.record_applied_conversion(ValueUseKey::cast_operand(cast.id()));
+        self.package
+            .record_applied_conversion(ValueUseKey::cast_operand(cast.id()));
         let adaptation = &self.facts.checked(cast).cast_operand().adaptation;
         matches!(adaptation, Adaptation::Interface(_))
             .then(|| CoercionPlan::adapted(self, adaptation, source_ty, target_ty, None))
@@ -37,7 +34,8 @@ impl Planner<'_> {
         let Some(recorded) = self.facts.checked(operand).propagated_error() else {
             return CoercionPlan::Identity;
         };
-        self.record_applied_conversion(ValueUseKey::propagated_error(operand));
+        self.package
+            .record_applied_conversion(ValueUseKey::propagated_error(operand));
         if !recorded.adaptation.converts() {
             return CoercionPlan::Identity;
         }
@@ -49,7 +47,7 @@ impl Planner<'_> {
         else {
             return Vec::new();
         };
-        self.record_applied_conversion(ValueUseKey::value(value));
+        self.record_converted_value(value);
         adaptations.clone()
     }
 
@@ -72,16 +70,9 @@ impl Planner<'_> {
         })
     }
 
-    pub(crate) fn record_bridged_conversion(&self, value: &Expression) {
-        self.record_applied_conversion(ValueUseKey::value(value));
-    }
-
-    pub(crate) fn record_dropped_code(&self, span: Span) {
-        self.package.record_dropped_code(span);
-    }
-
-    pub(crate) fn record_discarded_value(&self, value: &Expression) {
-        self.record_applied_conversion(ValueUseKey::value(value));
+    pub(crate) fn record_converted_value(&self, value: &Expression) {
+        self.package
+            .record_applied_conversion(ValueUseKey::value(value));
     }
 
     pub(crate) fn value_slot_coercion(&self, value: &Expression, layout: &Type) -> CoercionPlan {
@@ -95,13 +86,25 @@ impl Planner<'_> {
         go_layout: Option<&ValueLayout>,
     ) -> CoercionPlan {
         let value_use = self.facts.checked(value).value_use();
-        self.adapted_slot_coercion(
-            value,
-            &value_use.adaptation,
-            &value_use.slot,
-            layout,
-            go_layout,
-        )
+        let Some(go_layout) = go_layout else {
+            return self.adapted_slot_coercion(
+                value,
+                &value_use.adaptation,
+                &value_use.slot,
+                layout,
+            );
+        };
+        self.record_converted_value(value);
+        match &value_use.adaptation {
+            Adaptation::Delegated { .. } => CoercionPlan::Identity,
+            adaptation => CoercionPlan::adapted(
+                self,
+                adaptation,
+                &value.get_type(),
+                &value_use.slot,
+                Some(go_layout),
+            ),
+        }
     }
 
     pub(crate) fn adapted_slot_coercion(
@@ -110,71 +113,50 @@ impl Planner<'_> {
         adaptation: &Adaptation,
         slot: &Type,
         layout: &Type,
-        go_layout: Option<&ValueLayout>,
     ) -> CoercionPlan {
-        self.record_applied_conversion(ValueUseKey::value(value));
-        self.adapted_slot_plan(value, adaptation, slot, layout, go_layout)
-    }
-
-    fn adapted_slot_plan(
-        &self,
-        value: &Expression,
-        adaptation: &Adaptation,
-        slot: &Type,
-        layout: &Type,
-        go_layout: Option<&ValueLayout>,
-    ) -> CoercionPlan {
+        self.record_converted_value(value);
         let delegated = matches!(adaptation, Adaptation::Delegated { .. });
         let source_ty = if delegated {
             slot.clone()
         } else {
             value.get_type()
         };
-        if go_layout.is_some() {
-            if delegated {
-                return CoercionPlan::Identity;
-            }
-            return CoercionPlan::adapted(self, adaptation, &source_ty, slot, go_layout);
-        }
         let bridge = if delegated {
             self.function_type_slot_bridge(&source_ty, layout)
         } else {
             self.function_slot_bridge(value, layout)
         };
-        if bridge.is_identity() {
-            let internal = if delegated {
-                CoercionPlan::Identity
-            } else {
-                CoercionPlan::adapted(self, adaptation, &source_ty, slot, None)
-            };
+        if !bridge.is_identity() {
+            return bridge;
+        }
+        if !delegated {
+            let internal = CoercionPlan::adapted(self, adaptation, &source_ty, slot, None);
             if !internal.is_identity() {
                 return internal;
             }
-            let target = self.value_layout(layout, SlotOrigin::Lisette);
-            if matches!(
-                target.underlying(),
-                ValueLayout::TaggedOption { .. }
-                    | ValueLayout::Fallible { .. }
-                    | ValueLayout::Tuple { .. }
-                    | ValueLayout::Reference { .. }
-            ) {
-                let source = self.value_layout(&source_ty, SlotOrigin::Lisette);
-                let bridge = CoercionPlan::bridge(self, &source, &target);
-                let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
-                if !bridge.is_identity()
-                    && (!reference
-                        || matches!(
-                            bridge,
-                            CoercionPlan::Layout(coercion::LayoutBridge::Conversion { .. })
-                        ))
-                {
-                    return bridge;
-                }
-            }
-            internal
-        } else {
-            bridge
         }
+        let target = self.value_layout(layout, SlotOrigin::Lisette);
+        if matches!(
+            target.underlying(),
+            ValueLayout::TaggedOption { .. }
+                | ValueLayout::Fallible { .. }
+                | ValueLayout::Tuple { .. }
+                | ValueLayout::Reference { .. }
+        ) {
+            let source = self.value_layout(&source_ty, SlotOrigin::Lisette);
+            let bridge = CoercionPlan::bridge(self, &source, &target);
+            let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
+            if !bridge.is_identity()
+                && (!reference
+                    || matches!(
+                        bridge,
+                        CoercionPlan::Layout(coercion::LayoutBridge::Conversion { .. })
+                    ))
+            {
+                return bridge;
+            }
+        }
+        CoercionPlan::Identity
     }
 
     pub(crate) fn pair_slot_coercions(
@@ -187,16 +169,10 @@ impl Planner<'_> {
         let Adaptation::Tuple(adaptations) = &value_use.adaptation else {
             return [0, 1].map(|index| self.value_slot_coercion(elements[index], layouts[index]));
         };
-        self.record_applied_conversion(ValueUseKey::value(pair));
+        self.record_converted_value(pair);
         [0, 1].map(|index| {
             let adaptation = adaptations.get(index).unwrap_or(&Adaptation::Identity);
-            self.adapted_slot_coercion(
-                elements[index],
-                adaptation,
-                layouts[index],
-                layouts[index],
-                None,
-            )
+            self.adapted_slot_coercion(elements[index], adaptation, layouts[index], layouts[index])
         })
     }
 
@@ -226,13 +202,10 @@ impl Planner<'_> {
         expression: &Expression,
         emitted: GoExpression,
     ) -> GoExpression {
-        let Some(target) = target_ty else {
-            return emitted;
-        };
-        let coercion = self.value_slot_coercion(expression, target);
-        let (setup, value) = coercion.lower(self, emitted);
-        statements.extend(setup);
-        value
+        match target_ty {
+            Some(target) => self.coerce_into_slot(statements, (expression, emitted), target, None),
+            None => emitted,
+        }
     }
 }
 
@@ -254,7 +227,7 @@ pub(crate) fn check_applied_conversions(
             || applied.contains(key)
             || dropped_code
                 .iter()
-                .any(|dropped| contains(dropped, &value_use.span))
+                .any(|dropped| dropped.contains(&value_use.span))
             || open_bug_unit_into_unknown(facts, value_use)
         {
             continue;
@@ -313,10 +286,4 @@ fn needs_application(adaptation: &Adaptation) -> bool {
             adaptation,
             Adaptation::Delegated { .. } | Adaptation::Receiver(_)
         )
-}
-
-fn contains(outer: &Span, inner: &Span) -> bool {
-    outer.file_id == inner.file_id
-        && outer.byte_offset <= inner.byte_offset
-        && inner.byte_offset + inner.byte_length <= outer.byte_offset + outer.byte_length
 }

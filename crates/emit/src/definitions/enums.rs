@@ -33,10 +33,7 @@ impl Planner<'_> {
         let layout = self.facts.enum_layout(&enum_id)?;
 
         let receiver_generics = self.receiver_generics(generics);
-        let generics = self.plan_generics(
-            &generics.iter().map(generic_bounds).collect::<Vec<_>>(),
-            None,
-        );
+        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
         let mut result = layout.emit_definition(self, generics, doc_comment);
@@ -204,7 +201,6 @@ impl Planner<'_> {
                     .iter()
                     .map(generic_bounds)
                     .collect::<Vec<_>>(),
-                None,
             ),
             parameters,
             result.clone(),

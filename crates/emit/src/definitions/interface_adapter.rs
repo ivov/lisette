@@ -199,14 +199,8 @@ impl Planner<'_> {
             &declared.return_type,
         );
         let abi = if go {
-            self.facts.go_callable_return_abi(
-                &format!(
-                    "{}.{}",
-                    requirement.declaring_interface, requirement.method.source_name
-                ),
-                &declared.return_type,
-                &requirement.method.go_hints,
-            )
+            self.facts
+                .requirement_go_return_abi(requirement, &declared.return_type)
         } else {
             self.facts.requirement_return_abi(requirement)
         };
@@ -497,18 +491,15 @@ impl Planner<'_> {
 
         let interface_return = &requirement.method.ty.as_function_type()?.return_type;
         let go_method = go_name::is_go_import(&requirement.declaring_interface).then(|| {
-            format!(
-                "{}.{}",
-                requirement.declaring_interface, requirement.method.source_name
-            )
+            requirement
+                .declaring_interface
+                .with_segment(&requirement.method.source_name)
         });
-        let interface_abi = match &go_method {
-            Some(go_method) => self.facts.go_callable_return_abi(
-                go_method,
-                interface_return,
-                &requirement.method.go_hints,
-            ),
-            None => self.facts.requirement_return_abi(requirement),
+        let interface_abi = if go_method.is_some() {
+            self.facts
+                .requirement_go_return_abi(requirement, interface_return)
+        } else {
+            self.facts.requirement_return_abi(requirement)
         };
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
         let target = if interface_abi.fits_return_type(&self.facts, &return_type) {
@@ -579,7 +570,7 @@ impl Planner<'_> {
                 }
                 name
             });
-        let generic_parameters = self.plan_generics(&plan.generic_context, None);
+        let generic_parameters = self.plan_generics(&plan.generic_context);
         let receiver_type = GoType::named(
             &base_name,
             &plan
@@ -785,6 +776,20 @@ impl EmitFacts<'_> {
                         CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
                     )
             })
+    }
+
+    pub(crate) fn requirement_go_return_abi(
+        &self,
+        requirement: &InterfaceRequirement,
+        declared_return: &Type,
+    ) -> CallableReturnAbi {
+        self.go_callable_return_abi(
+            &requirement
+                .declaring_interface
+                .with_segment(&requirement.method.source_name),
+            declared_return,
+            &requirement.method.go_hints,
+        )
     }
 
     fn requirement_return_abi(&self, requirement: &InterfaceRequirement) -> CallableReturnAbi {

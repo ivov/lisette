@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
-use crate::abi::transition::multi_value_return;
+use crate::abi::transition::{multi_value_return, tag_condition};
 use crate::abi::wrapping::{WrapperTarget, non_nil_condition};
 use crate::calls::go_interop::LoweredProducer;
 use crate::control_flow::fallible as tags;
@@ -26,12 +26,8 @@ use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::SlotOrigin;
 use syntax::types::{CompoundKind, Type};
 
-fn some_condition(option: GoExpression) -> GoExpression {
-    GoExpression::binary(
-        GoExpression::selector(option, ENUM_TAG_FIELD.to_string()),
-        BinaryOp::Eq,
-        GoExpression::generated(GeneratedPackage::Prelude, tags::option_variant("Some").tag),
-    )
+fn some_condition(option: &GoExpression) -> GoExpression {
+    tag_condition(option, tags::option_variant("Some").tag)
 }
 
 fn some_payload(option: GoExpression) -> GoExpression {
@@ -153,7 +149,8 @@ impl Planner<'_> {
             address,
         );
         statements.push(
-            LoweredStatement::If(IfPlan::plain(some_condition(option), body, ElseArm::None)).into(),
+            LoweredStatement::If(IfPlan::plain(some_condition(&option), body, ElseArm::None))
+                .into(),
         );
         GoExpression::identifier(slot)
     }
@@ -570,7 +567,7 @@ impl Planner<'_> {
                 LoweredBlock {
                     statements: vec![
                         LoweredStatement::If(IfPlan::plain(
-                            some_condition(element),
+                            some_condition(&element),
                             then_block,
                             else_arm,
                         ))
@@ -781,10 +778,7 @@ impl Planner<'_> {
                 .collect();
             let (body, _) = self.plan_abi_wrapping(
                 call,
-                LoweredProducer {
-                    abi: &source.return_abi,
-                    producer: source.producer,
-                },
+                LoweredProducer::of_layout(source),
                 source.result_layout.logical_type(),
                 Some(GoResultBridge::Tuple(bridges)),
                 WrapperTarget::Return,
@@ -805,10 +799,7 @@ impl Planner<'_> {
         if let Some(bridge) = self.fallible_payload_bridge(source, target) {
             let (body, _) = self.plan_abi_wrapping(
                 call,
-                LoweredProducer {
-                    abi: &source.return_abi,
-                    producer: source.producer,
-                },
+                LoweredProducer::of_layout(source),
                 source.result_layout.logical_type(),
                 Some(bridge),
                 WrapperTarget::Return,

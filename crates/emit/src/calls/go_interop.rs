@@ -5,7 +5,7 @@ use crate::abi::wrapping::{NilGuard, WrapperTarget};
 use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
-use crate::abi::layout::{ResultProducer, ValueLayout};
+use crate::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::{Statement, assign, define_many};
 use crate::ir::local::GoIdentifier;
@@ -22,6 +22,22 @@ use syntax::types::Type;
 pub(crate) struct LoweredProducer<'r> {
     pub(crate) abi: &'r CallableReturnAbi,
     pub(crate) producer: ResultProducer,
+}
+
+impl<'r> LoweredProducer<'r> {
+    pub(crate) fn of_call(abi: &'r CallableAbi, origin: CallableOrigin<'_>) -> Self {
+        Self {
+            abi: &abi.result,
+            producer: origin.producer(),
+        }
+    }
+
+    pub(crate) fn of_layout(layout: &'r FunctionLayout) -> Self {
+        Self {
+            abi: &layout.return_abi,
+            producer: layout.producer,
+        }
+    }
 }
 
 impl Planner<'_> {
@@ -60,10 +76,7 @@ impl Planner<'_> {
                 Err(call) => {
                     let (wrap, outcome) = self.plan_abi_wrapping(
                         call,
-                        LoweredProducer {
-                            abi: &abi.result,
-                            producer: origin.producer(),
-                        },
+                        LoweredProducer::of_call(abi, origin),
                         result_ty,
                         bridge,
                         WrapperTarget::FreshSlot,
@@ -308,10 +321,7 @@ impl Planner<'_> {
         let (mut statements, call) = self
             .plan_call_expression(expression, None, ExpressionContext::value())
             .into_parts();
-        let producer = LoweredProducer {
-            abi: &abi.result,
-            producer: origin.producer(),
-        };
+        let producer = LoweredProducer::of_call(abi, origin);
         let (wrap, _) = self.plan_abi_wrapping(call, producer, result_ty, bridge, target);
         statements.extend(wrap);
         Some(statements)

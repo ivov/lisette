@@ -46,18 +46,17 @@ impl PackageState {
         }
     }
 
-    pub(crate) fn applied_conversions(&self) -> HashSet<ValueUseKey> {
-        self.applied_conversions.borrow().clone()
+    pub(crate) fn conversion_record(&mut self) -> (&HashSet<ValueUseKey>, &[Span]) {
+        (
+            self.applied_conversions.get_mut(),
+            self.dropped_code.get_mut(),
+        )
     }
 
     pub(crate) fn record_dropped_code(&self, span: Span) {
         if cfg!(debug_assertions) {
             self.dropped_code.borrow_mut().push(span);
         }
-    }
-
-    pub(crate) fn dropped_code(&self) -> Vec<Span> {
-        self.dropped_code.borrow().clone()
     }
 
     pub(crate) fn generic_rename(&self, source_name: &str) -> Option<&str> {

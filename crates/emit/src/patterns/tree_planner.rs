@@ -59,9 +59,9 @@ impl EmitFacts<'_> {
                         | Literal::Boolean(_)
                         | Literal::String { .. }
                         | Literal::Char(_)
-                ) && self.peel_go_alias(ty).as_simple().is_some()
+                ) && self.simple_kind(ty).is_some()
             }
-            Expression::Identifier { ty, .. } => self.peel_go_alias(ty).as_simple().is_some(),
+            Expression::Identifier { ty, .. } => self.simple_kind(ty).is_some(),
             Expression::Unary {
                 operator,
                 expression,
@@ -89,7 +89,7 @@ impl EmitFacts<'_> {
                 ty,
                 ..
             } => {
-                self.peel_go_alias(ty).as_simple().is_some()
+                self.simple_kind(ty).is_some()
                     && self.callee_renders_inline(expression)
                     && args.iter().all(|arg| self.guard_renders_inline(arg))
             }

@@ -878,10 +878,8 @@ impl Planner<'_> {
             Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
             Expression::StructCall { .. } => self.plan_struct_call(expression),
             Expression::Reference {
-                expression: inner,
-                ty,
-                ..
-            } => self.plan_reference(inner, ty),
+                expression: inner, ..
+            } => self.plan_reference(inner),
             Expression::DotAccess { .. } => self.plan_dot_access(expression, ctx),
             Expression::Task {
                 expression: inner, ..

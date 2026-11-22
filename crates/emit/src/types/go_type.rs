@@ -196,8 +196,8 @@ impl GoType {
     pub(crate) fn is_empty(&self) -> bool {
         matches!(self.shape.as_ref(), GoTypeShape::Empty)
     }
-    pub(crate) fn compared_as(mut self, target: &GoType) -> Self {
-        self.shape = target.shape.clone();
+    pub(crate) fn compared_as(mut self, target: GoType) -> Self {
+        self.shape = target.shape;
         self
     }
 
@@ -796,7 +796,7 @@ impl ValueLayout {
                 go_alias: true,
             } => planner
                 .leaf_go_type(named_type)
-                .compared_as(&underlying.go_type(planner)),
+                .compared_as(underlying.go_type(planner)),
             Self::Plain(ty) | Self::Named { named_type: ty, .. } => planner.leaf_go_type(ty),
         }
     }
@@ -814,10 +814,7 @@ impl FunctionLayout {
     }
 
     fn result_err_type(&self, planner: &Planner<'_>) -> Type {
-        planner
-            .facts
-            .peel_alias(self.result_layout.logical_type())
-            .err_type()
+        planner.facts.err_payload(self.result_layout.logical_type())
     }
 
     pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> Option<GoType> {

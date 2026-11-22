@@ -14,7 +14,6 @@ use crate::names::go_name::GeneratedPackage;
 use crate::state::expression::ExpressionContext;
 use crate::statements::assignments::lvalues_match;
 use crate::types::go_type::GoType;
-use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::program::{
     CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
@@ -476,12 +475,9 @@ impl Planner<'_> {
             let parameter = context.abi.param(first_param + index);
             match argument_expressions.get(index).zip(parameter) {
                 Some((argument, parameter))
-                    if self.facts.converts_for_inference(
-                        argument,
-                        parameter,
-                        !type_args.is_empty(),
-                        &HashSet::default(),
-                    ) =>
+                    if self
+                        .facts
+                        .converts_for_inference(argument, parameter, |_| !type_args.is_empty()) =>
                 {
                     GoExpression::conversion(self.go_type(&parameter.instantiated), value.clone())
                 }

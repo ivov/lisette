@@ -45,21 +45,14 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn plan_generics(
-        &self,
-        generics: &[(EcoString, Vec<Type>)],
-        declaring: Option<&str>,
-    ) -> Vec<TypeParameter> {
+    pub(crate) fn plan_generics(&self, generics: &[(EcoString, Vec<Type>)]) -> Vec<TypeParameter> {
         generics
             .iter()
             .map(|(name, bounds)| {
                 let has_ordered = bounds.iter().any(is_ordered_bound);
                 let mut planned = Vec::new();
                 for bound in bounds {
-                    if self.facts.bound_needs_dispatch(bound)
-                        || is_zeroable_bound(bound)
-                        || declaring.is_some() && bound.get_qualified_id() == declaring
-                    {
+                    if self.facts.bound_needs_dispatch(bound) || is_zeroable_bound(bound) {
                         continue;
                     }
                     let ty = if is_comparable_bound(bound) {

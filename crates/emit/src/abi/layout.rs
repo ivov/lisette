@@ -326,14 +326,10 @@ impl ValueLayout {
 
 impl Planner<'_> {
     pub(crate) fn lowered_tuple_slot_layouts(&self, tuple_ty: &Type) -> Vec<ValueLayout> {
-        let arity = self.facts.tuple_element_types(tuple_ty).len();
-        self.function_layout(
-            Vec::new(),
+        self.tuple_result_slots(
             &self.value_layout(tuple_ty, SlotOrigin::Lisette),
-            CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }),
             Some(tuple_ty),
         )
-        .results
     }
 
     pub(crate) fn prelude_receiver_method_layouts(
@@ -753,7 +749,7 @@ impl Planner<'_> {
         declaration: Option<&Type>,
     ) -> ValueLayout {
         let go_target = self.facts.peel_go_alias(ty);
-        if go_target != *ty.unwrap_forall() && !self.facts.is_transparent_alias(ty) {
+        if go_target != *ty.unwrap_forall() && go_target != self.facts.peel_alias(ty) {
             return ValueLayout::Named {
                 named_type: ty.clone(),
                 underlying: Box::new(self.value_layout_with_hint(&go_target, origin, declaration)),

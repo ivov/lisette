@@ -51,7 +51,7 @@ pub(crate) fn tag_check_with_initializer(
     })
 }
 
-fn tag_condition(value: &GoExpression, tag: &str) -> GoExpression {
+pub(super) fn tag_condition(value: &GoExpression, tag: &str) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(value.clone(), ENUM_TAG_FIELD.to_string()),
         BinaryOp::Eq,
@@ -371,10 +371,7 @@ impl Planner<'_> {
         target: &CallableReturnAbi,
     ) -> Vec<Statement> {
         let return_ty = source.result_layout.logical_type();
-        let producer = LoweredProducer {
-            abi: &source.return_abi,
-            producer: source.producer,
-        };
+        let producer = LoweredProducer::of_layout(source);
         match target.lowered() {
             None => self.lower_abi_to_tagged_return(call, producer, return_ty),
             Some(target) => {
@@ -419,7 +416,7 @@ impl Planner<'_> {
             );
             let coercion = CoercionPlan::bridge(self, &source, &target);
             if !coercion.is_identity() {
-                self.record_bridged_conversion(expression);
+                self.record_converted_value(expression);
                 let (mut statements, value) = self
                     .plan_value(expression, ExpressionContext::value())
                     .into_parts();
@@ -555,7 +552,7 @@ impl Planner<'_> {
         if let Adaptation::ImplicitSome { payload } = adaptation {
             let payload_ty = self.facts.ok_payload(slot_ty);
             let conversion =
-                self.adapted_slot_coercion(expression, payload, &payload_ty, &payload_ty, None);
+                self.adapted_slot_coercion(expression, payload, &payload_ty, &payload_ty);
             return self.plan_nullable_payload(expression, &payload_ty, conversion);
         }
         if let Expression::Call {

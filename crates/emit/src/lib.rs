@@ -281,7 +281,7 @@ impl<'a> Planner<'a> {
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let cached_packages = &analysis.cached_packages;
         for file in analysis.files.values_mut() {
-            if file.is_d_lis() || cached_packages.contains(&file.package_id) {
+            if !is_emitted(file, cached_packages) {
                 continue;
             }
             for item in &mut file.items {
@@ -318,8 +318,8 @@ impl<'a> Planner<'a> {
         };
 
         let mut files_by_package: HashMap<&str, Vec<&File>> = HashMap::default();
-        for file in analysis.files.values().filter(|file| !file.is_d_lis()) {
-            if !analysis.cached_packages.contains(&file.package_id) {
+        for file in analysis.files.values() {
+            if is_emitted(file, &analysis.cached_packages) {
                 files_by_package
                     .entry(file.package_id.as_str())
                     .or_default()
@@ -636,7 +636,6 @@ impl<'a> Planner<'a> {
         facts: EmitFacts<'a>,
         files: &[&File],
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let source_files = files;
         let mut package = PackageState::default();
         let mut adapters = AdapterRegistry::default();
         let plan = Planner::new(
@@ -649,12 +648,12 @@ impl<'a> Planner<'a> {
         let PackagePlan {
             package_name,
             collision_diagnostics,
-            files,
+            files: file_plans,
         } = plan;
         let mut output_files = Vec::new();
         let mut all_diagnostics = collision_diagnostics;
 
-        for plan in files {
+        for plan in file_plans {
             let file = plan.file;
             let mut namespace = FileNamespace::new(plan.imports);
             let source = Planner::new(facts.clone(), &mut package, &mut adapters, &mut namespace)
@@ -670,12 +669,8 @@ impl<'a> Planner<'a> {
             });
         }
 
-        abi::slot_conversion::check_applied_conversions(
-            &facts,
-            source_files,
-            &package.applied_conversions(),
-            &package.dropped_code(),
-        );
+        let (applied, dropped_code) = package.conversion_record();
+        abi::slot_conversion::check_applied_conversions(&facts, files, applied, dropped_code);
         if all_diagnostics.is_empty() {
             Ok(output_files)
         } else {
@@ -796,4 +791,8 @@ impl EmitFacts<'_> {
     fn end_position(&self, span: &Span) -> Option<Position> {
         self.position_at(span, span.byte_offset + span.byte_length)
     }
+}
+
+fn is_emitted(file: &File, cached_packages: &HashSet<String>) -> bool {
+    !file.is_d_lis() && !cached_packages.contains(&file.package_id)
 }

@@ -330,10 +330,10 @@ impl<'p> Planner<'p> {
     }
 
     pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<Statement> {
-        self.record_discarded_value(value);
+        self.record_converted_value(value);
 
         if self.facts.is_side_effect_free_discard(value) {
-            self.record_dropped_code(value.get_span());
+            self.package.record_dropped_code(value.get_span());
             return Vec::new();
         }
 

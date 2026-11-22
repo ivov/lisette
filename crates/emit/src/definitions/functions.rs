@@ -342,7 +342,7 @@ impl Planner<'_> {
 
         let receiver =
             self_param.map(|parameter| self.receiver_parameter(params_to_process, parameter));
-        let generics = self.plan_generics(&signature_generics, None);
+        let generics = self.plan_generics(&signature_generics);
         let (signature_parameters, deferred_patterns) =
             self.lower_signature_params(params_to_process);
         let return_ty = self.render_return_ty(function_definition, return_shape.as_ref());

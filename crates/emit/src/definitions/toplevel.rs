@@ -35,10 +35,7 @@ impl Planner<'_> {
             .and_then(|definition| definition.instantiate_alias_target(&params, false));
         let underlying_type = self.go_type(declared_target.as_ref().unwrap_or(ty));
 
-        let generics = self.plan_generics(
-            &generics.iter().map(generic_bounds).collect::<Vec<_>>(),
-            None,
-        );
+        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
 
         GoDeclaration::new(DeclarationKind::Alias {
             name: go_name::escape_type_name(name).into_owned(),

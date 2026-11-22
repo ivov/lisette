@@ -35,10 +35,8 @@ impl Planner<'_> {
         fields: &StructFields,
         attributes: &[Attribute],
     ) -> Vec<GoDeclaration> {
-        let parameters = self.plan_generics(
-            &generics.iter().map(generic_bounds).collect::<Vec<_>>(),
-            None,
-        );
+        let parameters =
+            self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
         let StructFields::Record(fields) = fields else {
             let StructFields::Tuple(fields) = fields else {
                 unreachable!();

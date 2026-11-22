@@ -27,12 +27,11 @@ use crate::types::go_type::GoType;
 use crate::{Planner, written_span};
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal};
-use syntax::program::GoTypeRecipe;
 use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, FieldSelection};
-use syntax::types::{CompoundKind, FunctionParameter, SubstitutionMap, Type};
+use syntax::types::{CompoundKind, FunctionParameter, FunctionType, SubstitutionMap, Type};
 
 struct TupleStructTarget<'a> {
     go_ty: GoType,
@@ -537,14 +536,14 @@ impl<'a> Planner<'a> {
             }
             CallableOrigin::Source(CallOperation::ReceiverMethod { is_public }) => {
                 let method = extract_receiver_ufcs_method(callee);
-                let owner = plan
+                let receiver = plan
                     .resolved
                     .instantiated
                     .as_function_type()
                     .and_then(|f| f.params.first())
-                    .map(|receiver| self.facts.without_references(&receiver.ty));
-                let go_method = self.facts.method_selector_go_name(
-                    owner.as_ref().and_then(Type::get_qualified_id),
+                    .map_or(&Type::Never, |receiver| &receiver.ty);
+                let go_method = self.facts.receiver_method_go_name(
+                    receiver,
                     &method,
                     *is_public,
                     self.selects_tagged_twin(callee),
@@ -832,18 +831,21 @@ impl Planner<'_> {
         } else {
             0
         };
-        if let Some(recipe) = self.facts.callee_collapsed_recipe(callee) {
+        if let Some(recipe) = callee
+            .declaration
+            .and_then(|declaration| declaration.go_type_param_recipe())
+        {
             let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
             if has_value_args
-                && self
-                    .facts
-                    .callee_fully_inferable(callee, receiver_count, arg_shape)
+                && generic_function(callee.declared_type()).is_some_and(|(vars, f)| {
+                    all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
+                })
             {
                 return GoType::default();
             }
             let type_arguments = &self.facts.checked(function).callee().type_arguments;
             return self
-                .reconstruct_collapsed_type_args(&recipe, type_arguments)
+                .reconstruct_collapsed_type_args(recipe, type_arguments)
                 .unwrap_or_default();
         }
 
@@ -916,19 +918,14 @@ impl Planner<'_> {
     }
 
     fn uninferable_type_args(
-        &mut self,
+        &self,
         function: &Expression,
         declared: Option<&Type>,
         receiver_count: usize,
         arg_shape: CallArgShape,
         function_alias_pins: bool,
     ) -> Option<GoType> {
-        let Type::Forall { vars, body } = declared? else {
-            return None;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return None;
-        };
+        let (vars, f) = generic_function(declared)?;
         let mapping = &self.facts.checked(function).callee().type_arguments;
         if all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
             && !(function_alias_pins
@@ -940,11 +937,7 @@ impl Planner<'_> {
         {
             return None;
         }
-        let resolved: Vec<Type> = vars
-            .iter()
-            .filter_map(|var| mapping.get(var).cloned())
-            .collect();
-        (resolved.len() == vars.len()).then(|| self.format_type_args(&resolved))
+        self.instantiated_type_args(vars, mapping)
     }
 
     pub(crate) fn format_value_type_args(&mut self, expression: &Expression) -> Option<GoType> {
@@ -960,7 +953,7 @@ impl Planner<'_> {
     }
 
     fn format_generic_instantiation(
-        &mut self,
+        &self,
         definition_ty: &Type,
         mapping: &SubstitutionMap,
     ) -> Option<GoType> {
@@ -970,12 +963,30 @@ impl Planner<'_> {
         if vars.is_empty() {
             return None;
         }
-        let arguments: Vec<GoType> = vars
-            .iter()
-            .filter_map(|var| Some(self.go_type(mapping.get(var.as_str())?)))
-            .collect();
-        (arguments.len() == vars.len()).then(|| GoType::type_arguments(&arguments))
+        self.instantiated_type_args(vars, mapping)
     }
+
+    fn instantiated_type_args(
+        &self,
+        vars: &[EcoString],
+        mapping: &SubstitutionMap,
+    ) -> Option<GoType> {
+        let resolved = vars
+            .iter()
+            .map(|var| mapping.get(var.as_str()))
+            .collect::<Option<Vec<_>>>()?;
+        Some(self.format_type_arg_iter(resolved))
+    }
+}
+
+fn generic_function(declared: Option<&Type>) -> Option<(&[EcoString], &FunctionType)> {
+    let Type::Forall { vars, body } = declared? else {
+        return None;
+    };
+    let Type::Function(f) = body.as_ref() else {
+        return None;
+    };
+    Some((vars, f))
 }
 
 fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
@@ -985,28 +996,4 @@ fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
     matches!(body.as_ref(), Type::Function(_))
         && callee.instantiated.as_function_type().is_some()
         && callee.receiver_offset > 0
-}
-
-impl EmitFacts<'_> {
-    fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<Vec<GoTypeRecipe>> {
-        callee
-            .declaration?
-            .go_type_param_recipe()
-            .map(<[_]>::to_vec)
-    }
-
-    fn callee_fully_inferable(
-        &self,
-        callee: &ResolvedCallee<'_>,
-        receiver_count: usize,
-        arg_shape: CallArgShape,
-    ) -> bool {
-        let Some(Type::Forall { vars, body }) = callee.declared_type() else {
-            return false;
-        };
-        let Type::Function(f) = body.as_ref() else {
-            return false;
-        };
-        all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
-    }
 }

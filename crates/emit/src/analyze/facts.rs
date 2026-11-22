@@ -274,7 +274,7 @@ impl<'a> EmitFacts<'a> {
             writable,
         } = &current
         {
-            if self.declares_go_function_type(&current) || !seen.insert(id.clone()) {
+            if self.declares_go_function_type(&current) {
                 break;
             }
             let Some(target) = self
@@ -283,6 +283,9 @@ impl<'a> EmitFacts<'a> {
             else {
                 break;
             };
+            if !seen.insert(id.clone()) {
+                break;
+            }
             current = target.unwrap_forall().clone();
         }
         current
@@ -308,7 +311,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn same_type(&self, left: &Type, right: &Type) -> bool {
-        self.without_go_aliases(left) == self.without_go_aliases(right)
+        left == right || self.without_go_aliases(left) == self.without_go_aliases(right)
     }
 
     pub(crate) fn same_types(&self, left: &[Type], right: &[Type]) -> bool {

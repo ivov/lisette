@@ -489,6 +489,7 @@ impl InferCtx<'_> {
             type_args,
             span,
         } = qualified;
+        let (receiver, rest) = args.split_first()?;
         let path = callee.unwrap_parens().as_dotted_path()?;
         let (owner, member) = path.split_once('.')?;
         if member.contains('.') || self.scopes.lookup_binding_id(owner).is_some() {
@@ -497,7 +498,6 @@ impl InferCtx<'_> {
         let owner_id =
             self.method_owner(&self.lookup_qualified_name(self.store, owner)?, member)?;
         let definition = Symbol::from_raw(format!("{owner_id}.{member}"));
-        let (receiver, rest) = args.split_first()?;
         let receiver = receiver.unwrap_parens();
         let call = Expression::Call {
             id: self.fresh_expression_id(),

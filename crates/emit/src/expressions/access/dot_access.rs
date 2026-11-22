@@ -457,13 +457,9 @@ impl Planner<'_> {
         tagged_twin: bool,
     ) -> Option<GoExpression> {
         let receiver_param = &result_ty.as_function_type()?.params.first()?.ty;
-        let owner = self.facts.without_references(receiver_param);
-        let go_method = self.facts.method_selector_go_name(
-            owner.get_qualified_id(),
-            member,
-            is_exported,
-            tagged_twin,
-        );
+        let go_method =
+            self.facts
+                .receiver_method_go_name(receiver_param, member, is_exported, tagged_twin);
         Some(self.method_expression(receiver_param, go_method))
     }
 }

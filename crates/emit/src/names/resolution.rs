@@ -179,10 +179,6 @@ impl Planner<'_> {
 }
 
 impl EmitFacts<'_> {
-    pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
-        go_name::resolve(name)
-    }
-
     pub(crate) fn package_member_go_name(&self, package: &str, member: &str) -> String {
         if go_name::is_go_import(package) {
             member.to_string()
@@ -208,6 +204,17 @@ impl EmitFacts<'_> {
             is_exported,
             self.embedded_field(owner, member),
         )
+    }
+
+    pub(crate) fn receiver_method_go_name(
+        &self,
+        receiver: &Type,
+        method: &str,
+        is_public: bool,
+        tagged: bool,
+    ) -> String {
+        let owner = self.without_references(receiver);
+        self.method_selector_go_name(owner.get_qualified_id(), method, is_public, tagged)
     }
 
     pub(crate) fn method_selector_go_name(

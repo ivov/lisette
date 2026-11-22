@@ -125,14 +125,9 @@ impl Planner<'_> {
         }
         if let Some(requirement) = self.go_bound_requirement(signature.callee) {
             let declared_return = requirement.method.ty.get_function_ret()?;
-            let abi = self.facts.go_callable_return_abi(
-                &format!(
-                    "{}.{}",
-                    requirement.declaring_interface, requirement.method.source_name
-                ),
-                declared_return,
-                &requirement.method.go_hints,
-            );
+            let abi = self
+                .facts
+                .requirement_go_return_abi(&requirement, declared_return);
             return abi.is_lowered().then_some(abi);
         }
         let id = signature.id.filter(|id| go_name::is_go_import(id))?;
