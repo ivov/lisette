@@ -169,6 +169,7 @@ pub enum DefinitionBody {
         /// `"Slice<E>, E"`). Lets emit rebuild Go's type arguments when the
         /// collapsed Lisette list cannot be projected onto Go's positionally.
         go_type_param_recipe: Option<Vec<super::GoTypeRecipe>>,
+        go_type_terms: Vec<super::GoTypeTerms>,
         superseded_by: Option<String>,
         /// The impl receiver of a static method in terms of the impl's generics.
         impl_receiver: Option<Type>,
@@ -363,6 +364,13 @@ impl Definition {
                 ..
             } => go_type_param_recipe.as_deref(),
             _ => None,
+        }
+    }
+
+    pub fn go_type_terms(&self) -> &[super::GoTypeTerms] {
+        match &self.body {
+            DefinitionBody::Value { go_type_terms, .. } => go_type_terms,
+            _ => &[],
         }
     }
 

@@ -12170,3 +12170,187 @@ fn area(s: IntShape) -> int {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn go_union_constraint_rejects_a_type_outside_the_union() {
+    for argument in ["2.5", "true", "\"x\"", "5 as float32", "Name(\"x\")"] {
+        let source = format!(
+            "import \"go:fmt\"\nimport \"go:math/rand/v2\"\nstruct Name(string)\nfn main() {{ fmt.Println(rand.N({argument})) }}\n"
+        );
+        let errors = checker_errors(&source, &[]);
+        assert!(
+            has_code(&errors, "infer.type_outside_constraint"),
+            "{argument}\n{errors:?}"
+        );
+        assert_eq!(errors.len(), 1, "{argument}\n{errors:?}");
+    }
+}
+
+#[test]
+fn go_union_constraint_accepts_named_types_over_a_tilde_term() {
+    let source = r#"
+import "go:fmt"
+import "go:math/rand/v2"
+import "go:time"
+
+struct Seconds(int64)
+struct Wrapped(Seconds)
+type Small = int8
+
+fn main() {
+  let small: Small = 3
+  let f: fn(uint16) -> uint16 = rand.N
+  fmt.Println(rand.N(5), rand.N(5 as uint8), rand.N(5 as byte), rand.N(5 as rune), rand.N(5 as uintptr))
+  fmt.Println(rand.N(Seconds(5)), rand.N(Wrapped(Seconds(5))), rand.N(10 * time.Second), rand.N(small), f(3))
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn go_union_constraint_checks_type_parameter_arguments_by_their_type_set() {
+    let source = r#"
+import "go:math/rand/v2"
+
+fn ordered<T: Ordered>(x: T) -> T { rand.N(x) }
+fn unbounded<T>(x: T) -> T { rand.N(x) }
+fn comparable<T: Comparable>(x: T) -> T { rand.N(x) }
+"#;
+    let errors = checker_errors(source, &[]);
+    let count = errors
+        .iter()
+        .filter(|e| e.code_str() == Some("infer.type_outside_constraint"))
+        .count();
+    assert_eq!(count, 3, "{errors:?}");
+
+    let typedef = r#"
+#[go(type_terms, "T: ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr | ~float32 | ~float64 | ~string")]
+pub fn Max<T>(a: T, b: T) -> T
+"#;
+    let source = r#"
+import "go:example.com/pick"
+
+fn biggest<T: Ordered>(a: T, b: T) -> T { pick.Max(a, b) }
+"#;
+    let errors = checker_errors(source, &[("go:example.com/pick", typedef)]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn go_union_constraint_terms_cover_composite_and_exact_types() {
+    let typedef = r#"
+#[go(type_terms, "T: ~Slice<byte> | ~string; K: int | Map<string, int>")]
+pub fn Pair<T, K>(t: T, k: K) -> int
+"#;
+    let accepted = r#"
+import "go:example.com/pick"
+struct Bytes(Slice<byte>)
+struct Text(string)
+fn main() {
+  let _ = pick.Pair([1 as byte], 1)
+  let _ = pick.Pair(Bytes([1]), 1)
+  let _ = pick.Pair(Text("a"), Map.new<string, int>())
+}
+"#;
+    let errors = checker_errors(accepted, &[("go:example.com/pick", typedef)]);
+    assert!(errors.is_empty(), "{errors:?}");
+
+    for call in [
+        "pick.Pair([1], 1)",
+        "pick.Pair(\"a\", Count(1))",
+        "pick.Pair(\"a\", 1 as int64)",
+        "pick.Pair(\"a\", Map.new<string, int8>())",
+    ] {
+        let source = format!(
+            "import \"go:example.com/pick\"\nstruct Count(int)\nfn main() {{ let _ = {call} }}\n"
+        );
+        let errors = checker_errors(&source, &[("go:example.com/pick", typedef)]);
+        assert!(
+            has_code(&errors, "infer.type_outside_constraint"),
+            "{call}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn go_union_constraint_without_a_bound_can_key_a_map() {
+    let typedef = r#"
+#[go(type_terms, "K: ~int | ~string")]
+pub fn Keys<K>(m: Map<K, int>) -> Slice<K>
+"#;
+    let source =
+        "import \"go:example.com/pick\"\nfn main() { let _ = pick.Keys(Map.new<string, int>()) }\n";
+    let errors = checker_errors(source, &[("go:example.com/pick", typedef)]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn invalid_go_type_terms_are_reported() {
+    let typedef = r#"
+#[go(type_terms, "T ~int")]
+pub fn Bad<T>(t: T) -> int
+"#;
+    let source = "import \"go:example.com/pick\"\nfn main() { let _ = pick.Bad(1) }\n";
+    let errors = checker_errors(source, &[("go:example.com/pick", typedef)]);
+    assert!(
+        has_code(&errors, "attribute.invalid_go_type_terms"),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn go_union_constraint_function_value_needs_a_type_argument() {
+    let source = r#"
+import "go:math/rand/v2"
+
+fn main() {
+  let f = rand.N
+  let _ = f
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.cannot_infer_bounded_function_reference")),
+        "{errors:?}"
+    );
+
+    let source = r#"
+import "go:math/rand/v2"
+
+fn main() {
+  let f: fn(int) -> int = rand.N
+  let _ = f
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn go_union_constraint_rejects_a_parameter_bound_by_a_go_constraint() {
+    let typedef = r#"
+#[go(constraint)]
+pub interface Number {}
+
+#[go(constraint)]
+pub interface Bool {}
+
+#[go(type_terms, "T: ~int | ~float64")]
+pub fn Direct<T>(x: T) -> T
+"#;
+    for source in [
+        "import \"go:example.com/pick\"\nfn narrow<T: Ordered + pick.Number>(x: T) -> T { pick.Direct(x) }",
+        "import \"go:example.com/pick\"\nfn wide<T: pick.Bool>(x: T) -> T { pick.Direct(x) }",
+    ] {
+        let errors = checker_errors(source, &[("go:example.com/pick", typedef)]);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.code_str() == Some("infer.type_outside_constraint")),
+            "{errors:?}"
+        );
+    }
+}

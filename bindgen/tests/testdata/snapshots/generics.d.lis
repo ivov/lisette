@@ -6,6 +6,9 @@
 import "go:cmp"
 import "go:fmt"
 
+#[go(type_terms, "T: ~int | ~int64 | ~float64")]
+pub fn Abs<T>(x: T) -> T
+
 /// Empty constraint (any)
 pub fn Clone<T>(v: T) -> T
 
@@ -51,7 +54,8 @@ pub fn MapEqualFunc<K: Comparable, V1, V2>(m1: Map<K, V1>, m2: Map<K, V2>, eq: f
 pub fn Max<T: Comparable>(a: T, b: T) -> T
 
 /// Function with ordered constraint
-pub fn Min<T: Ordered>(a: T, b: T) -> T
+#[go(type_terms, "T: ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64 | ~string")]
+pub fn Min<T>(a: T, b: T) -> T
 
 /// cmp.Ordered constraint (named-identity recognizer)
 pub fn MinOrdered<T: cmp.Ordered>(a: T, b: T) -> T
@@ -118,6 +122,9 @@ pub interface Pusher<T, C> {
   fn Push(t: T, c: C)
 }
 
+#[go(constraint)]
+pub type Real
+
 /// Type alias to a method-only interface — exercises *types.Alias path.
 pub type Salutation = Greeter
 
@@ -130,6 +137,9 @@ pub interface Sink<T> {
 pub interface Transformer<T> {
   fn Transform(t: T) -> T
 }
+
+#[go(constraint)]
+pub type Whole
 
 impl<K: Comparable, V> ConstrainedPair<K, V> {
   /// Method on constrained generic

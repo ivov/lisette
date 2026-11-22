@@ -274,6 +274,16 @@ pub fn iterate_variants_conflict(
     diagnostic.with_help("Rename the existing `variants`, or drop `#[iterate]`")
 }
 
+pub fn invalid_go_type_terms(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid Go type terms")
+        .with_attribute_code("invalid_go_type_terms")
+        .with_span_label(
+            span,
+            "expected `Name: ~int | string`, with `;` between parameters",
+        )
+        .with_help("Regenerate this typedef by re-running `lis add`")
+}
+
 pub fn invalid_go_type_recipe(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid Go type parameter recipe")
         .with_attribute_code("invalid_go_type_recipe")

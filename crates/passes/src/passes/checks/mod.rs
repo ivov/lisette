@@ -32,6 +32,7 @@ pub(crate) mod repeated_if_condition;
 pub(crate) mod shift_count;
 pub(crate) mod stringer_signature;
 pub(crate) mod temp_producing;
+mod type_terms;
 pub(crate) mod unchanging_loop_condition;
 mod visibility;
 
@@ -127,6 +128,7 @@ fn run_file_checks(
 
     prelude_shadowing::run(&file.items, store, sink);
     generics::run(&file.items, store, sink);
+    type_terms::run(&file.items, store, sink);
     native_value_usage::run(&file.items, &package.id, store, sink);
     json_serializable_fields::run(&file.items, sink);
     empty_select_default::run(&file.items, sink);

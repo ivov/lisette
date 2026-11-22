@@ -33,8 +33,9 @@ pub use native_operation::{
 
 mod go_interop;
 pub use go_interop::{
-    GoHint, GoInteropContract, GoOptionRepresentation, GoReturnContract, GoTypeRecipe, SlotOrigin,
-    go_boundary_converts_container, go_option_representation, go_return_contract,
+    GoHint, GoInteropContract, GoOptionRepresentation, GoReturnContract, GoTypeRecipe, GoTypeTerm,
+    GoTypeTerms, SlotOrigin, go_boundary_converts_container, go_option_representation,
+    go_return_contract,
 };
 
 mod conformance;

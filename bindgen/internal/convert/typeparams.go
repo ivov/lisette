@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"fmt"
 	"go/types"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 type TypeParamSpec struct {
 	Name  string
 	Bound string
+	Terms string
 }
 
 type TypeParamSpecs []TypeParamSpec
@@ -61,6 +63,16 @@ func (ps TypeParamSpecs) DeclBlock() string {
 		return ""
 	}
 	return "<" + ps.FormatDecl() + ">"
+}
+
+func (ps TypeParamSpecs) TermsAttribute() string {
+	var parts []string
+	for _, p := range ps {
+		if p.Terms != "" {
+			parts = append(parts, p.Name+": "+p.Terms)
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 // `<E, V>` or empty when there are no type parameters.
@@ -274,4 +286,71 @@ func recognizeMapShape(constraint types.Type) (keyName, valName string, ok bool)
 		return "", "", false
 	}
 	return k.Obj().Name(), v.Obj().Name(), true
+}
+
+func constraintTypeTerms(constraint types.Type) (string, bool) {
+	if named, isNamed := constraint.(*types.Named); isNamed {
+		obj := named.Obj()
+		if obj.Pkg() != nil && obj.Pkg().Path() == "cmp" && obj.Name() == "Ordered" {
+			return "", false
+		}
+	}
+	iface, isIface := constraint.Underlying().(*types.Interface)
+	if !isIface || iface.NumMethods() > 0 || iface.NumEmbeddeds() != 1 {
+		return "", false
+	}
+	union, isUnion := iface.EmbeddedType(0).(*types.Union)
+	if !isUnion {
+		return "", false
+	}
+	terms := make([]string, 0, union.Len())
+	for term := range union.Terms() {
+		if _, isNested := term.Type().Underlying().(*types.Interface); isNested && !term.Tilde() {
+			nested, ok := constraintTypeTerms(term.Type())
+			if !ok {
+				return "", false
+			}
+			terms = append(terms, nested)
+			continue
+		}
+		spelled, ok := termType(term.Type())
+		if !ok {
+			return "", false
+		}
+		if term.Tilde() {
+			spelled = "~" + spelled
+		}
+		terms = append(terms, spelled)
+	}
+	return strings.Join(terms, " | "), true
+}
+
+func termType(t types.Type) (string, bool) {
+	switch t := t.(type) {
+	case *types.Basic:
+		name, ok := basicTermNames[t.Kind()]
+		return name, ok
+	case *types.Slice:
+		element, ok := termType(t.Elem())
+		return "Slice<" + element + ">", ok
+	case *types.Pointer:
+		element, ok := termType(t.Elem())
+		return "Ref<" + element + ">", ok
+	case *types.Array:
+		element, ok := termType(t.Elem())
+		return fmt.Sprintf("Array<%s, %d>", element, t.Len()), ok
+	case *types.Map:
+		key, keyOk := termType(t.Key())
+		value, valueOk := termType(t.Elem())
+		return "Map<" + key + ", " + value + ">", keyOk && valueOk
+	}
+	return "", false
+}
+
+var basicTermNames = map[types.BasicKind]string{
+	types.Bool: "bool", types.Int: "int", types.Int8: "int8", types.Int16: "int16",
+	types.Int32: "int32", types.Int64: "int64", types.Uint: "uint", types.Uint8: "uint8",
+	types.Uint16: "uint16", types.Uint32: "uint32", types.Uint64: "uint64",
+	types.Uintptr: "uintptr", types.Float32: "float32", types.Float64: "float64",
+	types.Complex64: "complex64", types.Complex128: "complex128", types.String: "string",
 }

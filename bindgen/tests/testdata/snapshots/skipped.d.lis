@@ -9,7 +9,8 @@ pub fn BadUnsafeFunc(p: unsafe.Pointer)
 
 pub fn MakeOpaqueFunc() -> OpaqueFunc
 
-pub fn SkippedMin<T: Ordered>(a: T, b: T) -> T
+#[go(type_terms, "T: ~int | ~float64")]
+pub fn SkippedMin<T>(a: T, b: T) -> T
 
 /// Should be skipped: unsafe.Pointer
 pub fn UnsafeFunc(p: unsafe.Pointer)

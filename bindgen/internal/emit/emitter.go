@@ -407,6 +407,9 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	if result.CollapsedTypeParamRecipe != "" {
 		fmt.Fprintf(&e.buf, "#[go(collapsed_type_params, %q)]\n", result.CollapsedTypeParamRecipe)
 	}
+	if terms := result.TypeParams.TermsAttribute(); terms != "" {
+		fmt.Fprintf(&e.buf, "#[go(type_terms, %q)]\n", terms)
+	}
 	if result.SentinelInt != nil {
 		e.buf.WriteString(sentinelFlag(*result.SentinelInt) + "\n")
 	}
