@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795368477910,
+  "lastUpdate": 1795378216392,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -59464,6 +59464,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "passes",
             "value": 20278,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 18862,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14494,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9507,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7697,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2970,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1930,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11461,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0c2657da339c677e6d216f704210645a36fb04a0",
+          "message": "fix: detect instantiation cycles as Go does (#1723)",
+          "timestamp": "2026-11-22T21:09:54+01:00",
+          "tree_id": "a1deaee460448c1f719d0f45501cac896f7f2b6f",
+          "url": "https://github.com/ivov/lisette/commit/0c2657da339c677e6d216f704210645a36fb04a0"
+        },
+        "date": 1795378214794,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 165547,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43620,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 33713,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20050,
             "unit": "lines"
           },
           {
