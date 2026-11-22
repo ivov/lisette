@@ -841,6 +841,7 @@ mod tests {
                 go_hints: vec![],
                 go_name: None,
                 go_type_param_recipe: None,
+                go_type_terms: Vec::new(),
                 superseded_by: None,
                 impl_receiver: None,
             },

@@ -9,7 +9,8 @@ pub var Lookup: Unknown
 #[go(skipped, "type constraint T cannot be represented")]
 pub var Show: Unknown
 
-pub fn Sum<T: Ordered>(values: Slice<T>) -> T
+#[go(type_terms, "T: ~int | ~float64")]
+pub fn Sum<T>(values: Slice<T>) -> T
 
 /// The error method set renders as an `error` newtype, which keeps the marker.
 #[go(constraint)]

@@ -108,6 +108,11 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 		result.SkipReason = skip
 		return
 	}
+	for i := range typeParams {
+		if typeParams[i].Terms != "" {
+			typeParams[i].Bound = ""
+		}
+	}
 	result.TypeParams = typeParams
 	if len(substitutions) > 0 {
 		result.CollapsedTypeParamRecipe = strings.Join(recipe, ", ")
@@ -1439,7 +1444,8 @@ func collectTypeParams(
 		}
 
 		if boundExpr, ok := recognizeBound(constraint, conv, substitutions); ok {
-			specs = append(specs, TypeParamSpec{Name: name, Bound: boundExpr})
+			terms, _ := constraintTypeTerms(constraint)
+			specs = append(specs, TypeParamSpec{Name: name, Bound: boundExpr, Terms: terms})
 			recipe = append(recipe, name)
 			continue
 		}

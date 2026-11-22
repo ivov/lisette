@@ -3,6 +3,7 @@ use crate::checker::sealing::unexported_key;
 use std::slice::from_ref;
 use syntax::program::GoHint;
 use syntax::program::GoTypeRecipe;
+use syntax::program::GoTypeTerms;
 
 pub(super) fn extract_go_hints(attributes: &[Attribute]) -> Vec<GoHint> {
     extract_attribute_flags(attributes, "go")
@@ -33,6 +34,12 @@ pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
 pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<Vec<GoTypeRecipe>> {
     extract_go_flag_string(attributes, "collapsed_type_params")
         .and_then(|recipe| GoTypeRecipe::parse_list(&recipe))
+}
+
+pub(super) fn extract_go_type_terms(attributes: &[Attribute]) -> Vec<GoTypeTerms> {
+    extract_go_flag_string(attributes, "type_terms")
+        .and_then(|terms| GoTypeTerms::parse_list(&terms))
+        .unwrap_or_default()
 }
 
 pub(super) fn extract_go_superseded_by(attributes: &[Attribute]) -> Option<String> {
@@ -130,6 +137,13 @@ pub(super) fn check_go_hints(attributes: &[Attribute], sink: &diagnostics::Local
             && extract_go_type_param_recipe(from_ref(attribute)).is_none()
         {
             sink.push(diagnostics::attribute::invalid_go_type_recipe(
+                &attribute.span,
+            ));
+        }
+        if has_go_flag(from_ref(attribute), "type_terms")
+            && extract_go_type_terms(from_ref(attribute)).is_empty()
+        {
+            sink.push(diagnostics::attribute::invalid_go_type_terms(
                 &attribute.span,
             ));
         }

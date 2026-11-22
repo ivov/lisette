@@ -50,7 +50,8 @@ pub fn IntN(n: int) -> int
 /// N returns a pseudo-random number in the half-open interval [0,n) from the default Source.
 /// The type parameter Int can be any integer type.
 /// It panics if n <= 0.
-pub fn N<Int: Ordered>(n: Int) -> Int
+#[go(type_terms, "Int: ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr")]
+pub fn N<Int>(n: Int) -> Int
 
 /// New returns a new Rand that uses random values from src
 /// to generate other random values.

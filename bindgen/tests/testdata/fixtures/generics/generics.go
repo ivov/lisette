@@ -193,3 +193,13 @@ func PushInts[P Pusher[int, string]](p P) {}
 type Driver[T any, C any, P Pusher[T, C]] struct {
 	Inner P
 }
+
+type Whole interface {
+	~int | ~int64
+}
+
+type Real interface {
+	Whole | ~float64
+}
+
+func Abs[T Real](x T) T { return x }

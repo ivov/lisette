@@ -2079,6 +2079,28 @@ pub fn not_comparable_derive_equality(ty: &Type, span: Span) -> LisetteDiagnosti
         ))
 }
 
+pub fn type_outside_constraint(
+    argument: &str,
+    argument_is_parameter: bool,
+    parameter: &str,
+    function: &str,
+    terms: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    let label = if argument_is_parameter {
+        format!("`{argument}` can be a type that `{function}` does not accept for `{parameter}`")
+    } else {
+        format!("`{function}` does not accept `{argument}` for `{parameter}`")
+    };
+    LisetteDiagnostic::error("Type not in Go constraint")
+        .with_infer_code("type_outside_constraint")
+        .with_span_label(&span, label)
+        .with_help(format!(
+            "Pass one of these types for `{parameter}`: {terms}. A `~` type also accepts a named \
+             type whose underlying type it is"
+        ))
+}
+
 pub fn not_orderable_bound(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Bound not satisfied")
         .with_infer_code("not_orderable_bound")

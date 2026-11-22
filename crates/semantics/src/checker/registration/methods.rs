@@ -449,6 +449,7 @@ impl TaskState {
                         go_hints,
                         go_name: None,
                         go_type_param_recipe: None,
+                        go_type_terms: Vec::new(),
                         superseded_by: extract_go_superseded_by(fn_attrs),
                         impl_receiver: Some(receiver.receiver_ty.clone()),
                     },

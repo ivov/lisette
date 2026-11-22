@@ -18,6 +18,7 @@ pub enum GoHint {
     SentinelMinusOne,
     Skipped,
     SupersededBy,
+    TypeTerms,
     Unexported,
     ValueMethodSet,
     ZeroSafe,
@@ -40,6 +41,7 @@ impl GoHint {
             "sentinel_minus_one" => Self::SentinelMinusOne,
             "skipped" => Self::Skipped,
             "superseded_by" => Self::SupersededBy,
+            "type_terms" => Self::TypeTerms,
             "unexported" => Self::Unexported,
             "value_method_set" => Self::ValueMethodSet,
             "zero_safe" => Self::ZeroSafe,
@@ -290,6 +292,104 @@ impl GoTypeRecipe {
         }
         Some(Self::Parameter(input.to_string()))
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GoTypeTerm {
+    pub tilde: bool,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GoTypeTerms {
+    pub parameter: ecow::EcoString,
+    pub terms: Vec<GoTypeTerm>,
+}
+
+impl GoTypeTerms {
+    pub fn parse_list(input: &str) -> Option<Vec<Self>> {
+        input.split(';').map(Self::parse).collect()
+    }
+
+    fn parse(input: &str) -> Option<Self> {
+        let (parameter, terms) = input.split_once(':')?;
+        let terms = terms
+            .split('|')
+            .map(|term| {
+                let term = term.trim();
+                let (tilde, ty) = term
+                    .strip_prefix('~')
+                    .map_or((false, term), |rest| (true, rest));
+                Some(GoTypeTerm {
+                    tilde,
+                    ty: parse_term_type(ty)?,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(Self {
+            parameter: parameter.trim().into(),
+            terms,
+        })
+    }
+
+    pub fn display_terms(&self) -> String {
+        self.terms
+            .iter()
+            .map(|term| format!("{}{}", if term.tilde { "~" } else { "" }, term.ty))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+}
+
+fn parse_term_type(input: &str) -> Option<Type> {
+    let input = input.trim();
+    let Some((name, arguments)) = input.split_once('<') else {
+        return types::SimpleKind::from_name(input)
+            .filter(|kind| *kind != types::SimpleKind::Unit)
+            .map(Type::Simple);
+    };
+    let arguments = split_top_level(arguments.strip_suffix('>')?)?;
+    let compound = |kind, arguments: &[&str]| {
+        Some(Type::Compound {
+            kind,
+            args: arguments
+                .iter()
+                .map(|argument| parse_term_type(argument))
+                .collect::<Option<_>>()?,
+            writable: false,
+        })
+    };
+    match (name.trim(), arguments.as_slice()) {
+        ("Slice", [_]) => compound(CompoundKind::Slice, &arguments),
+        ("Ref", [_]) => compound(CompoundKind::Ref, &arguments),
+        ("Map", [_, _]) => compound(CompoundKind::Map, &arguments),
+        ("Array", [element, length]) => Some(Type::Array {
+            length: length.trim().parse().ok()?,
+            element: Box::new(parse_term_type(element)?),
+        }),
+        _ => None,
+    }
+}
+
+fn split_top_level(input: &str) -> Option<Vec<&str>> {
+    let mut depth = 0u32;
+    let mut start = 0;
+    let mut parts = Vec::new();
+    for (index, character) in input.char_indices() {
+        match character {
+            '<' => depth += 1,
+            '>' => depth = depth.checked_sub(1)?,
+            ',' if depth == 0 => {
+                parts.push(&input[start..index]);
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&input[start..]);
+    (depth == 0).then_some(parts)
 }
 
 #[cfg(test)]

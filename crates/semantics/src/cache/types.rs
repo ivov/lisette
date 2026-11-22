@@ -119,6 +119,7 @@ fn remap_definition_spans(definition: &mut Definition, remap: &mut impl FnMut(&m
             go_hints: _,
             go_name: _,
             go_type_param_recipe: _,
+            go_type_terms: _,
             superseded_by: _,
             impl_receiver: _,
         } => {}
@@ -278,6 +279,7 @@ mod tests {
                 go_hints: Vec::new(),
                 go_name: None,
                 go_type_param_recipe: None,
+                go_type_terms: Vec::new(),
                 superseded_by: None,
                 impl_receiver: None,
             },
