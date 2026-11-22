@@ -12354,3 +12354,761 @@ pub fn Direct<T>(x: T) -> T
         );
     }
 }
+
+#[test]
+fn growing_enum_variant_is_rejected() {
+    infer(
+        r#"
+enum E<T> {
+  A(T),
+  B(E<Slice<T>>),
+}
+
+fn show(e: E<int>) -> int {
+  match e {
+    E.A(_) => 0,
+    E.B(_) => 1,
+  }
+}
+
+fn main() {
+  let e: E<int> = E.A(1)
+  let _ = show(e)
+}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn growth_in_a_generic_function_called_from_a_method_is_rejected() {
+    infer(
+        r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) -> int {
+    g(self.v)
+  }
+}
+
+fn g<T>(x: T) -> int {
+  let _ = x
+  let b: Option<Box<Slice<T>>> = None
+  let _ = b
+  0
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn growth_two_calls_away_from_a_method_is_rejected() {
+    infer(
+        r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) -> int {
+    h(self.v)
+  }
+}
+
+fn h<T>(x: T) -> int {
+  f(x)
+}
+
+fn f<T>(x: T) -> int {
+  let _ = x
+  let b: Option<Box<Option<T>>> = None
+  let _ = b
+  0
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn growth_reached_from_an_enum_method_is_rejected() {
+    infer(
+        r#"
+enum E<T> {
+  A(T),
+  B,
+}
+
+impl<T> E<T> {
+  fn m(self) -> int {
+    match self {
+      E.A(v) => g(v),
+      E.B => 0,
+    }
+  }
+}
+
+fn g<T>(x: T) -> int {
+  let e: E<Slice<T>> = E.B
+  let _ = x
+  let _ = e
+  0
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn growth_in_a_static_method_called_from_a_method_is_rejected() {
+    infer(
+        r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) -> int {
+    Box.s(self.v)
+  }
+
+  fn s(v: T) -> int {
+    let _ = v
+    let b: Option<Box<Ref<T>>> = None
+    let _ = b
+    0
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn growth_in_a_parameter_type_reached_from_a_method_is_rejected() {
+    infer(
+        r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) -> int {
+    g(self.v, None)
+  }
+}
+
+fn g<T>(x: T, b: Option<Box<Slice<T>>>) -> int {
+  let _ = x
+  let _ = b
+  0
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn static_method_that_nests_its_own_type_is_rejected() {
+    infer(
+        r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn nest(v: T) -> Box<Box<T>> {
+    Box { v: Box { v } }
+  }
+
+  fn m(self) -> int {
+    let _ = Box.nest(self.v)
+    0
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn growth_in_a_function_that_no_method_reaches_is_valid() {
+    let source = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) -> int {
+    k(self.v)
+  }
+}
+
+fn k<T>(x: T) -> int {
+  let _ = x
+  0
+}
+
+fn g<T>(x: T) -> int {
+  let b: Option<Box<Slice<T>>> = None
+  let _ = b
+  k(x)
+}
+
+fn main() {
+  let _ = g(1)
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn method_called_on_a_box_of_a_slice_is_valid() {
+    let source = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn get(self) -> T {
+    self.v
+  }
+}
+
+fn f<T>(x: T) -> int {
+  let _ = Box { v: [x] }.get()
+  0
+}
+
+fn main() {
+  let _ = f(1)
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn nesting_static_method_called_from_main_is_valid() {
+    let source = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn nest(v: T) -> Box<Box<T>> {
+    Box { v: Box { v } }
+  }
+}
+
+fn main() {
+  let _ = Box.nest(1)
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn generic_method_called_with_a_slice_of_the_receiver_type_is_valid() {
+    let source = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn deep<U>(self, u: U) -> int {
+    let _ = u
+    0
+  }
+
+  fn m(self) -> int {
+    self.deep([self.v])
+  }
+}
+
+fn main() {
+  let _ = Box { v: 1 }.m()
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn recursion_through_a_reference_is_an_instantiation_cycle() {
+    infer(
+        r#"
+fn f<T>(x: T, n: int) -> int {
+  if n > 0 { f(&x, n - 1) } else { 0 }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn recursion_through_a_closure_result_is_an_instantiation_cycle() {
+    infer(
+        r#"
+fn f<T>(x: T, n: int) -> int {
+  if n > 0 { f(|| x, n - 1) } else { 0 }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn recursion_through_a_closure_parameter_is_an_instantiation_cycle() {
+    infer(
+        r#"
+fn f<T>(x: T, n: int) -> int {
+  if n > 0 {
+    f(|y: T| y, n - 1)
+  } else {
+    let _ = x
+    0
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn recursion_through_a_tuple_is_an_instantiation_cycle() {
+    infer(
+        r#"
+fn f<T>(x: T, n: int) -> int {
+  if n > 0 { f((x, x), n - 1) } else { 0 }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn recursion_through_a_struct_field_is_an_instantiation_cycle() {
+    infer(
+        r#"
+struct U<T> { p: Option<T> }
+
+fn f<T>(x: T, n: int) -> int {
+  if n > 0 { f(U { p: Some(x) }, n - 1) } else { 0 }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn method_that_wraps_its_own_type_is_an_instantiation_cycle() {
+    infer(
+        r#"
+struct U<T> { v: T }
+
+impl<T> U<T> {
+  fn m(self) {
+    let _ = U { v: Some(self.v) }
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn recursion_that_rotates_and_wraps_is_an_instantiation_cycle() {
+    infer(
+        r#"
+fn f<A, B, C, D, E>(a: A, b: B, c: C, d: D, e: E, n: int) -> int {
+  if n > 0 { f(b, c, d, e, Some(a), n - 1) } else { 0 }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn struct_field_that_wraps_its_own_type_is_an_instantiation_cycle() {
+    infer(
+        r#"
+struct A<T> { a: Option<Ref<A<Ref<T>>>> }
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn adapter_method_that_wraps_its_own_type_is_an_instantiation_cycle() {
+    infer(
+        r#"
+interface Fooer {
+  fn Foo()
+}
+
+struct Fooable<F: Fooer> { ptr: F }
+
+struct FooerImpl<F: Fooer> { f: Option<F> }
+
+impl<F: Fooer> FooerImpl<F> {
+  fn Foo(self) {}
+}
+
+impl<F: Fooer> Fooable<F> {
+  fn Adapter(self) -> Fooable<FooerImpl<F>> {
+    Fooable { ptr: FooerImpl { f: None } }
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn recursion_through_a_boxed_argument_is_an_instantiation_cycle() {
+    infer(
+        r#"
+struct Box<A> { value: A }
+
+fn nest<A>(b: Box<A>, n: int) -> int {
+  if n == 0 { return 0 }
+  nest(Box { value: b }, n - 1)
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn recursion_with_the_same_type_argument_is_valid() {
+    let source = r#"
+fn f<T>(x: T, n: int) -> int {
+  if n > 0 { f(x, n - 1) } else { 0 }
+}
+
+fn main() {
+  let _ = f(1, 2)
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn recursion_that_rotates_type_arguments_is_valid() {
+    let source = r#"
+fn f<T, U, V>(t: T, u: U, v: V, n: int) -> int {
+  if n > 0 { f(u, v, t, n - 1) + f(v, t, u, n - 1) } else { 0 }
+}
+
+fn main() {
+  let _ = f(1, 2, 3, 4)
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn struct_that_rotates_its_type_arguments_is_valid() {
+    let source = r#"
+struct Ring<A, B, C> {
+  l: Option<Ref<Ring<B, C, A>>>,
+  r: Option<Ref<Ring<C, A, B>>>,
+  a: Option<A>,
+}
+
+fn main() {
+  let _: Ring<int, int, int> = Ring { l: None, r: None, a: None }
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn growth_through_an_alias_that_ignores_its_parameter_is_valid() {
+    let source = r#"
+type Ignore<T> = int
+
+struct N<T> { v: T, x: Option<Ref<N<Ignore<Slice<T>>>>> }
+
+fn main() {
+  let _ = N { v: 1, x: None }
+}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn call_that_grows_two_type_arguments_is_reported_once() {
+    infer(
+        r#"
+fn f<A, B>(a: A, b: B, n: int) -> int {
+  if n > 0 { f([a], [b], n - 1) } else { 0 }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn explicit_type_argument_that_grows_is_an_instantiation_cycle() {
+    infer(
+        r#"
+fn f<T>(n: int) -> int {
+  if n > 0 { f<Slice<T>>(n - 1) } else { 0 }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn explicit_type_argument_of_a_go_function_that_grows_is_an_instantiation_cycle() {
+    infer(
+        r#"
+import "go:reflect"
+
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) {
+    let _ = reflect.TypeFor<Box<Slice<T>>>()
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn bound_that_grows_its_own_type_is_an_instantiation_cycle() {
+    infer(
+        r#"
+interface I<T> {}
+
+struct B<T: I<B<Slice<T>>>> { v: T }
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn explicit_method_type_arguments_with_receiver_parameters_are_an_instantiation_cycle() {
+    infer(
+        r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m<U>(self, n: int) {
+    if n > 0 { self.m<T, Slice<U>>(n - 1) }
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn explicit_method_type_arguments_with_receiver_parameters_are_valid() {
+    let source = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m<U>(self, u: U, n: int) {
+    if n > 0 { Box { v: [u] }.m<Slice<U>, int>(1, n - 1) }
+  }
+}
+
+fn main() {}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn interface_bound_that_grows_its_own_type_is_valid() {
+    let source = r#"
+interface I<T: I<Slice<T>>> {}
+
+fn main() {}
+"#;
+    let errors = checker_errors(source, &[]);
+    assert!(errors.is_empty(), "{errors:?}");
+}
+
+#[test]
+fn alias_argument_in_a_closure_type_is_an_instantiation_cycle() {
+    infer(
+        r#"
+type Ignore<T> = int
+
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) {
+    g(self.v)
+  }
+}
+
+fn g<T>(x: T) {
+  let _: fn(Ignore<Box<Slice<T>>>) -> int = |x| x
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn impl_bound_that_grows_a_type_is_an_instantiation_cycle() {
+    infer(
+        r#"
+interface I<T> {}
+
+struct B<T> { v: T }
+
+struct C<T> { v: T }
+
+impl<T> C<T> {
+  fn c(self) {
+    B { v: [self.v] }.m()
+  }
+}
+
+impl<T: I<C<Slice<T>>>> B<Slice<T>> {
+  fn m(self) {}
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn alias_argument_in_a_body_counts_even_when_the_alias_ignores_it() {
+    infer(
+        r#"
+type Ignore<T> = int
+
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn m(self) -> int {
+    g(self.v)
+  }
+}
+
+fn g<T>(_x: T) -> int {
+  let token: Ignore<Box<Slice<T>>> = 1
+  token
+}
+
+fn main() {
+  let _ = Box { v: 1 }.m()
+}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn alias_argument_in_a_function_value_type_is_an_instantiation_cycle() {
+    infer(
+        r#"
+type Ignore<T> = int
+
+struct Box<T> { v: T }
+
+fn id<U>(x: U) -> U {
+  x
+}
+
+impl<T> Box<T> {
+  fn m(self) {
+    let _: fn(Ignore<Box<Slice<T>>>) -> int = id
+  }
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn interface_bound_on_another_interface_is_an_instantiation_cycle() {
+    infer(
+        r#"
+interface J<T> {}
+
+interface I<T: J<B<Slice<T>>>> {}
+
+struct B<T> { v: I<T> }
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn receiver_bound_on_an_associated_function_is_an_instantiation_cycle() {
+    infer(
+        r#"
+interface I<T> {}
+
+struct B<T: I<C<Slice<T>>>> { v: T }
+
+struct C<T> { v: T }
+
+impl<T> C<T> {
+  fn c(self) {
+    B.m(self.v)
+  }
+}
+
+impl<T> B<T> {
+  fn m(_x: T) {}
+}
+
+fn main() {}
+"#,
+    )
+    .assert_infer_code_once("instantiation_cycle");
+}
