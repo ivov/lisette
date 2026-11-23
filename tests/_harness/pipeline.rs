@@ -95,7 +95,7 @@ pub struct TestPipeline {
     source: String,
     raw_source: String,
     wrapped: bool,
-    e2e_suite_mode: bool,
+    go_test_mode: bool,
     extra_go_typedefs: Vec<(String, String)>,
 }
 
@@ -105,7 +105,7 @@ impl TestPipeline {
             source: source.to_string(),
             raw_source: source.to_string(),
             wrapped: false,
-            e2e_suite_mode: false,
+            go_test_mode: false,
             extra_go_typedefs: Vec::new(),
         }
     }
@@ -118,8 +118,8 @@ impl TestPipeline {
 
     /// Keep the `__test__` wrapper in the typed AST so it is emitted as a callable Go fn.
     #[allow(dead_code)]
-    pub fn e2e_suite_mode(mut self) -> Self {
-        self.e2e_suite_mode = true;
+    pub fn go_test_mode(mut self) -> Self {
+        self.go_test_mode = true;
         self
     }
 
@@ -144,7 +144,7 @@ impl TestPipeline {
             ast: parse_result.ast,
             source: self.source,
             wrapped: self.wrapped,
-            e2e_suite_mode: self.e2e_suite_mode,
+            go_test_mode: self.go_test_mode,
             extra_go_typedefs: self.extra_go_typedefs,
         }
     }
@@ -154,7 +154,7 @@ pub struct CompiledTest {
     ast: Vec<Expression>,
     source: String,
     wrapped: bool,
-    e2e_suite_mode: bool,
+    go_test_mode: bool,
     extra_go_typedefs: Vec<(String, String)>,
 }
 
@@ -164,7 +164,7 @@ impl CompiledTest {
             ast,
             source,
             wrapped,
-            e2e_suite_mode,
+            go_test_mode,
             extra_go_typedefs,
         } = self;
         let InferredTestFile { mut store, checker } =
@@ -195,7 +195,7 @@ impl CompiledTest {
                 );
             }
 
-            if wrapped && !e2e_suite_mode {
+            if wrapped && !go_test_mode {
                 let has_hoisted = typed_ast.len() > 1
                     && typed_ast.iter().any(|expr| {
                         matches!(expr, Expression::Function { name, .. } if name == TEST_WRAPPER_NAME)

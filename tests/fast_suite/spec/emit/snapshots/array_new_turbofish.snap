@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn make() -> Array<int, 5> {
+    Array.new<int, 5>()
+  }
+---
+package main
+
+func make_() [5]int {
+	return [5]int{}
+}

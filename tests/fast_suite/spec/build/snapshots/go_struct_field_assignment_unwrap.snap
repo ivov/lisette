@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"runtime/debug"
+)
+
+func main() {
+	replacement := debug.Module{
+		Path:    "example.com/replacement",
+		Version: "v2.0.0",
+		Sum:     "",
+		Replace: nil,
+	}
+	mod := debug.Module{
+		Path:    "example.com/mod",
+		Version: "v1.0.0",
+		Sum:     "",
+		Replace: nil,
+	}
+	mod.Replace = &replacement
+	fmt.Print(mod.Path)
+}

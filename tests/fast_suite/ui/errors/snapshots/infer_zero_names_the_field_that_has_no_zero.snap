@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `fn (int) -> int` has no zero value
+   ╭─[test.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let s = zero<HasFn>()
+   ·           ──────┬──────
+   ·                 ╰── `fn (int) -> int` does not satisfy `Zeroable`
+ 6 │ }
+   ╰────
+  help: Build this value explicitly, e.g. `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel. `Zeroable` admits only types whose zero value Lisette can produce, and `fn (int) -> int` at `f` has none · code: [infer.not_zeroable_bound]

@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn use_f(f: fn(int) -> ()) { f(3) }
+  
+  fn main() {
+    let mut n = 0
+    let p = (|x: int| { n += x }, 7)
+    let f = (&p.0).*
+    use_f(f)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func useF(f func(int) struct{}) {
+	f(3)
+}
+
+func main() {
+	n := 0
+	p := lisette.MakeTuple2[func(int) struct{}, int](func(x int) struct{} {
+		n += x
+		return struct{}{}
+	}, 7)
+	f := p.First
+	useF(f)
+}

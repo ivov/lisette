@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+  }
+  
+  fn double(x: int) -> int { x * 2 }
+  
+  fn test() -> int {
+    apply(double, 21)
+  }
+---
+package main
+
+func apply(f func(int) int, x int) int {
+	return f(x)
+}
+
+func double(x int) int {
+	return x * 2
+}
+
+func test() int {
+	return apply(double, 21)
+}

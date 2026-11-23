@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ `Result` is silently discarded
+    ╭─[test.lis:13:3]
+ 12 │   safe_call();
+ 13 │   unsafe_call();
+    ·   ──────┬──────
+    ·         ╰── failure will go unnoticed
+ 14 │   ()
+    ╰────
+  help: Handle this `Result` with `?` or `match`, or explicitly discard it with `let _ = ...` · code: [lint.unused_result]

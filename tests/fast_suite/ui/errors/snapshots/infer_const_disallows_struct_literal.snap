@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Composite value in `const`
+   ╭─[test.lis:4:16]
+ 3 │ 
+ 4 │ const ORIGIN = Point { x: 0, y: 0 }
+   ·                ──────────┬─────────
+   ·                          ╰── not allowed
+   ╰────
+  help: Use a function that returns the value. `const` only accepts primitive values: `bool`, `int`, `float`, and `string` · code: [infer.const_disallows_composite]

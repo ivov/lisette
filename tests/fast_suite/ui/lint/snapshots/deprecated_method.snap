@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Use of deprecated API
+    ╭─[test.lis:13:11]
+ 12 │   let c = Cache {}
+ 13 │   let _ = c.warm()
+    ·           ───┬──
+    ·              ╰── not intended for new code
+ 14 │ }
+    ╰────
+  help: Use the new method instead · code: [lint.deprecated]

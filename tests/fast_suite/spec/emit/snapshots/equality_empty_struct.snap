@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Blank {}
+---
+package main
+
+type Blank struct{}
+
+func (b Blank) equals(other Blank) bool {
+	return true
+}

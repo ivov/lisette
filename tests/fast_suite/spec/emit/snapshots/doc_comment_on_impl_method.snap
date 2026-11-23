@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Counter { count: int }
+  
+  impl Counter {
+    /// Creates a new counter starting at zero.
+    fn new() -> Counter {
+      Counter { count: 0 }
+    }
+  }
+---
+package main
+
+type Counter struct {
+	count int
+}
+
+// Creates a new counter starting at zero.
+func newCounter() Counter {
+	return Counter{count: 0}
+}

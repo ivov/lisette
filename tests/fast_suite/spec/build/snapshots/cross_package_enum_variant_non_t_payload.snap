@@ -1,0 +1,48 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === data/data.go ===
+package data
+
+func MakeResult2Success[T any](arg0 T) Result2[T] {
+	return Result2[T]{Tag: Result2Success, Success: arg0}
+}
+
+func MakeResult2Failure[T any](arg0 string) Result2[T] {
+	return Result2[T]{Tag: Result2Failure, Failure: arg0}
+}
+
+type Result2Tag uint8
+
+const (
+	Result2Success Result2Tag = iota
+	Result2Failure
+)
+
+type Result2[T any] struct {
+	Tag     Result2Tag
+	Success T
+	Failure string
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/data"
+)
+
+func process(ok bool) data.Result2[string] {
+	if ok {
+		return data.MakeResult2Success("done")
+	}
+	return data.MakeResult2Failure[string]("failed")
+}
+
+func main() {
+	fmt.Println(process(true))
+	fmt.Println(process(false))
+}

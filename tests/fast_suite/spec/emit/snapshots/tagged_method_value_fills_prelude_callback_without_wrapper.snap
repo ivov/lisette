@@ -1,0 +1,71 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  pub interface Getter<T> {
+    fn get() -> T
+  }
+  
+  struct Box {
+    n: int,
+  }
+  
+  impl Box {
+    pub fn get(self) -> Option<int> { Some(self.n) }
+  }
+  
+  fn use_getter<G: Getter<Option<int>>>(g: G) -> Option<int> { g.get() }
+  
+  fn main() {
+    let b = Box { n: 1 }
+    let _ = use_getter(b)
+    let o: Option<int> = None
+    let _ = o.or_else(b.get)
+    let _ = Option.and_then(Some(b), Box.get)
+    let f = Box.get
+    let x = f(b)
+    let g = b.get
+    let y = g()
+    let _ = (x, y)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Getter[T any] interface {
+	Get_() T
+}
+
+type Box struct {
+	n int
+}
+
+func (b Box) Get() (int, bool) {
+	return b.n, true
+}
+
+func (b Box) Get_() lisette.Option[int] {
+	return lisette.OptionFromCommaOk[int](b.Get())
+}
+
+func useGetter[G Getter[lisette.Option[int]]](g G) (int, bool) {
+	v := g.Get_()
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return 0, false
+}
+
+func main() {
+	b := Box{n: 1}
+	useGetter(b)
+	o := lisette.MakeOptionNone[int]()
+	o.OrElse(b.Get_)
+	lisette.OptionAndThen(lisette.MakeOptionSome(b), Box.Get_)
+	f := Box.Get_
+	x := f(b)
+	g := b.Get_
+	y := g()
+	_ = lisette.MakeTuple2[lisette.Option[int], lisette.Option[int]](x, y)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Go-style short declaration
+   ╭─[test.lis:3:5]
+ 2 │ fn main() {
+ 3 │   x := 42
+   ·     ─┬
+   ·      ╰── Lisette has no `:=`
+ 4 │ }
+   ╰────
+  help: Use `let x = ...` instead of `:=` for variable declarations · code: [parse.go_short_declaration]

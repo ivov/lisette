@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Duplicate function
+   ╭─[test.lis:3:4]
+ 2 │ fn greet() -> string { "hello" }
+ 3 │ fn greet() -> string { "world" }
+   ·    ──┬──
+   ·      ╰── already defined
+ 4 │ 
+   ╰────
+  help: Rename or remove this definition. `greet` is already defined in this package · code: [infer.duplicate_definition]

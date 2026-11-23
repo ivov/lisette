@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  enum E {
+    // before A
+    A,
+    B,
+  }
+---
+enum E {
+  // before A
+  A,
+  B,
+}

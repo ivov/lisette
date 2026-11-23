@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct New(int)
+  
+  fn main() {
+    let mut n = New(1)
+    n = New(2)
+    fmt.Println(n.0)
+  }
+---
+package main
+
+import "fmt"
+
+type New int
+
+func main() {
+	n := New(1)
+	n = New(2)
+	fmt.Println(int(n))
+}

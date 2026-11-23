@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/idx"
+  
+  fn make_finder() -> fn(string, string) -> Option<int> {
+    idx.Find
+  }
+  
+  fn main() {
+    let f = make_finder()
+    let r = f("hello", "ll")
+    match r {
+      Some(v) => { let _ = v },
+      None => { let _ = -2 },
+    }
+  }
+---
+package main
+
+import (
+	"example.com/idx"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func makeFinder() func(string, string) lisette.Option[int] {
+	return func(arg0, arg1 string) lisette.Option[int] {
+		ret := idx.Find(arg0, arg1)
+		return lisette.OptionFromCommaOk[int](ret, ret != -1)
+	}
+}
+
+func main() {
+	f := makeFinder()
+	r := f("hello", "ll")
+	if r.Tag == lisette.OptionSome {
+		_ = r.SomeVal
+	} else {
+		_ = -2
+	}
+}

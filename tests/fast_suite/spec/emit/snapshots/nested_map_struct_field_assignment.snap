@@ -1,0 +1,44 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Inner {
+    value: int,
+  }
+  
+  struct Outer {
+    inner: Inner,
+    name: string,
+  }
+  
+  fn test() {
+      let mut m = Map.new<string, Outer>()
+      m["test"] = Outer { inner: Inner { value: 0 }, name: "test" }
+      let mut entry = m["test"]
+      entry.name = "updated"
+      entry.inner.value = 42
+      m["test"] = entry
+  }
+---
+package main
+
+type Inner struct {
+	value int
+}
+
+type Outer struct {
+	inner Inner
+	name  string
+}
+
+func test() {
+	m := make(map[string]Outer)
+	m["test"] = Outer{
+		inner: Inner{value: 0},
+		name:  "test",
+	}
+	entry := m["test"]
+	entry.name = "updated"
+	entry.inner.value = 42
+	m["test"] = entry
+}

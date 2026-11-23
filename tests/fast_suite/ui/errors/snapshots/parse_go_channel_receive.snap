@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Go-style channel receive
+   ╭─[test.lis:3:11]
+ 2 │ fn test(ch: Receiver<int>) {
+ 3 │   let x = <-ch;
+   ·           ─┬
+   ·            ╰── `<-` is not an operator
+ 4 │ }
+   ╰────
+  help: Use `select { let v = ch.receive() => ... }` to receive from a channel · code: [parse.go_channel_receive]

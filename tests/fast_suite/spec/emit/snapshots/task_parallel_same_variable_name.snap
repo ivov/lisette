@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let ch = Channel.new<int>()
+    task {
+      let mut found = 0
+      found = 1
+      ch.send(found)
+    }
+    task {
+      let mut found = 0
+      found = 2
+      ch.send(found)
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	ch := make(chan int)
+	go func() {
+		found := 0
+		found = 1
+		lisette.ChannelSend(ch, found)
+	}()
+	go func() {
+		found := 0
+		found = 2
+		lisette.ChannelSend(ch, found)
+	}()
+}

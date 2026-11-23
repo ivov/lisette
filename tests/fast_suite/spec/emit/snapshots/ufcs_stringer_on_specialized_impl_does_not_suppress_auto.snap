@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Box<T> { v: T }
+  
+  impl Box<int> {
+    fn String(self) -> string {
+      "int_box"
+    }
+  }
+  
+  fn main() {
+    let _ = Box { v: 42 }
+  }
+---
+package main
+
+type Box[T any] struct {
+	v T
+}
+
+func boxString(_ Box[int]) string {
+	return "int_box"
+}
+
+func main() {
+	_ = Box[int]{v: 42}
+}

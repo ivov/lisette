@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/fixes.rs
+---
+fn main() {
+  let mut x = 5
+  let _ = x
+}
+=== fixed ===
+fn main() {
+  let x = 5
+  let _ = x
+}

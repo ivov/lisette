@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type MyInt = int
+  
+  struct Box<T> { val: T }
+  
+  impl Box<MyInt> {
+    fn doubled(self) -> MyInt { self.val * 2 }
+  }
+---
+package main
+
+type MyInt = int
+
+type Box[T any] struct {
+	val T
+}
+
+func boxDoubled(self Box[MyInt]) MyInt {
+	return self.val * 2
+}

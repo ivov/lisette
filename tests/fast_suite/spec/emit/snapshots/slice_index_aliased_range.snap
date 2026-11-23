@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  type Prefix = RangeTo<int>
+  fn test(xs: Slice<int>, r: Prefix) -> Slice<int> {
+    xs[r]
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Prefix = lisette.RangeTo[int]
+
+func test(xs []int, r Prefix) []int {
+	return xs[:r.End:r.End]
+}

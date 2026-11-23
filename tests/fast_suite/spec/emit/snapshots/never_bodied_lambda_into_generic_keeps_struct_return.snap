@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn run<T>(f: fn() -> T) -> int {
+    let _ = f
+    0
+  }
+  
+  fn test() -> int {
+    run(|| { panic("boom") })
+  }
+---
+package main
+
+func run[T any](f func() T) int {
+	_ = f
+	return 0
+}
+
+func test() int {
+	return run(func() struct{} {
+		panic("boom")
+	})
+}

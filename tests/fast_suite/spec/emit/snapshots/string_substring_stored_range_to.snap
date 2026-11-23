@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: string, r: RangeTo<int>) -> string {
+    s.substring(r)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s string, r lisette.RangeTo[int]) string {
+	return lisette.SubstringTo(s, r.End)
+}

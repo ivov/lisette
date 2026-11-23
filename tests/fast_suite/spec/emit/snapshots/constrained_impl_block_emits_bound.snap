@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Displayable {
+    fn display() -> string
+  }
+  
+  struct Labeled<T: Displayable> {
+    label: string,
+    value: T,
+  }
+  
+  impl<T: Displayable> Labeled<T> {
+    fn show(self) -> string {
+      self.label
+    }
+  }
+---
+package main
+
+type Displayable interface {
+	display() string
+}
+
+type Labeled[T Displayable] struct {
+	label string
+	value T
+}
+
+func (l Labeled[T]) show() string {
+	return l.label
+}

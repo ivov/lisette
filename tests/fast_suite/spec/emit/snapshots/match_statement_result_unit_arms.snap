@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn noop() {}
+  
+  fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 { Err("err") } else { Ok(a / b) }
+  }
+  
+  fn test() {
+    match divide(10, 2) {
+      Ok(_) => noop(),
+      Err(_) => noop(),
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func noop() {}
+
+func divide(a, b int) lisette.Result[int, string] {
+	if b == 0 {
+		return lisette.MakeResultErr[int, string]("err")
+	}
+	return lisette.MakeResultOk[int, string](a / b)
+}
+
+func test() {
+	if divide(10, 2).Tag == lisette.ResultOk {
+		noop()
+	} else {
+		noop()
+	}
+}

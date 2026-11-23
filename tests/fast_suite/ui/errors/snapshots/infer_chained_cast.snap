@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid conversion
+   ╭─[test.lis:4:3]
+ 3 │   let x: int = 42;
+ 4 │   x as float64 as int
+   ·   ─────────┬─────────
+   ·            ╰── chained conversion not allowed
+ 5 │ }
+   ╰────
+  help: Use an intermediate variable if you need to convert through multiple types · code: [infer.chained_conversion]

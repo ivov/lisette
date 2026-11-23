@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn bump(i: mut Ref<int>) -> int {
+    i.* = 1
+    99
+  }
+  
+  fn test() -> int {
+    let xss = [[10], [20]]
+    let mut i = 0
+    let ys = xss[i].append(bump(&i))
+    ys[0]
+  }
+---
+package main
+
+import "slices"
+
+func bump(i *int) int {
+	*i = 1
+	return 99
+}
+
+func test() int {
+	xss := [][]int{{10}, {20}}
+	i := 0
+	recv := xss[i]
+	ys := append(slices.Clip(recv), bump(&i))
+	return ys[0]
+}

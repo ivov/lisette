@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(ch: Channel<int>) -> bool {
+    ch.is_empty()
+  }
+---
+package main
+
+func test(ch chan int) bool {
+	return len(ch) == 0
+}

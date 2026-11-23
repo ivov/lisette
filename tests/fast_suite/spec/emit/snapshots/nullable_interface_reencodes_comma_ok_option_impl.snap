@@ -1,0 +1,85 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Thing {
+    v: int,
+  }
+  
+  interface Opt {
+    fn find() -> Option<Ref<Thing>>
+  }
+  
+  struct Bar<T> {
+    x: Option<T>,
+  }
+  
+  impl<T> Bar<T> {
+    fn find(self) -> Option<T> {
+      self.x
+    }
+  }
+  
+  fn use_opt(o: Opt) {
+    match o.find() {
+      Some(t) => { let _ = t },
+      None => {},
+    }
+  }
+  
+  fn main() {
+    use_opt(Bar { x: None })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Thing struct {
+	v int
+}
+
+type Opt interface {
+	find() *Thing
+}
+
+type Bar[T any] struct {
+	x lisette.Option[T]
+}
+
+func (b Bar[T]) find() (T, bool) {
+	v := b.x
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	var zero T
+	return zero, false
+}
+
+func useOpt(o Opt) {
+	if t := o.find(); t != nil {
+		_ = t
+	}
+}
+
+func main() {
+	useOpt(_lisAdapter_Bar_Opt_0{inner: Bar[*Thing]{}})
+}
+
+type _lisAdapter_Bar_Opt_0 struct {
+	inner Bar[*Thing]
+}
+
+func (a _lisAdapter_Bar_Opt_0) find() *Thing {
+	ret, ret2 := a.inner.find()
+	var option lisette.Option[*Thing]
+	if ret2 && ret != nil {
+		option = lisette.MakeOptionSome[*Thing](ret)
+	} else {
+		option = lisette.MakeOptionNone[*Thing]()
+	}
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal
+	}
+	return nil
+}

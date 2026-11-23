@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  struct Grid {
+    cells: Array<int, 4>,
+  }
+  
+  fn make() -> Grid {
+    Grid { cells: [1, 2, 3, 4] }
+  }
+---
+package main
+
+type Grid struct {
+	cells [4]int
+}
+
+func make_() Grid {
+	return Grid{cells: [4]int{1, 2, 3, 4}}
+}

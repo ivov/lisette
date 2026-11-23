@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot implement methods on foreign type
+   ╭─[main.lis:2:1]
+ 1 │     
+ 2 │ ╭─▶ impl Ref<Array<int, 3>> {
+ 3 │ │     fn first(self) -> int {
+ 4 │ │       0
+ 5 │ │     }
+ 6 │ ├─▶ }
+   · ╰──── `Array` is defined in package `prelude`
+ 7 │     
+   ╰────
+  help: Use a standalone function: `fn my_method(w: Array) { ... }`. Methods can only be defined on types in the same package · code: [infer.impl_on_foreign_type]

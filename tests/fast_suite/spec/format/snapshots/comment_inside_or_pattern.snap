@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f(x: int) -> int {
+    match x {
+      1 |
+      // standalone comment
+      2 |
+      3 => 1,
+      _ => 0,
+    }
+  }
+---
+fn f(x: int) -> int {
+  match x {
+    1 |
+    // standalone comment
+    2 |
+    3 => 1,
+    _ => 0,
+  }
+}

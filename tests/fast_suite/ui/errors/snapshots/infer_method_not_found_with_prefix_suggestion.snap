@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Member not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(s: string) -> int {
+ 3 │   s.len()
+   ·   ──┬──
+   ·     ╰── no member `len` on type `string`
+ 4 │ }
+   ╰────
+  help: Did you mean `length()`? · code: [infer.member_not_found]

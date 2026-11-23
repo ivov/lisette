@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Empty {}
+  
+  fn test() -> Empty {
+    Empty {}
+  }
+---
+package main
+
+type Empty struct{}
+
+func test() Empty {
+	return Empty{}
+}

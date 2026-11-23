@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn g() -> Result<int, string> { Ok(1) }
+  
+  fn f() -> Result<int, string> {
+    match g()? {
+      0 => Ok(10),
+      x => Ok(x),
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func g() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func f() lisette.Result[int, string] {
+	check := g()
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	subject := check.OkVal
+	if subject == 0 {
+		return lisette.MakeResultOk[int, string](10)
+	}
+	return lisette.MakeResultOk[int, string](subject)
+}

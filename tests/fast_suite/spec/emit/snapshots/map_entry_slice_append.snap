@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Box {
+    items: Slice<int>,
+  }
+  
+  fn main() {
+    let mut m = Map.new<string, Box>()
+    m["a"] = Box { items: [] }
+    let mut entry = Box { items: m["a"].items.clone() }
+    entry.items = entry.items.append(1)
+    m["a"] = entry
+  }
+---
+package main
+
+import "slices"
+
+type Box struct {
+	items []int
+}
+
+func main() {
+	m := make(map[string]Box)
+	m["a"] = Box{items: []int{}}
+	entry := Box{items: slices.Clone(m["a"].items)}
+	entry.items = append(entry.items, 1)
+	m["a"] = entry
+}

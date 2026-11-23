@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  const X = 10
+  const Y = X + 5
+  
+  fn main() {
+    fmt.Println(Y)
+  }
+---
+package main
+
+import "fmt"
+
+const X int = 10
+
+const Y int = X + 5
+
+func main() {
+	fmt.Println(Y)
+}

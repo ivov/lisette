@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === geo/lib.go ===
+package geo
+
+type Point struct {
+	X int
+	Y int
+}
+
+type Coordinate = Point
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/geo"
+
+func getX(c geo.Coordinate) int {
+	return c.X
+}
+
+func main() {
+	c := geo.Point{
+		X: 10,
+		Y: 20,
+	}
+	getX(c)
+}

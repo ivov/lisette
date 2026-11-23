@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { for item in items { process(item) } }"
+---
+fn test() {
+  for item in items {
+    process(item)
+  }
+}

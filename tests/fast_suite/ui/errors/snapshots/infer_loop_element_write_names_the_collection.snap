@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot write to `row[0]`
+   ╭─[test.lis:5:5]
+ 4 │   for row in grid {
+ 5 │     row[0] = 9
+   ·     ─────┬────
+   ·          ╰── `row` is read-only
+ 6 │   }
+   ╰────
+  help: Declare `let mut grid`. `row` binds elements of `grid`, which is read-only · code: [infer.write_through_read_only]

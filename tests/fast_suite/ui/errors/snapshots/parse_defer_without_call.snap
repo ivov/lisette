@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid `defer`
+   ╭─[test.lis:4:9]
+ 3 │ fn f() {
+ 4 │   defer cleanup
+   ·         ───┬───
+   ·            ╰── expected `()`
+ 5 │ }
+   ╰────
+  help: Add parentheses to call the function · code: [parse.defer_missing_parens]

@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  struct Consumer { input: Receiver<int> }
+  
+  fn test(c: Consumer) -> Receiver<int> {
+    c.input
+  }
+---
+package main
+
+type Consumer struct {
+	input <-chan int
+}
+
+func test(c Consumer) <-chan int {
+	return c.input
+}

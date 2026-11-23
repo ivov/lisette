@@ -1,0 +1,54 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:bufio"
+  import "go:fmt"
+  import "go:io"
+  import "go:os"
+  
+  fn main() {
+    let mut reader = bufio.NewReader(os.Stdin)
+    while true {
+      let r = match reader.ReadRune() {
+        Ok((r, _)) => r,
+        Err(io.EOF) => break,
+        Err(_) => panic("error"),
+      }
+      fmt.Printf("%c", r)
+    }
+  }
+---
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		var r rune
+		ret, ret2, ret3 := reader.ReadRune()
+		tup := lisette.MakeTuple2(ret, ret2)
+		var result lisette.Result[lisette.Tuple2[rune, int], error]
+		if ret3 != nil {
+			result = lisette.MakeResultErr[lisette.Tuple2[rune, int], error](ret3)
+		} else {
+			result = lisette.MakeResultOk[lisette.Tuple2[rune, int], error](tup)
+		}
+		if result.Tag == lisette.ResultErr {
+			if result.ErrVal == io.EOF {
+				break
+			}
+			panic("error")
+		}
+		r = result.OkVal.First
+		fmt.Printf("%c", r)
+	}
+}

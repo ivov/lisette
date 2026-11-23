@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Inner { pub val: int }
+  
+  type Wrapper = Inner
+  
+  struct Outer { pub item: Wrapper }
+  
+  fn get_val(o: Outer) -> int {
+    o.item.val
+  }
+---
+package main
+
+type Inner struct {
+	Val int
+}
+
+type Wrapper = Inner
+
+type Outer struct {
+	Item Wrapper
+}
+
+func getVal(o Outer) int {
+	return o.Item.Val
+}

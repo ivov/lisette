@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct P { v: int }
+  fn mk() -> P { P { v: 1 } }
+  
+  fn test() {
+    let P { v: _ } = mk() else {
+      panic("no")
+    }
+    ()
+  }
+---
+package main
+
+type P struct {
+	v int
+}
+
+func mk() P {
+	return P{v: 1}
+}
+
+func test() {
+	_ = mk()
+}

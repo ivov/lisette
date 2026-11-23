@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Member not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(opt: Option<string>) -> int {
+ 3 │   opt.contains("h")
+   ·   ──────┬─────
+   ·         ╰── no member `contains` on type `Option<string>`
+ 4 │ }
+   ╰────
+  help: Unwrap the `Option` to extract the `string` value, then call `contains` on it, e.g. `match <expr> { Some(x) => x.contains(...), None => ... }` · code: [infer.member_not_found]

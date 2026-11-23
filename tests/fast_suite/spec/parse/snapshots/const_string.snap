@@ -1,0 +1,54 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  const GREETING: string = "Hello";
+---
+[
+    Const {
+        binding: None,
+        doc: None,
+        identifier: "GREETING",
+        identifier_span: Span {
+            file_id: 0,
+            byte_offset: 7,
+            byte_length: 8,
+        },
+        annotation: Some(
+            Constructor {
+                name: "string",
+                params: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 17,
+                    byte_length: 6,
+                },
+            },
+        ),
+        expression: Value(
+            Literal {
+                literal: String {
+                    value: "Hello",
+                    raw: false,
+                },
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 26,
+                    byte_length: 7,
+                },
+            },
+        ),
+        visibility: Private,
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 32,
+        },
+    },
+]

@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid number literal
+   ╭─[test.lis:1:11]
+ 1 │ let x = 42_
+   ·           ┬
+   ·           ╰── trailing underscore
+   ╰────
+  help: Remove the trailing underscore · code: [lex.number_trailing_underscore]

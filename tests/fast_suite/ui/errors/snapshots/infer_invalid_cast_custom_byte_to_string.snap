@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid conversion
+   ╭─[test.lis:6:3]
+ 5 │   let b: MyByte = 65;
+ 6 │   b as string
+   ·   ─────┬─────
+   ·        ╰── cannot convert `MyByte` to `string`
+ 7 │ }
+   ╰────
+  help: Use `[b] as string` to preserve the byte (may be invalid UTF-8), or convert through a rune to encode as a codepoint: `let r = b as rune; r as string`. A byte has two readings as a string · code: [infer.invalid_conversion]

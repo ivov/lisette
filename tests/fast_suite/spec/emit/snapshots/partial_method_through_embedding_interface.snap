@@ -1,0 +1,52 @@
+---
+source: tests/fast_suite/spec/emit/partial.rs
+description: |
+  
+  import "go:io"
+  
+  interface Base { fn fetch() -> Partial<int, error> }
+  interface Child { embed Base }
+  struct Source {}
+  impl Source {
+    fn fetch(self) -> Partial<int, error> { Partial.Both(0, io.EOF) }
+  }
+  fn main() {
+    let c: Child = Source {}
+    if !c.fetch().is_both() { panic("lost") }
+  }
+---
+package main
+
+import (
+	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Base interface {
+	fetch() (int, error)
+}
+
+type Child interface {
+	Base
+}
+
+type Source struct{}
+
+func (s Source) fetch() (int, error) {
+	return 0, io.EOF
+}
+
+func main() {
+	var c Child = Source{}
+	ret, ret2 := c.fetch()
+	var result lisette.Partial[int, error]
+	if ret2 != nil {
+		result = lisette.MakePartialBoth[int, error](ret, ret2)
+	} else {
+		result = lisette.MakePartialOk[int, error](ret)
+	}
+	if !result.IsBoth() {
+		panic("lost")
+	}
+}

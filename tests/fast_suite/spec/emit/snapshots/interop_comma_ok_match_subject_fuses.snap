@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  fn main() {
+    match os.LookupEnv("HOME") {
+      Some(v) => { let _ = v },
+      None => { let _ = "" },
+    }
+  }
+---
+package main
+
+import "os"
+
+func main() {
+	if v, ok := os.LookupEnv("HOME"); ok {
+		_ = v
+	}
+}

@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn start() -> int { 1 }
+  fn end() -> int { 3 }
+  
+  fn test() -> int {
+    let xs = [10, 20, 30, 40]
+    let ys = xs[start()..end()]
+    ys.length()
+  }
+---
+package main
+
+func start() int {
+	return 1
+}
+
+func end() int {
+	return 3
+}
+
+func test() int {
+	xs := []int{10, 20, 30, 40}
+	start2 := start()
+	end2 := end()
+	ys := xs[start2:end2:end2]
+	return len(ys)
+}

@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type Numbers = Slice<int>
+  
+  fn test() {
+    let xs: Numbers = [1, 2, 3]
+    let mut part = xs[0..2].clone()
+    part[0] = 99
+    let _ = xs
+  }
+---
+package main
+
+import "slices"
+
+type Numbers = []int
+
+func test() {
+	xs := []int{1, 2, 3}
+	part := slices.Clone(xs[0:2:2])
+	part[0] = 99
+	_ = xs
+}

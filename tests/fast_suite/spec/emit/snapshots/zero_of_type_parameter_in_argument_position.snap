@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/zero.rs
+description: |
+  
+  fn take<T: Zeroable>(value: T) -> T { value }
+  
+  fn f<T: Zeroable>() -> T {
+    take<T>(zero<T>())
+  }
+---
+package main
+
+func take[T any](value T) T {
+	return value
+}
+
+func f[T any]() T {
+	var zero T
+	return take[T](zero)
+}

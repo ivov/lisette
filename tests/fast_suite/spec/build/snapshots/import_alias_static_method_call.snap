@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+type Point struct {
+	X int
+	Y int
+}
+
+func NewPoint(x, y int) Point {
+	return Point{
+		X: x,
+		Y: y,
+	}
+}
+
+
+// === main.go ===
+package main
+
+import L "github.com/user/myproject/lib"
+
+func main() {
+	L.NewPoint(3, 4)
+}

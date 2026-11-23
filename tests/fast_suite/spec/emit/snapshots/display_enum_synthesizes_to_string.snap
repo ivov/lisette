@@ -1,0 +1,55 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[display]
+  enum Color { Red, Green }
+---
+package main
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+type ColorTag uint8
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Red"
+	case ColorGreen:
+		return "Green"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func (c Color) GoString() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Color.Red"
+	case ColorGreen:
+		return "Color.Green"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func (c Color) toString() string {
+	return c.String()
+}

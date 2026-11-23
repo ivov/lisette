@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn test() {
+    match os.Create("f") {
+      Ok(_) => fmt.Println("made"),
+      Err(e) => fmt.Println(e),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+)
+
+func test() {
+	if ret, e := os.Create("f"); e == nil && ret != nil {
+		fmt.Println("made")
+	} else {
+		if e == nil {
+			e = errors.New("unexpected nil")
+		}
+		fmt.Println(e)
+	}
+}

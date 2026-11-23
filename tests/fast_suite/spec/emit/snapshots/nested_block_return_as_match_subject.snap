@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let _ = match { { return 1 } } {
+      1 => 1,
+      _ => 2,
+    }
+    3
+  }
+---
+package main
+
+func test() int {
+	var tmp int
+	{
+		return 1
+	}
+	_ = tmp
+	return 3
+}

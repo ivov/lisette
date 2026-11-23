@@ -1,0 +1,49 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Point { x: int }
+  
+  fn main() {
+    let ch1 = Channel.buffered<Point>(1)
+    let x = 99
+  
+    let result = select {
+      let Some(Point { x }) = ch1.receive() => x,
+      _ => x,
+    }
+  
+    fmt.Println(result)
+  }
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+}
+
+func main() {
+	ch1 := make(chan Point, 1)
+	x := 99
+	var result int
+	ch := ch1
+	for {
+		select {
+		case recv, ok := <-ch:
+			if ok {
+				result = recv.x
+			} else {
+				ch = nil
+				continue
+			}
+		default:
+			result = x
+		}
+		break
+	}
+	fmt.Println(result)
+}

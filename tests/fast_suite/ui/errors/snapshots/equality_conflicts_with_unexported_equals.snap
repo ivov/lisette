@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `#[equality]` conflicts with your `equals`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[equality]
+   · ─────┬─────
+   ·      ╰── would synthesize an `equals` of its own
+ 3 │ struct Point { x: int }
+   ╰────
+  help: Write `equals` as a plain `fn equals(self, other: Self) -> bool`, or remove `#[equality]` · code: [attribute.equality_conflicting_equals]

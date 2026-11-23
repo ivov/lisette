@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:3:1]
+ 2 │ struct Foo(int,
+ 3 │ fn main() {}
+   · ─┬
+   ·  ╰── expected `)`
+   ╰────
+  code: [parse.unexpected_token]

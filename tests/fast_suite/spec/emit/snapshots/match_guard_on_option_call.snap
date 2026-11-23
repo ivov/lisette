@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn get_option() -> Option<int> { Some(42) }
+  
+  fn test() -> int {
+    match get_option() {
+      Some(x) if x > 0 => x,
+      Some(_) => 0,
+      None => -1,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func getOption() (int, bool) {
+	return 42, true
+}
+
+func test() int {
+	subject := lisette.OptionFromCommaOk[int](getOption())
+	if subject.Tag == lisette.OptionSome {
+		x := subject.SomeVal
+		if x > 0 {
+			return x
+		}
+		return 0
+	}
+	return -1
+}

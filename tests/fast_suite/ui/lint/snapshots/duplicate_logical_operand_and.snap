@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Duplicate logical operand
+   ╭─[test.lis:5:11]
+ 4 │   let b = 10;
+ 5 │   let _ = a > b && a > b
+   ·           ───────┬──────
+   ·                  ╰── accidental repetition
+ 6 │ }
+   ╰────
+  help: Simplify to `a > b` · code: [lint.duplicate_logical_operand]

@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"strings"
+)
+
+func main() {
+	reader := bufio.NewReader(strings.NewReader("hello\nworld"))
+	b, err := reader.ReadByte()
+	if err == nil {
+		fmt.Print(b)
+	} else {
+		fmt.Print("error")
+	}
+}

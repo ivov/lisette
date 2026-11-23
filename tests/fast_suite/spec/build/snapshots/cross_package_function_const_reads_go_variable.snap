@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+func Double(x int) int {
+	return x * 2
+}
+
+var Handler func(int) int = Double
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/lib"
+)
+
+var A func(int) int = lib.Handler
+
+func main() {
+	b := lib.Handler
+	fmt.Println(A(1), b(2))
+}

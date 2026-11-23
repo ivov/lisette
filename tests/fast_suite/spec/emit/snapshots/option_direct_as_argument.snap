@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn maybe_int(b: bool) -> Option<int> {
+    if b { Some(42) } else { None }
+  }
+  
+  fn unwrap_or(o: Option<int>, fallback: int) -> int {
+    match o { Some(v) => v, None => fallback }
+  }
+  
+  fn test() -> int {
+    unwrap_or(maybe_int(true), 0)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybeInt(b bool) (int, bool) {
+	if b {
+		return 42, true
+	}
+	return 0, false
+}
+
+func unwrapOr(o lisette.Option[int], fallback int) int {
+	if o.Tag == lisette.OptionSome {
+		return o.SomeVal
+	}
+	return fallback
+}
+
+func test() int {
+	return unwrapOr(lisette.OptionFromCommaOk[int](maybeInt(true)), 0)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid `as` binding
+   ╭─[test.lis:5:8]
+ 4 │ fn test(pair: (Point, int)) -> int {
+ 5 │   let (Point { x, .. } as p, z) = pair;
+   ·        ──────────┬─────────
+   ·                  ╰── `as` is disallowed here
+ 6 │   p.x + z
+   ╰────
+  help: Use `as` only in `match`, `if let`, and `while let` · code: [infer.as_binding_in_irrefutable_context]

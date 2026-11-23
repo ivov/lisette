@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import anon "go:example.com/anon"
+  
+  fn read() -> int {
+    let r = anon.PlainReturn()
+    r.X
+  }
+---
+package main
+
+import "example.com/anon"
+
+func read() int {
+	r := anon.PlainReturn()
+	return r.X
+}

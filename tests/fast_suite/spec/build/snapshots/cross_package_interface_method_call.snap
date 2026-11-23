@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/models"
+)
+
+func display(item models.Item) {
+	fmt.Println(item.Show())
+}
+
+func main() {}
+
+
+// === models/models.go ===
+package models
+
+type Showable interface {
+	Show() string
+}
+
+type Item struct {
+	Name string
+}
+
+func (i Item) Show() string {
+	return i.Name
+}

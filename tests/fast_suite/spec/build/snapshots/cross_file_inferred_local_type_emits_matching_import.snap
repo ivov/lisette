@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/util"
+)
+
+func main() {
+	fmt.Println(Count([]util.Box[string]{}))
+}
+
+
+// === maker.go ===
+package main
+
+import u "github.com/user/myproject/util"
+
+func Count(_ []u.Box[string]) int {
+	return 0
+}
+
+
+// === util/box.go ===
+package util
+
+type Box[T any] struct {
+	Items []T
+}

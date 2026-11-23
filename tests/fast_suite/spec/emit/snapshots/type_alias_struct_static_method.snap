@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Box { v: int }
+  
+  impl Box {
+    fn new(v: int) -> Box { Box { v } }
+  }
+  
+  type Alias = Box
+  
+  fn main() {
+    let b = Alias.new(1)
+    let _ = b
+  }
+---
+package main
+
+type Box struct {
+	v int
+}
+
+func newBox(v int) Box {
+	return Box{v: v}
+}
+
+type Alias = Box
+
+func main() {
+	b := newBox(1)
+	_ = b
+}

@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  const MAX_SIZE = 100
+  
+  fn test() -> int {
+    MAX_SIZE
+  }
+---
+package main
+
+const MaxSize int = 100
+
+func test() int {
+	return MaxSize
+}

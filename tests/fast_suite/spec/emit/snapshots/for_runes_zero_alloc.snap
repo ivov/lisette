@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  import "go:fmt"
+  fn test(s: string) {
+    for r in s.runes() {
+      fmt.Println(r)
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func test(s string) {
+	for _, r := range s {
+		fmt.Println(r)
+	}
+}

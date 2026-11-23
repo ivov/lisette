@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ struct Foo {
+ 3 │   let x = 1
+   ·   ─┬─
+   ·    ╰── expected field name
+ 4 │ }
+   ╰────
+  help: Field names must be identifiers · code: [parse.syntax_error]

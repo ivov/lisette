@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: |-
+  // regular comment
+  /// doc comment
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Comment,
+            text: "// regular comment",
+            byte_offset: 0,
+            byte_length: 18,
+        },
+        Token {
+            kind: DocComment,
+            text: "doc comment",
+            byte_offset: 19,
+            byte_length: 15,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 34,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "f\"\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FormatStringStart,
+            text: "f\"",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: FormatStringEnd,
+            text: "\"",
+            byte_offset: 2,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 3,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

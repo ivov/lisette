@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/recover.rs
+description: |
+  
+  fn fail(msg: string) -> Never { panic(msg) }
+  
+  fn test() -> string {
+    let result = recover { fail("intentional") };
+    match result {
+      Ok(_) => "ok",
+      Err(_) => "caught",
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func fail(msg string) {
+	panic(msg)
+}
+
+func test() string {
+	result := lisette.RecoverBlock(func() struct{} {
+		fail("intentional")
+		panic("unreachable")
+	})
+	if result.Tag == lisette.ResultOk {
+		return "ok"
+	}
+	return "caught"
+}

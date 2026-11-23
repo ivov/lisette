@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { 5 - 3 }"
+---
+fn test() {
+  5 - 3
+}

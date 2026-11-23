@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(opt: Option<int>) -> int {
+    if let Some(x) = opt {
+      x * 2
+    } else {
+      0
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) int {
+	if opt.Tag == lisette.OptionSome {
+		return opt.SomeVal * 2
+	}
+	return 0
+}

@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  fn apply(f: fn(string) -> Option<string>, key: string) -> string {
+    match f(key) {
+      Some(v) => v,
+      None => "unset",
+    }
+  }
+  
+  fn main() {
+    let r = apply(os.LookupEnv, "HOME")
+    let _ = r
+  }
+---
+package main
+
+import (
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func apply(f func(string) lisette.Option[string], key string) string {
+	subject := f(key)
+	if subject.Tag == lisette.OptionSome {
+		return subject.SomeVal
+	}
+	return "unset"
+}
+
+func main() {
+	r := apply(func(arg0 string) lisette.Option[string] {
+		return lisette.OptionFromCommaOk[string](os.LookupEnv(arg0))
+	}, "HOME")
+	_ = r
+}

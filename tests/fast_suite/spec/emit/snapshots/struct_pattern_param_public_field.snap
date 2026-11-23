@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Point { pub x: int, pub y: int }
+  
+  fn get_x(Point { x, .. }: Point) -> int {
+    x
+  }
+---
+package main
+
+type Point struct {
+	X int
+	Y int
+}
+
+func getX(arg Point) int {
+	return arg.X
+}

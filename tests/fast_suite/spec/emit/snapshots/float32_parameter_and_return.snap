@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn accept_float32(x: float32) -> float32 {
+    x
+  }
+---
+package main
+
+func acceptFloat32(x float32) float32 {
+	return x
+}

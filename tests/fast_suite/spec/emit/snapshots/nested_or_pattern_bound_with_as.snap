@@ -1,0 +1,98 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  #[display]
+  enum Event { KeyDown(int), KeyUp(int), Click }
+  
+  fn describe(e: Event) -> string {
+    match e {
+      (Event.KeyDown(c) | Event.KeyUp(c)) as key => f"{c} {key}",
+      Event.Click => "click",
+    }
+  }
+  
+  fn is_key(e: Event) -> string {
+    match e {
+      (Event.KeyDown(_) | Event.KeyUp(_)) as key => f"{key}",
+      Event.Click => "click",
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func MakeEventKeyDown(arg0 int) Event {
+	return Event{Tag: EventKeyDown, KeyDown: arg0}
+}
+
+func MakeEventKeyUp(arg0 int) Event {
+	return Event{Tag: EventKeyUp, KeyUp: arg0}
+}
+
+func MakeEventClick() Event {
+	return Event{Tag: EventClick}
+}
+
+type EventTag uint8
+
+const (
+	EventKeyDown EventTag = iota
+	EventKeyUp
+	EventClick
+)
+
+type Event struct {
+	Tag     EventTag
+	KeyDown int
+	KeyUp   int
+}
+
+func (e Event) String() string {
+	switch e.Tag {
+	case EventKeyDown:
+		return fmt.Sprintf("KeyDown(%v)", e.KeyDown)
+	case EventKeyUp:
+		return fmt.Sprintf("KeyUp(%v)", e.KeyUp)
+	case EventClick:
+		return "Click"
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+func (e Event) GoString() string {
+	switch e.Tag {
+	case EventKeyDown:
+		return fmt.Sprintf("Event.KeyDown(%v)", e.KeyDown)
+	case EventKeyUp:
+		return fmt.Sprintf("Event.KeyUp(%v)", e.KeyUp)
+	case EventClick:
+		return "Event.Click"
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+func (e Event) toString() string {
+	return e.String()
+}
+
+func describe(e Event) string {
+	switch e.Tag {
+	case EventKeyDown:
+		return fmt.Sprintf("%d %v", e.KeyDown, e)
+	case EventKeyUp:
+		return fmt.Sprintf("%d %v", e.KeyUp, e)
+	default:
+		return "click"
+	}
+}
+
+func isKey(e Event) string {
+	if e.Tag == EventKeyDown || e.Tag == EventKeyUp {
+		return fmt.Sprint(e)
+	}
+	return "click"
+}

@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn track(flag: mut Ref<bool>) -> Result<int, error> {
+    flag.* = true
+    Ok(1)
+  }
+  
+  fn test() {
+    let mut ran = false
+    if false && track(&ran).is_ok() {
+      panic("body should not run")
+    }
+    if ran {
+      panic("rhs evaluated despite short-circuit")
+    }
+  }
+---
+package main
+
+func track(flag *bool) (int, error) {
+	*flag = true
+	return 1, nil
+}
+
+func test() {
+	ran := false
+	if false {
+		if _, err := track(&ran); err == nil {
+			panic("body should not run")
+		}
+	}
+	if ran {
+		panic("rhs evaluated despite short-circuit")
+	}
+}

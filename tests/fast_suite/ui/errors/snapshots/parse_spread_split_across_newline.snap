@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:33]
+ 1 │ 
+ 2 │ fn test(xs: Slice<int>) { foo(xs
+   ·                                 ▲
+   ·                                 ╰── expected `,` or `)`
+ 3 │   ...) }
+   ╰────
+  help: Add a comma between elements · code: [parse.syntax_error]

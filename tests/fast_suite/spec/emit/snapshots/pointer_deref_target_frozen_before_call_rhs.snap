@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn run() -> int {
+    let mut a = 10
+    let mut b = 20
+    let mut p = &a
+    let repoint = || -> int { p = &b; 5 }
+    p.* = repoint()
+    a
+  }
+---
+package main
+
+func run() int {
+	a := 10
+	b := 20
+	p := &a
+	repoint := func() int {
+		p = &b
+		return 5
+	}
+	ref := p
+	*ref = repoint()
+	return a
+}

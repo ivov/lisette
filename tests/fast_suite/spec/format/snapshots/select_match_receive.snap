@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    select {
+      match ch.receive() {
+        Some(v) => process(v),
+        None => handle_close(),
+      },
+      _ => default(),
+    }
+  }
+---
+fn test() {
+  select {
+    match ch.receive() {
+      Some(v) => process(v),
+      None => handle_close(),
+    },
+    _ => default(),
+  }
+}

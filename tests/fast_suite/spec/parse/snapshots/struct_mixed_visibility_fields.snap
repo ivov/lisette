@@ -1,0 +1,108 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  struct Config {
+    pub name: string,
+    secret: string,
+    pub enabled: bool,
+  }
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Config",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 6,
+        },
+        generics: [],
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    name: "name",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 23,
+                        byte_length: 4,
+                    },
+                    annotation: Constructor {
+                        name: "string",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 29,
+                            byte_length: 6,
+                        },
+                    },
+                    visibility: Public,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+                StructFieldDefinition {
+                    doc: None,
+                    name: "secret",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 39,
+                        byte_length: 6,
+                    },
+                    annotation: Constructor {
+                        name: "string",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 47,
+                            byte_length: 6,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+                StructFieldDefinition {
+                    doc: None,
+                    name: "enabled",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 61,
+                        byte_length: 7,
+                    },
+                    annotation: Constructor {
+                        name: "bool",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 70,
+                            byte_length: 4,
+                        },
+                    },
+                    visibility: Public,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+            ],
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 76,
+        },
+    },
+]

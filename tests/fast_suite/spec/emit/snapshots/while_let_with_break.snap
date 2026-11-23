@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(opt: Option<int>) {
+    let mut current = opt;
+    while let Some(x) = current {
+      if x > 100 {
+        break;
+      }
+      current = None;
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) {
+	current := opt
+	for {
+		if current.Tag == lisette.OptionSome {
+			if current.SomeVal > 100 {
+				break
+			}
+			current = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+}

@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Item { x: int }
+  
+  fn get() -> mut Ref<Item> { &Item { x: 0 } }
+  
+  fn main() {
+    get().x = 1
+  }
+---
+package main
+
+type Item struct {
+	x int
+}
+
+func get() *Item {
+	return &Item{x: 0}
+}
+
+func main() {
+	get().x = 1
+}

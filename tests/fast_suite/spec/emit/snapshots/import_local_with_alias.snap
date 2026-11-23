@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import h "utils/helpers"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Local package with alias")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	fmt.Print("Local package with alias")
+}

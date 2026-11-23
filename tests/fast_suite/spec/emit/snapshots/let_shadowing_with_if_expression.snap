@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  fn test(cond: bool) -> int {
+    let x = 1;
+    let x = if cond { 2 } else { 3 };
+    x
+  }
+---
+package main
+
+func test(cond bool) int {
+	var x int
+	if cond {
+		x = 2
+	} else {
+		x = 3
+	}
+	return x
+}

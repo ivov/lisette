@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut s = [1]
+    s = Slice.append(s, 2)
+    let _ = s[1]
+  }
+---
+package main
+
+func main() {
+	s := []int{1}
+	s = append(s, 2)
+	_ = s[1]
+}

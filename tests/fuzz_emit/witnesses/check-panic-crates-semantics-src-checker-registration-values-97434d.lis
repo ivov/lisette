@@ -1,0 +1,14 @@
+
+import "go:strconv"
+
+type Pair = (error, int)
+struct Pair(F, int)
+
+fn main() {
+  let p = Pair(strconv.Atoi, 1)
+  let r = p.0("1")
+  match r {
+    Ok(v) => { let _ = v },
+    Err(_) => { let _ = 1 },
+  }
+}

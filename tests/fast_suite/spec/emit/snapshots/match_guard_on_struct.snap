@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(p: Point) -> string {
+    match p {
+      Point { x, y } if x == y => "diagonal",
+      Point { x, y } if x > y => "above",
+      Point { x, y } => "below",
+    }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test(p Point) string {
+	{
+		if p.x == p.y {
+			return "diagonal"
+		}
+	}
+	{
+		if p.x > p.y {
+			return "above"
+		}
+	}
+	return "below"
+}

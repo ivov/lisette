@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:example.com/events"
+  
+  fn handle(e: events.Event) -> int {
+    match e {
+      events.Click { .. } | events.KeyPress { .. } | events.Resize { .. } => 1,
+      _ => 0,
+    }
+  }
+---
+package main
+
+import "example.com/events"
+
+func handle(e events.Event) int {
+	switch e.(type) {
+	case events.Click, events.KeyPress, events.Resize:
+		return 1
+	default:
+		return 0
+	}
+}

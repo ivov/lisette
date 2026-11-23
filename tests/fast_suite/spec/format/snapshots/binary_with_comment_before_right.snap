@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    1 +
+    // comment before right operand
+    2
+  }
+---
+fn test() {
+  1 +
+  // comment before right operand
+  2
+}

@@ -1,0 +1,39 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let b = aws.Bucket { .. }
+    let slots = b.Slots
+    match slots[0] {
+      Some(v) => { let _ = v },
+      None => {},
+    }
+  }
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	b := aws.Bucket{}
+	raw := b.Slots
+	var wrapped [2]lisette.Option[*aws.Node]
+	for i, v := range raw {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[*aws.Node](v)
+		} else {
+			wrapped[i] = lisette.MakeOptionNone[*aws.Node]()
+		}
+	}
+	slots := wrapped
+	subject := slots[0]
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
+	}
+}

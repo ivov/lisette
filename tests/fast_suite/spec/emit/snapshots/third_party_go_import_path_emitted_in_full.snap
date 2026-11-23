@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:github.com/bwmarrin/discordgo"
+  
+  fn session() -> discordgo.Session {
+    discordgo.Session{}
+  }
+---
+package main
+
+import "github.com/bwmarrin/discordgo"
+
+func session() discordgo.Session {
+	return discordgo.Session{}
+}

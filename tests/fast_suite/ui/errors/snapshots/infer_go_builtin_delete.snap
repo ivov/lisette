@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(m: Map<string, int>) {
+ 3 │   delete(m, "key");
+   ·   ───┬──
+   ·      ╰── not a Lisette builtin
+ 4 │ }
+   ╰────
+  help: Use `map.delete(key)`. Lisette has no `delete` builtin · code: [resolve.name_not_found]

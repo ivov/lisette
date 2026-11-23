@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Handle(Ref<int>)
+---
+package main
+
+type Handle *int

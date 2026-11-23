@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ #[test(123)]
+   ·        ─┬─
+   ·         ╰── expected attribute argument
+ 3 │ fn bad_title_arg() { }
+   ╰────
+  help: Add a flag (e.g. `omitempty`), string (e.g. `"name"`), or raw tag (e.g. `` `json:"name"` ``) · code: [parse.syntax_error]

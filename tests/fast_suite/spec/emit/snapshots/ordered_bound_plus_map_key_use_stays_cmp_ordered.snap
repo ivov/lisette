@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn count<T: Ordered>(x: T) -> int {
+    let mut m: mut Map<T, int> = Map.new()
+    m[x] = 1
+    m.length()
+  }
+  
+  fn main() {
+    let _ = count(1)
+  }
+---
+package main
+
+import "cmp"
+
+func count[T cmp.Ordered](x T) int {
+	m := make(map[T]int)
+	m[x] = 1
+	return len(m)
+}
+
+func main() {
+	count(1)
+}

@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { [first_element, second_element, third_element, fourth_element, fifth_element, sixth_element] }"
+---
+fn test() {
+  [
+    first_element,
+    second_element,
+    third_element,
+    fourth_element,
+    fifth_element,
+    sixth_element,
+  ]
+}

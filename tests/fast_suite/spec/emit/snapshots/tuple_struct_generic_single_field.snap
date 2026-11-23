@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Wrapper<T>(T)
+  
+  fn test() -> Wrapper<int> {
+    Wrapper(42)
+  }
+---
+package main
+
+type Wrapper[T any] struct {
+	F0 T
+}
+
+func test() Wrapper[int] {
+	return Wrapper[int]{F0: 42}
+}

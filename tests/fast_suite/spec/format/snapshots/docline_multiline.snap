@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  /// First line
+  /// Second line
+  fn foo() {}
+---
+/// First line
+/// Second line
+fn foo() {}

@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "encoding/json"
+
+type User struct {
+	FirstName  string `json:"firstName,omitempty"`
+	MiddleName string `json:"middleName,omitempty"`
+}
+
+func main() {
+	u := User{
+		FirstName:  "Alice",
+		MiddleName: "",
+	}
+	json.Marshal(u)
+}

@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn find_first_negative(items: Slice<int>) -> int {
+    let mut result = 0
+    for item in items {
+      match item {
+        n if n < 0 => { result = n; break },
+        _ => (),
+      }
+    }
+    result
+  }
+---
+package main
+
+func findFirstNegative(items []int) int {
+	result := 0
+loop_1:
+	for _, item := range items {
+		switch {
+		case item < 0:
+			result = item
+			break loop_1
+		}
+	}
+	return result
+}

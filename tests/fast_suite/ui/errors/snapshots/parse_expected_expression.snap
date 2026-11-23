@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Missing initializer
+   ╭─[test.lis:3:9]
+ 2 │ fn main() {
+ 3 │   let x = ;
+   ·         ┬
+   ·         ╰── expected expression after `=`
+ 4 │ }
+   ╰────
+  help: Add a value to initialize the binding · code: [parse.expected_expression]

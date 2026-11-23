@@ -1,0 +1,80 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn get_items() -> Slice<int> { [1, 2, 3] }
+  
+  fn len() -> string { "context" }
+  
+  fn direct_let() -> int {
+    let getItems = 5
+    getItems + get_items().length()
+  }
+  
+  fn filtered_let() -> int {
+    let getItems = get_items().filter(|x| x > 1)
+    getItems.length() + get_items().length()
+  }
+  
+  fn parameter(getItems: int) -> int {
+    let (first, rest) = (getItems, 2)
+    first + rest + get_items().length()
+  }
+  
+  fn arm_in_other_arm() {
+    match strconv.Atoi("bad") {
+      Ok(len) => fmt.Println(len),
+      Err(_) => fmt.Println(len()),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func getItems() []int {
+	return []int{1, 2, 3}
+}
+
+func len_() string {
+	return "context"
+}
+
+func directLet() int {
+	getItems2 := 5
+	return getItems2 + len(getItems())
+}
+
+func filteredLet() int {
+	var result []int
+	for _, x := range getItems() {
+		if x > 1 {
+			result = append(result, x)
+		}
+	}
+	getItems2 := result
+	return len(getItems2) + len(getItems())
+}
+
+func parameter(getItems2 int) int {
+	tmp := lisette.MakeTuple2[int, int](getItems2, 2)
+	first := tmp.First
+	rest := tmp.Second
+	return first + rest + len(getItems())
+}
+
+func armInOtherArm() {
+	if len2, err := strconv.Atoi("bad"); err == nil {
+		fmt.Println(len2)
+	} else {
+		fmt.Println(len_())
+	}
+}

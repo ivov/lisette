@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(err: error) {
+    panic(err)
+  }
+---
+package main
+
+func test(err error) {
+	panic(err)
+}

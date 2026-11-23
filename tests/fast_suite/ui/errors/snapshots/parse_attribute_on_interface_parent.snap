@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Attribute not supported on target
+   ╭─[test.lis:7:3]
+ 6 │ interface Child {
+ 7 │   #[iterate]
+   ·   ─────┬────
+   ·        ╰── nothing here can carry an attribute
+ 8 │   embed Parent
+   ╰────
+  help: Remove the attribute, or move it onto an enum, struct, or function · code: [parse.misplaced_attribute]

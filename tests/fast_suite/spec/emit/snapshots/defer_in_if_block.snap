@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(flag: bool) {
+    if flag {
+      defer fmt.Println("cleanup")
+      fmt.Println("work")
+    }
+    fmt.Println("after if")
+  }
+---
+package main
+
+import "fmt"
+
+func test(flag bool) {
+	if flag {
+		defer fmt.Println("cleanup")
+		fmt.Println("work")
+	}
+	fmt.Println("after if")
+}

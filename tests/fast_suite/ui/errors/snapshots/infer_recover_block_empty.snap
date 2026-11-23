@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ▲ Empty `recover` block
+   ╭─[test.lis:3:3]
+ 2 │ fn test() {
+ 3 │   recover {}
+   ·   ───┬───
+   ·      ╰── no expressions that could panic
+ 4 │ }
+   ╰────
+  help: Ensure the `recover` block contains at least one expression that may panic · code: [infer.recover_block_empty]

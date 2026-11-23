@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn fallible() -> Result<int, string> {
+    Err("something went wrong")
+  }
+  
+  fn process() -> Result<int, string> {
+    let x = fallible()?;
+    Ok(x)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func fallible() lisette.Result[int, string] {
+	return lisette.MakeResultErr[int, string]("something went wrong")
+}
+
+func process() lisette.Result[int, string] {
+	check := fallible()
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	x := check.OkVal
+	return lisette.MakeResultOk[int, string](x)
+}

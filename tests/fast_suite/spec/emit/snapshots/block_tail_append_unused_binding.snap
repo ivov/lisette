@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>) {
+    let _x = { s.append(2) }
+  }
+---
+package main
+
+import "slices"
+
+func test(s []int) {
+	_ = append(slices.Clip(s), 2)
+}

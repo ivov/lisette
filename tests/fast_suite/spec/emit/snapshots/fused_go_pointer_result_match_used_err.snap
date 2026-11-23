@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn test() {
+    let file = match os.Create("f") {
+      Ok(f) => f,
+      Err(e) => {
+        fmt.Println(e)
+        return
+      },
+    }
+    defer file.Close()
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+)
+
+func test() {
+	file, e := os.Create("f")
+	if e != nil || file == nil {
+		if e == nil {
+			e = errors.New("unexpected nil")
+		}
+		fmt.Println(e)
+		return
+	}
+	defer file.Close()
+}

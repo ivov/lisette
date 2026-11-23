@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test<T: Comparable>(a: Slice<T>, b: Slice<T>) -> bool {
+    a.equals(b)
+  }
+---
+package main
+
+import "slices"
+
+func test[T comparable](a, b []T) bool {
+	return slices.Equal(a, b)
+}

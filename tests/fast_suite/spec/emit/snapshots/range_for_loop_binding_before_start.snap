@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let start = 0
+    for start in start..3 {
+      let _ = start
+    }
+  }
+---
+package main
+
+func main() {
+	start := 0
+	for start2 := start; start2 < 3; start2++ {
+		_ = start2
+	}
+}

@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Pair(int, int)
+  
+  fn test(p: Pair) -> int {
+    match p {
+      Pair(a, b) => a + b,
+    }
+  }
+---
+package main
+
+type Pair struct {
+	F0 int
+	F1 int
+}
+
+func test(p Pair) int {
+	return p.F0 + p.F1
+}

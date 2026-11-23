@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn fallible() -> Result<int, error> {
+    Ok(1)
+  }
+  
+  fn describe(value: Unknown) -> string {
+    match assert_type<string>(value) {
+      Some(text) => text,
+      None => "",
+    }
+  }
+  
+  fn run() -> Result<string, error> {
+    let mut value: Unknown = fallible()?
+    value = "two"
+    Ok(describe(value))
+  }
+  
+  fn test() {
+    let text = match run() {
+      Ok(text) => text,
+      Err(_) => "",
+    }
+    if text != "two" {
+      panic("propagated Unknown binding was declared at the concrete type")
+    }
+  }
+---
+package main
+
+func fallible() (int, error) {
+	return 1, nil
+}
+
+func describe(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
+func run() (string, error) {
+	var value any
+	ret, err := fallible()
+	if err != nil {
+		return "", err
+	}
+	value = ret
+	value = "two"
+	return describe(value), nil
+}
+
+func test() {
+	var text2 string
+	if text, err := run(); err == nil {
+		text2 = text
+	} else {
+		text2 = ""
+	}
+	if text2 != "two" {
+		panic("propagated Unknown binding was declared at the concrete type")
+	}
+}

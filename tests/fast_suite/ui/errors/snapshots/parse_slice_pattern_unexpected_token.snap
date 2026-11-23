@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:4:6]
+ 3 │   match items {
+ 4 │     [+ + +] => 0,
+   ·      ┬
+   ·      ╰── unexpected `+` in pattern
+ 5 │   }
+   ╰────
+  help: Patterns include literals, variables, and destructuring · code: [parse.invalid_pattern]

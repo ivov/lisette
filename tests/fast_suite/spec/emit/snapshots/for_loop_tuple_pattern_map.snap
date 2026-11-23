@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(m: Map<string, int>) -> int {
+    let mut sum = 0;
+    for (_, value) in m {
+      sum = sum + value;
+    };
+    sum
+  }
+---
+package main
+
+func test(m map[string]int) int {
+	sum := 0
+	for _, value := range m {
+		sum += value
+	}
+	return sum
+}

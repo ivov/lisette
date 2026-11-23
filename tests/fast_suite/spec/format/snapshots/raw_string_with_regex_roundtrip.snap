@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { let re = r\"([a-zA-Z])(\\d)\" }"
+---
+fn test() {
+  let re = r"([a-zA-Z])(\d)"
+}

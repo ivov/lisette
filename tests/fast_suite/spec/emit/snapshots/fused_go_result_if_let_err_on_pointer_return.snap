@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  
+  fn test(name: string) -> bool {
+    if let Err(e) = os.Open(name) {
+      return false
+    }
+    true
+  }
+---
+package main
+
+import "os"
+
+func test(name string) bool {
+	if ret, err := os.Open(name); err != nil || ret == nil {
+		return false
+	}
+	return true
+}

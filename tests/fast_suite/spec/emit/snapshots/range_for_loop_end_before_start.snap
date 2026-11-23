@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn start() -> int { 0 }
+  fn bound() -> int { 3 }
+  
+  fn main() {
+    for i in start()..bound() {
+      let _ = i
+    }
+  }
+---
+package main
+
+func start() int {
+	return 0
+}
+
+func bound() int {
+	return 3
+}
+
+func main() {
+	start2 := start()
+	bound2 := bound()
+	for i := start2; i < bound2; i++ {
+		_ = i
+	}
+}

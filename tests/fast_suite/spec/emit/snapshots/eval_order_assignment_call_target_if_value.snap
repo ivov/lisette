@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn get_items() -> Slice<int> { [1, 2, 3] }
+  
+  fn main() {
+    let mut items = [0, 0, 0]
+    items[get_items()[0]] = if true { 42 } else { 0 }
+  }
+---
+package main
+
+func getItems() []int {
+	return []int{1, 2, 3}
+}
+
+func main() {
+	items := []int{0, 0, 0}
+	base := items
+	idx := getItems()[0]
+	var tmp int
+	if true {
+		tmp = 42
+	} else {
+		tmp = 0
+	}
+	base[idx] = tmp
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Missing bound on type parameter
+   ╭─[test.lis:7:20]
+ 6 │ fn wrapper<T: Comparable>(x: T) {
+ 7 │   requires_ordered(x)
+   ·                    ┬
+   ·                    ╰── does not satisfy `Ordered`
+ 8 │ }
+   ╰────
+  help: Add this bound to the enclosing function: `<T: cmp.Ordered>`. The parameter must be `cmp.Ordered` but the argument is unbounded · code: [infer.missing_bound_on_param]

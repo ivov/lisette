@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Reserved keyword
+   ╭─[test.lis:3:7]
+ 2 │ fn main() {
+ 3 │   let defer = 1
+   ·       ──┬──
+   ·         ╰── cannot be used as a binding name
+ 4 │ }
+   ╰────
+  help: Rename this binding. `defer` is a keyword reserved for scheduling cleanup · code: [parse.keyword_as_binding]

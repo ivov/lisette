@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/aws"
+  
+  fn main() {
+    match aws.Read() {
+      Partial.Err(e) => fmt.Println("err", e),
+      _ => {},
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	"example.com/aws"
+)
+
+func main() {
+	if ret, e := aws.Read(); e != nil && ret == nil {
+		fmt.Println("err", e)
+	}
+}

@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/cli"
+  
+  fn make() -> Ref<cli.StringFlag> {
+    &cli.StringFlag { Name: "n", Value: "v", .. }
+  }
+---
+package main
+
+import "example.com/cli"
+
+func make_() *cli.StringFlag {
+	return &cli.StringFlag{
+		Name:  "n",
+		Value: "v",
+	}
+}

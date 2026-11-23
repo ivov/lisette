@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn might_fail() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn get_value() -> Result<int, string> {
+    let result = might_fail()?;
+    Ok(result)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func mightFail() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func getValue() lisette.Result[int, string] {
+	check := mightFail()
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	result := check.OkVal
+	return lisette.MakeResultOk[int, string](result)
+}

@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import t "go:time"
+  
+  fn second() -> t.Duration {
+    t.Second
+  }
+---
+package main
+
+import t "time"
+
+func second() t.Duration {
+	return t.Second
+}

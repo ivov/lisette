@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  pub interface IFoo {
+    fn foo() -> int
+  }
+  
+  struct S {
+    foo: int,
+  }
+  
+  fn main() {
+    let s = S { foo: 1 }
+    let _ = s.foo
+  }
+---
+package main
+
+type IFoo interface {
+	Foo() int
+}
+
+type S struct {
+	foo int
+}
+
+func main() {
+	s := S{foo: 1}
+	_ = s.foo
+}

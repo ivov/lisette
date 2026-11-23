@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn bump(i: mut Ref<int>) -> int {
+    i.* = 1
+    10
+  }
+  
+  fn main() {
+    let items = [100, 200, 300]
+    let mut i = 0
+    let v = items[bump(&i)]
+    let _ = v
+  }
+---
+package main
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func main() {
+	items := []int{100, 200, 300}
+	i := 0
+	v := items[bump(&i)]
+	_ = v
+}

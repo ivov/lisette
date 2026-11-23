@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() -> Point {
+    let base = Point { x: 1, y: 2 };
+    Point { ..base }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test() Point {
+	base := Point{
+		x: 1,
+		y: 2,
+	}
+	return base
+}

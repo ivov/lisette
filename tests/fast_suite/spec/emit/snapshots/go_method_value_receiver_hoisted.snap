@@ -1,0 +1,58 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:bytes"
+  import "go:fmt"
+  
+  fn make(counter: mut Ref<int>) -> mut Ref<bytes.Buffer> {
+    counter.* = counter.* + 1
+    bytes.NewBufferString("a\nb\n")
+  }
+  
+  fn use_fn(f: fn(uint8) -> Partial<string, error>) {
+    let _ = f(10)
+    let _ = f(10)
+  }
+  
+  fn main() {
+    let mut count = 0
+    use_fn(make(&count).ReadString)
+    fmt.Println(count)
+  }
+---
+package main
+
+import (
+	"bytes"
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func make_(counter *int) *bytes.Buffer {
+	*counter++
+	return bytes.NewBufferString("a\nb\n")
+}
+
+func useFn(f func(uint8) lisette.Partial[string, error]) {
+	f(10)
+	f(10)
+}
+
+func main() {
+	count := 0
+	cb := make_(&count).ReadString
+	var adapted func(uint8) lisette.Partial[string, error]
+	if cb != nil {
+		adapted = func(arg0 uint8) lisette.Partial[string, error] {
+			ret, ret2 := cb(arg0)
+			if ret2 != nil {
+				return lisette.MakePartialBoth[string, error](ret, ret2)
+			}
+			return lisette.MakePartialOk[string, error](ret)
+		}
+	}
+	useFn(adapted)
+	fmt.Println(count)
+}

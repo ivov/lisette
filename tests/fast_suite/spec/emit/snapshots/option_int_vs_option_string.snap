@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test_int() -> Option<int> {
+    Some(42)
+  }
+  
+  fn test_string() -> Option<string> {
+    Some("hello")
+  }
+---
+package main
+
+func testInt() (int, bool) {
+	return 42, true
+}
+
+func testString() (string, bool) {
+	return "hello", true
+}

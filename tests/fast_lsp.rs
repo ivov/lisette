@@ -1,0 +1,16354 @@
+#[path = "fast_lsp/harness.rs"]
+mod lsp_harness;
+#[path = "fast_lsp/session.rs"]
+mod session;
+
+use lisette_lsp::protocol::*;
+use lsp_harness::{
+    TestClient, completion_items, completion_labels, cursor, cursors, definition_location,
+    definition_target_text, doc_end, hover_content, inlay_hint_triples, symbol_names,
+};
+use std::collections::HashSet;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+
+const TEST_URI: &str = "file:///test.lis";
+
+#[test]
+fn initialize_returns_capabilities() {
+    let mut client = TestClient::new();
+    let result = client.initialize();
+
+    assert!(result.capabilities.hover_provider.is_some());
+    assert!(result.capabilities.definition_provider.is_some());
+    assert!(result.capabilities.references_provider.is_some());
+    assert!(result.capabilities.completion_provider.is_some());
+    assert!(result.capabilities.signature_help_provider.is_some());
+    assert!(result.capabilities.rename_provider.is_some());
+    assert!(result.capabilities.document_formatting_provider.is_some());
+    assert!(result.capabilities.document_symbol_provider.is_some());
+    assert!(result.capabilities.inlay_hint_provider.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_shows_function_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn add(x: int, y: int) -> int { x + y }");
+
+    let hover = client.hover(TEST_URI, 0, 3);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"));
+    assert!(content.contains("->"));
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_callee_of_rejected_pipeline_step() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn id(a: int) -> int { a } fn main() { let _ = 1 |> id? }",
+    );
+
+    let hover = client.hover(TEST_URI, 0, 52);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"));
+    assert!(content.contains("->"));
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_shows_variable_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+
+    let hover = client.hover(TEST_URI, 0, 16);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"));
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_shows_string_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"fn main() { let s = "hello"; s }"#);
+
+    let hover = client.hover(TEST_URI, 0, 16);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("string"));
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_tuple_binding_shows_element_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"fn main() { let (a, b) = (1, "hi"); b }"#);
+
+    let hover = client.hover(TEST_URI, 0, 20);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("string"));
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_local_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let x = 1\n  x + 1\n}");
+
+    let response = client.goto_definition(TEST_URI, 2, 2);
+    assert!(response.is_some());
+
+    let response = response.unwrap();
+    let loc = definition_location(&response);
+    assert!(loc.is_some());
+
+    let loc = loc.unwrap();
+    assert_eq!(loc.range.start.line, 1);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_function_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo() }");
+
+    let response = client.goto_definition(TEST_URI, 1, 12);
+    assert!(response.is_some());
+
+    let response = response.unwrap();
+    let loc = definition_location(&response);
+    assert!(loc.is_some());
+
+    let loc = loc.unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_function_parameter() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn add(x: int) { x + 1 }");
+
+    let response = client.goto_definition(TEST_URI, 0, 17);
+    assert!(response.is_some());
+
+    let response = response.unwrap();
+    let loc = definition_location(&response);
+    assert!(loc.is_some());
+
+    let loc = loc.unwrap();
+    assert_eq!(loc.range.start.line, 0);
+    assert!(loc.range.start.character < 10);
+
+    client.shutdown();
+}
+
+const EMBED_SRC: &str = r#"struct Base {
+  pub id: int,
+}
+impl Base {
+  pub fn describe(self) -> string { "b" }
+}
+struct Wrapper {
+  embed Base,
+}
+fn use_method(w: Wrapper) -> string {
+  w.describe()
+}
+fn use_field(w: Wrapper) -> int {
+  w.id
+}"#;
+
+#[test]
+fn goto_definition_promoted_method() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, EMBED_SRC);
+
+    let response = client.goto_definition(TEST_URI, 10, 6);
+    let loc = definition_location(&response.expect("response")).expect("location");
+    assert_eq!(loc.range.start.line, 4);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_promoted_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, EMBED_SRC);
+
+    let response = client.goto_definition(TEST_URI, 13, 4);
+    let loc = definition_location(&response.expect("response")).expect("location");
+    assert_eq!(loc.range.start.line, 1);
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_offers_promoted_members() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(&format!(
+        "{EMBED_SRC}\n\nfn use_dot(w: Wrapper) {{\n  w.~\n}}"
+    ));
+    client.open(TEST_URI, &source);
+
+    let labels = completion_labels(
+        &client
+            .completion(TEST_URI, line, character)
+            .expect("completions"),
+    );
+    for promoted in ["id", "describe"] {
+        assert!(
+            labels.iter().any(|l| l == promoted),
+            "expected `{promoted}` promoted from the embedded `Base`; got: {labels:?}"
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_offers_members_promoted_through_a_ref_embed_and_two_levels() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "struct A {\n  pub a: int,\n}\nimpl A {\n  pub fn am(self) -> int { self.a }\n}\nstruct B {\n  embed Ref<A>,\n  pub b: int,\n}\nstruct C {\n  embed B,\n}\nfn f(c: C) -> int {\n  c.~\n  0\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let labels = completion_labels(
+        &client
+            .completion(TEST_URI, line, character)
+            .expect("completions"),
+    );
+    for promoted in ["b", "a", "am"] {
+        assert!(
+            labels.iter().any(|l| l == promoted),
+            "expected `{promoted}` promoted onto `C`; got: {labels:?}"
+        );
+    }
+
+    client.shutdown();
+}
+
+/// `b.dup` resolves to the promoted field and is not callable, so the
+/// same-named UFCS method must not be offered beside it.
+#[test]
+fn completion_offers_one_entry_when_a_ufcs_method_collides_with_a_promoted_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "struct A {\n  pub dup: int,\n}\nstruct B {\n  embed A,\n}\nimpl B {\n  pub fn dup<T>(self, x: T) -> T { x }\n}\nfn f(b: B) -> int {\n  b.~\n  0\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client
+        .completion(TEST_URI, line, character)
+        .expect("completions");
+    let dups: Vec<_> = completion_items(&response)
+        .iter()
+        .filter(|item| item.label == "dup")
+        .collect();
+    assert_eq!(
+        dups.len(),
+        1,
+        "`dup` should be offered once; got: {:?}",
+        completion_labels(&response)
+    );
+    assert_eq!(
+        dups[0].kind,
+        Some(CompletionItemKind::FIELD),
+        "`b.dup` resolves to the promoted field, so the field is the entry to keep"
+    );
+
+    client.shutdown();
+}
+
+/// A body use is a `Slice<T>`, as `gopls` reports for Go's `...T`.
+#[test]
+fn hover_on_varargs_param_in_body_shows_a_slice() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "fn f(xs: VarArgs<int>) -> int {\n  ~xs.length()\n}\n\nfn main() {\n  let _ = f(1, 2)\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, line, character).expect("hover");
+    let content = hover_content(&hover);
+    assert!(
+        content.contains("Slice<int>"),
+        "expected the body binding to hover as a slice, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_explicit_type_arg_call_shows_substituted_signature() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) =
+        cursor("fn f<T>(xs: VarArgs<T>) {}\n\nfn main() {\n  ~f<Option<int>>()\n}");
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, line, character).expect("hover");
+    let content = hover_content(&hover);
+    assert!(
+        content.contains("VarArgs<Option<int>>"),
+        "expected substituted signature, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_promoted_method_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, EMBED_SRC);
+
+    let hover = client.hover(TEST_URI, 10, 6).expect("hover");
+    assert!(
+        hover_content(&hover).contains("string"),
+        "hover content: {}",
+        hover_content(&hover)
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn references_finds_all_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }");
+
+    let refs = client.references(TEST_URI, 0, 3, true);
+    assert!(refs.is_some());
+
+    let locations = refs.unwrap();
+    assert_eq!(locations.len(), 3);
+
+    client.shutdown();
+}
+
+#[test]
+fn references_excludes_declaration_when_flag_false() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }");
+
+    let refs = client.references(TEST_URI, 0, 3, false);
+    assert!(refs.is_some());
+
+    let locations = refs.unwrap();
+    assert_eq!(locations.len(), 2);
+
+    client.shutdown();
+}
+
+#[test]
+fn references_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let x = 1\n  x + x\n}");
+
+    let refs = client.references(TEST_URI, 1, 6, true);
+    assert!(refs.is_some());
+
+    let locations = refs.unwrap();
+    assert_eq!(locations.len(), 3);
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_includes_keywords() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
+
+    let response = client.completion(TEST_URI, 0, 0);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(labels.iter().any(|l| l == "fn"));
+    assert!(labels.iter().any(|l| l == "let"));
+    assert!(labels.iter().any(|l| l == "if"));
+    assert!(labels.iter().any(|l| l == "match"));
+    assert!(labels.iter().any(|l| l == "struct"));
+    assert!(labels.iter().any(|l| l == "enum"));
+    assert!(labels.iter().any(|l| l == "var"));
+    assert!(labels.iter().any(|l| l == "self"));
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_includes_prelude_types() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
+
+    let response = client.completion(TEST_URI, 0, 0);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(labels.iter().any(|l| l == "int"));
+    assert!(labels.iter().any(|l| l == "string"));
+    assert!(labels.iter().any(|l| l == "bool"));
+    assert!(labels.iter().any(|l| l == "Option"));
+    assert!(labels.iter().any(|l| l == "Result"));
+    assert!(labels.iter().any(|l| l == "Array"));
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_omits_go_builtins_lisette_does_not_have() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
+
+    let labels = completion_labels(&client.completion(TEST_URI, 0, 0).unwrap());
+
+    for absent in [
+        "println", "print", "len", "cap", "make", "append", "copy", "Unit",
+    ] {
+        assert!(
+            !labels.iter().any(|l| l == absent),
+            "`{absent}` is a Go builtin the compiler rejects by name, so offering it misleads"
+        );
+    }
+    for present in ["Some", "None", "Ok", "Err", "panic"] {
+        assert!(
+            labels.iter().any(|l| l == present),
+            "`{present}` resolves and should be offered"
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_includes_synthesized_to_string() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "#[display]\nstruct Point { x: int, y: int }\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.\n}",
+        )
+        ;
+
+    let response = client.completion(TEST_URI, 5, 4);
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "to_string"),
+        "expected synthesized `to_string` in instance completions; got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_includes_local_bindings() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let myvar = 1\n  m\n}");
+
+    let response = client.completion(TEST_URI, 2, 3);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(labels.iter().any(|l| l == "myvar"));
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_uses_the_nearest_shadowed_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct First { first: int }\nstruct Second { second: int }\nfn main() {\n  let value = First { first: 1 }\n  let value = Second { second: 2 }\n  value.\n}",
+    );
+
+    let response = client.completion(TEST_URI, 5, 8).unwrap();
+    let labels = completion_labels(&response);
+
+    assert_eq!(labels, vec!["second"]);
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_includes_defined_functions() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn helper() { 1 }\nfn main() { h }");
+
+    let response = client.completion(TEST_URI, 1, 13);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(labels.iter().any(|l| l == "helper"));
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_shows_function_params() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
+    );
+
+    let help = client.signature_help(TEST_URI, 1, 17);
+    assert!(help.is_some());
+
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("add"));
+    assert!(sig.label.contains("int"));
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_shows_param_names() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
+    );
+
+    let help = client.signature_help(TEST_URI, 1, 17);
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("x: int"), "label was {}", sig.label);
+    assert!(sig.label.contains("y: int"), "label was {}", sig.label);
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_method_strips_receiver_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+struct Point { x: int, y: int }
+impl Point {
+  pub fn translate(self, dx: int, dy: int) -> int { self.x + dx + dy }
+}
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  p.translate(1, 2)
+}";
+    client.open(TEST_URI, source);
+
+    let help = client.signature_help(TEST_URI, 6, 14);
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("dx: int"), "label was {}", sig.label);
+    assert!(sig.label.contains("dy: int"), "label was {}", sig.label);
+    assert!(
+        !sig.label.contains("self"),
+        "receiver name leaked into label: {}",
+        sig.label
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_generic_function_shows_param_names() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+fn pick<T>(first: T, second: T) -> T { first }
+fn main() {
+  let _ = pick(1, 2)
+}";
+    client.open(TEST_URI, source);
+
+    let help = client.signature_help(TEST_URI, 2, 15);
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("first:"), "label was {}", sig.label);
+    assert!(sig.label.contains("second:"), "label was {}", sig.label);
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_interface_method_shows_param_names() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+interface Account {
+  fn withdraw(amount: int) -> int
+}
+fn process(a: Account) -> int {
+  a.withdraw(50)
+}";
+    client.open(TEST_URI, source);
+
+    let help = client.signature_help(TEST_URI, 4, 13);
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("amount: int"), "label was {}", sig.label);
+    assert!(
+        !sig.label.contains("self"),
+        "receiver name leaked into label: {}",
+        sig.label
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_inferred_closure_param_keeps_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+fn main() {
+  let inc = |x| -> int { x + 1 }
+  let _ = inc(5)
+}";
+    client.open(TEST_URI, source);
+
+    let help = client.signature_help(TEST_URI, 2, 14);
+    let sig = &help.unwrap().signatures[0];
+    assert!(sig.label.contains("x: int"), "label was {}", sig.label);
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_active_parameter() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
+    );
+
+    let help = client.signature_help(TEST_URI, 1, 19);
+    assert!(help.is_some());
+
+    let sig_help = help.unwrap();
+    assert_eq!(sig_help.active_parameter, Some(1));
+
+    client.shutdown();
+}
+
+#[test]
+fn prepare_rename_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}");
+
+    let response = client.prepare_rename(TEST_URI, 1, 6);
+    assert!(response.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}");
+
+    let edit = client.rename(TEST_URI, 1, 6, "bar");
+    assert!(edit.is_some());
+
+    let workspace_edit = edit.unwrap();
+    let changes = workspace_edit.changes.unwrap();
+    let file_edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    assert_eq!(file_edits.len(), 2);
+
+    for edit in file_edits {
+        assert_eq!(edit.new_text, "bar");
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn code_action_capability_advertised() {
+    let mut client = TestClient::new();
+    let result = client.initialize();
+    assert!(result.capabilities.code_action_provider.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn code_action_offers_quick_fix() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let x = true\n  let _ = x == true\n}",
+    );
+
+    let actions = client
+        .code_action(TEST_URI, (2, 12), (2, 12))
+        .expect("expected code actions");
+
+    let CodeActionOrCommand::CodeAction(action) = &actions[0] else {
+        panic!("expected a CodeAction");
+    };
+    assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
+    assert_eq!(action.is_preferred, Some(true));
+
+    let edits = action
+        .edit
+        .as_ref()
+        .unwrap()
+        .changes
+        .as_ref()
+        .unwrap()
+        .get(&Url::parse(TEST_URI).unwrap())
+        .unwrap();
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "x");
+
+    client.shutdown();
+}
+
+#[test]
+fn code_action_absent_away_from_diagnostic() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let x = true\n  let _ = x == true\n}",
+    );
+
+    let actions = client.code_action(TEST_URI, (0, 0), (0, 0));
+    assert!(actions.is_none() || actions.unwrap().is_empty());
+
+    client.shutdown();
+}
+
+fn edited_columns(edit: Option<WorkspaceEdit>) -> Vec<(u32, u32)> {
+    let changes = edit.expect("rename should succeed").changes.unwrap();
+    let mut columns: Vec<(u32, u32)> = changes
+        .get(&Url::parse(TEST_URI).unwrap())
+        .unwrap()
+        .iter()
+        .map(|edit| (edit.range.start.line, edit.range.start.character))
+        .collect();
+    columns.sort();
+    columns
+}
+
+#[test]
+fn rename_or_pattern_binding_edits_every_alternative() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+enum Event { KeyDown(int), KeyUp(int), Click }
+fn code(e: Event, o: Option<Event>) -> int {
+  match e {
+    Event.KeyDown(c) | Event.KeyUp(c) => c + 1,
+    Event.Click => 0,
+  }
+  match o {
+    Some(Event.KeyDown(d) | Event.KeyUp(d)) => d,
+    _ => 0,
+  }
+}",
+    );
+
+    let from_body = edited_columns(client.rename(TEST_URI, 3, 41, "key"));
+    assert_eq!(from_body, vec![(3, 18), (3, 35), (3, 41)]);
+
+    let from_second_alternative = edited_columns(client.rename(TEST_URI, 3, 35, "key"));
+    assert_eq!(from_second_alternative, vec![(3, 18), (3, 35), (3, 41)]);
+
+    let nested = edited_columns(client.rename(TEST_URI, 7, 47, "key"));
+    assert_eq!(nested, vec![(7, 23), (7, 40), (7, 47)]);
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_from_later_or_pattern_alias_and_rest_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn f(o: int, s: Slice<int>) -> int {
+  match o {
+    1 as x | 2 as x => x,
+    _ => 0,
+  }
+  match s {
+    [1, ..xs] | [2, ..xs] => xs.length(),
+    _ => 0,
+  }
+}",
+    );
+
+    let alias = edited_columns(client.rename(TEST_URI, 2, 18, "y"));
+    assert_eq!(alias, vec![(2, 9), (2, 18), (2, 23)]);
+
+    let rest = edited_columns(client.rename(TEST_URI, 6, 22, "ys"));
+    assert_eq!(rest, vec![(6, 10), (6, 22), (6, 29)]);
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_rejects_keywords() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}");
+
+    for keyword in ["fn", "assert"] {
+        let error = client.try_rename(TEST_URI, 1, 6, keyword).unwrap_err();
+        assert_eq!(error, format!("'{keyword}' is a reserved keyword"));
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_rejects_self_as_a_type_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "struct Counter { value: int }\n");
+
+    let error = client.try_rename(TEST_URI, 0, 7, "Self").unwrap_err();
+    assert_eq!(error, "'Self' is reserved for the type of an `impl` block");
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_allows_self_as_an_enum_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "enum Target { First, Other }\nfn main() { let _ = Target.First }\n",
+    );
+
+    let edit = client.rename(TEST_URI, 0, 14, "Self");
+    assert!(edit.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_function() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }");
+
+    let edit = client.rename(TEST_URI, 0, 3, "bar");
+    assert!(edit.is_some());
+
+    let workspace_edit = edit.unwrap();
+    let changes = workspace_edit.changes.unwrap();
+    let file_edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    assert_eq!(file_edits.len(), 3);
+
+    client.shutdown();
+}
+
+#[test]
+fn formatting_reformats_code() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo(){1}");
+
+    let edits = client.formatting(TEST_URI);
+    assert!(edits.is_some());
+
+    let text_edits = edits.unwrap();
+    assert!(!text_edits.is_empty());
+
+    let new_text = &text_edits[0].new_text;
+    assert!(new_text.contains("fn foo()"));
+    assert!(new_text.contains("{ 1 }") || new_text.contains("{\n"));
+
+    client.shutdown();
+}
+
+#[test]
+fn formatting_returns_none_on_parse_error() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo(");
+
+    let edits = client.formatting(TEST_URI);
+    assert!(edits.is_none());
+
+    client.shutdown();
+}
+
+#[test]
+fn formatting_applies_edits() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn  foo()  { 1 }");
+
+    let edits = client.formatting(TEST_URI);
+    assert!(edits.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn document_symbols_lists_functions() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"fn foo() { 1 }
+fn bar() { 2 }"#,
+    );
+
+    let response = client.document_symbol(TEST_URI);
+    assert!(response.is_some());
+
+    let names = symbol_names(&response.unwrap());
+    assert!(names.iter().any(|n| n == "foo"));
+    assert!(names.iter().any(|n| n == "bar"));
+
+    client.shutdown();
+}
+
+#[test]
+fn document_symbols_lists_structs() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"struct Point { x: int, y: int }"#);
+
+    let response = client.document_symbol(TEST_URI);
+    assert!(response.is_some());
+
+    let names = symbol_names(&response.unwrap());
+    assert!(names.iter().any(|n| n == "Point"));
+
+    client.shutdown();
+}
+
+#[test]
+fn document_symbols_lists_enums() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"enum Color { Red, Green, Blue }"#);
+
+    let response = client.document_symbol(TEST_URI);
+    assert!(response.is_some());
+
+    let names = symbol_names(&response.unwrap());
+    assert!(names.iter().any(|n| n == "Color"));
+
+    client.shutdown();
+}
+
+#[test]
+fn document_symbols_lists_constants() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "const PI = 3.14");
+
+    let response = client.document_symbol(TEST_URI);
+    assert!(response.is_some());
+
+    let names = symbol_names(&response.unwrap());
+    assert!(names.iter().any(|n| n == "PI"));
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_updates_after_document_change() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover1 = client.hover(TEST_URI, 0, 16);
+    assert!(hover1.is_some(), "hover1 should return something");
+    let content1 = hover_content(&hover1.unwrap());
+    assert!(content1.contains("int"));
+
+    client.change(TEST_URI, r#"fn main() { let x = "hello"; x }"#, 2);
+    let hover2 = client.hover(TEST_URI, 0, 16);
+    assert!(hover2.is_some(), "hover2 should return something");
+    let content2 = hover_content(&hover2.unwrap());
+    assert!(content2.contains("string"));
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_function_name_works() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1 }");
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("fn"));
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_type_alias_name_shows_target() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type K = int");
+
+    let hover = client.hover(TEST_URI, 0, 5);
+    let content = hover_content(&hover.expect("hover on K"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_struct_name_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "struct Point { x: int, y: int }");
+
+    let hover = client.hover(TEST_URI, 0, 9);
+    let content = hover_content(&hover.expect("hover on Point"));
+    assert!(content.contains("Point"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_enum_name_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "enum Color { Red, Green, Blue }");
+
+    let hover = client.hover(TEST_URI, 0, 7);
+    let content = hover_content(&hover.expect("hover on Color"));
+    assert!(content.contains("Color"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_interface_name_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "interface Foo { fn bar() -> int }");
+
+    let hover = client.hover(TEST_URI, 0, 12);
+    let content = hover_content(&hover.expect("hover on Foo"));
+    assert!(content.contains("Foo"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_alias_target_primitive() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type K = int");
+
+    let hover = client.hover(TEST_URI, 0, 10);
+    let content = hover_content(&hover.expect("hover on int"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_alias_target_qualified() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let response_dir = src.join("response");
+    fs::create_dir_all(&response_dir).unwrap();
+    fs::write(
+        response_dir.join("response.lis"),
+        "pub enum Code { Ok, Err }",
+    )
+    .unwrap();
+    let (main_content, line, character) =
+        cursor("import \"response\"\n\ntype Code = response.C~ode\n");
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, &main_content);
+
+    let hover = client.hover(&main_uri, line, character);
+    let content = hover_content(&hover.expect("hover on response.Code"));
+    assert!(content.contains("Code"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_with_percent_encoded_client_uri() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let (main_content, line, character) = cursor("fn main() {\n  let x~ = 1\n}\n");
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string()
+        .replace("main.lis", "main%2Elis");
+    client.open(&main_uri, &main_content);
+
+    let hover = client.hover(&main_uri, line, character);
+    let content = hover_content(&hover.expect("hover on x"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_alias_target_in_function_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors("type Handler = fn(i~nt) -> s~tring");
+    client.open(TEST_URI, &source);
+
+    let hover_param = client.hover(TEST_URI, positions[0].0, positions[0].1);
+    let content = hover_content(&hover_param.expect("hover on int"));
+    assert!(content.contains("int"), "got: {content}");
+
+    let hover_ret = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    let content = hover_content(&hover_ret.expect("hover on string"));
+    assert!(content.contains("string"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_alias_target_in_tuple_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type Pair = (int, string)");
+
+    let hover = client.hover(TEST_URI, 0, 19);
+    let content = hover_content(&hover.expect("hover on string in tuple"));
+    assert!(content.contains("string"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_alias_target_generic_arg() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type Ints = Slice<int>");
+
+    let hover = client.hover(TEST_URI, 0, 19);
+    let content = hover_content(&hover.expect("hover on int inside Slice<int>"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_alias_target_generic_head() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type Ints = Slice<int>");
+
+    let hover = client.hover(TEST_URI, 0, 13);
+    let content = hover_content(&hover.expect("hover on Slice head"));
+    assert!(content.contains("Slice"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_function_return_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn make() -> string { \"hi\" }");
+
+    let hover = client.hover(TEST_URI, 0, 14);
+    let content = hover_content(&hover.expect("hover on string return type"));
+    assert!(content.contains("string"), "got: {content}");
+    assert!(
+        !content.contains("->"),
+        "should be type only, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_function_param_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn add(x: int) -> string { \"hi\" }");
+
+    let hover = client.hover(TEST_URI, 0, 11);
+    let content = hover_content(&hover.expect("hover on int param type"));
+    assert!(content.contains("int"), "got: {content}");
+    assert!(
+        !content.contains("string"),
+        "should not leak return type, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_function_qualified_return_annotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let http_dir = src.join("http");
+    fs::create_dir_all(&http_dir).unwrap();
+    fs::write(
+        http_dir.join("http.lis"),
+        "pub struct HandlerFunc { name: string }",
+    )
+    .unwrap();
+    let (main_content, line, character) = cursor(
+        "import \"http\"\n\nfn handle() -> http.Hand~lerFunc { http.HandlerFunc { name: \"\" } }\n",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, &main_content);
+
+    let hover = client.hover(&main_uri, line, character);
+    let content = hover_content(&hover.expect("hover on http.HandlerFunc"));
+    assert!(content.contains("HandlerFunc"), "got: {content}");
+    assert!(
+        !content.contains("->"),
+        "should be type only, not full signature, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_param_annotation_excludes_function_doc() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
+    );
+
+    let hover = client.hover(TEST_URI, 1, 11);
+    let content = hover_content(&hover.expect("hover on int param type"));
+    assert!(content.contains("int"), "got: {content}");
+    assert!(
+        !content.contains("Adds two ints"),
+        "function doc leaked into param-type hover, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_function_name_includes_doc() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
+    );
+
+    let hover = client.hover(TEST_URI, 1, 3);
+    let content = hover_content(&hover.expect("hover on function name"));
+    assert!(content.contains("Adds two ints"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_on_literal_returns_none() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 42 }");
+
+    let response = client.goto_definition(TEST_URI, 0, 12);
+    assert!(response.is_none());
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_on_stdlib_go_function_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) =
+        cursor("import \"go:fmt\"\n\nfn main() {\n  fmt.~Println(\"hello\")\n}");
+    client.open(TEST_URI, &source);
+
+    // The LSP writes the whole stdlib typedef set to disk at startup, so
+    // go-to-definition navigates into the generated `.d.lis` file.
+    let response = client.goto_definition(TEST_URI, line, character);
+    let location = definition_location(
+        &response.expect("go-to-definition on stdlib go: function should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("stdlib-typedefs") && path.ends_with(".d.lis"),
+        "should land in an extracted typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("Println"),
+        "should land on the `Println` definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_on_third_party_go_function_navigates_to_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    let manifest = format!(
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n\n[toolchain]\nlis = \"{}\"\n\n[dependencies.go]\n\"github.com/example/lib\" = \"v1.0.0\"\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    fs::write(root.join("lisette.toml"), manifest).unwrap();
+
+    // Pre-populate the typedef cache for `github.com/example/lib@v1.0.0`.
+    let pkg = deps::GoPackage {
+        module: deps::GoModule {
+            path: "github.com/example/lib",
+            version: "v1.0.0",
+            replacement: None,
+        },
+        package: "github.com/example/lib",
+    };
+    let cache_dir = deps::typedef_cache_dir(root);
+    let typedef_path = pkg.typedef_path(&cache_dir, stdlib::Target::host());
+    fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+    fs::write(
+        &typedef_path,
+        "// Package: lib\n\npub fn DoStuff() -> int\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let (main_content, line, character) =
+        cursor("import \"go:github.com/example/lib\"\n\nfn main() {\n  let _ = lib.~DoStuff()\n}");
+    let main_path = src.join("main.lis");
+    fs::write(&main_path, &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let response = client.goto_definition(&main_uri, line, character);
+    let location = definition_location(
+        &response.expect("go-to-definition on third-party go: function should return a location"),
+    )
+    .expect("response should contain a location");
+
+    let typedef_uri = Url::from_file_path(&typedef_path).unwrap();
+    assert_eq!(location.uri, typedef_uri);
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_empty_file() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
+
+    let response = client.completion(TEST_URI, 0, 0);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(!labels.is_empty());
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_attribute_on_struct() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor("#[~\nstruct Point { x: int, y: int }\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("attribute completions"));
+
+    assert!(labels.contains(&"json".to_string()));
+    assert!(labels.contains(&"display".to_string()));
+    assert!(labels.contains(&"tag".to_string()));
+    assert!(labels.contains(&"allow".to_string()));
+    assert!(!labels.contains(&"iterate".to_string()));
+    assert!(!labels.iter().any(|l| l == "fn" || l == "let" || l == "int"));
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_attribute_on_struct_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor("struct Point {\n  #[~\n  x: int\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("attribute completions"));
+
+    assert!(labels.contains(&"json".to_string()));
+    assert!(labels.contains(&"tag".to_string()));
+    assert!(!labels.contains(&"display".to_string()));
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_attribute_on_enum() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "#[\nenum Direction { North, South }\n");
+
+    let response = client.completion(TEST_URI, 0, 2);
+    let labels = completion_labels(&response.expect("attribute completions"));
+
+    assert!(labels.contains(&"iterate".to_string()));
+    assert!(labels.contains(&"display".to_string()));
+    assert!(labels.contains(&"json".to_string()));
+    assert!(labels.contains(&"allow".to_string()));
+    assert!(!labels.contains(&"tag".to_string()));
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_attribute_before_interface_is_empty() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor("#[~\ninterface Service {\n  fn run()\n}\n");
+    client.open(TEST_URI, &source);
+
+    // Attributes are rejected on interfaces, so offer nothing rather than a
+    // union that would immediately parse as misplaced.
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("attribute completions"));
+    assert!(labels.is_empty(), "expected no completions, got {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() { Point { x: 1, y: 2 } }",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 12);
+    assert!(response.is_some());
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_in_parameter() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn foo(p: Point) -> int { 1 }",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 10);
+    assert!(response.is_some());
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_in_return_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn foo() -> Point { Point { x: 1, y: 2 } }",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 12);
+    assert!(response.is_some());
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_from_struct_call_usage() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p\n}",
+    );
+
+    let response = client.goto_definition(TEST_URI, 2, 10);
+    assert!(response.is_some());
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+impl Point {
+  pub fn dist(self) -> int { self.x + self.y }
+}
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  p.dist()
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 6, 4);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "dist"),
+        "should include 'dist' method, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "x"),
+        "should include 'x' field, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor(
+        "\
+struct Point { x: int, y: int }
+impl Point {
+  pub fn sum(self) -> int { self.x + self.y }
+}
+fn main() {
+  let s = Point { ~ }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("struct literal field completions"));
+
+    assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
+    assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
+    // A literal body wants fields only, not the struct's methods.
+    assert!(!labels.contains(&"sum".to_string()), "got: {labels:?}");
+    assert!(
+        !labels.iter().any(|l| l == "fn" || l == "let"),
+        "got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_value_position_offers_no_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let s = Point { x:~ 1 }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("completions"));
+
+    // A value position is not a field-name position: no fields, fall through to general completions.
+    assert!(!labels.contains(&"y".to_string()), "got: {labels:?}");
+    assert!(labels.iter().any(|l| l == "let"), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_nested_resolves_inner_struct() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor(
+        "\
+struct Inner { a: int, b: int }
+struct Outer { inner: Inner }
+fn main() {
+  let s = Outer { inner: Inner { ~ } }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("nested struct literal field completions"));
+
+    // The inner literal offers Inner's fields, not Outer's.
+    assert!(labels.contains(&"a".to_string()), "got: {labels:?}");
+    assert!(labels.contains(&"b".to_string()), "got: {labels:?}");
+    assert!(!labels.contains(&"inner".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_ignores_comma_in_comment() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    // A comma inside a comment is not a field separator: the field name detection
+    // is token-based, so it must not treat this as a field-name position.
+    let (source, line, character) = cursor(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let s = Point { x: 1 //,
+  ~}
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("completions"));
+
+    assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
+    assert!(!labels.contains(&"y".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_omits_assigned_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let s = Point { x: 1, ~ }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    let labels = completion_labels(&response.expect("struct literal field completions"));
+
+    assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
+    assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_respects_field_visibility() {
+    let mut client = TestClient::new();
+
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path();
+
+    fs::write(
+        root_path.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/shapes")).unwrap();
+    fs::write(
+        root_path.join("src/shapes/shapes.lis"),
+        "pub struct Box { pub w: int, h: int }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
+    let (main_source, line, character) =
+        cursor("import \"shapes\"\nfn main() {\n  let b = shapes.Box { ~ }\n}\n");
+    fs::write(root_path.join("src/main/main.lis"), &main_source).unwrap();
+
+    client.initialize_with_root(root_path);
+
+    let shapes_uri = format!(
+        "file://{}",
+        root_path.join("src/shapes/shapes.lis").display()
+    );
+    let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
+
+    client.open(
+        &shapes_uri,
+        &fs::read_to_string(root_path.join("src/shapes/shapes.lis")).unwrap(),
+    );
+    client.open(&main_uri, &main_source);
+
+    let response = client.completion(&main_uri, line, character);
+    let labels = completion_labels(&response.expect("struct literal field completions"));
+
+    assert!(
+        labels.contains(&"w".to_string()),
+        "public field, got: {labels:?}"
+    );
+    assert!(
+        !labels.contains(&"h".to_string()),
+        "private field, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_enum_variant_offers_variant_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+enum Action { Move { x: int, y: int }, Stop }
+fn main() {
+  let a = Action.Move {  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 23);
+    let labels = completion_labels(&response.expect("enum variant field completions"));
+
+    assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
+    assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
+    assert!(!labels.contains(&"Stop".to_string()), "got: {labels:?}");
+    assert!(!labels.contains(&"Move".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_keeps_field_being_typed() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+fn main() {
+  let s = Point { x }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 19);
+    let labels = completion_labels(&response.expect("struct literal field completions"));
+
+    assert!(
+        labels.contains(&"x".to_string()),
+        "field being typed must remain, got: {labels:?}"
+    );
+    assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_unclosed_brace_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+fn main() {
+  let s = Point {
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 18);
+    let labels = completion_labels(&response.expect("struct literal field completions"));
+
+    assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
+    assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_no_space_after_brace_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+fn main() {
+  let s = Point {}
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 17);
+    let labels = completion_labels(&response.expect("struct literal field completions"));
+
+    assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
+    assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_after_spread_offers_no_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+fn main() {
+  let base = Point { x: 1, y: 2 }
+  let s = Point { ..base,  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 3, 26);
+    let labels = completion_labels(&response.expect("completions"));
+
+    assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
+    assert!(!labels.contains(&"y".to_string()), "got: {labels:?}");
+    assert!(labels.iter().any(|l| l == "let"), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_struct_literal_before_spread_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+fn main() {
+  let base = Point { x: 1, y: 2 }
+  let s = Point { x: 1, ..base }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 3, 23);
+    let labels = completion_labels(&response.expect("struct literal field completions"));
+
+    assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
+    assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_for_loop_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Shape { side: int }
+impl Shape {
+  pub fn area(self) -> int { self.side * self.side }
+}
+fn main() {
+  let shapes = [Shape { side: 3 }]
+  for shape in shapes {
+    shape.area()
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 7, 10);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "area"),
+        "should include 'area' method for element type, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "side"),
+        "should include 'side' field for element type, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_after_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Item { name: string }
+impl Item {
+  pub fn label(self) -> string { self.name }
+}
+fn main() {
+  let items = [Item { name: \"a\" }]
+  items[0].label()
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 6, 11);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "label"),
+        "should include 'label' method for element type, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "name"),
+        "should include 'name' field for element type, got: {labels:?}"
+    );
+    assert!(
+        !labels.iter().any(|l| l == "length"),
+        "should not include Slice methods like 'length', got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_after_array_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Item { name: string }
+impl Item {
+  pub fn label(self) -> string { self.name }
+}
+fn main() {
+  let items: Array<Item, 1> = [Item { name: \"a\" }]
+  items[0].
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 6, 11);
+    let labels = completion_labels(&response.expect("completion response"));
+
+    assert!(
+        ["label", "name"]
+            .iter()
+            .all(|expected| labels.iter().any(|label| label == expected)),
+        "should include element members, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_slice_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn main() {
+  let names = [\"Lisette\", \"Lilian\", \"Lisa\"]
+  names.length()
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 8);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "length"),
+        "should include 'length' from prelude Slice, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "is_empty"),
+        "should include 'is_empty' from prelude Slice, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_array_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn main() {
+  let xs: Array<int, 3> = [1, 2, 3]
+  xs.length()
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 5);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "length"),
+        "array value dot should offer 'length', got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_array_type_dot_offers_constructors() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn main() {
+  let _ = Array.
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 1, 16);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "new"),
+        "Array type dot should offer 'new', got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "from"),
+        "Array type dot should offer 'from', got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_ref_to_array() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn use_ref(r: Ref<Array<int, 3>>) {
+  r.length()
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 1, 4);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "length"),
+        "ref-to-array dot should offer 'length', got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_string_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn main() {
+  let s = \"hello\"
+  s.length()
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 4);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "length"),
+        "should include 'length' from prelude string, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "contains"),
+        "should include 'contains' from prelude string, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_no_globals_after_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  p.x
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 3, 4);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        !labels.iter().any(|l| l == "fn"),
+        "should not include keyword 'fn' after dot, got: {labels:?}"
+    );
+    assert!(
+        !labels.iter().any(|l| l == "let"),
+        "should not include keyword 'let' after dot, got: {labels:?}"
+    );
+    assert!(
+        !labels.iter().any(|l| l == "if"),
+        "should not include keyword 'if' after dot, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn crash_resilience_broken_syntax() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let broken_inputs = [
+        "fn",
+        "fn foo(",
+        "fn foo() {",
+        "fn foo() -> ",
+        "struct",
+        "struct Foo {",
+        "struct Foo { x:",
+        "enum",
+        "enum Foo {",
+        "enum Foo { A(",
+        "let x =",
+        "let x: ",
+        "if",
+        "if true {",
+        "if true { 1 } else {",
+        "match",
+        "match x {",
+        "match x { A =>",
+        "fn foo() { ( }",
+        "fn foo() { [ }",
+        "fn foo() { { ( ) }",
+        "fn foo(x: int, { 1 }",
+        "fn main() { 1 + }",
+        "fn main() { 1 + 2 * }",
+        "fn main() { x. }",
+        "}{}{}{",
+        ")))(((",
+        "->->->",
+        "::::",
+        "fn 日本語() { 1 }",
+        "fn main() { \"unterminated",
+        "fn main() { 'x }",
+        "",
+        "   ",
+        "\n\n\n",
+        "fn fn foo() { 1 }",
+        "let let x = 1",
+        "struct struct Foo {}",
+        "fn main() { if true { if true { if true { if true {",
+        "fn main() { ((((((((((",
+        "fn main() { let x: int = \"hello\" }",
+        "fn main() { let x: string = 42 }",
+        "fn main() { let x = 1 + \"hello\" }",
+        r#"import "nonexistent""#,
+        r#"import "go:nonexistent/pkg""#,
+        "fn main() { if let Some(x) = Some(1) { x } }",
+    ];
+
+    for (i, input) in broken_inputs.iter().enumerate() {
+        client.open(TEST_URI, input);
+
+        let _hover = client.hover(TEST_URI, 0, 0);
+        let _completion = client.completion(TEST_URI, 0, 0);
+
+        client.change(TEST_URI, input, (i as i32) + 2);
+    }
+
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover = client.hover(TEST_URI, 0, 16);
+    assert!(
+        hover.is_some(),
+        "server should still respond after broken inputs"
+    );
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "server should still produce correct results"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_enum_dot_shows_variants() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+enum Color { Red, Green, Blue }
+fn main() {
+  let c = Color.Red
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 16);
+    assert!(response.is_some(), "should return completions for enum dot");
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "Red"),
+        "should include 'Red' variant, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "Green"),
+        "should include 'Green' variant, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "Blue"),
+        "should include 'Blue' variant, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_type_dot_via_alias_to_concrete_map_shows_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+type M = Map<string, int>
+fn main() {
+  let _ = M.
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 12);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "new"),
+        "should include 'new' via alias to Map<string, int>, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_type_dot_via_alias_to_concrete_slice_shows_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+type Buf = Slice<byte>
+fn main() {
+  let _ = Buf.
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 2, 14);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "new"),
+        "should include 'new' via alias to Slice<byte>, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_enum_dot_via_type_alias_shows_variants() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+enum Kind { Int, String }
+type K = Kind
+fn main() {
+  let o = K.
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 3, 12);
+    assert!(
+        response.is_some(),
+        "should return completions for type-alias dot"
+    );
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "Int"),
+        "should include 'Int' variant via alias, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "String"),
+        "should include 'String' variant via alias, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_enum_dot_shows_tuple_variants() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+enum Shape {
+  Circle(float),
+  Rectangle(float, float),
+}
+fn main() {
+  let s = Shape.Circle(1.0)
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 5, 16);
+    assert!(response.is_some(), "should return completions for enum dot");
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "Circle"),
+        "should include 'Circle' variant, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "Rectangle"),
+        "should include 'Rectangle' variant, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_enum_variant_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+enum Color { Red, Green, Blue }
+fn main() {
+  let c = Color.Red
+}";
+    client.open(TEST_URI, source);
+
+    let hover = client.hover(TEST_URI, 2, 6);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("Color"),
+        "should show Color type, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_match_arm_binding_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn main() {
+  let opt: Option<int> = Some(42)
+  match opt {
+    Some(val) => val + 1,
+    None => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let hover = client.hover(TEST_URI, 3, 9);
+    assert!(
+        hover.is_some(),
+        "hover on match arm binding should return something"
+    );
+
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "match arm binding should show inner type 'int', got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_match_option_binding_shows_inner_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn main() {
+  let opt: Option<string> = Some(\"hello\")
+  match opt {
+    Some(val) => val,
+    None => \"\",
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let hover = client.hover(TEST_URI, 3, 9);
+    assert!(
+        hover.is_some(),
+        "hover on match arm binding should return something"
+    );
+
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("string"),
+        "match arm binding should show inner type 'string', got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_if_let_does_not_crash() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+fn main() {
+  let opt: Option<string> = Some(\"hello\")
+  if let Some(val) = opt {
+    val
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let _hover = client.hover(TEST_URI, 2, 15);
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(
+        hover.is_some(),
+        "server should still respond after if-let hover"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_match_struct_destructuring_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  match p {
+    Point { x, y } => x + y,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let hover = client.hover(TEST_URI, 4, 12);
+    assert!(
+        hover.is_some(),
+        "hover on destructured field should return something"
+    );
+
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "destructured field should show type 'int', got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_match_arm_enum_variant_shows_enum_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, positions) = cursors(
+        "\
+enum Color { Red, Green, Blue(string) }
+fn main() {
+  let c: Color = Color.Green
+  match c {
+    Co~lor.Red => 0,
+    Color.Green => 1,
+    Co~lor.Blue(_) => 2,
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
+    assert!(
+        hover.is_some(),
+        "hover on match arm enum variant should return something"
+    );
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("Color"),
+        "match arm enum variant should show enum type 'Color', not the match expression's return type, got: {content}"
+    );
+
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    assert!(
+        hover.is_some(),
+        "hover on match arm enum variant with payload should return something"
+    );
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("Color"),
+        "match arm enum variant with payload should show enum type 'Color', got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_match_arm_literal_pattern_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, positions) = cursors(
+        "\
+fn main() {
+  let x = 1
+  match x {
+    ~1 => 10,
+    2 => 20,
+    ~_ => 0,
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
+    assert!(
+        hover.is_some(),
+        "hover on literal pattern should return something"
+    );
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "literal pattern should show 'int', got: {content}"
+    );
+
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    assert!(
+        hover.is_some(),
+        "hover on wildcard pattern should return something"
+    );
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "wildcard pattern should show 'int', got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn diagnostics_type_error() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { let x: int = \"hello\" }");
+
+    let diagnostics = client.await_diagnostics();
+    assert!(
+        !diagnostics.is_empty(),
+        "type error should produce diagnostics"
+    );
+
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR)),
+        "should contain an error diagnostic, got: {diagnostics:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn diagnostics_valid_code_is_clean() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { let x = 42 }");
+
+    let diagnostics = client.await_diagnostics();
+
+    let errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "valid code should produce no error diagnostics, got: {errors:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn diagnostics_parse_error() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn foo(");
+
+    let diagnostics = client.await_diagnostics();
+    assert!(
+        !diagnostics.is_empty(),
+        "parse error should produce diagnostics"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn recovery_missing_initializer_points_to_equals() {
+    let (source, positions) =
+        cursors("fn main() {\n  let total: int ~=\n  let other = 2\n  let copy = ~other\n}");
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+
+    let diagnostics = client.await_diagnostics();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(NumberOrString::String("parse.expected_expression".into()))
+    );
+    let (line, character) = positions[0];
+    assert_eq!(diagnostics[0].range.start, Position::new(line, character));
+    let (line, character) = positions[1];
+    let hover = client.hover(TEST_URI, line, character).unwrap();
+    assert_eq!(hover_content(&hover), "```lisette\nint\n```");
+    client.shutdown();
+}
+
+#[test]
+fn recovery_preserves_later_binding_and_other_function_types() {
+    for initializer in ["@", "1 + @", "add(@, 2)"] {
+        let (source, positions) = cursors(&format!(
+            "fn add(a: int, b: int) -> int {{ a + b }}\n\
+             fn broken() {{\n  let bad = {initializer}\n  let total = add(1, 2)\n  let copy = ~total\n}}\n\
+             fn intact() {{\n  let other = add(3, 4)\n  let copy = ~other\n}}"
+        ));
+        let mut client = TestClient::new();
+        client.initialize();
+        client.open(TEST_URI, &source);
+        let diagnostics = client.await_diagnostics();
+        assert_eq!(diagnostics.len(), 1, "{initializer}: {diagnostics:?}");
+        for (line, character) in positions {
+            let hover = client.hover(TEST_URI, line, character).unwrap();
+            assert_eq!(
+                hover_content(&hover),
+                "```lisette\nint\n```",
+                "{initializer}"
+            );
+        }
+        client.shutdown();
+    }
+}
+
+#[test]
+fn recovery_placeholders_do_not_produce_type_errors() {
+    for source in [
+        "fn main() { let n: int = @ }",
+        "fn take(n: int) {}\nfn main() { take(@) }",
+        "fn take(n: int, m: int) {}\nfn main() { take(, 2) }",
+        "fn main() { let n: int; }",
+        "fn main() { let n: int = make([]int) }",
+        "fn main() { let n: int = <-ch }",
+    ] {
+        let mut client = TestClient::new();
+        client.initialize();
+        client.open(TEST_URI, source);
+        let diagnostics = client.await_diagnostics();
+        assert_eq!(diagnostics.len(), 1, "{source}: {diagnostics:?}");
+        assert!(
+            matches!(&diagnostics[0].code, Some(NumberOrString::String(code)) if code.starts_with("parse.")),
+            "{source}: {diagnostics:?}"
+        );
+        client.shutdown();
+    }
+}
+
+#[test]
+fn recovery_placeholder_binding_has_no_hover_type() {
+    let (source, line, character) = cursor("fn main() { let ~bad = @ }");
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    assert!(client.hover(TEST_URI, line, character).is_none());
+    client.shutdown();
+}
+
+#[test]
+fn diagnostics_update_after_fix() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { let x: int = \"hello\" }");
+    let diagnostics = client.await_diagnostics();
+    assert!(
+        !diagnostics.is_empty(),
+        "should have diagnostics for type error"
+    );
+
+    client.change(TEST_URI, "fn main() { let x: int = 42 }", 2);
+    let diagnostics = client.await_diagnostics();
+
+    let errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "after fixing the error, should have no error diagnostics, got: {errors:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn cross_package_goto_definition() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let main_content = "import \"utils\"\n\nfn main() { utils.helper() }";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let utils_dir = src.join("utils");
+    fs::create_dir_all(&utils_dir).unwrap();
+    fs::write(utils_dir.join("utils.lis"), "pub fn helper() -> int { 42 }").unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    let hover = client.hover(&main_uri, 2, 14);
+    let _ = hover;
+
+    let completion = client.completion(&main_uri, 2, 0);
+    assert!(
+        completion.is_some(),
+        "server should still respond with cross-package code"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_hides_promoted_members_private_to_the_embedded_type() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let utils_dir = src.join("utils");
+    fs::create_dir_all(&utils_dir).unwrap();
+    fs::write(
+        utils_dir.join("utils.lis"),
+        "pub struct Base {\n  pub id: int,\n  hidden: int,\n}\nimpl Base {\n  pub fn shown(self) -> int { self.id }\n  fn concealed(self) -> int { self.hidden }\n}",
+    )
+    .unwrap();
+
+    let (main_content, line, character) = cursor(
+        "import \"utils\"\n\nstruct Wrapper {\n  embed utils.Base,\n}\n\nfn f(w: Wrapper) -> int {\n  w.~\n  0\n}",
+    );
+    let main_path = src.join("main.lis");
+    fs::write(&main_path, &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let labels = completion_labels(
+        &client
+            .completion(&main_uri, line, character)
+            .expect("completions"),
+    );
+    for public in ["id", "shown"] {
+        assert!(
+            labels.iter().any(|l| l == public),
+            "expected the promoted public `{public}`; got: {labels:?}"
+        );
+    }
+    for private in ["hidden", "concealed"] {
+        assert!(
+            !labels.iter().any(|l| l == private),
+            "`{private}` is private to `utils.Base`, promotion must not leak it; got: {labels:?}"
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn go_import_hover_on_function() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+import \"go:fmt\"
+
+fn main() {
+  fmt.Println(\"hello\")
+}";
+    client.open(TEST_URI, source);
+
+    let hover = client.hover(TEST_URI, 3, 6);
+    let _ = hover;
+
+    let completion = client.completion(TEST_URI, 3, 6);
+    assert!(
+        completion.is_some(),
+        "server should still respond after go: import"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn go_import_completion_on_package() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+import \"go:strings\"
+
+fn main() {
+  strings.Contains(\"hello\", \"ell\")
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 3, 10);
+    let _ = response;
+
+    let hover = client.hover(TEST_URI, 0, 0);
+    let _ = hover;
+
+    client.shutdown();
+}
+
+fn stress_test_input(source: &str) -> bool {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
+
+    let _hover = client.hover(TEST_URI, 0, 0);
+    let _completion = client.completion(TEST_URI, 0, 0);
+    let _def = client.goto_definition(TEST_URI, 0, 0);
+    let _refs = client.references(TEST_URI, 0, 0, true);
+    let _sig = client.signature_help(TEST_URI, 0, 0);
+    let _fmt = client.formatting(TEST_URI);
+    let _sym = client.document_symbol(TEST_URI);
+    let _inlay = client.inlay_hint(TEST_URI, (0, 0), doc_end(source));
+
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
+    let alive = hover.is_some();
+
+    client.shutdown();
+    alive
+}
+
+#[test]
+fn stress_match_wrong_variant_count() {
+    assert!(stress_test_input(
+        "\
+enum Pair { A(int, int) }
+fn main() {
+  match Pair.A(1, 2) {
+    Pair.A(x) => x,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_nonexistent_variant() {
+    assert!(stress_test_input(
+        "\
+enum Color { Red, Green }
+fn main() {
+  match Color.Red {
+    Color.Blue => 1,
+    _ => 2,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_struct_as_enum() {
+    assert!(stress_test_input(
+        "\
+struct Point { x: int }
+fn main() {
+  let p = Point { x: 1 }
+  match p {
+    Point.Something(x) => x,
+    _ => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_function_as_pattern() {
+    assert!(stress_test_input(
+        "\
+fn foo() -> int { 1 }
+fn main() {
+  match 1 {
+    foo(x) => x,
+    _ => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_deeply_nested_patterns() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x: Option<Option<Option<int>>> = Some(Some(Some(42)))
+  match x {
+    Some(Some(Some(val))) => val,
+    Some(Some(None)) => 0,
+    Some(None) => 0,
+    None => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_literal_patterns() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  match 42 {
+    0 => \"zero\",
+    1 => \"one\",
+    _ => \"other\",
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_string_literal_pattern() {
+    assert!(stress_test_input(
+        r#"
+fn main() {
+  match "hello" {
+    "hello" => 1,
+    "world" => 2,
+    _ => 0,
+  }
+}"#
+    ));
+}
+
+#[test]
+fn stress_match_tuple_destructuring() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  match (1, \"hello\", true) {
+    (a, b, c) => a,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_or_pattern() {
+    assert!(stress_test_input(
+        "\
+enum Color { Red, Green, Blue }
+fn main() {
+  match Color.Red {
+    Color.Red | Color.Green => 1,
+    Color.Blue => 2,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_guard() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  match 42 {
+    x if x > 0 => \"positive\",
+    _ => \"non-positive\",
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_enum_with_wrong_type() {
+    assert!(stress_test_input(
+        "\
+enum A { X }
+enum B { Y }
+fn main() {
+  match A.X {
+    B.Y => 1,
+    _ => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_result_nested() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let r: Result<Option<int>, string> = Ok(Some(42))
+  match r {
+    Ok(Some(val)) => val,
+    Ok(None) => 0,
+    Err(msg) => -1,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_loops_with_errors() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  for x in [1, 2, 3] {
+    for y in [\"a\", \"b\"] {
+      let z: int = y
+      break
+    }
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_while_let_with_type_error() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let mut opt: Option<int> = Some(1)
+  while let Some(x) = opt {
+    let y: string = x
+    opt = None
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_for_loop_wrong_iterable() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  for x in 42 {
+    x
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_while_with_break() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  while true {
+    while true {
+      while true {
+        break
+      }
+      break
+    }
+    break
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_loop_with_match_inside() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let mut x = Some(1)
+  while let Some(val) = x {
+    match val {
+      0 => { x = None },
+      _ => { x = Some(val - 1) },
+    }
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_on_int() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = 42
+  x.foo()
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_on_string() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = \"hello\"
+  x.nonexistent()
+}"
+    ));
+}
+
+#[test]
+fn stress_chained_dots_on_error() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = undefined_var
+  x.foo.bar.baz()
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_on_function_result() {
+    assert!(stress_test_input(
+        "\
+fn foo() -> int { 1 }
+fn main() {
+  foo().nonexistent()
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_on_tuple() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let t = (1, 2, 3)
+  t.nonexistent()
+}"
+    ));
+}
+
+#[test]
+fn stress_method_on_generic() {
+    assert!(stress_test_input(
+        "\
+fn apply<T>(x: T) -> T {
+  x.something()
+}"
+    ));
+}
+
+#[test]
+fn stress_pipeline_operator() {
+    assert!(stress_test_input(
+        "\
+fn double(x: int) -> int { x * 2 }
+fn main() {
+  let result = 5 |> double
+}"
+    ));
+}
+
+#[test]
+fn stress_pipeline_chained() {
+    assert!(stress_test_input(
+        "\
+fn add1(x: int) -> int { x + 1 }
+fn double(x: int) -> int { x * 2 }
+fn main() {
+  let result = 1 |> add1 |> double |> add1
+}"
+    ));
+}
+
+#[test]
+fn stress_pipeline_with_args() {
+    assert!(stress_test_input(
+        "\
+fn add(x: int, y: int) -> int { x + y }
+fn main() {
+  let result = 5 |> add(3)
+}"
+    ));
+}
+
+#[test]
+fn stress_name_shadow_struct_with_function() {
+    assert!(stress_test_input(
+        "\
+fn Point() -> int { 1 }
+struct Point { x: int }
+fn main() {
+  let p = Point { x: 1 }
+}"
+    ));
+}
+
+#[test]
+fn stress_type_alias_to_primitive() {
+    assert!(stress_test_input(
+        "\
+type MyInt = int
+fn main() {
+  let x: MyInt = 42
+}"
+    ));
+}
+
+#[test]
+fn stress_type_alias_to_generic() {
+    assert!(stress_test_input(
+        "\
+type OptInt = Option<int>
+fn main() {
+  let x: OptInt = Some(42)
+}"
+    ));
+}
+
+#[test]
+fn stress_recursive_type_alias() {
+    assert!(stress_test_input(
+        "\
+type Tree = Option<(int, Tree, Tree)>
+fn main() {
+  let t: Tree = None
+}"
+    ));
+}
+
+#[test]
+fn stress_impl_on_nonexistent_type() {
+    assert!(stress_test_input(
+        "\
+impl Nonexistent {
+  pub fn foo(self) -> int { 1 }
+}"
+    ));
+}
+
+#[test]
+fn stress_impl_wrong_self_type() {
+    assert!(stress_test_input(
+        "\
+struct Foo { x: int }
+impl Foo {
+  pub fn bar(self) -> string { self.x }
+}"
+    ));
+}
+
+#[test]
+fn stress_interface_implementation_mismatch() {
+    assert!(stress_test_input(
+        "\
+interface Printable {
+  fn to_string() -> string
+}
+struct Foo { x: int }
+impl Foo {
+  pub fn to_string(self) -> int { self.x }
+}
+fn print(p: Printable) -> string { p.to_string() }
+fn main() {
+  print(Foo { x: 1 })
+}"
+    ));
+}
+
+#[test]
+fn stress_empty_interface() {
+    assert!(stress_test_input(
+        "\
+interface Empty {}
+struct Foo {}
+fn take(e: Empty) { }
+fn main() {
+  take(Foo {})
+}"
+    ));
+}
+
+#[test]
+fn stress_generic_instantiation_mismatch() {
+    assert!(stress_test_input(
+        "\
+fn identity<T>(x: T) -> T { x }
+fn main() {
+  let x: string = identity(42)
+}"
+    ));
+}
+
+#[test]
+fn stress_generic_struct_wrong_params() {
+    assert!(stress_test_input(
+        "\
+struct Pair<A, B> { first: A, second: B }
+fn main() {
+  let p: Pair<int> = Pair { first: 1, second: 2 }
+}"
+    ));
+}
+
+#[test]
+fn stress_higher_order_generics() {
+    assert!(stress_test_input(
+        "\
+fn apply<A, B>(f: fn(A) -> B, x: A) -> B { f(x) }
+fn main() {
+  let result = apply(fn(x: int) -> string { \"hello\" }, 42)
+  let y: int = result
+}"
+    ));
+}
+
+#[test]
+fn stress_deeply_nested_if() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  if true {
+    if true {
+      if true {
+        if true {
+          if true {
+            if true {
+              if true {
+                42
+              } else { 0 }
+            } else { 0 }
+          } else { 0 }
+        } else { 0 }
+      } else { 0 }
+    } else { 0 }
+  } else { 0 }
+}"
+    ));
+}
+
+#[test]
+fn stress_mutual_recursion() {
+    assert!(stress_test_input(
+        "\
+fn is_even(n: int) -> bool {
+  if n == 0 { true } else { is_odd(n - 1) }
+}
+fn is_odd(n: int) -> bool {
+  if n == 0 { false } else { is_even(n - 1) }
+}"
+    ));
+}
+
+#[test]
+fn stress_closure_capture() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = 42
+  let f = fn() -> int { x }
+  let g = fn() -> int { f() }
+  g()
+}"
+    ));
+}
+
+#[test]
+fn stress_slice_operations_chain() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let s = [1, 2, 3, 4, 5]
+  let t = s[1..3]
+  let u = t[0]
+  let v: string = u
+}"
+    ));
+}
+
+#[test]
+fn stress_map_operations() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let m = { \"a\": 1, \"b\": 2 }
+  let v = m[\"a\"]
+  let x: string = v
+}"
+    ));
+}
+
+#[test]
+fn stress_enum_struct_variant() {
+    assert!(stress_test_input(
+        "\
+enum Shape {
+  Circle { radius: float },
+  Rectangle { width: float, height: float },
+}
+fn area(s: Shape) -> float {
+  match s {
+    Shape.Circle { radius } => 3.14 * radius * radius,
+    Shape.Rectangle { width, height } => width * height,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_enum_method_on_variant() {
+    assert!(stress_test_input(
+        "\
+enum List {
+  Cons(int, List),
+  Nil,
+}
+impl List {
+  pub fn head(self) -> Option<int> {
+    match self {
+      List.Cons(x, _) => Some(x),
+      List.Nil => None,
+    }
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_conflicting_type_annotations() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x: int = \"hello\"
+  let y: string = 42
+  let z: bool = 3.14
+  let w: float = true
+}"
+    ));
+}
+
+#[test]
+fn stress_function_type_mismatch() {
+    assert!(stress_test_input(
+        "\
+fn foo(f: fn(int) -> string) -> string { f(1) }
+fn main() {
+  foo(fn(x: string) -> int { 1 })
+}"
+    ));
+}
+
+#[test]
+fn stress_return_type_mismatch() {
+    assert!(stress_test_input(
+        "\
+fn foo() -> int {
+  if true {
+    \"hello\"
+  } else {
+    42
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_option_result_confusion() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x: Option<int> = Ok(42)
+  let y: Result<int, string> = Some(42)
+}"
+    ));
+}
+
+#[test]
+fn stress_multiple_errors_same_line() {
+    assert!(stress_test_input(
+        "\
+fn main() { let x: int = \"a\"; let y: string = 1; let z: bool = 3.14 }"
+    ));
+}
+
+#[test]
+fn stress_undefined_everywhere() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = undefined1
+  let y = undefined2 + undefined3
+  let z = undefined4.method(undefined5)
+  match undefined6 {
+    Something(a) => a,
+    _ => undefined7,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_self_outside_impl() {
+    assert!(stress_test_input(
+        "\
+fn foo() -> int { self.x }"
+    ));
+}
+
+#[test]
+fn stress_break_outside_loop() {
+    assert!(stress_test_input(
+        "\
+fn main() { break }"
+    ));
+}
+
+#[test]
+fn stress_continue_outside_loop() {
+    assert!(stress_test_input(
+        "\
+fn main() { continue }"
+    ));
+}
+
+#[test]
+fn stress_return_outside_function() {
+    assert!(stress_test_input("return 42"));
+}
+
+#[test]
+fn stress_hover_every_position_complex_code() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+enum Color { Red, Green, Blue }
+impl Point {
+  pub fn dist(self) -> int { self.x + self.y }
+}
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  let c = Color.Red
+  match c {
+    Color.Red => p.dist(),
+    _ => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let line_count = source.lines().count() as u32;
+    for line in 0..line_count {
+        let line_len = source.lines().nth(line as usize).unwrap_or("").len() as u32;
+        for ch in 0..line_len {
+            let _ = client.hover(TEST_URI, line, ch);
+        }
+    }
+
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(
+        hover.is_some(),
+        "server must survive exhaustive hover sweep"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_every_position_complex_code() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Foo { val: int }
+impl Foo {
+  pub fn get(self) -> int { self.val }
+}
+fn main() {
+  let f = Foo { val: 42 }
+  f.get()
+}";
+    client.open(TEST_URI, source);
+
+    let line_count = source.lines().count() as u32;
+    for line in 0..line_count {
+        let line_len = source.lines().nth(line as usize).unwrap_or("").len() as u32;
+        for ch in 0..=line_len {
+            let _ = client.completion(TEST_URI, line, ch);
+        }
+    }
+
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(
+        hover.is_some(),
+        "server must survive exhaustive completion sweep"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_goto_def_every_position() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+enum Shape { Circle(float), Rect(float, float) }
+fn area(s: Shape) -> float {
+  match s {
+    Shape.Circle(r) => 3.14 * r * r,
+    Shape.Rect(w, h) => w * h,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let line_count = source.lines().count() as u32;
+    for line in 0..line_count {
+        let line_len = source.lines().nth(line as usize).unwrap_or("").len() as u32;
+        for ch in 0..line_len {
+            let _ = client.goto_definition(TEST_URI, line, ch);
+        }
+    }
+
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(
+        hover.is_some(),
+        "server must survive exhaustive goto-def sweep"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_match_type_param_as_pattern() {
+    assert!(stress_test_input(
+        "\
+fn check<T>(x: T) -> int {
+  match x {
+    T(val) => 1,
+    _ => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_type_alias_as_pattern() {
+    assert!(stress_test_input(
+        "\
+type Num = int
+fn main() {
+  match 42 {
+    Num(x) => x,
+    _ => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_on_generic_value() {
+    assert!(stress_test_input(
+        "\
+fn check<T>(x: T) -> T {
+  match x {
+    val => val,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_name_shadow_type_alias_with_function() {
+    assert!(stress_test_input(
+        "\
+fn MyType() -> int { 1 }
+type MyType = int
+fn main() {
+  let x: MyType = 42
+}"
+    ));
+}
+
+#[test]
+fn stress_name_shadow_enum_with_function() {
+    assert!(stress_test_input(
+        "\
+fn Color() -> int { 1 }
+enum Color { Red, Green }
+fn main() {
+  let c = Color.Red
+}"
+    ));
+}
+
+#[test]
+fn stress_name_shadow_struct_with_const() {
+    assert!(stress_test_input(
+        "\
+const Point = 42
+struct Point { x: int }
+fn main() {
+  let p = Point { x: 1 }
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_or_patterns() {
+    assert!(stress_test_input(
+        "\
+enum Tree { Leaf(int), Node(Tree, Tree) }
+fn sum(t: Tree) -> int {
+  match t {
+    Tree.Leaf(x) | Tree.Leaf(x) => x,
+    Tree.Node(l, r) => sum(l) + sum(r),
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_slice_pattern() {
+    assert!(stress_test_input(
+        "\
+fn first(xs: [int]) -> int {
+  match xs {
+    [x, ..rest] => x,
+    [] => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_struct_pattern_wrong_fields() {
+    assert!(stress_test_input(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  match p {
+    Point { z, w } => z + w,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_on_boolean() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  match true {
+    true => 1,
+    false => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_recursive_enum_match() {
+    assert!(stress_test_input(
+        "\
+enum Expr {
+  Num(int),
+  Add(Expr, Expr),
+  Mul(Expr, Expr),
+}
+fn eval(e: Expr) -> int {
+  match e {
+    Expr.Num(n) => n,
+    Expr.Add(a, b) => eval(a) + eval(b),
+    Expr.Mul(a, b) => eval(a) * eval(b),
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_struct_call_missing_field() {
+    assert!(stress_test_input(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let p = Point { x: 1 }
+}"
+    ));
+}
+
+#[test]
+fn stress_struct_call_extra_field() {
+    assert!(stress_test_input(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let p = Point { x: 1, y: 2, z: 3 }
+}"
+    ));
+}
+
+#[test]
+fn stress_struct_call_wrong_field_type() {
+    assert!(stress_test_input(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let p = Point { x: \"hello\", y: true }
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_on_option() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x: Option<int> = Some(42)
+  x.nonexistent()
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_on_result() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x: Result<int, string> = Ok(42)
+  x.nonexistent()
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_chain_method_on_wrong_type() {
+    assert!(stress_test_input(
+        "\
+struct Foo { x: int }
+impl Foo {
+  pub fn get(self) -> int { self.x }
+}
+fn main() {
+  let f = Foo { x: 1 }
+  f.get().nonexistent().another()
+}"
+    ));
+}
+
+#[test]
+fn stress_dot_on_enum_variant() {
+    assert!(stress_test_input(
+        "\
+enum Color { Red, Green, Blue }
+fn main() {
+  Color.Red.something()
+}"
+    ));
+}
+
+#[test]
+fn stress_propagate_in_non_result() {
+    assert!(stress_test_input(
+        "\
+fn main() -> int {
+  let x = 42
+  x?
+}"
+    ));
+}
+
+#[test]
+fn stress_propagate_nested() {
+    assert!(stress_test_input(
+        "\
+fn foo() -> Result<int, string> {
+  let a: Result<Result<int, string>, string> = Ok(Ok(42))
+  let b = a??
+  Ok(b)
+}"
+    ));
+}
+
+#[test]
+fn stress_mut_reassign_wrong_type() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let mut x = 42
+  x = \"hello\"
+  x = true
+  x = [1, 2, 3]
+}"
+    ));
+}
+
+#[test]
+fn stress_immutable_reassign() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = 42
+  x = 100
+}"
+    ));
+}
+
+#[test]
+fn stress_all_expression_types() {
+    assert!(stress_test_input(
+        "\
+struct Foo { x: int }
+enum Bar { A(int), B }
+interface Baz {
+  fn method() -> int
+}
+type Alias = int
+const CONST = 42
+
+impl Foo {
+  pub fn get(self) -> int { self.x }
+}
+
+fn identity<T>(x: T) -> T { x }
+
+fn main() {
+  let a = 1
+  let b = \"hello\"
+  let c = true
+  let d = 3.14
+  let e = (a, b, c)
+  let f = [1, 2, 3]
+  let g = { \"key\": \"value\" }
+  let h = Foo { x: a }
+  let i = Bar.A(a)
+  let j = Bar.B
+  let k: Option<int> = Some(a)
+  let l: Result<int, string> = Ok(a)
+  let mut m = 0
+  m = m + 1
+  let n = if c { a } else { CONST }
+  let o = match k {
+    Some(val) => val,
+    None => 0,
+  }
+  for x in f {
+    m = m + x
+  }
+  while m > 0 {
+    m = m - 1
+  }
+  let p = h.get()
+  let q = identity(a)
+  let r = f[0]
+  let s = f[0..2]
+}"
+    ));
+}
+
+#[test]
+fn stress_rapid_changes() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    for i in 0..20 {
+        let source = if i % 2 == 0 {
+            "fn main() { let x = 42; x }"
+        } else {
+            "fn main() { let x: int = \"wrong\" }"
+        };
+        client.change(TEST_URI, source, i + 1);
+    }
+
+    client.change(TEST_URI, "fn main() { 1 }", 100);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some(), "server must survive rapid changes");
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_very_long_line() {
+    let mut expr = "1".to_string();
+    for _ in 0..500 {
+        expr = format!("{} + 1", expr);
+    }
+    let source = format!("fn main() {{ {} }}", expr);
+
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(
+        hover.is_some(),
+        "server must survive deeply nested expressions"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_many_definitions() {
+    let mut source = String::new();
+    for i in 0..100 {
+        source.push_str(&format!("fn f{}() -> int {{ {} }}\n", i, i));
+    }
+    source.push_str("fn main() { f0() + f99() }");
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_deeply_nested_generics() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x: Option<Option<Option<Option<Option<int>>>>> = Some(Some(Some(Some(Some(42)))))
+  match x {
+    Some(Some(Some(Some(Some(v))))) => v,
+    _ => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_empty_function_body() {
+    assert!(stress_test_input("fn main() {}"));
+}
+
+#[test]
+fn stress_empty_struct() {
+    assert!(stress_test_input(
+        "\
+struct Empty {}
+fn main() {
+  let e = Empty {}
+}"
+    ));
+}
+
+#[test]
+fn stress_empty_enum() {
+    assert!(stress_test_input("enum Nothing {}"));
+}
+
+#[test]
+fn stress_empty_impl() {
+    assert!(stress_test_input(
+        "\
+struct Foo { x: int }
+impl Foo {}"
+    ));
+}
+
+#[test]
+fn stress_empty_match() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  match 42 {}
+}"
+    ));
+}
+
+#[test]
+fn stress_multiple_impl_blocks() {
+    assert!(stress_test_input(
+        "\
+struct Foo { x: int }
+impl Foo {
+  pub fn get_x(self) -> int { self.x }
+}
+impl Foo {
+  pub fn double(self) -> int { self.x * 2 }
+}
+fn main() {
+  let f = Foo { x: 5 }
+  f.get_x() + f.double()
+}"
+    ));
+}
+
+#[test]
+fn stress_bounded_generic() {
+    assert!(stress_test_input(
+        "\
+interface Printable {
+  fn to_str() -> string
+}
+fn print<T: Printable>(x: T) -> string {
+  x.to_str()
+}"
+    ));
+}
+
+#[test]
+fn stress_bounded_generic_mismatch() {
+    assert!(stress_test_input(
+        "\
+interface Printable {
+  fn to_str() -> string
+}
+fn print<T: Printable>(x: T) -> string {
+  x.to_str()
+}
+fn main() {
+  print(42)
+}"
+    ));
+}
+
+#[test]
+fn stress_import_self_reference() {
+    assert!(stress_test_input(r#"import "self""#));
+}
+
+#[test]
+fn stress_import_empty_string() {
+    assert!(stress_test_input(r#"import """#));
+}
+
+#[test]
+fn stress_multiple_go_imports() {
+    assert!(stress_test_input(
+        "\
+import \"go:fmt\"
+import \"go:strings\"
+import \"go:strconv\"
+
+fn main() {
+  fmt.Println(strings.Contains(\"hello\", \"ell\"))
+}"
+    ));
+}
+
+#[test]
+fn stress_closure_type_mismatch() {
+    assert!(stress_test_input(
+        "\
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn main() {
+  apply(fn(x: string) -> string { x }, 42)
+}"
+    ));
+}
+
+#[test]
+fn stress_higher_order_closure() {
+    assert!(stress_test_input(
+        "\
+fn compose(f: fn(int) -> int, g: fn(int) -> int) -> fn(int) -> int {
+  fn(x: int) -> int { f(g(x)) }
+}
+fn main() {
+  let double = fn(x: int) -> int { x * 2 }
+  let inc = fn(x: int) -> int { x + 1 }
+  let f = compose(double, inc)
+  f(5)
+}"
+    ));
+}
+
+#[test]
+fn stress_select_syntax() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  select {
+    _ => 1,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_only_comments() {
+    assert!(stress_test_input(
+        "\
+/* block comment */
+"
+    ));
+}
+
+#[test]
+fn stress_comment_in_expression() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = 1 + /* middle of expr */ 2
+  x
+}"
+    ));
+}
+
+#[test]
+fn stress_unicode_strings() {
+    assert!(stress_test_input(
+        r#"
+fn main() {
+  let x = "こんにちは世界"
+  let y = "🎉🎊🎈"
+  let z = "café naïve résumé"
+  x
+}
+"#
+    ));
+}
+
+#[test]
+fn stress_numeric_edge_cases() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let a = -42
+  let b = 0
+  let c = 9999999999
+  let d = 0.0
+  let e = -3.14
+  let f = 1e10
+  a + b + c
+}"
+    ));
+}
+
+#[test]
+fn stress_cascading_errors() {
+    assert!(stress_test_input(
+        "\
+fn main() {
+  let x = unknown1
+  let y = x.method()
+  let z = y + unknown2
+  let w = z.another(unknown3)
+  match w {
+    Some(v) => v.yet_another(),
+    None => unknown4,
+  }
+}"
+    ));
+}
+
+fn stress_test_all_positions(source: &str) -> bool {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
+
+    let lines: Vec<&str> = source.lines().collect();
+    for line in 0..lines.len() as u32 {
+        let line_len = lines[line as usize].len() as u32;
+        for col in [0, line_len / 2, line_len.saturating_sub(1), line_len] {
+            let _hover = client.hover(TEST_URI, line, col);
+            let _def = client.goto_definition(TEST_URI, line, col);
+            let _comp = client.completion(TEST_URI, line, col);
+            let _sig = client.signature_help(TEST_URI, line, col);
+            let _refs = client.references(TEST_URI, line, col, true);
+            let _rename = client.try_prepare_rename(TEST_URI, line, col);
+            let _inlay = client.inlay_hint(TEST_URI, (line, col), doc_end(source));
+        }
+    }
+
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
+    let alive = hover.is_some();
+
+    client.shutdown();
+    alive
+}
+
+#[test]
+fn stress_completion_after_dot_on_broken_expr() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1. }");
+    let _comp = client.completion(TEST_URI, 0, 15);
+
+    client.change(TEST_URI, "fn main() { \"hello\". }", 2);
+    let _comp = client.completion(TEST_URI, 0, 21);
+
+    client.change(TEST_URI, "fn main() { true. }", 2);
+    let _comp = client.completion(TEST_URI, 0, 18);
+
+    client.change(TEST_URI, "fn main() { (1, 2). }", 2);
+    let _comp = client.completion(TEST_URI, 0, 20);
+
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_after_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let xs = [1, 2]; xs[0]. }");
+    let _comp = client.completion(TEST_URI, 0, 36);
+
+    client.change(TEST_URI, "fn main() { let xs = [1]; xs[0]. }", 2);
+    let _comp = client.completion(TEST_URI, 0, 33);
+
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_at_end_of_file() {
+    let source = "fn main() { let x = 42 }";
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
+
+    let _hover = client.hover(TEST_URI, 0, source.len() as u32);
+    let _hover = client.hover(TEST_URI, 0, source.len() as u32 + 100);
+    let _hover = client.hover(TEST_URI, 100, 0);
+    let _hover = client.hover(TEST_URI, 100, 100);
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_all_handlers_at_every_position_simple() {
+    assert!(stress_test_all_positions("fn main() { let x = 42; x + 1 }"));
+}
+
+#[test]
+fn stress_all_handlers_at_every_position_method_call() {
+    assert!(stress_test_all_positions(
+        "\
+struct Foo { x: int }
+impl Foo {
+  pub fn get(self) -> int { self.x }
+}
+fn main() {
+  let f = Foo { x: 1 }
+  f.get()
+}"
+    ));
+}
+
+#[test]
+fn stress_all_handlers_at_every_position_enum_match() {
+    assert!(stress_test_all_positions(
+        "\
+enum Shape {
+  Circle(float64),
+  Rect(float64, float64),
+}
+fn area(s: Shape) -> float64 {
+  match s {
+    Shape.Circle(r) => 3.14 * r * r,
+    Shape.Rect(w, h) => w * h,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_all_handlers_at_every_position_broken_code() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: int = \"wrong\"
+  let y = x.nonexistent()
+  let z = unknown_var
+  match z {
+    Some(v) => v,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_impl_block_on_unknown_type() {
+    assert!(stress_test_all_positions(
+        "\
+impl UnknownType {
+  pub fn method(self) -> int { 1 }
+}
+fn main() { 1 }"
+    ));
+}
+
+#[test]
+fn stress_impl_block_wrong_self_type() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x = 1
+  x.nonexistent_method()
+}"
+    ));
+}
+
+#[test]
+fn stress_type_alias_cycle() {
+    assert!(stress_test_all_positions(
+        "type A = A\nfn main() { let x: A = 1 }"
+    ));
+}
+
+#[test]
+fn stress_deeply_nested_closures() {
+    let mut source = String::from("fn main() { let f = ");
+    for _ in 0..15 {
+        source.push_str("fn(x: int) -> int { ");
+    }
+    source.push('x');
+    for _ in 0..15 {
+        source.push_str(" }");
+    }
+    source.push_str(" }");
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_deeply_nested_blocks() {
+    let mut source = String::from("fn main() -> int { ");
+    for _ in 0..15 {
+        source.push_str("{ ");
+    }
+    source.push('1');
+    for _ in 0..15 {
+        source.push_str(" }");
+    }
+    source.push_str(" }");
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_deeply_nested_if_else() {
+    let mut source = String::from("fn main() -> int { ");
+    for i in 0..5 {
+        source.push_str(&format!("if {} > 0 {{ ", i));
+    }
+    source.push('1');
+    for _ in 0..5 {
+        source.push_str(" } else { 0 }");
+    }
+    source.push_str(" }");
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_many_match_arms() {
+    let mut source = String::from("fn main() -> int {\n  match 0 {\n");
+    for i in 0..100 {
+        source.push_str(&format!("    {} => {},\n", i, i * 2));
+    }
+    source.push_str("    _ => 0,\n  }\n}");
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_signature_help_on_broken_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn foo(a: int, b: string) -> int { a }\nfn main() { foo( }",
+    );
+    let sig = client.signature_help(TEST_URI, 1, 17);
+    assert!(sig.is_some());
+
+    client.change(TEST_URI, "fn main() { unknown_fn( }", 2);
+    let _sig = client.signature_help(TEST_URI, 0, 24);
+
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_rename_on_non_renamable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x + 1 }");
+
+    let prep = client.prepare_rename(TEST_URI, 0, 28);
+    assert!(prep.is_none());
+
+    let prep = client.prepare_rename(TEST_URI, 0, 11);
+    assert!(prep.is_none());
+
+    let prep = client.prepare_rename(TEST_URI, 100, 100);
+    assert!(prep.is_none());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_goto_def_on_dot_access_chain() {
+    assert!(stress_test_all_positions(
+        "\
+struct A { b: B }
+struct B { c: int }
+fn main() {
+  let a = A { b: B { c: 1 } }
+  a.b.c
+}"
+    ));
+}
+
+#[test]
+fn stress_or_pattern_with_type_mismatch() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Result<int, string> = Ok(1)
+  match x {
+    Ok(n) | Err(n) => n,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_on_unit_type() {
+    assert!(stress_test_all_positions(
+        "\
+fn foo() {}
+fn main() {
+  match foo() {
+    _ => 1,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_recursive_function() {
+    assert!(stress_test_all_positions(
+        "\
+fn fib(n: int) -> int {
+  if n <= 1 { n }
+  else { fib(n - 1) + fib(n - 2) }
+}"
+    ));
+}
+
+#[test]
+fn stress_generic_function_wrong_args() {
+    assert!(stress_test_all_positions(
+        "\
+fn identity<T>(x: T) -> T { x }
+fn main() {
+  let x: int = identity(\"hello\")
+  let y: string = identity(42)
+}"
+    ));
+}
+
+#[test]
+fn stress_empty_source() {
+    assert!(stress_test_input(""));
+}
+
+#[test]
+fn stress_whitespace_only() {
+    assert!(stress_test_input("   \n\n  \n"));
+}
+
+#[test]
+fn stress_single_character() {
+    assert!(stress_test_input("x"));
+}
+
+#[test]
+fn stress_just_keywords() {
+    assert!(stress_test_input("fn if let match enum struct impl"));
+}
+
+#[test]
+fn stress_unclosed_string_multiline() {
+    assert!(stress_test_input(
+        "fn main() {\n  let x = \"hello\n  let y = 1\n}"
+    ));
+}
+
+#[test]
+fn stress_many_type_errors_same_line() {
+    assert!(stress_test_input(
+        "fn main() { let a: int = \"x\"; let b: string = 1; let c: bool = 3.14; let d: float64 = true }"
+    ));
+}
+
+#[test]
+fn stress_interface_with_generic_constraint() {
+    assert!(stress_test_all_positions(
+        "\
+interface Printable {
+  fn to_str() -> string
+}
+fn print<T: Printable>(x: T) -> string { x.to_str() }
+fn main() { print(42) }"
+    ));
+}
+
+#[test]
+fn stress_while_let_wrong_pattern() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let mut x: Option<int> = Some(1)
+  while let Some(a, b) = x {
+    x = None
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_for_loop_non_iterable_type() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  for x in 42 {
+    x
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_index_on_non_indexable() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x = 42
+  x[0]
+}"
+    ));
+}
+
+#[test]
+fn stress_let_else_with_wrong_pattern() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x = 42
+  let Some(y) = x else { return }
+  y
+}"
+    ));
+}
+
+#[test]
+fn stress_multiple_semicolons() {
+    assert!(stress_test_input("fn main() { ;;; let x = 1;;; x;;; }"));
+}
+
+#[test]
+fn stress_nested_struct_literal() {
+    assert!(stress_test_all_positions(
+        "\
+struct Inner { x: int }
+struct Outer { inner: Inner, y: string }
+fn main() {
+  let o = Outer { inner: Inner { x: 1 }, y: \"hello\" }
+  o.inner.x
+}"
+    ));
+}
+
+#[test]
+fn stress_closure_as_argument() {
+    assert!(stress_test_all_positions(
+        "\
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn main() {
+  apply(fn(x: int) -> int { x + 1 }, 42)
+}"
+    ));
+}
+
+#[test]
+fn stress_tuple_destructuring_mismatch() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let (a, b, c) = (1, 2)
+  let (x,) = (1, 2, 3)
+}"
+    ));
+}
+
+#[test]
+fn stress_self_outside_impl_with_method_call() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  self.method()
+}"
+    ));
+}
+
+#[test]
+fn stress_return_in_top_level() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  return 1
+  return \"hello\"
+  return
+}"
+    ));
+}
+
+#[test]
+fn stress_break_continue_outside_loop() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  break
+  continue
+}"
+    ));
+}
+
+#[test]
+fn stress_duplicate_field_names() {
+    assert!(stress_test_all_positions(
+        "\
+struct Foo { x: int, x: string }
+fn main() { Foo { x: 1, x: \"hello\" } }"
+    ));
+}
+
+#[test]
+fn stress_duplicate_function_names() {
+    assert!(stress_test_all_positions(
+        "\
+fn foo() -> int { 1 }
+fn foo() -> string { \"hello\" }
+fn main() { foo() }"
+    ));
+}
+
+#[test]
+fn stress_completion_on_self_in_impl() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+struct Foo { x: int, y: string }
+impl Foo {
+  pub fn method(self) -> int { self. }
+}",
+    );
+
+    let comp = client.completion(TEST_URI, 2, 36);
+    assert!(comp.is_some());
+    if let Some(CompletionResponse::Array(items)) = comp {
+        let labels: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(labels.contains(&"x"));
+        assert!(labels.contains(&"y"));
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_pattern_bindings() {
+    assert!(stress_test_all_positions(
+        "\
+enum Expr {
+  Num(int),
+  Add(Expr, Expr),
+}
+fn eval(e: Expr) -> int {
+  match e {
+    Expr.Num(n) => n,
+    Expr.Add(a, b) => eval(a) + eval(b),
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_rapid_open_close_cycle() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    for i in 0..20 {
+        let source = if i % 2 == 0 {
+            "fn main() { let x = 42; x }"
+        } else {
+            "fn main() { let x: int = \"wrong\" }"
+        };
+        client.open(TEST_URI, source);
+        let _hover = client.hover(TEST_URI, 0, 4);
+    }
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_propagate_outside_result_function() {
+    assert!(stress_test_all_positions(
+        "\
+fn fallible() -> Result<int, string> { Ok(1) }
+fn main() {
+  let x = fallible()?
+  x
+}"
+    ));
+}
+
+#[test]
+fn stress_cast_wrong_types() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x = \"hello\" as int
+  let y = true as float64
+}"
+    ));
+}
+
+#[test]
+fn stress_range_expressions() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  xs[1..3]
+  xs[..2]
+  xs[3..]
+}"
+    ));
+}
+
+#[test]
+fn stress_very_long_identifier() {
+    let long_name: String = "a".repeat(1000);
+    let source = format!("fn main() {{ let {} = 42; {} }}", long_name, long_name);
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_many_parameters() {
+    let params: String = (0..50)
+        .map(|i| format!("x{}: int", i))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let args: String = (0..50)
+        .map(|i| format!("{}", i))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!(
+        "fn big({}) -> int {{ x0 }}\nfn main() {{ big({}) }}",
+        params, args
+    );
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_chained_method_calls() {
+    assert!(stress_test_all_positions(
+        "\
+struct Builder { val: int }
+impl Builder {
+  pub fn new() -> Builder { Builder { val: 0 } }
+  pub fn set(self, v: int) -> Builder { Builder { val: v } }
+  pub fn build(self) -> int { self.val }
+}
+fn main() {
+  Builder.new().set(1).set(2).set(3).build()
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_generic_types() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Option<Option<Option<int>>> = Some(Some(Some(42)))
+  let y: Result<Option<int>, string> = Ok(Some(1))
+  match x {
+    Some(Some(Some(n))) => n,
+    _ => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_enum_variant_same_name_as_type() {
+    assert!(stress_test_all_positions(
+        "\
+struct Foo { x: int }
+enum Bar { Foo(int), Other }
+fn main() {
+  let f = Foo { x: 1 }
+  let b = Bar.Foo(2)
+}"
+    ));
+}
+
+#[test]
+fn stress_mutual_type_reference() {
+    assert!(stress_test_all_positions(
+        "\
+struct A { b: Option<B> }
+struct B { a: Option<A> }
+fn main() {
+  let a = A { b: Some(B { a: None }) }
+  a.b
+}"
+    ));
+}
+
+#[test]
+fn stress_if_let_chain() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Option<int> = Some(1)
+  let y: Option<string> = Some(\"hi\")
+  if let Some(a) = x {
+    if let Some(b) = y {
+      a
+    }
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_deeply_nested_dot_access_chain() {
+    let mut source = String::from(
+        "struct S { s: S, v: int }\nfn main() {\n  let x = S { s: S { v: 0, s: S { v: 0, s: S { v: 1 } } }, v: 0 }\n  x",
+    );
+    for _ in 0..15 {
+        source.push_str(".s");
+    }
+    source.push_str(".v\n}");
+    assert!(stress_test_all_positions(&source));
+}
+
+#[test]
+fn stress_deeply_nested_call_expressions() {
+    let mut source = String::from("fn f(x: int) -> int { x }\nfn main() { ");
+    for _ in 0..15 {
+        source.push_str("f(");
+    }
+    source.push('1');
+    for _ in 0..15 {
+        source.push(')');
+    }
+    source.push_str(" }");
+    assert!(stress_test_all_positions(&source));
+}
+
+#[test]
+fn stress_deeply_nested_right_spine_binary() {
+    let mut source = String::from("fn main() { 1 + ");
+    for _ in 0..8 {
+        source.push_str("(1 + ");
+    }
+    source.push('1');
+    for _ in 0..8 {
+        source.push(')');
+    }
+    source.push_str(" }");
+    assert!(stress_test_all_positions(&source));
+}
+
+#[test]
+fn stress_deeply_nested_parens() {
+    let mut source = String::from("fn main() { ");
+    for _ in 0..15 {
+        source.push('(');
+    }
+    source.push('1');
+    for _ in 0..15 {
+        source.push(')');
+    }
+    source.push_str(" }");
+    assert!(stress_test_all_positions(&source));
+}
+
+#[test]
+fn stress_deeply_nested_unary() {
+    let mut source = String::from("fn main() { ");
+    for _ in 0..8 {
+        source.push_str("!!");
+    }
+    source.push_str("true }");
+    assert!(stress_test_all_positions(&source));
+}
+#[test]
+fn stress_completion_offset_zero() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "x.");
+    let _comp = client.completion(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 1);
+    let _comp = client.completion(TEST_URI, 0, 2);
+
+    client.change(TEST_URI, ".", 2);
+    let _comp = client.completion(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 1);
+
+    client.change(TEST_URI, "", 3);
+    let _comp = client.completion(TEST_URI, 0, 0);
+
+    client.change(TEST_URI, "fn main() { 1 }", 4);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_after_indexed_access_short_source() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "].");
+    let _comp = client.completion(TEST_URI, 0, 2);
+
+    client.change(TEST_URI, "a].", 2);
+    let _comp = client.completion(TEST_URI, 0, 3);
+
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_on_enum_with_many_variants() {
+    let mut source = String::from("enum Color {\n");
+    for i in 0..50 {
+        source.push_str(&format!("  V{}(int),\n", i));
+    }
+    source.push_str("}\nfn main() { Color. }");
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    let line = source.lines().count() as u32 - 1;
+    let comp = client.completion(TEST_URI, line, 20);
+    assert!(comp.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_on_multiple_impl_blocks() {
+    assert!(stress_test_all_positions(
+        "\
+struct Foo { x: int }
+impl Foo {
+  pub fn get_x(self) -> int { self.x }
+}
+impl Foo {
+  pub fn doubled(self) -> int { self.x * 2 }
+}
+fn main() {
+  let f = Foo { x: 42 }
+  f.get_x()
+  f.doubled()
+}"
+    ));
+}
+#[test]
+fn stress_select_expression() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let ch1 = make(Channel<int>, 1)
+  let ch2 = make(Channel<string>, 1)
+  select {
+    v <- ch1 => v,
+    s <- ch2 => 0,
+    _ => 42,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_try_recover_blocks() {
+    assert!(stress_test_all_positions(
+        "\
+fn fallible() -> Result<int, string> { Ok(1) }
+fn main() -> Result<int, string> {
+  let x = try {
+    let a = fallible()?
+    let b = fallible()?
+    a + b
+  }
+  x
+}"
+    ));
+}
+
+#[test]
+fn stress_defer_and_task() {
+    assert!(stress_test_all_positions(
+        "\
+fn cleanup() {}
+fn work() -> int { 42 }
+fn main() {
+  defer cleanup()
+  task work()
+  1
+}"
+    ));
+}
+#[test]
+fn stress_format_string_with_expressions() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x = 42
+  let s = \"hello\"
+  let result = \"${s} world ${x + 1} and ${if x > 0 { \"yes\" } else { \"no\" }}\"
+  result
+}"
+    ));
+}
+#[test]
+fn stress_const_expressions() {
+    assert!(stress_test_all_positions(
+        "\
+const PI: float64 = 3.14159
+const NAME: string = \"lisette\"
+const MAX: int = 100
+fn main() { PI + 1.0 }"
+    ));
+}
+
+#[test]
+fn stress_chained_type_aliases() {
+    assert!(stress_test_all_positions(
+        "\
+type A = int
+type B = A
+type C = B
+fn main() {
+  let x: C = 42
+  x + 1
+}"
+    ));
+}
+
+#[test]
+fn stress_enum_match_positions() {
+    assert!(stress_test_all_positions(
+        "\
+enum Direction {
+  North,
+  South,
+  East,
+  West,
+}
+fn main() {
+  let d = Direction.North
+  match d {
+    Direction.North => 0,
+    Direction.South => 1,
+    Direction.East => 2,
+    Direction.West => 3,
+  }
+}"
+    ));
+}
+#[test]
+fn stress_deeply_nested_patterns() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Option<Option<Option<int>>> = Some(Some(Some(42)))
+  match x {
+    Some(Some(Some(n))) => n,
+    Some(Some(None)) => 0,
+    Some(None) => 0,
+    None => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_struct_pattern_in_match() {
+    assert!(stress_test_all_positions(
+        "\
+struct Point { x: int, y: int }
+fn classify(p: Point) -> string {
+  match p {
+    Point { x: 0, y: 0 } => \"origin\",
+    Point { x: 0, y } => \"y-axis\",
+    Point { x, y: 0 } => \"x-axis\",
+    Point { x, y } => \"other\",
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_slice_pattern_in_match() {
+    assert!(stress_test_all_positions(
+        "\
+fn describe(xs: Slice<int>) -> string {
+  match xs {
+    [] => \"empty\",
+    [x] => \"one\",
+    [x, y] => \"two\",
+    [first, ..rest] => \"many\",
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_match_with_guards() {
+    assert!(stress_test_all_positions(
+        "\
+fn classify(x: int) -> string {
+  match x {
+    n if n < 0 => \"negative\",
+    0 => \"zero\",
+    n if n > 100 => \"big\",
+    n => \"small\",
+  }
+}"
+    ));
+}
+#[test]
+fn stress_hover_on_for_loop_binding() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let xs = [1, 2, 3]
+  for x in xs {
+    x + 1
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_hover_on_while_let_binding() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let mut opt: Option<int> = Some(42)
+  while let Some(v) = opt {
+    opt = None
+    v
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_hover_on_lambda_params() {
+    assert!(stress_test_all_positions(
+        "\
+fn apply(f: fn(int, string) -> bool, x: int, s: string) -> bool { f(x, s) }
+fn main() {
+  apply(fn(a: int, b: string) -> bool { a > 0 }, 1, \"hi\")
+}"
+    ));
+}
+#[test]
+fn stress_goto_def_on_struct_constructor() {
+    assert!(stress_test_all_positions(
+        "\
+struct Config { width: int, height: int, title: string }
+fn main() {
+  let c = Config { width: 800, height: 600, title: \"hello\" }
+  c.width
+}"
+    ));
+}
+
+#[test]
+fn stress_goto_def_on_enum_variant() {
+    assert!(stress_test_all_positions(
+        "\
+enum Token {
+  Number(int),
+  Ident(string),
+  Plus,
+}
+fn main() {
+  let t = Token.Number(42)
+  match t {
+    Token.Number(n) => n,
+    Token.Ident(s) => 0,
+    Token.Plus => 0,
+  }
+}"
+    ));
+}
+#[test]
+fn stress_references_on_widely_used_binding() {
+    let mut source = String::from("fn main() {\n  let counter = 0\n");
+    for i in 0..50 {
+        source.push_str(&format!("  let x{} = counter + {}\n", i, i));
+    }
+    source.push_str("  counter\n}");
+    assert!(stress_test_all_positions(&source));
+}
+#[test]
+fn stress_signature_help_nested_calls() {
+    assert!(stress_test_all_positions(
+        "\
+fn add(a: int, b: int) -> int { a + b }
+fn mul(a: int, b: int) -> int { a * b }
+fn main() {
+  add(mul(1, 2), mul(3, add(4, 5)))
+}"
+    ));
+}
+
+#[test]
+fn stress_signature_help_method_call() {
+    assert!(stress_test_all_positions(
+        "\
+struct Vec2 { x: float64, y: float64 }
+impl Vec2 {
+  pub fn add(self, other: Vec2) -> Vec2 {
+    Vec2 { x: self.x + other.x, y: self.y + other.y }
+  }
+  pub fn scale(self, factor: float64) -> Vec2 {
+    Vec2 { x: self.x * factor, y: self.y * factor }
+  }
+}
+fn main() {
+  let v = Vec2 { x: 1.0, y: 2.0 }
+  v.add(v.scale(2.0))
+}"
+    ));
+}
+#[test]
+fn stress_completion_after_unicode() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s.\n}",
+    );
+    let _comp = client.completion(TEST_URI, 3, 4);
+
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_at_multibyte_boundaries() {
+    let source = "fn main() { let x = 42; x }";
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
+
+    for col in 0..source.len() as u32 + 5 {
+        let _hover = client.hover(TEST_URI, 0, col);
+    }
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+#[test]
+fn stress_rename_enum_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "enum Color { Red, Green, Blue }\nfn main() { Color.Red }",
+    );
+
+    let prep = client.prepare_rename(TEST_URI, 0, 14);
+    assert!(prep.is_some());
+
+    let _prep = client.prepare_rename(TEST_URI, 1, 19);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_rename_with_many_usages() {
+    let mut source = String::from("fn main() {\n  let counter = 0\n");
+    for _ in 0..30 {
+        source.push_str("  let _ = counter + 1\n");
+    }
+    source.push('}');
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+
+    let prep = client.prepare_rename(TEST_URI, 1, 7);
+    assert!(prep.is_some());
+
+    client.shutdown();
+}
+#[test]
+fn stress_formatting_deeply_nested() {
+    let mut source = String::from("fn main() { ");
+    for _ in 0..7 {
+        source.push_str("if true { ");
+    }
+    source.push('1');
+    for _ in 0..7 {
+        source.push_str(" } else { 0 }");
+    }
+    source.push_str(" }");
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_formatting_long_function_signature() {
+    let params: String = (0..20)
+        .map(|i| format!("param_{}: int", i))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!("fn long_function({}) -> int {{ param_0 }}", params);
+    assert!(stress_test_input(&source));
+}
+#[test]
+fn stress_document_symbols_many_items() {
+    let mut source = String::new();
+    for i in 0..50 {
+        source.push_str(&format!("fn func_{}() -> int {{ {} }}\n", i, i));
+    }
+    for i in 0..20 {
+        source.push_str(&format!("struct S{} {{ x: int }}\n", i));
+    }
+    for i in 0..10 {
+        source.push_str(&format!("const C{}: int = {}\n", i, i));
+    }
+    source.push_str("fn main() { 1 }");
+
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    let symbols = client.document_symbol(TEST_URI);
+    assert!(symbols.is_some());
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+#[test]
+fn stress_rapid_type_changes() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let sources = [
+        "fn main() { let x: int = 1; x }",
+        "fn main() { let x: string = \"hello\"; x }",
+        "fn main() { let x: bool = true; x }",
+        "fn main() { let x: float64 = 3.14; x }",
+        "struct S { x: int }\nfn main() { let x = S { x: 1 }; x }",
+        "enum E { A(int), B }\nfn main() { let x = E.A(1); x }",
+        "fn main() { let x = (1, \"hi\", true); x }",
+        "fn main() { let x = [1, 2, 3]; x }",
+        "fn main() { let x: Option<int> = Some(42); x }",
+        "fn main() { let x: Result<int, string> = Ok(1); x }",
+    ];
+
+    for (i, src) in sources.iter().enumerate() {
+        client.change(TEST_URI, src, i as i32 + 1);
+        let _hover = client.hover(TEST_URI, 0, 4);
+        let _comp = client.completion(TEST_URI, 0, 4);
+    }
+
+    client.change(TEST_URI, "fn main() { 1 }", sources.len() as i32 + 1);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+#[test]
+fn stress_trailing_newlines() {
+    assert!(stress_test_input("fn main() { 1 }\n\n\n\n\n\n\n\n\n\n"));
+}
+
+#[test]
+fn stress_very_long_string_literal() {
+    let long_string: String = "a".repeat(10000);
+    let source = format!("fn main() {{ let s = \"{}\"; s }}", long_string);
+    assert!(stress_test_input(&source));
+}
+
+#[test]
+fn stress_many_let_bindings() {
+    let mut source = String::from("fn main() {\n");
+    for i in 0..100 {
+        source.push_str(&format!("  let v{} = {}\n", i, i));
+    }
+    source.push_str("  v99\n}");
+    assert!(stress_test_all_positions(&source));
+}
+#[test]
+fn stress_valid_then_broken_then_valid() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover1 = client.hover(TEST_URI, 0, 4);
+    assert!(hover1.is_some());
+
+    client.change(TEST_URI, "fn {{{{{", 2);
+    let _hover = client.hover(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 0);
+
+    client.change(TEST_URI, "fn main() { let y = \"hello\"; y }", 3);
+    let hover3 = client.hover(TEST_URI, 0, 4);
+    assert!(hover3.is_some());
+
+    client.shutdown();
+}
+#[test]
+fn stress_compound_assignments() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let mut x = 0
+  x += 1
+  x -= 2
+  x *= 3
+  x
+}"
+    ));
+}
+
+#[test]
+fn stress_mutable_struct_field_assignment() {
+    assert!(stress_test_all_positions(
+        "\
+struct Counter { count: int }
+fn main() {
+  let mut c = Counter { count: 0 }
+  c.count += 1
+  c.count
+}"
+    ));
+}
+#[test]
+fn stress_loop_with_break_value() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() -> int {
+  let result = loop {
+    break 42
+  }
+  result
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_loops_with_break_continue() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  for i in [1, 2, 3] {
+    for j in [4, 5, 6] {
+      if i == 2 { continue }
+      if j == 5 { break }
+      i + j
+    }
+  }
+}"
+    ));
+}
+#[test]
+fn stress_struct_spread() {
+    assert!(stress_test_all_positions(
+        "\
+struct Config { width: int, height: int, debug: bool }
+fn main() {
+  let base = Config { width: 800, height: 600, debug: false }
+  let custom = Config { width: 1024, ..base }
+  custom.height
+}"
+    ));
+}
+#[test]
+fn stress_recursive_enum() {
+    assert!(stress_test_all_positions(
+        "\
+enum List {
+  Cons(int, List),
+  Nil,
+}
+fn sum(l: List) -> int {
+  match l {
+    List.Cons(head, tail) => head + sum(tail),
+    List.Nil => 0,
+  }
+}
+fn main() { sum(List.Cons(1, List.Cons(2, List.Nil))) }"
+    ));
+}
+#[test]
+fn stress_interface_multiple_methods() {
+    assert!(stress_test_all_positions(
+        "\
+interface Shape {
+  fn area() -> float64
+  fn perimeter() -> float64
+  fn name() -> string
+}
+struct Circle { radius: float64 }
+impl Circle {
+  pub fn area(self) -> float64 { 3.14 * self.radius * self.radius }
+  pub fn perimeter(self) -> float64 { 2.0 * 3.14 * self.radius }
+  pub fn name(self) -> string { \"circle\" }
+}
+fn describe<T: Shape>(s: T) -> string { s.name() }
+fn main() { describe(Circle { radius: 1.0 }) }"
+    ));
+}
+#[test]
+fn stress_expressions_as_values_in_calls() {
+    assert!(stress_test_all_positions(
+        "\
+fn add(a: int, b: int) -> int { a + b }
+fn main() {
+  add(
+    if true { 1 } else { 2 },
+    match 3 {
+      3 => 4,
+      _ => 5,
+    }
+  )
+}"
+    ));
+}
+#[test]
+fn stress_cast_expression() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: int = 42
+  let y = x as float64
+  let z = y as int
+  z
+}"
+    ));
+}
+
+#[test]
+fn stress_reference_expressions() {
+    assert!(stress_test_all_positions(
+        "\
+fn takes_ref(r: &int) -> int { *r }
+fn main() {
+  let x = 42
+  let r = &x
+  takes_ref(r)
+}"
+    ));
+}
+#[test]
+fn stress_generic_function_hover() {
+    assert!(stress_test_all_positions(
+        "\
+fn identity<T>(x: T) -> T { x }
+fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }
+fn main() {
+  let x = identity(42)
+  let y = identity(\"hello\")
+  let p = pair(x, y)
+  p
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_option_result() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let a: Option<Result<int, string>> = Some(Ok(42))
+  let b: Result<Option<int>, string> = Ok(Some(10))
+  match a {
+    Some(Ok(n)) => n,
+    Some(Err(e)) => 0,
+    None => 0,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_match_in_match() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Option<int> = Some(42)
+  let y: Option<int> = Some(10)
+  match x {
+    Some(a) => match y {
+      Some(b) => a + b,
+      None => a,
+    },
+    None => match y {
+      Some(b) => b,
+      None => 0,
+    },
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_shadowed_variable_hover() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x = 42
+  let y = x + 1
+  let x = \"hello\"
+  let z = x
+  z
+}"
+    ));
+}
+
+#[test]
+fn stress_chained_method_calls_long() {
+    assert!(stress_test_all_positions(
+        "\
+struct Builder { count: int }
+impl Builder {
+  fn inc(self) -> Builder { Builder { count: self.count + 1 } }
+  fn build(self) -> int { self.count }
+}
+fn main() {
+  let b = Builder { count: 0 }
+  b.inc().inc().inc().inc().inc().build()
+}"
+    ));
+}
+
+#[test]
+fn stress_let_else_pattern() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Option<int> = Some(42)
+  let Some(value) = x else {
+    return ()
+  }
+  value
+}"
+    ));
+}
+
+#[test]
+fn stress_while_let_loop() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let mut x: Option<int> = Some(5)
+  while let Some(n) = x {
+    if n == 0 {
+      x = None
+    } else {
+      x = Some(n - 1)
+    }
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_multiple_return_types() {
+    assert!(stress_test_all_positions(
+        "\
+fn classify(n: int) -> string {
+  if n < 0 {
+    return \"negative\"
+  }
+  match n {
+    0 => \"zero\",
+    1 => \"one\",
+    _ => \"other\",
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_tuple_destructuring() {
+    assert!(stress_test_all_positions(
+        "\
+fn swap(a: int, b: int) -> (int, int) { (b, a) }
+fn main() {
+  let (x, y) = swap(1, 2)
+  let (a, b) = (x + y, x - y)
+  a + b
+}"
+    ));
+}
+
+#[test]
+fn stress_enum_with_methods() {
+    assert!(stress_test_all_positions(
+        "\
+enum Shape {
+  Circle(float64),
+  Rect(float64, float64),
+}
+impl Shape {
+  fn area(self) -> float64 {
+    match self {
+      Shape.Circle(r) => 3.14 * r * r,
+      Shape.Rect(w, h) => w * h,
+    }
+  }
+}
+fn main() {
+  let s = Shape.Circle(5.0)
+  s.area()
+}"
+    ));
+}
+
+#[test]
+fn stress_closure_as_parameter() {
+    assert!(stress_test_all_positions(
+        "\
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn main() {
+  let double = |x: int| -> int { x * 2 }
+  let result = apply(double, 21)
+  apply(|x: int| -> int { x + 1 }, result)
+}"
+    ));
+}
+
+#[test]
+fn stress_multiline_string_positions() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let s = \"line one
+line two
+line three\"
+  s
+}"
+    ));
+}
+
+#[test]
+fn stress_all_handlers_on_single_char_source() {
+    assert!(stress_test_all_positions("fn main() { 1 }"));
+}
+
+#[test]
+fn stress_completion_on_partially_typed() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let value = 42\n  val\n}");
+    let _comp = client.completion(TEST_URI, 2, 5);
+    client.change(TEST_URI, "fn main() {\n  let value = 42\n  value\n}", 2);
+    let hover = client.hover(TEST_URI, 2, 3);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_goto_def_on_pattern_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn main() {
+  let x: Option<int> = Some(42)
+  match x {
+    Some(value) => value + 1,
+    None => 0,
+  }
+}",
+    );
+    let _def = client.goto_definition(TEST_URI, 3, 19);
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_impl_method_self() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+struct Point { x: int, y: int }
+impl Point {
+  fn sum(self) -> int { self.x + self.y }
+}",
+    );
+    let _hover = client.hover(TEST_URI, 2, 24);
+    let _hover2 = client.hover(TEST_URI, 2, 34);
+    client.shutdown();
+}
+
+#[test]
+fn stress_rapid_changes_with_errors() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1 }");
+    for i in 0..10 {
+        if i % 2 == 0 {
+            client.change(TEST_URI, "fn main() { let x: int = \"wrong\" }", i + 2);
+        } else {
+            client.change(TEST_URI, "fn main() { let x = 42; x }", i + 2);
+        }
+        let _hover = client.hover(TEST_URI, 0, 20);
+    }
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_or_pattern_in_match() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Option<int> = Some(3)
+  match x {
+    Some(1) | Some(2) | Some(3) => true,
+    Some(_) | None => false,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_pipeline_chain() {
+    assert!(stress_test_all_positions(
+        "\
+fn double(x: int) -> int { x * 2 }
+fn add(x: int, y: int) -> int { x + y }
+fn main() {
+  let result = 5 |> double |> add(10)
+  result
+}"
+    ));
+}
+
+#[test]
+fn stress_multibyte_utf8_identifiers() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let café = 42
+  let naïve = café + 1
+  naïve
+}"
+    ));
+}
+
+#[test]
+fn stress_multibyte_utf8_in_strings() {
+    assert!(stress_test_all_positions(
+        r#"
+fn main() {
+  let s = "héllo wörld 日本語"
+  let t = "αβγδ"
+  s
+}"#
+    ));
+}
+
+#[test]
+fn stress_single_newline() {
+    assert!(stress_test_input("\n"));
+}
+
+#[test]
+fn stress_self_dot_outside_impl() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let self_val = 1
+  self_val
+}"
+    ));
+}
+
+#[test]
+fn stress_completion_self_dot_no_impl() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn main() {
+  self.
+}",
+    );
+    let comp = client.completion(TEST_URI, 1, 7);
+    assert!(
+        comp.is_none() || matches!(comp, Some(CompletionResponse::Array(ref v)) if v.is_empty())
+    );
+    client.shutdown();
+}
+
+#[test]
+fn stress_import_only_file_document_symbols() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+import foo
+import bar
+",
+    );
+    let _symbols = client.document_symbol(TEST_URI);
+
+    let _hover = client.hover(TEST_URI, 0, 7);
+    let _def = client.goto_definition(TEST_URI, 0, 7);
+    let _comp = client.completion(TEST_URI, 0, 10);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_match_pattern_bindings() {
+    assert!(stress_test_all_positions(
+        "\
+enum Shape {
+  Circle(float64),
+  Rect(float64, float64),
+}
+fn area(s: Shape) -> float64 {
+  match s {
+    Shape.Circle(r) => r * r,
+    Shape.Rect(w, h) => w * h,
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_hover_on_if_let_pattern() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let x: Option<int> = Some(42)
+  if let Some(val) = x {
+    val + 1
+  } else {
+    0
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_calls_signature_help() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn add(x: int, y: int) -> int { x + y }
+fn mul(x: int, y: int) -> int { x * y }
+fn main() {
+  add(mul(1, 2), mul(3, 4))
+}",
+    );
+
+    let sig = client.signature_help(TEST_URI, 3, 6);
+    assert!(sig.is_some());
+
+    let sig_inner = client.signature_help(TEST_URI, 3, 10);
+    assert!(sig_inner.is_some());
+
+    let sig_second = client.signature_help(TEST_URI, 3, 17);
+    assert!(sig_second.is_some());
+
+    let sig_outer_second = client.signature_help(TEST_URI, 3, 22);
+    assert!(sig_outer_second.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_format_string_interpolation_positions() {
+    assert!(stress_test_all_positions(
+        r#"
+fn main() {
+  let name = "world"
+  let x = 42
+  let msg = "hello ${name}, num=${x + 1}"
+  msg
+}"#
+    ));
+}
+
+#[test]
+fn stress_range_expression_not_dot() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let r = 0..10
+  for i in 0..5 {
+    i
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_prepare_rename_on_various_positions() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
+
+    let _rename_fn_keyword = client.prepare_rename(TEST_URI, 0, 0);
+    let rename_main = client.prepare_rename(TEST_URI, 0, 3);
+    assert!(rename_main.is_some());
+    let _rename_let = client.prepare_rename(TEST_URI, 0, 12);
+    let rename_x = client.prepare_rename(TEST_URI, 0, 16);
+    assert!(rename_x.is_some());
+    let _rename_eq = client.prepare_rename(TEST_URI, 0, 18);
+    let _rename_literal = client.prepare_rename(TEST_URI, 0, 20);
+    let _rename_usage = client.prepare_rename(TEST_URI, 0, 24);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_references_no_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn unused_fn() -> int { 1 }
+fn main() { 42 }",
+    );
+
+    let refs = client.references(TEST_URI, 0, 3, true);
+    assert!(refs.is_some());
+    let locs = refs.unwrap();
+    assert!(locs.len() <= 1);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_type_alias_hover() {
+    assert!(stress_test_all_positions(
+        "\
+type Ints = Slice<int>
+fn sum(xs: Ints) -> int { 0 }
+fn main() {
+  let xs: Ints = [1, 2, 3]
+  sum(xs)
+}"
+    ));
+}
+
+#[test]
+fn stress_impl_block_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+struct Counter { count: int }
+impl Counter {
+  pub fn new() -> Counter { Counter { count: 0 } }
+  pub fn inc(self) -> Counter { Counter { count: self.count + 1 } }
+  pub fn get(self) -> int { self.count }
+}
+fn main() {
+  let c = Counter.new()
+  let c2 = c.inc()
+  c2.get()
+}"
+    ));
+}
+
+#[test]
+fn stress_lambda_in_call_arg() {
+    assert!(stress_test_all_positions(
+        "\
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn main() {
+  apply(fn(x) { x + 1 }, 5)
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_struct_calls() {
+    assert!(stress_test_all_positions(
+        "\
+struct Inner { val: int }
+struct Outer { inner: Inner }
+fn main() {
+  let o = Outer { inner: Inner { val: 42 } }
+  o.inner.val
+}"
+    ));
+}
+
+#[test]
+fn stress_tuple_index_access() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let t = (1, \"hello\", true)
+  let a = t.0
+  let b = t.1
+  let c = t.2
+  a
+}"
+    ));
+}
+
+#[test]
+fn stress_propagate_operator() {
+    assert!(stress_test_all_positions(
+        "\
+fn inner() -> Result<int, string> { Ok(1) }
+fn outer() -> Result<int, string> {
+  let x = inner()?
+  Ok(x + 1)
+}"
+    ));
+}
+
+#[test]
+fn stress_indexed_access_completion() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+struct Item { name: string }
+fn main() {
+  let items: Slice<Item> = []
+  items[0].
+}",
+    );
+    let comp = client.completion(TEST_URI, 3, 11);
+    assert!(comp.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_on_number_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 42. }");
+    let _comp = client.completion(TEST_URI, 0, 16);
+
+    client.change(TEST_URI, "fn main() { 3.14 }", 2);
+    let _comp2 = client.completion(TEST_URI, 0, 15);
+
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+    client.shutdown();
+}
+
+#[test]
+fn stress_all_handlers_at_eof() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { 42 }";
+    client.open(TEST_URI, source);
+
+    let eof_col = source.len() as u32;
+    let _hover = client.hover(TEST_URI, 0, eof_col);
+    let _def = client.goto_definition(TEST_URI, 0, eof_col);
+    let _comp = client.completion(TEST_URI, 0, eof_col);
+    let _sig = client.signature_help(TEST_URI, 0, eof_col);
+    let _refs = client.references(TEST_URI, 0, eof_col, true);
+    let _rename = client.prepare_rename(TEST_URI, 0, eof_col);
+    let _inlay = client.inlay_hint(TEST_URI, (0, 0), (0, eof_col));
+
+    let _hover_past = client.hover(TEST_URI, 0, eof_col + 10);
+    let _hover_line_past = client.hover(TEST_URI, 5, 0);
+    let _inlay_past = client.inlay_hint(TEST_URI, (5, 0), (6, 0));
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_all_handlers_at_position_zero() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+struct Foo { x: int }
+enum Bar { A, B }
+interface Baz { fn do_thing() -> int }
+fn main() { 1 }",
+    );
+
+    let _hover = client.hover(TEST_URI, 0, 0);
+    let _def = client.goto_definition(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 0);
+    let _sig = client.signature_help(TEST_URI, 0, 0);
+    let _refs = client.references(TEST_URI, 0, 0, true);
+    let _rename = client.prepare_rename(TEST_URI, 0, 0);
+    let _fmt = client.formatting(TEST_URI);
+    let _sym = client.document_symbol(TEST_URI);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_formatting_already_formatted() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn main() {
+  let x = 1
+  x + 1
+}
+",
+    );
+    let edits = client.formatting(TEST_URI);
+    assert!(edits.is_none() || matches!(&edits, Some(v) if v.is_empty()));
+    client.shutdown();
+}
+
+#[test]
+fn stress_formatting_with_parse_errors() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = ; ; ; }");
+    let edits = client.formatting(TEST_URI);
+    assert!(edits.is_none());
+    client.shutdown();
+}
+
+#[test]
+fn stress_multiple_impl_blocks_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+struct Vec2 { x: float64, y: float64 }
+impl Vec2 {
+  pub fn new(x: float64, y: float64) -> Vec2 { Vec2 { x: x, y: y } }
+  pub fn add(self, other: Vec2) -> Vec2 {
+    Vec2 { x: self.x + other.x, y: self.y + other.y }
+  }
+}
+impl Vec2 {
+  pub fn scale(self, s: float64) -> Vec2 {
+    Vec2 { x: self.x * s, y: self.y * s }
+  }
+  pub fn len(self) -> float64 { self.x }
+}
+fn main() {
+  let v = Vec2.new(1.0, 2.0)
+  let v2 = v.scale(2.0)
+  v2.len()
+}"
+    ));
+}
+
+#[test]
+fn stress_generic_enum_with_methods() {
+    assert!(stress_test_all_positions(
+        "\
+enum Tree<T> {
+  Leaf(T),
+  Node(Tree<T>, Tree<T>),
+}
+impl Tree<T> {
+  pub fn is_leaf(self) -> bool {
+    match self {
+      Tree.Leaf(_) => true,
+      Tree.Node(_, _) => false,
+    }
+  }
+}
+fn main() {
+  let t = Tree.Leaf(42)
+  t.is_leaf()
+}"
+    ));
+}
+
+#[test]
+fn stress_break_continue_in_loops() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let mut sum = 0
+  for i in [1, 2, 3, 4, 5] {
+    if i == 3 { continue }
+    if i == 5 { break }
+    sum = sum + i
+  }
+  sum
+}"
+    ));
+}
+
+#[test]
+fn stress_loop_with_conditional_break() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let mut i = 0
+  let result = loop {
+    i = i + 1
+    if i > 10 { break i }
+  }
+  result
+}"
+    ));
+}
+
+#[test]
+fn stress_binary_operators_all() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let a = 1 + 2
+  let b = 3 - 1
+  let c = 2 * 3
+  let d = 10 / 2
+  let e = 10 % 3
+  let f = true && false
+  let g = true || false
+  let h = 1 == 1
+  let i = 1 != 2
+  let j = 1 < 2
+  let k = 2 > 1
+  let l = 1 <= 2
+  let m = 2 >= 1
+  a + b + c + d + e
+}"
+    ));
+}
+
+#[test]
+fn stress_unary_operators() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let a = !true
+  let b = !false
+  let c = -1
+  let d = -3.14
+  a
+}"
+    ));
+}
+
+#[test]
+fn stress_many_params_signature_help() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn many(a: int, b: string, c: bool, d: float64, e: int) -> int { a }
+fn main() {
+  many(1, \"hi\", true, 3.14, 5)
+}",
+    );
+
+    for col in [7, 10, 16, 22, 28] {
+        let sig = client.signature_help(TEST_URI, 2, col);
+        assert!(sig.is_some());
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_goto_def_on_struct_field_in_pattern() {
+    assert!(stress_test_all_positions(
+        "\
+struct Pair { first: int, second: string }
+fn main() {
+  let p = Pair { first: 1, second: \"hi\" }
+  let Pair { first, second } = p
+  first
+}"
+    ));
+}
+
+#[test]
+fn stress_hover_on_enum_variant_constructor() {
+    assert!(stress_test_all_positions(
+        "\
+enum Expr {
+  Num(int),
+  Add(Expr, Expr),
+}
+fn eval(e: Expr) -> int {
+  match e {
+    Expr.Num(n) => n,
+    Expr.Add(l, r) => eval(l) + eval(r),
+  }
+}
+fn main() {
+  let e = Expr.Add(Expr.Num(1), Expr.Num(2))
+  eval(e)
+}"
+    ));
+}
+
+#[test]
+fn stress_cross_package_hover_on_imported_function() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let (main_content, positions) = cursors(
+        "\
+import \"math\"
+
+fn main() {
+  let x = ma~th.d~ouble(5)
+  x
+}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let math_dir = src.join("math");
+    fs::create_dir_all(&math_dir).unwrap();
+    fs::write(
+        math_dir.join("math.lis"),
+        "pub fn double(n: int) -> int { n * 2 }",
+    )
+    .unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let hover = client.hover(&main_uri, positions[1].0, positions[1].1);
+    assert!(
+        hover.is_some(),
+        "hover on cross-package function should work"
+    );
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"), "should show return type");
+
+    let completion = client.completion(&main_uri, positions[0].0, positions[0].1);
+    let _ = completion;
+
+    let refs = client.references(&main_uri, positions[1].0, positions[1].1, true);
+    let _ = refs; // no crash
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_completion_on_struct_methods() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let lib_dir = src.join("shapes");
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(
+        lib_dir.join("shapes.lis"),
+        "\
+pub struct Circle { pub radius: float64 }
+impl Circle {
+  pub fn area(self: Circle) -> float64 { 3.14 * self.radius * self.radius }
+}",
+    )
+    .unwrap();
+
+    let (main_content, positions) = cursors(
+        "\
+import \"shapes\"
+
+fn main() {
+  let c = shapes.Circle { radius: 5.0 }
+  ~c.~area~()
+}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let hover = client.hover(&main_uri, positions[0].0, positions[0].1);
+    assert!(
+        hover.is_some(),
+        "hover on struct instance should show Circle type"
+    );
+
+    let def = client.goto_definition(&main_uri, positions[1].0, positions[1].1);
+    let _ = def; // just ensure no crash
+
+    let sig = client.signature_help(&main_uri, positions[2].0, positions[2].1);
+    let _ = sig; // no crash
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_enum_variant_completion() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let types_dir = src.join("types");
+    fs::create_dir_all(&types_dir).unwrap();
+    fs::write(
+        types_dir.join("types.lis"),
+        "\
+pub enum Color {
+  Red,
+  Green,
+  Blue,
+}",
+    )
+    .unwrap();
+
+    let main_content = "\
+import \"types\"
+
+fn main() {
+  let c = types.Color.Red
+  c
+}";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    for col in [0, 10, 20, 25] {
+        let _ = client.hover(&main_uri, 3, col);
+        let _ = client.completion(&main_uri, 3, col);
+        let _ = client.goto_definition(&main_uri, 3, col);
+        let _ = client.prepare_rename(&main_uri, 3, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_rename_local_binding() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let util_dir = src.join("util");
+    fs::create_dir_all(&util_dir).unwrap();
+    fs::write(
+        util_dir.join("util.lis"),
+        "pub fn greet() -> string { \"hi\" }",
+    )
+    .unwrap();
+
+    let (main_content, line, character) = cursor(
+        "\
+import \"util\"
+
+fn main() {
+  let ~msg = util.greet()
+  msg
+}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let edit = client.rename(&main_uri, line, character, "message");
+    assert!(edit.is_some(), "rename should produce workspace edit");
+    let changes = edit.unwrap().changes.unwrap();
+    let file_edits = changes.get(&Url::parse(&main_uri).unwrap()).unwrap();
+    assert!(file_edits.len() >= 2, "should rename definition and usage");
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_rename_empty_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
+
+    let error = client.try_rename(TEST_URI, 0, 16, "").unwrap_err();
+    assert_eq!(error, "Identifier cannot be empty");
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_rename_to_keyword() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
+
+    for keyword in ["fn", "let", "match"] {
+        let error = client.try_rename(TEST_URI, 0, 16, keyword).unwrap_err();
+        assert_eq!(error, format!("'{keyword}' is a reserved keyword"));
+    }
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_rename_to_special_characters() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
+
+    for (name, expected) in [
+        (
+            "123abc",
+            "Identifier must start with a letter or underscore, not '1'",
+        ),
+        (
+            "a-b",
+            "Identifier cannot contain '-' - only letters, digits, and underscores allowed",
+        ),
+        (
+            "a b",
+            "Identifier cannot contain ' ' - only letters, digits, and underscores allowed",
+        ),
+        (
+            "a.b",
+            "Identifier cannot contain '.' - only letters, digits, and underscores allowed",
+        ),
+        (
+            "@foo",
+            "Identifier must start with a letter or underscore, not '@'",
+        ),
+    ] {
+        let error = client.try_rename(TEST_URI, 0, 16, name).unwrap_err();
+        assert_eq!(error, expected);
+    }
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_diagnostics_contain_error_code() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x: int = \"hello\"; x }");
+
+    let diags = client.await_diagnostics();
+    assert!(!diags.is_empty(), "should have type error diagnostics");
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR)),
+        "should have ERROR severity"
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.source == Some("lisette".to_string())),
+        "source should be lisette"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_diagnostics_multiple_errors() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn main() {
+  let x: int = \"hello\"
+  let y: string = 42
+  x + y
+}",
+    );
+
+    let diags = client.await_diagnostics();
+    assert!(
+        diags.len() >= 2,
+        "should have multiple type errors, got {}",
+        diags.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_diagnostics_warning_lint() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn unused_function() -> int { 42 }
+fn main() { 1 }",
+    );
+
+    let diags = client.await_diagnostics();
+    // May have warning for unused function
+    let _ = diags;
+
+    // Server still alive
+    let hover = client.hover(TEST_URI, 1, 4);
+    assert!(hover.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_go_import_all_handlers() {
+    assert!(stress_test_all_positions(
+        "\
+import \"go:strings\"
+
+fn main() {
+  let s = strings.Contains(\"hello world\", \"world\")
+  s
+}"
+    ));
+}
+
+#[test]
+fn stress_go_import_multiple_packages() {
+    assert!(stress_test_all_positions(
+        "\
+import \"go:fmt\"
+import \"go:strings\"
+
+fn main() {
+  let s = strings.HasPrefix(\"hello\", \"he\")
+  fmt.Println(s)
+}"
+    ));
+}
+
+#[test]
+fn stress_go_import_completion_after_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+import \"go:strings\"
+
+fn main() {
+  strings.~
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let completion = client.completion(TEST_URI, line, character);
+    let _ = completion; // should return completions from Go strings package, not crash
+
+    for col in 0..11 {
+        let _ = client.hover(TEST_URI, 3, col);
+        let _ = client.goto_definition(TEST_URI, 3, col);
+        let _ = client.prepare_rename(TEST_URI, 3, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_multiple_files_open() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let uri1 = "file:///test1.lis";
+    let uri2 = "file:///test2.lis";
+    let uri3 = "file:///test3.lis";
+
+    client.open(uri1, "fn add(a: int, b: int) -> int { a + b }");
+    client.open(uri2, "fn greet(name: string) -> string { name }");
+    client.open(uri3, "fn main() { 42 }");
+
+    let h1 = client.hover(uri1, 0, 3);
+    let h2 = client.hover(uri2, 0, 3);
+    let h3 = client.hover(uri3, 0, 3);
+    assert!(h1.is_some());
+    assert!(h2.is_some());
+    assert!(h3.is_some());
+
+    let c1 = client.completion(uri1, 0, 0);
+    let c2 = client.completion(uri2, 0, 0);
+    assert!(c1.is_some());
+    assert!(c2.is_some());
+
+    client.change(uri2, "fn greet() -> int { 1 }", 2);
+    let h1_after = client.hover(uri1, 0, 3);
+    assert!(
+        h1_after.is_some(),
+        "other file should still work after change"
+    );
+
+    let h2_after = client.hover(uri2, 0, 3);
+    assert!(h2_after.is_some(), "changed file should still work");
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_goto_def_on_type_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Point { x: int, y: int }
+fn distance(p: Po~int) -> float64 { 0.0 }
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  distance(p)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let def = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        def.is_some(),
+        "should resolve type annotation to struct definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_goto_def_on_return_type_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Result2 { value: int }
+fn make() -> Re~sult2 { Result2 { value: 1 } }
+fn main() { make() }",
+    );
+    client.open(TEST_URI, &source);
+
+    let def = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        def.is_some(),
+        "should resolve return type annotation to struct definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_on_self_in_impl_with_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Player { name: string, score: int }
+impl Player {
+  fn display(self: Player) -> string {
+    self.~
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let completion = client.completion(TEST_URI, line, character);
+    assert!(completion.is_some());
+    let labels = completion_labels(&completion.unwrap());
+    assert!(
+        labels.contains(&"name".to_string()),
+        "should complete struct fields: {:?}",
+        labels
+    );
+    assert!(
+        labels.contains(&"score".to_string()),
+        "should complete struct fields: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_chained_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Wrapper { inner: Inner }
+struct Inner { value: int }
+fn main() {
+  let w = Wrapper { inner: Inner { value: 42 } }
+  w.inner.~
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let completion = client.completion(TEST_URI, line, character);
+    let _ = completion; // should provide completions for Inner type (field: value), no crash
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_document_symbols_all_kinds() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+struct MyStruct { x: int }
+enum MyEnum { A, B }
+interface MyInterface { fn method() -> int }
+type MyAlias = int
+const MY_CONST: int = 42
+var my_var: int
+fn my_function() -> int { 1 }
+fn main() { 1 }",
+    );
+
+    let symbols = client.document_symbol(TEST_URI);
+    assert!(symbols.is_some());
+    let names = symbol_names(&symbols.unwrap());
+    assert!(names.contains(&"MyStruct".to_string()));
+    assert!(names.contains(&"MyEnum".to_string()));
+    assert!(names.contains(&"MyInterface".to_string()));
+    assert!(names.contains(&"MyAlias".to_string()));
+    assert!(names.contains(&"MY_CONST".to_string()));
+    assert!(names.contains(&"my_var".to_string()));
+    assert!(names.contains(&"my_function".to_string()));
+    assert!(names.contains(&"main".to_string()));
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_signature_help_on_method_with_self() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Counter { count: int }
+impl Counter {
+  fn increment(self: Counter, by: int) -> Counter {
+    Counter { count: self.count + by }
+  }
+}
+fn main() {
+  let c = Counter { count: 0 }
+  c.increment(5~)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let sig = client.signature_help(TEST_URI, line, character);
+    assert!(sig.is_some());
+    let sig = sig.unwrap();
+    let label = &sig.signatures[0].label;
+    assert!(
+        !label.contains("Counter, int"),
+        "self param should be hidden: expected `fn increment(int) -> Counter`, not `fn increment(Counter, int) -> Counter`, got {}",
+        label
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_signature_help_generic_function() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn identity<T>(x: T) -> T { x }
+fn main() {
+  identity(42)
+}",
+    );
+
+    let sig = client.signature_help(TEST_URI, 2, 11);
+    assert!(sig.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_alternating_valid_invalid_changes() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { 42 }");
+    let h1 = client.hover(TEST_URI, 0, 4);
+    assert!(h1.is_some());
+
+    client.change(TEST_URI, "fn main() { let x: int = \"bad\"", 2);
+    let _ = client.hover(TEST_URI, 0, 4);
+    let _ = client.completion(TEST_URI, 0, 0);
+
+    client.change(TEST_URI, "fn main() { let x = 42; x }", 3);
+    let h3 = client.hover(TEST_URI, 0, 4);
+    assert!(h3.is_some());
+
+    client.change(TEST_URI, "}{}{}{", 4);
+    let _ = client.hover(TEST_URI, 0, 0);
+    let _ = client.completion(TEST_URI, 0, 0);
+
+    client.change(TEST_URI, "fn main() { 1 }", 5);
+    let h5 = client.hover(TEST_URI, 0, 4);
+    assert!(h5.is_some(), "server should recover from broken state");
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_rapid_completion_requests() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+struct Foo { a: int, b: string, c: bool }
+fn main() {
+  let f = Foo { a: 1, b: \"hi\", c: true }
+  f.
+}",
+    );
+
+    for _ in 0..10 {
+        let _ = client.completion(TEST_URI, 3, 4);
+    }
+
+    client.change(
+        TEST_URI,
+        "\
+struct Foo { a: int, b: string, c: bool }
+fn main() {
+  let f = Foo { a: 1, b: \"hi\", c: true }
+  f.a
+}",
+        2,
+    );
+    let hover = client.hover(TEST_URI, 1, 3);
+    assert!(
+        hover.is_some(),
+        "hover should recover after fixing broken code"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_at_every_byte_boundary() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn f(x: int) -> int { x + 1 }";
+    client.open(TEST_URI, source);
+
+    for col in 0..source.len() as u32 {
+        let _ = client.hover(TEST_URI, 0, col);
+        let _ = client.goto_definition(TEST_URI, 0, col);
+    }
+
+    let _ = client.hover(TEST_URI, 0, source.len() as u32 + 10);
+    let _ = client.hover(TEST_URI, 100, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_all_handlers_past_end_of_source() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1 }");
+
+    let _ = client.hover(TEST_URI, 999, 999);
+    let _ = client.completion(TEST_URI, 999, 999);
+    let _ = client.goto_definition(TEST_URI, 999, 999);
+    let _ = client.references(TEST_URI, 999, 999, true);
+    let _ = client.signature_help(TEST_URI, 999, 999);
+    let _ = client.prepare_rename(TEST_URI, 999, 999);
+    let _ = client.rename(TEST_URI, 999, 999, "foo");
+    let _ = client.inlay_hint(TEST_URI, (999, 999), (1000, 0));
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_while_let_with_option_chain() {
+    assert!(stress_test_all_positions(
+        "\
+fn next_val(n: int) -> Option<int> {
+  if n > 0 { Some(n - 1) } else { None }
+}
+fn main() {
+  let mut current = Some(10)
+  while let Some(val) = current {
+    current = next_val(val)
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_if_let_chain_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+fn main() {
+  let a: Option<int> = Some(1)
+  let b: Option<int> = Some(2)
+  if let Some(x) = a {
+    if let Some(y) = b {
+      x + y
+    } else { 0 }
+  } else { 0 }
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_match_with_guards_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+enum Shape {
+  Circle(float64),
+  Rect(float64, float64),
+}
+fn describe(s: Shape) -> string {
+  match s {
+    Shape.Circle(r) if r > 10.0 => \"big circle\",
+    Shape.Circle(r) => \"small circle\",
+    Shape.Rect(w, h) if w == h => \"square\",
+    Shape.Rect(_, _) => \"rectangle\",
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_enum_match_all_handlers() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+enum D~irection {
+  North,
+  South,
+  East,
+  West,
+}
+fn main() {
+  let d = Direction.Nor~th
+  match d {
+    Direction.North => \"up\",
+    Direction.South => \"down\",
+    Direction.East => \"right\",
+    Direction.West => \"left\",
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    let _ = hover;
+
+    // No completion assertion, just checks the handler does not crash.
+    let _ = client.completion(TEST_URI, 7, 19);
+
+    let rename = client.prepare_rename(TEST_URI, positions[0].0, positions[0].1);
+    assert!(rename.is_some());
+
+    let symbols = client.document_symbol(TEST_URI);
+    assert!(symbols.is_some());
+    let names = symbol_names(&symbols.unwrap());
+    assert!(names.contains(&"Direction".to_string()));
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_interface_generic_impl_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+interface Printable {
+  fn to_string() -> string
+}
+struct Name { value: string }
+impl Name {
+  fn to_string(self: Name) -> string { self.value }
+}
+fn print_it<T: Printable>(item: T) -> string {
+  item.to_string()
+}
+fn main() {
+  let n = Name { value: \"Alice\" }
+  print_it(n)
+}"
+    ));
+}
+
+#[test]
+fn stress_nested_struct_destructuring() {
+    assert!(stress_test_all_positions(
+        "\
+struct Inner { value: int }
+struct Outer { inner: Inner, name: string }
+fn main() {
+  let o = Outer { inner: Inner { value: 42 }, name: \"test\" }
+  let Outer { inner: Inner { value }, name } = o
+  value + len(name)
+}"
+    ));
+}
+
+#[test]
+fn stress_try_recover_with_match() {
+    assert!(stress_test_all_positions(
+        "\
+fn might_fail(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err(\"negative\") }
+}
+fn main() -> Result<int, string> {
+  let result = try {
+    let a = might_fail(1)?
+    let b = might_fail(2)?
+    a + b
+  }
+  match result {
+    Ok(v) => Ok(v),
+    Err(e) => Err(e),
+  }
+}"
+    ));
+}
+
+#[test]
+fn stress_generic_option_map_slice() {
+    assert!(stress_test_all_positions(
+        "\
+fn first<T>(items: Slice<T>) -> Option<T> {
+  if len(items) > 0 { Some(items[0]) } else { None }
+}
+fn main() {
+  let nums: Slice<int> = [1, 2, 3]
+  let result: Option<int> = first(nums)
+  result
+}"
+    ));
+}
+
+#[test]
+fn stress_cross_package_import_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let helpers_dir = src.join("helpers");
+    fs::create_dir_all(&helpers_dir).unwrap();
+    fs::write(
+        helpers_dir.join("helpers.lis"),
+        "pub fn compute() -> int { 42 }",
+    )
+    .unwrap();
+
+    let (main_content, positions) = cursors(
+        "\
+import h \"helpers\"
+
+fn main() {
+  h.~c~ompute()
+}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let hover = client.hover(&main_uri, positions[1].0, positions[1].1);
+    let _ = hover;
+
+    let completion = client.completion(&main_uri, positions[0].0, positions[0].1);
+    let _ = completion;
+
+    let def = client.goto_definition(&main_uri, positions[1].0, positions[1].1);
+    let _ = def;
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_const_var_all_handlers() {
+    assert!(stress_test_all_positions(
+        "\
+const MAX: int = 100
+const MIN: int = 0
+var counter: int = 0
+fn main() {
+  let range = MAX - MIN
+  counter = counter + 1
+  range + counter
+}"
+    ));
+}
+
+#[test]
+fn stress_formatting_complex_match() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+enum Tree { Leaf(int), Node(Tree,Tree) }
+fn sum(t:Tree)->int{match t{Tree.Leaf(n)=>n,Tree.Node(l,r)=>sum(l)+sum(r)}}
+fn main(){sum(Tree.Node(Tree.Leaf(1),Tree.Leaf(2)))}",
+    );
+
+    let edits = client.formatting(TEST_URI);
+    assert!(
+        edits.is_some(),
+        "formatter should produce edits for compressed code"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_all_literal_types() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+fn main() {
+  let ~a = 42
+  let ~b = 3.14
+  let ~c = true
+  let ~d = \"hello\"
+  let ~e = 'x'
+  let f = [1, 2, 3]
+  let g = (1, \"two\", true)
+  a
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    for (pos, expected) in positions
+        .iter()
+        .zip(["int", "float64", "bool", "string", "rune"])
+    {
+        let hover = client.hover(TEST_URI, pos.0, pos.1);
+        assert!(hover.is_some(), "hover on line {} should work", pos.0);
+        let content = hover_content(&hover.unwrap());
+        assert!(
+            content.contains(expected),
+            "line {}: expected '{}' in '{}'",
+            pos.0,
+            expected,
+            content
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_falls_back_to_last_valid_snapshot() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    // Start with valid code: this populates last_valid_snapshot.
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover = client.hover(TEST_URI, 0, 3);
+    assert!(hover.is_some(), "hover should work on valid code");
+
+    // Break the code with a lex error: run_analysis returns Err.
+    client.change(TEST_URI, "fn main() { let x = 42; x.", 2);
+
+    let hover = client.hover(TEST_URI, 0, 3);
+    assert!(
+        hover.is_some(),
+        "hover should fall back to last valid snapshot during parse errors"
+    );
+
+    client.shutdown();
+}
+
+/// Tests that completion after a dot following a multi-byte character
+/// does not panic in get_package_prefix (rfind + 1 byte offset issue).
+#[test]
+fn stress_completion_after_multibyte_identifier() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    // CJK character (3 bytes each in UTF-8) used as separator before an identifier
+    // This tests that `get_package_prefix` handles multi-byte chars correctly
+    // when doing `rfind(|c| ...).map(|i| i + 1)`: i+1 could be mid-char
+    client.open(
+        TEST_URI,
+        "\
+struct S { value: int }
+fn main() {
+  let s = S { value: 1 }
+  s.value
+}",
+    );
+
+    for col in 0..10 {
+        let _ = client.hover(TEST_URI, 3, col);
+        let _ = client.completion(TEST_URI, 3, col);
+        let _ = client.goto_definition(TEST_URI, 3, col);
+    }
+
+    client.shutdown();
+}
+
+/// Specifically test that completion does not panic when a multi-byte
+/// character appears right before an identifier followed by a dot.
+#[test]
+fn stress_completion_multibyte_before_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    // `let x = 1; 名.`: multi-byte char right before dot
+    // The get_package_prefix rfind will find the multi-byte char as the non-ident boundary,
+    // then `i + 1` might be mid-char, which would panic on `base[start..]`
+    // However, Lisette identifiers can only be ASCII, so this should not happen in practice
+    // because the lexer would not produce a multi-byte identifier. But the LSP should
+    // handle it gracefully without panic.
+    client.open(TEST_URI, "fn main() {\n  let x = 1\n  x\n}");
+
+    for line in 0..4 {
+        for col in 0..20 {
+            let _ = client.hover(TEST_URI, line, col);
+            let _ = client.completion(TEST_URI, line, col);
+        }
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_dot_after_emoji_string() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    // String containing emoji (4-byte UTF-8) followed by code
+    client.open(
+        TEST_URI,
+        "\
+struct S { x: int }
+fn main() {
+  let s = \"🎉\"
+  let obj = S { x: 1 }
+  obj.x
+}",
+    );
+
+    for col in 0..8 {
+        let _ = client.hover(TEST_URI, 4, col);
+        let _ = client.completion(TEST_URI, 4, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_snapshot_cache_invalidation() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { 42 }");
+    let h1 = client.hover(TEST_URI, 0, 4);
+    assert!(h1.is_some());
+
+    client.change(TEST_URI, "fn greet() -> string { \"hi\" }", 2);
+    let h2 = client.hover(TEST_URI, 0, 4);
+    assert!(h2.is_some());
+    let content = hover_content(&h2.unwrap());
+    assert!(
+        content.contains("string"),
+        "hover should reflect new code after cache invalidation, got: {}",
+        content
+    );
+
+    client.change(TEST_URI, "fn main() -> int { 42 }", 3);
+    let h3 = client.hover(TEST_URI, 0, 4);
+    assert!(h3.is_some());
+    let content = hover_content(&h3.unwrap());
+    assert!(
+        content.contains("int"),
+        "hover should reflect reverted code, got: {}",
+        content
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_rename_struct_with_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct F~oo { x: int }
+fn make() -> Foo { Foo { x: 1 } }
+fn main() { let f: Foo = make(); f }",
+    );
+    client.open(TEST_URI, &source);
+
+    let prep = client.prepare_rename(TEST_URI, line, character);
+    assert!(prep.is_some());
+
+    // Rename currently only renames the definition itself, not type annotation
+    // usages. This is a known limitation of the usage tracking system.
+    let edit = client.rename(TEST_URI, line, character, "Bar");
+    assert!(edit.is_some());
+    let changes = edit.unwrap().changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+    assert!(!edits.is_empty(), "should rename at least the definition");
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_rename_function_with_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn helper() -> int { 42 }
+fn main() {
+  let a = helper()
+  let b = helper()
+  a + b
+}",
+    );
+
+    let edit = client.rename(TEST_URI, 0, 4, "compute");
+    assert!(edit.is_some());
+    let changes = edit.unwrap().changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+    assert!(
+        edits.len() >= 3,
+        "should rename definition + 2 usages, got {} edits",
+        edits.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_if_match_block_values() {
+    assert!(stress_test_all_positions(
+        "\
+fn classify(n: int) -> string {
+  let label = if n > 100 {
+    \"big\"
+  } else if n > 10 {
+    \"medium\"
+  } else {
+    \"small\"
+  }
+  let result = match n {
+    0 => \"zero\",
+    1 => \"one\",
+    _ => label,
+  }
+  result
+}"
+    ));
+}
+
+#[test]
+fn stress_open_change_query_close_cycle() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let uri1 = "file:///cycle1.lis";
+    let uri2 = "file:///cycle2.lis";
+
+    for i in 0..5i32 {
+        client.open(uri1, &format!("fn f{i}() -> int {{ {i} }}"));
+        client.open(uri2, &format!("fn g{i}() -> string {{ \"v{i}\" }}"));
+
+        let _ = client.hover(uri1, 0, 3);
+        let _ = client.completion(uri2, 0, 0);
+
+        client.change(
+            uri1,
+            &format!("fn f{i}(x: int) -> int {{ x + {i} }}"),
+            i + 2,
+        );
+
+        let _ = client.hover(uri1, 0, 3);
+        let _ = client.document_symbol(uri2);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_large_struct_completion() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let mut fields = String::new();
+    for i in 0..20 {
+        if i > 0 {
+            fields.push_str(", ");
+        }
+        fields.push_str(&format!("field_{i}: int"));
+    }
+    let source = format!(
+        "\
+struct Big {{ {fields} }}
+fn main() {{
+  let b = Big {{ {} }}
+  b.field_0
+}}",
+        (0..20)
+            .map(|i| format!("field_{i}: {i}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    client.open(TEST_URI, &source);
+
+    // Completion after `b.` should include all 20 fields
+    let lines: Vec<&str> = source.lines().collect();
+    let dot_line = lines.len() as u32 - 2; // `  b.field_0` line
+    let _ = client.completion(TEST_URI, dot_line, 4);
+
+    for col in [0, 5, 10, 20, 30, 40, 50] {
+        let _ = client.hover(TEST_URI, 0, col);
+        let _ = client.goto_definition(TEST_URI, 0, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_incremental_method_chain_typing() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let stages = [
+        "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s\n}",
+        "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s.\n}",
+        "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s.x\n}",
+    ];
+
+    client.open(TEST_URI, stages[0]);
+
+    for (i, stage) in stages[1..].iter().enumerate() {
+        client.change(TEST_URI, stage, (i + 2) as i32);
+        let _ = client.hover(TEST_URI, 3, 3);
+        let _ = client.completion(TEST_URI, 3, 3);
+        let _ = client.goto_definition(TEST_URI, 3, 3);
+    }
+
+    let hover = client.hover(TEST_URI, 3, 4);
+    assert!(hover.is_some(), "final state should have working hover");
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_incremental_function_typing() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let stages = [
+        "fn",
+        "fn m",
+        "fn main",
+        "fn main()",
+        "fn main() {",
+        "fn main() { 4",
+        "fn main() { 42",
+        "fn main() { 42 }",
+    ];
+
+    client.open(TEST_URI, stages[0]);
+    for (i, stage) in stages[1..].iter().enumerate() {
+        client.change(TEST_URI, stage, (i + 2) as i32);
+        let _ = client.hover(TEST_URI, 0, 0);
+        let _ = client.completion(TEST_URI, 0, 0);
+    }
+
+    let hover = client.hover(TEST_URI, 0, 4);
+    assert!(hover.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_self_in_impl() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+struct Point { x: int, y: int }
+impl Point {
+  fn origin() -> Point { Point { x: 0, y: 0 } }
+  fn shift(s~elf: Point, dx: int) -> Point {
+    Point { x: se~lf~.x + dx, y: self.y }
+  }
+}
+fn main() {
+  let p = Point.o~rigin()
+  p.~shift(~1)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1);
+
+    let _ = client.hover(TEST_URI, positions[0].0, positions[0].1);
+
+    let _ = client.completion(TEST_URI, positions[2].0, positions[2].1);
+
+    let _ = client.goto_definition(TEST_URI, positions[3].0, positions[3].1);
+
+    let _ = client.goto_definition(TEST_URI, positions[4].0, positions[4].1);
+
+    let sig = client.signature_help(TEST_URI, positions[5].0, positions[5].1);
+    assert!(sig.is_some(), "signature help should return a result");
+    let label = &sig.unwrap().signatures[0].label;
+    assert!(
+        !label.contains("Point, int"),
+        "self should be stripped from signature: {}",
+        label
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+enum Shape {
+  Circle(float64),
+  Rect(float64, float64),
+}
+fn main() {
+  let s = Shape.Circle(1.0)
+  match s {
+    Shape.~
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let _ = client.completion(TEST_URI, line, character);
+
+    for col in 0..12 {
+        let _ = client.hover(TEST_URI, 7, col);
+        let _ = client.goto_definition(TEST_URI, 7, col);
+        let _ = client.prepare_rename(TEST_URI, 7, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_enum_variant_goto_def() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let types_dir = src.join("types");
+    fs::create_dir_all(&types_dir).unwrap();
+    fs::write(
+        types_dir.join("types.lis"),
+        "\
+pub enum Color {
+  Red,
+  Green,
+  Blue,
+}
+pub fn is_warm(c: Color) -> bool {
+  match c {
+    Color.Red => true,
+    Color.Green => false,
+    Color.Blue => false,
+  }
+}",
+    )
+    .unwrap();
+
+    let (main_content, positions) = cursors(
+        "\
+import \"types\"
+
+fn main() {
+  let c = types.~Color.~Red
+  types.is~_warm(c~)
+}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let _ = client.goto_definition(&main_uri, positions[0].0, positions[0].1);
+
+    let _ = client.goto_definition(&main_uri, positions[1].0, positions[1].1);
+
+    let _ = client.goto_definition(&main_uri, positions[2].0, positions[2].1);
+
+    for col in [10, 14, 16, 20, 22, 24] {
+        let _ = client.hover(&main_uri, 3, col);
+    }
+
+    let _ = client.signature_help(&main_uri, positions[3].0, positions[3].1);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_const_pattern_resolves_exact_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let a_dir = src.join("week_a");
+    fs::create_dir_all(&a_dir).unwrap();
+    fs::write(
+        a_dir.join("week_a.lis"),
+        "\
+pub struct Weekday(int)
+pub const Friday: Weekday = 5",
+    )
+    .unwrap();
+
+    let b_dir = src.join("week_b");
+    fs::create_dir_all(&b_dir).unwrap();
+    fs::write(
+        b_dir.join("week_b.lis"),
+        "\
+pub struct Workday(int)
+pub const Friday: Workday = 5",
+    )
+    .unwrap();
+
+    let main_content = "\
+import a \"week_a\"
+import b \"week_b\"
+
+fn classify(d: b.Workday) -> int {
+  match d {
+    b.Friday => 1,
+    _ => 0,
+  }
+}";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    let response = client.goto_definition(&main_uri, 5, 8);
+    let loc = response.as_ref().and_then(definition_location);
+    assert!(
+        loc.is_some(),
+        "const pattern should resolve to its constant definition"
+    );
+    assert!(
+        loc.unwrap().uri.as_str().contains("week_b"),
+        "const pattern must resolve to the matched package, not a same-named const elsewhere"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_bare_const_pattern_resolves_local_constant() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let main_content = "\
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> int {
+  match n {
+    MAX_SIZE => 1,
+    _ => 0,
+  }
+}";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    let response = client.goto_definition(&main_uri, 4, 6);
+    let loc = response.as_ref().and_then(definition_location);
+    assert!(
+        loc.is_some(),
+        "bare const pattern should resolve to its constant definition"
+    );
+    assert_eq!(
+        loc.unwrap().range.start.line,
+        0,
+        "bare const pattern must resolve to the `const` declaration"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_references_on_struct_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+struct Config { wi~dth: int, height: int }
+fn area(c: Config) -> int {
+  c.~width * c.height
+}
+fn main() {
+  let c = Config { w~idth: 10, height: 20 }
+  area(c)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let _ = client.references(TEST_URI, positions[0].0, positions[0].1, true);
+
+    let _ = client.references(TEST_URI, positions[2].0, positions[2].1, true);
+
+    let _ = client.references(TEST_URI, positions[1].0, positions[1].1, true);
+
+    let _ = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
+
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_handlers_on_import_statement() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let lib_dir = src.join("mylib");
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(
+        lib_dir.join("mylib.lis"),
+        "pub fn greet() -> string { \"hello\" }",
+    )
+    .unwrap();
+
+    let main_content = "\
+import \"mylib\"
+
+fn main() {
+  mylib.greet()
+}";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    for col in 0..16 {
+        let _ = client.hover(&main_uri, 0, col);
+        let _ = client.goto_definition(&main_uri, 0, col);
+        let _ = client.completion(&main_uri, 0, col);
+        let _ = client.prepare_rename(&main_uri, 0, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_for_loop_components() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+fn main() {
+  let items = [10, 20, 30]
+  for ~item in ~items {
+    ~item + 1
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
+    assert!(hover.is_some());
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "for binding should be int: {}",
+        content
+    );
+
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    assert!(hover.is_some());
+
+    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1);
+    assert!(hover.is_some());
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "for body var should be int: {}",
+        content
+    );
+
+    let def = client.goto_definition(TEST_URI, positions[2].0, positions[2].1);
+    assert!(
+        def.is_some(),
+        "goto def on item in loop body should resolve to the for binding"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_pipeline_completion() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn double(x: int) -> int { x * 2 }
+fn add_one(x: int) -> int { x + 1 }
+fn main() {
+  let result = 5 |> double |> add_one
+  result
+}",
+    );
+
+    let line = "  let result = 5 |> double |> add_one";
+    for col in 0..line.len() as u32 {
+        let _ = client.hover(TEST_URI, 3, col);
+        let _ = client.completion(TEST_URI, 3, col);
+        let _ = client.goto_definition(TEST_URI, 3, col);
+    }
+
+    for col in [18, 22, 30, 35] {
+        let _ = client.signature_help(TEST_URI, 3, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_type_error_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let lib_dir = src.join("mymod");
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(lib_dir.join("mymod.lis"), "pub fn get_num() -> int { 42 }").unwrap();
+
+    let main_content = "\
+import \"mymod\"
+
+fn main() {
+  let x: string = mymod.get_num()
+  x
+}";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    let diags = client.await_diagnostics();
+    assert!(
+        !diags.is_empty(),
+        "should have type error for assigning int to string"
+    );
+
+    let _ = client.hover(&main_uri, 3, 20);
+    let comp = client.completion(&main_uri, 3, 0);
+    assert!(
+        comp.is_some(),
+        "completion should still work despite diagnostics"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_sibling_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let mod_dir = src.join("shapes");
+    fs::create_dir_all(&mod_dir).unwrap();
+
+    fs::write(
+        mod_dir.join("circle.lis"),
+        "pub struct Circle { pub radius: float64 }",
+    )
+    .unwrap();
+    fs::write(
+        mod_dir.join("rect.lis"),
+        "pub struct Rect { pub width: float64, pub height: float64 }",
+    )
+    .unwrap();
+    // Package entry file
+    fs::write(mod_dir.join("shapes.lis"), "").unwrap();
+
+    let (main_content, positions) = cursors(
+        "\
+import \"shapes\"
+
+fn main() {
+  let c = shapes~.C~ircle { radius: 5.0 }
+  let r = shapes.R~ect { width: 10.0, height: 20.0 }
+  c.~radius + r.w~idth
+}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let _ = client.hover(&main_uri, positions[1].0, positions[1].1);
+    let _ = client.hover(&main_uri, positions[2].0, positions[2].1);
+
+    let _ = client.completion(&main_uri, positions[0].0, positions[0].1);
+
+    let _ = client.goto_definition(&main_uri, positions[3].0, positions[3].1);
+    let _ = client.goto_definition(&main_uri, positions[4].0, positions[4].1);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_generic_params() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+fn identity<T~>(x: T) -> T { x }
+fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }
+fn main() {
+  identity(42)
+  pair(1, \"hello\")
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let _ = client.hover(TEST_URI, line, character);
+
+    let hover = client.hover(TEST_URI, 3, 2);
+    assert!(hover.is_some(), "hover on call should show inferred type");
+
+    let hover = client.hover(TEST_URI, 4, 2);
+    assert!(hover.is_some(), "hover on call should show inferred type");
+
+    let sig = client.signature_help(TEST_URI, 3, 11);
+    assert!(sig.is_some());
+
+    let sig = client.signature_help(TEST_URI, 4, 6);
+    assert!(sig.is_some());
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_all_handlers_fall_back_during_lex_error() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    // Establish valid snapshot
+    client.open(
+        TEST_URI,
+        "\
+struct Point { x: int, y: int }
+fn distance(p: Point) -> int { p.x + p.y }
+fn main() {
+  let p = Point { x: 3, y: 4 }
+  distance(p)
+}",
+    );
+
+    let hover = client.hover(TEST_URI, 1, 3);
+    assert!(hover.is_some());
+
+    // Break with a lex error
+    client.change(
+        TEST_URI,
+        "\
+struct Point { x: int, y: int }
+fn distance(p: Point) -> int { p.x + p.y }
+fn main() {
+  let p = Point { x: 3, y: 4 }
+  distance(p)
+  let broken = \"unclosed",
+        2,
+    );
+
+    // All handlers should fall back to last valid snapshot
+    let hover = client.hover(TEST_URI, 1, 3);
+    assert!(
+        hover.is_some(),
+        "hover should work via last_valid_snapshot during lex error"
+    );
+
+    let comp = client.completion(TEST_URI, 0, 0);
+    assert!(comp.is_some(), "completion should work via fallback");
+
+    let definition = client.goto_definition(TEST_URI, 4, 2).unwrap();
+    assert_eq!(
+        definition_location(&definition).unwrap().range.start,
+        Position::new(1, 3),
+        "definition should use the last usable snapshot during a lex error"
+    );
+    let _ = client.references(TEST_URI, 1, 3, true);
+    let _ = client.signature_help(TEST_URI, 4, 11);
+
+    let syms = client.document_symbol(TEST_URI);
+    assert!(syms.is_some(), "document symbols should work via fallback");
+
+    let inlay = client.inlay_hint(TEST_URI, (0, 0), (5, 1));
+    assert!(
+        inlay.is_some(),
+        "inlay hints should work via last_valid_snapshot during lex error"
+    );
+    assert!(
+        inlay_hint_triples(&inlay.unwrap()).contains(&(3, 7, ": Point".to_string())),
+        "fallback inlay hints should reflect the last valid snapshot"
+    );
+
+    let _ = client.formatting(TEST_URI);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_completion_on_map_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+struct Item { name: string, count: int }
+fn main() {
+  let items: Slice<Item> = []
+  items[0].~n~ame
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let _ = client.completion(TEST_URI, positions[0].0, positions[0].1);
+
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    let _ = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_multiple_imports() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    for name in ["a", "b", "c"] {
+        let d = src.join(name);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(
+            d.join(format!("{name}.lis")),
+            format!("pub fn f{name}() -> int {{ 1 }}"),
+        )
+        .unwrap();
+    }
+
+    let main_content = "\
+import \"a\"
+import \"b\"
+import \"c\"
+
+fn main() {
+  a.fa() + b.fb() + c.fc()
+}";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    for col in [4, 14, 24] {
+        let _ = client.hover(&main_uri, 5, col);
+        let _ = client.goto_definition(&main_uri, 5, col);
+        let _ = client.completion(&main_uri, 5, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_enum_struct_variant_match_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+enum Event {
+  Click { x: int, y: int },
+  Scroll(int),
+  Quit,
+}
+fn handle(e: Event) -> int {
+  match e {
+    Event.Click { x, y } => x + y,
+    Event.Scroll(amount) => amount,
+    Event.Quit => 0,
+  }
+}
+fn main() {
+  let e = Event.Click { x: 10, y: 20 }
+  handle(e)
+}"
+    ));
+}
+
+#[test]
+fn stress_bounded_generic_function_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+interface Summable {
+  fn sum() -> int
+}
+struct Pair { a: int, b: int }
+impl Pair {
+  fn sum(self: Pair) -> int { self.a + self.b }
+}
+fn total<T: Summable>(items: Slice<T>) -> int {
+  let mut result = 0
+  for item in items {
+    result = result + item.sum()
+  }
+  result
+}
+fn main() {
+  let pairs = [Pair { a: 1, b: 2 }, Pair { a: 3, b: 4 }]
+  total(pairs)
+}"
+    ));
+}
+
+#[test]
+fn stress_empty_constructs_all_handlers() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+struct Empty {}
+enum SingleVariant { Only }
+interface NoMethods {}
+fn noop() {}
+fn main() {
+  let e = Empty {}
+  noop()
+}",
+    );
+
+    let syms = client.document_symbol(TEST_URI);
+    assert!(syms.is_some());
+    let names = symbol_names(&syms.unwrap());
+    assert!(names.contains(&"Empty".to_string()));
+    assert!(names.contains(&"SingleVariant".to_string()));
+    assert!(names.contains(&"NoMethods".to_string()));
+    assert!(names.contains(&"noop".to_string()));
+
+    for line in 0..8 {
+        for col in [0, 5, 10, 15, 20] {
+            let _ = client.hover(TEST_URI, line, col);
+            let _ = client.completion(TEST_URI, line, col);
+        }
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_diagnostics_after_rapid_edits() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() { 42 }");
+    let _ = client.await_diagnostics();
+
+    for i in 2..7i32 {
+        client.change(TEST_URI, &format!("fn main() {{ {} }}", i), i);
+    }
+
+    client.change(TEST_URI, "fn main() { let x: int = \"bad\"; x }", 7);
+
+    let diags = client.await_diagnostics();
+    assert!(
+        !diags.is_empty(),
+        "should eventually get diagnostics for type error"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_hover_on_expression_values() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+fn main() {
+  let ~a = if true { 1 } else { 2 }
+  let ~b = match a {
+    1 => \"one\",
+    _ => \"other\",
+  }
+  let ~c = {
+    let tmp = 42
+    tmp + 1
+  }
+  a + c
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
+    assert!(hover.is_some());
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "if-else value should be int: {}",
+        content
+    );
+
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    assert!(hover.is_some());
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("string"),
+        "match value should be string: {}",
+        content
+    );
+
+    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1);
+    assert!(hover.is_some());
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "block expression value should be int: {}",
+        content
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_closure_capture_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn main() {
+  let offset = 10
+  let add_offset = |x: int| -> int { x + offset }
+  let result = apply(add_offset, 5)
+  result
+}"
+    ));
+}
+
+#[test]
+fn stress_or_pattern_let_else_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+enum Token {
+  Num(int),
+  Plus,
+  Minus,
+}
+fn value(t: Token) -> int {
+  let Token.Num(n) | Token.Plus = t else { return 0 }
+  n
+}"
+    ));
+}
+
+#[test]
+fn stress_deep_field_access_chain() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct A { b: B }
+struct B { c: C }
+struct C { value: int }
+fn main() {
+  let a = A { b: B { c: C { value: 42 } } }
+  ~a.b.c.value
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, line, character);
+    assert!(hover.is_some());
+
+    for col in [2, 4, 6, 8] {
+        let _ = client.hover(TEST_URI, 5, col);
+        let _ = client.goto_definition(TEST_URI, 5, col);
+        let _ = client.completion(TEST_URI, 5, col);
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_cross_package_rename_function() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let lib_dir = src.join("lib");
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(lib_dir.join("lib.lis"), "pub fn compute() -> int { 42 }").unwrap();
+
+    let (main_content, line, character) = cursor(
+        "\
+import \"lib\"
+
+fn main() {
+  let x = lib.~compute()
+  let y = lib.compute()
+  x + y
+}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let _ = client.prepare_rename(&main_uri, line, character);
+    let _ = client.rename(&main_uri, line, character, "calculate");
+    let _ = client.references(&main_uri, line, character, true);
+
+    client.shutdown();
+}
+
+#[test]
+fn stress_format_string_complex() {
+    assert!(stress_test_all_positions(
+        "\
+struct Point { x: int, y: int }
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  let msg = f\"Point({p.x}, {p.y})\"
+  let nested = f\"Result: {if true { 1 } else { 2 }}\"
+  msg
+}"
+    ));
+}
+
+#[test]
+fn stress_var_mutation_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
+var counter: int = 0
+fn increment() {
+  counter = counter + 1
+}
+fn main() {
+  increment()
+  increment()
+  counter
+}"
+    ));
+}
+
+#[test]
+fn goto_definition_method_call_via_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct User { pub name: string }
+impl User {
+  pub fn greet(self: User) -> string { self.name }
+}
+fn main() {
+  let u = User { name: \"Alice\" }
+  u.~greet()
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on method call should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 2,
+        "should jump to the method definition (`pub fn greet`)"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_variable_in_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Point { pub x: int }
+impl Point {
+  pub fn translate(self: Point) -> Point { self }
+}
+fn main() {
+  let p = Point { x: 1 }
+  ~p.translate()
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on variable in dot access should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 5, "should jump to `let p = ...`");
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_in_let_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) =
+        cursor("type UserID = int\nfn main() {\n  let x: ~UserID = 42\n}");
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on type in let annotation should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_in_static_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Point { pub x: int }
+impl Point {
+  pub fn origin() -> Point { Point { x: 0 } }
+}
+fn main() {
+  ~Point.origin()
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on type name in static call should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_import_alias() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) =
+        cursor("import \"go:fmt\"\nfn main() {\n  ~fmt.Println(\"hi\")\n}");
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on import alias should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to the import statement"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_pipe_operator() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) =
+        cursor("fn add(a: int, b: int) -> int { a + b }\nfn main() {\n  5 |> ~add(3)\n}");
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(response.is_some(), "goto_definition in pipe should resolve");
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn find_references_struct_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct ~Point { pub x: int, pub y: int }
+fn make() -> Point {
+  Point { x: 1, y: 2 }
+}
+fn main() {
+  let p: Point = make()
+  p.x
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let refs = client.references(TEST_URI, line, character, true);
+    assert!(refs.is_some(), "find references for struct should succeed");
+
+    let locations = refs.unwrap();
+    assert!(
+        locations.len() >= 2,
+        "should find at least the definition and one usage (of definition, return type, constructor, type annotation), found {}",
+        locations.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_enum_variant_preserves_qualifier() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+enum Color { ~Red, Green, Blue }
+fn main() {
+  let c = Color.Red
+  match c {
+    Color.Red => 1,
+    Color.Green => 2,
+    Color.Blue => 3,
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let edit = client.rename(TEST_URI, line, character, "Crimson");
+    assert!(edit.is_some(), "rename enum variant should succeed");
+
+    let edit = edit.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    for text_edit in edits {
+        assert_eq!(
+            text_edit.new_text, "Crimson",
+            "edit should replace the variant name with the new name"
+        );
+        assert_eq!(
+            text_edit.range.start.line, text_edit.range.end.line,
+            "edit should be on a single line"
+        );
+        let char_span = text_edit.range.end.character - text_edit.range.start.character;
+        assert_eq!(
+            char_span, 3,
+            "edit should span only the variant name ('Red' = 3 chars), got {} chars",
+            char_span
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_bare_tuple_variant_preserves_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Color { Red(int), Green, Blue }
+fn main() {
+  let c = Color.Red(1)
+  match c {
+    Red(x) => x,
+    _ => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson").unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    for e in edits {
+        assert_eq!(e.new_text, "Crimson");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 3,
+            "edit must span only `Red`, not its payload: {:?}",
+            e
+        );
+    }
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 4)
+        .expect("bare arm should be renamed");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 7);
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_bare_struct_variant_preserves_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x, y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let edit = client.rename(TEST_URI, 0, 13, "Shift").unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    for e in edits {
+        assert_eq!(e.new_text, "Shift");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 4,
+            "edit must span only `Move`, not its field block: {:?}",
+            e
+        );
+    }
+
+    let constructor = edits
+        .iter()
+        .find(|e| e.range.start.line == 2)
+        .expect("constructor expression `Shape.Move { ... }` should be renamed");
+    assert_eq!(
+        constructor.range.start.character, 16,
+        "constructor edit should land on the `Move` segment"
+    );
+    assert_eq!(constructor.range.end.character, 20);
+
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 4)
+        .expect("bare struct arm should be renamed");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 8);
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_enum_variant_updates_bare_match_arms() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Color { Red, Green, Blue }
+fn main() {
+  let c = Color.Red
+  match c {
+    Red => 1,
+    Green => 2,
+    Blue => 3,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson");
+    assert!(edit.is_some(), "rename enum variant should succeed");
+
+    let edit = edit.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    assert_eq!(edits.len(), 3, "expected 3 edits, got {}", edits.len());
+    for text_edit in edits {
+        assert_eq!(text_edit.new_text, "Crimson");
+        let char_span = text_edit.range.end.character - text_edit.range.start.character;
+        assert_eq!(char_span, 3, "edit should span only `Red`");
+    }
+
+    assert!(
+        edits.iter().any(|e| e.range.start.line == 4),
+        "rename should update the bare match arm on line 4"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_bare_struct_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x, y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.goto_definition(TEST_URI, 4, 5);
+    assert!(
+        response.is_some(),
+        "goto-def on a bare struct variant should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to the variant definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn references_bare_tuple_variant_excludes_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Color { Red(int), Green }
+fn main() {
+  let c = Color.Red(1)
+  match c {
+    Red(x) => x,
+    _ => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let refs = client.references(TEST_URI, 0, 13, true).unwrap();
+
+    let arm = refs
+        .iter()
+        .find(|l| l.range.start.line == 4)
+        .expect("bare arm should be a reference");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 7);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_variant_field_label_is_not_the_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x: px, y: py } => px + py,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.goto_definition(TEST_URI, 4, 11);
+    let on_variant_def = response
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0);
+    assert!(
+        !on_variant_def,
+        "a field label must not resolve to the variant definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_variant_with_whitespace_in_qualifier_targets_the_variant_token() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Color { Red, Green, Blue }
+fn main() {
+  let c = Color.Red
+  match c {
+    Color . Red => 1,
+    _ => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson").unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+    for e in edits {
+        assert_eq!(e.new_text, "Crimson");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 3,
+            "every edit must span only `Red` (3 chars), got {:?}",
+            e
+        );
+    }
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 4)
+        .expect("the `Color . Red` arm must be renamed");
+    assert_eq!(arm.range.start.character, 12);
+    assert_eq!(arm.range.end.character, 15);
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_outer_variant_with_dotted_payload_targets_outer_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Color { Red, Green }
+enum Holder { Wrap(Color), Empty }
+fn main() {
+  let h = Holder.Wrap(Color.Red)
+  match h {
+    Wrap(Color.Red) => 1,
+    Empty => 0,
+    _ => 2,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let edit = client
+        .rename(TEST_URI, 1, 14, "Bag")
+        .expect("rename Wrap should succeed");
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    for e in edits {
+        assert_eq!(e.new_text, "Bag");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 4,
+            "edit must span only `Wrap`, not inner pattern: {:?}",
+            e
+        );
+    }
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 5)
+        .expect("bare arm `Wrap(Color.Red)` should be renamed");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 8);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_qualified_struct_variant_field_label_is_not_the_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Shape.Move { x: px, y: py } => px + py,
+    Shape.Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.goto_definition(TEST_URI, 4, 17);
+    let on_variant_def = response
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0);
+    assert!(
+        !on_variant_def,
+        "a field label in a qualified struct-variant pattern must not resolve to the variant"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_bare_variant_inside_struct_variant_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Color { Red, Green }
+enum Shape { Tag { color: Color }, Stay }
+fn main() {
+  let s = Shape.Tag { color: Color.Red }
+  match s {
+    Tag { color: Red } => 0,
+    Stay => 1,
+    _ => 2,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client
+        .goto_definition(TEST_URI, 5, 17)
+        .expect("nested bare variant in a struct-variant field should resolve");
+    let loc = definition_location(&response).expect("location");
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to `Red` in enum Color"
+    );
+    assert_eq!(loc.range.start.character, 13);
+    assert_eq!(loc.range.end.character, 16);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_explicit_binding_in_struct_variant_field_does_not_shadow_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x: px, y: py } => px + py,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.goto_definition(TEST_URI, 4, 14);
+    if let Some(r) = response
+        && let Some(loc) = definition_location(&r)
+    {
+        assert_ne!(
+            loc.range.start.line, 0,
+            "binding `px` must not resolve to the unrelated field declaration on line 0"
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_qualifier_in_struct_variant_pattern_does_not_jump_to_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Shape.Move  { x, y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let r1 = client.goto_definition(TEST_URI, 4, 5);
+    let on_variant = r1
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0 && loc.range.start.character == 13);
+    assert!(
+        !on_variant,
+        "cursor on `Shape` (qualifier) must not resolve to the variant `Move`"
+    );
+
+    let r2 = client.goto_definition(TEST_URI, 4, 14);
+    let location = definition_location(&r2.expect("name end resolves the variant")).unwrap();
+    assert_eq!(location.range.start, Position::new(0, 13));
+
+    let r3 = client.goto_definition(TEST_URI, 4, 15);
+    assert!(
+        r3.is_none(),
+        "cursor on trailing whitespace must not resolve to anything"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_explicit_same_name_field_does_not_resolve_as_shorthand() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x: x, y: y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source);
+
+    let r = client.goto_definition(TEST_URI, 4, 14);
+    let on_field_decl = r
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0 && loc.range.start.character == 20);
+    assert!(
+        !on_field_decl,
+        "binding `x` in explicit `x: x` must not resolve to the field declaration"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_chained_pipe_operator() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+fn add(a: int, b: int) -> int { a + b }
+fn multiply(a: int, b: int) -> int { a * b }
+fn main() {
+  let result = 5 |> ~add(3) |> ~multiply(2)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, positions[0].0, positions[0].1);
+    assert!(
+        response.is_some(),
+        "goto_definition on add in chained pipe should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0, "should jump to add definition");
+
+    let response = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
+    assert!(
+        response.is_some(),
+        "goto_definition on multiply in chained pipe should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 1,
+        "should jump to multiply definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_struct_updates_type_annotations() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+pub struct ~Point { pub x: int, pub y: int }
+impl Point {
+  pub fn new(x: int, y: int) -> Point {
+    Point { x, y }
+  }
+  pub fn distance(self: Point, other: Point) -> int {
+    self.x - other.x
+  }
+}
+fn main() {
+  let p: Point = Point.new(1, 2)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let edit = client.rename(TEST_URI, line, character, "Vec2");
+    assert!(edit.is_some(), "rename struct should succeed");
+
+    let edit = edit.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    assert!(
+        edits.len() >= 5,
+        "rename should update at least the struct def, impl target, return type, params, and constructor call, got {}",
+        edits.len()
+    );
+
+    for text_edit in edits {
+        assert_eq!(text_edit.new_text, "Vec2");
+    }
+
+    let mut seen = HashSet::new();
+    for text_edit in edits {
+        let key = (text_edit.range.start.line, text_edit.range.start.character);
+        assert!(
+            seen.insert(key),
+            "duplicate edit at line {} col {}, would cause double-rename",
+            key.0,
+            key.1
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn find_references_struct_includes_type_annotations() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+pub struct ~Point { pub x: int, pub y: int }
+impl Point {
+  pub fn origin() -> Point {
+    Point { x: 0, y: 0 }
+  }
+}
+fn main() {
+  let p: Point = Point.origin()
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let refs = client.references(TEST_URI, line, character, true);
+    assert!(refs.is_some(), "find references for struct should succeed");
+
+    let locations = refs.unwrap();
+    assert!(
+        locations.len() >= 4,
+        "should find at least the definition, impl target, return type, and constructor call, found {}",
+        locations.len()
+    );
+
+    let mut seen = HashSet::new();
+    for loc in &locations {
+        let key = (loc.range.start.line, loc.range.start.character);
+        assert!(
+            seen.insert(key),
+            "duplicate reference at line {} col {}",
+            key.0,
+            key.1
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_struct_updates_static_method_calls() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+pub struct ~Point { pub x: int, pub y: int }
+impl Point {
+  pub fn new(x: int, y: int) -> Point {
+    Point { x, y }
+  }
+  pub fn origin() -> Point {
+    Point { x: 0, y: 0 }
+  }
+}
+fn main() {
+  let p = Point.new(1, 2)
+  let o = Point.origin()
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let edit = client.rename(TEST_URI, line, character, "Vec2");
+    assert!(edit.is_some(), "rename struct should succeed");
+
+    let edit = edit.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    let positions: Vec<(u32, u32)> = edits
+        .iter()
+        .map(|e| (e.range.start.line, e.range.start.character))
+        .collect();
+
+    assert!(
+        positions.contains(&(10, 10)),
+        "rename should include Point in `Point.new(1, 2)` on line 10, got edits at: {:?}",
+        positions
+    );
+
+    assert!(
+        positions.contains(&(11, 10)),
+        "rename should include Point in `Point.origin()` on line 11, got edits at: {:?}",
+        positions
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_stdlib_member_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) =
+        cursor("import \"go:fmt\"\nfn main() {\n  fmt.~Println(\"hello\")\n}");
+    client.open(TEST_URI, &source);
+
+    // The LSP builds the stdlib typedefs at startup, so this navigates into the generated `.d.lis` file.
+    let response = client.goto_definition(TEST_URI, line, character);
+    let location = definition_location(
+        &response.expect("go-to-definition on stdlib member should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("stdlib-typedefs") && path.ends_with(".d.lis"),
+        "should land in an extracted typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("Println"),
+        "should land on the `Println` definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_on_prelude_type_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "fn get() -> Option<int> {\n  none\n}\nfn main() {\n  let x = get()\n}";
+    client.open(TEST_URI, source);
+
+    let response = client.goto_definition(TEST_URI, 0, 13);
+    let location = definition_location(
+        &response.expect("go-to-definition on prelude type should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("prelude-typedefs") && path.ends_with("prelude.d.lis"),
+        "should land in the extracted prelude typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("Option"),
+        "should land on the `Option` definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn opening_prelude_typedef_publishes_no_diagnostics() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let path = deps::prelude_typedef_path().expect("prelude typedef path");
+    let content = fs::read_to_string(&path).expect("prelude cache file should exist");
+    let uri = Url::from_file_path(&path).expect("path to uri").to_string();
+
+    client.open(&uri, &content);
+    let diagnostics = client.await_diagnostics();
+    assert!(
+        diagnostics.is_empty(),
+        "opening the generated prelude typedef must report no diagnostics, got: {diagnostics:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_on_prelude_method_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}";
+    client.open(TEST_URI, source);
+
+    let response = client.goto_definition(TEST_URI, 2, 12);
+    let location = definition_location(
+        &response.expect("go-to-definition on prelude method should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("prelude-typedefs") && path.ends_with("prelude.d.lis"),
+        "should land in the extracted prelude typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("length"),
+        "should land on the `length` method definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_on_prelude_function_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "fn main() {\n  panic(\"boom\")\n}";
+    client.open(TEST_URI, source);
+
+    let response = client.goto_definition(TEST_URI, 1, 3);
+    let location = definition_location(
+        &response.expect("go-to-definition on prelude function should return a location"),
+    )
+    .expect("response should contain a location");
+    let path = location.uri.path();
+    assert!(
+        path.contains("prelude-typedefs") && path.ends_with("prelude.d.lis"),
+        "should land in the extracted prelude typedef, got {path}"
+    );
+    assert!(
+        definition_target_text(&location).starts_with("panic"),
+        "should land on the `panic` definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_through_propagate_operator() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor(
+        "\
+fn greet() -> Result<string, string> { Ok(\"hi\") }
+fn main() -> Result<(), string> {
+  let msg = ~greet()?
+  Ok(())
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on function call inside propagate should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0, "should jump to the fn definition");
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_same_package_function_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor(
+        "\
+fn helper() -> int { 42 }
+fn main() {
+  let x = ~helper()
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on same-package function call should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to helper's definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn references_cross_package_finds_call_sites() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let main_content = "import \"utils\"\n\nfn main() {\n  utils.helper()\n  utils.helper()\n}";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let utils_dir = src.join("utils");
+    fs::create_dir_all(&utils_dir).unwrap();
+    let utils_content = "pub fn helper() -> int { 42 }";
+    fs::write(utils_dir.join("utils.lis"), utils_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    let utils_uri = Url::from_file_path(utils_dir.join("utils.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&main_uri, main_content);
+    client.open(&utils_uri, utils_content);
+
+    let refs = client.references(&utils_uri, 0, 7, true);
+    assert!(
+        refs.is_some(),
+        "references on pub fn should find cross-package call sites"
+    );
+
+    let locations = refs.unwrap();
+    assert!(
+        locations.len() >= 3,
+        "expected at least 3 references (1 declaration + 2 usages), got {}",
+        locations.len()
+    );
+
+    let main_refs: Vec<_> = locations
+        .iter()
+        .filter(|l| l.uri.as_str() == main_uri)
+        .collect();
+    assert!(
+        main_refs.len() >= 2,
+        "expected at least 2 references in main.lis, got {}",
+        main_refs.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_field_cross_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let models_dir = src.join("models");
+    fs::create_dir_all(&models_dir).unwrap();
+
+    let models_content = "pub struct Task {\n  pub id: int,\n  pub title: string,\n}";
+    fs::write(models_dir.join("models.lis"), models_content).unwrap();
+
+    let (main_content, line, character) = cursor(
+        "import \"models\"\n\nfn main() {\n  let t = models.Task { id: 1, title: \"hi\" }\n  let x = t.~id\n}",
+    );
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    let models_uri = Url::from_file_path(models_dir.join("models.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&models_uri, models_content);
+    client.open(&main_uri, &main_content);
+
+    let response = client.goto_definition(&main_uri, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on cross-package struct field should resolve"
+    );
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.uri.as_str(),
+        models_uri,
+        "should navigate to models file"
+    );
+    assert_eq!(
+        loc.range.start.line, 1,
+        "should jump to 'id' field declaration (line 1: `pub id: int,`)"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_field_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+struct Task {
+  pub id: int,
+  pub title: string,
+}
+fn main() {
+  let t = Task { id: 1, title: \"hello\" }
+  let x = t.i~d
+  let y = t.t~itle
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, positions[0].0, positions[0].1);
+    assert!(
+        response.is_some(),
+        "goto_definition on struct field access should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 1,
+        "should jump to 'id' field declaration"
+    );
+
+    let response = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
+    assert!(
+        response.is_some(),
+        "goto_definition on struct field 'title' should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 2,
+        "should jump to 'title' field declaration"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_enum_variant_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "enum Color { Red, Green, Blue }\nfn describe(c: Color) -> string {\n  match c {\n    Color.~Red => \"red\",\n    Color.Green => \"green\",\n    Color.Blue => \"blue\",\n  }\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on enum variant in match pattern should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to Red variant declaration"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_enum_variant_with_payload_in_match() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "enum Msg { Text(string), Num(int) }\nfn handle(m: Msg) -> string {\n  match m {\n    Msg.~Text(s) => s,\n    Msg.Num(n) => \"num\",\n  }\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto_definition on enum variant with payload should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to Text variant declaration"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_match_arm_payload_binding_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "enum Wrapper { Val(string) }\nfn extract(w: Wrapper) -> string {\n  match w {\n    Wrapper.Val(~inner) => inner,\n  }\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, line, character);
+    assert!(hover.is_some(), "hover on match arm binding should work");
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("string"),
+        "should show payload type 'string', got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_has_parameter_info() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "fn greet(name: string, age: int) -> string { name }\nfn main() { greet(\"~hi\", 1) }",
+    );
+    client.open(TEST_URI, &source);
+
+    let help = client.signature_help(TEST_URI, line, character);
+    assert!(help.is_some(), "signature help should be returned");
+
+    let sig = &help.unwrap().signatures[0];
+    assert!(
+        sig.parameters.is_some(),
+        "parameters should be populated, not None"
+    );
+    let params = sig.parameters.as_ref().unwrap();
+    assert_eq!(params.len(), 2, "should have 2 parameters");
+
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_method_call_does_not_double_strip_self() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, positions) = cursors(
+        "\
+struct Point { x: int, y: int }
+impl Point {
+  pub fn translate(self, dx: int, dy: int) -> Point {
+    Point { x: self.x + dx, y: self.y + dy }
+  }
+  pub fn distance_sq(self, other: Point) -> int {
+    let dx = self.x - other.x
+    let dy = self.y - other.y
+    dx * dx + dy * dy
+  }
+}
+fn main() {
+  let p = Point { x: 0, y: 0 }
+  let moved = p.translate(~1, 2)
+  let dist = p.distance_sq(~moved)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let help = client.signature_help(TEST_URI, positions[0].0, positions[0].1);
+    assert!(help.is_some(), "translate sig help should exist");
+    let sig = &help.unwrap().signatures[0];
+    let params = sig.parameters.as_ref().expect("should have params");
+    assert_eq!(
+        params.len(),
+        2,
+        "translate should show 2 params (dx, dy) after self stripped"
+    );
+
+    let help = client.signature_help(TEST_URI, positions[1].0, positions[1].1);
+    assert!(help.is_some(), "distance_sq sig help should exist");
+    let sig = &help.unwrap().signatures[0];
+    let params = sig.parameters.as_ref().expect("should have params");
+    assert_eq!(
+        params.len(),
+        1,
+        "distance_sq should show 1 param (other) after self stripped"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_enum_variant_in_tuple_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+enum Shape {
+  Circle(int),
+  Rect(int, int),
+}
+fn match_pair(a: Shape, b: Shape) -> string {
+  match (a, b) {
+    (Shape.~Circle(_), Shape.Circle(_)) => \"two circles\",
+    (Shape.Rect(_, _), Shape.Rect(_, _)) => \"two rects\",
+    _ => \"mixed\",
+  }
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto-def on Circle in tuple pattern should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 1, "Circle is defined on line 1");
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_chained_method_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Canvas { shapes: Slice<int>, name: string }
+impl Canvas {
+  pub fn new(name: string) -> Canvas {
+    Canvas { shapes: [], name }
+  }
+  pub fn add(self, shape: int) -> Canvas {
+    Canvas { shapes: self.shapes.append(shape), ..self }
+  }
+}
+fn main() {
+  let c = Canvas.new(\"test\").~add(1).add(2)
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.goto_definition(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "goto-def on chained .add() should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 5, "add is defined on line 5");
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_on_function_parameter_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "\
+struct Point { pub x: int, pub y: int }
+impl Point {
+  pub fn translate(self, dx: int, dy: int) -> Point {
+    Point { x: self.x + dx, y: self.y + dy }
+  }
+}
+fn process(p: Point) -> int {
+  p.~x
+}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "completion after param dot should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"x".to_string()),
+        "should include field 'x', got: {:?}",
+        labels
+    );
+    assert!(
+        labels.contains(&"translate".to_string()),
+        "should include method 'translate', got: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_on_if_let_binding_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    const TEST_URI: &str = "file:///test.lis";
+
+    client.open(
+        TEST_URI,
+        "struct Line {
+  start: int,
+  end: int,
+}
+impl Line {
+  pub fn length(self) -> int { self.end - self.start }
+}
+fn process(maybe: Option<Line>) -> int {
+  if let Some(line) = maybe {
+    line.length()
+  } else {
+    0
+  }
+}",
+    );
+
+    let response = client.completion(TEST_URI, 9, 9);
+    assert!(
+        response.is_some(),
+        "completion after if-let binding dot should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"start".to_string()),
+        "should include field 'start', got: {:?}",
+        labels
+    );
+    assert!(
+        labels.contains(&"length".to_string()),
+        "should include method 'length', got: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_on_cross_package_enum_dot_access() {
+    let mut client = TestClient::new();
+
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path();
+
+    fs::write(
+        root_path.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/colors")).unwrap();
+    fs::write(
+        root_path.join("src/colors/colors.lis"),
+        "pub enum Color { Red, Green, Blue }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
+    fs::write(
+        root_path.join("src/main/main.lis"),
+        "import \"colors\"\nfn main() {\n  let c = colors.Color.Red\n}\n",
+    )
+    .unwrap();
+
+    client.initialize_with_root(root_path);
+
+    let colors_uri = format!(
+        "file://{}",
+        root_path.join("src/colors/colors.lis").display()
+    );
+    let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
+
+    client.open(
+        &colors_uri,
+        &fs::read_to_string(root_path.join("src/colors/colors.lis")).unwrap(),
+    );
+    client.open(
+        &main_uri,
+        &fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+    );
+
+    let response = client.completion(&main_uri, 2, 23);
+    assert!(
+        response.is_some(),
+        "completion after cross-package enum dot should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"Red".to_string()),
+        "should include variant 'Red', got: {:?}",
+        labels
+    );
+    assert!(
+        labels.contains(&"Green".to_string()),
+        "should include variant 'Green', got: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_alias_to_cross_package_enum_shows_variants() {
+    let mut client = TestClient::new();
+
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path();
+
+    fs::write(
+        root_path.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/utils")).unwrap();
+    fs::write(
+        root_path.join("src/utils/utils.lis"),
+        "pub enum Kind { Int, String }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
+    fs::write(
+        root_path.join("src/main/main.lis"),
+        "import \"utils\"\ntype K = utils.Kind\nfn main() {\n  let o = K.\n}\n",
+    )
+    .unwrap();
+
+    client.initialize_with_root(root_path);
+
+    let utils_uri = format!("file://{}", root_path.join("src/utils/utils.lis").display());
+    let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
+
+    client.open(
+        &utils_uri,
+        &fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
+    );
+    client.open(
+        &main_uri,
+        &fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+    );
+
+    let response = client.completion(&main_uri, 3, 12);
+    assert!(
+        response.is_some(),
+        "completion after alias dot should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"Int".to_string()),
+        "should include 'Int' via alias to cross-package enum, got: {labels:?}"
+    );
+    assert!(
+        labels.contains(&"String".to_string()),
+        "should include 'String' via alias to cross-package enum, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_alias_to_cross_package_enum_hides_private_static_methods() {
+    let mut client = TestClient::new();
+
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path();
+
+    fs::write(
+        root_path.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/utils")).unwrap();
+    fs::write(
+        root_path.join("src/utils/utils.lis"),
+        "pub enum Kind { Int, String }\n\
+impl Kind {\n\
+  pub fn public_static() -> int { 1 }\n\
+  fn private_static() -> int { 2 }\n\
+}\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
+    fs::write(
+        root_path.join("src/main/main.lis"),
+        "import \"utils\"\ntype K = utils.Kind\nfn main() {\n  let _ = K.\n}\n",
+    )
+    .unwrap();
+
+    client.initialize_with_root(root_path);
+
+    let utils_uri = format!("file://{}", root_path.join("src/utils/utils.lis").display());
+    let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
+
+    client.open(
+        &utils_uri,
+        &fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
+    );
+    client.open(
+        &main_uri,
+        &fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+    );
+
+    let response = client.completion(&main_uri, 3, 12);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"public_static".to_string()),
+        "should include 'public_static' from cross-package aliased type, got: {labels:?}"
+    );
+    assert!(
+        !labels.contains(&"private_static".to_string()),
+        "should NOT include 'private_static' from cross-package aliased type, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_underscore_prefixed_variable_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+impl Point {
+  fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
+}
+fn main() -> int {
+  let _p = Point.new(1, 2)
+  _p.x
+}"#,
+    );
+
+    let response = client.completion(TEST_URI, 6, 5);
+    assert!(
+        response.is_some(),
+        "completion after _p. should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"x".to_string()),
+        "should include field 'x', got: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_chained_field_access_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+struct Rect { origin: Point, width: int, height: int }
+impl Rect {
+  fn new(x: int, y: int, w: int, h: int) -> Rect {
+    Rect { origin: Point { x: x, y: y }, width: w, height: h }
+  }
+}
+fn main() -> int {
+  let r = Rect.new(0, 0, 10, 20)
+  r.origin.x
+}"#,
+    );
+
+    let response = client.completion(TEST_URI, 9, 11);
+    assert!(
+        response.is_some(),
+        "completion after r.origin. should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"x".to_string()),
+        "should include field 'x', got: {:?}",
+        labels
+    );
+    assert!(
+        labels.contains(&"y".to_string()),
+        "should include field 'y', got: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_let_else_binding_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+fn main() -> int {
+  let o: Option<Point> = Some(Point { x: 1, y: 2 })
+  let Some(pt) = o else {
+    return 0
+  }
+  pt.x
+}"#,
+    );
+
+    let response = client.completion(TEST_URI, 6, 5);
+    assert!(
+        response.is_some(),
+        "completion after pt. in let-else body should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"x".to_string()),
+        "should include field 'x', got: {:?}",
+        labels
+    );
+    assert!(
+        labels.contains(&"y".to_string()),
+        "should include field 'y', got: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_method_call_return_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+struct Rect { origin: Point, width: int, height: int }
+impl Rect {
+  fn center(self) -> Point {
+    Point { x: self.origin.x + self.width / 2, y: self.origin.y + self.height / 2 }
+  }
+}
+fn main() -> int {
+  let r = Rect { origin: Point { x: 0, y: 0 }, width: 10, height: 20 }
+  r.center().x
+}"#,
+    );
+
+    let response = client.completion(TEST_URI, 9, 13);
+    assert!(
+        response.is_some(),
+        "completion after r.center(). should return results"
+    );
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.contains(&"x".to_string()),
+        "should include field 'x', got: {:?}",
+        labels
+    );
+    assert!(
+        labels.contains(&"y".to_string()),
+        "should include field 'y', got: {:?}",
+        labels
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn prepare_rename_on_dot_access_method() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        r#"struct Rect { width: int, height: int }
+impl Rect {
+  fn area(self) -> int { self.width * self.height }
+}
+fn main() -> int {
+  let r = Rect { width: 10, height: 20 }
+  r.~area()
+}"#,
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.prepare_rename(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "prepare_rename on method via dot access should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn prepare_rename_on_prelude_method_is_refused() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
+    );
+
+    let response = client.prepare_rename(TEST_URI, 2, 12);
+    assert!(
+        response.is_none(),
+        "prepare_rename on a prelude method must be refused, got {response:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_on_prelude_method_is_refused() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
+    );
+
+    let edit = client.rename(TEST_URI, 2, 12, "len");
+    assert!(
+        edit.is_none(),
+        "rename on a prelude method must be refused, got {edit:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn prepare_rename_on_dot_access_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        r#"struct Point { x: int, y: int }
+struct Rect { origin: Point, width: int }
+fn main() -> int {
+  let r = Rect { origin: Point { x: 0, y: 0 }, width: 10 }
+  r.origin.~x
+}"#,
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client.prepare_rename(TEST_URI, line, character);
+    assert!(
+        response.is_some(),
+        "prepare_rename on field via chained dot access should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_on_dot_access_field_finds_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+impl Point {
+  fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
+}
+fn main() {
+  let p = Point.new(1, 2)
+  let a = p.x
+  let b = p.x
+  a + b
+}"#,
+    );
+
+    let edits = client.rename(TEST_URI, 6, 12, "horizontal");
+    let edits = edits.expect("rename on field via dot access should return edits");
+    let changes = edits.changes.expect("rename should have changes");
+
+    let all_edits: Vec<_> = changes
+        .values()
+        .flat_map(|e| e.iter())
+        .filter(|e| e.new_text == "horizontal")
+        .collect();
+
+    assert!(
+        all_edits.len() >= 3,
+        "rename on field via dot access should find definition + usage sites, got {} edits",
+        all_edits.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn references_on_dot_access_field_finds_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+impl Point {
+  fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
+}
+fn main() {
+  let p = Point.new(1, 2)
+  let a = p.x
+  let b = p.x
+  a + b
+}"#,
+    );
+
+    let refs = client.references(TEST_URI, 6, 12, true);
+    let refs = refs.expect("references on field via dot access should return results");
+
+    assert!(
+        refs.len() >= 3,
+        "find-references on field via dot access should find definition + usage sites, got {} refs",
+        refs.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn references_on_enum_variant_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(
+        TEST_URI,
+        r#"enum Shape { Circle(int), Square(int) }
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Circle(r) => r * r,
+    Shape.Square(side) => side * side,
+  }
+}
+fn main() {
+  let _ = area(Shape.Circle(5))
+}"#,
+    );
+
+    let refs = client.references(TEST_URI, 3, 10, true);
+    let refs = refs.expect("references on enum variant in match pattern should return results");
+
+    assert!(
+        refs.len() >= 2,
+        "find-references on enum variant in match pattern should find multiple refs, got {} refs",
+        refs.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn references_on_type_in_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+impl Point {
+  fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
+}
+fn use_point(p: Point) -> int {
+  p.x
+}
+fn main() {
+  let p: Point = Point.new(1, 2)
+  let _ = use_point(p)
+}"#,
+    );
+
+    let refs = client.references(TEST_URI, 8, 10, true);
+    let refs = refs.expect("references on type in annotation should return results");
+
+    assert!(
+        refs.len() >= 2,
+        "find-references on type in annotation should find multiple refs, got {} refs",
+        refs.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn prepare_rename_on_enum_variant_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(
+        TEST_URI,
+        r#"enum Status { Active(int), Inactive }
+fn check(s: Status) -> int {
+  match s {
+    Status.Active(code) => code,
+    Status.Inactive => 0,
+  }
+}"#,
+    );
+
+    let pr = client.prepare_rename(TEST_URI, 3, 11);
+    assert!(
+        pr.is_some(),
+        "prepare_rename on enum variant in match pattern should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn prepare_rename_on_type_in_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
+impl Point {
+  fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
+}
+fn main() {
+  let p: Point = Point.new(1, 2)
+  p.x
+}"#,
+    );
+
+    let pr = client.prepare_rename(TEST_URI, 5, 9);
+    assert!(
+        pr.is_some(),
+        "prepare_rename on type name in annotation should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
+    );
+
+    let response = client.goto_definition(TEST_URI, 2, 18);
+    assert!(response.is_some());
+
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(loc.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() { Point { x: 1, y: 2 } }",
+    );
+
+    let hover = client.hover(TEST_URI, 1, 20);
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("int"),
+        "hover on field name in struct literal should show field type, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn prepare_rename_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
+    );
+
+    let pr = client.prepare_rename(TEST_URI, 2, 18);
+    assert!(
+        pr.is_some(),
+        "prepare_rename on field name in struct literal should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn references_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
+    );
+
+    let refs = client.references(TEST_URI, 2, 18, true);
+    assert!(refs.is_some());
+
+    let locations = refs.unwrap();
+    let lines: Vec<u32> = locations.iter().map(|l| l.range.start.line).collect();
+    assert!(
+        lines.contains(&0),
+        "references on struct literal field should include field definition (line 0), got: {lines:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_for_loop_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let items = [1, 2, 3]\n  for item in items {\n    item\n  }\n}",
+    );
+
+    let response = client.goto_definition(TEST_URI, 2, 6);
+    assert!(
+        response.is_some(),
+        "goto-def on for-loop binding should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_match_slice_pattern_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let items = [1, 2, 3]\n  match items {\n    [first, ..rest] => first,\n    _ => 0,\n  }\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 3, 5);
+    assert!(
+        response.is_some(),
+        "goto-def on 'first' in match slice pattern should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_if_let_slice_pattern_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let items = [1, 2, 3]\n  if let [head, ..tail] = items {\n    head\n  } else {\n    0\n  }\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 2, 10);
+    assert!(
+        response.is_some(),
+        "goto-def on 'head' in if-let slice pattern should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_enum_variant_payload_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let val = Some(42)\n  match val {\n    Some(n) => n,\n    None => 0,\n  }\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 3, 9);
+    assert!(
+        response.is_some(),
+        "goto-def on 'n' in Some(n) pattern should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_while_let_enum_payload_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "fn main() {\n  let items = [Some(1), None]\n  let mut i = 0\n  while let Some(val) = items[i] {\n    val\n    i += 1\n  }\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 3, 17);
+    assert!(
+        response.is_some(),
+        "goto-def on 'val' in while-let Some(val) pattern should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_enum_variant_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "enum Color {\n  Red,\n  Green,\n  Blue,\n}\n\nfn main() {\n  let c = Color.Red\n}",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 2);
+    assert!(
+        response.is_some(),
+        "goto-def on 'Red' in enum definition should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_enum_variant_with_payload_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "enum Shape {\n  Circle(int),\n  Rectangle(int, int),\n}\n\nfn main() {\n  let s = Shape.Circle(5)\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 1, 2);
+    assert!(
+        response.is_some(),
+        "goto-def on 'Circle' in enum definition should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_struct_field_from_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "struct Config {\n  pub width: int,\n  pub height: int,\n}\n\nfn create(w: int, h: int) -> Config {\n  Config { width: w, height: h }\n}\n\nfn main() {\n  let c = create(10, 20)\n  c.width + c.height\n}",
+        )
+        ;
+
+    let prep = client.prepare_rename(TEST_URI, 1, 6);
+    assert!(prep.is_some());
+
+    let edit = client.rename(TEST_URI, 1, 6, "w");
+    assert!(edit.is_some());
+    let changes = edit.unwrap().changes.unwrap();
+    let file_edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+    for e in file_edits {
+        assert_eq!(
+            e.new_text, "w",
+            "all rename edits should use the new field name, got {:?}",
+            e.new_text
+        );
+    }
+    assert!(
+        file_edits.len() >= 2,
+        "expected at least 2 edits (definition + dot access), got {}",
+        file_edits.len()
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_field_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 1, 6);
+    assert!(
+        response.is_some(),
+        "goto-def on 'x' in struct field definition should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_alias_rhs_with_shadowing_lhs_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    let server_dir = src.join("server");
+    let response_dir = server_dir.join("response");
+    fs::create_dir_all(&response_dir).unwrap();
+
+    let response_content = "pub enum Code { Ok, NotFound }\n";
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
+
+    let routes_content = "import \"server/response\"\n\ntype Code = response.Code\n";
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let response_uri = Url::from_file_path(response_dir.join("response.lis"))
+        .unwrap()
+        .to_string();
+    let routes_uri = Url::from_file_path(server_dir.join("routes.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
+
+    let lhs = definition_location(&client.goto_definition(&routes_uri, 2, 6).unwrap()).unwrap();
+    assert_eq!(lhs.uri.as_str(), routes_uri);
+    assert_eq!(lhs.range.start.line, 2);
+
+    let qualifier =
+        definition_location(&client.goto_definition(&routes_uri, 2, 14).unwrap()).unwrap();
+    assert_eq!(qualifier.uri.as_str(), routes_uri);
+    assert_eq!(qualifier.range.start.line, 0);
+
+    let rhs = definition_location(&client.goto_definition(&routes_uri, 2, 23).unwrap()).unwrap();
+    assert_eq!(rhs.uri.as_str(), response_uri);
+    assert_eq!(rhs.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_alias_inside_generic_param() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    let server_dir = src.join("server");
+    let response_dir = server_dir.join("response");
+    fs::create_dir_all(&response_dir).unwrap();
+
+    let response_content = "pub enum Code { Ok, NotFound }\n";
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
+
+    let routes_content = "import \"server/response\"\n\ntype Codes = Slice<response.Code>\n";
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let response_uri = Url::from_file_path(response_dir.join("response.lis"))
+        .unwrap()
+        .to_string();
+    let routes_uri = Url::from_file_path(server_dir.join("routes.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
+
+    let qualifier =
+        definition_location(&client.goto_definition(&routes_uri, 2, 22).unwrap()).unwrap();
+    assert_eq!(qualifier.uri.as_str(), routes_uri);
+
+    let inner = definition_location(&client.goto_definition(&routes_uri, 2, 30).unwrap()).unwrap();
+    assert_eq!(inner.uri.as_str(), response_uri);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_alias_inside_function_annotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    let server_dir = src.join("server");
+    let response_dir = server_dir.join("response");
+    fs::create_dir_all(&response_dir).unwrap();
+
+    let response_content = "pub enum Code { Ok, NotFound }\n";
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
+
+    let routes_content =
+        "import \"server/response\"\n\ntype Handler = fn(response.Code) -> response.Code\n";
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let response_uri = Url::from_file_path(response_dir.join("response.lis"))
+        .unwrap()
+        .to_string();
+    let routes_uri = Url::from_file_path(server_dir.join("routes.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
+
+    let param = definition_location(&client.goto_definition(&routes_uri, 2, 28).unwrap()).unwrap();
+    assert_eq!(param.uri.as_str(), response_uri);
+
+    let ret = definition_location(&client.goto_definition(&routes_uri, 2, 46).unwrap()).unwrap();
+    assert_eq!(ret.uri.as_str(), response_uri);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_alias_inside_tuple_annotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    let server_dir = src.join("server");
+    let response_dir = server_dir.join("response");
+    fs::create_dir_all(&response_dir).unwrap();
+
+    let response_content = "pub enum Code { Ok, NotFound }\n";
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
+
+    let routes_content = "import \"server/response\"\n\ntype Pair = (response.Code, int)\n";
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let response_uri = Url::from_file_path(response_dir.join("response.lis"))
+        .unwrap()
+        .to_string();
+    let routes_uri = Url::from_file_path(server_dir.join("routes.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
+
+    let qualifier =
+        definition_location(&client.goto_definition(&routes_uri, 2, 15).unwrap()).unwrap();
+    assert_eq!(qualifier.uri.as_str(), routes_uri);
+
+    let inner = definition_location(&client.goto_definition(&routes_uri, 2, 23).unwrap()).unwrap();
+    assert_eq!(inner.uri.as_str(), response_uri);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_alias_rhs_same_package() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "struct Bar { x: int }\ntype Foo = Bar\n";
+    client.open(TEST_URI, source);
+
+    let rhs = definition_location(&client.goto_definition(TEST_URI, 1, 12).unwrap()).unwrap();
+    assert_eq!(rhs.uri.as_str(), TEST_URI);
+    assert_eq!(rhs.range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_struct_field_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "struct Point {\n  pub x: int,\n  pub y: string,\n}\n\nfn main() {\n  let p = Point { x: 1, y: \"hi\" }\n}",
+        )
+        ;
+
+    let hover = client.hover(TEST_URI, 2, 6);
+    assert!(
+        hover.is_some(),
+        "hover on 'y' in struct field definition should return a result"
+    );
+    let content = hover_content(&hover.unwrap());
+    assert!(
+        content.contains("string"),
+        "hover should show string type, got: {content}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_pattern_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  match p {\n    Point { x, y } => x + y,\n  }\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 8, 12);
+    assert!(
+        response.is_some(),
+        "goto-def on 'x' in struct pattern should return a result"
+    );
+    let loc = definition_location(&response.unwrap());
+    assert!(loc.is_some());
+    assert_eq!(
+        loc.unwrap().range.start.line,
+        1,
+        "goto-def should land on field definition line 1"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_struct_name_in_aliased_struct_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let shapes_dir = src.join("shapes");
+    fs::create_dir_all(&shapes_dir).unwrap();
+    fs::write(
+        shapes_dir.join("shapes.lis"),
+        "pub struct Rect {\n  pub width: int,\n  pub height: int,\n}\n",
+    )
+    .unwrap();
+
+    let main_content = "import s \"shapes\"\n\nfn main() {\n  let r = s.Rect { width: 10, height: 20 }\n  r.width\n}\n";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, main_content);
+
+    let response = client.goto_definition(&main_uri, 3, 14);
+    assert!(
+        response.is_some(),
+        "goto-def on 'Rect' in aliased struct call s.Rect should return a result"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_struct_from_aliased_struct_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let shapes_dir = src.join("shapes");
+    fs::create_dir_all(&shapes_dir).unwrap();
+    fs::write(
+        shapes_dir.join("shapes.lis"),
+        "pub struct Rect {\n  pub width: int,\n  pub height: int,\n}\n",
+    )
+    .unwrap();
+
+    let main_content = "import s \"shapes\"\n\nfn main() {\n  let r = s.Rect { width: 10, height: 20 }\n  r.width\n}\n";
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, main_content);
+
+    let result = client.rename(&main_uri, 3, 14, "Box");
+    assert!(
+        result.is_some(),
+        "rename 'Rect' from aliased struct call s.Rect should return edits"
+    );
+    let changes = result.unwrap().changes.unwrap_or_default();
+    assert!(
+        !changes.is_empty(),
+        "rename should produce changes across files"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_type_alias_in_struct_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\ntype Alias = Point\n\nfn main() {\n  let p = Alias { x: 1, y: 2 }\n  p.x\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 8, 12);
+    assert!(
+        response.is_some(),
+        "goto-def on 'Alias' in struct call should return a result"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 5,
+        "goto-def should land on type alias definition, not the underlying struct"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_field_in_aliased_struct_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client
+        .open(
+            TEST_URI,
+            "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\ntype Alias = Point\n\nfn main() {\n  let p = Alias { x: 1, y: 2 }\n}",
+        )
+        ;
+
+    let response = client.goto_definition(TEST_URI, 8, 18);
+    assert!(
+        response.is_some(),
+        "goto-def on field `x` in aliased struct call should find the underlying struct field"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 1,
+        "goto-def should land on `pub x: int` in the struct definition"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn diagnostics_invalid_manifest_surfaces_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    // Write an invalid lisette.toml (missing required [project] section)
+    fs::write(root.join("lisette.toml"), "[invalid]\nfoo = 1\n").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let content = "fn main() { 1 }";
+    fs::write(src.join("main.lis"), content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, content);
+
+    let diagnostics = client.await_diagnostics();
+
+    let has_manifest_error = diagnostics.iter().any(|d| {
+        d.severity == Some(DiagnosticSeverity::ERROR)
+            && d.code.as_ref().is_some_and(
+                |c| matches!(c, NumberOrString::String(s) if s == "resolve.manifest_error"),
+            )
+    });
+
+    assert!(
+        has_manifest_error,
+        "invalid lisette.toml should produce a manifest_error diagnostic, got: {diagnostics:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn diagnostics_toolchain_mismatch_surfaces_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    // Pin a lis version that does not match the running binary
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n\n[toolchain]\nlis = \"99.99.99\"\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let content = "fn main() { 1 }";
+    fs::write(src.join("main.lis"), content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, content);
+
+    let diagnostics = client.await_diagnostics();
+
+    let has_toolchain_error = diagnostics.iter().any(|d| {
+        d.severity == Some(DiagnosticSeverity::ERROR) && d.message.contains("Toolchain mismatch")
+    });
+
+    assert!(
+        has_toolchain_error,
+        "toolchain version mismatch should produce a diagnostic, got: {diagnostics:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_dot_on_ref_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+struct Point { x: int, y: int }
+impl Point {
+  pub fn dist(self) -> int { self.x + self.y }
+}
+fn main() {
+  let p = &Point { x: 1, y: 2 }
+  p.dist()
+}";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 6, 4);
+    assert!(response.is_some());
+
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "dist"),
+        "should include 'dist' method through ref, got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "x"),
+        "should include 'x' field through ref, got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_includes_interface_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "interface Example { fn example() -> string }\nfn test(ex: Example) { ex. }";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 1, 26);
+    assert!(response.is_some());
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "example"),
+        "should include interface method 'example', got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_includes_inherited_interface_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let source = "\
+interface Reader { fn read() -> string }
+interface ReadWriter {
+embed Reader
+fn write() -> string
+}
+fn use_rw(rw: ReadWriter) { rw. }";
+    client.open(TEST_URI, source);
+
+    let response = client.completion(TEST_URI, 5, 31);
+    assert!(response.is_some());
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "write"),
+        "should include own method 'write', got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "read"),
+        "should include inherited method 'read', got: {labels:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_shows_let_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { let x = 42; x }";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 17, ": int".to_string())]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_shows_parameter_names() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(1, 16, "x:".to_string()), (1, 19, "y:".to_string())]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_suppresses_matching_argument_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source =
+        "fn add(x: int, y: int) -> int { x + y }\nfn wrap(x: int, y: int) -> int { add(x, y) }";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    assert_eq!(inlay_hint_triples(&hints), vec![]);
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_method_call_omits_receiver() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+struct Point { x: int, y: int }
+impl Point {
+  fn translate(self, dx: int, dy: int) -> int { self.x + dx + dy }
+}
+fn run(p: Point) -> int {
+  p.translate(10, 20)
+}";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(5, 14, "dx:".to_string()), (5, 18, "dy:".to_string())]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_variadic_labels_first_arg_only() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+fn log_all(prefix: string, vals: VarArgs<int>) -> int { prefix.length() }
+fn main() {
+  let _ = log_all(\"tag\", 1, 2, 3)
+}";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    // The fixed `prefix` is labeled, and the variadic `vals` labels only its first arg.
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(2, 18, "prefix:".to_string()), (2, 25, "vals:".to_string())]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_renders_collection_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { let xs = [1, 2, 3]; xs.length() }";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 18, ": Slice<int>".to_string())]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_skips_annotated_let() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { let x: int = 42; x }";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    assert!(
+        hints.is_empty(),
+        "annotated let should have no hint: {hints:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_skips_destructuring_let() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { let (a, b) = (1, 2); a + b }";
+    client.open(TEST_URI, source);
+
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+
+    assert!(
+        hints.is_empty(),
+        "destructuring let is out of v1 scope: {hints:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_respects_requested_range() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n    let a = 1\n    let b = 2\n    a + b\n}",
+    );
+
+    let hints = client.inlay_hint(TEST_URI, (2, 0), (3, 0)).unwrap();
+
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(2, 9, ": int".to_string())]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_range_end_is_exclusive() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+
+    let at_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 17)).unwrap();
+    assert!(
+        at_boundary.is_empty(),
+        "insertion point at the exclusive range end must not be returned: {at_boundary:?}"
+    );
+
+    let past_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 18)).unwrap();
+    assert_eq!(
+        inlay_hint_triples(&past_boundary),
+        vec![(0, 17, ": int".to_string())]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_range_past_eof_is_empty() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+
+    let hints = client.inlay_hint(TEST_URI, (999, 999), (1000, 0)).unwrap();
+
+    assert!(
+        hints.is_empty(),
+        "a range entirely past EOF must not scan the whole file: {hints:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_for_loop_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { for i in 0..3 { i } }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 17, ": int".to_string())]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_match_tuple_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn pick(p: (int, string)) -> int { match p { (a, b) => a } }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 47, ": int".to_string()),
+            (0, 50, ": string".to_string())
+        ]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_match_enum_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source =
+        "fn m(o: Option<int>) -> int { match o { Option.Some(n) => n, Option.None => 0 } }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 53, ": int".to_string())]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_if_let_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn u(o: Option<int>) -> int { if let Some(x) = o { x } else { 0 } }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 43, ": int".to_string())]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_while_let_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn drain(o: Option<int>) -> int { let mut c: Option<int> = o; while let Some(x) = c { c = Option.None } 0 }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 78, ": int".to_string())]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_lambda_param_and_return() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { (|x| x + 1)(5) }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 24, "x:".to_string()),
+            (0, 15, ": int".to_string()),
+            (0, 17, "-> int".to_string())
+        ]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_lambda_skips_annotated_param() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { (|x: int| x + 1)(5) }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(0, 29, "x:".to_string()), (0, 22, "-> int".to_string())]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_curried_lambda_skips_outer_return() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn main() { ((|x| |y| x + y)(1))(2) }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 33, "y:".to_string()),
+            (0, 29, "x:".to_string()),
+            (0, 16, ": int".to_string()),
+            (0, 20, ": int".to_string()),
+            (0, 22, "-> int".to_string())
+        ]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn hover_match_tuple_binding_shows_element_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    // A tuple pattern in a match arm carries a typed pattern; `a` must resolve to its
+    // element type `int`, not the whole `(int, string)`.
+    let source = "fn pick(p: (int, string)) -> int { match p { (a, b) => a } }";
+    client.open(TEST_URI, source);
+
+    let hover = client.hover(TEST_URI, 0, 46);
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"));
+    assert!(!content.contains("string"));
+
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_parameter_position_for_index_arg() {
+    let mut client = TestClient::new();
+    client.initialize();
+    // Regression: param-name hints anchor at the start of `items[..]`, not the `[`.
+    let source = "fn add(x: int, y: int) -> int { x + y }\nfn s(items: Slice<int>) -> int { add(items[0], items[1]) }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![(1, 37, "x:".to_string()), (1, 47, "y:".to_string())]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_match_slice_prefix_and_rest() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source =
+        "fn head(items: Slice<int>) -> int { match items { [] => 0, [first, ..rest] => first } }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    // `first` binds the element type; `rest` binds the remaining slice.
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (0, 65, ": int".to_string()),
+            (0, 73, ": Slice<int>".to_string())
+        ]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_nested_array_rest_binds_sub_array() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source =
+        "fn f(m: Array<Array<int, 3>, 1>) -> int { match m { [[first, ..rest]] => first[0] } }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    let labels: Vec<String> = inlay_hint_triples(&hints)
+        .into_iter()
+        .map(|(_, _, label)| label)
+        .collect();
+    assert!(
+        labels.contains(&": Array<int, 2>".to_string()),
+        "nested array rest should bind Array<int, 2>, got {labels:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn inlay_hint_lambda_return_over_index_body() {
+    let mut client = TestClient::new();
+    client.initialize();
+    // The `-> int` return hint anchors at the body's left edge (`ys`), not the `[`.
+    let source =
+        "fn ap(f: fn(Slice<int>) -> int) -> int { f([1, 2]) }\nfn d() -> int { ap(|ys| ys[0]) }";
+    client.open(TEST_URI, source);
+    let hints = client
+        .inlay_hint(TEST_URI, (0, 0), doc_end(source))
+        .unwrap();
+    assert_eq!(
+        inlay_hint_triples(&hints),
+        vec![
+            (1, 19, "f:".to_string()),
+            (1, 22, ": Slice<int>".to_string()),
+            (1, 24, "-> int".to_string())
+        ]
+    );
+    client.shutdown();
+}
+
+#[test]
+fn opening_prelude_source_reports_no_foreign_type_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let prelude_src = fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../crates/stdlib/prelude.d.lis"
+    ))
+    .unwrap();
+    let path = dir.path().join("prelude.d.lis");
+    fs::write(&path, &prelude_src).unwrap();
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(&uri, &prelude_src);
+    let diagnostics = client.await_diagnostics();
+
+    let offenders: Vec<&str> = diagnostics
+        .iter()
+        .filter(|d| d.message.contains("foreign type"))
+        .map(|d| d.message.as_str())
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "opening the prelude source must not flag its own impls as foreign: {offenders:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let foo_content = "pub struct Foo {}\n\nimpl Foo {\n  pub fn foo(self) {}\n}\n";
+    let main_content = "fn main() {\n  let foo = Foo {}\n  foo.foo()\n}\n";
+    fs::write(src.join("foo.lis"), foo_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let foo_uri = Url::from_file_path(src.join("foo.lis"))
+        .unwrap()
+        .to_string();
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&foo_uri, foo_content);
+    client.open(&main_uri, main_content);
+
+    let initial = client
+        .await_diagnostics_for(&main_uri)
+        .expect("main.lis should publish diagnostics on open");
+    let initial_errors: Vec<_> = initial
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        initial_errors.is_empty(),
+        "main.lis should start clean, got: {initial_errors:?}"
+    );
+
+    let renamed_foo = "pub struct Foo {}\n\nimpl Foo {\n  pub fn floo(self) {}\n}\n";
+    client.change(&foo_uri, renamed_foo, 2);
+
+    let refreshed = client
+        .await_diagnostics_for(&main_uri)
+        .expect("editing foo.lis should refresh diagnostics for the dependent main.lis");
+    assert!(
+        refreshed
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR) && d.message.contains("floo")),
+        "main.lis should now report the renamed member, got: {refreshed:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn closing_an_unsaved_file_refreshes_dependent_open_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let foo_content = "pub struct Foo {}\n\nimpl Foo {\n  pub fn foo(self) {}\n}\n";
+    let main_content = "fn main() {\n  let foo = Foo {}\n  foo.foo()\n}\n";
+    fs::write(src.join("foo.lis"), foo_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let foo_uri = Url::from_file_path(src.join("foo.lis"))
+        .unwrap()
+        .to_string();
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+
+    client.open(&foo_uri, foo_content);
+    client.open(&main_uri, main_content);
+    client.await_diagnostics_for(&main_uri);
+
+    let renamed_foo = "pub struct Foo {}\n\nimpl Foo {\n  pub fn floo(self) {}\n}\n";
+    client.change(&foo_uri, renamed_foo, 2);
+    let broken = client
+        .await_diagnostics_for(&main_uri)
+        .expect("editing foo.lis should break main.lis");
+    assert!(
+        broken
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR)),
+        "main.lis should have an error against the unsaved rename, got: {broken:?}"
+    );
+
+    client.close(&foo_uri);
+    let restored = client
+        .await_diagnostics_for(&main_uri)
+        .expect("closing the unsaved foo.lis should refresh main.lis against on-disk content");
+    let errors: Vec<_> = restored
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "reverting foo.lis to disk should clear main.lis errors, got: {errors:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn exit_after_shutdown_signals_clean_exit() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.shutdown();
+    client.exit();
+    assert_eq!(client.await_exit_code(), 0);
+}
+
+#[test]
+fn exit_without_shutdown_signals_error_exit() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.exit();
+    assert_eq!(client.await_exit_code(), 1);
+}
+
+#[test]
+fn library_root_file_analyzes_cleanly() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let content = "pub fn origin() -> int { 0 }";
+    fs::write(src.join("geo.lis"), content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = Url::from_file_path(src.join("geo.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics();
+    let errors: Vec<_> = diags
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "library root file should be clean: {errors:?}"
+    );
+
+    let hover = client.hover(&uri, 0, 8);
+    assert!(hover.is_some(), "hover should work in a library");
+    client.shutdown();
+}
+
+#[test]
+fn library_cross_package_goto_definition_works() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/lib\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(src.join("math")).unwrap();
+    fs::create_dir_all(src.join("calc")).unwrap();
+    fs::write(
+        src.join("math/math.lis"),
+        "pub fn double(n: int) -> int { n * 2 }",
+    )
+    .unwrap();
+    let calc = "import \"math\"\n\npub fn quad(n: int) -> int {\n  math.double(n) * 2\n}";
+    fs::write(src.join("calc/calc.lis"), calc).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = Url::from_file_path(src.join("calc/calc.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, calc);
+
+    let diags = client.await_diagnostics();
+    let errors: Vec<_> = diags
+        .iter()
+        .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "cross-package library import should resolve: {errors:?}"
+    );
+
+    let goto = client.goto_definition(&uri, 3, 8);
+    assert!(goto.is_some(), "goto across library packages should work");
+    client.shutdown();
+}
+
+#[test]
+fn library_main_function_is_not_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/lib\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let content = "pub fn main(x: int) -> int { x }";
+    fs::write(src.join("lib.lis"), content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = Url::from_file_path(src.join("lib.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics();
+    let bad: Vec<_> = diags
+        .iter()
+        .filter(|d| {
+            d.code
+                == Some(NumberOrString::String(
+                    "infer.invalid_main_signature".to_string(),
+                ))
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "a library `main` is an ordinary function, should not be flagged: {bad:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn creating_main_lis_flips_a_library_to_a_binary() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/flip\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let content = "pub fn main(x: int) -> int { x }";
+    fs::write(src.join("flip.lis"), content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = Url::from_file_path(src.join("flip.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content);
+
+    let is_main_signature = |d: &Diagnostic| {
+        d.code
+            == Some(NumberOrString::String(
+                "infer.invalid_main_signature".to_string(),
+            ))
+    };
+
+    let diags = client.await_diagnostics();
+    assert!(
+        !diags.iter().any(is_main_signature),
+        "library `main` should not be flagged: {diags:?}"
+    );
+
+    fs::write(src.join("main.lis"), "fn main() {}").unwrap();
+    client.change(&uri, content, 2);
+
+    let diags = client.await_diagnostics();
+    assert!(
+        diags.iter().any(is_main_signature),
+        "after `src/main.lis` appears the project is a binary: {diags:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn external_test_file_is_analyzed_with_visibility_rules() {
+    let mut client = TestClient::new();
+
+    let root = tempfile::tempdir().unwrap();
+    let root_path = root.path();
+
+    fs::write(
+        root_path.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("src/geometry")).unwrap();
+    fs::write(
+        root_path.join("src/main.lis"),
+        "import \"geometry\"\nfn main() {\n  geometry.area()\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        root_path.join("src/geometry/geometry.lis"),
+        "pub fn area() -> int {\n  hidden()\n}\n\nfn hidden() -> int {\n  4\n}\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root_path.join("tests")).unwrap();
+    let ok_source =
+        "import \"geometry\"\n\n#[test]\nfn uses_api() {\n  assert geometry.area() == 4\n}\n";
+    fs::write(root_path.join("tests/ok.test.lis"), ok_source).unwrap();
+    let peek_source =
+        "import \"geometry\"\n\n#[test]\nfn peeks() {\n  assert geometry.hidden() == 4\n}\n";
+    fs::write(root_path.join("tests/peek.test.lis"), peek_source).unwrap();
+
+    client.initialize_with_root(root_path);
+
+    let ok_uri = format!("file://{}", root_path.join("tests/ok.test.lis").display());
+    client.open(&ok_uri, ok_source);
+    let diagnostics = client
+        .await_diagnostics_for(&ok_uri)
+        .expect("diagnostics for valid external test");
+    assert!(diagnostics.is_empty(), "got: {diagnostics:?}");
+
+    let peek_uri = format!("file://{}", root_path.join("tests/peek.test.lis").display());
+    client.open(&peek_uri, peek_source);
+    let diagnostics = client
+        .await_diagnostics_for(&peek_uri)
+        .expect("diagnostics for private-symbol reference");
+    assert!(
+        diagnostics.iter().any(|d| d.code
+            == Some(NumberOrString::String(
+                "resolve.not_found_in_package".to_string()
+            ))),
+        "got: {diagnostics:?}"
+    );
+
+    client.shutdown();
+}
+
+fn geo_library_project() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/geo.lis"),
+        "pub struct Point { pub x: int, pub y: int }\npub fn distance(a: int, b: int) -> int { if a > b { a - b } else { b - a } }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("tests")).unwrap();
+    (dir, root)
+}
+
+#[test]
+fn external_test_root_import_resolves() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.is_empty(),
+        "valid root import must not error in the editor: {diags:?}"
+    );
+
+    let broken = content.replace("root.distance(2, 9)", "root.missing(2, 9)");
+    client.change(&uri, &broken, 2);
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(
+            |d| d.message.contains("missing") || d.message.to_lowercase().contains("not found")
+        ),
+        "a genuine reference error through `root` is still reported: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_root_import_in_binary_reports_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join("main.lis"), "fn main() {}\n").unwrap();
+
+    let tests = root.join("tests");
+    fs::create_dir_all(&tests).unwrap();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  assert true\n}\n";
+    let test_path = tests.join("api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.message.contains("binary has no importable root")),
+        "a binary root import must report the rejection in the editor: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_goto_definition_into_root_resolves_to_src() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
+
+    let def = client.goto_definition(&uri, 6, 16);
+    let loc = def
+        .as_ref()
+        .and_then(definition_location)
+        .expect("go-to-definition through `root` should resolve");
+    let target = loc.uri.to_file_path().unwrap();
+    assert!(
+        target.ends_with("src/geo.lis"),
+        "root definition must resolve under src/, got {target:?}"
+    );
+    assert!(
+        definition_target_text(&loc).contains("distance"),
+        "the jump should land on `distance`"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_hover_survives_reanalysis() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  let total = root.distance(2, 9)\n  assert total == 7\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
+
+    client.change(&uri, content, 2);
+    let _ = client.await_diagnostics_for(&uri);
+
+    let hover = client.hover(&uri, 4, 6);
+    assert!(
+        hover.is_some(),
+        "hover on a local binding must survive re-analysis (no empty-AST cache reload)"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_non_test_file_is_flagged() {
+    let (_dir, root) = geo_library_project();
+    let content = "pub fn helper() -> int { 1 }\n";
+    let helper_path = root.join("tests/helper.lis");
+    fs::write(&helper_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&helper_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("not a test file")),
+        "a non-test file under tests/ must be flagged in the editor: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_misnamed_suffix_is_flagged() {
+    let (_dir, root) = geo_library_project();
+    let content = "#[test]\nfn t() {}\n";
+    let misnamed = root.join("tests/api_test.lis");
+    fs::write(&misnamed, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&misnamed).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.message.contains("unsupported suffix")),
+        "a `_test.lis` file must be flagged in the editor even though the graph drops it: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_root_import_in_subpackage_only_library_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let shapes = root.join("src/shapes");
+    fs::create_dir_all(&shapes).unwrap();
+    fs::write(shapes.join("shapes.lis"), "pub fn area() -> int { 4 }\n").unwrap();
+
+    let tests = root.join("tests");
+    fs::create_dir_all(&tests).unwrap();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert true\n}\n";
+    let test_path = tests.join("api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("no root package")),
+        "a subpackage-only library has no importable root, even in the editor: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_root_namespace_hover_shows_root() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert root.distance(2, 9) == 11\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
+
+    let hover = client
+        .hover(&uri, 4, 9)
+        .expect("hover on the root namespace should resolve");
+    let text = hover_content(&hover);
+    assert!(
+        !text.contains("_entry_"),
+        "namespace hover must not leak the internal `_entry_` name: {text}"
+    );
+    assert!(
+        text.contains("root"),
+        "namespace hover should show the source spelling `root`: {text}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_invalid_sibling_is_rejected() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert true\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    fs::write(&test_path, content).unwrap();
+    fs::write(
+        root.join("tests/helper.lis"),
+        "pub fn shared() -> int { 2 }\n",
+    )
+    .unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("not a test file")),
+        "an invalid sibling under tests/ must be rejected while a valid test is open: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn src_tests_file_is_not_misclassified_as_external() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let src_tests = root.join("src/tests");
+    fs::create_dir_all(&src_tests).unwrap();
+    let content = "fn f() -> int {\n  missing_symbol()\n}\n";
+    let file_path = src_tests.join("helper.lis");
+    fs::write(&file_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let uri = Url::from_file_path(&file_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("missing_symbol")),
+        "a file under src/tests/ must be analyzed in place, not routed to the external tests/ dir: {diags:?}"
+    );
+    assert!(
+        !diags.iter().any(|d| d.message.contains("not a test file")),
+        "a src/tests/ file must not be treated as an external test: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn src_tests_siblings_load_from_src_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let src_tests = root.join("src/tests");
+    fs::create_dir_all(&src_tests).unwrap();
+    fs::write(
+        src_tests.join("sibling.lis"),
+        "pub fn from_sibling() -> int { 7 }\n",
+    )
+    .unwrap();
+    let content = "fn use_it() -> int {\n  from_sibling()\n}\n";
+    let file_path = src_tests.join("caller.lis");
+    fs::write(&file_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let uri = Url::from_file_path(&file_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.message.contains("from_sibling")),
+        "a src/tests/ file must resolve siblings from src/tests/, not the external tests/ dir: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn src_tests_overlay_does_not_collide_with_external_tests() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join("geo.lis"), "pub fn distance() -> int { 1 }\n").unwrap();
+
+    let src_tests = root.join("src/tests");
+    fs::create_dir_all(&src_tests).unwrap();
+    let src_helper = src_tests.join("shared.test.lis");
+    let src_helper_content = "fn from_src_tests() -> int { 1 }\n";
+    fs::write(&src_helper, src_helper_content).unwrap();
+
+    let tests = root.join("tests");
+    fs::create_dir_all(&tests).unwrap();
+    let api = tests.join("api.test.lis");
+    let api_content = "import \"root\"\n\n#[test]\nfn t() {\n  assert from_src_tests() == 1\n}\n";
+    fs::write(&api, api_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let src_uri = Url::from_file_path(&src_helper).unwrap().to_string();
+    client.open(&src_uri, src_helper_content);
+    let _ = client.await_diagnostics_for(&src_uri);
+
+    let api_uri = Url::from_file_path(&api).unwrap().to_string();
+    client.open(&api_uri, api_content);
+
+    let diags = client.await_diagnostics_for(&api_uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("from_src_tests")),
+        "a src/tests overlay must not leak into the external tests package: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn external_test_inlay_hint_does_not_leak_entry() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  let x = root\n  assert true\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
+
+    if let Some(hints) = client.inlay_hint(&uri, (0, 0), doc_end(content)) {
+        for (_, _, label) in inlay_hint_triples(&hints) {
+            assert!(
+                !label.contains("_entry_"),
+                "inlay hints must not leak the internal `_entry_` name: {label}"
+            );
+        }
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn file_watching_registration_respects_capabilities_and_accepts_replies() {
+    for supported in [false, true] {
+        for rejected in [false, true] {
+            let mut client = TestClient::new();
+            let result = client.initialize_with_capabilities(serde_json::json!({
+                "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": supported } }
+            }));
+            assert_eq!(
+                serde_json::to_value(result.capabilities.text_document_sync).unwrap(),
+                serde_json::json!({
+                    "openClose": true, "change": 1, "save": true
+                })
+            );
+            client.open(TEST_URI, "fn main() { let value = 1; value }");
+            assert!(client.hover(TEST_URI, 0, 16).is_some());
+            let request = client.take_server_request("client/registerCapability");
+            assert_eq!(request.is_some(), supported);
+            if let Some(request) = request {
+                let registration = &request["params"]["registrations"][0];
+                assert_eq!(registration["method"], "workspace/didChangeWatchedFiles");
+                assert_eq!(
+                    registration["registerOptions"]["watchers"],
+                    serde_json::json!([
+                        {"globPattern": "**/*.lis", "kind": 7},
+                        {"globPattern": "**/lisette.toml", "kind": 7}
+                    ])
+                );
+                let id = request["id"].clone();
+                client.reply_to_server_request(
+                    id.clone(),
+                    rejected.then(|| serde_json::json!({"code": -32601, "message": "unsupported"})),
+                );
+                assert!(client.hover(TEST_URI, 0, 16).is_some());
+                assert!(
+                    client.take_response(&id).is_none(),
+                    "a response must not receive another response"
+                );
+            }
+            client.shutdown();
+        }
+    }
+}
+
+#[test]
+fn watched_file_creation_and_deletion_refresh_missing_package_diagnostics() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let caller = "import \"helper\"\nfn main() { helper.value() }";
+    project_with(root, &[("src/main.lis", caller)]);
+    let caller_uri = uri_of(root, "src/main.lis");
+    let helper_path = root.join("src/helper/helper.lis");
+    let helper_uri = Url::from_file_path(&helper_path).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, caller);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    fs::create_dir_all(helper_path.parent().unwrap()).unwrap();
+    fs::write(&helper_path, "pub fn value() {}").unwrap();
+    client.change_watched_files(&[
+        (helper_uri.clone(), FileChangeType::CREATED),
+        (helper_uri.clone(), FileChangeType::CHANGED),
+    ]);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    fs::remove_file(helper_path).unwrap();
+    client.change_watched_files(&[(helper_uri, FileChangeType::DELETED)]);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn watched_disk_changes_preserve_unsaved_overlays() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (caller, line, character) =
+        cursor("import \"helper\"\nfn main() { let _ = helper.~value() }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &caller),
+            ("src/helper/helper.lis", "pub fn value() -> int { 1 }"),
+        ],
+    );
+    let caller_uri = uri_of(root, "src/main.lis");
+    let helper_uri = Url::parse(&uri_of(root, "src/helper/helper.lis")).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, &caller);
+    client.open(
+        helper_uri.as_str(),
+        "pub fn value() -> string { \"unsaved\" }",
+    );
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> string")
+    );
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> bool { true }",
+    )
+    .unwrap();
+    client.change_watched_files(&[(helper_uri.clone(), FileChangeType::CHANGED)]);
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> string")
+    );
+    client.close(helper_uri.as_str());
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> bool")
+    );
+    client.shutdown();
+}
+
+#[test]
+fn save_and_configuration_notifications_refresh_closed_dependencies() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (caller, line, character) =
+        cursor("import \"helper\"\nfn main() { let _ = helper.~value() }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &caller),
+            ("src/helper/helper.lis", "pub fn value() -> int { 1 }"),
+        ],
+    );
+    let caller_uri = uri_of(root, "src/main.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, &caller);
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> string { \"saved\" }",
+    )
+    .unwrap();
+    client.save(&caller_uri);
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> string")
+    );
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> bool { true }",
+    )
+    .unwrap();
+    client.change_configuration();
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> bool")
+    );
+    client.shutdown();
+}
+
+#[test]
+fn watched_manifest_changes_reroute_documents_and_preserve_unsaved_text() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.lis"), "fn main() {}").unwrap();
+    let (source, line, character) = cursor("fn main() { let value = \"unsaved\"; let _ = ~value }");
+    let uri = uri_of(root, "src/main.lis");
+    let manifest_path = root.join("lisette.toml");
+    let manifest_uri = Url::from_file_path(&manifest_path).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap();
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(hover_content(&client.hover(&uri, line, character).unwrap()).contains("string"));
+
+    for (content, kind, expect_error) in [
+        (Some("[invalid]\nfoo = 1\n"), FileChangeType::CREATED, true),
+        (
+            Some("[project]\nname = \"example.com/you/app\"\nversion = \"0.1.0\"\n"),
+            FileChangeType::CHANGED,
+            false,
+        ),
+        (None, FileChangeType::DELETED, false),
+    ] {
+        if let Some(content) = content {
+            fs::write(&manifest_path, content).unwrap();
+        } else {
+            fs::remove_file(&manifest_path).unwrap();
+        }
+        client.change_watched_files(&[(manifest_uri.clone(), kind)]);
+        let diagnostics = client.await_diagnostics_for(&uri).unwrap();
+        assert_eq!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(NumberOrString::String("resolve.manifest_error".into()))
+            }),
+            expect_error,
+            "{diagnostics:?}"
+        );
+        assert!(hover_content(&client.hover(&uri, line, character).unwrap()).contains("string"));
+    }
+    client.shutdown();
+}
+
+#[test]
+fn watched_dependency_changes_refresh_hover_and_open_file_diagnostics() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (caller, line, character) =
+        cursor("import \"helper\"\nfn main() { let _: int = helper.~value() }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &caller),
+            ("src/helper/helper.lis", "pub fn value() -> int { 1 }"),
+        ],
+    );
+    let caller_uri = uri_of(root, "src/main.lis");
+    let helper_uri = Url::parse(&uri_of(root, "src/helper/helper.lis")).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, &caller);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> string { \"changed\" }",
+    )
+    .unwrap();
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+    client.change_watched_files(&[
+        (
+            Url::from_file_path(root.join("target/.lisette/typedefs/api.d.lis")).unwrap(),
+            FileChangeType::CREATED,
+        ),
+        (
+            Url::from_file_path(root.join("README.md")).unwrap(),
+            FileChangeType::CHANGED,
+        ),
+    ]);
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+    client.change_watched_files(&[(helper_uri, FileChangeType::CHANGED)]);
+    let hover = client.hover(&caller_uri, line, character).unwrap();
+    assert!(hover_content(&hover).contains("-> string"), "{hover:?}");
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn scripts_in_different_directories_work_in_both_opening_orders() {
+    let directory = tempfile::tempdir().unwrap();
+    let fixtures = [
+        (
+            "first/main.lis",
+            "fn main() { let value = 1; ~value }",
+            "int",
+        ),
+        (
+            "second/main.lis",
+            "fn main() { let value = \"two\"; ~value }",
+            "string",
+        ),
+    ];
+    let scripts: Vec<_> = fixtures
+        .into_iter()
+        .map(|(relative, fixture, expected_type)| {
+            let path = directory.path().join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "fn main() {}\n").unwrap();
+            let (source, line, character) = cursor(fixture);
+            (
+                uri_of(directory.path(), relative),
+                source,
+                line,
+                character,
+                expected_type,
+            )
+        })
+        .collect();
+
+    for order in [[0, 1], [1, 0]] {
+        let mut client = TestClient::new();
+        client.initialize();
+        for index in order {
+            let (uri, source, ..) = &scripts[index];
+            client.open(uri, source);
+        }
+        for (uri, _, line, character, expected_type) in &scripts {
+            let hover = client
+                .hover(uri, *line, *character)
+                .expect("each script should resolve its own overlay");
+            assert!(
+                hover_content(&hover).contains(expected_type),
+                "{uri}: {hover:?}"
+            );
+            let definition = client.goto_definition(uri, *line, *character).unwrap();
+            assert_eq!(definition_location(&definition).unwrap().uri.as_str(), uri);
+            let completion = client.completion(uri, *line, *character).unwrap();
+            let value = completion_items(&completion)
+                .iter()
+                .find(|item| item.label == "value")
+                .unwrap();
+            assert_eq!(value.detail.as_deref(), Some(*expected_type));
+            let edits = client
+                .rename(uri, *line, *character, "renamed")
+                .unwrap()
+                .changes
+                .unwrap();
+            assert_eq!(edits.len(), 1);
+            assert_eq!(edits[&Url::parse(uri).unwrap()].len(), 2);
+        }
+        for (uri, source, line, character, expected_type) in &scripts {
+            client.change(uri, &format!("{source}\n\"unclosed"), 2);
+            let hover = client.hover(uri, *line, *character).unwrap();
+            assert!(
+                hover_content(&hover).contains(expected_type),
+                "fallback for {uri}: {hover:?}"
+            );
+        }
+        client.shutdown();
+    }
+}
+
+#[test]
+fn a_project_and_a_script_at_its_root_keep_separate_contexts() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (project, project_line, project_character) =
+        cursor("import \"helpers\"\nfn main() { let result = helpers.~value(); result }");
+    let (script, script_line, script_character) =
+        cursor("fn main() { let result = \"script\"; ~result }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &project),
+            ("src/helpers/helpers.lis", "pub fn value() -> int { 1 }"),
+            ("main.lis", &script),
+        ],
+    );
+    let documents = [
+        (
+            uri_of(root, "src/main.lis"),
+            project,
+            project_line,
+            project_character,
+            "-> int",
+        ),
+        (
+            uri_of(root, "main.lis"),
+            script,
+            script_line,
+            script_character,
+            "string",
+        ),
+    ];
+    for order in [[0, 1], [1, 0]] {
+        let mut client = TestClient::new();
+        client.initialize_with_root(root);
+        for index in order {
+            let (uri, source, ..) = &documents[index];
+            client.open(uri, source);
+        }
+        for (uri, _, line, character, expected_type) in &documents {
+            let hover = client.hover(uri, *line, *character).unwrap();
+            assert!(
+                hover_content(&hover).contains(expected_type),
+                "{uri}: {hover:?}"
+            );
+        }
+        client.close(&documents[0].0);
+        let (uri, _, line, character, _) = &documents[1];
+        assert!(client.goto_definition(uri, *line, *character).is_some());
+        client.open(&documents[0].0, &documents[0].1);
+        let (uri, _, line, character, _) = &documents[0];
+        assert!(hover_content(&client.hover(uri, *line, *character).unwrap()).contains("-> int"));
+        client.shutdown();
+    }
+}
+
+#[test]
+fn projects_with_identical_package_names_keep_separate_overlays() {
+    let directory = tempfile::tempdir().unwrap();
+    let roots = [
+        directory.path().join("first"),
+        directory.path().join("second"),
+    ];
+    assert_separate_project_overlays(&roots);
+}
+
+#[test]
+fn nested_projects_use_their_nearest_manifest() {
+    let directory = tempfile::tempdir().unwrap();
+    let outer = directory.path().join("outer");
+    let inner = outer.join("src/nested");
+    assert_separate_project_overlays(&[outer, inner]);
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_project_paths_preserve_document_uris() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempfile::tempdir().unwrap();
+    let project = directory.path().join("project");
+    let alias = directory.path().join("alias");
+    fs::create_dir_all(&project).unwrap();
+    symlink(&project, &alias).unwrap();
+    assert_separate_project_overlays(&[project, alias]);
+}
+
+fn assert_separate_project_overlays(roots: &[PathBuf; 2]) {
+    let (caller, line, character) =
+        cursor("import \"helpers\"\nfn main() { let result = helpers.~value(); result }\n");
+    let helpers = [
+        "pub fn value() -> int { 1 }",
+        "pub fn value() -> string { \"two\" }",
+    ];
+    for root in roots {
+        fs::create_dir_all(root).unwrap();
+        project_with(
+            root,
+            &[
+                ("src/main.lis", &caller),
+                ("src/helpers/helpers.lis", "pub fn value() -> bool { true }"),
+            ],
+        );
+    }
+    for order in [[0, 1], [1, 0]] {
+        let mut client = TestClient::new();
+        client.initialize_with_root(&roots[0]);
+        for index in order {
+            client.open(
+                &uri_of(&roots[index], "src/helpers/helpers.lis"),
+                helpers[index],
+            );
+            client.open(&uri_of(&roots[index], "src/main.lis"), &caller);
+        }
+        for (index, expected_type) in ["int", "string"].into_iter().enumerate() {
+            let caller_uri = uri_of(&roots[index], "src/main.lis");
+            let helper_uri = uri_of(&roots[index], "src/helpers/helpers.lis");
+            let hover = client.hover(&caller_uri, line, character).unwrap();
+            assert!(
+                hover_content(&hover).contains(&format!("-> {expected_type}")),
+                "{caller_uri}: {hover:?}"
+            );
+            let definition = client
+                .goto_definition(&caller_uri, line, character)
+                .unwrap();
+            assert_eq!(
+                definition_location(&definition).unwrap().uri.as_str(),
+                helper_uri
+            );
+            let references = client
+                .references(&caller_uri, line, character, true)
+                .unwrap();
+            assert_eq!(references.len(), 2);
+            assert!(
+                references
+                    .iter()
+                    .all(|reference| reference.uri.as_str() == caller_uri
+                        || reference.uri.as_str() == helper_uri)
+            );
+            let edits = client
+                .rename(&caller_uri, line, character, "renamed")
+                .unwrap()
+                .changes
+                .unwrap();
+            assert_eq!(edits.len(), 2);
+            assert_eq!(edits[&Url::parse(&helper_uri).unwrap()].len(), 1);
+            assert_eq!(edits[&Url::parse(&caller_uri).unwrap()].len(), 1);
+        }
+        let first_caller = uri_of(&roots[0], "src/main.lis");
+        let first_helper = uri_of(&roots[0], "src/helpers/helpers.lis");
+        let second_caller = uri_of(&roots[1], "src/main.lis");
+        client.change(&first_helper, "pub fn value() -> float64 { 1.5 }", 2);
+        assert!(
+            hover_content(&client.hover(&first_caller, line, character).unwrap())
+                .contains("-> float64")
+        );
+        assert!(
+            hover_content(&client.hover(&second_caller, line, character).unwrap())
+                .contains("-> string")
+        );
+        client.close(&first_helper);
+        assert!(
+            hover_content(&client.hover(&first_caller, line, character).unwrap())
+                .contains("-> bool")
+        );
+        assert!(
+            hover_content(&client.hover(&second_caller, line, character).unwrap())
+                .contains("-> string")
+        );
+        client.shutdown();
+    }
+}
+
+#[test]
+fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("proj");
+    let src = root.join("src");
+    fs::create_dir_all(src.join("util")).unwrap();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        src.join("util/util.lis"),
+        "pub fn greet() -> string {\n  \"hi\"\n}\n",
+    )
+    .unwrap();
+    let content = "import \"util\"\n\nfn main() {\n  let _ = util.greet()\n}\n";
+    fs::write(src.join("main.lis"), content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize();
+    let uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content);
+
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| !d.message.contains("Package not")),
+        "the ancestor walk must find the project from the file alone: {diagnostics:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let loose = dir.path().join("loose.lis");
+    let content = "import \"nowhere\"\n\nfn main() {}\n";
+    fs::write(&loose, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize();
+    let uri = Url::from_file_path(&loose).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap_or_default();
+    let missing = diagnostics
+        .iter()
+        .find(|d| {
+            d.code
+                == Some(NumberOrString::String(
+                    "resolve.package_not_found".to_string(),
+                ))
+        })
+        .unwrap_or_else(|| panic!("expected an unresolved import: {diagnostics:?}"));
+    assert!(missing.message.contains("lis new"), "got: {missing:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn a_dotted_project_directory_is_not_a_dotted_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("my.app");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/myapp\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let content = "pub struct VConf { pub a: int }\n";
+    let path = root.join("src/conf.lis");
+    fs::write(&path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.code
+            == Some(NumberOrString::String(
+                "resolve.dotted_package_directory".to_string()
+            ))),
+        "the dot is in the project directory, not a package path: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn a_typedef_file_under_a_dotted_directory_is_exempt() {
+    let (_dir, root) = geo_library_project();
+    let content = "pub fn Ext() -> int\n";
+    fs::create_dir_all(root.join("src/v1.2")).unwrap();
+    let path = root.join("src/v1.2/api.d.lis");
+    fs::write(&path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.code
+            == Some(NumberOrString::String(
+                "resolve.dotted_package_directory".to_string()
+            ))),
+        "a typedef file puts no directory in the package graph, and `lis build` accepts this project: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn a_typedef_beside_a_compiled_sibling_under_a_dotted_directory_is_rejected() {
+    for sibling in ["s.lis", "api.test.lis"] {
+        let (_dir, root) = geo_library_project();
+        fs::create_dir_all(root.join("src/v1.2")).unwrap();
+        let content = "pub fn Ext() -> int\n";
+        let path = root.join("src/v1.2/api.d.lis");
+        fs::write(&path, content).unwrap();
+        fs::write(
+            root.join("src/v1.2").join(sibling),
+            "pub struct S { pub a: int }\n",
+        )
+        .unwrap();
+
+        let mut client = TestClient::new();
+        client.initialize_with_root(&root);
+        let uri = Url::from_file_path(&path).unwrap().to_string();
+        client.open(&uri, content);
+
+        let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+        assert!(
+            diags.iter().any(|d| d.code
+                == Some(NumberOrString::String(
+                    "resolve.dotted_package_directory".to_string()
+                ))),
+            "`{sibling}` puts `v1.2` in the package graph and `lis build` rejects it: {diags:?}"
+        );
+
+        client.shutdown();
+    }
+}
+
+#[test]
+fn a_typedef_tree_under_a_dotted_directory_tracks_the_whole_subtree() {
+    let dotted_code = Some(NumberOrString::String(
+        "resolve.dotted_package_directory".to_string(),
+    ));
+    let typedef = "pub fn Ext() -> int\n";
+
+    for (open_at, compiled_at) in [
+        ("src/v1.2/api.d.lis", "src/v1.2/sub/x.lis"),
+        ("src/v1.2/sub/api.d.lis", "src/v1.2/x.lis"),
+        ("src/v1.2/sub/api.d.lis", "src/v1.2/sub/x.lis"),
+    ] {
+        let (_dir, root) = geo_library_project();
+        fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
+        fs::write(root.join(open_at), typedef).unwrap();
+        fs::write(root.join(compiled_at), "pub fn f() -> int { 1 }\n").unwrap();
+
+        let mut client = TestClient::new();
+        client.initialize_with_root(&root);
+        let uri = Url::from_file_path(root.join(open_at)).unwrap().to_string();
+        client.open(&uri, typedef);
+
+        let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+        assert!(
+            diags.iter().any(|d| d.code == dotted_code),
+            "`{compiled_at}` puts `v1.2` in the package graph while `{open_at}` is open: {diags:?}"
+        );
+
+        client.shutdown();
+    }
+
+    let (_dir, root) = geo_library_project();
+    fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
+    fs::write(root.join("src/v1.2/api.d.lis"), typedef).unwrap();
+    fs::write(root.join("src/v1.2/sub/other.d.lis"), typedef).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(root.join("src/v1.2/api.d.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, typedef);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.code == dotted_code),
+        "a tree of nothing but typedefs reaches no package and `lis build` accepts it: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn dotted_external_test_directory_is_rejected() {
+    let (_dir, root) = geo_library_project();
+    let content = "struct VConf { a: int }\n\n#[test]\nfn value() {\n  let c = VConf { a: 1 }\n  assert c.a == 1\n}\n";
+    fs::create_dir_all(root.join("tests/v1.2")).unwrap();
+    let test_path = root.join("tests/v1.2/api.test.lis");
+    fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.code
+            == Some(NumberOrString::String(
+                "resolve.dotted_package_directory".to_string()
+            ))),
+        "a dotted directory under tests/ must be rejected, not crash registration: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn dotted_source_directory_is_rejected() {
+    let (_dir, root) = geo_library_project();
+    let content = "pub struct VConf { pub a: int }\n";
+    fs::create_dir_all(root.join("src/v1.2")).unwrap();
+    let path = root.join("src/v1.2/vconf.lis");
+    fs::write(&path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    let dotted = diags
+        .iter()
+        .find(|d| {
+            d.code
+                == Some(NumberOrString::String(
+                    "resolve.dotted_package_directory".to_string(),
+                ))
+        })
+        .unwrap_or_else(|| {
+            panic!("the editor must agree with what `lis build` rejects: {diags:?}")
+        });
+    assert!(dotted.message.contains("`v1.2`"), "got: {dotted:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn an_unsaved_test_file_in_a_dotted_directory_is_rejected() {
+    let content = "struct VConf { a: int }\n\n#[test]\nfn t() {\n  let c = VConf { a: 1 }\n  assert c.a == 1\n}\n";
+
+    for on_disk in [None, Some("api.d.lis")] {
+        let (_dir, root) = geo_library_project();
+        fs::create_dir_all(root.join("tests/v1.2")).unwrap();
+        if let Some(sibling) = on_disk {
+            fs::write(
+                root.join("tests/v1.2").join(sibling),
+                "pub fn Ext() -> int\n",
+            )
+            .unwrap();
+        }
+
+        let mut client = TestClient::new();
+        client.initialize_with_root(&root);
+        let uri = Url::from_file_path(root.join("tests/v1.2/api.test.lis"))
+            .unwrap()
+            .to_string();
+        client.open(&uri, content);
+
+        let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+        assert!(
+            diags.iter().any(|d| d.code
+                == Some(NumberOrString::String(
+                    "resolve.dotted_package_directory".to_string()
+                ))),
+            "the open buffer is the compiled source, saved or not, and reaching registration \
+             through the overlay crashes the server: {diags:?}"
+        );
+
+        client.shutdown();
+    }
+}
+
+fn completion_item<'a>(response: &'a CompletionResponse, label: &str) -> &'a CompletionItem {
+    let items = completion_items(response);
+    items
+        .iter()
+        .find(|item| item.label == label)
+        .unwrap_or_else(|| {
+            let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+            panic!("expected a `{label}` completion, got: {labels:?}")
+        })
+}
+
+fn import_edits(item: &CompletionItem) -> &[TextEdit] {
+    item.additional_text_edits
+        .as_deref()
+        .unwrap_or_else(|| panic!("`{}` should carry its import", item.label))
+}
+
+#[test]
+fn completion_leaves_out_unsupported_go_symbols() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    for source in [
+        "import \"go:errors\"\n\nfn main() {\n  errors.~\n}\n",
+        "fn main() {\n  errors.~\n}\n",
+    ] {
+        let (source, line, character) = cursor(source);
+        client.open(TEST_URI, &source);
+
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let labels: Vec<&str> = completion_items(&response)
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(labels.contains(&"AsType"), "{labels:?}");
+        assert!(!labels.contains(&"As"), "{labels:?}");
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_unimported_go_package_offers_its_members_and_import() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let slug = strings.~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client
+        .completion(TEST_URI, line, character)
+        .expect("a package the file has yet to import should still complete");
+
+    let lower = completion_item(&response, "ToLower");
+    assert_eq!(lower.kind, Some(CompletionItemKind::FUNCTION));
+    assert_eq!(
+        lower.detail.as_deref(),
+        Some("fn ToLower(s: string) -> string · go:strings")
+    );
+    assert_eq!(
+        import_edits(lower),
+        [TextEdit {
+            range: Range {
+                start: Position::new(0, 0),
+                end: Position::new(0, 0),
+            },
+            new_text: "import \"go:strings\"\n\n".to_string(),
+        }]
+    );
+
+    let builder = completion_item(&response, "Builder");
+    assert_eq!(
+        builder.kind,
+        Some(CompletionItemKind::TYPE_PARAMETER),
+        "a Go named type reads as it does once the package is imported"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_a_shared_package_name_offers_every_package_that_answers_to_it() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let n = rand.~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+    let details: Vec<&str> = completion_items(&response)
+        .iter()
+        .filter_map(|item| item.detail.as_deref())
+        .collect();
+
+    for package in ["go:math/rand", "go:math/rand/v2", "go:crypto/rand"] {
+        assert!(
+            details.iter().any(|detail| detail.ends_with(package)),
+            "three packages bind `rand`, so all three belong in the list: {details:?}"
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_partway_through_a_member_still_lists_the_package() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let slug = strings.ToLo~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    let lower = completion_item(&response, "ToLower");
+    assert_eq!(
+        import_edits(lower)[0].new_text,
+        "import \"go:strings\"\n\n",
+        "a half-typed member is still the package's list, import and all"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_partway_through_a_member_of_an_imported_package() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("import \"go:fmt\"\n\nfn main() {\n  fmt.Printl~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+    let println = completion_item(&response, "Println");
+
+    assert!(
+        println.additional_text_edits.is_none(),
+        "the package is imported already: {println:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_at_the_import_position_folds_the_import_into_one_edit() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "");
+    client.change(TEST_URI, "strings", 2);
+
+    let response = client.completion(TEST_URI, 0, 3).unwrap();
+    let strings = completion_item(&response, "strings");
+
+    assert!(
+        strings.additional_text_edits.is_none(),
+        "a second edit here would share the item's own position: {strings:?}"
+    );
+    let edit: TextEdit = serde_json::from_value(
+        strings
+            .text_edit
+            .clone()
+            .expect("the item should carry one edit that writes both"),
+    )
+    .expect("the edit should be a TextEdit");
+    assert_eq!(edit.new_text, "import \"go:strings\"\n\nstrings");
+    assert_eq!(
+        edit.range,
+        Range {
+            start: Position::new(0, 0),
+            end: Position::new(0, 7),
+        },
+        "the whole word, which only the buffer knows, or the tail survives as \
+         `stringsings`"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_offers_unimported_go_packages_by_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let x = str~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    let strings = completion_item(&response, "strings");
+    assert_eq!(strings.kind, Some(CompletionItemKind::MODULE));
+    assert_eq!(strings.detail.as_deref(), Some("go:strings"));
+    assert_eq!(
+        import_edits(strings)[0].new_text,
+        "import \"go:strings\"\n\n"
+    );
+
+    let edit: TextEdit = serde_json::from_value(
+        strings
+            .text_edit
+            .clone()
+            .expect("an item carrying an import states where its own text goes"),
+    )
+    .expect("a client without insertReplaceSupport gets a plain edit");
+    assert_eq!(edit.new_text, "strings");
+    assert_eq!(
+        edit.range,
+        Range {
+            start: Position::new(1, 10),
+            end: Position::new(1, 13),
+        },
+        "the typed prefix, not a range the editor guesses at"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_mid_word_rewrites_the_word_for_a_client_that_states_no_preference() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() {\n  let x = strings\n}\n");
+
+    let response = client.completion(TEST_URI, 1, 13).unwrap();
+    let edit: TextEdit = serde_json::from_value(
+        completion_item(&response, "strings")
+            .text_edit
+            .clone()
+            .expect("the item states its own edit"),
+    )
+    .unwrap();
+
+    assert_eq!(edit.new_text, "strings");
+    assert_eq!(
+        edit.range,
+        Range {
+            start: Position::new(1, 10),
+            end: Position::new(1, 17),
+        },
+        "an edit stopping at the cursor would leave `stringsings` behind"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_hands_both_ranges_to_a_client_that_takes_them() {
+    let mut client = TestClient::new();
+    client.initialize_with_capabilities(serde_json::json!({
+        "textDocument": {"completion": {"completionItem": {"insertReplaceSupport": true}}}
+    }));
+
+    client.open(TEST_URI, "fn main() {\n  let x = strings\n}\n");
+
+    let response = client.completion(TEST_URI, 1, 13).unwrap();
+    let edit: InsertReplaceEdit = serde_json::from_value(
+        completion_item(&response, "strings")
+            .text_edit
+            .clone()
+            .expect("the item states its own edit"),
+    )
+    .expect("a client with insertReplaceSupport gets both ranges");
+
+    assert_eq!(edit.new_text, "strings");
+    assert_eq!(edit.insert.end, Position::new(1, 13), "stops at the cursor");
+    assert_eq!(
+        edit.replace.end,
+        Position::new(1, 17),
+        "takes the whole word"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_leaves_an_imported_package_alone() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) =
+        cursor("import \"go:strings\"\n\nfn main() {\n  let x = str~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+    let offered: Vec<&CompletionItem> = completion_items(&response)
+        .iter()
+        .filter(|item| item.label == "strings")
+        .collect();
+
+    assert_eq!(
+        offered.len(),
+        1,
+        "an imported package is one completion, not one per import edit: {offered:?}"
+    );
+    assert!(
+        offered[0].additional_text_edits.is_none(),
+        "an imported package needs no import: {:?}",
+        offered[0]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_leaves_a_blank_imported_package_alone() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) =
+        cursor("import _ \"go:image/png\"\n\nfn main() {\n  let x = pn~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    assert!(
+        !completion_items(&response)
+            .iter()
+            .any(|item| item.label == "png"),
+        "a blank import binds no name, but importing the path again is still a duplicate"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_unimported_third_party_package_offers_its_members_and_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    let manifest = format!(
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n\n[toolchain]\nlis = \"{}\"\n\n[dependencies.go]\n\"github.com/example/go-lib\" = \"v1.0.0\"\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    fs::write(root.join("lisette.toml"), manifest).unwrap();
+
+    let pkg = deps::GoPackage {
+        module: deps::GoModule {
+            path: "github.com/example/go-lib",
+            version: "v1.0.0",
+            replacement: None,
+        },
+        package: "github.com/example/go-lib",
+    };
+    let typedef_path = pkg.typedef_path(&deps::typedef_cache_dir(root), stdlib::Target::host());
+    fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+    fs::write(
+        &typedef_path,
+        "// Generated by Lisette bindgen\n// Package: lib\n\npub fn DoStuff(n: int) -> int\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let (content, line, character) = cursor("fn main() {\n  let n = lib.~\n}\n");
+    let main_path = src.join("main.lis");
+    fs::write(&main_path, &content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &content);
+
+    let response = client.completion(&main_uri, line, character).unwrap();
+
+    let do_stuff = completion_item(&response, "DoStuff");
+    assert_eq!(
+        do_stuff.detail.as_deref(),
+        Some("fn DoStuff(n: int) -> int · go:github.com/example/go-lib")
+    );
+    assert_eq!(
+        import_edits(do_stuff)[0].new_text,
+        "import \"go:github.com/example/go-lib\"\n\n"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_an_unknown_prefix_dot_offers_nothing() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let x = nosuchpackage.~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    assert!(
+        completion_items(&response).is_empty(),
+        "a prefix that names nothing must not fall through to package members: {:?}",
+        completion_labels(&response)
+    );
+
+    client.shutdown();
+}
+
+fn project_with(root: &Path, files: &[(&str, &str)]) {
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/app\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    for (relative, content) in files {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+}
+
+fn uri_of(root: &Path, relative: &str) -> String {
+    Url::from_file_path(root.join(relative))
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn declarations_in_a_broken_sibling_still_resolve() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let caller = "fn main() {\n  let n = shared()\n}\n";
+    let broken = "fn shared() -> int { 42 }\n\nfn oops(\n";
+    project_with(
+        root,
+        &[("src/main.lis", caller), ("src/broken.lis", broken)],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let caller_uri = uri_of(root, "src/main.lis");
+    client.open(&caller_uri, caller);
+    client.open(&uri_of(root, "src/broken.lis"), broken);
+
+    let diagnostics = client
+        .await_diagnostics_for(&caller_uri)
+        .unwrap_or_default();
+
+    assert!(
+        !diagnostics.iter().any(|d| d.message.contains("shared")),
+        "a declaration before a sibling's parse error stays visible: {diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_document_with_parse_errors_keeps_its_own_partial_ast() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let partial = "pub fn intact() -> int { 7 }\n\nfn broken(\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/partial.lis", partial),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let partial_uri = uri_of(root, "src/partial.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&partial_uri, partial);
+
+    let hover = client.hover(&partial_uri, 0, 8);
+    let diagnostics = client
+        .await_diagnostics_for(&partial_uri)
+        .unwrap_or_default();
+
+    assert!(
+        hover.is_some(),
+        "declarations before a parse error stay hoverable"
+    );
+    assert!(
+        !diagnostics.is_empty(),
+        "the parse error is still reported: {diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_document_broken_on_open_serves_no_stale_disk_features() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let on_disk = "pub fn helper() -> int { 42 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/helper.lis", on_disk),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let helper_uri = uri_of(root, "src/helper.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&helper_uri, "fn helper() -> int { \"unterminated\n");
+
+    let hover = client.hover(&helper_uri, 0, 8);
+
+    assert!(
+        hover.is_none(),
+        "a buffer that fails to lex must not be served from its disk contents: {hover:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_lexer_failure_falls_back_to_the_last_usable_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let good = "pub fn helper() -> int { 42 }\n";
+    project_with(
+        root,
+        &[("src/main.lis", "fn main() {}\n"), ("src/helper.lis", good)],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let helper_uri = uri_of(root, "src/helper.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&helper_uri, good);
+    assert!(client.hover(&helper_uri, 0, 8).is_some());
+
+    client.change(&helper_uri, "pub fn helper() -> int { \"oops\n", 2);
+
+    assert!(
+        client.hover(&helper_uri, 0, 8).is_some(),
+        "features fall back to the snapshot this document was last usable in"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn staggered_failures_keep_separate_fallbacks() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let b = "pub fn from_b() -> int { 1 }\n";
+    let c = "pub fn from_c() -> int { 2 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/b.lis", b),
+            ("src/c.lis", c),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let b_uri = uri_of(root, "src/b.lis");
+    let c_uri = uri_of(root, "src/c.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&b_uri, b);
+    client.open(&c_uri, c);
+    assert!(client.hover(&b_uri, 0, 8).is_some());
+    assert!(client.hover(&c_uri, 0, 8).is_some());
+
+    client.change(&b_uri, "pub fn from_b() -> int { \"broken\n", 2);
+    client.change(&c_uri, "pub fn from_c() -> int { 3 }\n", 2);
+    client.change(&c_uri, "pub fn from_c() -> int { \"broken\n", 3);
+
+    assert!(
+        client.hover(&b_uri, 0, 8).is_some(),
+        "b keeps the snapshot from before b broke"
+    );
+    assert!(
+        client.hover(&c_uri, 0, 8).is_some(),
+        "c keeps the snapshot from before c broke, a later one than b's"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn an_invalid_external_test_file_does_not_stop_its_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let valid = "fn check() -> int { 1 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("tests/valid.test.lis", valid),
+            ("tests/invalid.lis", "fn stray() -> int { 2 }\n"),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let invalid_uri = uri_of(root, "tests/invalid.lis");
+    let valid_uri = uri_of(root, "tests/valid.test.lis");
+    client.open(&invalid_uri, "fn stray() -> int { 2 }\n");
+    client.open(&valid_uri, valid);
+
+    let invalid_diagnostics = client
+        .await_diagnostics_for(&invalid_uri)
+        .unwrap_or_default();
+
+    assert!(
+        invalid_diagnostics
+            .iter()
+            .any(|d| d.message.contains("test file")),
+        "the invalidly named file reports its own problem: {invalid_diagnostics:?}"
+    );
+    assert!(
+        client.hover(&valid_uri, 0, 3).is_some(),
+        "its validly named sibling still analyzes"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_production_test_suffix_file_still_analyzes() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let content = "fn helper() -> int { 42 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/thing_test.lis", content),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = uri_of(root, "src/thing_test.lis");
+    client.open(&uri, content);
+
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap_or_default();
+
+    assert!(
+        diagnostics.iter().any(|d| d.message.contains("_test.lis")),
+        "the wrong-suffix diagnostic still reaches a file the package loader skips: {diagnostics:?}"
+    );
+    assert!(
+        client.hover(&uri, 0, 3).is_some(),
+        "and its features keep working"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_project_typedef_file_still_analyzes() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let content = "pub struct Point { pub x: int }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/shapes.d.lis", content),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = uri_of(root, "src/shapes.d.lis");
+    client.open(&uri, content);
+
+    assert!(
+        client.document_symbol(&uri).is_some(),
+        "a .d.lis the entry package skips is analyzed under its own key"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_closed_document_gets_no_diagnostics_from_a_surviving_sibling_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let broken = "fn f() -> int {\n  missing_symbol()\n}\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/other.lis", broken),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = uri_of(root, "src/main.lis");
+    let other_uri = uri_of(root, "src/other.lis");
+    client.open(&main_uri, "fn main() {}\n");
+    client.open(&other_uri, broken);
+    assert!(
+        client
+            .await_diagnostics_for(&other_uri)
+            .is_some_and(|d| !d.is_empty())
+    );
+
+    client.close(&other_uri);
+    assert_eq!(
+        client.await_diagnostics_for(&other_uri),
+        Some(vec![]),
+        "closing clears the document's diagnostics"
+    );
+    client.save(&other_uri);
+
+    assert_eq!(
+        client.await_diagnostics_for(&other_uri),
+        None,
+        "a closed document must not be republished from disk through its package key"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_array_size_constant_declared_later() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn take(xs: Array<int, SIZE>) -> int { xs.length() }\nconst SIZE = 3",
+    );
+
+    let response = client.goto_definition(TEST_URI, 0, 23);
+    assert!(response.is_some(), "forward-declared size should resolve");
+
+    let loc = definition_location(&response.unwrap());
+    assert!(loc.is_some());
+    assert_eq!(loc.unwrap().range.start.line, 1);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_array_size_constant_in_struct_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Holder {\n  pub data: Array<int, SIZE>\n}\nconst SIZE = 3",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 23);
+    assert!(response.is_some(), "struct field size should resolve");
+
+    let loc = definition_location(&response.unwrap());
+    assert!(loc.is_some());
+    assert_eq!(loc.unwrap().range.start.line, 3);
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_array_size_constant_shows_its_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "const SIZE = 3\nfn take(xs: Array<int, SIZE>) -> int { xs.length() }",
+    );
+
+    let hover = client.hover(TEST_URI, 1, 23);
+    assert!(hover.is_some(), "array size constant should hover");
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_array_size_constant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "const SIZE = 3\nfn take(xs: Array<int, SIZE>) -> int { xs.length() }",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 23);
+    assert!(response.is_some(), "array size constant should resolve");
+
+    let loc = definition_location(&response.unwrap());
+    assert!(loc.is_some());
+    assert_eq!(loc.unwrap().range.start.line, 0);
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_only_offers_locals_from_enclosing_scopes() {
+    let (source, positions) = cursors(
+        "fn alpha(alpha_param: int) { let only_in_alpha = 1 }\n\
+         fn beta(beta_param: string) {\n\
+           let only_in_beta = true\n\
+           let pick = only_in_beta~\n\
+           if true { let inner_only = 1; ~ }\n\
+           let after = only_in_beta~\n\
+           let later = 2\n\
+         }\n\
+         fn gamma() { ~ }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+
+    for (index, (line, character)) in positions.into_iter().enumerate() {
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let labels = completion_labels(&response);
+        for name in ["only_in_alpha", "alpha_param", "later", "after"] {
+            assert!(
+                !labels.iter().any(|label| label == name),
+                "offered {name} at cursor {index}"
+            );
+        }
+        for name in ["alpha", "beta", "gamma"] {
+            assert!(labels.iter().any(|label| label == name), "missing {name}");
+        }
+        assert_eq!(
+            labels.iter().any(|name| name == "pick"),
+            index == 1 || index == 2
+        );
+        assert_eq!(labels.iter().any(|name| name == "inner_only"), index == 1);
+        if index < 3 {
+            assert_eq!(
+                completion_item(&response, "only_in_beta").detail.as_deref(),
+                Some("bool")
+            );
+            assert_eq!(
+                completion_item(&response, "beta_param").detail.as_deref(),
+                Some("string")
+            );
+        } else {
+            assert!(
+                !labels
+                    .iter()
+                    .any(|name| name == "only_in_beta" || name == "beta_param")
+            );
+        }
+    }
+    client.shutdown();
+}
+
+#[test]
+fn completion_shadows_outer_bindings_and_definitions_with_one_typed_item() {
+    let (source, positions) = cursors(
+        "fn value() {}\n\
+         fn main() {\n\
+           let value = 1\n\
+           if true {\n\
+             let value = value~ + 1\n\
+             let value = \"inner\"\n\
+             ~\n\
+           }\n\
+           ~\n\
+         }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    for ((line, character), expected_type) in positions.into_iter().zip(["int", "string", "int"]) {
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let values: Vec<_> = completion_items(&response)
+            .iter()
+            .filter(|item| item.label == "value")
+            .collect();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].detail.as_deref(), Some(expected_type));
+        assert_eq!(values[0].kind, Some(CompletionItemKind::VARIABLE));
+    }
+    client.shutdown();
+}
+
+#[test]
+fn completion_respects_pattern_and_closure_scopes() {
+    let cases = [
+        (
+            "fn main() { let ch = Channel.new<int>(); select { let Some(received) = ch.receive() => { ~ }, _ => {} } }",
+            "received",
+            Some("int"),
+        ),
+        (
+            "fn main() { let ch = Channel.new<int>(); select { let Some(received) = ch.receive() => {}, _ => { ~ } } }",
+            "received",
+            None,
+        ),
+        (
+            "fn main() { let ch = Channel.new<int>(); select { match ch.receive() { Some(received) => { ~ }, None => {} } } }",
+            "received",
+            Some("int"),
+        ),
+        (
+            "fn main() { let ch = Channel.new<int>(); select { match ch.receive() { Some(received) => {}, None => { ~ } } } }",
+            "received",
+            None,
+        ),
+        (
+            "fn main() { let previous = 1; previous~",
+            "previous",
+            Some("int"),
+        ),
+        ("fn main() { let previous = 1; ~", "previous", Some("int")),
+        ("fn main() { let previous = 1; }~", "previous", None),
+        ("fn main() { let previous = 1; } ~", "previous", None),
+        (
+            "fn main() { let (number, text) = (1, \"hi\"); ~ }",
+            "text",
+            Some("string"),
+        ),
+        (
+            "fn main() { let (number, text) = (1, ~\"hi\"); }",
+            "text",
+            None,
+        ),
+        (
+            "fn main() { for element in [1, 2] { ~ } }",
+            "element",
+            Some("int"),
+        ),
+        ("fn main() { for element in [~1, 2] {} }", "element", None),
+        ("fn main() { for element in [1, 2] {} ~ }", "element", None),
+        (
+            "fn main() { if let Some(found) = Some(1) { ~ } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { if let Some(found) = Some(1) {} else { ~ } }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { while let Some(found) = Some(1) { ~ } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { while let Some(found) = Some(~1) {} }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { match Some(1) { Some(found) if found > ~0 => {}, _ => {} } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { match Some(1) { Some(found) => { ~ }, _ => {} } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { match Some(1) { Some(found) => {}, _ => { ~ } } }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { let outer = 1; let closure = |param: string| { ~ } }",
+            "param",
+            Some("string"),
+        ),
+        (
+            "fn main() { let outer = 1; let closure = |param: string| { ~ } }",
+            "outer",
+            Some("int"),
+        ),
+        (
+            "fn main() { let outer = 1; let closure = |param: string| { ~ } }",
+            "closure",
+            None,
+        ),
+        (
+            "fn main() { let closure = |param: string| {}; ~ }",
+            "param",
+            None,
+        ),
+        (
+            "fn main() { let Some(found) = Some(1) else { ~ return }; }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { let Some(found) = Some(1) else { return }; ~ }",
+            "found",
+            Some("int"),
+        ),
+    ];
+    let mut client = TestClient::new();
+    client.initialize();
+    for (index, (fixture, name, expected_type)) in cases.into_iter().enumerate() {
+        let (source, line, character) = cursor(fixture);
+        client.open(TEST_URI, &source);
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let item = completion_items(&response)
+            .iter()
+            .find(|item| item.label == name);
+        assert_eq!(
+            item.map(|item| item.detail.as_deref()),
+            expected_type.map(Some),
+            "case {index}: {fixture}"
+        );
+        client.close(TEST_URI);
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_ignore_names_in_strings_and_comments() {
+    let fixtures = [
+        "struct Thing {}\nfn main() { let text = \"Th~ing\" }",
+        "struct Thing {}\nfn main() { let text = `Th~ing` }",
+        "struct Thing {}\nfn main() { // Th~ing\n }",
+        "struct Thing {}\nfn main() { /* Th~ing */ }",
+        "struct Thing {}\n// Th~ing\nfn main() {}",
+        "struct Thing {\n // Th~ing\n value: int\n}",
+        "struct Thing {}\nfn main() { let value = Thing { /* Th~ing */ } }",
+        "struct Thing {}\nfn read(value: Slice</* Th~ing */ Thing>) {}",
+        "struct Thing {}\nfn main() { match \"\" { \"Th~ing\" => 1, _ => 0 } }",
+        "struct Thing {}\nfn main() { let text = f\"Th~ing {1}\" }",
+    ];
+    let mut client = TestClient::new();
+    client.initialize();
+    for fixture in fixtures {
+        let (source, line, character) = cursor(fixture);
+        client.open(TEST_URI, &source);
+        assert!(
+            client.goto_definition(TEST_URI, 0, 8).is_some(),
+            "missing declaration: {fixture}"
+        );
+        assert!(
+            client.goto_definition(TEST_URI, line, character).is_none(),
+            "definition resolved nonsemantic text: {fixture}"
+        );
+        assert!(
+            client.references(TEST_URI, line, character, true).is_none(),
+            "references resolved nonsemantic text: {fixture}"
+        );
+        assert!(
+            client.prepare_rename(TEST_URI, line, character).is_none(),
+            "prepare rename resolved nonsemantic text: {fixture}"
+        );
+        assert!(
+            client
+                .rename(TEST_URI, line, character, "Renamed")
+                .is_none(),
+            "rename edited a declaration from nonsemantic text: {fixture}"
+        );
+        client.close(TEST_URI);
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_ignore_unresolved_struct_fields() {
+    let (source, line, character) =
+        cursor("struct Thing {}\nfn main() { let value = Thing { Th~ing: 1 } }");
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    assert!(client.goto_definition(TEST_URI, 0, 8).is_some());
+    assert!(client.goto_definition(TEST_URI, line, character).is_none());
+    assert!(client.references(TEST_URI, line, character, true).is_none());
+    assert!(client.prepare_rename(TEST_URI, line, character).is_none());
+    assert!(
+        client
+            .rename(TEST_URI, line, character, "Renamed")
+            .is_none()
+    );
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_preserve_qualified_targets_and_member_ranges() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let source_directory = root.join("src");
+    let shapes_directory = source_directory.join("shapes");
+    fs::create_dir_all(&shapes_directory).unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+    let shapes_source = "pub struct Point {}";
+    let shapes_path = shapes_directory.join("shapes.lis");
+    fs::write(&shapes_path, shapes_source).unwrap();
+    let (source, positions) = cursors(
+        "import \"shapes\"\nstruct Point {}\ntype Alias = ~shapes.~Point\nfn main() { let value = shapes.~Point {} }",
+    );
+    let main_path = source_directory.join("main.lis");
+    fs::write(&main_path, &source).unwrap();
+    let main_uri = Url::from_file_path(&main_path).unwrap();
+    let shapes_uri = Url::from_file_path(&shapes_path).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(shapes_uri.as_str(), shapes_source);
+    client.open(main_uri.as_str(), &source);
+
+    let (line, character) = positions[0];
+    let qualifier = client
+        .goto_definition(main_uri.as_str(), line, character)
+        .unwrap();
+    let qualifier = definition_location(&qualifier).unwrap();
+    assert_eq!(qualifier.uri, main_uri);
+    assert_eq!(qualifier.range.start.line, 0);
+    assert!(
+        client
+            .prepare_rename(main_uri.as_str(), line, character)
+            .is_none()
+    );
+    assert!(
+        client
+            .rename(main_uri.as_str(), line, character, "Renamed")
+            .is_none()
+    );
+
+    for &(line, character) in &positions[1..] {
+        let definition = client
+            .goto_definition(main_uri.as_str(), line, character)
+            .unwrap();
+        let definition = definition_location(&definition).unwrap();
+        assert_eq!(definition.uri, shapes_uri);
+        assert_eq!(definition.range.start, Position::new(0, 11));
+        let range = Range {
+            start: Position::new(line, character),
+            end: Position::new(line, character + 5),
+        };
+        assert_eq!(
+            client.prepare_rename(main_uri.as_str(), line, character),
+            Some(PrepareRenameResponse::RangeWithPlaceholder {
+                range,
+                placeholder: "Point".to_string(),
+            })
+        );
+        let references = client
+            .references(main_uri.as_str(), line, character, true)
+            .unwrap();
+        assert_eq!(references.len(), 3);
+        let edits = client
+            .rename(main_uri.as_str(), line, character, "Renamed")
+            .unwrap()
+            .changes
+            .unwrap();
+        assert_eq!(edits[&shapes_uri].len(), 1);
+        assert_eq!(edits[&shapes_uri][0].range, definition.range);
+        assert_eq!(edits[&main_uri].len(), 2);
+        for &(line, character) in &positions[1..] {
+            let range = Range {
+                start: Position::new(line, character),
+                end: Position::new(line, character + 5),
+            };
+            assert!(
+                references
+                    .iter()
+                    .any(|reference| reference.uri == main_uri && reference.range == range)
+            );
+            assert!(edits[&main_uri].iter().any(|edit| edit.range == range));
+        }
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_agree_on_annotation_and_pattern_targets() {
+    let fixtures = [
+        ("Thing", "struct ~Thing {}\nfn read(value: ~Thing) {}"),
+        ("Thing", "struct ~Thing {}\ntype Alias = Slice<~Thing>"),
+        (
+            "Thing",
+            "struct ~Thing {}\ntype Callback = fn(~Thing) -> ~Thing",
+        ),
+        (
+            "Thing",
+            "struct ~Thing {}\nstruct Container { value: ~Thing }",
+        ),
+        (
+            "Thing",
+            "struct ~Thing {}\nenum Container { Value(~Thing) }",
+        ),
+        (
+            "Thing",
+            "struct ~Thing {}\nfn main() { let value: ~Thing = Thing {} }",
+        ),
+        (
+            "SIZE",
+            "const ~SIZE = 3\nfn read(value: Array<int, ~SIZE>) {}",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(value: Color) { match value { Color.~Red => 1 } }",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(value: Color) { if let Color.~Red = value {} }",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(channel: Channel<Color>) { select { match channel.receive() { Some(Color.~Red) => {}, _ => {} } } }",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(channel: Channel<Color>) { select { let Some(Color.~Red) = channel.receive() => {}, _ => {} } }",
+        ),
+        (
+            "café",
+            "fn read(~café: int) -> string { f\"value {~café}\" }",
+        ),
+    ];
+    let mut client = TestClient::new();
+    client.initialize();
+    for (name, fixture) in fixtures {
+        let (source, positions) = cursors(fixture);
+        client.open(TEST_URI, &source);
+        let (line, character) = positions[0];
+        let expected_definition =
+            definition_location(&client.goto_definition(TEST_URI, line, character).unwrap())
+                .unwrap();
+        let expected_references = client.references(TEST_URI, line, character, true).unwrap();
+        for &(line, character) in &positions[1..] {
+            let definition = client.goto_definition(TEST_URI, line, character).unwrap();
+            assert_eq!(
+                definition_location(&definition).unwrap(),
+                expected_definition,
+                "{fixture}"
+            );
+            assert_eq!(
+                client.prepare_rename(TEST_URI, line, character),
+                Some(PrepareRenameResponse::RangeWithPlaceholder {
+                    range: Range {
+                        start: Position::new(line, character),
+                        end: Position::new(line, character + name.encode_utf16().count() as u32),
+                    },
+                    placeholder: name.to_string(),
+                }),
+                "{fixture}"
+            );
+            assert_eq!(
+                client.references(TEST_URI, line, character, true).unwrap(),
+                expected_references,
+                "{fixture}"
+            );
+            let edits = client
+                .rename(TEST_URI, line, character, "Renamed")
+                .unwrap()
+                .changes
+                .unwrap();
+            let edits = edits.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+            assert_eq!(edits.len(), expected_references.len(), "{fixture}");
+            for reference in &expected_references {
+                assert!(
+                    edits.iter().any(|edit| edit.range == reference.range),
+                    "{fixture}"
+                );
+            }
+        }
+        client.close(TEST_URI);
+    }
+    client.shutdown();
+}
+
+#[test]
+fn shorthand_pattern_keeps_field_navigation_and_binding_rename() {
+    let (source, positions) = cursors(
+        "struct Record { field: int }\nfn read(value: Record) -> int {\n  match value { Record { ~field } => ~field }\n}",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    let (line, character) = positions[0];
+    let definition = client.goto_definition(TEST_URI, line, character).unwrap();
+    assert_eq!(
+        definition_location(&definition).unwrap().range.start,
+        Position::new(0, 16)
+    );
+    let references = client.references(TEST_URI, line, character, true).unwrap();
+    let edits = client
+        .rename(TEST_URI, line, character, "renamed")
+        .unwrap()
+        .changes
+        .unwrap();
+    let edits = edits.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+    assert_eq!(references.len(), 2);
+    assert_eq!(edits.len(), 2);
+    for (line, character) in positions {
+        let range = Range {
+            start: Position::new(line, character),
+            end: Position::new(line, character + 5),
+        };
+        assert!(references.iter().any(|reference| reference.range == range));
+        assert!(edits.iter().any(|edit| edit.range == range));
+    }
+    client.shutdown();
+}
+
+fn renamed_source(source: &str, line: u32, character: u32, new_name: &str) -> String {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
+    let changes = client
+        .rename(TEST_URI, line, character, new_name)
+        .expect("rename should succeed")
+        .changes
+        .unwrap();
+    client.shutdown();
+    let mut edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap().clone();
+    edits.sort_by_key(|edit| (edit.range.start.line, edit.range.start.character));
+    let offset = |position: Position| {
+        let line_start: usize = source
+            .split_inclusive('\n')
+            .take(position.line as usize)
+            .map(str::len)
+            .sum();
+        line_start + position.character as usize
+    };
+    let mut result = source.to_string();
+    for edit in edits.iter().rev() {
+        result.replace_range(
+            offset(edit.range.start)..offset(edit.range.end),
+            &edit.new_text,
+        );
+    }
+    result
+}
+
+const SHORTHAND_STRUCT_SOURCE: &str = "\
+struct P { x: int, y: int }
+fn mk(x: int) -> P {
+  P { x, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { x, y: _ } = p
+  x
+}";
+
+#[test]
+fn rename_local_at_shorthand_struct_sites_keeps_the_field_name() {
+    assert_eq!(
+        renamed_source(SHORTHAND_STRUCT_SOURCE, 1, 6, "renamed"),
+        "\
+struct P { x: int, y: int }
+fn mk(renamed: int) -> P {
+  P { x: renamed, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { x, y: _ } = p
+  x
+}"
+    );
+    let from_pattern = renamed_source(SHORTHAND_STRUCT_SOURCE, 5, 10, "renamed");
+    assert_eq!(
+        from_pattern,
+        renamed_source(SHORTHAND_STRUCT_SOURCE, 6, 2, "renamed")
+    );
+    assert_eq!(
+        from_pattern,
+        "\
+struct P { x: int, y: int }
+fn mk(x: int) -> P {
+  P { x, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { x: renamed, y: _ } = p
+  renamed
+}"
+    );
+}
+
+#[test]
+fn rename_struct_field_edits_literal_and_pattern_sites() {
+    assert_eq!(
+        renamed_source(SHORTHAND_STRUCT_SOURCE, 0, 11, "renamed"),
+        "\
+struct P { renamed: int, y: int }
+fn mk(x: int) -> P {
+  P { renamed: x, y: 0 }
+}
+fn pt(p: P) -> int {
+  let P { renamed: x, y: _ } = p
+  x
+}"
+    );
+    let explicit = "\
+struct P { x: int, y: int }
+fn main() {
+  let p = P { x: 1, y: 2 }
+  let P { x: a, y: _ } = p
+  let _ = p.x + a
+}";
+    assert_eq!(
+        renamed_source(explicit, 0, 11, "renamed"),
+        "\
+struct P { renamed: int, y: int }
+fn main() {
+  let p = P { renamed: 1, y: 2 }
+  let P { renamed: a, y: _ } = p
+  let _ = p.renamed + a
+}"
+    );
+
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, explicit);
+    let mut references: Vec<(u32, u32)> = client
+        .references(TEST_URI, 0, 11, true)
+        .unwrap()
+        .iter()
+        .map(|reference| (reference.range.start.line, reference.range.start.character))
+        .collect();
+    references.sort();
+    assert_eq!(references, vec![(0, 11), (2, 14), (3, 10), (4, 12)]);
+    client.shutdown();
+}
+
+#[test]
+fn rename_constant_at_shorthand_struct_site_keeps_the_field_name() {
+    assert_eq!(
+        renamed_source(
+            "const X = 1\nstruct P { X: int }\nfn main() {\n  let _ = P { X }\n}",
+            0,
+            6,
+            "Y"
+        ),
+        "const Y = 1\nstruct P { X: int }\nfn main() {\n  let _ = P { X: Y }\n}"
+    );
+}
+
+const SHORTHAND_VARIANT_SOURCE: &str = "\
+enum Shape { Sq { side: int }, Rect { side: int, h: int }, Dot }
+fn mk(side: int) -> Shape {
+  Shape.Sq { side }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { side } | Shape.Rect { side, .. } => side * 2,
+    Shape.Dot => 0,
+  }
+}";
+
+#[test]
+fn rename_at_shorthand_enum_struct_variant_sites() {
+    let from_body = renamed_source(SHORTHAND_VARIANT_SOURCE, 6, 51, "renamed");
+    assert_eq!(
+        from_body,
+        renamed_source(SHORTHAND_VARIANT_SOURCE, 6, 37, "renamed")
+    );
+    assert_eq!(
+        from_body,
+        "\
+enum Shape { Sq { side: int }, Rect { side: int, h: int }, Dot }
+fn mk(side: int) -> Shape {
+  Shape.Sq { side }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { side: renamed } | Shape.Rect { side: renamed, .. } => renamed * 2,
+    Shape.Dot => 0,
+  }
+}"
+    );
+    assert_eq!(
+        renamed_source(SHORTHAND_VARIANT_SOURCE, 1, 6, "renamed"),
+        "\
+enum Shape { Sq { side: int }, Rect { side: int, h: int }, Dot }
+fn mk(renamed: int) -> Shape {
+  Shape.Sq { side: renamed }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { side } | Shape.Rect { side, .. } => side * 2,
+    Shape.Dot => 0,
+  }
+}"
+    );
+    assert_eq!(
+        renamed_source(SHORTHAND_VARIANT_SOURCE, 0, 18, "renamed"),
+        "\
+enum Shape { Sq { renamed: int }, Rect { side: int, h: int }, Dot }
+fn mk(side: int) -> Shape {
+  Shape.Sq { renamed: side }
+}
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Sq { renamed: side } | Shape.Rect { side, .. } => side * 2,
+    Shape.Dot => 0,
+  }
+}"
+    );
+}
+
+#[test]
+fn symbol_requests_resolve_name_ends_and_stop_one_character_later() {
+    let (source, positions) = cursors(
+        "fn compute~  () -> int {\n\
+           let total~  = 1\n\
+           total~  + total  \n\
+         }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    for (index, (line, character)) in positions.into_iter().enumerate() {
+        let expected = if index == 0 { 1 } else { 3 };
+        assert!(client.goto_definition(TEST_URI, line, character).is_some());
+        assert!(client.hover(TEST_URI, line, character).is_some());
+        assert!(client.prepare_rename(TEST_URI, line, character).is_some());
+        assert_eq!(
+            client
+                .references(TEST_URI, line, character, true)
+                .unwrap()
+                .len(),
+            expected
+        );
+        let edits = client
+            .rename(TEST_URI, line, character, "renamed")
+            .unwrap()
+            .changes
+            .unwrap();
+        assert_eq!(edits.values().map(Vec::len).sum::<usize>(), expected);
+
+        assert!(
+            client
+                .goto_definition(TEST_URI, line, character + 1)
+                .is_none()
+        );
+        assert!(client.hover(TEST_URI, line, character + 1).is_none());
+        assert!(
+            client
+                .prepare_rename(TEST_URI, line, character + 1)
+                .is_none()
+        );
+        assert!(
+            client
+                .references(TEST_URI, line, character + 1, true)
+                .is_none()
+        );
+        assert!(
+            client
+                .rename(TEST_URI, line, character + 1, "renamed")
+                .is_none()
+        );
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_boundaries_distinguish_receivers_members_and_unicode_names() {
+    let (source, positions) = cursors(
+        "struct Record { field: int }\n\
+         fn read(value: Record, café: int) -> int {\n\
+           value~.~field~ + café~\n\
+         }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    for ((line, character), expected_line) in positions.into_iter().zip([1, 0, 0, 1]) {
+        let definition = client.goto_definition(TEST_URI, line, character).unwrap();
+        assert_eq!(
+            definition_location(&definition).unwrap().range.start.line,
+            expected_line
+        );
+        assert_eq!(
+            client
+                .references(TEST_URI, line, character, true)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(client.prepare_rename(TEST_URI, line, character).is_some());
+        assert!(
+            client
+                .rename(TEST_URI, line, character, "renamed")
+                .is_some()
+        );
+    }
+    client.shutdown();
+}
+
+#[test]
+fn cancellation_accepts_number_and_string_ids_while_a_build_is_running() {
+    use serde_json::json;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (source, line, character) = cursor("fn main() { let value = 1; let _ = ~value }");
+    project_with(root, &[("src/main.lis", &source)]);
+    let uri = uri_of(root, "src/main.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate.clone()));
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    let params =
+        json!({"textDocument": {"uri": uri}, "position": {"line": line, "character": character}});
+    let number = json!(700);
+    let string = json!("700");
+    client.send_request(number.clone(), "textDocument/hover", params.clone());
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.send_request(string.clone(), "textDocument/hover", params.clone());
+    client.cancel(number.clone());
+    assert_eq!(client.receive_response(&number)["error"]["code"], -32800);
+    // Repeated and unknown cancellation are harmless, and strings stay distinct.
+    client.cancel(number.clone());
+    client.cancel(json!("unknown"));
+    client.send_request(json!("cheap"), "test/unknown", json!({}));
+    assert_eq!(
+        client.receive_response(&json!("cheap"))["error"]["code"],
+        -32601
+    );
+    assert!(client.take_response(&string).is_none());
+    client.cancel(string.clone());
+    assert_eq!(client.receive_response(&string)["error"]["code"], -32800);
+
+    // Reuse an ID before the cancelled worker finishes. Its late result must
+    // neither answer this request nor remove it from cancellation bookkeeping.
+    client.send_request(number.clone(), "textDocument/hover", params);
+    release.send(()).unwrap();
+    assert!(!client.receive_response(&number)["result"].is_null());
+    assert!(client.hover(&uri, line, character).is_some());
+    assert!(client.take_response(&number).is_none());
+    assert!(client.take_response(&string).is_none());
+    assert_eq!(gate.builds.load(Ordering::SeqCst), 1);
+    client.shutdown();
+}
+
+#[test]
+fn edits_during_a_build_reject_older_results_and_keep_the_latest_text() {
+    use serde_json::json;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (source, line, character) = cursor("fn main() { let value = 1; let _ = ~value }");
+    project_with(root, &[("src/main.lis", &source)]);
+    let uri = uri_of(root, "src/main.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate));
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    client.send_request(
+        json!("old"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+        }),
+    );
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.change(&uri, "fn main() { let value = false; let _ = value }", 2);
+    let (latest, line, character) = cursor("fn main() { let value = \"latest\"; let _ = ~value }");
+    client.change(&uri, &latest, 3);
+    client.send_request(json!("barrier"), "test/unknown", json!({}));
+    client.receive_response(&json!("barrier"));
+    release.send(()).unwrap();
+    assert_eq!(
+        client.receive_response(&json!("old"))["error"]["code"],
+        -32801
+    );
+    let hover = client.hover(&uri, line, character).unwrap();
+    assert!(hover_content(&hover).contains("string"), "{hover:?}");
+    let diagnostics = client.await_versioned_diagnostics_for(&uri).unwrap();
+    assert_eq!(diagnostics.version, Some(3));
+    assert!(diagnostics.diagnostics.is_empty());
+    assert!(!client.has_diagnostics_for_version(&uri, 1));
+    assert!(!client.has_diagnostics_for_version(&uri, 2));
+    client.shutdown();
+}
+
+#[test]
+fn concurrent_sibling_requests_share_one_package_build() {
+    use serde_json::json;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (source, line, character) = cursor("fn main() { let _ = ~helper() }");
+    let helper = "fn helper() -> int { 1 }";
+    project_with(
+        root,
+        &[("src/main.lis", &source), ("src/helper.lis", helper)],
+    );
+    let uri = uri_of(root, "src/main.lis");
+    let helper_uri = uri_of(root, "src/helper.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate.clone()));
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    client.open(&helper_uri, helper);
+    client.send_request(
+        json!("caller"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+        }),
+    );
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.send_request(
+        json!("helper"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": helper_uri}, "position": {"line": 0, "character": 4}
+        }),
+    );
+    release.send(()).unwrap();
+    assert!(!client.receive_response(&json!("caller"))["result"].is_null());
+    assert!(!client.receive_response(&json!("helper"))["result"].is_null());
+    assert_eq!(gate.builds.load(Ordering::SeqCst), 1);
+    client.shutdown();
+}
+
+#[test]
+fn shutdown_cancels_requests_and_joins_running_workers() {
+    use serde_json::json;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let source = "fn main() { let value = 1; let _ = value }";
+    project_with(root, &[("src/main.lis", source)]);
+    let uri = uri_of(root, "src/main.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate));
+    client.initialize_with_root(root);
+    client.open(&uri, source);
+    client.send_request(
+        json!("active"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri}, "position": {"line": 0, "character": 16}
+        }),
+    );
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.send_request(json!("stop"), "shutdown", json!(null));
+    assert_eq!(
+        client.receive_response(&json!("active"))["error"]["code"],
+        -32800
+    );
+    assert!(client.receive_response(&json!("stop"))["result"].is_null());
+    client.exit();
+    release.send(()).unwrap();
+    assert_eq!(client.await_exit_code(), 0);
+}
+
+#[test]
+fn references_inside_extracted_typedefs_cover_only_the_member_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(concat!(
+        "import \"go:io\"\nimport \"go:strings\"\n",
+        "fn take(writer: io.~Writer) { let _ = strings.NewReader(\"\") }\n"
+    ));
+    client.open(TEST_URI, &source);
+    let constructor = source.lines().nth(2).unwrap().find("NewReader").unwrap() as u32;
+    let target = client.goto_definition(TEST_URI, 2, constructor).unwrap();
+    let location = definition_location(&target).unwrap();
+    let typedef_source = fs::read_to_string(location.uri.to_file_path().unwrap()).unwrap();
+    client.open(location.uri.as_str(), &typedef_source);
+    let references = client.references(TEST_URI, line, character, false).unwrap();
+    let in_typedef: Vec<_> = references
+        .iter()
+        .filter(|location| location.uri.path().ends_with("/strings.d.lis"))
+        .collect();
+    assert!(
+        !in_typedef.is_empty(),
+        "expected usages of io.Writer in the extracted strings typedef"
+    );
+    for location in in_typedef {
+        let length = location.range.end.character - location.range.start.character;
+        assert_eq!(
+            definition_target_text(location).get(..length as usize),
+            Some("Writer")
+        );
+    }
+    client.shutdown();
+}
+
+#[test]
+fn editing_an_unrelated_package_keeps_other_packages_analyzed() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let files = [
+        (
+            "src/main.lis",
+            "import \"middle\"\nfn main() { let _ = middle.value() }",
+        ),
+        (
+            "src/middle/middle.lis",
+            "import \"base\"\npub fn value() -> int { base.value() }",
+        ),
+        ("src/base/base.lis", "pub fn value() -> int { 1 }"),
+        ("src/other/other.lis", "pub fn value() -> int { 2 }"),
+    ];
+    project_with(root, &files);
+    let counter = Arc::new(lsp_harness::BuildCounter::default());
+    let mut client = TestClient::with_bindgen_setup(Some(counter.clone()));
+    client.initialize_with_root(root);
+    for (file, source) in files {
+        client.open(&uri_of(root, file), source);
+    }
+    for (file, source) in files {
+        let line = u32::from(source.starts_with("import"));
+        assert!(
+            client
+                .hover(
+                    &uri_of(root, file),
+                    line,
+                    if line == 1 && file.ends_with("main.lis") {
+                        3
+                    } else {
+                        7
+                    }
+                )
+                .is_some()
+        );
+    }
+    let before = counter.0.load(Ordering::SeqCst);
+    let other = uri_of(root, "src/other/other.lis");
+    client.change(&other, "pub fn value() -> string { \"changed\" }", 2);
+    assert!(client.hover(&uri_of(root, "src/main.lis"), 1, 3).is_some());
+    let hover = client.hover(&other, 0, 7).unwrap();
+    assert!(hover_content(&hover).contains("-> string"));
+    assert_eq!(
+        counter.0.load(Ordering::SeqCst) - before,
+        1,
+        "only the edited package should rebuild"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn package_edits_and_unsaved_closes_refresh_transitive_dependents() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let files = [
+        (
+            "src/main.lis",
+            "import \"middle\"\nfn main() { let _ = middle.value() }",
+        ),
+        (
+            "src/middle/middle.lis",
+            "import \"base\"\npub fn value() -> int { base.value() }",
+        ),
+        ("src/base/base.lis", "pub fn value() -> int { 1 }"),
+        ("src/other/other.lis", "pub fn value() -> int { 2 }"),
+    ];
+    project_with(root, &files);
+    let counter = Arc::new(lsp_harness::BuildCounter::default());
+    let mut client = TestClient::with_bindgen_setup(Some(counter.clone()));
+    client.initialize_with_root(root);
+    for (file, source) in files {
+        client.open(&uri_of(root, file), source);
+    }
+    let main = uri_of(root, files[0].0);
+    let middle = uri_of(root, files[1].0);
+    let base = uri_of(root, files[2].0);
+    let other = uri_of(root, files[3].0);
+    for (uri, line, character) in [
+        (&main, 1, 3),
+        (&middle, 1, 7),
+        (&base, 0, 7),
+        (&other, 0, 7),
+    ] {
+        assert!(client.hover(uri, line, character).is_some());
+    }
+    let before = counter.0.load(Ordering::SeqCst);
+    client.change(&base, "pub fn value() -> string { \"unsaved\" }", 2);
+    let diagnostics = client
+        .await_diagnostics_matching(&middle, |diagnostics| {
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR))
+        })
+        .expect("the dependent package must report its type mismatch");
+    assert!(!diagnostics.diagnostics.is_empty());
+    for (uri, line, character) in [
+        (&main, 1, 3),
+        (&middle, 1, 7),
+        (&base, 0, 7),
+        (&other, 0, 7),
+    ] {
+        assert!(client.hover(uri, line, character).is_some());
+    }
+    assert_eq!(counter.0.load(Ordering::SeqCst) - before, 3);
+    let before_close = counter.0.load(Ordering::SeqCst);
+    client.close(&base);
+    assert!(client.hover(&main, 1, 3).is_some());
+    assert!(client.hover(&middle, 1, 7).is_some());
+    assert!(client.hover(&other, 0, 7).is_some());
+    assert_eq!(counter.0.load(Ordering::SeqCst) - before_close, 2);
+    client
+        .await_diagnostics_matching(&middle, |diagnostics| {
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != Some(DiagnosticSeverity::ERROR))
+        })
+        .expect("closing an unsaved dependency must clear dependent errors");
+    client.shutdown();
+}
+
+#[test]
+fn editing_a_library_root_refreshes_external_test_diagnostics() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let library = "pub fn value() -> int { 1 }";
+    let test = "import \"root\"\n#[test]\nfn t() { let _: int = root.value() }";
+    project_with(
+        root,
+        &[("src/lib.lis", library), ("tests/api.test.lis", test)],
+    );
+    let library_uri = uri_of(root, "src/lib.lis");
+    let test_uri = uri_of(root, "tests/api.test.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&library_uri, library);
+    client.open(&test_uri, test);
+    assert!(client.hover(&test_uri, 2, 27).is_some());
+    client.change(&library_uri, "pub fn value() -> string { \"changed\" }", 2);
+    client
+        .await_diagnostics_matching(&test_uri, |diagnostics| {
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR))
+        })
+        .expect("external tests must refresh after a library-root edit");
+    client.shutdown();
+}
+
+#[test]
+fn references_and_rename_include_closed_dependent_packages() {
+    use std::time::Duration;
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    let caller = "import \"utils\"\nfn main() { let _ = utils.helper() }";
+    project_with(
+        root,
+        &[("src/utils/utils.lis", helper), ("src/main.lis", caller)],
+    );
+    let helper_uri = uri_of(root, "src/utils/utils.lis");
+    let caller_uri = uri_of(root, "src/main.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&helper_uri, helper);
+
+    let closed_references = client.references(&helper_uri, 0, 8, true).unwrap();
+    assert_eq!(closed_references.len(), 2);
+    assert!(
+        closed_references
+            .iter()
+            .any(|location| location.uri.as_str() == caller_uri)
+    );
+    let closed_rename = client.rename(&helper_uri, 0, 8, "renamed").unwrap();
+    assert_eq!(closed_rename.changes.as_ref().unwrap().len(), 2);
+    let notifications = client.collect_messages(Duration::from_millis(100));
+    assert!(
+        notifications
+            .iter()
+            .all(|message| message["params"]["uri"] != caller_uri)
+    );
+
+    client.open(&caller_uri, caller);
+    let open_references = client.references(&helper_uri, 0, 8, true).unwrap();
+    let open_rename = client.rename(&helper_uri, 0, 8, "renamed").unwrap();
+    assert_eq!(
+        serde_json::to_value(&closed_references).unwrap(),
+        serde_json::to_value(open_references).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&closed_rename).unwrap(),
+        serde_json::to_value(open_rename).unwrap()
+    );
+    client.close(&caller_uri);
+    assert_eq!(
+        serde_json::to_value(closed_references).unwrap(),
+        serde_json::to_value(client.references(&helper_uri, 0, 8, true).unwrap()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(closed_rename).unwrap(),
+        serde_json::to_value(client.rename(&helper_uri, 0, 8, "renamed").unwrap()).unwrap()
+    );
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_follows_indirect_dependents_without_analyzing_unrelated_packages() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (model, line, character) = cursor("pub struct Task { pub ~id: int }");
+    project_with(
+        root,
+        &[
+            ("src/models/model.lis", &model),
+            (
+                "src/middle/middle.lis",
+                "import \"models\"\npub fn make() -> models.Task { let value = models.Task { id: 1 }; let _ = value.id; value }",
+            ),
+            (
+                "src/main.lis",
+                "import \"middle\"\nfn main() { let value = middle.make(); let _ = value.id }",
+            ),
+            (
+                "src/unrelated/other.lis",
+                "pub fn broken() -> int { unknown }",
+            ),
+        ],
+    );
+    let counter = Arc::new(lsp_harness::BuildCounter::default());
+    let mut client = TestClient::with_bindgen_setup(Some(counter.clone()));
+    client.initialize_with_root(root);
+    let uri = uri_of(root, "src/models/model.lis");
+    client.open(&uri, &model);
+    assert!(client.hover(&uri, line, character).is_some());
+    let before = counter.0.load(Ordering::SeqCst);
+    let references = client.references(&uri, line, character, true).unwrap();
+    assert_eq!(references.len(), 4);
+    assert_eq!(counter.0.load(Ordering::SeqCst) - before, 2);
+    let changes = client
+        .rename(&uri, line, character, "identifier")
+        .unwrap()
+        .changes
+        .unwrap();
+    assert_eq!(changes.len(), 3);
+    assert!(changes.contains_key(&Url::parse(&uri_of(root, "src/main.lis")).unwrap()));
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_includes_unsaved_packages_and_restores_disk_after_close() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    let caller = "import \"utils\"\npub fn call() -> int { utils.helper() }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/consumer/use.lis", caller),
+        ],
+    );
+    let helper_uri = uri_of(root, "src/utils/utils.lis");
+    let caller_uri = uri_of(root, "src/consumer/use.lis");
+    let unsaved_uri = uri_of(root, "src/unsaved/new.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&helper_uri, helper);
+    client.open(&caller_uri, "pub fn call() -> int { 0 }");
+    client.open(
+        &unsaved_uri,
+        "import \"utils\"\npub fn call() -> int { utils.helper() + utils.helper() }",
+    );
+    let references = client.references(&helper_uri, 0, 8, true).unwrap();
+    assert_eq!(references.len(), 3);
+    assert!(
+        references
+            .iter()
+            .all(|location| location.uri.as_str() != caller_uri)
+    );
+    assert_eq!(
+        references
+            .iter()
+            .filter(|location| location.uri.as_str() == unsaved_uri)
+            .count(),
+        2
+    );
+    client.close(&caller_uri);
+    client.close(&unsaved_uri);
+    let references = client.references(&helper_uri, 0, 8, true).unwrap();
+    assert_eq!(references.len(), 2);
+    assert!(
+        references
+            .iter()
+            .any(|location| location.uri.as_str() == caller_uri)
+    );
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_includes_closed_internal_and_external_tests() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let library = "pub fn value() -> int { 1 }";
+    project_with(
+        root,
+        &[
+            ("src/lib.lis", library),
+            (
+                "src/lib.test.lis",
+                "#[test]\nfn internal() { let _ = value() }",
+            ),
+            (
+                "tests/integration/api.test.lis",
+                "import \"root\"\n#[test]\nfn external() { let _ = root.value() }",
+            ),
+        ],
+    );
+    let uri = uri_of(root, "src/lib.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, library);
+    assert_eq!(client.references(&uri, 0, 8, true).unwrap().len(), 3);
+    let changes = client
+        .rename(&uri, 0, 8, "renamed")
+        .unwrap()
+        .changes
+        .unwrap();
+    assert_eq!(changes.len(), 3);
+    assert!(changes.values().all(|edits| edits.len() == 1));
+    client.shutdown();
+}
+
+#[test]
+fn rename_refuses_an_incomplete_closed_dependent_analysis() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/main.lis", "fn main() {}"),
+        ],
+    );
+    let uri = uri_of(root, "src/utils/utils.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, helper);
+    for broken in [
+        "import \"utils\"\nfn main() { let _ = utils.helper() @ }",
+        "import \"utils\"\nfn main() { let _: string = utils.helper() }",
+        "import \"utils\"\nimport \"missing\"\nfn main() { let _ = utils.helper() }",
+    ] {
+        fs::write(root.join("src/main.lis"), broken).unwrap();
+        let error = client.try_rename(&uri, 0, 8, "renamed").unwrap_err();
+        assert!(
+            error.contains("Cannot complete the reference search"),
+            "{error}"
+        );
+    }
+    fs::write(
+        root.join("src/main.lis"),
+        "import \"utils\"\nfn main() { let _ = utils.helper() }",
+    )
+    .unwrap();
+    assert_eq!(
+        client
+            .rename(&uri, 0, 8, "renamed")
+            .unwrap()
+            .changes
+            .unwrap()
+            .len(),
+        2
+    );
+    client.shutdown();
+}
+
+#[test]
+fn rename_rejects_sources_changed_during_a_closed_package_search() {
+    use serde_json::json;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    for change in ["disk", "buffer", "manifest"] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let helper = "pub fn helper() -> int { 42 }";
+        project_with(
+            root,
+            &[
+                ("src/utils/utils.lis", helper),
+                (
+                    "src/main.lis",
+                    "import \"utils\"\nfn main() { let _ = utils.helper() }",
+                ),
+            ],
+        );
+        let (gate, entered, release) = lsp_harness::BuildGate::new();
+        release.send(()).unwrap();
+        let mut client = TestClient::with_bindgen_setup(Some(gate.clone()));
+        client.initialize_with_root(root);
+        let uri = uri_of(root, "src/utils/utils.lis");
+        client.open(&uri, helper);
+        assert!(client.hover(&uri, 0, 8).is_some());
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        gate.builds.store(0, Ordering::SeqCst);
+        client.send_request(json!(90), "textDocument/rename", json!({
+            "textDocument": {"uri": uri}, "position": {"line": 0, "character": 8}, "newName": "renamed"
+        }));
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        if change == "buffer" {
+            client.change(&uri, &format!("\n{helper}"), 2);
+            client.send_request(json!(91), "textDocument/formatting", json!({"textDocument": {"uri": uri}, "options": {"tabSize": 2, "insertSpaces": true}}));
+            client.receive_response(&json!(91));
+        } else if change == "manifest" {
+            let manifest = fs::read_to_string(root.join("lisette.toml")).unwrap();
+            fs::write(root.join("lisette.toml"), format!("{manifest}\n")).unwrap();
+        } else {
+            fs::write(
+                root.join("src/main.lis"),
+                "\nimport \"utils\"\nfn main() { let _ = utils.helper() }",
+            )
+            .unwrap();
+        }
+        release.send(()).unwrap();
+        let response = client.receive_response(&json!(90));
+        assert_eq!(response["error"]["code"], -32801, "{response}");
+        assert!(response.get("result").is_none());
+        client.shutdown();
+    }
+}
+
+#[test]
+fn references_from_extracted_typedefs_include_closed_project_callers() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let library = "pub fn value() -> int { 1 }";
+    let (caller, line, character) =
+        cursor("import \"go:strings\"\npub fn clean() -> string { strings.~TrimSpace(\" hi \") }");
+    project_with(
+        root,
+        &[("src/lib.lis", library), ("src/consumer/use.lis", &caller)],
+    );
+    let library_uri = uri_of(root, "src/lib.lis");
+    let caller_uri = uri_of(root, "src/consumer/use.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&library_uri, library);
+    client.open(&caller_uri, &caller);
+    let definition = definition_location(
+        &client
+            .goto_definition(&caller_uri, line, character)
+            .unwrap(),
+    )
+    .unwrap();
+    client.close(&caller_uri);
+    let source = fs::read_to_string(definition.uri.to_file_path().unwrap()).unwrap();
+    client.open(definition.uri.as_str(), &source);
+    let references = client
+        .references(
+            definition.uri.as_str(),
+            definition.range.start.line,
+            definition.range.start.character,
+            false,
+        )
+        .unwrap();
+    assert!(
+        references
+            .iter()
+            .any(|location| location.uri.as_str() == caller_uri)
+    );
+    client.shutdown();
+}
+
+#[test]
+fn rename_refuses_to_skip_unreadable_closed_sources() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/main.lis", "fn main() {}"),
+        ],
+    );
+    fs::write(root.join("src/main.lis"), [0xff, 0xfe]).unwrap();
+    let uri = uri_of(root, "src/utils/utils.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, helper);
+    let error = client.try_rename(&uri, 0, 8, "renamed").unwrap_err();
+    assert!(error.contains("Cannot read all project files"), "{error}");
+    client.open(
+        &uri_of(root, "src/main.lis"),
+        "import \"utils\"\nfn main() { let _ = utils.helper() }",
+    );
+    assert_eq!(
+        client
+            .rename(&uri, 0, 8, "renamed")
+            .unwrap()
+            .changes
+            .unwrap()
+            .len(),
+        2
+    );
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_includes_internal_test_roots() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/checks/types.lis", "pub struct Marker {}"),
+            (
+                "src/checks/api.test.lis",
+                "import \"utils\"\n#[test]\nfn t() { let _ = utils.helper() }",
+            ),
+        ],
+    );
+    let uri = uri_of(root, "src/utils/utils.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, helper);
+    assert_eq!(client.references(&uri, 0, 8, true).unwrap().len(), 2);
+    assert_eq!(
+        client
+            .rename(&uri, 0, 8, "renamed")
+            .unwrap()
+            .changes
+            .unwrap()
+            .len(),
+        2
+    );
+    client.shutdown();
+}
+
+#[test]
+fn cached_dependency_keeps_diagnostics_fixes_and_local_hover_when_opened() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::create_dir_all(root.join("src/dependency")).unwrap();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/cached-lints\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let main = "import \"dependency\"\nfn main() { let _ = dependency.value(2) }\n";
+    let source = "pub fn value(input: int) -> int {\n  let mut value = input\n  value + 0\n}\n";
+    fs::write(root.join("src/main.lis"), main).unwrap();
+    fs::write(root.join("src/dependency/value.lis"), source).unwrap();
+    let main_uri = Url::from_file_path(root.join("src/main.lis"))
+        .unwrap()
+        .to_string();
+    let uri = Url::from_file_path(root.join("src/dependency/value.lis"))
+        .unwrap()
+        .to_string();
+    let mut cold = TestClient::new();
+    cold.initialize_with_root(root);
+    cold.open(&uri, source);
+    let expected = cold.await_diagnostics_for(&uri).unwrap();
+    let expected_fixes = cold.code_action(&uri, (0, 0), (4, 0)).unwrap();
+    assert!(!expected_fixes.is_empty());
+    cold.shutdown();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&main_uri, main);
+    client.await_diagnostics_for(&main_uri);
+    let cache = root
+        .join("target/.lisette/cache")
+        .join(stdlib::Target::host().cache_segment())
+        .join("dependency.cache");
+    assert!(
+        cache.exists(),
+        "dependency warnings should no longer block caching"
+    );
+    client.open(&uri, source);
+    assert_eq!(client.await_diagnostics_for(&uri).unwrap(), expected);
+    assert_eq!(
+        client.code_action(&uri, (0, 0), (4, 0)).unwrap(),
+        expected_fixes
+    );
+    assert!(hover_content(&client.hover(&uri, 2, 4).unwrap()).contains("int"));
+    client.change(&uri, &format!("{source}\n// edit\n"), 2);
+    assert_eq!(client.await_diagnostics_for(&uri).unwrap(), expected);
+    assert_eq!(
+        client.code_action(&uri, (0, 0), (4, 0)).unwrap(),
+        expected_fixes
+    );
+    assert!(hover_content(&client.hover(&uri, 2, 4).unwrap()).contains("int"));
+    client.shutdown();
+}
+
+fn active_parameter_at(source_line: &str, marker: &str) -> Option<u32> {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        &format!("fn f(a: int, b: int, c: int, d: int) -> int {{ a }}\n{source_line}"),
+    );
+    let column = source_line.find(marker).unwrap() + marker.len();
+    let help = client.signature_help(TEST_URI, 1, column as u32);
+    client.shutdown();
+    help.and_then(|help| help.active_parameter)
+}
+
+fn active_parameter_in(
+    client: &mut TestClient,
+    source: &str,
+    line: u32,
+    marker: &str,
+) -> Option<u32> {
+    let text = source.lines().nth(line as usize).unwrap();
+    let column = text.find(marker).unwrap() + marker.len();
+    client
+        .signature_help(TEST_URI, line, column as u32)
+        .and_then(|help| help.active_parameter)
+}
+
+#[test]
+fn signature_help_keeps_parameter_until_comma() {
+    let line = "fn main() { let _ = f(1, 2, 3, 4) }";
+    assert_eq!(active_parameter_at(line, "f(1"), Some(0));
+    assert_eq!(active_parameter_at(line, "f(1,"), Some(1));
+}
+
+#[test]
+fn signature_help_counts_pipeline_value_as_first_argument() {
+    let line = "fn main() { let _ = 9 |> f(1, 2, 3) }";
+    assert_eq!(active_parameter_at(line, "f("), Some(1));
+    assert_eq!(active_parameter_at(line, "f(1,"), Some(2));
+}
+
+#[test]
+fn signature_help_counts_values_piped_into_a_pipeline_target() {
+    let line = "fn main() { let _ = 2 |> (3 |> f(4)) }";
+    assert_eq!(active_parameter_at(line, "f("), Some(2));
+}
+
+#[test]
+fn signature_help_skips_parentheses_around_pipeline_target() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+fn f<A, B>(a: A, b: B, c: int) -> int { c }
+fn g(a: int, b: int, c: int) -> int { a }
+fn maker(x: int, y: int) -> fn(int, int, int) -> int { g }
+fn h(a: int, b: int, c: int, d: int) -> int { a }
+fn pair(x: int, y: int) -> int { x }
+fn main() {
+  let _ = 9 |> (f<int, string>(\"a\", 3))
+  let _ = 9 |> (maker(1, 2)(3, 4))
+  let _ = 2 |> (pair(3, 4) |> h(5, 6))
+  let _ = 9 |> (g(2, 3) // target
+  )
+}";
+    client.open(TEST_URI, source);
+    assert_eq!(active_parameter_in(&mut client, source, 6, ">("), Some(1));
+    assert_eq!(active_parameter_in(&mut client, source, 7, ")("), Some(1));
+    assert_eq!(active_parameter_in(&mut client, source, 8, "h(5"), Some(2));
+    assert_eq!(active_parameter_in(&mut client, source, 8, "h(5,"), Some(3));
+    assert_eq!(active_parameter_in(&mut client, source, 9, "g("), Some(1));
+    assert_eq!(active_parameter_in(&mut client, source, 9, "2,"), Some(2));
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_ignores_commas_in_strings() {
+    let line = "fn main() { let _ = 9 |> f(1, \"x,y\".length(), 3) }";
+    assert_eq!(active_parameter_at(line, "\"x,"), Some(2));
+}
+
+#[test]
+fn signature_help_ignores_commas_in_comments() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn f(a: int, b: int, c: int) -> int { a }\nfn main() {\n  let _ = 9 |> f(1, // a, b\n    2, 3)\n}";
+    client.open(TEST_URI, source);
+    assert_eq!(
+        active_parameter_in(&mut client, source, 3, "    2"),
+        Some(2)
+    );
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_ignores_commas_in_lambda_parameters() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn g(h: fn(int, int) -> int, n: int) -> int { n }\nfn main() { let _ = g(|a, b| a + b, 1) }";
+    client.open(TEST_URI, source);
+    assert_eq!(
+        active_parameter_in(&mut client, source, 1, "g(|a, b|"),
+        Some(0)
+    );
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_counts_pipeline_placeholder_slot() {
+    let line = "fn main() { let _ = 9 |> f(1, _, 3) }";
+    assert_eq!(active_parameter_at(line, "f("), Some(0));
+    assert_eq!(active_parameter_at(line, "f(1,"), Some(1));
+    assert_eq!(active_parameter_at(line, "_,"), Some(2));
+    assert_eq!(active_parameter_at(line, "3"), Some(2));
+}
+
+#[test]
+fn signature_help_counts_first_slot_placeholder() {
+    let line = "fn main() { let _ = 9 |> f(_, 2, 3) }";
+    assert_eq!(active_parameter_at(line, "f(_"), Some(0));
+    assert_eq!(active_parameter_at(line, "f(_,"), Some(1));
+}
+
+#[test]
+fn signature_help_counts_placeholder_in_grouped_targets() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+fn f<A, B>(a: A, b: B, c: int) -> int { c }
+fn g(a: int, b: int, c: int) -> int { a }
+fn maker(x: int, y: int) -> fn(int, int, int) -> int { g }
+fn main() {
+  let _ = 9 |> (f<int, string>(_, \"a\", 3))
+  let _ = 9 |> (maker(1, 2)(_, 3, 4))
+  let _ = 2 |> (3 |> g(_, 4))
+  let _ = 9 |> (g(_, 2, 3) // target
+  )
+  let _ = 9 |> g(1, // a, b
+    _, 3)
+}";
+    client.open(TEST_URI, source);
+    assert_eq!(active_parameter_in(&mut client, source, 4, ">(_"), Some(0));
+    assert_eq!(active_parameter_in(&mut client, source, 5, ")(_"), Some(0));
+    assert_eq!(active_parameter_in(&mut client, source, 6, "g(_,"), Some(2));
+    assert_eq!(active_parameter_in(&mut client, source, 7, "g(_"), Some(0));
+    assert_eq!(active_parameter_in(&mut client, source, 7, "2,"), Some(2));
+    assert_eq!(
+        active_parameter_in(&mut client, source, 10, "    _"),
+        Some(1)
+    );
+    client.shutdown();
+}

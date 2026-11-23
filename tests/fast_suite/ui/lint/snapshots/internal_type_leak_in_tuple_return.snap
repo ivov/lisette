@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Private type `PrivateA` in public API
+    ╭─[test.lis:10:23]
+  9 │ 
+ 10 │ pub fn get_pair() -> (PrivateA, PrivateB) {
+    ·                       ────┬───
+    ·                           ╰── exposed by `get_pair`
+ 11 │   (PrivateA { _a: 1 }, PrivateB { _b: 2 })
+    ╰────
+  help: Add `pub` to the private type or remove it from the public API. `PrivateA` is private but exposed by `get_pair`, which is public · code: [lint.internal_type_leak]

@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Duplicate method
+   ╭─[test.lis:3:6]
+ 2 │ interface I {
+ 3 │   fn f();
+   ·      ┬
+   ·      ╰── first defined
+ 4 │   fn f();
+   ·      ┬
+   ·      ╰── defined again
+ 5 │ }
+   ╰────
+  help: Remove the duplicate method `f` · code: [parse.duplicate_interface_method]

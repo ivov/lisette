@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> Option<Option<int>> {
+    Some(Some(42))
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() (lisette.Option[int], bool) {
+	return lisette.MakeOptionSome(42), true
+}

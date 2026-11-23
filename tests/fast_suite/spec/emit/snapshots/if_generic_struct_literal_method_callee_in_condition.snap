@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct Box<T> { v: T }
+  
+  impl<T> Box<T> {
+    fn ok(self) -> bool { true }
+  }
+  
+  fn test() {
+    if Box { v: 1 }.ok() {
+      let _ = 1
+    }
+  }
+---
+package main
+
+type Box[T any] struct {
+	v T
+}
+
+func (b Box[T]) ok() bool {
+	return true
+}
+
+func test() {
+	if (Box[int]{v: 1}).ok() {
+	}
+}

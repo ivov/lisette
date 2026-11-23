@@ -1,0 +1,57 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum E { A(int), B(int), C }
+  fn test() {
+    let x = 5
+    let e = E.C
+    while let E.A(x) | E.B(x) = e {
+      panic("unexpected")
+    }
+    if x != 5 { panic("shadow") }
+  }
+---
+package main
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+}
+
+func test() {
+	x := 5
+	e := MakeEC()
+	for {
+		if e.Tag == EA {
+			panic("unexpected")
+		} else if e.Tag == EB {
+			panic("unexpected")
+		}
+		break
+	}
+	if x != 5 {
+		panic("shadow")
+	}
+}

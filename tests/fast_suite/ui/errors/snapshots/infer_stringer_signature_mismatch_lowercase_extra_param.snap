@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Reserved method signature
+   ╭─[test.lis:5:6]
+ 4 │ impl A {
+ 5 │   fn string(self, prefix: string) -> string {
+   ·      ───┬──
+   ·         ╰── `string` must have signature `(self) -> string`
+ 6 │     prefix + self.a
+   ╰────
+  help: Change the signature to `(self) -> string`, or rename the method. `string` is reserved for the Go `fmt.Stringer` (or `fmt.GoStringer`) interface and is auto-emitted by Lisette · code: [infer.stringer_signature_mismatch]

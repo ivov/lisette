@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Face interface {
+}
+
+func Resolve[T any, R any, E any](a T, f func(T) lisette.Result[R, E]) lisette.Result[R, E] {
+	return f(a)
+}
+
+func main() {
+	Resolve(42, func(x int) lisette.Result[int, Face] {
+		return lisette.MakeResultOk[int, Face](x)
+	})
+}

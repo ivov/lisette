@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  enum E {
+    A, // trailing variant
+    B,
+    C,
+  }
+---
+enum E {
+  A, // trailing variant
+  B,
+  C,
+}

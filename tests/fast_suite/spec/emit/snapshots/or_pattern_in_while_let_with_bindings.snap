@@ -1,0 +1,57 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum E { A(int), B(int) }
+  
+  fn test() -> int {
+    let mut current: Option<E> = Some(E.A(5));
+    let mut sum = 0;
+    while let Some(E.A(x)) | Some(E.B(x)) = current {
+      sum = sum + x;
+      current = None;
+    }
+    sum
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+}
+
+func test() int {
+	current := lisette.MakeOptionSome(MakeEA(5))
+	sum := 0
+	for {
+		if current.Tag == lisette.OptionSome && current.SomeVal.Tag == EA {
+			sum += current.SomeVal.A
+			current = lisette.MakeOptionNone[E]()
+		} else if current.Tag == lisette.OptionSome && current.SomeVal.Tag == EB {
+			sum += current.SomeVal.B
+			current = lisette.MakeOptionNone[E]()
+		} else {
+			break
+		}
+	}
+	return sum
+}

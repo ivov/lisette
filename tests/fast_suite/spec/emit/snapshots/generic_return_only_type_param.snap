@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn default_value<T>() -> Option<T> {
+    None
+  }
+  
+  fn test() -> Option<int> {
+    default_value()
+  }
+---
+package main
+
+func defaultValue[T any]() (T, bool) {
+	var zero T
+	return zero, false
+}
+
+func test() (int, bool) {
+	return defaultValue[int]()
+}

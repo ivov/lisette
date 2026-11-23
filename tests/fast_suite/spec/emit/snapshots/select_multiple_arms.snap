@@ -1,0 +1,52 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() -> int {
+    let ch1 = Channel.new<int>();
+    let ch2 = Channel.new<int>();
+    let ch3 = Channel.new<int>();
+  
+    select {
+      match ch1.receive() {
+        Some(val) => val,
+        None => 0,
+      },
+      match ch2.receive() {
+        Some(val) => val,
+        None => 0,
+      },
+      match ch3.receive() {
+        Some(val) => val,
+        None => 0,
+      },
+      _ => 0,
+    }
+  }
+---
+package main
+
+func test() int {
+	ch1 := make(chan int)
+	ch2 := make(chan int)
+	ch3 := make(chan int)
+	select {
+	case val, ok := <-ch1:
+		if ok {
+			return val
+		}
+		return 0
+	case val, ok := <-ch2:
+		if ok {
+			return val
+		}
+		return 0
+	case val, ok := <-ch3:
+		if ok {
+			return val
+		}
+		return 0
+	default:
+		return 0
+	}
+}

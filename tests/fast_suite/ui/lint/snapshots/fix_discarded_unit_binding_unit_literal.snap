@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/ui/lint/fixes.rs
+---
+fn main() {
+  let _ = ()
+}
+=== fixed ===
+fn main() {
+}

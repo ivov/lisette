@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ trait Displayable {
+   · ──┬──
+   ·   ╰── unexpected `trait`
+ 3 │   fn display() -> string
+   ╰────
+  help: Lisette uses `interface` in place of `trait`. Types automatically satisfy interfaces if they have the required methods · code: [parse.trait_unsupported]

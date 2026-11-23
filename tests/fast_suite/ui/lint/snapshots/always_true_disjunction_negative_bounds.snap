@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ✕ Always-true comparison
+   ╭─[test.lis:4:11]
+ 3 │   let x = 0;
+ 4 │   let _ = x >= -3 || x <= 0
+   ·           ────────┬────────
+   ·                   ╰── always `true`
+ 5 │ }
+   ╰────
+  help: Check the bounds, or did you mean `&&`? Every value satisfies at least one side, so this `||` is always `true` · code: [infer.always_true_disjunction]

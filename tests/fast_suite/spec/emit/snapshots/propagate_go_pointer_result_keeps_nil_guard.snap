@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  fn open_first(path: string) -> Result<int, error> {
+    let _ = os.Open(path)?
+    Ok(0)
+  }
+---
+package main
+
+import (
+	"errors"
+	"os"
+)
+
+func openFirst(path string) (int, error) {
+	ret, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	if ret == nil {
+		return 0, errors.New("unexpected nil")
+	}
+	return 0, nil
+}

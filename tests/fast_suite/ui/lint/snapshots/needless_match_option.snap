@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Needless `match`
+   ╭─[test.lis:4:11]
+ 3 │   let o: Option<int> = Some(1)
+ 4 │   let _ = match o {
+   ·           ──┬──
+   ·             ╰── unnecessary
+ 5 │     Some(x) => Some(x),
+   ╰────
+  help: Replace this `match` with `o`. Every arm rebuilds the subject unchanged · code: [lint.needless_match]

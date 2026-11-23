@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f() -> int {
+    let g = |
+      a: int,
+      // between lambda params
+      b: int,
+    | a + b
+    g(1, 2)
+  }
+---
+fn f() -> int {
+  let g = |
+    a: int,
+    // between lambda params
+    b: int,
+  | a + b
+  g(1, 2)
+}

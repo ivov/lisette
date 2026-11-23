@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:4:3]
+ 3 │   Ok,
+ 4 │   ^
+   ·   ┬
+   ·   ╰── expected variant name
+ 5 │   Error,
+   ╰────
+  help: Variant names must be identifiers · code: [parse.syntax_error]

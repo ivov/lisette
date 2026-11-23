@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    let p = P { v: 1 }
+    let _ = match p {
+      P { v } => (),
+    }
+  }
+---
+package main
+
+type P struct {
+	v int
+}
+
+func test() {
+	var tmp struct{}
+	tmp = struct{}{}
+	_ = tmp
+}

@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match items { [] => \"empty\", _ => \"not empty\" } }"
+---
+fn test() {
+  match items {
+    [] => "empty",
+    _ => "not empty",
+  }
+}

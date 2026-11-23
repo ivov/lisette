@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  pub interface Printable {
+    fn to_string() -> string
+  }
+  
+  struct Box { label: string }
+  impl Box {
+    pub fn to_string(self) -> string { self.label }
+  }
+  
+  fn test() {
+    let p: Printable = Box { label: "hello" }
+  }
+---
+package main
+
+type Printable interface {
+	ToString() string
+}
+
+type Box struct {
+	label string
+}
+
+func (b Box) ToString() string {
+	return b.label
+}
+
+func test() {
+	_ = Box{label: "hello"}
+}

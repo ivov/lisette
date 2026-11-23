@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: |-
+  "a
+  b"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: String,
+            text: "\"a\nb\"",
+            byte_offset: 0,
+            byte_length: 5,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 5,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

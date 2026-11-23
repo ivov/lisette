@@ -1,0 +1,60 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  enum Color { Red, Green, Blue }
+  
+  impl Color {
+    fn name(self) -> string {
+      match self {
+        Color.Red => "red",
+        Color.Green => "green",
+        Color.Blue => "blue",
+      }
+    }
+  }
+  
+  fn test() -> string {
+    Color.Red.name()
+  }
+---
+package main
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag uint8
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) name() string {
+	switch c.Tag {
+	case ColorRed:
+		return "red"
+	case ColorGreen:
+		return "green"
+	default:
+		return "blue"
+	}
+}
+
+func test() string {
+	return MakeColorRed().name()
+}

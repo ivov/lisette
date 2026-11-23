@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    select {
+      let Some(v) = ch1.receive() => handle(v),
+      match ch2.receive() {
+        Some(x) => process(x),
+        None => close(),
+      },
+      _ => timeout(),
+    }
+  }
+---
+fn test() {
+  select {
+    let Some(v) = ch1.receive() => handle(v),
+    match ch2.receive() {
+      Some(x) => process(x),
+      None => close(),
+    },
+    _ => timeout(),
+  }
+}

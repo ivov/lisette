@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "0xDeAdBeEf"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Integer,
+            text: "0xDeAdBeEf",
+            byte_offset: 0,
+            byte_length: 10,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 10,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

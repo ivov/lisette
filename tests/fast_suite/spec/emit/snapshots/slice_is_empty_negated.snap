@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>) -> bool {
+    !s.is_empty()
+  }
+---
+package main
+
+func test(s []int) bool {
+	return len(s) != 0
+}

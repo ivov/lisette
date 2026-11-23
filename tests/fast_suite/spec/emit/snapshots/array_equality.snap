@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn same(a: Array<int, 2>, b: Array<int, 2>) -> bool {
+    a == b
+  }
+---
+package main
+
+func same(a, b [2]int) bool {
+	return a == b
+}

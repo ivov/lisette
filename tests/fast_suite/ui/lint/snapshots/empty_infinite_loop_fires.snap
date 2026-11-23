@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ✕ Empty infinite loop
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   loop {}
+   ·   ───┬───
+   ·      ╰── busy-spins
+ 4 │ }
+   ╰────
+  help: Block on a channel, call `time.Sleep`, or add a `break`. An empty `loop` spins forever at 100% CPU · code: [infer.empty_infinite_loop]

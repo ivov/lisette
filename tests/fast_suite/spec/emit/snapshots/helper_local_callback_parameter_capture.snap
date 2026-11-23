@@ -1,0 +1,80 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn next(arg0: int) -> Option<int> { Some(arg0 + 1) }
+  fn main() {
+    let arg0 = 7
+    let cb = || {
+      let arg0 = Option.and_then(Some(arg0), next).unwrap_or(0)
+      let read = || arg0
+      read()
+    }
+    let mut pending = Some(2)
+    let mut total = 0
+    while let Some(arg0) = pending {
+      total += arg0 + cb()
+      pending = None
+    }
+    let ch = Channel.buffered<int>(1)
+    ch.send(3)
+    total += select {
+      let Some(arg0) = ch.receive() => arg0 + cb(),
+      _ => 0,
+    }
+    if total != 21 || arg0 != 7 { panic("callback parameter identity") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func next(arg0 int) (int, bool) {
+	return arg0 + 1, true
+}
+
+func main() {
+	arg0 := 7
+	cb := func() int {
+		arg0_2 := lisette.OptionAndThen(lisette.MakeOptionSome(arg0), func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](next(arg0))
+		}).UnwrapOr(0)
+		read := func() int {
+			return arg0_2
+		}
+		return read()
+	}
+	pending := lisette.MakeOptionSome(2)
+	total := 0
+	for {
+		if pending.Tag == lisette.OptionSome {
+			left := pending.SomeVal
+			total += left + cb()
+			pending = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 3)
+	left2 := total
+	var tmp int
+	for {
+		select {
+		case arg0, ok := <-ch:
+			if ok {
+				tmp = arg0 + cb()
+			} else {
+				ch = nil
+				continue
+			}
+		default:
+			tmp = 0
+		}
+		break
+	}
+	total = left2 + tmp
+	if total != 21 || arg0 != 7 {
+		panic("callback parameter identity")
+	}
+}

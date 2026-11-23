@@ -1,0 +1,64 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Cell { a: int, b: int }
+  
+  impl Cell {
+    fn add<T>(self: mut Ref<Cell>, delta: int) {
+      self.b += delta
+    }
+  }
+  
+  fn seed() -> Result<int, error> {
+    Ok(1)
+  }
+  
+  fn bump(i: mut Ref<int>) -> Result<int, error> {
+    i.* = 99
+    Ok(7)
+  }
+  
+  fn run() -> Result<(), error> {
+    let mut i = 0
+    Cell { a: seed()?, b: i }.add<int>(bump(&i)?)
+    Ok(())
+  }
+---
+package main
+
+type Cell struct {
+	a int
+	b int
+}
+
+func cellAdd[T any](self *Cell, delta int) {
+	self.b += delta
+}
+
+func seed() (int, error) {
+	return 1, nil
+}
+
+func bump(i *int) (int, error) {
+	*i = 99
+	return 7, nil
+}
+
+func run() error {
+	i := 0
+	ret, err := seed()
+	if err != nil {
+		return err
+	}
+	ref := &Cell{
+		a: ret,
+		b: i,
+	}
+	ret2, err := bump(&i)
+	if err != nil {
+		return err
+	}
+	cellAdd[int](ref, ret2)
+	return nil
+}

@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let items = [(1,2), (3,4)]
+    let mut sum = 0
+    for (i, (a, b)) in items.enumerate() {
+      sum = sum + a + b
+    }
+    sum
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	items := []lisette.Tuple2[int, int]{
+		lisette.MakeTuple2[int, int](1, 2),
+		lisette.MakeTuple2[int, int](3, 4),
+	}
+	sum := 0
+	for key, value := range items {
+		_ = key
+		a := value.First
+		b := value.Second
+		sum = sum + a + b
+	}
+	return sum
+}

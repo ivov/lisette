@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> int {
+    let mut pair = (10, 20);
+    pair.0 = 99;
+    pair.0
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	pair := lisette.MakeTuple2[int, int](10, 20)
+	pair.First = 99
+	return pair.First
+}

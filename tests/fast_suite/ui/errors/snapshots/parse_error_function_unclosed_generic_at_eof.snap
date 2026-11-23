@@ -1,0 +1,8 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:1:6]
+ 1 │ fn f<
+   ╰────
+  code: [parse.unexpected_token]

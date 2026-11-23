@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(items: Slice<string>) -> string {
+    items
+      .map(|s| s + "!")
+      .filter(|s| s.length() > 2)
+      .join(", ")
+  }
+---
+package main
+
+import "strings"
+
+func test(items []string) string {
+	result := make([]string, len(items))
+	for i, s := range items {
+		result[i] = s + "!"
+	}
+	var result2 []string
+	for _, s := range result {
+		if len(s) > 2 {
+			result2 = append(result2, s)
+		}
+	}
+	return strings.Join(result2, ", ")
+}

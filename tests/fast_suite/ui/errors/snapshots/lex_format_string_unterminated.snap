@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unterminated format string
+   ╭─[test.lis:1:9]
+ 1 │ let x = f"hello {name}
+   ·         ─┬
+   ·          ╰── format string not completed
+   ╰────
+  help: Add a closing double quote · code: [lex.format_string_unterminated]

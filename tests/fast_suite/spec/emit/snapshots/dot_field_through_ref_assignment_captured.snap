@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct P { x: int }
+  struct H { ptr: mut Ref<P> }
+  
+  impl H {
+    fn repoint(self: mut Ref<H>, q: mut Ref<P>) -> int {
+      self.ptr = q
+      9
+    }
+  }
+  
+  fn main() {
+    let mut a = P { x: 1 }
+    let mut b = P { x: 2 }
+    let mut h = H { ptr: &a }
+    h.ptr.x = h.repoint(&b)
+    let _ = a
+    let _ = b
+  }
+---
+package main
+
+type P struct {
+	x int
+}
+
+type H struct {
+	ptr *P
+}
+
+func (h *H) repoint(q *P) int {
+	h.ptr = q
+	return 9
+}
+
+func main() {
+	a := P{x: 1}
+	b := P{x: 2}
+	h := H{ptr: &a}
+	h.ptr.x = h.repoint(&b)
+	_ = a
+	_ = b
+}

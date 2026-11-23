@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct UserId(int)
+  
+  fn raw() -> int { 1 }
+  
+  fn take(u: UserId) {
+    let _ = u
+  }
+  
+  fn test() {
+    let mut id = UserId(0)
+    id = raw() as UserId
+    take(id)
+  }
+---
+package main
+
+type UserId int
+
+func raw() int {
+	return 1
+}
+
+func take(u UserId) {
+	_ = u
+}
+
+func test() {
+	id := UserId(0)
+	id = UserId(raw())
+	take(id)
+}

@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match shape { Shape.Circle { radius, .. } => radius, _ => 0 } }"
+---
+fn test() {
+  match shape {
+    Shape.Circle { radius, .. } => radius,
+    _ => 0,
+  }
+}

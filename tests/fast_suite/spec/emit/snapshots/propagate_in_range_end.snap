@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn g() -> Result<int, string> { Ok(5) }
+  
+  fn f() -> Result<int, string> {
+    let mut s = 0
+    for i in 0..g()? { s = s + i }
+    Ok(s)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func g() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](5)
+}
+
+func f() lisette.Result[int, string] {
+	s := 0
+	check := g()
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	for i := range check.OkVal {
+		s += i
+	}
+	return lisette.MakeResultOk[int, string](s)
+}

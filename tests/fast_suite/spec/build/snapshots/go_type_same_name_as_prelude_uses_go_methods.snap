@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+	m := sync.Map{}
+	m.Store("key", "value")
+	if v, ok := m.Load("key"); ok {
+		fmt.Printf("got: %v\n", v)
+	} else {
+		fmt.Println("not found")
+	}
+}

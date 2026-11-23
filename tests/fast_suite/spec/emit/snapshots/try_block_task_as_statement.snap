@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn risky() -> Result<int, string> { Ok(1) }
+  fn do_something() { }
+  
+  fn test() {
+    let r = try {
+      let x = risky()?;
+      task { do_something() };
+      x
+    };
+    let _ = r;
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func risky() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func doSomething() {}
+
+func test() {
+	r := func() lisette.Result[int, string] {
+		check := risky()
+		if check.Tag != lisette.ResultOk {
+			return check
+		}
+		x := check.OkVal
+		go func() {
+			doSomething()
+		}()
+		return lisette.MakeResultOk[int, string](x)
+	}()
+	_ = r
+}

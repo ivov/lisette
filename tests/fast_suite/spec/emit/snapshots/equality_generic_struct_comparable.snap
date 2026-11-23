@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Box<T: Comparable> { value: T }
+---
+package main
+
+type Box[T comparable] struct {
+	value T
+}
+
+func (b Box[T]) equals(other Box[T]) bool {
+	return b.value == other.value
+}

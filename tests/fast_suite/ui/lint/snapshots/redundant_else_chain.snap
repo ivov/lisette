@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Redundant `else`
+   ╭─[test.lis:6:5]
+ 5 │     return 0
+ 6 │   } else if d {
+   ·     ──┬─
+   ·       ╰── unnecessary
+ 7 │     count += 1
+   ╰────
+  help: Drop `else` and move its body to follow the `if`. The `if` branch always exits, so the `else` only adds nesting · code: [lint.redundant_else]

@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Holder {
+    slc: Slice<()>,
+  }
+  
+  fn main() {
+    let mut h = Holder { slc: [] }
+    let bump = || { (&h).slc = [(), (), ()] }
+    let ys = {
+      h.slc.append(bump())
+    }
+    if ys.length() != 1 {
+      panic("the receiver must be read before argument effects run")
+    }
+  }
+---
+package main
+
+import "slices"
+
+type Holder struct {
+	slc []struct{}
+}
+
+func main() {
+	h := Holder{slc: []struct{}{}}
+	bump := func() struct{} {
+		h.slc = []struct{}{{}, {}, {}}
+		return struct{}{}
+	}
+	arg := h.slc
+	bump()
+	ys := append(slices.Clip(arg), struct{}{})
+	if len(ys) != 1 {
+		panic("the receiver must be read before argument effects run")
+	}
+}

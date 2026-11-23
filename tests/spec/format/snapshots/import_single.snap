@@ -1,5 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "import \"go:fmt\""
----
-import "go:fmt"

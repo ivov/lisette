@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(x: int) -> int {
+    if x > 10 {
+      100
+    } else if x > 5 {
+      50
+    } else {
+      10
+    }
+  }
+---
+package main
+
+func test(x int) int {
+	if x > 10 {
+		return 100
+	} else if x > 5 {
+		return 50
+	}
+	return 10
+}

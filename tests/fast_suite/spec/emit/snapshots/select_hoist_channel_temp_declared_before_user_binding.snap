@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn get_ch() -> Channel<int> {
+    Channel.buffered<int>(1)
+  }
+  
+  fn test() -> int {
+    let result = select {
+      let Some(v) = get_ch().receive() => v,
+      _ => 0,
+    }
+    let ch_1 = result + 1
+    ch_1
+  }
+---
+package main
+
+func getCh() chan int {
+	return make(chan int, 1)
+}
+
+func test() int {
+	var result int
+	ch := getCh()
+	for {
+		select {
+		case v, ok := <-ch:
+			if ok {
+				result = v
+			} else {
+				ch = nil
+				continue
+			}
+		default:
+			result = 0
+		}
+		break
+	}
+	ch1 := result + 1
+	return ch1
+}

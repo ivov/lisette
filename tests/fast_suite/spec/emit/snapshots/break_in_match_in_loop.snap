@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(items: Slice<int>) -> int {
+    let mut sum = 0
+    for item in items {
+      match item {
+        0 => break,
+        n => sum += n,
+      }
+    }
+    sum
+  }
+---
+package main
+
+func test(items []int) int {
+	sum := 0
+	for _, item := range items {
+		if item == 0 {
+			break
+		}
+		sum += item
+	}
+	return sum
+}

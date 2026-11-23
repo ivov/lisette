@@ -1,0 +1,49 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Holder { p: mut Ref<int> }
+  struct Carrier { h: mut Ref<Holder>, np: mut Ref<int> }
+  
+  fn retarget(c: mut Carrier) -> int {
+    c.h.p = c.np
+    9
+  }
+  
+  fn main() {
+    let mut a = 1
+    let mut b = 2
+    let mut h = Holder { p: &a }
+    let mut c = Carrier { h: &h, np: &b }
+    h.p.* = retarget(c)
+    let _ = a
+  }
+---
+package main
+
+type Holder struct {
+	p *int
+}
+
+type Carrier struct {
+	h  *Holder
+	np *int
+}
+
+func retarget(c Carrier) int {
+	c.h.p = c.np
+	return 9
+}
+
+func main() {
+	a := 1
+	b := 2
+	h := Holder{p: &a}
+	c := Carrier{
+		h:  &h,
+		np: &b,
+	}
+	ref := h.p
+	*ref = retarget(c)
+	_ = a
+}

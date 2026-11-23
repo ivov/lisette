@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn sum_parsed(a: string, b: string) -> Result<int, error> {
+    try {
+      let x = strconv.Atoi(a)?
+      let y = strconv.Atoi(b)?
+      x + y
+    }
+  }
+  
+  fn main() {
+    match sum_parsed("3", "4") {
+      Ok(n) => { let _ = n },
+      Err(_) => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import "strconv"
+
+func sumParsed(a, b string) (int, error) {
+	x, err := strconv.Atoi(a)
+	if err != nil {
+		return 0, err
+	}
+	y, err := strconv.Atoi(b)
+	if err != nil {
+		return 0, err
+	}
+	return x + y, nil
+}
+
+func main() {
+	if n, err := sumParsed("3", "4"); err == nil {
+		_ = n
+	}
+}

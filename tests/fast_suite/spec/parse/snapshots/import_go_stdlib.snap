@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  import "go:fmt"
+---
+[
+    PackageImport {
+        name: "go:fmt",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 8,
+        },
+        alias: None,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 15,
+        },
+    },
+]

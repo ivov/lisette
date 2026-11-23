@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unknown go hint `comma_okay`
+   ╭─[typedef.d.lis:2:1]
+ 1 │ 
+ 2 │ #[go(comma_okay)]
+   · ────────┬────────
+   ·         ╰── not one of the hints `lis add` emits
+ 3 │ pub fn Get() -> Option<int>
+   ╰────
+  help: Regenerate this typedef by re-running `lis add`. The hint in this attribute is not recognized · code: [attribute.unknown]

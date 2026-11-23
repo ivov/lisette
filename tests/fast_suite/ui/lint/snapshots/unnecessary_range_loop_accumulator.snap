@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Unnecessary range loop
+   ╭─[test.lis:5:12]
+ 4 │   let mut total = 0
+ 5 │   for i in 0..xs.length() {
+   ·            ───────┬──────
+   ·                   ╰── can be simpler
+ 6 │     total += xs[i]
+   ╰────
+  help: Iterate directly over the elements with `for value in xs`. This loop exposes the index only to access elements of `xs` · code: [lint.unnecessary_range_loop]

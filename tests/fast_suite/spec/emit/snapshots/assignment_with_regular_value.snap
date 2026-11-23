@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() {
+    let mut x = 0;
+    x = 42;
+  }
+---
+package main
+
+func test() {}

@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:path/filepath"
+  import "go:io/fs"
+  
+  fn main() {
+    let walker: filepath.WalkFunc = |_path: string, _info: Option<fs.FileInfo>, _err: Option<error>| -> Result<(), error> {
+      Ok(())
+    }
+    let _ = filepath.Walk("/tmp", walker)
+  }
+---
+package main
+
+import (
+	"io/fs"
+	"path/filepath"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	cb := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {
+		return nil
+	}
+	var walker filepath.WalkFunc = func(arg0 string, arg1 fs.FileInfo, arg2 error) error {
+		option := lisette.OptionFromNilable[fs.FileInfo](arg1, lisette.IsNilInterface(arg1))
+		option2 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
+		return cb(arg0, option, option2)
+	}
+	filepath.Walk("/tmp", filepath.WalkFunc(walker))
+}

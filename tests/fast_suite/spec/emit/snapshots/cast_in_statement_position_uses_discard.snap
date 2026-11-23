@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let x = 1
+    x as float64
+  }
+---
+package main
+
+func main() {
+	x := 1
+	_ = float64(x)
+}

@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() -> int {
+    defer fmt.Print("cleanup");
+    42
+  }
+---
+package main
+
+import "fmt"
+
+func test() int {
+	defer fmt.Print("cleanup")
+	return 42
+}

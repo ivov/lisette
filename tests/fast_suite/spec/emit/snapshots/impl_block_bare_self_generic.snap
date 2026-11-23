@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Container<T> { value: T }
+  
+  impl<T> Container<T> {
+    fn get(self) -> T {
+      self.value
+    }
+  }
+  
+  fn main() {
+    let c = Container { value: 42 };
+    let v = c.get();
+  }
+---
+package main
+
+type Container[T any] struct {
+	value T
+}
+
+func (c Container[T]) get() T {
+	return c.value
+}
+
+func main() {
+	c := Container[int]{value: 42}
+	c.get()
+}

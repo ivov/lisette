@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:context"
+  import "go:fmt"
+  
+  fn main() {
+    let ctx = context.Background()
+    match ctx.Err() {
+      Some(e) => fmt.Println(e.Error()),
+      None => fmt.Println("no error"),
+    }
+  }
+---
+package main
+
+import (
+	"context"
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ctx := context.Background()
+	if e := ctx.Err(); !lisette.IsNilInterface(e) {
+		fmt.Println(e.Error())
+	} else {
+		fmt.Println("no error")
+	}
+}

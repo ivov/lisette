@@ -8,7 +8,8 @@ permissions:
   issues: write
 
 jobs:
-  fuzz:
+  cargo-fuzz:
+    name: cargo fuzz (${{ matrix.target }})
     if: github.repository == 'ivov/lisette'
     runs-on: ubuntu-latest
     strategy:
@@ -96,7 +97,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  rewrite:
+  test-fuzz:
+    name: Fuzz tests
     if: github.repository == 'ivov/lisette'
     runs-on: ubuntu-latest
     steps:
@@ -104,24 +106,58 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
+          just: 'true'
           go: 'true'
+          go-cache: 'false'
 
-      - name: Rewrite suite
-        run: cargo test -p tests --test rewrite_suite --locked -- --nocapture
+      - name: Fuzz tests
+        env:
+          FUZZ_SEED: ${{ github.run_id }}
+          FUZZ_OUT: ${{ runner.temp }}/fuzz-emit
+        run: just test-fuzz 1500
+
+      - name: Upload findings
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
+        with:
+          name: test-fuzz-findings
+          path: |
+            ${{ runner.temp }}/fuzz-emit/new/
+            ${{ runner.temp }}/fuzz-emit/hang/
+            ${{ runner.temp }}/fuzz-emit/summary.txt
+          if-no-files-found: ignore
 
       - name: Create issue on failure
         if: failure()
         run: |
-          open=$(gh issue list --repo ivov/lisette --state open --search 'in:title "rewrite-suite failure"' --json title --jq '[.[] | select(.title == "rewrite-suite failure")] | length')
+          open=$(gh issue list --repo ivov/lisette --state open --search 'in:title "test-fuzz failure"' --json title --jq '[.[] | select(.title == "test-fuzz failure")] | length')
           if [ "$open" != "0" ]; then
-            echo "An open rewrite-suite issue already exists"
+            echo "An open test-fuzz issue already exists"
             exit 0
           fi
+          out="$RUNNER_TEMP/fuzz-emit"
+          body="$RUNNER_TEMP/issue.md"
+          {
+            echo "\`fuzz_emit\` failed in a scheduled run: a program that \`lis check\` accepts crashed or failed \`go build\`, or a failure in \`tests/fuzz_emit/failing.txt\` changed. The \`test-fuzz-findings\` artifact holds all failing programs."
+            echo
+            echo "**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            if [ -f "$out/summary.txt" ]; then
+              printf '\n## Summary\n\n```\n'
+              head -c 20000 "$out/summary.txt"
+              printf '\n```\n'
+            fi
+            first=$(ls "$out"/new/*.lis 2>/dev/null | head -1)
+            if [ -n "$first" ]; then
+              printf '\n## First failing program: `%s`\n\n```rust\n' "$(basename "$first")"
+              head -c 15000 "$first"
+              printf '\n```\n\n## Its error\n\n```\n'
+              head -c 15000 "${first%.lis}.txt"
+              printf '\n```\n'
+            fi
+          } > "$body"
           gh issue create \
             --repo ivov/lisette \
-            --title "rewrite-suite failure" \
-            --body "The rewrite suite failed in a scheduled run. The \`Rewrite suite\` step log lists each failing variant with its change and its first error. To get the variant files, run \`cargo test -p tests --test rewrite_suite\` locally.
-
-          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --title "test-fuzz failure" \
+            --body-file "$body"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

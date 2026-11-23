@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn get_start(r: Ref<Range<int>>) -> int {
+    r.start
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func getStart(r *lisette.Range[int]) int {
+	return r.Start
+}

@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn main() {
+    let s = [1, 2, 3]
+    let r = &s
+    for v in r {
+      let _ = v
+    }
+  }
+---
+package main
+
+func main() {
+	s := []int{1, 2, 3}
+	r := &s
+	for _, v := range *r {
+		_ = v
+	}
+}

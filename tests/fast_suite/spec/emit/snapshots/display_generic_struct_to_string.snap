@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Box<T> { value: T }
+---
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func (b Box[T]) toString() string {
+	return b.String()
+}

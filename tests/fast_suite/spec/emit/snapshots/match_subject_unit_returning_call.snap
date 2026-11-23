@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn noop() {}
+  
+  fn main() {
+    let x = match noop() {
+      () => 1,
+    }
+    let _ = x
+  }
+---
+package main
+
+func noop() {}
+
+func main() {
+	var x int
+	noop()
+	_ = struct{}{}
+	x = 1
+	_ = x
+}

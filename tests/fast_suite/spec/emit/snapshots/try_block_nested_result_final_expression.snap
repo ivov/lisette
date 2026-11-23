@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn risky() -> Result<int, string> { Ok(1) }
+  fn nested() -> Result<int, string> { Ok(1) }
+  
+  fn test() -> Result<Result<int, string>, string> {
+    let r = try {
+      let _ = risky()?;
+      nested()
+    };
+    r
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func risky() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func nested() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func test() lisette.Result[lisette.Result[int, string], string] {
+	check := risky()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[lisette.Result[int, string], string](check.ErrVal)
+	}
+	return lisette.MakeResultOk[lisette.Result[int, string], string](nested())
+}

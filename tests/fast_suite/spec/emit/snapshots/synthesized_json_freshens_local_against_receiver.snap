@@ -1,0 +1,87 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[json]
+  enum Vault {
+    Full { a: int, b: int },
+  }
+  
+  fn test() -> int {
+    match Vault.Full { a: 1, b: 2 } {
+      Vault.Full { a, b } => a + b,
+    }
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+func MakeVaultFull(arg0, arg1 int) Vault {
+	return Vault{Tag: VaultFull, A: arg0, B: arg1}
+}
+
+type VaultTag uint8
+
+const (
+	VaultFull VaultTag = iota
+)
+
+type Vault struct {
+	Tag VaultTag
+	A   int
+	B   int
+}
+
+func (v Vault) MarshalJSON() ([]byte, error) {
+	switch v.Tag {
+	case VaultFull:
+		return json.Marshal(map[string]any{"Full": map[string]any{"a": v.A, "b": v.B}})
+	default:
+		return nil, fmt.Errorf("unknown Vault tag: %d", v.Tag)
+	}
+}
+
+func (v *Vault) UnmarshalJSON(data []byte) error {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return errors.New("invalid Vault JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Full":
+			v.Tag = VaultFull
+			var inner map[string]json.RawMessage
+			if err := json.Unmarshal(val, &inner); err != nil {
+				return err
+			}
+			if v2, ok := inner["a"]; ok {
+				if err := json.Unmarshal(v2, &v.A); err != nil {
+					return err
+				}
+			}
+			if v2, ok := inner["b"]; ok {
+				if err := json.Unmarshal(v2, &v.B); err != nil {
+					return err
+				}
+			}
+			return nil
+		default:
+			return fmt.Errorf("unknown Vault variant: %s", key)
+		}
+	}
+	return errors.New("empty Vault JSON object")
+}
+
+func test() int {
+	subject := Vault{
+		Tag: VaultFull,
+		A:   1,
+		B:   2,
+	}
+	return subject.A + subject.B
+}

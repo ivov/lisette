@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn inner() {
+    fmt.Print(f"Nested task");
+  }
+  
+  fn outer() {
+    task inner()
+  }
+  
+  fn test() {
+    task outer()
+  }
+---
+package main
+
+import "fmt"
+
+func inner() {
+	fmt.Print("Nested task")
+}
+
+func outer() {
+	go inner()
+}
+
+func test() {
+	go outer()
+}

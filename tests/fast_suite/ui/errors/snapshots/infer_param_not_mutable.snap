@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Immutable variable
+   ╭─[test.lis:3:3]
+ 2 │ fn test(count: int) {
+ 3 │   count = 20;
+   ·   ─────┬────
+   ·        ╰── `count` was declared without `mut`
+ 4 │ }
+   ╰────
+  help: Rebind with `let mut count = count` to mutate a local copy. Parameters are immutable · code: [infer.immutable]

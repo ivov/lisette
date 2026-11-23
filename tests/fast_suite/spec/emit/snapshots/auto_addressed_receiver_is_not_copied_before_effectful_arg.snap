@@ -1,0 +1,45 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Foo { count: int }
+  
+  impl Foo {
+    fn add<T>(self: mut Ref<Foo>, _val: Bar) {
+      self.count += 1
+    }
+  }
+  
+  struct Bar {}
+  
+  impl Bar {
+    fn new() -> Bar {
+      Bar {}
+    }
+  }
+  
+  fn run() {
+    let mut foo = Foo { count: 0 }
+    foo.add<int>(Bar.new())
+  }
+---
+package main
+
+type Foo struct {
+	count int
+}
+
+func fooAdd[T any](self *Foo, _ Bar) {
+	self.count++
+}
+
+type Bar struct{}
+
+func newBar() Bar {
+	return Bar{}
+}
+
+func run() {
+	foo := Foo{count: 0}
+	fooAdd[int](&foo, newBar())
+}

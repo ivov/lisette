@@ -1,0 +1,53 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  import "go:fmt"
+  import "go:io/fs"
+  import "go:os"
+  
+  const FILE = "tasks.json"
+  
+  fn load() -> Result<Slice<byte>, error> {
+    let bytes = match os.ReadFile(FILE) {
+      Ok(bytes) => bytes,
+      Err(err) => {
+        if errors.Is(err, fs.ErrNotExist) { return Ok([]) }
+        return Err(err).wrap_err(f"reading {FILE}")
+      },
+    }
+    Ok(bytes)
+  }
+  
+  fn main() {
+    fmt.Println(load())
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+const File = "tasks.json"
+
+func load() ([]byte, error) {
+	bytes, err := os.ReadFile(File)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return []byte{}, nil
+		}
+		return nil, fmt.Errorf("reading %s: %w", File, err)
+	}
+	return bytes, nil
+}
+
+func main() {
+	fmt.Println(lisette.ResultFromPair[[]byte](load()))
+}

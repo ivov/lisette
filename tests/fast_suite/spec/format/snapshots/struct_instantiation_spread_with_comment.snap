@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    Point {
+      x: 1,
+      // inherit the rest
+      ..other
+    }
+  }
+---
+fn test() {
+  Point {
+    x: 1,
+    // inherit the rest
+    ..other,
+  }
+}

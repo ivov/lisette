@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Pattern might not match
+   ╭─[test.lis:3:7]
+ 2 │ fn test(opt: Option<int>) {
+ 3 │   let Some(x) = opt;
+   ·       ───┬───
+   ·          ╰── only matches `Some`
+ 4 │ }
+   ╰────
+  help: Use `if let Some(x) = opt { ... }` to handle only `Some`, or `match opt { Some(x) => ..., None => ... }` to also handle `None` · code: [infer.refutable_pattern]

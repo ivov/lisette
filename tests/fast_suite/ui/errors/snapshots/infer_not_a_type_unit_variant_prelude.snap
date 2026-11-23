@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Value in type position
+   ╭─[test.lis:2:17]
+ 1 │ 
+ 2 │ fn nothing() -> None {
+   ·                 ──┬─
+   ·                   ╰── expected type, found enum variant
+ 3 │   return None
+   ╰────
+  help: Use `Option` for the enum type · code: [resolve.value_in_type_position]

@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn make() -> int {
+    2
+  }
+  
+  fn main() {
+    {
+      const X = 1
+      fmt.Println(X)
+    }
+    let x = make()
+    const Y = x
+    fmt.Println(Y)
+  }
+---
+package main
+
+import "fmt"
+
+func make_() int {
+	return 2
+}
+
+func main() {
+	{
+		const X int = 1
+		fmt.Println(X)
+	}
+	x := make_()
+	var Y int = x
+	fmt.Println(Y)
+}

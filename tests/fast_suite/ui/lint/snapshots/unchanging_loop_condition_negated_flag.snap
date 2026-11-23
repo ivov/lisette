@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ✕ Loop condition never changes
+   ╭─[test.lis:4:9]
+ 3 │   let done = false;
+ 4 │   while !done {
+   ·         ──┬──
+   ·           ╰── the loop either never runs or never ends
+ 5 │     let _ = done
+   ╰────
+  help: Nothing in the loop body changes this condition. Did you forget to update a variable, or mean to `break` out of the loop? · code: [infer.unchanging_loop_condition]

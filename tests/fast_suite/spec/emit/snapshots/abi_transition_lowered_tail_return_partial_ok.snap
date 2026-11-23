@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn run(x: int) -> Partial<int, error> {
+    Partial.Ok(x)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func run(x int) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](x)
+}

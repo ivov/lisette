@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> complex128 {
+    complex(1.0, 2.0)
+  }
+---
+package main
+
+func test() complex128 {
+	return complex(1.0, 2.0)
+}

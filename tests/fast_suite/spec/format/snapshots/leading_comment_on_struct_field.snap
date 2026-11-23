@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Point {
+    // documentation for x
+    x: int,
+    // documentation for y
+    y: int,
+  }
+---
+struct Point {
+  // documentation for x
+  x: int,
+  // documentation for y
+  y: int,
+}

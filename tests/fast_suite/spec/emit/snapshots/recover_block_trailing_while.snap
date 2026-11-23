@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> Result<(), PanicValue> {
+    recover {
+      while true {
+        break
+      }
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Result[struct{}, lisette.PanicValue] {
+	recoverResult := lisette.RecoverBlock(func() struct{} {
+		for {
+			break
+		}
+		return struct{}{}
+	})
+	return recoverResult
+}

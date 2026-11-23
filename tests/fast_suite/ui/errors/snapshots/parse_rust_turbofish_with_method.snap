@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `::<T>` type arguments
+   ╭─[test.lis:3:17]
+ 2 │ fn test() {
+ 3 │   let xs = Slice::<int>::new()
+   ·                 ─┬
+   ·                  ╰── Rust-style type arguments
+ 4 │ }
+   ╰────
+  help: Use `Slice.new<int>()`. Lisette does not use `::<T>` · code: [parse.turbofish]

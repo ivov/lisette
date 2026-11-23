@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Outer { items: Slice<int> }
+  
+  fn key() -> string { "a" }
+  
+  fn main() {
+    let mut m = Map.new<string, Outer>()
+    m["a"] = Outer{ items: [1] }
+    let k = key()
+    let mut entry = Outer { items: m[k].items.clone() }
+    entry.items = entry.items.append(2)
+    m[k] = entry
+  }
+---
+package main
+
+import "slices"
+
+type Outer struct {
+	items []int
+}
+
+func key() string {
+	return "a"
+}
+
+func main() {
+	m := make(map[string]Outer)
+	m["a"] = Outer{items: []int{1}}
+	k := key()
+	entry := Outer{items: slices.Clone(m[k].items)}
+	entry.items = append(entry.items, 2)
+	m[k] = entry
+}

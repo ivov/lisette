@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "io"
+
+type Dev struct{}
+
+func (d Dev) Read(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func (d Dev) Write(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func useRw(_ io.ReadWriter) int {
+	return 0
+}
+
+func main() {
+	d := Dev{}
+	useRw(d)
+}

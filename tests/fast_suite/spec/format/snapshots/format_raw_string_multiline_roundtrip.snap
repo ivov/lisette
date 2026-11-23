@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() { let s = r"a
+  b"; foo(s) }
+---
+fn test() {
+  let s = r"a
+b"
+  foo(s)
+}

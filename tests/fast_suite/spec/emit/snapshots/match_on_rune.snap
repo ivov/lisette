@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(c: rune) -> int {
+    match c {
+      'a' => 1,
+      'b' => 2,
+      _ => 0,
+    }
+  }
+---
+package main
+
+func test(c rune) int {
+	switch c {
+	case 'a':
+		return 1
+	case 'b':
+		return 2
+	default:
+		return 0
+	}
+}

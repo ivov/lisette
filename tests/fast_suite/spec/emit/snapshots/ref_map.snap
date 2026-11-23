@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn test(m: Ref<Map<string, int>>) {
+    let _ = m
+  }
+---
+package main
+
+func test(m *map[string]int) {
+	_ = m
+}

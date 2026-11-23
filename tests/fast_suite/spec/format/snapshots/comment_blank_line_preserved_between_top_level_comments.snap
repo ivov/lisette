@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn a() {}
+  // first
+  
+  // second
+  fn b() {}
+---
+fn a() {}
+
+// first
+
+// second
+fn b() {}

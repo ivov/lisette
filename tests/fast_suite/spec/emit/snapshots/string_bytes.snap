@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: string) -> Slice<byte> {
+    s.bytes()
+  }
+---
+package main
+
+func test(s string) []byte {
+	return []byte(s)
+}

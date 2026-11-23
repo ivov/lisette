@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/grpc_health_v1"
+  
+  fn main() {
+    let _ = grpc_health_v1.HealthCheckResponse_SERVING
+  }
+---
+package main
+
+import "example.com/grpc_health_v1"
+
+func main() {
+	_ = grpc_health_v1.HealthCheckResponse_SERVING
+}

@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:io"
+  import "go:fmt"
+  
+  fn test() {
+    let x = "hello";
+    fmt.Print(x)
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	x := "hello"
+	fmt.Print(x)
+}

@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn noop() {}
+  
+  fn test() {
+    let ch = Channel.buffered<()>(1)
+    select {
+      ch.send(noop()) => {},
+      _ => {},
+    }
+  }
+---
+package main
+
+func noop() {}
+
+func test() {
+	ch := make(chan struct{}, 1)
+	noop()
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}

@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Wrapper<T>(T)
+  
+  impl<T> Wrapper<T> {
+    fn unwrap(self: Wrapper<T>) -> T {
+      self.0
+    }
+  }
+  
+  fn test() -> int {
+    let w = Wrapper(42);
+    w.unwrap()
+  }
+---
+package main
+
+type Wrapper[T any] struct {
+	F0 T
+}
+
+func (w Wrapper[T]) unwrap() T {
+	return w.F0
+}
+
+func test() int {
+	w := Wrapper[int]{F0: 42}
+	return w.unwrap()
+}

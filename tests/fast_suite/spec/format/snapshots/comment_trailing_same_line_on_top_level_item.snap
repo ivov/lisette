@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn h() {} // trailing
+  fn i() {}
+---
+fn h() {} // trailing
+
+fn i() {}

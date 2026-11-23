@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Box { x: int }
+  
+  fn main() {
+    let mut m = Map.from([("a", Box { x: 1 })])
+    let mut entry = m["a"]
+    entry.x = 2
+    m["a"] = entry
+  }
+---
+package main
+
+type Box struct {
+	x int
+}
+
+func main() {
+	m := map[string]Box{"a": {x: 1}}
+	entry := m["a"]
+	entry.x = 2
+	m["a"] = entry
+}

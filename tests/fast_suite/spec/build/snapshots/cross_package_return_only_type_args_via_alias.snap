@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+func Make[T any]() T {
+	panic("nope")
+}
+
+
+// === main.go ===
+package main
+
+import L "github.com/user/myproject/lib"
+
+func main() {
+	x := L.Make[int]()
+	_ = x
+}

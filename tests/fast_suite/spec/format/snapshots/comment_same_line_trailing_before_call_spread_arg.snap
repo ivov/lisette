@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f(args: Slice<int>) {
+    foo(1, // trailing
+    args...)
+  }
+---
+fn f(args: Slice<int>) {
+  foo(
+    1, // trailing
+    args...,
+  )
+}

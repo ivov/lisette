@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let xs = [1]
+    task xs.length()
+  }
+---
+package main
+
+func test() {
+	xs := []int{1}
+	go func() {
+		_ = len(xs)
+	}()
+}

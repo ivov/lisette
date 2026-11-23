@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() {
+    let mut count = 0;
+    let inc = || { count = count + 1; };
+    inc();
+  }
+---
+package main
+
+func test() {
+	count := 0
+	inc := func() struct{} {
+		count++
+		return struct{}{}
+	}
+	inc()
+}

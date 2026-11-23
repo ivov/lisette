@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface Reader {
+    fn read() -> int;
+    fn close();
+  }
+  
+  fn test() {
+    fmt.Print("Interface with methods")
+  }
+---
+package main
+
+import "fmt"
+
+type Reader interface {
+	read() int
+	close()
+}
+
+func test() {
+	fmt.Print("Interface with methods")
+}

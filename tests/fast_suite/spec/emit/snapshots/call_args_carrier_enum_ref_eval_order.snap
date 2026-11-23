@@ -1,0 +1,65 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  enum Carrier {
+    C { p: mut Ref<int> },
+  }
+  
+  fn bump(c: mut Carrier) -> int {
+    match c {
+      Carrier.C { p } => {
+        p.* = 1
+        9
+      },
+    }
+  }
+  
+  fn first(a: int, _b: int) -> int { a }
+  
+  fn main() {
+    let mut i = 0
+    let m = [[10], [20]]
+    let mut c = Carrier.C { p: &i }
+    let x = first(m[i][0], [bump(c)][0])
+    let _ = x
+  }
+---
+package main
+
+func MakeCarrierC(arg0 *int) Carrier {
+	return Carrier{Tag: CarrierC, P: arg0}
+}
+
+type CarrierTag uint8
+
+const (
+	CarrierC CarrierTag = iota
+)
+
+type Carrier struct {
+	Tag CarrierTag
+	P   *int
+}
+
+func bump(c Carrier) int {
+	p := c.P
+	*p = 1
+	return 9
+}
+
+func first(a, _ int) int {
+	return a
+}
+
+func main() {
+	i := 0
+	m := [][]int{{10}, {20}}
+	c := Carrier{
+		Tag: CarrierC,
+		P:   &i,
+	}
+	arg := m[i][0]
+	x := first(arg, []int{bump(c)}[0])
+	_ = x
+}

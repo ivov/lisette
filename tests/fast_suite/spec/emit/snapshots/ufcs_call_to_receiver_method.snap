@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Box { x: int }
+  
+  impl Box {
+    fn add(self, y: int) -> int { self.x + y }
+  }
+  
+  fn make_box() -> Box { Box { x: 1 } }
+  
+  fn main() {
+    let v = Box.add(make_box(), 1);
+    let _ = v;
+  }
+---
+package main
+
+type Box struct {
+	x int
+}
+
+func (b Box) add(y int) int {
+	return b.x + y
+}
+
+func makeBox() Box {
+	return Box{x: 1}
+}
+
+func main() {
+	v := makeBox().add(1)
+	_ = v
+}

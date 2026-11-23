@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  enum Token {
+    Eof {},
+  }
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Token",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 5,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                attributes: [],
+                name: "Eof",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 3,
+                },
+                fields: Struct(
+                    [],
+                ),
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 24,
+        },
+    },
+]

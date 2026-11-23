@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Name not found
+   ╭─[test.lis:4:3]
+ 3 │   let counter = 42;
+ 4 │   countr
+   ·   ───┬──
+   ·      ╰── not declared or imported
+ 5 │ }
+   ╰────
+  help: Did you mean `counter`? · code: [resolve.name_not_found]

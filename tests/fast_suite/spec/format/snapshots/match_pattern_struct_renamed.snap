@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match p { Point { x: a, y: b } => a + b } }"
+---
+fn test() {
+  match p {
+    Point { x: a, y: b } => a + b,
+  }
+}

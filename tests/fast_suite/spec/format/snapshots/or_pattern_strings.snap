@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match s { \"yes\" | \"y\" => true, \"no\" | \"n\" => false, _ => false } }"
+---
+fn test() {
+  match s {
+    "yes" | "y" => true,
+    "no" | "n" => false,
+    _ => false,
+  }
+}

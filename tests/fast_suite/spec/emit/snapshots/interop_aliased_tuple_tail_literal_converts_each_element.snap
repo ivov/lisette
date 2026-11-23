@@ -1,0 +1,78 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import "go:net/http"
+  
+  struct Counter {
+    count: int,
+  }
+  
+  impl Counter {
+    fn String(self) -> string {
+      f"{self.count}"
+    }
+  }
+  
+  type Pair = (Option<http.Handler>, int)
+  type Shown = (fmt.Stringer, int)
+  
+  fn handler_pair() -> Pair {
+    (http.FileServer(http.Dir(".")), 1)
+  }
+  
+  fn shown_pair(c: Counter) -> Shown {
+    (c, c.count)
+  }
+  
+  fn main() {
+    let (handler, n) = handler_pair()
+    let (shown, m) = shown_pair(Counter { count: 2 })
+    if !handler.is_some() || n != 1 || shown.String() != "2" || m != 2 {
+      panic("wrong tuple")
+    }
+    fmt.Println("ok")
+  }
+---
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Counter struct {
+	count int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprint(c.count)
+}
+
+type Pair = lisette.Tuple2[lisette.Option[http.Handler], int]
+
+type Shown = lisette.Tuple2[fmt.Stringer, int]
+
+func handlerPair() (http.Handler, int) {
+	return http.FileServer(http.Dir(".")), 1
+}
+
+func shownPair(c Counter) (fmt.Stringer, int) {
+	return c, c.count
+}
+
+func main() {
+	ret, ret2 := handlerPair()
+	option := lisette.OptionFromNilable[http.Handler](ret, lisette.IsNilInterface(ret))
+	tup := lisette.MakeTuple2(option, ret2)
+	handler := tup.First
+	n := tup.Second
+	shown, m := shownPair(Counter{count: 2})
+	if !handler.IsSome() || n != 1 || shown.String() != "2" || m != 2 {
+		panic("wrong tuple")
+	}
+	fmt.Println("ok")
+}

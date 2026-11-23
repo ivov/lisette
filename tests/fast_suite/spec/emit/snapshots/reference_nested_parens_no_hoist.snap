@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct S { x: int }
+  
+  impl S {
+    fn inc(self: mut Ref<S>) { self.x = self.x + 1 }
+  }
+  
+  fn main() {
+    let mut s = S { x: 1 }
+    let mut r = &((s))
+    r.inc()
+  }
+---
+package main
+
+type S struct {
+	x int
+}
+
+func (s *S) inc() {
+	s.x++
+}
+
+func main() {
+	s := S{x: 1}
+	r := &s
+	r.inc()
+}

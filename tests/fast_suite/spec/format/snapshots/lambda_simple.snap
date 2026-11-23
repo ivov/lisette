@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { let f = |x| x + 1; }"
+---
+fn test() {
+  let f = |x| x + 1
+}

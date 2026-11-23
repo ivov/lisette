@@ -1,0 +1,48 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn make_items() -> Slice<int> {
+    fmt.Println("receiver")
+    [10, 20, 30, 40]
+  }
+  
+  fn make_range() -> Range<int> {
+    fmt.Println("range")
+    1..3
+  }
+  
+  fn main() {
+    let xs = make_items()[make_range()]
+    fmt.Println(xs.length())
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func makeItems() []int {
+	fmt.Println("receiver")
+	return []int{10, 20, 30, 40}
+}
+
+func makeRange() lisette.Range[int] {
+	fmt.Println("range")
+	return lisette.Range[int]{
+		Start: 1,
+		End:   3,
+	}
+}
+
+func main() {
+	base := makeItems()
+	range2 := makeRange()
+	xs := base[range2.Start:range2.End:range2.End]
+	fmt.Println(len(xs))
+}

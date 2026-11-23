@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:9:32]
+  8 │   let x = Either.Left("oops");
+  9 │   let _: Either<int, string> = x;
+    ·                                ┬
+    ·                                ╰── expected `Either<int, string>`, found `Either<string, R>`
+ 10 │ }
+    ╰────
+  help: Change the type annotation to `Either<string, R>` or convert the value to `Either<int, string>` · code: [infer.type_mismatch]

@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    match items {
+      [first, // trailing
+      ..] => first,
+      [] => 0,
+    }
+  }
+---
+fn test() {
+  match items {
+    [
+      first, // trailing
+      ..,
+    ] => first,
+    [] => 0,
+  }
+}

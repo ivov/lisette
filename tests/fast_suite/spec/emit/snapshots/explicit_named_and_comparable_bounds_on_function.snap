@@ -1,0 +1,54 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Named {
+    fn name() -> string
+  }
+  
+  struct Person {
+    value: string,
+  }
+  
+  impl Person {
+    fn name(self) -> string {
+      self.value
+    }
+  }
+  
+  fn count<T: Named + Comparable>(x: T) -> int {
+    let mut m: mut Map<T, int> = Map.new()
+    m[x] = 1
+    m.length()
+  }
+  
+  fn main() {
+    let _ = count(Person { value: "Ada" })
+  }
+---
+package main
+
+type Named interface {
+	name() string
+}
+
+type Person struct {
+	value string
+}
+
+func (p Person) name() string {
+	return p.value
+}
+
+func count[T interface {
+	Named
+	comparable
+}](x T) int {
+	m := make(map[T]int)
+	m[x] = 1
+	return len(m)
+}
+
+func main() {
+	count(Person{value: "Ada"})
+}

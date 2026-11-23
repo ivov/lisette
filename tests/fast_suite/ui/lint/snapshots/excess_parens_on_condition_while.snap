@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Unnecessary parentheses
+   ╭─[test.lis:4:9]
+ 3 │   let mut i = 0;
+ 4 │   while (i < 10) {
+   ·         ────┬───
+   ·             ╰── remove parentheses
+ 5 │     i = i + 1;
+   ╰────
+  help: Lisette does not require parentheses around `while` conditions · code: [lint.excess_parens_on_condition]

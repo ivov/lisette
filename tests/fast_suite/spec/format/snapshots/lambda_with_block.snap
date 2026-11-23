@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { let f = |x| { let y = x + 1; y * 2 }; }"
+---
+fn test() {
+  let f = |x| {
+    let y = x + 1
+    y * 2
+  }
+}

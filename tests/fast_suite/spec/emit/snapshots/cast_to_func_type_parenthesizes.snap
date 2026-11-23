@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  type Handler = fn(int) -> ()
+  
+  fn test(h: Handler) -> fn(int) -> () {
+    h as fn(int) -> ()
+  }
+---
+package main
+
+type Handler = func(int) struct{}
+
+func test(h Handler) func(int) struct{} {
+	return (func(int) struct{})(h)
+}

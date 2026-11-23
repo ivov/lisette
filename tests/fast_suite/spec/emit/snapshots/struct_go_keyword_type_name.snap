@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct default {
+    value: int,
+  }
+  
+  fn main() {
+    let x = default { value: 42 }
+    fmt.Println(x)
+  }
+---
+package main
+
+import "fmt"
+
+type default_ struct {
+	value int
+}
+
+func main() {
+	x := default_{value: 42}
+	fmt.Println(x)
+}

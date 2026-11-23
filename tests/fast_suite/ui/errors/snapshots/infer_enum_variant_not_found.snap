@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Name not found
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let x = Maybe(42);
+   ·           ──┬──
+   ·             ╰── not declared or imported
+ 4 │ }
+   ╰────
+  help: Define or import `Maybe` · code: [resolve.name_not_found]

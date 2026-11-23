@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:3:3]
+ 2 │ fn test(m: Map<string, int>) {
+ 3 │   m[0..3]
+   ·   ┬
+   ·   ╰── expected `Slice`, found `Map<string, int>`
+ 4 │ }
+   ╰────
+  help: Range indexing only works on `Slice` · code: [infer.range_index_not_slice]

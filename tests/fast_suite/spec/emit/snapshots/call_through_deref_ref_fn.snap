@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  type IntFn = fn(int) -> int
+  
+  fn apply(f: Ref<IntFn>, x: int) -> int {
+    f.*(x)
+  }
+  
+  fn test() -> int {
+    let double: IntFn = |x: int| x * 2;
+    apply(&double, 3)
+  }
+---
+package main
+
+type IntFn = func(int) int
+
+func apply(f *IntFn, x int) int {
+	return (*f)(x)
+}
+
+func test() int {
+	double := func(x int) int {
+		return x * 2
+	}
+	return apply(&double, 3)
+}

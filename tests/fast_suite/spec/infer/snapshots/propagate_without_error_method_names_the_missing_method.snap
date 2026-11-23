@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/infer/try.rs
+---
+  ✕ `PlainError` does not implement `error`
+   ╭─[test.lis:7:15]
+ 6 │     fn load() -> Result<int, error> {
+ 7 │       let n = fetch()?
+   ·               ────┬───
+   ·                   ╰── `error` needed here
+ 8 │       Ok(n)
+   ╰────
+  help: One method does not satisfy `error`:
+        Missing:
+          fn Error(self: PlainError) -> string
+  code: [infer.interface_not_implemented]

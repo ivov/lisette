@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid `defer`
+   ╭─[test.lis:5:14]
+ 4 │ fn f() {
+ 5 │   let arr = [defer a(), defer b()];
+   ·              ────┬────
+   ·                  ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `defer` to its own statement · code: [infer.defer_in_expression_position]
+
+  ✕ Invalid `defer`
+   ╭─[test.lis:5:25]
+ 4 │ fn f() {
+ 5 │   let arr = [defer a(), defer b()];
+   ·                         ────┬────
+   ·                             ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `defer` to its own statement · code: [infer.defer_in_expression_position]

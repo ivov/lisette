@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>) -> int {
+    s.enumerate().fold(0, |acc, (i, v)| acc + i * v)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s []int) int {
+	return lisette.EnumeratedSliceFold(s, 0, func(acc int, arg lisette.Tuple2[int, int]) int {
+		i := arg.First
+		v := arg.Second
+		return acc + i*v
+	})
+}

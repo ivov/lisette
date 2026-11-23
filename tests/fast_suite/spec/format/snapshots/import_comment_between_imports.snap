@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  // http helpers
+  import "go:net/http"
+  // json helpers
+  import "go:encoding/json"
+  
+  fn main() {}
+---
+// json helpers
+import "go:encoding/json"
+// http helpers
+import "go:net/http"
+
+fn main() {}

@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn make() -> Array<int, 3> {
+    let xs: Array<int, 3> = Array.new()
+    xs
+  }
+---
+package main
+
+func make_() [3]int {
+	xs := [3]int{}
+	return xs
+}

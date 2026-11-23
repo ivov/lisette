@@ -1,0 +1,50 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum Status { Pending, Running, Complete, Failed }
+  
+  fn test(s: Status) -> string {
+    match s {
+      Pending | Running => "in progress",
+      Complete | Failed => "finished",
+    }
+  }
+---
+package main
+
+func MakeStatusPending() Status {
+	return Status{Tag: StatusPending}
+}
+
+func MakeStatusRunning() Status {
+	return Status{Tag: StatusRunning}
+}
+
+func MakeStatusComplete() Status {
+	return Status{Tag: StatusComplete}
+}
+
+func MakeStatusFailed() Status {
+	return Status{Tag: StatusFailed}
+}
+
+type StatusTag uint8
+
+const (
+	StatusPending StatusTag = iota
+	StatusRunning
+	StatusComplete
+	StatusFailed
+)
+
+type Status struct {
+	Tag StatusTag
+}
+
+func test(s Status) string {
+	if s.Tag == StatusPending || s.Tag == StatusRunning {
+		return "in progress"
+	}
+	return "finished"
+}

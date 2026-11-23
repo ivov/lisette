@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid comparison
+   ╭─[test.lis:7:3]
+ 6 │ fn test(a: Slice<Holder>, b: Slice<Holder>) -> bool {
+ 7 │   a == b
+   ·   ┬
+   ·   ╰── `Slice<Holder>` cannot be compared with `==`
+ 8 │ }
+   ╰────
+  help: `.equals()` will not help either, because a struct containing non-comparable fields cannot be compared · code: [infer.type_mismatch]

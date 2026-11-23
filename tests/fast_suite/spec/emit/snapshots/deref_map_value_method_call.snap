@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Counter { count: int }
+  
+  impl Counter {
+    fn increment(self: mut Ref<Counter>) {
+      self.*.count += 1
+    }
+  }
+  
+  fn test(m: mut Map<string, mut Ref<Counter>>) {
+    let Some(c) = m.get("a") else { return; };
+    c.*.increment()
+  }
+---
+package main
+
+type Counter struct {
+	count int
+}
+
+func (c *Counter) increment() {
+	c.count++
+}
+
+func test(m map[string]*Counter) {
+	c, ok := m["a"]
+	if !ok {
+		return
+	}
+	c.increment()
+}

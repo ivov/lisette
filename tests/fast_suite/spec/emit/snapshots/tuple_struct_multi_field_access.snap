@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Point(int, int)
+  
+  fn test(p: Point) -> int {
+    p.0 + p.1
+  }
+---
+package main
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func test(p Point) int {
+	return p.F0 + p.F1
+}

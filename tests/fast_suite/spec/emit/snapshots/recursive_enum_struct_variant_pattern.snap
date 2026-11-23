@@ -1,0 +1,47 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  enum Tree<T> {
+    Leaf(T),
+    Node { left: Tree<T>, right: Tree<T> },
+  }
+  
+  fn count_leaves<T>(tree: Tree<T>) -> int {
+    match tree {
+      Tree.Leaf(_) => 1,
+      Tree.Node { left, right } => count_leaves(left) + count_leaves(right),
+    }
+  }
+---
+package main
+
+func MakeTreeLeaf[T any](arg0 T) Tree[T] {
+	return Tree[T]{Tag: TreeLeaf, Leaf: arg0}
+}
+
+func MakeTreeNode[T any](arg0, arg1 Tree[T]) Tree[T] {
+	return Tree[T]{Tag: TreeNode, Left: &arg0, Right: &arg1}
+}
+
+type TreeTag uint8
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree[T any] struct {
+	Tag   TreeTag
+	Leaf  T
+	Left  *Tree[T]
+	Right *Tree[T]
+}
+
+func countLeaves[T any](tree Tree[T]) int {
+	if tree.Tag == TreeLeaf {
+		return 1
+	}
+	right := *tree.Right
+	return countLeaves(*tree.Left) + countLeaves(right)
+}

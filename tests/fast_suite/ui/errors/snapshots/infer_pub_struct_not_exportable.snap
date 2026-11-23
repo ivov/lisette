@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Public type is not exportable
+   ╭─[test.lis:2:12]
+ 1 │ 
+ 2 │ pub struct widget {
+   ·            ───┬──
+   ·               ╰── `widget` cannot be exported from Go
+ 3 │   pub x: int,
+   ╰────
+  help: Rename to `Widget`. Public types become exported Go identifiers, which must start with an uppercase letter · code: [infer.pub_type_not_exportable]

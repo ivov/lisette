@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match pair { (a, b) => a + b } }"
+---
+fn test() {
+  match pair {
+    (a, b) => a + b,
+  }
+}

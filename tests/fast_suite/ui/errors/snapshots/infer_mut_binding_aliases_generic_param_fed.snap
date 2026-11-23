@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot write to `b2.items[0][0]`
+   ╭─[test.lis:6:3]
+ 5 │   let mut b2 = b1
+ 6 │   b2.items[0][0] = 9
+   ·   ─────────┬────────
+   ·            ╰── `b2.items[0]` is read-only
+ 7 │ }
+   ╰────
+  help: Make `b1` writable, or write to a `.clone()` for an independent copy. `b2` shares storage with `b1`, which is read-only · code: [infer.write_through_read_only]

@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn f() -> Option<int> {
+    None?
+  }
+  
+  fn test() -> Option<int> {
+    f()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func f() (int, bool) {
+	check := lisette.MakeOptionNone[lisette.Option[int]]()
+	if check.Tag != lisette.OptionSome {
+		return 0, false
+	}
+	v := check.SomeVal
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return 0, false
+}
+
+func test() (int, bool) {
+	return f()
+}

@@ -1,5 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: pub struct Format(int)
----
-pub struct Format(int)

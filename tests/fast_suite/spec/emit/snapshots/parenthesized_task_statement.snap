@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn noop() {}
+  
+  fn main() {
+    (task { noop() })
+  }
+---
+package main
+
+func noop() {}
+
+func main() {
+	go func() {
+		noop()
+	}()
+}

@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Factory {}
+  
+  impl Factory {
+    fn make<T>(self) -> Slice<T> {
+      Slice.new<T>()
+    }
+  }
+  
+  fn test() -> Slice<int> {
+    let f = Factory {}
+    (Factory.make)(f)
+  }
+---
+package main
+
+type Factory struct{}
+
+func factoryMake[T any](_ Factory) []T {
+	return []T{}
+}
+
+func test() []int {
+	f := Factory{}
+	return factoryMake[int](f)
+}

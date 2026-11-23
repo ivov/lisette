@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn new() -> Channel<int> {
+    Channel.new<int>()
+  }
+  
+  fn test() -> Channel<int> {
+    new()
+  }
+---
+package main
+
+func new_() chan int {
+	return make(chan int)
+}
+
+func test() chan int {
+	return new_()
+}

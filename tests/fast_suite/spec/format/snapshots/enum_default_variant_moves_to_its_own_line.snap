@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "enum Colour { #[default] Red, Green }"
+---
+enum Colour {
+  #[default]
+  Red,
+  Green,
+}

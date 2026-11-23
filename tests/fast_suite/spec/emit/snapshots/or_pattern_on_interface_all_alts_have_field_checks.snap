@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:example.com/events"
+  
+  fn handle(e: events.Event) -> int {
+    match e {
+      events.Click { x: 5 } | events.Scroll { delta: 10 } => 1,
+      _ => 0,
+    }
+  }
+---
+package main
+
+import "example.com/events"
+
+func handle(e events.Event) int {
+	switch e := e.(type) {
+	case events.Click:
+		if e.X == 5 {
+			return 1
+		}
+		return 0
+	case events.Scroll:
+		if e.Delta == 10 {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}

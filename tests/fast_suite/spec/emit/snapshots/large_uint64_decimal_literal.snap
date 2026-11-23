@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> uint64 {
+    18446744073709551615
+  }
+---
+package main
+
+func test() uint64 {
+	return 18446744073709551615
+}

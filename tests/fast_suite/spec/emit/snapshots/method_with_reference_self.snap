@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Counter { count: int }
+  
+  impl Counter {
+    fn get_count(self: Ref<Counter>) -> int {
+      self.count
+    }
+  }
+---
+package main
+
+type Counter struct {
+	count int
+}
+
+func (c *Counter) getCount() int {
+	return c.count
+}

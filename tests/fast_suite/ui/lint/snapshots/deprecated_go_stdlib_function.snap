@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Use of deprecated API
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let _ = strings.Title("hello world")
+   ·           ──────┬──────
+   ·                 ╰── not intended for new code
+ 6 │ }
+   ╰────
+  help: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead · code: [lint.deprecated]

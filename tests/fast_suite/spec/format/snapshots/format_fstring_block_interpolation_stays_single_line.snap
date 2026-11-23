@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { let b = f\"v { { let a = 1; a } }\" }"
+---
+fn test() {
+  let b = f"v { { let a = 1; a }}"
+}

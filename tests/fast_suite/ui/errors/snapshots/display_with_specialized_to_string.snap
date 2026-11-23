@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `#[display]` conflicts with your `to_string`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[display]
+   · ─────┬────
+   ·      ╰── adds a `to_string` of its own
+ 3 │ struct Box<T> {
+   ╰────
+  help: Write `to_string` as a plain `fn to_string(self) -> string` on the type, or remove `#[display]` · code: [attribute.display_specialized_to_string]

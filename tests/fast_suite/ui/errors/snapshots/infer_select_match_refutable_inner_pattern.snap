@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Pattern in select receive might not match
+   ╭─[test.lis:6:12]
+ 5 │     match ch.receive() {
+ 6 │       Some(1) => {},
+   ·            ┬
+   ·            ╰── may not match all received values
+ 7 │       None => {},
+   ╰────
+  help: Use a regular `match` inside the arm body to filter values. Select receive requires a binding that always matches, e.g. `Some(v)` or `Some(_)` · code: [infer.select_receive_refutable_pattern]

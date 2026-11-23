@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:3:3]
+ 2 │ fn test(a: complex64, b: complex64) -> bool {
+ 3 │   a < b
+   ·   ┬
+   ·   ╰── expected orderable, found `complex64`
+ 4 │ }
+   ╰────
+  help: Use comparison operators only with numeric or string types · code: [infer.type_mismatch]

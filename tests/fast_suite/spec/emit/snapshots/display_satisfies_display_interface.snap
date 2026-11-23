@@ -1,0 +1,50 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Display {
+    fn to_string() -> string
+  }
+  
+  #[display]
+  struct Point { x: int, y: int }
+  
+  fn render(d: Display) -> string {
+    d.to_string()
+  }
+  
+  fn use_it() -> string {
+    render(Point { x: 1, y: 2 })
+  }
+---
+package main
+
+import "fmt"
+
+type Display interface {
+	toString() string
+}
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func (p Point) toString() string {
+	return p.String()
+}
+
+func render(d Display) string {
+	return d.toString()
+}
+
+func useIt() string {
+	return render(Point{
+		x: 1,
+		y: 2,
+	})
+}

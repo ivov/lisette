@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let y = 10
+    let z = {
+      let y = 20
+      y
+    }
+    let _ = z
+    y
+  }
+---
+package main
+
+func test() int {
+	y := 10
+	var z int
+	{
+		y2 := 20
+		z = y2
+	}
+	_ = z
+	return y
+}

@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type LoadError struct {
+	msg string
+}
+
+type Loader struct{}
+
+func (l Loader) Load(_ string) lisette.Result[int, LoadError] {
+	return lisette.MakeResultOk[int, LoadError](0)
+}
+
+func run(l Loader) int {
+	subject := l.Load("k")
+	if subject.Tag == lisette.ResultOk {
+		return subject.OkVal
+	}
+	return -1
+}
+
+func main() {
+	l := Loader{}
+	run(l)
+}

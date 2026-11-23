@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<int, 3>) -> Array<int, 2> {
+    let [0, ..rest] = arr else { return [9, 9] }
+    rest
+  }
+---
+package main
+
+func f(arr [3]int) [2]int {
+	if arr[0] != 0 {
+		return [2]int{9, 9}
+	}
+	rest := ([2]int)(arr[1:])
+	return rest
+}

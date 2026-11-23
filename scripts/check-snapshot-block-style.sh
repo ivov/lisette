@@ -21,6 +21,6 @@ done < <(find tests crates -name '*.snap' -print0)
 if ((${#scrunched[@]} > 0)); then
     printf '%s\n' "${scrunched[@]}" | sort
     printf '\n%d snapshot(s) were generated without INSTA_YAML_BLOCK_STYLE=1.\n' "${#scrunched[@]}"
-    echo "Fix with: just test-refresh-snapshots"
+    echo "Fix with: just snap-refresh"
     exit 1
 fi

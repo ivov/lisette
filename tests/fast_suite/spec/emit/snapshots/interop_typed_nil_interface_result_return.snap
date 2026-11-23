@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let info = os.Stat("/tmp")
+    match info {
+      Ok(i) => fmt.Println(i.Size()),
+      Err(e) => fmt.Println(e),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret, ret2 := os.Stat("/tmp")
+	var info lisette.Result[fs.FileInfo, error]
+	if ret2 != nil {
+		info = lisette.MakeResultErr[fs.FileInfo, error](ret2)
+	} else if lisette.IsNilInterface(ret) {
+		info = lisette.MakeResultErr[fs.FileInfo, error](errors.New("unexpected nil"))
+	} else {
+		info = lisette.MakeResultOk[fs.FileInfo, error](ret)
+	}
+	if info.Tag == lisette.ResultOk {
+		fmt.Println(info.OkVal.Size())
+	} else {
+		fmt.Println(info.ErrVal)
+	}
+}

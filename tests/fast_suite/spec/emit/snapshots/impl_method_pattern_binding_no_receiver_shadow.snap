@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Node {
+    pub value: int,
+    pub next: Option<int>,
+  }
+  
+  impl Node {
+    fn sum(self) -> int {
+      match self.next {
+        Some(n) => self.value + n,
+        None => self.value,
+      }
+    }
+  }
+  
+  fn test() -> int {
+    let node = Node { value: 10, next: Some(5) }
+    node.sum()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Node struct {
+	Value int
+	Next  lisette.Option[int]
+}
+
+func (n Node) sum() int {
+	if n.Next.Tag == lisette.OptionSome {
+		return n.Value + n.Next.SomeVal
+	}
+	return n.Value
+}
+
+func test() int {
+	node := Node{
+		Value: 10,
+		Next:  lisette.MakeOptionSome(5),
+	}
+	return node.sum()
+}

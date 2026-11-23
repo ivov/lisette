@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() {
+    let m = Map.from<string, Unknown>([("one", "two")])
+    if m.length() != 1 {
+      panic("Map.from lost its entry when widening values to Unknown")
+    }
+  }
+---
+package main
+
+func test() {
+	m := map[string]any{"one": "two"}
+	if len(m) != 1 {
+		panic("Map.from lost its entry when widening values to Unknown")
+	}
+}

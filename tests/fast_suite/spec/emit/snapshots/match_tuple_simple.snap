@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let pair = (1, 2);
+    match pair {
+      (0, 0) => 0,
+      (1, 2) => 3,
+      (x, y) => x + y,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	pair := lisette.MakeTuple2[int, int](1, 2)
+	if pair.First == 0 && pair.Second == 0 {
+		return 0
+	} else if pair.First == 1 && pair.Second == 2 {
+		return 3
+	}
+	return pair.First + pair.Second
+}

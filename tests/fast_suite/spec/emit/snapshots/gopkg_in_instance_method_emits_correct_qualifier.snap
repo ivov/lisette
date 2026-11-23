@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:gopkg.in/yaml.v3"
+  
+  fn test() {
+    let mut d = yaml.Decoder{}
+    d.KnownFields(true)
+  }
+---
+package main
+
+import yaml "gopkg.in/yaml.v3"
+
+func test() {
+	d := yaml.Decoder{}
+	d.KnownFields(true)
+}

@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> float64 {
+    max(1.0, 2.0, 3.0)
+  }
+---
+package main
+
+func test() float64 {
+	return max(1.0, 2.0, 3.0)
+}

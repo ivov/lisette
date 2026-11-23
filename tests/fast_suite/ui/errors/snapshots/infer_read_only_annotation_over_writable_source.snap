@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot write to `view[0]`
+   ╭─[test.lis:6:3]
+ 5 │   let view: Slice<int> = scores
+ 6 │   view[0] = 1
+   ·   ─────┬─────
+   ·        ╰── `view` is read-only
+ 7 │ }
+   ╰────
+  help: Declare `view` as `mut Slice<int>` to write through it. It is declared as `Slice<int>` · code: [infer.write_through_read_only]

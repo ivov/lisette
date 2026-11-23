@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Wrapper {
+    opt: Option<int>,
+  }
+  
+  fn get_opt(b: bool) -> Option<int> {
+    if b { Some(42) } else { None }
+  }
+  
+  fn test() {
+    let w = Wrapper { opt: get_opt(true) };
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Wrapper struct {
+	opt lisette.Option[int]
+}
+
+func getOpt(b bool) (int, bool) {
+	if b {
+		return 42, true
+	}
+	return 0, false
+}
+
+func test() {
+	_ = Wrapper{opt: lisette.OptionFromCommaOk[int](getOpt(true))}
+}

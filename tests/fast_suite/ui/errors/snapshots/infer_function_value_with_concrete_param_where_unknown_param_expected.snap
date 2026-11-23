@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:11:9]
+ 10 │ fn test() -> int {
+ 11 │   apply(double)
+    ·         ───┬──
+    ·            ╰── expected `fn (Unknown) -> int`, found `fn (int) -> int`
+ 12 │ }
+    ╰────
+  help: Declare the function with the expected signature and narrow with `assert_type` inside, or wrap it in a closure that narrows at the call site. Function types must match exactly, and `Unknown` matches only `Unknown` · code: [infer.type_mismatch]

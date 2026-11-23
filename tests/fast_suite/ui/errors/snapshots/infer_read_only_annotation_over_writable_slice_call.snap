@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot write to `items[0]`
+   ╭─[test.lis:4:3]
+ 3 │   let mut items: Slice<int> = Slice.new()
+ 4 │   items[0] = 2
+   ·   ──────┬─────
+   ·         ╰── `items` is read-only
+ 5 │ }
+   ╰────
+  help: Declare `items` as `mut Slice<int>` to write through it. It is declared as `Slice<int>` · code: [infer.write_through_read_only]

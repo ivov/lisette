@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `::<T>` type arguments
+   ╭─[test.lis:5:19]
+ 4 │ fn test() {
+ 5 │   let x = identity::<int>(5);
+   ·                   ─┬
+   ·                    ╰── Rust-style type arguments
+ 6 │ }
+   ╰────
+  help: Use `identity<T>(...)`. Lisette does not use `::<T>` · code: [parse.turbofish]

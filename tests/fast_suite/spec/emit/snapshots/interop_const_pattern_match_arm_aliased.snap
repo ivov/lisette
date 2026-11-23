@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import t "go:time"
+  
+  fn describe(d: t.Duration) -> string {
+    match d {
+      t.Second => "one second",
+      t.Minute => "one minute",
+      _ => "other",
+    }
+  }
+---
+package main
+
+import t "time"
+
+func describe(d t.Duration) string {
+	switch d {
+	case t.Second:
+		return "one second"
+	case t.Minute:
+		return "one minute"
+	default:
+		return "other"
+	}
+}

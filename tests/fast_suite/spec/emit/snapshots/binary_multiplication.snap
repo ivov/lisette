@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> int {
+    3 * 4
+  }
+---
+package main
+
+func test() int {
+	return 3 * 4
+}

@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() {
+    loop {
+      let _ = if true { { continue } } else { { 1 } }
+      break
+    }
+  }
+---
+package main
+
+func test() {
+	for {
+		var tmp int
+		if true {
+			continue
+		}
+		tmp = 1
+		_ = tmp
+		break
+	}
+}

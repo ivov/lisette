@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret, ret2, ret3 := strings.Cut("hello-world", "-")
+	result := lisette.MakeTuple3(ret, ret2, ret3)
+	fmt.Println(result)
+}

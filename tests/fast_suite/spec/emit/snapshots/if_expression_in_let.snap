@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(x: int) -> int {
+    let result = if x > 0 { x * 2 } else { 0 };
+    result
+  }
+---
+package main
+
+func test(x int) int {
+	var result int
+	if x > 0 {
+		result = x * 2
+	} else {
+		result = 0
+	}
+	return result
+}

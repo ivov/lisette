@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Config {
+    range: int,
+    default: string,
+  }
+  
+  fn main() {
+    let mut c = Config { range: 10, default: "hello" }
+    c.range = 20
+    c.default = "world"
+  }
+---
+package main
+
+type Config struct {
+	range_   int
+	default_ string
+}
+
+func main() {
+	c := Config{
+		range_:   10,
+		default_: "hello",
+	}
+	c.range_ = 20
+	c.default_ = "world"
+}

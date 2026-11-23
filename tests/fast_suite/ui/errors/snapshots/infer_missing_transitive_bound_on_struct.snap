@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Missing bound on type parameter
+   ╭─[test.lis:4:23]
+ 3 │ 
+ 4 │ struct Foo<T: Bar<E>, E> { value: T }
+   ·                       ┬
+   ·                       ╰── must satisfy `error`
+   ╰────
+  help: Add the bound: `E: error`. `Bar` requires its type argument to satisfy `error` · code: [infer.missing_transitive_bound]

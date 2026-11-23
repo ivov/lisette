@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: |-
+  r"abc
+  let x = 1
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: RawString,
+            text: "r\"abc\nlet x = 1",
+            byte_offset: 0,
+            byte_length: 15,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 15,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Unterminated raw string literal",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 2,
+                    },
+                    "raw string not closed",
+                ),
+            ],
+            help: Some(
+                "Add a closing double quote",
+            ),
+            code: "lex.unterminated_raw_string",
+        },
+    ],
+    blank_lines: [],
+}

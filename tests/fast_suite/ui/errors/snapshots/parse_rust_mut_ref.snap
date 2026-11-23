@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unsupported `&mut`
+   ╭─[test.lis:4:11]
+ 3 │   let mut x = 5;
+ 4 │   let y = &mut x;
+   ·           ──┬─
+   ·             ╰── Lisette has no mutable references
+ 5 │ }
+   ╰────
+  help: Use `&x` · code: [parse.ampersand_mut]

@@ -1,0 +1,71 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum Tree { Node(int, int), Leaf }
+  type T = Tree
+  
+  fn sum(t: T) -> int {
+    match t {
+      Tree.Node(a, b) => a + b,
+      Tree.Leaf => 0,
+    }
+  }
+  
+  fn first(t: Ref<T>) -> int {
+    if let Tree.Node(a, _) = t.* { a } else { 0 }
+  }
+  
+  fn main() {
+    let t: T = Tree.Node(1, 2)
+    fmt.Println(sum(t), first(&t))
+  }
+---
+package main
+
+import "fmt"
+
+func MakeTreeNode(arg0, arg1 int) Tree {
+	return Tree{Tag: TreeNode, Node0: arg0, Node1: arg1}
+}
+
+func MakeTreeLeaf() Tree {
+	return Tree{Tag: TreeLeaf}
+}
+
+type TreeTag uint8
+
+const (
+	TreeNode TreeTag = iota
+	TreeLeaf
+)
+
+type Tree struct {
+	Tag   TreeTag
+	Node0 int
+	Node1 int
+}
+
+type T = Tree
+
+func sum(t T) int {
+	if t.Tag == TreeNode {
+		return t.Node0 + t.Node1
+	}
+	return 0
+}
+
+func first(t *T) int {
+	subject := *t
+	if subject.Tag == TreeNode {
+		return subject.Node0
+	}
+	return 0
+}
+
+func main() {
+	t := MakeTreeNode(1, 2)
+	fmt.Println(sum(t), first(&t))
+}

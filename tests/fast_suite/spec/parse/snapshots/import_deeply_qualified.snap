@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  import "core/net/http"
+---
+[
+    PackageImport {
+        name: "core/net/http",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 15,
+        },
+        alias: None,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 22,
+        },
+    },
+]

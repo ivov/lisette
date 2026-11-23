@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  import "go:crypto"
+  import "go:crypto/ecdh"
+  import "go:io"
+  import "go:math/big"
+---
+import "go:crypto"
+import "go:crypto/ecdh"
+import "go:io"
+import "go:math/big"

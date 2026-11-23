@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid method value
+   ╭─[test.lis:4:11]
+ 3 │   let opt: Option<int> = Some(42);
+ 4 │   let f = opt.map;
+   ·           ───┬───
+   ·              ╰── taking value not allowed
+ 5 │ }
+   ╰────
+  help: Call the method directly: `obj.method(...)`. This method cannot be taken as a value · code: [infer.taking_value_of_ufcs_method]

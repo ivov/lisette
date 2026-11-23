@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn new(value: T) -> Box<T> {
+      Box { value: value }
+    }
+  }
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func newBox[T any](value T) Box[T] {
+	return Box[T]{value: value}
+}

@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(ch: Channel<int>) -> int {
+    ch.length()
+  }
+---
+package main
+
+func test(ch chan int) int {
+	return len(ch)
+}

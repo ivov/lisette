@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: string, sub: string) -> bool {
+    s.contains(sub)
+  }
+---
+package main
+
+import "strings"
+
+func test(s, sub string) bool {
+	return strings.Contains(s, sub)
+}

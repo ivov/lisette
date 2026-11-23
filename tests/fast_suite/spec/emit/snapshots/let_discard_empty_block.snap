@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() {
+    let _ = {}
+  }
+---
+package main
+
+func test() {}

@@ -1,0 +1,90 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  pub enum Hand {
+    Left,
+    Right,
+  }
+  
+  impl Hand {
+    pub fn left_right(self, other: Hand) -> bool {
+      match (self, other) {
+        (Hand.Left, Hand.Right) => true,
+        _ => false,
+      }
+    }
+  
+    pub fn left_left(self, other: Hand) -> bool {
+      match (self, other) {
+        (Hand.Left, Hand.Left) => true,
+        _ => false,
+      }
+    }
+  
+    pub fn eq(self, other: Hand) -> bool {
+      match (self, other) {
+        (Hand.Left, Hand.Left) => true,
+        (Hand.Right, Hand.Right) => true,
+        _ => false,
+      }
+    }
+  }
+---
+package main
+
+func MakeHandLeft() Hand {
+	return Hand{Tag: HandLeft}
+}
+
+func MakeHandRight() Hand {
+	return Hand{Tag: HandRight}
+}
+
+type HandTag uint8
+
+const (
+	HandLeft HandTag = iota
+	HandRight
+)
+
+type Hand struct {
+	Tag HandTag
+}
+
+func (h Hand) LeftRight(other Hand) bool {
+	if h.Tag == HandLeft {
+		if other.Tag == HandRight {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+func (h Hand) LeftLeft(other Hand) bool {
+	if h.Tag == HandLeft {
+		if other.Tag == HandLeft {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+func (h Hand) Eq(other Hand) bool {
+	switch h.Tag {
+	case HandLeft:
+		if other.Tag == HandLeft {
+			return true
+		}
+		return false
+	case HandRight:
+		if other.Tag == HandRight {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}

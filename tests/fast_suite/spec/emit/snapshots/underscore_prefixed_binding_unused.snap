@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() {
+    let _x = 42;
+  }
+---
+package main
+
+func test() {}

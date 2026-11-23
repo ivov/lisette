@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Deferred `RLock` instead of `RUnlock`
+    ╭─[test.lis:11:11]
+ 10 │     self.rw.RLock()
+ 11 │     defer self.rw.RLock()
+    ·           ───────┬───────
+    ·                  ╰── re-locks at function exit
+ 12 │   }
+    ╰────
+  help: Deferring `RLock` re-acquires the lock when the function returns, deadlocking the next caller. Did you mean `RUnlock`? · code: [infer.deferred_lock]

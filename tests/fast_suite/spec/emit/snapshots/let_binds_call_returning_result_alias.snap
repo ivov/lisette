@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type MyRes = Result<int, error>
+  
+  fn source() -> MyRes {
+    Ok(3)
+  }
+  
+  fn main() {
+    let a = source()
+    let _ = a
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyRes = lisette.Result[int, error]
+
+func source() (int, error) {
+	return 3, nil
+}
+
+func main() {
+	a := lisette.ResultFromPair[int](source())
+	_ = a
+}

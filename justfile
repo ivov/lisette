@@ -1,16 +1,3 @@
-alias b := build
-alias c := check
-alias t := test
-alias tu := test-unit
-alias tr := test-review
-alias ta := test-accept
-alias te := test-e2e-smoke
-alias r := run
-alias f := format
-alias l := lint
-alias lf := lintfix
-alias cov := test-cov
-
 export INSTA_YAML_BLOCK_STYLE := "1"
 
 build:
@@ -23,52 +10,54 @@ grammar:
     npm --prefix editors/tree-sitter-lisette ci
     npm --prefix editors/tree-sitter-lisette run build
 
-test:
-    cargo test -p tests --test suite -- --format terse
-    cargo test -p lisette-lsp --test lsp -- --format terse
-    cargo test -p tests --test manifest_pins -- --format terse
+# `fast_*` tests: the compiler and language server as a library, without `lis` or Go.
+test-fast:
+    cargo test -p tests --locked --test fast_suite --test fast_lsp --test fast_release -- --format terse
 
+# Unit tests inside each crate.
 test-unit:
     cargo test --workspace --lib --bins --locked -- --format terse
     cargo test -p lisette --bins --locked --features self-upgrade -- --format terse
 
-_test-check:
-    cargo test --workspace --lib --bins --test suite --test lsp --test session --test manifest_pins -- --format terse
-    cargo test -p lisette --bins --features self-upgrade -- --format terse
-
 test-infer:
-    cargo test -p tests --test suite infer_tests
+    cargo test -p tests --test fast_suite infer_tests
 
 test-watch:
-    cargo watch -x "test -p tests --test suite"
+    cargo watch -x "test -p tests --test fast_suite"
 
-test-review:
+snap-review:
     cargo insta review
 
-test-accept:
+snap-accept:
     cargo insta accept --all
 
-test-e2e-smoke:
-    cargo build -p lisette
-    cargo test -p tests --test e2e_smoke
+# `cli_*` tests: `lis` CLI commands on small projects.
+test-cli:
+    cargo build -p lisette --locked
+    cd bindgen && go build -o bin/bindgen .
+    cargo test -p tests --locked \
+        --test cli_language \
+        --test cli_run \
+        --test cli_cross \
+        --test cli_library \
+        --test cli_go_dependencies \
+        --test cli_external_tests \
+        --test cli_learn \
+        --test cli_lsp \
+        -- --format terse
 
-test-e2e-cross:
-    cargo build -p lisette
-    cargo test -p tests --test e2e_cross
+# `go_*` tests: Lisette against the Go toolchain.
+test-go:
+    cargo test -p tests --locked --test go_emit --test go_rejections -- --nocapture
 
-test-e2e-suite:
-    cargo test -p tests --test e2e_suite -- --nocapture
-
-test-embed-diff:
-    cargo test -p tests --test embed_diff -- --nocapture
-
-test-conversion-shapes:
-    cargo test -p tests --test conversion_shapes -- --nocapture
+# `fuzz_*` tests: random changes to test programs. `seconds` limits the run.
+test-fuzz seconds="600":
+    FUZZ_SECONDS={{seconds}} cargo test --release -p tests --locked --test fuzz_emit -- --nocapture
 
 test-cov:
-    cargo llvm-cov -p tests -p lisette-lsp --test suite --test lsp --html --open
+    cargo llvm-cov -p tests --test fast_suite --test fast_lsp --html --open
 
-test-refresh-snapshots:
+snap-refresh:
     cargo insta test --force-update-snapshots
 
 format:
@@ -93,15 +82,16 @@ lintfix:
 run file:
     cargo run -p lisette -- {{file}}
 
-check: format-check _test-check lint
+# What the git hook runs before each commit.
+pre-commit: format-check test-fast test-unit lint
 
 perf-flamegraph:
     cargo build --profile flamegraph -p lisette
-    sudo flamegraph -o flamegraph.svg -- ./target/flamegraph/lis check tests/e2e_smoke_project
+    sudo flamegraph -o flamegraph.svg -- ./target/flamegraph/lis check tests/cli_language/project
 
 perf-samply:
     cargo build --profile flamegraph -p lisette
-    samply record ./target/flamegraph/lis check tests/e2e_smoke_project
+    samply record ./target/flamegraph/lis check tests/cli_language/project
 
 loc:
     git fetch origin gh-pages:gh-pages

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:8:16]
+ 7 │   let view: Slice<string> = names
+ 8 │   sort.Strings(view)
+   ·                ──┬─
+   ·                  ╰── expected `mut Slice<string>`, found `Slice<string>`
+ 9 │ }
+   ╰────
+  help: Declare `view` as `mut Slice<string>`. It is declared as `Slice<string>`. `mut Slice<string>` permits writes, `Slice<string>` does not · code: [infer.needs_writable]

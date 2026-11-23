@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f(x: int) -> int {
+    match x {
+      1 => 1,
+      _ => 0,
+      // trailing in match block
+    }
+  }
+---
+fn f(x: int) -> int {
+  match x {
+    1 => 1,
+    _ => 0,
+
+    // trailing in match block
+  }
+}

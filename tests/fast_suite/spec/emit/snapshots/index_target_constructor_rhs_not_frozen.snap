@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Wrap(int)
+  
+  fn run() -> int {
+    let mut xs = [Wrap(0), Wrap(0)]
+    let i = 0
+    xs[i] = Wrap(5)
+    xs[0].0
+  }
+---
+package main
+
+type Wrap int
+
+func run() int {
+	xs := []Wrap{Wrap(0), Wrap(0)}
+	i := 0
+	xs[i] = Wrap(5)
+	return int(xs[0])
+}

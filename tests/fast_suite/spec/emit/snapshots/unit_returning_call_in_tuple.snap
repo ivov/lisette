@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn do_nothing() {}
+  
+  fn main() {
+    let t = (42, do_nothing())
+    let _ = t.0
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func doNothing() {}
+
+func main() {
+	doNothing()
+	t := lisette.MakeTuple2[int, struct{}](42, struct{}{})
+	_ = t.First
+}

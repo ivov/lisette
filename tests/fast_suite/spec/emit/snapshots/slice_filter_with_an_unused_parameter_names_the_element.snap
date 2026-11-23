@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>) -> Slice<int> {
+    s.filter(|_x| true)
+  }
+---
+package main
+
+func test(s []int) []int {
+	var result []int
+	for _, v := range s {
+		if true {
+			result = append(result, v)
+		}
+	}
+	return result
+}

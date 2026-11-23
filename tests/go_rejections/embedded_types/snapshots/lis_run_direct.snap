@@ -1,0 +1,20 @@
+---
+source: tests/go_rejections/embedded_types/render_lis.rs
+---
+import "go:fmt"
+
+struct N0 {}
+impl N0 {
+  pub fn M(self) -> string {
+    "N0.M"
+  }
+}
+
+fn main() {
+  let r0 = N0 { .. }
+  fmt.Println(r0.M())
+  let f0 = r0.M
+  fmt.Println(f0())
+  let g0 = N0.M
+  fmt.Println(g0(r0))
+}

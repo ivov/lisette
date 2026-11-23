@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/ui/lint/fixes.rs
+---
+pub fn f(o: Option<int>) -> int {
+  match o {
+    Some(x) => match x {
+      1 | 2 => 10,
+      _ => 0,
+    },
+    _ => 0,
+  }
+}
+=== fixed ===
+pub fn f(o: Option<int>) -> int {
+  match o {
+    Some(1 | 2) => 10,
+    _ => 0,
+  }
+}

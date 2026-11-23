@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(items: Slice<int>) -> string {
+    match items {
+      [] => "empty",
+      _ => "not empty",
+    }
+  }
+---
+package main
+
+func test(items []int) string {
+	if len(items) == 0 {
+		return "empty"
+	}
+	return "not empty"
+}

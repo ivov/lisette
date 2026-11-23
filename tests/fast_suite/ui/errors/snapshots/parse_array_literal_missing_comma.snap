@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let arr = [1 2 3];
+   ·                ┬
+   ·                ╰── expected `,` or `]`
+ 4 │ }
+   ╰────
+  help: Add a comma between elements · code: [parse.syntax_error]

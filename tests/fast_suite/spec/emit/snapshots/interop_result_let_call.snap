@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn main() {
+    let f = strconv.Atoi
+    let r = f("42")
+    match r {
+      Ok(v) => { let _ = v },
+      Err(_) => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import (
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	f := func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}
+	r := f("42")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
+	}
+}

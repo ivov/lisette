@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Params {
+    pub alpha: Option<Ref<big.Int>>,
+    pub beta: Option<Ref<big.Int>>,
+    pub gamma: Option<Ref<big.Int>>,
+    pub size: int,
+  }
+---
+struct Params {
+  pub alpha: Option<Ref<big.Int>>,
+  pub beta: Option<Ref<big.Int>>,
+  pub gamma: Option<Ref<big.Int>>,
+  pub size: int,
+}

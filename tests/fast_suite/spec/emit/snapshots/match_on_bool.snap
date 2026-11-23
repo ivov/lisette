@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(flag: bool) -> int {
+    match flag {
+      true => 1,
+      false => 0,
+    }
+  }
+---
+package main
+
+func test(flag bool) int {
+	if flag {
+		return 1
+	}
+	return 0
+}

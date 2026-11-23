@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn test() {
+    let mut x = 42
+    let r1 = &x
+    let r2 = &r1
+    let val = r2.*
+  }
+---
+package main
+
+func test() {
+	x := 42
+	r1 := &x
+	r2 := r1
+	_ = *r2
+}

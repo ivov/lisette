@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn noop() {}
+  fn take(_x: ()) {}
+  
+  fn test() {
+    take(noop())
+  }
+---
+package main
+
+func noop() {}
+
+func take(_ struct{}) {}
+
+func test() {
+	noop()
+	take(struct{}{})
+}

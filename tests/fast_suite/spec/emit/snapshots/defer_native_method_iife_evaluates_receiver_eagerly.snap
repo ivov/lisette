@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn get_items() -> Slice<int> {
+    [1]
+  }
+  
+  fn test() {
+    defer get_items().length()
+  }
+---
+package main
+
+func getItems() []int {
+	return []int{1}
+}
+
+func test() {
+	arg := getItems()
+	defer func() {
+		_ = len(arg)
+	}()
+}

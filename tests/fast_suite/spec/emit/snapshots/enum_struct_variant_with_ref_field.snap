@@ -1,0 +1,50 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  enum Tree {
+    Leaf(int),
+    Node { value: int, left: Ref<Tree>, right: Ref<Tree> },
+  }
+  
+  fn test() -> Tree {
+    let l = Tree.Leaf(1);
+    let r = Tree.Leaf(2);
+    Tree.Node { value: 0, left: &l, right: &r }
+  }
+---
+package main
+
+func MakeTreeLeaf(arg0 int) Tree {
+	return Tree{Tag: TreeLeaf, Leaf: arg0}
+}
+
+func MakeTreeNode(arg0 int, arg1, arg2 *Tree) Tree {
+	return Tree{Tag: TreeNode, Value: arg0, Left: arg1, Right: arg2}
+}
+
+type TreeTag uint8
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree struct {
+	Tag   TreeTag
+	Leaf  int
+	Value int
+	Left  *Tree
+	Right *Tree
+}
+
+func test() Tree {
+	l := MakeTreeLeaf(1)
+	r := MakeTreeLeaf(2)
+	return Tree{
+		Tag:   TreeNode,
+		Value: 0,
+		Left:  &l,
+		Right: &r,
+	}
+}

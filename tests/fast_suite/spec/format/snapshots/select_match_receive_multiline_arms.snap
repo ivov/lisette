@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    select {
+      match ch.receive() {
+        Some(msg) => {
+          log(msg);
+          process(msg);
+        },
+        None => cleanup(),
+      },
+      _ => {},
+    }
+  }
+---
+fn test() {
+  select {
+    match ch.receive() {
+      Some(msg) => {
+        log(msg)
+        process(msg)
+      },
+      None => cleanup(),
+    },
+    _ => {},
+  }
+}

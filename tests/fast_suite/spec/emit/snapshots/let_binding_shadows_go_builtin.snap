@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test(items: Slice<int>) -> int {
+    let len = items.length();
+    len
+  }
+---
+package main
+
+func test(items []int) int {
+	len_ := len(items)
+	return len_
+}

@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let pct = 50;
+    fmt.Print(f"{pct}% complete")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	pct := 50
+	fmt.Printf("%d%% complete", pct)
+}

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Logger {}
+  
+  impl Logger {
+    fn push(self, entries: VarArgs<string>) {}
+  }
+  
+  fn test(l: Logger, parts: Slice<string>) {
+    l.push(parts...)
+  }
+---
+package main
+
+type Logger struct{}
+
+func (l Logger) push(_ ...string) {}
+
+func test(l Logger, parts []string) {
+	l.push(parts...)
+}

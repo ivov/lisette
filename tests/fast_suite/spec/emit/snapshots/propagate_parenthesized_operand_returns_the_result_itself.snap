@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn get_value(r: Result<int, string>) -> Result<int, string> {
+    let x = (r)?
+    Ok(x + 1)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func getValue(r lisette.Result[int, string]) lisette.Result[int, string] {
+	if r.Tag != lisette.ResultOk {
+		return r
+	}
+	x := r.OkVal
+	return lisette.MakeResultOk[int, string](x + 1)
+}

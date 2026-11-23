@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn test(arr: Slice<int>) {
+    let view = arr[1..4]
+    let mut owned = arr[1..4].clone()
+    owned[0] = 99
+    let _ = view
+  }
+---
+package main
+
+import "slices"
+
+func test(arr []int) {
+	view := arr[1:4:4]
+	owned := slices.Clone(arr[1:4:4])
+	owned[0] = 99
+	_ = view
+}

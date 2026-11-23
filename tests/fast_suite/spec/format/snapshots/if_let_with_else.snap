@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test(opt: Option<int>) -> int { if let Some(x) = opt { x } else { 0 } }"
+---
+fn test(opt: Option<int>) -> int {
+  if let Some(x) = opt { x } else { 0 }
+}

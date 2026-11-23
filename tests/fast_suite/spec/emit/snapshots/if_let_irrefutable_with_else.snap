@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(x: int) -> int {
+    if let y = x {
+      y * 2
+    } else {
+      0
+    }
+  }
+---
+package main
+
+func test(x int) int {
+	return x * 2
+}

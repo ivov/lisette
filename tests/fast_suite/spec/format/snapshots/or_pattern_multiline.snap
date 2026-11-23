@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    match x {
+      1 | 2 | 3 => "small",
+      4 | 5 | 6 => "medium",
+      _ => "large",
+    }
+  }
+---
+fn test() {
+  match x {
+    1 | 2 | 3 => "small",
+    4 | 5 | 6 => "medium",
+    _ => "large",
+  }
+}

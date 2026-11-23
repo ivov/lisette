@@ -1,7 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "fn test() { !flag }"
----
-fn test() {
-  !flag
-}

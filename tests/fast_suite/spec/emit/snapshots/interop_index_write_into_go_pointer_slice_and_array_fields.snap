@@ -1,0 +1,123 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  import "go:regexp/syntax"
+  
+  fn main() {
+    let mut attr = os.ProcAttr { Dir: "", Env: [], Files: [Some(os.Stdin), None], Sys: None }
+    attr.Files[0] = None
+    attr.Files[1] = Some(os.Stderr)
+    let Ok(re) = syntax.Parse("a", syntax.Perl) else { panic("parse") }
+    let Ok(other) = syntax.Parse("b", syntax.Perl) else { panic("parse") }
+    re.Sub0[0] = Some(other)
+    if attr.Files[0].is_some() || attr.Files[1].is_none() { panic("slice field write lost") }
+    if re.Sub0[0].is_none() { panic("array field write lost") }
+    (re.Sub0)[0] = None
+    if re.Sub0[0].is_some() { panic("array field reset lost") }
+    (attr.Files)[1] = None
+    if attr.Files[1].is_some() { panic("parenthesized slice field write lost") }
+  }
+---
+package main
+
+import (
+	"os"
+	"regexp/syntax"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	src := []lisette.Option[*os.File]{
+		lisette.MakeOptionSome(os.Stdin),
+		lisette.MakeOptionNone[*os.File](),
+	}
+	unwrapped := make([]*os.File, len(src))
+	for i, v := range src {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = v.SomeVal
+		}
+	}
+	attr := os.ProcAttr{
+		Dir:   "",
+		Env:   []string{},
+		Files: unwrapped,
+		Sys:   nil,
+	}
+	attr.Files[0] = nil
+	attr.Files[1] = os.Stderr
+	re, err := syntax.Parse("a", syntax.Perl)
+	if err != nil || re == nil {
+		panic("parse")
+	}
+	other, err2 := syntax.Parse("b", syntax.Perl)
+	if err2 != nil || other == nil {
+		panic("parse")
+	}
+	re.Sub0[0] = other
+	raw := attr.Files
+	wrapped := make([]lisette.Option[*os.File], len(raw))
+	for i2, v2 := range raw {
+		if v2 != nil {
+			wrapped[i2] = lisette.MakeOptionSome[*os.File](v2)
+		} else {
+			wrapped[i2] = lisette.MakeOptionNone[*os.File]()
+		}
+	}
+	cond := wrapped[0].IsSome()
+	if !cond {
+		raw2 := attr.Files
+		wrapped2 := make([]lisette.Option[*os.File], len(raw2))
+		for i3, v3 := range raw2 {
+			if v3 != nil {
+				wrapped2[i3] = lisette.MakeOptionSome[*os.File](v3)
+			} else {
+				wrapped2[i3] = lisette.MakeOptionNone[*os.File]()
+			}
+		}
+		cond = wrapped2[1].IsNone()
+	}
+	if cond {
+		panic("slice field write lost")
+	}
+	raw3 := re.Sub0
+	var wrapped3 [1]lisette.Option[*syntax.Regexp]
+	for i4, v4 := range raw3 {
+		if v4 != nil {
+			wrapped3[i4] = lisette.MakeOptionSome[*syntax.Regexp](v4)
+		} else {
+			wrapped3[i4] = lisette.MakeOptionNone[*syntax.Regexp]()
+		}
+	}
+	if wrapped3[0].IsNone() {
+		panic("array field write lost")
+	}
+	re.Sub0[0] = nil
+	raw4 := re.Sub0
+	var wrapped4 [1]lisette.Option[*syntax.Regexp]
+	for i5, v5 := range raw4 {
+		if v5 != nil {
+			wrapped4[i5] = lisette.MakeOptionSome[*syntax.Regexp](v5)
+		} else {
+			wrapped4[i5] = lisette.MakeOptionNone[*syntax.Regexp]()
+		}
+	}
+	if wrapped4[0].IsSome() {
+		panic("array field reset lost")
+	}
+	attr.Files[1] = nil
+	raw5 := attr.Files
+	wrapped5 := make([]lisette.Option[*os.File], len(raw5))
+	for i6, v6 := range raw5 {
+		if v6 != nil {
+			wrapped5[i6] = lisette.MakeOptionSome[*os.File](v6)
+		} else {
+			wrapped5[i6] = lisette.MakeOptionNone[*os.File]()
+		}
+	}
+	if wrapped5[1].IsSome() {
+		panic("parenthesized slice field write lost")
+	}
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `Color` has no zero value
+   ╭─[test.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let c = zero<Color>()
+   ·           ──────┬──────
+   ·                 ╰── `Color` does not satisfy `Zeroable`
+ 6 │ }
+   ╰────
+  help: Mark the variant that should be the zero with `#[default]`, or build the value explicitly. `Color` is an enum with no variant marked `#[default]`, so it has no zero value · code: [infer.not_zeroable_bound]

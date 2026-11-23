@@ -1,0 +1,82 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  struct Point {
+    pub x: int,
+    pub y: int,
+  }
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Point",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 5,
+        },
+        generics: [],
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    name: "x",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 22,
+                        byte_length: 1,
+                    },
+                    annotation: Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 25,
+                            byte_length: 3,
+                        },
+                    },
+                    visibility: Public,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+                StructFieldDefinition {
+                    doc: None,
+                    name: "y",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 36,
+                        byte_length: 1,
+                    },
+                    annotation: Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 39,
+                            byte_length: 3,
+                        },
+                    },
+                    visibility: Public,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+            ],
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 44,
+        },
+    },
+]

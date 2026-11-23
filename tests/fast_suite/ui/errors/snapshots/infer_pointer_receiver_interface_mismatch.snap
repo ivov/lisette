@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:18:14]
+ 17 │   let w = MyWorker { label: "test", count: 0 }
+ 18 │   use_worker(w)
+    ·              ┬
+    ·              ╰── `MyWorker` does not implement `Worker`
+ 19 │ }
+    ╰────
+  help: Take a reference with `&` (for example `&MyWorker { ... }`). `MyWorker.work` takes `self: Ref<MyWorker>`, so `Worker` is satisfied by a `Ref<MyWorker>`, not a value · code: [infer.interface_not_implemented]

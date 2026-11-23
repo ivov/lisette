@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Duplicate name in impl
+    ╭─[test.lis:9:6]
+  8 │ impl Foo {
+  9 │   fn bar(self: Foo) {}
+    ·      ─┬─
+    ·       ╰── method name already taken
+ 10 │ }
+    ╰────
+  help: Rename one of the methods. Method `bar` is already defined for type `Foo` · code: [infer.duplicate_impl_item]

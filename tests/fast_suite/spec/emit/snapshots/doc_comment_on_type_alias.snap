@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  /// A unique identifier for a user.
+  type UserId = int
+---
+package main
+
+// A unique identifier for a user.
+type UserId = int

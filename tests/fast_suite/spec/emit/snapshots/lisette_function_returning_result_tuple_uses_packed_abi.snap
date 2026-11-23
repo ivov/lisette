@@ -1,0 +1,36 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn pair<A, B>(a: A, b: B) -> Result<(A, B), error> {
+    Ok((a, b))
+  }
+  
+  fn test() {
+    match pair<int, string>(1, "x") {
+      Ok((first, second)) => {
+        let _ = first
+        let _ = second
+      },
+      Err(e) => {
+        let _ = e
+      },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair[A any, B any](a A, b B) (lisette.Tuple2[A, B], error) {
+	return lisette.MakeTuple2[A, B](a, b), nil
+}
+
+func test() {
+	if ret, e := pair[int, string](1, "x"); e == nil {
+		_ = ret.First
+		_ = ret.Second
+	} else {
+		_ = e
+	}
+}

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn run() {
+    let mut dst = [0, 0, 0]
+    let mut src = [1, 2, 3]
+    defer dst.copy_from(src)
+    src = [9, 9, 9]
+  }
+---
+package main
+
+func run() {
+	dst := []int{0, 0, 0}
+	src := []int{1, 2, 3}
+	arg := dst
+	arg2 := src
+	defer func() {
+		_ = copy(arg, arg2)
+	}()
+	src = []int{9, 9, 9}
+}

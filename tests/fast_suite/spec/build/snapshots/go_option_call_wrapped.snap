@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"go/doc/comment"
+)
+
+func main() {
+	_, ok := comment.DefaultLookupPackage("math")
+	fmt.Print(ok)
+}

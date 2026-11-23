@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn get_end() -> int { 5 }
+  
+  fn test() -> int {
+    let mut sum = 0;
+    for i in 0..get_end() {
+      sum = sum + i;
+    };
+    sum
+  }
+---
+package main
+
+func getEnd() int {
+	return 5
+}
+
+func test() int {
+	sum := 0
+	for i := range getEnd() {
+		sum += i
+	}
+	return sum
+}

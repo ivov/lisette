@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Store<K: Comparable, V> {
+    fn entries() -> Map<K, V>
+  }
+---
+package main
+
+type Store[K comparable, V any] interface {
+	entries() map[K]V
+}

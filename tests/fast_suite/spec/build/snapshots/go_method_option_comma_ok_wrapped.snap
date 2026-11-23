@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+func main() {
+	ctx := context.Background()
+	_, ok := ctx.Deadline()
+	fmt.Print(ok)
+}

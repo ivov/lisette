@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn bump(i: mut Ref<int>) -> int {
+    i.* = 1
+    10
+  }
+  
+  fn main() {
+    let mut i = 0
+    let mut items: Slice<int> = []
+    items = items.append(i, bump(&i))
+    let _ = items
+  }
+---
+package main
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func main() {
+	i := 0
+	items := []int{}
+	arg := i
+	items = append(items, arg, bump(&i))
+	_ = items
+}

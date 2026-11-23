@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  pub struct Service {}
+  
+  impl Service {
+    pub fn get_session(self) -> int { 42 }
+  }
+  
+  fn main() {
+    let s = Service {};
+    let _ = Service.get_session(s);
+  }
+---
+package main
+
+type Service struct{}
+
+func (s Service) GetSession() int {
+	return 42
+}
+
+func main() {
+	s := Service{}
+	s.GetSession()
+}

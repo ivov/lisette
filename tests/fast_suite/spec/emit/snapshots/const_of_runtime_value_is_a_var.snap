@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn double(x: int) -> int { x * 2 }
+  
+  const N: Option<int> = None
+  const EMPTY: bool = N == None
+  const HANDLER: fn(int) -> int = double
+  const LIMIT = 10
+  const NEXT = LIMIT + 1
+  
+  fn main() {
+    fmt.Println(N, EMPTY, HANDLER(NEXT))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func double(x int) int {
+	return x * 2
+}
+
+var N lisette.Option[int] = lisette.MakeOptionNone[int]()
+
+var Empty bool = N == lisette.MakeOptionNone[int]()
+
+var Handler func(int) int = double
+
+const Limit int = 10
+
+const Next int = Limit + 1
+
+func main() {
+	fmt.Println(N, Empty, Handler(Next))
+}

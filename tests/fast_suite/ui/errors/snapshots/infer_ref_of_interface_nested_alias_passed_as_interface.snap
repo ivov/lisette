@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid use of `Ref` with interface
+    ╭─[test.lis:26:7]
+ 25 │   let pp: Ref<P> = ref_of(p)
+ 26 │   foo(pp)
+    ·       ─┬
+    ·        ╰── `Ref<P>` does not implement `Foo`
+ 27 │ }
+    ╰────
+  help: Dereference with `.*` until reaching the interface value. A reference to an interface does not implement the interface · code: [infer.ref_of_interface]

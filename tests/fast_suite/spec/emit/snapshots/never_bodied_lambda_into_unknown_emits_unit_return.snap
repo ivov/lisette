@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn take_any(x: Unknown) {}
+  
+  fn test() {
+    take_any(|| { panic("boom") })
+  }
+---
+package main
+
+func takeAny(_ any) {}
+
+func test() {
+	cb := func() struct{} {
+		panic("boom")
+	}
+	takeAny(func() {
+		cb()
+	})
+}

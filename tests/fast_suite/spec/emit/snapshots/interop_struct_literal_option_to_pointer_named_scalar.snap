@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/cb"
+  
+  fn main() {
+    let _ = cb.Options {
+      Direction: Some(cb.DirectionDefault),
+    }
+  }
+---
+package main
+
+import "example.com/cb"
+
+func main() {
+	var ptr cb.Direction = cb.DirectionDefault
+	_ = cb.Options{Direction: &ptr}
+}

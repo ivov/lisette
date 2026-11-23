@@ -141,16 +141,17 @@ jobs:
       - run: cd prelude && golangci-lint run
       - run: cd bindgen && go test ./...
 
-  test-suite:
-    name: Test suite
+  test-fast:
+    name: Fast tests
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
-      - run: cargo test -p tests --test suite --locked -- --format terse
-      - run: cargo test -p tests --test manifest_pins --locked -- --format terse
+        with:
+          just: 'true'
+      - run: just test-fast
 
   test-unit:
     name: Unit tests
@@ -163,17 +164,6 @@ jobs:
         with:
           just: 'true'
       - run: just test-unit
-
-  lsp-test:
-    name: LSP tests
-    needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-      - uses: ./.github/actions/setup-rust
-      - run: cargo test -p lisette-lsp --test lsp --locked -- --format terse
-      - run: cargo test -p lisette-lsp --test session --locked -- --format terse
 
   playground-lsp:
     name: Playground LSP
@@ -206,8 +196,8 @@ jobs:
       - run: wasm-bindgen --target web --out-dir "$RUNNER_TEMP/wasm" wasm/target/wasm32-unknown-unknown/debug/lisette_wasm.wasm
       - run: node scripts/lsp-smoke.mjs "$RUNNER_TEMP/wasm"
 
-  e2e-smoke:
-    name: E2E smoke
+  test-cli:
+    name: CLI tests
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
@@ -215,24 +205,17 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
+          just: 'true'
           go: 'true'
           go-cache: 'false'
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6
         id: go-build-cache
         with:
           path: ~/.cache/go-build
-          key: go-build-e2e-smoke-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          key: go-build-cli-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
           restore-keys: |
-            go-build-e2e-smoke-${{ runner.os }}-
-      - run: cargo build -p lisette --locked
-      - run: cd bindgen && go build -o bin/bindgen .
-      - run: cargo test -p tests --test e2e_smoke --locked -- --format terse
-      - run: cargo test -p tests --test e2e_learn --locked -- --format terse
-      - run: cargo test -p tests --test e2e_run --locked -- --format terse
-      - run: cargo test -p tests --test e2e_library --locked -- --format terse
-      - run: cargo test -p tests --test e2e_go_dependencies --locked -- --format terse
-      - run: cargo test -p tests --test e2e_cross --locked -- --format terse
-      - run: cargo test -p tests --test e2e_external_tests --locked -- --format terse
+            go-build-cli-${{ runner.os }}-
+      - run: just test-cli
       - if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6
         with:
@@ -307,8 +290,8 @@ jobs:
 
           exit $fail
 
-  e2e-suite:
-    name: E2E suite
+  test-go:
+    name: Go toolchain tests
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
@@ -323,29 +306,15 @@ jobs:
         id: go-build-cache
         with:
           path: ~/.cache/go-build
-          key: go-build-e2e-suite-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          key: go-build-go-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
           restore-keys: |
-            go-build-e2e-suite-${{ runner.os }}-
-      - run: just test-e2e-suite
-      - run: just test-conversion-shapes
+            go-build-go-${{ runner.os }}-
+      - run: just test-go
       - if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6
         with:
           path: ~/.cache/go-build
           key: ${{ steps.go-build-cache.outputs.cache-primary-key }}
-
-  embed-diff:
-    name: Embed differential
-    needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-      - uses: ./.github/actions/setup-rust
-        with:
-          just: 'true'
-          go: 'true'
-      - run: just test-embed-diff
 
   prelude-go:
     name: Prelude tests
@@ -381,7 +350,7 @@ jobs:
       # fails the job unless at least one test actually passed.
       - run: |
           set -o pipefail
-          cargo test -p tests --test e2e_library --locked external_go_program_imports_the_library -- --format terse 2>&1 | tee test-output.log
+          cargo test -p tests --test cli_library --locked external_go_program_imports_the_library -- --format terse 2>&1 | tee test-output.log
           grep -qE 'test result: ok\. [1-9]' test-output.log
 
   shear:
@@ -443,15 +412,13 @@ jobs:
       - clippy
       - clippy-satellites
       - go-checks
-      - test-suite
+      - test-fast
       - test-unit
-      - lsp-test
-      - e2e-smoke
+      - test-cli
       - stdlib-check
       - tree-sitter-check
       - ide-extension-version-check
-      - e2e-suite
-      - embed-diff
+      - test-go
       - prelude-go
       - minimum-go-tests
       - shear

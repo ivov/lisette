@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Private field
+   ╭─[main.lis:5:21]
+ 4 │ fn main() {
+ 5 │   let p = s.Point { x: 1, y: 2 };
+   ·                     ┬
+   ·                     ╰── private to `shapes`
+ 6 │ }
+   ╰────
+  help: Mark the field as `pub`. Field `x` of struct `s.Point` is private · code: [resolve.private_field_access]

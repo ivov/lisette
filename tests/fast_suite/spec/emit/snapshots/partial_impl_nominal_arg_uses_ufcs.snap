@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct User {
+    name: string,
+  }
+  
+  struct Pair<A, B> {
+    a: A,
+    b: B,
+  }
+  
+  impl<B> Pair<User, B> {
+    fn left(self) -> User {
+      self.a
+    }
+  }
+  
+  fn test() -> string {
+    let p = Pair { a: User { name: "x" }, b: 1 };
+    p.left().name
+  }
+---
+package main
+
+type User struct {
+	name string
+}
+
+type Pair[A any, B any] struct {
+	a A
+	b B
+}
+
+func pairLeft[B any](self Pair[User, B]) User {
+	return self.a
+}
+
+func test() string {
+	p := Pair[User, int]{
+		a: User{name: "x"},
+		b: 1,
+	}
+	return pairLeft(p).name
+}

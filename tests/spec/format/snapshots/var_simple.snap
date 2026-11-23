@@ -1,5 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "var ErrNotFound: error"
----
-var ErrNotFound: error

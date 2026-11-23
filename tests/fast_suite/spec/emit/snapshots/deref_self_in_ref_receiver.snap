@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Foo { x: int }
+  
+  impl Foo {
+    fn copy_out(self: Ref<Foo>) -> Foo {
+      let copy = self.*
+      Foo { x: copy.x }
+    }
+  }
+---
+package main
+
+type Foo struct {
+	x int
+}
+
+func (f *Foo) copyOut() Foo {
+	copy := *f
+	return Foo{x: copy.x}
+}

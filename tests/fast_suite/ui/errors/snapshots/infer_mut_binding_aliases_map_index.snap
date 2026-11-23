@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot write to `s[0]`
+   ╭─[test.lis:4:3]
+ 3 │   let mut s = m["k"]
+ 4 │   s[0] = 1
+   ·   ────┬───
+   ·       ╰── `s` is read-only
+ 5 │ }
+   ╰────
+  help: Make `m` writable, or write to a `.clone()` for an independent copy. `s` shares storage with `m`, which is read-only · code: [infer.write_through_read_only]

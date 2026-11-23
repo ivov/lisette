@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn noop() {}
+  
+  fn test() {
+    let mut xs: Slice<()> = []
+    xs.append(noop())
+  }
+---
+package main
+
+import "slices"
+
+func noop() {}
+
+func test() {
+	xs := []struct{}{}
+	noop()
+	_ = append(slices.Clip(xs), struct{}{})
+}

@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test(res: Result<int, string>) -> int { let Ok(x) = res else { return 0; }; x }"
+---
+fn test(res: Result<int, string>) -> int {
+  let Ok(x) = res else {
+    return 0
+  }
+  x
+}

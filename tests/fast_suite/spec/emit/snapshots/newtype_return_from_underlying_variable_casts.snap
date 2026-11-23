@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct UserId(int)
+  
+  fn make(i: int) -> UserId {
+    i as UserId
+  }
+---
+package main
+
+type UserId int
+
+func make_(i int) UserId {
+	return UserId(i)
+}

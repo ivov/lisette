@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Cb(fn(int) -> ())
+  
+  fn test(c: Cb) {
+    match c {
+      Cb(f) => f(1),
+    }
+  }
+---
+package main
+
+type Cb func(int) struct{}
+
+func test(c Cb) {
+	(func(int) struct{})(c)(1)
+}

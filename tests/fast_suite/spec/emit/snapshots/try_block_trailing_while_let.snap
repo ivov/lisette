@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> Result<(), string> {
+    try {
+      let _ = Ok(1)?
+      let o = Some(1)
+      while let Some(_v) = o {
+        break
+      }
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Result[struct{}, string] {
+	check := lisette.MakeResultOk[int, string](1)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check.ErrVal)
+	}
+	o := lisette.MakeOptionSome(1)
+	for {
+		if o.Tag == lisette.OptionSome {
+			break
+		}
+		break
+	}
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}

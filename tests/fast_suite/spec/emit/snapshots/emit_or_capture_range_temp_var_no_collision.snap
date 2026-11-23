@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn make_range() -> Range<int> { 0..2 }
+  
+  fn main() {
+    let s = [1, 2, 3];
+    let sub = s[make_range()];
+    let range_1 = 7;
+    let _ = sub;
+    let _ = range_1;
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func makeRange() lisette.Range[int] {
+	return lisette.Range[int]{
+		Start: 0,
+		End:   2,
+	}
+}
+
+func main() {
+	s := []int{1, 2, 3}
+	range2 := makeRange()
+	sub := s[range2.Start:range2.End:range2.End]
+	_ = sub
+}

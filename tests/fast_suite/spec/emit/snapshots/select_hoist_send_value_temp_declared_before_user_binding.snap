@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn mark(log: Channel<int>, tag: int) -> int {
+    log.send(tag)
+    tag
+  }
+  
+  fn test() {
+    let log = Channel.buffered<int>(8)
+    let closed = Channel.new<int>()
+    closed.close()
+    let out_ch = Channel.new<int>()
+  
+    let result = select {
+      let Some(v) = closed.receive() => v,
+      out_ch.send(mark(log, 1)) => 0,
+      _ => -1,
+    }
+    let send_val_2 = result + 1
+    fmt.Println(send_val_2)
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func mark(log chan int, tag int) int {
+	lisette.ChannelSend(log, tag)
+	return tag
+}
+
+func test() {
+	log := make(chan int, 8)
+	closed := make(chan int)
+	lisette.ChannelClose(closed)
+	outCh := make(chan int)
+	var result int
+	ch := closed
+	sendVal := mark(log, 1)
+	for {
+		select {
+		case v, ok := <-ch:
+			if ok {
+				result = v
+			} else {
+				ch = nil
+				continue
+			}
+		case outCh <- sendVal:
+			result = 0
+		default:
+			result = -1
+		}
+		break
+	}
+	sendVal2 := result + 1
+	fmt.Println(sendVal2)
+}

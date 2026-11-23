@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test(opt: Option<int>) { while let Some(x) = opt { use(x); } }"
+---
+fn test(opt: Option<int>) {
+  while let Some(x) = opt {
+    use(x)
+  }
+}

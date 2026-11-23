@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type Table<T: Comparable> = Map<T, int>
+  
+  fn id<T: Comparable>(table: Table<T>) -> Table<T> {
+    table
+  }
+  
+  fn main() {
+    let t = Map.new<string, int>()
+    let _ = id(t)
+  }
+---
+package main
+
+type Table[T comparable] = map[T]int
+
+func id[T comparable](table Table[T]) Table[T] {
+	return table
+}
+
+func main() {
+	t := make(map[string]int)
+	id(t)
+}

@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let items = [1, 2, 3]
+    defer Slice.length(items)
+  }
+---
+package main
+
+func test() {
+	items := []int{1, 2, 3}
+	defer func() {
+		_ = len(items)
+	}()
+}

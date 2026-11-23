@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Point {
+      x: int, // the x coordinate
+      y: int, // the y coordinate
+  }
+---
+struct Point {
+  x: int, // the x coordinate
+  y: int, // the y coordinate
+}

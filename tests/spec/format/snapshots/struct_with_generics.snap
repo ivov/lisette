@@ -1,5 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "struct Container<T> { value: T }"
----
-struct Container<T> { value: T }

@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strconv"
+  
+  type F = fn(string) -> Result<int, error>
+  
+  fn main() {
+    let mut xs: Slice<F> = []
+    xs = xs.append(strconv.Atoi)
+    let _ = xs
+  }
+---
+package main
+
+import (
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type F = func(string) lisette.Result[int, error]
+
+func main() {
+	xs := []F{}
+	xs = append(xs, func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	})
+	_ = xs
+}

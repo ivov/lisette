@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Struct `Person` is missing fields
+    ╭─[test.lis:9:11]
+  8 │ fn test() {
+  9 │   let p = Person {
+    ·           ───┬──
+    ·              ╰── missing fields: age, email
+ 10 │     name: "Alice",
+    ╰────
+  help: Initialize all fields, or add `..` to autofill the rest · code: [infer.missing_struct_fields]

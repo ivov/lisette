@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let x = loop {
+      let x = 1
+      break x
+    }
+    x
+  }
+---
+package main
+
+func test() int {
+	var x2 int
+	for {
+		x := 1
+		x2 = x
+		break
+	}
+	return x2
+}

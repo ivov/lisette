@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> float64 {
+    3.14e-5
+  }
+---
+package main
+
+func test() float64 {
+	return 3.14e-5
+}

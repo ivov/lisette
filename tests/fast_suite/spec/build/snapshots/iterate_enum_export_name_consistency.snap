@@ -1,0 +1,50 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func MakePublicPhaseBuild() PublicPhase {
+	return PublicPhase{Tag: PublicPhaseBuild}
+}
+
+func MakeLocalPhaseCheck() LocalPhase {
+	return LocalPhase{Tag: LocalPhaseCheck}
+}
+
+type PublicPhaseTag uint8
+
+const (
+	PublicPhaseBuild PublicPhaseTag = iota
+)
+
+type PublicPhase struct {
+	Tag PublicPhaseTag
+}
+
+func PublicPhaseVariants() []PublicPhase {
+	return []PublicPhase{
+		{Tag: PublicPhaseBuild},
+	}
+}
+
+type LocalPhaseTag uint8
+
+const (
+	LocalPhaseCheck LocalPhaseTag = iota
+)
+
+type LocalPhase struct {
+	Tag LocalPhaseTag
+}
+
+func localPhaseVariants() []LocalPhase {
+	return []LocalPhase{
+		{Tag: LocalPhaseCheck},
+	}
+}
+
+func main() {
+	localPhaseVariants()
+	PublicPhaseVariants()
+}

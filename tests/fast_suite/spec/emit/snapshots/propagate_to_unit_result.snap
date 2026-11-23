@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn returns_int() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn returns_unit() -> Result<(), string> {
+    let _ = returns_int()?;
+    Ok(())
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func returnsInt() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func returnsUnit() lisette.Result[struct{}, string] {
+	check := returnsInt()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check.ErrVal)
+	}
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}

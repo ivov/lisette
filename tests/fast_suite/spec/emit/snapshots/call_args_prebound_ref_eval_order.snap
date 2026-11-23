@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn bump(i: mut Ref<int>) -> int {
+    i.* = 1
+    9
+  }
+  
+  fn first(a: int, _b: int) -> int { a }
+  
+  fn main() {
+    let mut i = 0
+    let m = [[10], [20]]
+    let mut ip = &i
+    let x = first(m[i][0], [bump(ip)][0])
+    let _ = x
+  }
+---
+package main
+
+func bump(i *int) int {
+	*i = 1
+	return 9
+}
+
+func first(a, _ int) int {
+	return a
+}
+
+func main() {
+	i := 0
+	m := [][]int{{10}, {20}}
+	ip := &i
+	arg := m[i][0]
+	x := first(arg, []int{bump(ip)}[0])
+	_ = x
+}

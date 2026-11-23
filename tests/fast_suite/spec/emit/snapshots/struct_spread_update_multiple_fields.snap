@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Config { host: string, port: int, timeout: int }
+  
+  fn test() -> Config {
+    let default_config = Config { host: "localhost", port: 8080, timeout: 30 };
+    Config { port: 9000, timeout: 60, ..default_config }
+  }
+---
+package main
+
+type Config struct {
+	host    string
+	port    int
+	timeout int
+}
+
+func test() Config {
+	defaultConfig := Config{
+		host:    "localhost",
+		port:    8080,
+		timeout: 30,
+	}
+	defaultConfig.port = 9000
+	defaultConfig.timeout = 60
+	return defaultConfig
+}

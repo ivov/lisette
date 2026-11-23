@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    select {
+      tx.Send(42) => done(),
+      _ => timeout(),
+    }
+  }
+---
+fn test() {
+  select {
+    tx.Send(42) => done(),
+    _ => timeout(),
+  }
+}

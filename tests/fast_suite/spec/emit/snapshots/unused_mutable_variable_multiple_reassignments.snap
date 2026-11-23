@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn f() -> int { 42 }
+  fn g() -> int { 99 }
+  
+  fn test() {
+    let mut x = 0
+    x = f()
+    x = g()
+  }
+---
+package main
+
+func f() int {
+	return 42
+}
+
+func g() int {
+	return 99
+}
+
+func test() {
+	f()
+	g()
+}

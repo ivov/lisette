@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Order { id: int, tags: Slice<string> }
+  
+  fn test(a: Slice<Order>, b: Slice<Order>) -> bool {
+    a.equals(b)
+  }
+---
+package main
+
+import "slices"
+
+type Order struct {
+	id   int
+	tags []string
+}
+
+func (o Order) equals(other Order) bool {
+	return o.id == other.id && slices.Equal(o.tags, other.tags)
+}
+
+func test(a, b []Order) bool {
+	return slices.EqualFunc(a, b, func(a2, b2 Order) bool { return a2.equals(b2) })
+}

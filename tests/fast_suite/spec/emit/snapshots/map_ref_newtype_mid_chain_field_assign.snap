@@ -1,0 +1,44 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Inner { x: int }
+  struct Wrap(Inner)
+  struct Outer { w: mut Ref<Wrap> }
+  
+  fn main() {
+    let mut w = Wrap(Inner { x: 0 })
+    let mut m = Map.new<string, mut Outer>()
+    m["a"] = Outer { w: &w }
+    let Some(o) = m.get("a") else { return; };
+    let mut inner = o.w.0
+    inner.x = 2
+    o.w.* = Wrap(inner)
+    let _ = w
+  }
+---
+package main
+
+type Inner struct {
+	x int
+}
+
+type Wrap Inner
+
+type Outer struct {
+	w *Wrap
+}
+
+func main() {
+	w := Wrap(Inner{x: 0})
+	m := make(map[string]Outer)
+	m["a"] = Outer{w: &w}
+	o, ok := m["a"]
+	if !ok {
+		return
+	}
+	inner := Inner(*o.w)
+	inner.x = 2
+	*o.w = Wrap(inner)
+	_ = w
+}

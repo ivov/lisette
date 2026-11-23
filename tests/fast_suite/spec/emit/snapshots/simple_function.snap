@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn foo() {
+    let x = 42;
+  }
+---
+package main
+
+func foo() {}

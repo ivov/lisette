@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Big { a: int, b: int, c: int, d: int }
+  
+  fn test() -> int {
+    let b = Big { a: 1, b: 2, c: 3, d: 4 };
+    match b {
+      Big { a, b, .. } => a + b,
+    }
+  }
+---
+package main
+
+type Big struct {
+	a int
+	b int
+	c int
+	d int
+}
+
+func test() int {
+	b := Big{
+		a: 1,
+		b: 2,
+		c: 3,
+		d: 4,
+	}
+	return b.a + b.b
+}

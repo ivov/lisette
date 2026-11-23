@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn maybe_pair(n: int) -> Option<(int, int)> {
+    if n > 0 { Some((n, n + 1)) } else { None }
+  }
+  fn main() {
+    let r = maybe_pair(5)
+    let _ = r
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybePair(n int) (lisette.Tuple2[int, int], bool) {
+	if n > 0 {
+		return lisette.MakeTuple2[int, int](n, n+1), true
+	}
+	return lisette.Tuple2[int, int]{}, false
+}
+
+func main() {
+	r := lisette.OptionFromCommaOk[lisette.Tuple2[int, int]](maybePair(5))
+	_ = r
+}

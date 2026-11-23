@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Operation has no effect
+   ╭─[test.lis:6:11]
+ 5 │   let x = 5
+ 6 │   let _ = ident(x) + 0
+   ·           ──────┬─────
+   ·                 ╰── one operand leaves the other unchanged
+ 7 │ }
+   ╰────
+  help: Simplify this operation to its other operand · code: [lint.redundant_operation]

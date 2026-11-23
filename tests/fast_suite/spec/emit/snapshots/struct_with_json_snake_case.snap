@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[json(snake_case)]
+  struct User {
+    first_name: string,
+    last_name: string,
+  }
+---
+package main
+
+type User struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}

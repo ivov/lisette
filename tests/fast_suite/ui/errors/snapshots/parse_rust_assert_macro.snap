@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unsupported macro call
+   ╭─[test.lis:4:3]
+ 3 │ fn test() {
+ 4 │   assert!(false)
+   ·   ───┬───
+   ·      ╰── Lisette has no macros
+ 5 │ }
+   ╰────
+  help: Remove the `!`. `assert` is a statement, e.g. `assert a == b` · code: [parse.macro_call]

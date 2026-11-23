@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { if true{1}else{2} }"
+---
+fn test() {
+  if true { 1 } else { 2 }
+}

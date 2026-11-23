@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  /// A user in the system.
+  struct User {
+    /// The user's display name.
+    pub name: string,
+    /// The user's age in years.
+    age: int,
+  }
+---
+package main
+
+// A user in the system.
+type User struct {
+	// The user's display name.
+	Name string
+	// The user's age in years.
+	age int
+}

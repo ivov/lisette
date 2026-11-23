@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> string {
+    r"C:\Users"
+  }
+---
+package main
+
+func test() string {
+	return `C:\Users`
+}

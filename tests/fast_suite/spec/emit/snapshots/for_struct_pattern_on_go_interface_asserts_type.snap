@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:example.com/shapes"
+  
+  fn sum(items: Slice<shapes.Shape>) -> int {
+    let mut total = 0
+    for shapes.Rect { W: w, H: h } in items {
+      total = total + w * h
+    }
+    total
+  }
+---
+package main
+
+import "example.com/shapes"
+
+func sum(items []shapes.Shape) int {
+	total := 0
+	for _, item := range items {
+		asserted := item.(shapes.Rect)
+		w := asserted.W
+		h := asserted.H
+		total += w * h
+	}
+	return total
+}

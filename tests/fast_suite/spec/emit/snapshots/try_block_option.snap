@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn maybe_get() -> Option<int> {
+    Some(42)
+  }
+  
+  fn test() -> int {
+    let opt: Option<int> = try {
+      let x = maybe_get()?;
+      x + 1
+    };
+    match opt {
+      Some(v) => v,
+      None => 0,
+    }
+  }
+---
+package main
+
+func maybeGet() (int, bool) {
+	return 42, true
+}
+
+func test() int {
+	opt, ok := func() (int, bool) {
+		x, ok := maybeGet()
+		if !ok {
+			return 0, false
+		}
+		return x + 1, true
+	}()
+	if ok {
+		return opt
+	}
+	return 0
+}

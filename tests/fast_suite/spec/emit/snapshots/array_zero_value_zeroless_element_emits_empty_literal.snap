@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  struct S {
+    refs: Array<Ref<int>, 0>,
+    n: int,
+  }
+  
+  fn make() -> S {
+    S { n: 1, .. }
+  }
+---
+package main
+
+type S struct {
+	refs [0]*int
+	n    int
+}
+
+func make_() S {
+	return S{n: 1}
+}

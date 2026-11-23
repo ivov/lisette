@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Item { x: int }
+  
+  fn main() {
+    let mut v = Item { x: 0 }
+    let mut r = &v
+    r.*.x = 1
+    let _ = v.x
+  }
+---
+package main
+
+type Item struct {
+	x int
+}
+
+func main() {
+	v := Item{x: 0}
+	r := &v
+	r.x = 1
+	_ = v.x
+}

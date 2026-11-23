@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[yaml(omitempty)]
+  struct User {
+    name: string,
+    email: Option<string>,
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type User struct {
+	Name  string                 `yaml:"name,omitempty"`
+	Email lisette.Option[string] `yaml:"email,omitempty"`
+}

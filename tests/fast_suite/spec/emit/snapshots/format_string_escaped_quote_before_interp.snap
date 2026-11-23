@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let x = 7;
+    fmt.Println(f"prefix \", {x}")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	x := 7
+	fmt.Printf("prefix \", %d\n", x)
+}

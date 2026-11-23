@@ -1,0 +1,67 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  struct Box<T> {
+    value: T,
+  }
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Box",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 3,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                resolved_bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 12,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    name: "value",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 19,
+                        byte_length: 5,
+                    },
+                    annotation: Constructor {
+                        name: "T",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 26,
+                            byte_length: 1,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+            ],
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 29,
+        },
+    },
+]

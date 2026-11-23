@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `match` is not exhaustive
+   ╭─[test.lis:3:3]
+ 2 │ fn f(arr: Array<int, 3>) -> int {
+ 3 │   match arr {
+   ·   ────┬────
+   ·       ╰── not all patterns covered
+ 4 │     [0, ..] => 1
+   ╰────
+  help: Handle the missing case `[_, ..]`, e.g. `[_, ..] => { ... }` · code: [infer.non_exhaustive]

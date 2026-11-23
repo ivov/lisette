@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let _x = 42;
+    _x
+  }
+---
+package main
+
+func test() int {
+	_x := 42
+	return _x
+}

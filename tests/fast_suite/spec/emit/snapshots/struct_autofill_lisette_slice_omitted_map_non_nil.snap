@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Conf { items: Slice<int>, lookup: Map<string, int> }
+  
+  fn test() -> Conf {
+    Conf { .. }
+  }
+---
+package main
+
+type Conf struct {
+	items  []int
+	lookup map[string]int
+}
+
+func test() Conf {
+	return Conf{lookup: map[string]int{}}
+}

@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/recover.rs
+description: |
+  
+  fn test() {
+    let result = recover { "hello" };
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	recoverResult := lisette.RecoverBlock(func() string {
+		return "hello"
+	})
+	_ = recoverResult
+}

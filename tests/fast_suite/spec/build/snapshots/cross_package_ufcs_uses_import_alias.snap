@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/box.go ===
+package lib
+
+type Box[T any] struct {
+	Value T
+}
+
+func BoxMap[T any, U any](self Box[T], f func(T) U) Box[U] {
+	return Box[U]{Value: f(self.Value)}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	L "github.com/user/myproject/lib"
+)
+
+func main() {
+	b := L.Box[int]{Value: 1}
+	c := L.BoxMap(b, func(x int) int {
+		return x + 1
+	})
+	fmt.Println(c.Value)
+}

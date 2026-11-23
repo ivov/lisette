@@ -1,0 +1,57 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Foo { v: int }
+  
+  impl Foo {
+    fn inc(self: mut Ref<Foo>) -> int {
+      self.v += 1
+      self.v
+    }
+    fn get(self) -> int { self.v }
+  }
+  
+  fn make() -> Foo { Foo { v: 1 } }
+  
+  fn main() {
+    let a = Foo.inc(&make())
+    let b = make().inc()
+    let c = (&make()).inc()
+    let d = (&make()).get()
+    fmt.Println(a, b, c, d)
+  }
+---
+package main
+
+import "fmt"
+
+type Foo struct {
+	v int
+}
+
+func (f *Foo) inc() int {
+	f.v++
+	return f.v
+}
+
+func (f Foo) get() int {
+	return f.v
+}
+
+func make_() Foo {
+	return Foo{v: 1}
+}
+
+func main() {
+	ref := make_()
+	a := ref.inc()
+	ref2 := make_()
+	b := ref2.inc()
+	ref3 := make_()
+	c := ref3.inc()
+	d := make_().get()
+	fmt.Println(a, b, c, d)
+}

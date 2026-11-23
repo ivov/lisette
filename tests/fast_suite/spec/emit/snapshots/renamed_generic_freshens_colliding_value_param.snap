@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import sc "go:strconv"
+  
+  fn label<sc>(sc2: int, _tag: sc) -> string {
+    sc.Itoa(sc2)
+  }
+  
+  fn test() -> string {
+    label(5, 1)
+  }
+---
+package main
+
+import sc "strconv"
+
+func label[sc2 any](sc2_2 int, _ sc2) string {
+	return sc.Itoa(sc2_2)
+}
+
+func test() string {
+	return label(5, 1)
+}

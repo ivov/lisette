@@ -1,0 +1,99 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn err() -> int { 3 }
+  fn n() -> string { "context" }
+  fn items() -> Slice<int> { [1, 2] }
+  
+  fn status() -> Result<int, error> {
+    let count = strconv.Atoi("2")?
+    Ok(count + err())
+  }
+  
+  fn arm_after_message() {
+    match strconv.Atoi("2").wrap_err(n()) {
+      Ok(n) => fmt.Println(n),
+      Err(e) => fmt.Println(e),
+    }
+  }
+  
+  fn arm_in_other_arm() {
+    match strconv.Atoi("bad") {
+      Ok(n) => fmt.Println(n),
+      Err(_) => fmt.Println(n()),
+    }
+  }
+  
+  fn find_arm() {
+    match items().find(|x| x > 1) {
+      Some(items) => fmt.Println(items),
+      None => fmt.Println("none"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func err() int {
+	return 3
+}
+
+func n() string {
+	return "context"
+}
+
+func items() []int {
+	return []int{1, 2}
+}
+
+func status() (int, error) {
+	count, err2 := strconv.Atoi("2")
+	if err2 != nil {
+		return 0, err2
+	}
+	return count + err(), nil
+}
+
+func armAfterMessage() {
+	n2, e := strconv.Atoi("2")
+	msg := n()
+	if e == nil {
+		fmt.Println(n2)
+	} else {
+		e = fmt.Errorf("%s: %w", msg, e)
+		fmt.Println(e)
+	}
+}
+
+func armInOtherArm() {
+	if n2, err := strconv.Atoi("bad"); err == nil {
+		fmt.Println(n2)
+	} else {
+		fmt.Println(n())
+	}
+}
+
+func findArm() {
+	var items2 int
+	found := false
+	for _, x := range items() {
+		if x > 1 {
+			items2 = x
+			found = true
+			break
+		}
+	}
+	if found {
+		fmt.Println(items2)
+	} else {
+		fmt.Println("none")
+	}
+}

@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Adder { base: int }
+  
+  impl Adder {
+    fn add(self, a: int, b: int) -> int {
+      self.base + a + b
+    }
+  }
+  
+  fn bump(i: mut Ref<int>) -> int {
+    i.* = 1
+    10
+  }
+  
+  fn main() {
+    let mut i = 0
+    let adder = Adder { base: 5 }
+    let v = adder.add(i, bump(&i))
+    let _ = v
+  }
+---
+package main
+
+type Adder struct {
+	base int
+}
+
+func (aa Adder) add(a, b int) int {
+	return aa.base + a + b
+}
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func main() {
+	i := 0
+	adder := Adder{base: 5}
+	arg := i
+	v := adder.add(arg, bump(&i))
+	_ = v
+}

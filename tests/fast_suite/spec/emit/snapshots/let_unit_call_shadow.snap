@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn foo() { }
+  
+  fn main() {
+    let x = foo()
+    let _ = x
+    let x = foo()
+    let _ = x
+  }
+---
+package main
+
+func foo() {}
+
+func main() {
+	foo()
+	foo()
+}

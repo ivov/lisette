@@ -1,0 +1,50 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn maybe(flag: bool) -> Option<int> {
+    if flag { Some(42) } else { None }
+  }
+  
+  fn test() -> int {
+    let mut count = 0
+    loop {
+      count = count + 1
+      if count > 5 { break }
+      match count {
+        1 => {
+          let Some(v) = maybe(true) else { break }
+          let _ = v
+        },
+        _ => {},
+      }
+    }
+    count
+  }
+---
+package main
+
+func maybe(flag bool) (int, bool) {
+	if flag {
+		return 42, true
+	}
+	return 0, false
+}
+
+func test() int {
+	count := 0
+	for {
+		count++
+		if count > 5 {
+			break
+		}
+		if count == 1 {
+			v, ok := maybe(true)
+			if !ok {
+				break
+			}
+			_ = v
+		}
+	}
+	return count
+}

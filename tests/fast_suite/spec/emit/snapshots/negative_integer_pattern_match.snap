@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  fn classify(x: int) -> string {
+    match x {
+      -100 => "very negative",
+      -5 => "negative five",
+      -1 => "negative one",
+      0 => "zero",
+      1 => "one",
+      _ => "other",
+    }
+  }
+---
+package main
+
+func classify(x int) string {
+	switch x {
+	case -100:
+		return "very negative"
+	case -5:
+		return "negative five"
+	case -1:
+		return "negative one"
+	case 0:
+		return "zero"
+	case 1:
+		return "one"
+	default:
+		return "other"
+	}
+}

@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn first_positive(s: Slice<int>, seen: Channel<int>) -> Option<int> {
+    s.find(|x| {
+      seen.send(x)
+      x > 0
+    })
+  }
+  
+  fn test() {
+    let seen = Channel.buffered<int>(8)
+    match first_positive([-1, 0, 3, 4], seen) {
+      Some(v) => { if v != 3 { panic("wrong first hit") } },
+      None => { panic("expected a hit") },
+    }
+    if seen.length() != 3 {
+      panic("predicate ran past the first hit")
+    }
+    match first_positive([-1, 0], seen) {
+      Some(_) => { panic("expected no hit") },
+      None => {},
+    }
+    if seen.length() != 5 {
+      panic("predicate did not see every element")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func firstPositive(s []int, seen chan int) (int, bool) {
+	for _, x := range s {
+		var tmp bool
+		{
+			lisette.ChannelSend(seen, x)
+			tmp = x > 0
+		}
+		if tmp {
+			return x, true
+		}
+	}
+	return 0, false
+}
+
+func test() {
+	seen := make(chan int, 8)
+	v, ok := firstPositive([]int{-1, 0, 3, 4}, seen)
+	if !ok {
+		panic("expected a hit")
+	}
+	if v != 3 {
+		panic("wrong first hit")
+	}
+	if len(seen) != 3 {
+		panic("predicate ran past the first hit")
+	}
+	if _, ok := firstPositive([]int{-1, 0}, seen); ok {
+		panic("expected no hit")
+	}
+	if len(seen) != 5 {
+		panic("predicate did not see every element")
+	}
+}

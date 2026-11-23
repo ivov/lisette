@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn get_value() -> Option<int> {
+    Some(99)
+  }
+  
+  fn test(flag: bool) -> Option<int> {
+    if flag { Some(42) } else { get_value() }
+  }
+---
+package main
+
+func getValue() (int, bool) {
+	return 99, true
+}
+
+func test(flag bool) (int, bool) {
+	if flag {
+		return 42, true
+	}
+	return getValue()
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `#[equality]` conflicts with a specialized `equals`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[equality]
+   · ─────┬─────
+   ·      ╰── would synthesize an `equals` of its own
+ 3 │ struct Handler { run: fn(int) -> int }
+   ╰────
+  help: Write `equals` as a plain `fn equals(self, other: Self) -> bool` over the whole type, or remove `#[equality]`. An `equals` over a partial or concrete receiver (`impl Box<int>`, `impl<T> Pair<T, T>`), or one with extra type parameters (`fn equals<U>`, `impl<T, U> Box<T>`), is emitted as a free function and cannot satisfy `#[equality]` · code: [attribute.equality_specialized_equals]

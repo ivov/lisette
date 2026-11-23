@@ -1,0 +1,59 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct FileError { path: string }
+  
+  impl FileError {
+    fn Error(self: Ref<FileError>) -> string { f"cannot open {self.path}" }
+  }
+  
+  fn read_value() -> Result<int, Ref<FileError>> { Err(&FileError { path: "a.txt" }) }
+  
+  fn load() -> Result<int, error> {
+    let n = read_value()?
+    Ok(n)
+  }
+  
+  fn test() {
+    match load() {
+      Ok(_) => panic("expected error"),
+      Err(e) => {
+        if e.Error() != "cannot open a.txt" {
+          panic("wrong ref error")
+        }
+      },
+    }
+  }
+---
+package main
+
+type FileError struct {
+	path string
+}
+
+func (f *FileError) Error() string {
+	return "cannot open " + f.path
+}
+
+func readValue() (int, *FileError) {
+	return 0, &FileError{path: "a.txt"}
+}
+
+func load() (int, error) {
+	n, err := readValue()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+func test() {
+	_, e := load()
+	if e == nil {
+		panic("expected error")
+	}
+	if e.Error() != "cannot open a.txt" {
+		panic("wrong ref error")
+	}
+}

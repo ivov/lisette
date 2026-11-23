@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn sum_pair(pair: Slice<int>) -> int {
+    match pair {
+      [a, b] => a + b,
+      _ => 0,
+    }
+  }
+  
+  fn test() -> int {
+    sum_pair([10, 20])
+  }
+---
+package main
+
+func sumPair(pair []int) int {
+	if len(pair) == 2 {
+		return pair[0] + pair[1]
+	}
+	return 0
+}
+
+func test() int {
+	return sumPair([]int{10, 20})
+}

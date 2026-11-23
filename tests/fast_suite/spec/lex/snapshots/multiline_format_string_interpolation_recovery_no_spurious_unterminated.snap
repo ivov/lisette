@@ -1,0 +1,75 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: |-
+  let s = f"result: {
+    match n {
+      0 => "zero",
+    }
+  }"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Let,
+            text: "let",
+            byte_offset: 0,
+            byte_length: 3,
+        },
+        Token {
+            kind: Identifier,
+            text: "s",
+            byte_offset: 4,
+            byte_length: 1,
+        },
+        Token {
+            kind: Equal,
+            text: "=",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: FormatStringStart,
+            text: "f\"",
+            byte_offset: 8,
+            byte_length: 2,
+        },
+        Token {
+            kind: FormatStringText,
+            text: "result: ",
+            byte_offset: 10,
+            byte_length: 8,
+        },
+        Token {
+            kind: FormatStringInterpolationStart,
+            text: "{",
+            byte_offset: 18,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 55,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Multi-line f-string interpolation",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 18,
+                        byte_length: 1,
+                    },
+                    "f-string interpolations must be single-line",
+                ),
+            ],
+            help: Some(
+                "Extract the expression into a `let` binding and interpolate the variable",
+            ),
+            code: "lex.format_string_multiline_interpolation",
+        },
+    ],
+    blank_lines: [],
+}

@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(p: Point) -> int {
+    match p {
+      Point { x, .. } as pt => x + pt.y,
+    }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test(p Point) int {
+	return p.x + p.y
+}

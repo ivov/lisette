@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> int {
+    10 % 3
+  }
+---
+package main
+
+func test() int {
+	return 10 % 3
+}

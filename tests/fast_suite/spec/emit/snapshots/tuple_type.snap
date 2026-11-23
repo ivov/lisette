@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn test() {
+    (42, "hello")
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	_ = lisette.MakeTuple2[int, string](42, "hello")
+}

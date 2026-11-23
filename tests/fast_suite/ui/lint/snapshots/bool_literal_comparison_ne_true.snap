@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Redundant comparison to boolean literal
+   ╭─[test.lis:4:11]
+ 3 │   let x = true;
+ 4 │   let _ = x != true
+   ·           ────┬────
+   ·               ╰── can be simpler
+ 5 │ }
+   ╰────
+  help: Simplify to `!x` · code: [lint.bool_literal_comparison]

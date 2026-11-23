@@ -1,0 +1,36 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn run(start: int) -> int {
+    let mut total = start
+    let f = |c: bool| {
+      let total = if c {
+        total = total + 1
+        total
+      } else {
+        0
+      }
+      total * 2
+    }
+    let r = f(true)
+    r + total
+  }
+---
+package main
+
+func run(start int) int {
+	total := start
+	f := func(c bool) int {
+		var total2 int
+		if c {
+			total++
+			total2 = total
+		} else {
+			total2 = 0
+		}
+		return total2 * 2
+	}
+	r := f(true)
+	return r + total
+}

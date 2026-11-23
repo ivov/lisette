@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match opt { Some(x) | Some(x) => x, None => 0 } }"
+---
+fn test() {
+  match opt {
+    Some(x) | Some(x) => x,
+    None => 0,
+  }
+}

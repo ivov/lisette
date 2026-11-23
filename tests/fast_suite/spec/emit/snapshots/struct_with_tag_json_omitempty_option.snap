@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct User {
+    #[tag("json", omitempty)]
+    email: Option<string>,
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type User struct {
+	Email lisette.Option[string] `json:"email,omitzero"`
+}

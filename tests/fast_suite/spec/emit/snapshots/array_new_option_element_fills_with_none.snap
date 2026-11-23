@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn opts() -> Array<Option<int>, 2> {
+    Array.new<Option<int>, 2>()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func opts() [2]lisette.Option[int] {
+	return [2]lisette.Option[int]{}
+}

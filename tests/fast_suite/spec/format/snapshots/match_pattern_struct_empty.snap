@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match p { Empty {} => \"empty\" } }"
+---
+fn test() {
+  match p {
+    Empty {} => "empty",
+  }
+}

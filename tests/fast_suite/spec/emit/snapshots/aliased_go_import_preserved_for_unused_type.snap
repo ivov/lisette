@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import s "go:sync"
+  
+  struct Wrapper {
+    mu: s.Mutex,
+  }
+  
+  fn main() {}
+---
+package main
+
+import s "sync"
+
+type Wrapper struct {
+	mu s.Mutex
+}
+
+func main() {}

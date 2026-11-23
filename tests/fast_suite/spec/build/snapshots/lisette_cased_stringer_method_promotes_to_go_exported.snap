@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type A struct {
+	a string
+}
+
+func (a A) String() string {
+	return "lis_" + a.a
+}
+
+func main() {
+	a := A{a: "x"}
+	fmt.Println(a)
+}

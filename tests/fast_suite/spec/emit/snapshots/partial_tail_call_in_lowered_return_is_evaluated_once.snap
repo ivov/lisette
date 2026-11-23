@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/partial.rs
+description: |
+  
+  fn ident<T>(x: T) -> T {
+    x
+  }
+  
+  pub fn tail(b: bool, p: Partial<int, error>) -> Partial<int, error> {
+    if b {
+      ident(p)
+    } else {
+      p
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func ident[T any](x T) T {
+	return x
+}
+
+func Tail(b bool, p lisette.Partial[int, error]) lisette.Partial[int, error] {
+	if b {
+		return ident(p)
+	}
+	return p
+}

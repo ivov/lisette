@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  
+  fn test(name: string) -> string {
+    if let Err(e) = os.Stat(name) {
+      return name
+    }
+    "found"
+  }
+---
+package main
+
+import (
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(name string) string {
+	if ret, err := os.Stat(name); err != nil || lisette.IsNilInterface(ret) {
+		return name
+	}
+	return "found"
+}

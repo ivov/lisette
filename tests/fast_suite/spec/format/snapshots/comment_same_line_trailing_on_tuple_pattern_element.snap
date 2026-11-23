@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f(x: (int, int)) -> int {
+    match x {
+      (1, // trailing tuple elem
+      2) => 0,
+      _ => 1,
+    }
+  }
+---
+fn f(x: (int, int)) -> int {
+  match x {
+    (
+      1, // trailing tuple elem
+      2,
+    ) => 0,
+    _ => 1,
+  }
+}

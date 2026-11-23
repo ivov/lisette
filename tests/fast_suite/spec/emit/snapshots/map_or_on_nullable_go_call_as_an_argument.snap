@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:context"
+  import "go:fmt"
+  
+  fn main() {
+    let ctx = context.Background()
+    fmt.Println(ctx.Err().map_or("clean", |err| err.Error()))
+  }
+---
+package main
+
+import (
+	"context"
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ctx := context.Background()
+	var tmp string
+	if err := ctx.Err(); !lisette.IsNilInterface(err) {
+		tmp = err.Error()
+	} else {
+		tmp = "clean"
+	}
+	fmt.Println(tmp)
+}

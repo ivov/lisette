@@ -1,0 +1,77 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  struct Container<T: Clone> {
+    item: T,
+  }
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Container",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 9,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [
+                    Constructor {
+                        name: "Clone",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 21,
+                            byte_length: 5,
+                        },
+                    },
+                ],
+                resolved_bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 8,
+                },
+            },
+        ],
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    name: "item",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 32,
+                        byte_length: 4,
+                    },
+                    annotation: Constructor {
+                        name: "T",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 38,
+                            byte_length: 1,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+            ],
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 41,
+        },
+    },
+]

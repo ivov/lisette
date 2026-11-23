@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Blank {}
+---
+package main
+
+type Blank struct{}
+
+func (b Blank) String() string {
+	return "Blank"
+}
+
+func (b Blank) toString() string {
+	return b.String()
+}

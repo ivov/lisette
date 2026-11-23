@@ -1,0 +1,128 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  import "go:fmt"
+  fn fail(s: string) -> Result<string, error> { Err(errors.New("bad " + s)) }
+  fn find(_s: string) -> Option<int> { None }
+  fn unit() {}
+  fn kind(value: Unknown) -> string { fmt.Sprintf("%T", value) }
+  fn main() {
+    let lambda = |_s: string| -> Result<int, error> { Ok(1) }
+    let stored: Unknown = fail
+    let values: Slice<Unknown> = [find, unit]
+    if kind(stored) != "func(string) (string, error)" { panic("let binding") }
+    if kind(lambda) != "func(string) (int, error)" { panic("local lambda") }
+    if kind(values[0]) != "func(string) (int, bool)" { panic("option result") }
+    if kind(values[1]) != "func()" { panic("unit result") }
+    let Some(f) = assert_type<fn(string) -> Result<string, error>>(stored) else { panic("assert") }
+    let Err(e) = f("x") else { panic("call after assert") }
+    if e.Error() != "bad x" { panic("wrong error") }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func fail(s string) (string, error) {
+	return "", errors.New("bad " + s)
+}
+
+func find(_ string) (int, bool) {
+	return 0, false
+}
+
+func unit() {}
+
+func kind(value any) string {
+	return fmt.Sprintf("%T", value)
+}
+
+func main() {
+	lambda := func(_ string) lisette.Result[int, error] {
+		return lisette.MakeResultOk[int, error](1)
+	}
+	cb := func(arg0 string) lisette.Result[string, error] {
+		return lisette.ResultFromPair[string](fail(arg0))
+	}
+	var stored any = func(arg0 string) (string, error) {
+		res := cb(arg0)
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return "", res.ErrVal
+	}
+	cb2 := func(arg0 string) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](find(arg0))
+	}
+	cb3 := func() struct{} {
+		unit()
+		return struct{}{}
+	}
+	values := []any{
+		func(arg0 string) (int, bool) {
+			res2 := cb2(arg0)
+			if res2.Tag == lisette.OptionSome {
+				return res2.SomeVal, true
+			}
+			return 0, false
+		},
+		func() {
+			cb3()
+		},
+	}
+	if kind(stored) != "func(string) (string, error)" {
+		panic("let binding")
+	}
+	cb4 := lambda
+	var adapted func(string) (int, error)
+	if cb4 != nil {
+		adapted = func(arg0 string) (int, error) {
+			res3 := cb4(arg0)
+			if res3.Tag == lisette.ResultOk {
+				return res3.OkVal, nil
+			}
+			return 0, res3.ErrVal
+		}
+	}
+	if kind(adapted) != "func(string) (int, error)" {
+		panic("local lambda")
+	}
+	if kind(values[0]) != "func(string) (int, bool)" {
+		panic("option result")
+	}
+	if kind(values[1]) != "func()" {
+		panic("unit result")
+	}
+	src := lisette.AssertType[func(string) (string, error)](stored)
+	var adapted2 lisette.Option[func(string) lisette.Result[string, error]]
+	adapted2.Tag = src.Tag
+	if src.Tag == lisette.OptionSome {
+		cb5 := src.SomeVal
+		var adapted3 func(string) lisette.Result[string, error]
+		if cb5 != nil {
+			adapted3 = func(arg0 string) lisette.Result[string, error] {
+				return lisette.ResultFromPair[string](cb5(arg0))
+			}
+		}
+		adapted2.SomeVal = adapted3
+	}
+	if adapted2.Tag != lisette.OptionSome {
+		panic("assert")
+	}
+	f := adapted2.SomeVal
+	subject := f("x")
+	if subject.Tag != lisette.ResultErr {
+		panic("call after assert")
+	}
+	e := subject.ErrVal
+	if e.Error() != "bad x" {
+		panic("wrong error")
+	}
+}

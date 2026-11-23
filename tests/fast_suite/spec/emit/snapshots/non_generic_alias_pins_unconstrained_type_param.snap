@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Phantom<T, P> { pub value: T }
+  
+  type IntPhantom = Phantom<int, string>
+  
+  fn make() -> IntPhantom {
+    IntPhantom { value: 7, .. }
+  }
+---
+package main
+
+type Phantom[T any, P any] struct {
+	Value T
+}
+
+type IntPhantom = Phantom[int, string]
+
+func make_() IntPhantom {
+	return Phantom[int, string]{Value: 7}
+}

@@ -456,6 +456,7 @@ dependencies = [
  "lisette-diagnostics",
  "lisette-emit",
  "lisette-format",
+ "lisette-lsp",
  "lisette-passes",
  "lisette-semantics",
  "lisette-stdlib",

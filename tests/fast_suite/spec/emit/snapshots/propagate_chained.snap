@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn first() -> Result<int, string> {
+    Ok(10)
+  }
+  
+  fn second() -> Result<int, string> {
+    Ok(20)
+  }
+  
+  fn test() -> Result<int, string> {
+    let x = first()?;
+    let y = second()?;
+    Ok(x + y)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func first() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](10)
+}
+
+func second() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](20)
+}
+
+func test() lisette.Result[int, string] {
+	check := first()
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	x := check.OkVal
+	check2 := second()
+	if check2.Tag != lisette.ResultOk {
+		return check2
+	}
+	y := check2.OkVal
+	return lisette.MakeResultOk[int, string](x + y)
+}

@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() -> string {
+    let f = || -> string {
+      let x = 1
+      let x = f"was {x}"
+      x
+    }
+    f()
+  }
+---
+package main
+
+import "fmt"
+
+func test() string {
+	f := func() string {
+		x := 1
+		x2 := fmt.Sprintf("was %d", x)
+		return x2
+	}
+	return f()
+}

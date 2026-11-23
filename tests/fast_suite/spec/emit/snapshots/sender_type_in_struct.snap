@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  struct Producer { output: Sender<int> }
+  
+  fn test(p: Producer) -> Sender<int> {
+    p.output
+  }
+---
+package main
+
+type Producer struct {
+	output chan<- int
+}
+
+func test(p Producer) chan<- int {
+	return p.output
+}

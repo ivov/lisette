@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unexpected character
+   ╭─[test.lis:1:12]
+ 1 │ let x = 42 ~ invalid
+   ·            ┬
+   ·            ╰── not part of any token
+   ╰────
+  help: Remove this character · code: [lex.unexpected_char]

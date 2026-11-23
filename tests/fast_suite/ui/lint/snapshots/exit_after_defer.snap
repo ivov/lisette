@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ `os.Exit` skips `defer`
+   ╭─[test.lis:8:3]
+ 7 │   defer cleanup()
+ 8 │   os.Exit(1)
+   ·   ─────┬────
+   ·        ╰── exits before `defer` can run
+ 9 │ }
+   ╰────
+  help: Run the cleanup before exiting instead of deferring it. `os.Exit` will terminate the process without running deferred calls · code: [lint.exit_after_defer]

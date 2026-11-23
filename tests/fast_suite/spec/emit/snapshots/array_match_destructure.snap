@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<int, 3>) -> int {
+    match arr {
+      [a, b, c] => a + b + c
+    }
+  }
+---
+package main
+
+func f(arr [3]int) int {
+	return arr[0] + arr[1] + arr[2]
+}

@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> Option<int> {
+    try {
+      let _ = Some(1)?;
+      panic("fatal")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() (int, bool) {
+	check := lisette.MakeOptionSome(1)
+	if check.Tag != lisette.OptionSome {
+		return 0, false
+	}
+	panic("fatal")
+}

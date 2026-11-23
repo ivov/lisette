@@ -1,0 +1,90 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Thing {}
+  
+  interface Opt {
+    fn find() -> Option<mut Ref<Thing>>
+  }
+  
+  struct Bar<T> {
+    x: Option<T>,
+  }
+  
+  impl<T> Bar<T> {
+    fn find(self) -> Option<T> { self.x }
+  }
+  
+  fn maybe_bar(bar: mut Ref<Bar<mut Ref<Thing>>>) -> Option<mut Ref<Bar<mut Ref<Thing>>>> {
+    Some(bar)
+  }
+  
+  fn main() {
+    let mut bar = Bar { x: Some(&Thing {}) }
+    let opt: Opt = match maybe_bar(&bar) {
+      Some(found) => found,
+      None => { return },
+    }
+    if let Some(thing) = opt.find() {
+      let _ = thing
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Thing struct{}
+
+type Opt interface {
+	find() *Thing
+}
+
+type Bar[T any] struct {
+	x lisette.Option[T]
+}
+
+func (b Bar[T]) find() (T, bool) {
+	v := b.x
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	var zero T
+	return zero, false
+}
+
+func maybeBar(bar *Bar[*Thing]) *Bar[*Thing] {
+	return bar
+}
+
+func main() {
+	bar := Bar[*Thing]{x: lisette.MakeOptionSome(&Thing{})}
+	var opt Opt
+	found := maybeBar(&bar)
+	if found == nil {
+		return
+	}
+	opt = _lisAdapter_Bar_Opt_0{inner: found}
+	if thing := opt.find(); thing != nil {
+		_ = thing
+	}
+}
+
+type _lisAdapter_Bar_Opt_0 struct {
+	inner *Bar[*Thing]
+}
+
+func (a _lisAdapter_Bar_Opt_0) find() *Thing {
+	ret, ret2 := a.inner.find()
+	var option lisette.Option[*Thing]
+	if ret2 && ret != nil {
+		option = lisette.MakeOptionSome[*Thing](ret)
+	} else {
+		option = lisette.MakeOptionNone[*Thing]()
+	}
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal
+	}
+	return nil
+}

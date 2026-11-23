@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot read `_`
+   ╭─[test.lis:4:3]
+ 3 │   let _ = 1
+ 4 │   _
+   ·   ┬
+   ·   ╰── `_` discards a value
+ 5 │ }
+   ╰────
+  help: Bind the value to a name to use it. `_` binds nothing, so it cannot be read · code: [resolve.underscore_read]

@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Pair { x: int }
+  
+  fn set_key(k: mut Ref<string>) -> int {
+    k.* = "b"
+    1
+  }
+  
+  fn main() {
+    let mut m = Map.new<string, Pair>()
+    m["a"] = Pair { x: 0 }
+    let mut k = "a"
+    let captured_key = k
+    let mut entry = m[captured_key]
+    entry.x = set_key(&k)
+    m[captured_key] = entry
+    let _ = m
+  }
+---
+package main
+
+type Pair struct {
+	x int
+}
+
+func setKey(k *string) int {
+	*k = "b"
+	return 1
+}
+
+func main() {
+	m := make(map[string]Pair)
+	m["a"] = Pair{x: 0}
+	k := "a"
+	capturedKey := k
+	entry := m[capturedKey]
+	entry.x = setKey(&k)
+	m[capturedKey] = entry
+	_ = m
+}

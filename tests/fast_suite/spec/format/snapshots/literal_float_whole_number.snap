@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { 6.0 }"
+---
+fn test() {
+  6.0
+}

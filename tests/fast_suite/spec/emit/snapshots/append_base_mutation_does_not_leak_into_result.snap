@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let mut t = [1, 2]
+    t = t.append(3)
+    let u = t.append(7)
+    t[0] = 99
+    if u.get(0).unwrap_or(-1) != 1 {
+      panic("mutating the base must not write through to an append result")
+    }
+  }
+---
+package main
+
+import "slices"
+
+func main() {
+	t := []int{1, 2}
+	t = append(t, 3)
+	u := append(slices.Clip(t), 7)
+	t[0] = 99
+	ret := -1
+	if len(u) > 0 {
+		ret = u[0]
+	}
+	if ret != 1 {
+		panic("mutating the base must not write through to an append result")
+	}
+}

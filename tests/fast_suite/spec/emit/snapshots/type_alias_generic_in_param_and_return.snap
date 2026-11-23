@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type Numbers = Slice<int>
+  
+  fn sum(nums: Numbers) -> int {
+    let mut total = 0
+    for n in nums {
+      total += n
+    }
+    total
+  }
+---
+package main
+
+type Numbers = []int
+
+func sum(nums Numbers) int {
+	total := 0
+	for _, n := range nums {
+		total += n
+	}
+	return total
+}

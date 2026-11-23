@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `zip.File` has no zero value
+   ╭─[test.lis:5:15]
+ 4 │ fn test() {
+ 5 │   let files = Slice.make<zip.File>(4)
+   ·               ───────────┬───────────
+   ·                          ╰── `Slice.make` zero-fills every element, but `zip.File` has none
+ 6 │ }
+   ╰────
+  help: Build the slice from a list literal of values obtained from the documented Go constructor of `zip.File`. `zip.File` has Go-side state hidden from Lisette, so it has no zero value · code: [infer.slice_make_no_zero]

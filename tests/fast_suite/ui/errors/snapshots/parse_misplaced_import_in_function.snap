@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Nested definition
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   import "go:strings"
+   ·   ───┬──
+   ·      ╰── must be at the top level
+ 4 │ }
+   ╰────
+  help: Move this import to the top level of the file · code: [parse.nested_definition]

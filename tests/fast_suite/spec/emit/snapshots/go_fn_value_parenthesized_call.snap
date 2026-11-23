@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let r = (strconv.Atoi)("42")
+    fmt.Println(r)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	r := lisette.ResultFromPair[int](strconv.Atoi("42"))
+	fmt.Println(r)
+}

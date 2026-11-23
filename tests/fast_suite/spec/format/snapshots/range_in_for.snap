@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { for i in 0..3 { print(i) } }"
+---
+fn test() {
+  for i in 0..3 {
+    print(i)
+  }
+}

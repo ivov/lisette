@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type Transform<T> = fn(T) -> T
+  
+  fn apply_transform<T>(val: T, f: Transform<T>) -> T {
+    f(val)
+  }
+  
+  fn test() -> int {
+    apply_transform(42, |x| x + 1)
+  }
+---
+package main
+
+type Transform[T any] = func(T) T
+
+func applyTransform[T any](val T, f Transform[T]) T {
+	return f(val)
+}
+
+func test() int {
+	return applyTransform(42, func(x int) int {
+		return x + 1
+	})
+}

@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Empty rune literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = ''
+   ·         ─┬
+   ·          ╰── must hold exactly one character
+   ╰────
+  help: Add a rune between the single quotes · code: [lex.empty_rune]

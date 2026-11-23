@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn fallible() -> Result<int, string> {
+    Ok(10)
+  }
+  
+  fn test() -> int {
+    let f = |x: int| -> Result<int, string> {
+      let v = fallible()?;
+      Ok(v + x)
+    };
+    match f(5) {
+      Ok(n) => n,
+      Err(_) => -1,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func fallible() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](10)
+}
+
+func test() int {
+	f := func(x int) lisette.Result[int, string] {
+		check := fallible()
+		if check.Tag != lisette.ResultOk {
+			return check
+		}
+		v := check.OkVal
+		return lisette.MakeResultOk[int, string](v + x)
+	}
+	subject := f(5)
+	if subject.Tag == lisette.ResultOk {
+		return subject.OkVal
+	}
+	return -1
+}

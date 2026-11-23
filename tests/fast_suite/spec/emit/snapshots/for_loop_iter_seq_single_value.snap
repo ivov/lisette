@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:maps"
+  import "go:fmt"
+  
+  fn main() {
+    let m = Map.from([("a", 1)])
+    for k in maps.Keys(m) {
+      fmt.Println(k)
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"maps"
+)
+
+func main() {
+	m := map[string]int{"a": 1}
+	for k := range maps.Keys(m) {
+		fmt.Println(k)
+	}
+}

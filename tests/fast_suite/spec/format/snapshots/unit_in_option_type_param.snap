@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn maybe() -> Option<()> { Some(()) }"
+---
+fn maybe() -> Option<()> {
+  Some(())
+}

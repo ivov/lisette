@@ -1,0 +1,82 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Displayable {
+    fn display() -> string
+  }
+  
+  enum Either<L: Displayable, R: Displayable> {
+    Left(L),
+    Right(R),
+  }
+  
+  impl<L: Displayable, R: Displayable> Either<L, R> {
+    fn display(self) -> string {
+      match self {
+        Either.Left(l) => {
+          let s = l.display()
+          f"Left({s})"
+        },
+        Either.Right(r) => {
+          let s = r.display()
+          f"Right({s})"
+        },
+      }
+    }
+  }
+  
+  struct Name { value: string }
+  impl Name { fn display(self) -> string { self.value } }
+  
+  fn test() -> Either<Name, Name> {
+    Either.Left(Name { value: "hello" })
+  }
+---
+package main
+
+func MakeEitherLeft[L Displayable, R Displayable](arg0 L) Either[L, R] {
+	return Either[L, R]{Tag: EitherLeft, Left: arg0}
+}
+
+func MakeEitherRight[L Displayable, R Displayable](arg0 R) Either[L, R] {
+	return Either[L, R]{Tag: EitherRight, Right: arg0}
+}
+
+type Displayable interface {
+	display() string
+}
+
+type EitherTag uint8
+
+const (
+	EitherLeft EitherTag = iota
+	EitherRight
+)
+
+type Either[L Displayable, R Displayable] struct {
+	Tag   EitherTag
+	Left  L
+	Right R
+}
+
+func (e Either[L, R]) display() string {
+	if e.Tag == EitherLeft {
+		s := e.Left.display()
+		return "Left(" + s + ")"
+	}
+	s := e.Right.display()
+	return "Right(" + s + ")"
+}
+
+type Name struct {
+	value string
+}
+
+func (n Name) display() string {
+	return n.value
+}
+
+func test() Either[Name, Name] {
+	return MakeEitherLeft[Name, Name](Name{value: "hello"})
+}

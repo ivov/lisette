@@ -1,9 +1,0 @@
----
-source: tests/spec/emit/types.rs
-description: |
-  
-  fn run(callback: fn() -> Unknown) {}
----
-package main
-
-func run(_ func() any) {}

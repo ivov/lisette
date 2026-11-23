@@ -1,0 +1,217 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  fn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z: V) -> int {
+    return 0;
+  }
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "complex",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 7,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [
+                    Constructor {
+                        name: "Display",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 15,
+                            byte_length: 7,
+                        },
+                    },
+                    Constructor {
+                        name: "Clone",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 25,
+                            byte_length: 5,
+                        },
+                    },
+                ],
+                resolved_bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 12,
+                    byte_length: 18,
+                },
+            },
+            Generic {
+                name: "U",
+                bounds: [
+                    Constructor {
+                        name: "Debug",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 35,
+                            byte_length: 5,
+                        },
+                    },
+                ],
+                resolved_bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 32,
+                    byte_length: 8,
+                },
+            },
+            Generic {
+                name: "V",
+                bounds: [],
+                resolved_bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 42,
+                    byte_length: 1,
+                },
+            },
+        ],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "x",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 45,
+                        byte_length: 1,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "T",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 48,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "y",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 51,
+                        byte_length: 1,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "U",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 54,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "z",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 57,
+                        byte_length: 1,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "V",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 60,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+        ],
+        return_annotation: Constructor {
+            name: "int",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 66,
+                byte_length: 3,
+            },
+        },
+        return_type: Var {
+            id: uninferred,
+        },
+        visibility: Private,
+        body: Definition(
+            Block {
+                items: [
+                    Return {
+                        expression: Literal {
+                            literal: Integer {
+                                value: 0,
+                                text: None,
+                            },
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 81,
+                                byte_length: 1,
+                            },
+                        },
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 74,
+                            byte_length: 8,
+                        },
+                    },
+                ],
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 70,
+                    byte_length: 15,
+                },
+            },
+        ),
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 84,
+        },
+    },
+]

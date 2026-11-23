@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unterminated rune literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = 'a
+   ·         ─┬
+   ·          ╰── rune literal not closed
+   ╰────
+  help: Add a closing single quote · code: [lex.unterminated_rune]

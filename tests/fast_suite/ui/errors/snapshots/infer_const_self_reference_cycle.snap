@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `const` init cycle
+   ╭─[test.lis:2:7]
+ 1 │ 
+ 2 │ const SELF = SELF
+   ·       ──┬─
+   ·         ╰── self-reference
+   ╰────
+  help: `const` initializers cannot refer to themselves, either directly or transitively · code: [infer.const_cycle]

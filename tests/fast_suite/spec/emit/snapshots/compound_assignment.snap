@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> int {
+    let mut x = 100;
+    x += 10;
+    x -= 5;
+    x *= 2;
+    x /= 3;
+    x %= 7;
+    x
+  }
+---
+package main
+
+func test() int {
+	x := 100
+	x += 10
+	x -= 5
+	x *= 2
+	x /= 3
+	x %= 7
+	return x
+}

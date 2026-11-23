@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid assignment target
+   ╭─[test.lis:3:9]
+ 2 │ fn main() {
+ 3 │   { 1 } -= 2;
+   ·         ─┬
+   ·          ╰── not assignable
+ 4 │ }
+   ╰────
+  help: Only variables, fields, and indices can be assigned to · code: [parse.invalid_assignment_target]

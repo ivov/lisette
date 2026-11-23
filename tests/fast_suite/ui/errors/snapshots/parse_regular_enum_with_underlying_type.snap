@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Enum with underlying type
+   ╭─[test.lis:2:12]
+ 1 │ 
+ 2 │ enum Status: int {
+   ·            ┬
+   ·            ╰── enums cannot have an underlying type
+ 3 │   Active,
+   ╰────
+  help: Remove the `: type` annotation. To model a Go defined primitive type, use a named primitive type, e.g. `pub struct Weekday(int)`, with package-level constants · code: [parse.enum_underlying_type]

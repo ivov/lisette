@@ -1,0 +1,14 @@
+---
+source: tests/go_rejections/embedded_types/render_go.rs
+---
+package p
+
+type N0 interface {
+	Speak() string
+}
+
+type N1 struct {
+}
+func (r N1) Speak() string {
+	return "N1.Speak"
+}

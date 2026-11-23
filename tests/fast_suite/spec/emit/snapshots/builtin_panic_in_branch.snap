@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(x: int) -> int {
+    if x < 0 {
+      panic("negative value")
+    } else {
+      x
+    }
+  }
+---
+package main
+
+func test(x int) int {
+	if x < 0 {
+		panic("negative value")
+	}
+	return x
+}

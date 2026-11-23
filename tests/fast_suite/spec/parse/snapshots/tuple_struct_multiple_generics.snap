@@ -1,0 +1,100 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  struct Pair<A, B>(A, B)
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Pair",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 4,
+        },
+        generics: [
+            Generic {
+                name: "A",
+                bounds: [],
+                resolved_bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 13,
+                    byte_length: 1,
+                },
+            },
+            Generic {
+                name: "B",
+                bounds: [],
+                resolved_bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: Tuple(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    name: "_0",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 19,
+                        byte_length: 1,
+                    },
+                    annotation: Constructor {
+                        name: "A",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 19,
+                            byte_length: 1,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+                StructFieldDefinition {
+                    doc: None,
+                    name: "_1",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 22,
+                        byte_length: 1,
+                    },
+                    annotation: Constructor {
+                        name: "B",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 22,
+                            byte_length: 1,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [],
+                    },
+                },
+            ],
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 23,
+        },
+    },
+]

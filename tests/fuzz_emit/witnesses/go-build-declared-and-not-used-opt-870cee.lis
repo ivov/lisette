@@ -1,0 +1,37 @@
+
+fn add(m: Map<string, int>) -> int {
+  let opt = m.get("a")
+  if let Some(v) = opt {
+    let f = |opt: int| v + opt
+    f(100)
+  } else {
+    0
+  }
+}
+
+fn local(m: Map<string, int>) -> int {
+  let opt = m.get("a")
+  match opt {
+    Some(v) => {
+      let f = || {
+  let opt = m.get("a")
+  if let Some(v) = opt {
+    let f = |opt: int| v + opt
+    f(100)
+  } else {
+    0
+  }
+}
+      f()
+    },
+    None => 0,
+  }
+}
+
+fn test() {
+  let m = Map.from([("a", 1)])
+  if add(m) != 101 { panic("the closure parameter should not hide the payload") }
+  if local(m) != 101 { panic("the closure local should not hide the payload") }
+}
+
+fn main() { let _ = test(); }

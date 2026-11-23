@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid comment
+   ╭─[test.lis:1:1]
+ 1 │ //// This has too many slashes
+   · ──┬─
+   ·   ╰── expected 2 or 3 slashes
+   ╰────
+  help: Use `//` for regular comments or `///` for doc comments · code: [lex.excess_slashes_in_comment]

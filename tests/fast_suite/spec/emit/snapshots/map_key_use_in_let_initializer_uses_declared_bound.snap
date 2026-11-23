@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn is_empty<T: Comparable>() -> bool {
+    let empty = Map.new<T, int>().is_empty()
+    empty
+  }
+  
+  fn main() {
+    let _ = is_empty<int>()
+  }
+---
+package main
+
+func isEmpty[T comparable]() bool {
+	empty := len(make(map[T]int)) == 0
+	return empty
+}
+
+func main() {
+	isEmpty[int]()
+}

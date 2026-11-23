@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  fn test() -> int {
+    let res1: Result<int, string> = Ok(5);
+    let x1 = match res1 {
+      Ok(v) => v,
+      Err(e) => 0,
+    };
+  
+    let res2: Result<int, string> = Ok(10);
+    let x2 = match res2 {
+      Ok(v) => v,
+      Err(e) => 0,
+    };
+  
+    x1 + x2
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	res1 := lisette.MakeResultOk[int, string](5)
+	var x1 int
+	if res1.Tag == lisette.ResultOk {
+		x1 = res1.OkVal
+	} else {
+		x1 = 0
+	}
+	res2 := lisette.MakeResultOk[int, string](10)
+	var x2 int
+	if res2.Tag == lisette.ResultOk {
+		x2 = res2.OkVal
+	} else {
+		x2 = 0
+	}
+	return x1 + x2
+}

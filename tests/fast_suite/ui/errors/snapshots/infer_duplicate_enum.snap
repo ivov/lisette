@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Duplicate enum
+   ╭─[test.lis:3:6]
+ 2 │ enum Dir { North, South }
+ 3 │ enum Dir { East, West }
+   ·      ─┬─
+   ·       ╰── already defined
+ 4 │ 
+   ╰────
+  help: Rename or remove this definition. `Dir` is already defined in this package · code: [infer.duplicate_definition]

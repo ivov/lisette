@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn main() {
+    let m = Map.from([("k", [1, 2])])
+    let mut m2 = m.clone()
+    m2["k"] = [9]
+    let _ = m
+    let _ = m2
+  }
+---
+package main
+
+import (
+	"slices"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	m := map[string][]int{"k": {1, 2}}
+	m2 := lisette.MapCloneFunc(m, func(e []int) []int { return slices.Clone(e) })
+	m2["k"] = []int{9}
+	_ = m
+	_ = m2
+}

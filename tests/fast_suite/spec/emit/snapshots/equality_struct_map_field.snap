@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Counts { name: string, totals: Map<string, int> }
+---
+package main
+
+import "maps"
+
+type Counts struct {
+	name   string
+	totals map[string]int
+}
+
+func (c Counts) equals(other Counts) bool {
+	return c.name == other.name && maps.Equal(c.totals, other.totals)
+}

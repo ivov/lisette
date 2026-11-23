@@ -1,5 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "const PI: float = 3.14159"
----
-const PI: float = 3.14159

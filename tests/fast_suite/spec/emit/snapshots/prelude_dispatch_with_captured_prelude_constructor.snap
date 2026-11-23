@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let g = Some
+    let opt: Option<int> = Some(1)
+    let r = opt.and_then(g)
+    let _ = r
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	g := lisette.MakeOptionSome[int]
+	opt := lisette.MakeOptionSome(1)
+	r := lisette.OptionAndThen(opt, g)
+	_ = r
+}

@@ -1,0 +1,48 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Mapper[T any] interface {
+	MapVal() T
+}
+
+type Filter interface {
+	Keep() bool
+}
+
+type Processor[T any] interface {
+	Mapper[T]
+	Filter
+}
+
+type Score struct {
+	name string
+	val  int
+}
+
+func (s Score) MapVal() string {
+	return s.name
+}
+
+func (s Score) Keep() bool {
+	return s.val > 50
+}
+
+func processScore(item Score) string {
+	if item.Keep() {
+		return item.MapVal()
+	}
+	return "filtered"
+}
+
+func main() {
+	s := Score{
+		name: "hello",
+		val:  42,
+	}
+	fmt.Println(processScore(s))
+}

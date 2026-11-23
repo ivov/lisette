@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn first() -> Result<int, error> { Ok(1) }
+  fn second() -> Result<int, error> { Ok(2) }
+  fn pick(flag: bool, n: int) -> int { if flag { n } else { 0 } }
+  
+  fn run() -> Result<int, error> {
+    Ok(pick(first().is_ok(), second()?))
+  }
+---
+package main
+
+func first() (int, error) {
+	return 1, nil
+}
+
+func second() (int, error) {
+	return 2, nil
+}
+
+func pick(flag bool, n int) int {
+	if flag {
+		return n
+	}
+	return 0
+}
+
+func run() (int, error) {
+	_, err := first()
+	ret, err2 := second()
+	if err2 != nil {
+		return 0, err2
+	}
+	return pick(err == nil, ret), nil
+}

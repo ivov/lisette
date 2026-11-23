@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let mut s = "ab"
+    let mut count = 0
+    for b in s.bytes() {
+      count += 1
+      s = ""
+      let _ = b
+    }
+    if count != 2 {
+      panic("expected count 2 — bytes loop must iterate over the original string")
+    }
+  }
+---
+package main
+
+func main() {
+	s := "ab"
+	count := 0
+	s2 := s
+	for i := 0; i < len(s2); i++ {
+		b := s2[i]
+		count++
+		s = ""
+		_ = b
+	}
+	if count != 2 {
+		panic("expected count 2 — bytes loop must iterate over the original string")
+	}
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Float equality without `abs`
+   ╭─[test.lis:5:11]
+ 4 │   let g: float64 = 2.0
+ 5 │   let _ = (f - g) <= 0.0001
+   ·           ────────┬────────
+   ·                   ╰── difference is not wrapped in `math.Abs`
+ 6 │ }
+   ╰────
+  help: Compare the magnitude: `math.Abs(a - b) < c`. `a - b` is negative whenever `a` is below `b`, so this is also `true` when `a` is far below `b` · code: [lint.float_equality_without_abs]

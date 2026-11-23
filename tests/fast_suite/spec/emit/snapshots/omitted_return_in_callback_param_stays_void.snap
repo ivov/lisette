@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn run(callback: fn(int)) {}
+---
+package main
+
+func run(_ func(int) struct{}) {}

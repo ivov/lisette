@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn start() -> int { 0 }
+  fn items() -> Slice<int> { [1, 2, 3] }
+  
+  fn main() {
+    let end = if true { 2 } else { 3 }
+    let s = items()[start()..end]
+    let _ = s
+  }
+---
+package main
+
+func start() int {
+	return 0
+}
+
+func items() []int {
+	return []int{1, 2, 3}
+}
+
+func main() {
+	var end int
+	if true {
+		end = 2
+	} else {
+		end = 3
+	}
+	s := items()[start():end:end]
+	_ = s
+}

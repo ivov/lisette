@@ -1,9 +1,0 @@
----
-source: tests/spec/emit/types.rs
-description: |
-  
-  struct UserId(int)
----
-package main
-
-type UserId int

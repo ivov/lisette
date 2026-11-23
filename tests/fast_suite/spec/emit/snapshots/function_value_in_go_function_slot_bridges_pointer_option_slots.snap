@@ -1,0 +1,131 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/cb"
+  
+  fn named() -> Result<Option<int>, error> {
+    Ok(Some(2))
+  }
+  
+  fn pass(f: fn() -> Result<Option<int>, error>) {
+    cb.Run(f)
+  }
+  
+  fn pick() -> fn() -> Result<Option<int>, error> {
+    named
+  }
+  
+  fn main() {
+    let local = named
+    cb.Run(local)
+    pass(named)
+    cb.Run(pick())
+    cb.R {}.Run(local)
+  }
+---
+package main
+
+import (
+	"example.com/cb"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func named() (lisette.Option[int], error) {
+	return lisette.MakeOptionSome(2), nil
+}
+
+func pass(f func() lisette.Result[lisette.Option[int], error]) {
+	cb2 := f
+	var adapted func() (*int, error)
+	if cb2 != nil {
+		adapted = func() (*int, error) {
+			ret, ret2 := func() (lisette.Option[int], error) {
+				res := cb2()
+				if res.Tag == lisette.ResultOk {
+					return res.OkVal, nil
+				}
+				return lisette.Option[int]{}, res.ErrVal
+			}()
+			var ptr *int
+			if ret.Tag == lisette.OptionSome {
+				ptr = &ret.SomeVal
+			}
+			return ptr, ret2
+		}
+	}
+	cb.Run(adapted)
+}
+
+func pick() func() lisette.Result[lisette.Option[int], error] {
+	return func() lisette.Result[lisette.Option[int], error] {
+		return lisette.ResultFromPair[lisette.Option[int]](named())
+	}
+}
+
+func main() {
+	local := func() lisette.Result[lisette.Option[int], error] {
+		return lisette.ResultFromPair[lisette.Option[int]](named())
+	}
+	cb2 := local
+	var adapted func() (*int, error)
+	if cb2 != nil {
+		adapted = func() (*int, error) {
+			ret, ret2 := func() (lisette.Option[int], error) {
+				res := cb2()
+				if res.Tag == lisette.ResultOk {
+					return res.OkVal, nil
+				}
+				return lisette.Option[int]{}, res.ErrVal
+			}()
+			var ptr *int
+			if ret.Tag == lisette.OptionSome {
+				ptr = &ret.SomeVal
+			}
+			return ptr, ret2
+		}
+	}
+	cb.Run(adapted)
+	pass(func() lisette.Result[lisette.Option[int], error] {
+		return lisette.ResultFromPair[lisette.Option[int]](named())
+	})
+	cb3 := pick()
+	var adapted2 func() (*int, error)
+	if cb3 != nil {
+		adapted2 = func() (*int, error) {
+			ret3, ret4 := func() (lisette.Option[int], error) {
+				res2 := cb3()
+				if res2.Tag == lisette.ResultOk {
+					return res2.OkVal, nil
+				}
+				return lisette.Option[int]{}, res2.ErrVal
+			}()
+			var ptr2 *int
+			if ret3.Tag == lisette.OptionSome {
+				ptr2 = &ret3.SomeVal
+			}
+			return ptr2, ret4
+		}
+	}
+	cb.Run(adapted2)
+	callee := cb.R{}.Run
+	cb4 := local
+	var adapted3 func() (*int, error)
+	if cb4 != nil {
+		adapted3 = func() (*int, error) {
+			ret5, ret6 := func() (lisette.Option[int], error) {
+				res3 := cb4()
+				if res3.Tag == lisette.ResultOk {
+					return res3.OkVal, nil
+				}
+				return lisette.Option[int]{}, res3.ErrVal
+			}()
+			var ptr3 *int
+			if ret5.Tag == lisette.OptionSome {
+				ptr3 = &ret5.SomeVal
+			}
+			return ptr3, ret6
+		}
+	}
+	callee(adapted3)
+}

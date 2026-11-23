@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Missing value at end of block
+   ╭─[test.lis:4:3]
+ 3 │   let mut x = 0
+ 4 │   x = 1
+   ·   ──┬──
+   ·     ╰── produces `()`
+ 5 │ }
+   ╰────
+  help: End the block with an expression that produces `int`. The block must produce `int` · code: [infer.statement_as_tail]

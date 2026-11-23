@@ -1,0 +1,45 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  enum Message {
+    Move { x: int, y: int },
+    Quit,
+  }
+  
+  fn handle(m: Message) -> int {
+    match m {
+      Move { x, y } => x + y,
+      Quit => 0,
+    }
+  }
+---
+package main
+
+func MakeMessageMove(arg0, arg1 int) Message {
+	return Message{Tag: MessageMove, X: arg0, Y: arg1}
+}
+
+func MakeMessageQuit() Message {
+	return Message{Tag: MessageQuit}
+}
+
+type MessageTag uint8
+
+const (
+	MessageMove MessageTag = iota
+	MessageQuit
+)
+
+type Message struct {
+	Tag MessageTag
+	X   int
+	Y   int
+}
+
+func handle(m Message) int {
+	if m.Tag == MessageMove {
+		return m.X + m.Y
+	}
+	return 0
+}

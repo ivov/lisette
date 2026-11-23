@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn factorial(n: int) -> int {
+    if n <= 1 {
+      1
+    } else {
+      n * factorial(n - 1)
+    }
+  }
+---
+package main
+
+func factorial(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	return n * factorial(n-1)
+}

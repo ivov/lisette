@@ -1,0 +1,14 @@
+
+import "go:bufio"
+import "go:fmt"
+import "go:strings"
+
+fn main() {
+  let mut scanner = bufio.NewScanner(strings.NewReader("one two three"))
+  fmt.Println(bufio.ScanWords)
+  let mut count = 0
+  while scanner.Scan() {
+    count += 1
+  }
+  fmt.Println(count)
+}

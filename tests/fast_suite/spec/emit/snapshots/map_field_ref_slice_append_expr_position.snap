@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Outer { items: Ref<Slice<int>> }
+  
+  fn main() {
+    let mut items = [1]
+    let mut m = Map.new<string, Outer>()
+    m["a"] = Outer { items: &items }
+    let Some(o) = m.get("a") else { return; };
+    let _ = { o.items.*.append(2) }
+    let _ = items
+  }
+---
+package main
+
+import "slices"
+
+type Outer struct {
+	items *[]int
+}
+
+func main() {
+	items := []int{1}
+	m := make(map[string]Outer)
+	m["a"] = Outer{items: &items}
+	o, ok := m["a"]
+	if !ok {
+		return
+	}
+	recv := *o.items
+	_ = append(slices.Clip(recv), 2)
+	_ = items
+}

@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:example.com/generic"
+  
+  fn main() {
+    let option = Some(1)
+    let options: Slice<Option<int>> = [option]
+    generic.Store(option)
+    generic.StoreAll(options)
+    generic.StoreMany(option, option)
+    let loaded = generic.Load(option)
+    let loaded_all = generic.LoadAll(options)
+    let bag = generic.Bag { Value: option, Values: options }
+    generic.Store(bag.Value)
+    generic.Store(loaded)
+    generic.StoreAll(loaded_all)
+  }
+---
+package main
+
+import (
+	"example.com/generic"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	option := lisette.MakeOptionSome(1)
+	options := []lisette.Option[int]{option}
+	generic.Store(option)
+	generic.StoreAll(options)
+	generic.StoreMany(option, option)
+	loaded := generic.Load(option)
+	loadedAll := generic.LoadAll(options)
+	bag := generic.Bag[lisette.Option[int]]{
+		Value:  option,
+		Values: options,
+	}
+	generic.Store(bag.Value)
+	generic.Store(loaded)
+	generic.StoreAll(loadedAll)
+}

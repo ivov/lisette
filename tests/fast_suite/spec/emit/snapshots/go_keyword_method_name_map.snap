@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn map(self: Box<T>, f: fn(T) -> T) -> Box<T> {
+      Box { value: f(self.value) }
+    }
+  }
+  
+  fn test() -> int {
+    let b = Box { value: 10 };
+    b.map(|x: int| x * 2).value
+  }
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) map_(f func(T) T) Box[T] {
+	return Box[T]{value: f(b.value)}
+}
+
+func test() int {
+	b := Box[int]{value: 10}
+	return b.map_(func(x int) int {
+		return x * 2
+	}).value
+}

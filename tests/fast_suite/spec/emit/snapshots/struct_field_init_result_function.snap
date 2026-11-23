@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Container {
+    res: Result<int, string>,
+  }
+  
+  fn get_res(b: bool) -> Result<int, string> {
+    if b { Ok(42) } else { Err("failed") }
+  }
+  
+  fn test() {
+    let c = Container { res: get_res(true) };
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Container struct {
+	res lisette.Result[int, string]
+}
+
+func getRes(b bool) lisette.Result[int, string] {
+	if b {
+		return lisette.MakeResultOk[int, string](42)
+	}
+	return lisette.MakeResultErr[int, string]("failed")
+}
+
+func test() {
+	_ = Container{res: getRes(true)}
+}

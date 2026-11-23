@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> complex128 {
+    (3 + 4i) * 2i
+  }
+---
+package main
+
+func test() complex128 {
+	return (3 + 4i) * 2i
+}

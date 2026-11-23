@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  enum Event {
+    Click(int, int),
+    KeyPress(string),
+  }
+  
+  fn test() -> int {
+    let e1 = Event.Click(10, 20);
+    let sum1 = match e1 {
+      Event.Click(x, y) => x + y,
+      Event.KeyPress(k) => 0,
+    };
+  
+    let e2 = Event.Click(30, 40);
+    let sum2 = match e2 {
+      Event.Click(x, y) => x + y,
+      Event.KeyPress(k) => 0,
+    };
+  
+    sum1 + sum2
+  }
+---
+package main
+
+func MakeEventClick(arg0, arg1 int) Event {
+	return Event{Tag: EventClick, Click0: arg0, Click1: arg1}
+}
+
+func MakeEventKeyPress(arg0 string) Event {
+	return Event{Tag: EventKeyPress, KeyPress: arg0}
+}
+
+type EventTag uint8
+
+const (
+	EventClick EventTag = iota
+	EventKeyPress
+)
+
+type Event struct {
+	Tag      EventTag
+	Click0   int
+	Click1   int
+	KeyPress string
+}
+
+func test() int {
+	e1 := MakeEventClick(10, 20)
+	var sum1 int
+	if e1.Tag == EventClick {
+		sum1 = e1.Click0 + e1.Click1
+	} else {
+		sum1 = 0
+	}
+	e2 := MakeEventClick(30, 40)
+	var sum2 int
+	if e2.Tag == EventClick {
+		sum2 = e2.Click0 + e2.Click1
+	} else {
+		sum2 = 0
+	}
+	return sum1 + sum2
+}

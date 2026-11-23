@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/cli"
+  
+  fn group() -> cli.Group {
+    let f1 = &cli.Flag { Name: "a", .. }
+    let f2 = &cli.Flag { Name: "b", .. }
+    cli.Group {
+      Flags: [[Some(f1), Some(f2)]],
+      ..,
+    }
+  }
+---
+package main
+
+import (
+	"example.com/cli"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func group() cli.Group {
+	f1 := &cli.Flag{Name: "a"}
+	f2 := &cli.Flag{Name: "b"}
+	src := [][]lisette.Option[*cli.Flag]{{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
+	unwrapped := make([][]*cli.Flag, len(src))
+	for i, v := range src {
+		unwrapped2 := make([]*cli.Flag, len(v))
+		for i2, v2 := range v {
+			if v2.Tag == lisette.OptionSome {
+				unwrapped2[i2] = v2.SomeVal
+			}
+		}
+		unwrapped[i] = unwrapped2
+	}
+	return cli.Group{Flags: unwrapped}
+}

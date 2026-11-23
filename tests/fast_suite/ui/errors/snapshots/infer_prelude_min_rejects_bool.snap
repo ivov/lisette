@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Bound not satisfied
+   ╭─[test.lis:3:7]
+ 2 │ fn test() -> bool {
+ 3 │   min(true, false)
+   ·       ──┬─
+   ·         ╰── does not satisfy `cmp.Ordered`
+ 4 │ }
+   ╰────
+  help: Relax the bound or pass an orderable argument. The type parameter must be `cmp.Ordered` but the argument is not orderable · code: [infer.not_orderable_bound]

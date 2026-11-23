@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Const pattern outside a match arm
+   ╭─[test.lis:5:7]
+ 4 │ fn test(day: weekday.Weekday) {
+ 5 │   let weekday.Friday = day
+   ·       ───────┬──────
+   ·              ╰── const patterns are only allowed in match arms
+ 6 │ }
+   ╰────
+  help: Match on `weekday.Friday` inside a `match` expression, or compare with `==` in a `let` or function parameter. `weekday.Friday` is a constant, so this pattern can fail to match · code: [infer.const_pattern_outside_match_arm]

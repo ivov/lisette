@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Pattern always matches
+   ╭─[test.lis:4:13]
+ 3 │   let mut x = 0;
+ 4 │   while let y = x {
+   ·             ┬
+   ·             ╰── matches every value, so the loop never ends
+ 5 │     x = x + 1;
+   ╰────
+  help: Use `loop` with `let` binding instead · code: [infer.irrefutable_while_let]

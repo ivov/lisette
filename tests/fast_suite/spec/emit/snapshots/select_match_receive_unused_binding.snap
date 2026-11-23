@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let ch = Channel.new<int>()
+    select {
+      match ch.receive() {
+        Some(_) => { let _ = 0; },
+        None => { let _ = 1; },
+      }
+    }
+  }
+---
+package main
+
+func main() {
+	ch := make(chan int)
+	select {
+	case <-ch:
+	}
+}

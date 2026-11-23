@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid unicode escape
+   ╭─[test.lis:1:10]
+ 1 │ let x = "\u{XYZ}"
+   ·          ───┬───
+   ·             ╰── expected `\u{HEX}` with 1-6 hex digits
+   ╰────
+  help: Use the form `\u{1F600}` with 1-6 hexadecimal digits between braces · code: [lex.invalid_unicode_escape]

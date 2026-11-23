@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn test(s: Ref<Slice<int>>) {
+    let _ = s
+  }
+---
+package main
+
+func test(s *[]int) {
+	_ = s
+}

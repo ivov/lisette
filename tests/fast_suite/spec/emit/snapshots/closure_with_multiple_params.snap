@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() {
+    let add = |a: int, b: int| a + b;
+  }
+---
+package main
+
+func test() {
+	_ = func(a, b int) int {
+		return a + b
+	}
+}

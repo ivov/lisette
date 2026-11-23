@@ -14,6 +14,7 @@ format = { package = "lisette-format", path = "../crates/format" }
 emit = { package = "lisette-emit", path = "../crates/emit" }
 stdlib = { package = "lisette-stdlib", path = "../crates/stdlib" }
 deps = { package = "lisette-deps", path = "../crates/deps" }
+lisette_lsp = { package = "lisette-lsp", path = "../crates/lsp" }
 rustc-hash.workspace = true
 rayon.workspace = true
 insta.workspace = true
@@ -22,57 +23,69 @@ serde_json.workspace = true
 tempfile = "3"
 toml_edit = { version = "0.25", features = ["serde"] }
 
-[[test]]
-name = "suite"
-path = "suite.rs"
+# `fast_*`: the compiler and language server as a library, without `lis` or Go. CI runs these on every PR.
 
 [[test]]
-name = "e2e_smoke"
-path = "e2e_smoke.rs"
+name = "fast_suite"
+path = "fast_suite.rs"
 
 [[test]]
-name = "e2e_run"
-path = "e2e_run.rs"
+name = "fast_release"
+path = "fast_release.rs"
 
 [[test]]
-name = "e2e_cross"
-path = "e2e_cross.rs"
+name = "fast_lsp"
+path = "fast_lsp.rs"
+
+# `cli_*`: `lis` CLI commands on small projects. CI runs these on every PR.
 
 [[test]]
-name = "e2e_library"
-path = "e2e_library.rs"
+name = "cli_language"
+path = "cli_language.rs"
 
 [[test]]
-name = "e2e_go_dependencies"
-path = "e2e_go_dependencies.rs"
+name = "cli_run"
+path = "cli_run.rs"
 
 [[test]]
-name = "e2e_external_tests"
-path = "e2e_external_tests.rs"
+name = "cli_cross"
+path = "cli_cross.rs"
 
 [[test]]
-name = "e2e_learn"
-path = "e2e_learn.rs"
+name = "cli_library"
+path = "cli_library.rs"
 
 [[test]]
-name = "e2e_suite"
-path = "e2e_suite.rs"
+name = "cli_go_dependencies"
+path = "cli_go_dependencies.rs"
 
 [[test]]
-name = "rewrite_suite"
-path = "rewrite_suite.rs"
+name = "cli_external_tests"
+path = "cli_external_tests.rs"
 
 [[test]]
-name = "conversion_shapes"
-path = "conversion_shapes.rs"
+name = "cli_learn"
+path = "cli_learn.rs"
 
 [[test]]
-name = "embed_diff"
-path = "embed_diff.rs"
+name = "cli_lsp"
+path = "cli_lsp.rs"
+
+# `go_*`: Lisette against the Go toolchain. CI runs these on every PR.
 
 [[test]]
-name = "manifest_pins"
-path = "manifest_pins.rs"
+name = "go_emit"
+path = "go_emit.rs"
+
+[[test]]
+name = "go_rejections"
+path = "go_rejections.rs"
+
+# `fuzz_*`: random changes to test programs. CI runs these nightly.
+
+[[test]]
+name = "fuzz_emit"
+path = "fuzz_emit.rs"
 
 [lints]
 workspace = true

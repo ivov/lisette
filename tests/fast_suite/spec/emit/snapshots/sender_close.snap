@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Sender<int>) {
+    s.close()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s chan<- int) {
+	lisette.SenderClose(s)
+}

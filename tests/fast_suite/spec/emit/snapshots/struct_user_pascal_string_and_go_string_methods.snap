@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn String(self) -> string {
+      "custom display"
+    }
+  
+    fn GoString(self) -> string {
+      "custom debug"
+    }
+  }
+  
+  fn main() {
+    let p = Point { x: 1, y: 2 }
+    let _ = p
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return "custom display"
+}
+
+func (p Point) GoString() string {
+	return "custom debug"
+}
+
+func main() {}

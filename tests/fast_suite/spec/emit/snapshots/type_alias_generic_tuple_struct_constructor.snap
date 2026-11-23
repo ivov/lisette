@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Wrapper<T>(T)
+  type W<T> = Wrapper<T>
+  
+  fn test() -> W<int> {
+    W(5)
+  }
+---
+package main
+
+type Wrapper[T any] struct {
+	F0 T
+}
+
+type W[T any] = Wrapper[T]
+
+func test() W[int] {
+	return Wrapper[int]{F0: 5}
+}

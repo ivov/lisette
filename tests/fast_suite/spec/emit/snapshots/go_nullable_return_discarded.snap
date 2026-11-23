@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:html/template"
+  
+  fn main() {
+    let t = template.New("x")
+    t.Lookup("y")
+  }
+---
+package main
+
+import "html/template"
+
+func main() {
+	t := template.New("x")
+	t.Lookup("y")
+}

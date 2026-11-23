@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct S {
+    #[a]
+    // between attributes
+    #[b]
+    pub name: string,
+  }
+---
+struct S {
+  #[a]
+  // between attributes
+  #[b]
+  pub name: string,
+}

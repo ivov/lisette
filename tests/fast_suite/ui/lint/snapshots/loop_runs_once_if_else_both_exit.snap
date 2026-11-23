@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Loop runs at most once
+   ╭─[test.lis:4:3]
+ 3 │   let flag = true
+ 4 │   loop {
+   ·   ──┬─
+   ·     ╰── the body always exits before looping back
+ 5 │     if flag {
+   ╰────
+  help: Make the exit conditional, or remove the loop. The body always exits on the first iteration, so the loop never repeats · code: [lint.loop_runs_once]

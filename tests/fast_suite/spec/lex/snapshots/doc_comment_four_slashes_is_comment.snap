@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "//// This is a divider, not a doc comment"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Comment,
+            text: "//// This is a divider, not a doc comment",
+            byte_offset: 0,
+            byte_length: 41,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 41,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Invalid comment",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 4,
+                    },
+                    "expected 2 or 3 slashes",
+                ),
+            ],
+            help: Some(
+                "Use `//` for regular comments or `///` for doc comments",
+            ),
+            code: "lex.excess_slashes_in_comment",
+        },
+    ],
+    blank_lines: [],
+}
