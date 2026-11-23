@@ -23,7 +23,6 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-stdlib = { package = "lisette-stdlib", path = "../stdlib" }
 tempfile = "3"
 
 [lints]

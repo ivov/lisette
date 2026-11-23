@@ -230,7 +230,6 @@ dependencies = [
  "lisette-format",
  "lisette-passes",
  "lisette-semantics",
- "lisette-stdlib",
  "lisette-syntax",
  "rustc-hash",
  "serde",
