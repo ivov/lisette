@@ -1,0 +1,65 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:cmp"
+  
+  fn get() -> Result<Ref<int>, error> {
+    Ok(cmp.Or<Ref<int>>())
+  }
+  
+  fn get_at(x: int) -> Result<Ref<int>, error> {
+    let _ = x
+    get()
+  }
+  
+  fn call<T>(f: fn() -> T) -> T { f() }
+  
+  fn main() {
+    if !call(get).is_ok() { panic("generic call reads as Err") }
+    let fs = [get]
+    if !fs[0]().is_ok() { panic("stored function reads as Err") }
+    let at = [1].map(get_at)
+    if !at[0].is_ok() { panic("prelude callback reads as Err") }
+  }
+---
+package main
+
+import (
+	"cmp"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func get() (*int, error) {
+	return cmp.Or[*int](), nil
+}
+
+func getAt(x int) (*int, error) {
+	_ = x
+	return get()
+}
+
+func call[T any](f func() T) T {
+	return f()
+}
+
+func main() {
+	if !call(func() lisette.Result[*int, error] {
+		return lisette.ResultFromPair[*int](get())
+	}).IsOk() {
+		panic("generic call reads as Err")
+	}
+	fs := []func() lisette.Result[*int, error]{func() lisette.Result[*int, error] {
+		return lisette.ResultFromPair[*int](get())
+	}}
+	if !fs[0]().IsOk() {
+		panic("stored function reads as Err")
+	}
+	at := lisette.SliceMap([]int{1}, func(arg0 int) lisette.Result[*int, error] {
+		return lisette.ResultFromPair[*int](getAt(arg0))
+	})
+	if !at[0].IsOk() {
+		panic("prelude callback reads as Err")
+	}
+}

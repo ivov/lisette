@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Undeclared type parameter
+   ╭─[test.lis:6:16]
+ 5 │ 
+ 6 │ impl Container<T> {
+   ·                ┬
+   ·                ╰── not declared by this `impl`
+ 7 │   fn get(self) -> T { self.value }
+   ╰────
+  help: Declare the type parameter: `impl<T> Container<T>` · code: [resolve.type_not_found]

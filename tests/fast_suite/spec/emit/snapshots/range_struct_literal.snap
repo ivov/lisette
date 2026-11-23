@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn test() -> int {
+    let r: Range<int> = Range{ start: 0, end: 10 };
+    r.start + r.end
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	r := lisette.Range[int]{
+		Start: 0,
+		End:   10,
+	}
+	return r.Start + r.End
+}

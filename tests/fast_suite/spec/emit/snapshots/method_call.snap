@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn get_x(self: Point) -> int {
+      self.x
+    }
+  }
+  
+  fn test(p: Point) -> int {
+    p.get_x()
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) getX() int {
+	return p.x
+}
+
+func test(p Point) int {
+	return p.getX()
+}

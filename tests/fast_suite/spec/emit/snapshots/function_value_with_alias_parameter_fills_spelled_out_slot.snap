@@ -1,0 +1,54 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  type PairFn = fn(int) -> (int, int)
+  
+  fn invoke(f: PairFn) -> (int, int) { f(4) }
+  
+  fn first(f: PairFn) -> int { f(4).0 }
+  
+  fn main() {
+    let gs: Slice<fn(fn(int) -> (int, int)) -> (int, int)> = [invoke]
+    let (a, b) = gs[0](|x| (x, x + 1))
+    if a != 4 || b != 5 { panic("tuple") }
+    let hs: Slice<fn(fn(int) -> (int, int)) -> int> = [first]
+    if hs[0](|x| (x, x)) != 4 { panic("first") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type PairFn = func(int) lisette.Tuple2[int, int]
+
+func invoke(f PairFn) (int, int) {
+	tup := f(4)
+	return tup.First, tup.Second
+}
+
+func first(f PairFn) int {
+	return f(4).First
+}
+
+func main() {
+	gs := []func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]{func(arg0 PairFn) lisette.Tuple2[int, int] {
+		ret, ret2 := invoke(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
+		return tup
+	}}
+	tmp := gs[0](func(x int) lisette.Tuple2[int, int] {
+		return lisette.MakeTuple2[int, int](x, x+1)
+	})
+	a := tmp.First
+	b := tmp.Second
+	if a != 4 || b != 5 {
+		panic("tuple")
+	}
+	hs := []func(func(int) lisette.Tuple2[int, int]) int{first}
+	if hs[0](func(x int) lisette.Tuple2[int, int] {
+		return lisette.MakeTuple2[int, int](x, x)
+	}) != 4 {
+		panic("first")
+	}
+}

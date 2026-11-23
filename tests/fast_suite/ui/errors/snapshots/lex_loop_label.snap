@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Loop labels are not supported
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   'outer: for i in 0..3 {
+   ·   ───┬──
+   ·      ╰── loop label
+ 4 │     break 'outer
+   ╰────
+  help: Remove the label. `break` and `continue` always apply to the innermost loop · code: [lex.loop_label]

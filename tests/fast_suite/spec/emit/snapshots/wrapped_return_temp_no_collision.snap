@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn foo() -> Option<int> {
+    let tmp2 = 7;
+    let _ = tmp2;
+    return if true { Some(1) } else { None };
+  }
+  
+  fn main() {
+    let _ = foo();
+  }
+---
+package main
+
+func foo() (int, bool) {
+	if true {
+		return 1, true
+	}
+	return 0, false
+}
+
+func main() {
+	foo()
+}

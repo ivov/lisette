@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Point { x: int }
+  
+  impl Point {
+    fn bump(self: mut Ref<Point>) {
+      self.x += 1
+    }
+  }
+  
+  fn test(r: Ref<Point>) -> int {
+    let mut p = Point { x: 1 }
+    (&p).bump()
+    let copy = (&p).*
+    let same = &r
+    copy.x + (&p).x + same.x
+  }
+---
+package main
+
+type Point struct {
+	x int
+}
+
+func (p *Point) bump() {
+	p.x++
+}
+
+func test(r *Point) int {
+	p := Point{x: 1}
+	p.bump()
+	copy := p
+	same := r
+	return copy.x + p.x + same.x
+}

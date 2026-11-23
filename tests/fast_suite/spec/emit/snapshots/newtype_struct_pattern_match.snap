@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct UserId(int)
+  
+  fn test(uid: UserId) -> int {
+    match uid {
+      UserId(id) => id,
+    }
+  }
+---
+package main
+
+type UserId int
+
+func test(uid UserId) int {
+	return int(uid)
+}

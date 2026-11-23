@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    let f = flag.UnquoteUsage
+    let fl = flag.Lookup("verbose")
+    match fl {
+      Some(v) => { let _ = f(v) },
+      None => {},
+    }
+  }
+---
+package main
+
+import (
+	"flag"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	f := func(arg0 *flag.Flag) lisette.Tuple2[string, string] {
+		ret, ret2 := flag.UnquoteUsage(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
+		return tup
+	}
+	raw := flag.Lookup("verbose")
+	fl := lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+	if fl.Tag == lisette.OptionSome {
+		f(fl.SomeVal)
+	}
+}

@@ -1,0 +1,8 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "struct Point { pub x: int, pub y: int }"
+---
+struct Point {
+  pub x: int,
+  pub y: int,
+}

@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct inner { x: int }
+  
+  #[json]
+  struct Outer {
+    embed inner,
+  }
+  
+  fn read(o: Outer) -> int {
+    o.inner.x
+  }
+---
+package main
+
+type inner struct {
+	x int
+}
+
+type Outer struct {
+	inner
+}
+
+func read(o Outer) int {
+	return o.inner.x
+}

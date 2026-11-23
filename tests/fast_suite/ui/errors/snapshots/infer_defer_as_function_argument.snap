@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid `defer`
+   ╭─[test.lis:5:11]
+ 4 │ fn f() {
+ 5 │   consume(defer cleanup());
+   ·           ───────┬───────
+   ·                  ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `defer` to its own statement · code: [infer.defer_in_expression_position]

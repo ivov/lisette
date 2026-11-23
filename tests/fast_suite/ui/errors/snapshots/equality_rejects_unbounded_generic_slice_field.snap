@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot derive equality
+   ╭─[test.lis:4:3]
+ 3 │ struct Cart<T> {
+ 4 │   items: Slice<T>,
+   ·   ──┬──
+   ·     ╰── `items` cannot be compared
+ 5 │ }
+   ╰────
+  help: Bound `T` by `Comparable`, `Ordered`, or an interface that declares `equals`, or give `Cart` a hand-written `equals` method. `T` has no bound that supports comparison · code: [attribute.cannot_derive_equality]

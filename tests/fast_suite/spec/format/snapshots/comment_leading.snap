@@ -1,0 +1,8 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  // leading comment
+  fn foo() {}
+---
+// leading comment
+fn foo() {}

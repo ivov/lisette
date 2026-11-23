@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type IntBox = Box<int>
+  
+  struct Box<T> { value: T }
+---
+package main
+
+type IntBox = Box[int]
+
+type Box[T any] struct {
+	value T
+}

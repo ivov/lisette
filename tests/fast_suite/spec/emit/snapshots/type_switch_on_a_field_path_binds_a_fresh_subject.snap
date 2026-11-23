@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  interface Shape {
+    fn area() -> int
+  }
+  
+  struct Circle { r: int }
+  
+  impl Circle {
+    fn area(self) -> int { self.r }
+  }
+  
+  struct Square { s: int }
+  
+  impl Square {
+    fn area(self) -> int { self.s * self.s }
+  }
+  
+  struct Holder { shape: Shape }
+  
+  fn describe(h: Ref<Holder>) -> int {
+    match h.shape {
+      Circle { r } => r,
+      Square { s } => s,
+      _ => 0,
+    }
+  }
+---
+package main
+
+type Shape interface {
+	area() int
+}
+
+type Circle struct {
+	r int
+}
+
+func (c Circle) area() int {
+	return c.r
+}
+
+type Square struct {
+	s int
+}
+
+func (s Square) area() int {
+	return s.s * s.s
+}
+
+type Holder struct {
+	shape Shape
+}
+
+func describe(h *Holder) int {
+	switch subject := h.shape.(type) {
+	case Circle:
+		return subject.r
+	case Square:
+		return subject.s
+	default:
+		return 0
+	}
+}

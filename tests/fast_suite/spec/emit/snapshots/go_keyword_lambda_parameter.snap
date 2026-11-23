@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() -> int {
+    let f = |map: int, range: int| map + range;
+    f(10, 20)
+  }
+---
+package main
+
+func test() int {
+	f := func(m, rng int) int {
+		return m + rng
+	}
+	return f(10, 20)
+}

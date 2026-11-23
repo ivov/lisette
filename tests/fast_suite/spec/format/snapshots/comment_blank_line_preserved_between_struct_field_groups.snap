@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct S {
+    x: int, // trailing
+  
+    // second
+    y: int,
+  }
+---
+struct S {
+  x: int, // trailing
+
+  // second
+  y: int,
+}

@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl Box<int> {
+    fn keep<U>(self, x: U) -> U { x }
+  }
+  
+  fn test() -> string {
+    let b = Box { value: 1 };
+    b.keep<string>("ok")
+  }
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func boxKeep[U any](_ Box[int], x U) U {
+	return x
+}
+
+func test() string {
+	b := Box[int]{value: 1}
+	return boxKeep[string](b, "ok")
+}

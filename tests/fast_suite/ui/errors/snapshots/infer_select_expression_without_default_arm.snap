@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Non-exhaustive select expression
+    ╭─[test.lis:8:13]
+  7 │       }
+  8 │ ╭─▶   let got = select {
+  9 │ │       let Some(v) = rx.receive() => v,
+ 10 │ ├─▶   }
+    · ╰──── may not produce a value
+ 11 │       let _ = got
+    ╰────
+  help: To wait for a value, use a `match` receive arm with a `None` case: `match ch.receive() { Some(v) => v, None => ... }`. A default arm `_ => ...` makes the `select` non-blocking · code: [infer.non_exhaustive_select_expression]

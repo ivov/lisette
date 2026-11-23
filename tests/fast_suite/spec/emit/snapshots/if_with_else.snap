@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(x: int) {
+    if x > 10 {
+      let y = 1;
+    } else {
+      let y = 2;
+    }
+  }
+---
+package main
+
+func test(x int) {
+	if x > 10 {
+	}
+}

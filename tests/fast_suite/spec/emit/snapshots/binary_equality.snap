@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> bool {
+    5 == 5
+  }
+---
+package main
+
+func test() bool {
+	return 5 == 5
+}

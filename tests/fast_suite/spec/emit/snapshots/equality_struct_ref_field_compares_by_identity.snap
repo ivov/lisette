@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Node { value: int, next: Ref<Node> }
+---
+package main
+
+type Node struct {
+	value int
+	next  *Node
+}
+
+func (n Node) equals(other Node) bool {
+	return n.value == other.value && n.next == other.next
+}

@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn test(arr: Slice<int>) -> Slice<int> {
+    arr[2..]
+  }
+---
+package main
+
+func test(arr []int) []int {
+	len2 := len(arr)
+	return arr[2:len2:len2]
+}

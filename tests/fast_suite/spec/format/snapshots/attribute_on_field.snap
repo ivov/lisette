@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Person {
+    #[json("firstName")]
+    first_name: string,
+  }
+---
+struct Person {
+  #[json("firstName")]
+  first_name: string,
+}

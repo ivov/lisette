@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unknown go hint `array_return`
+   ╭─[typedef.d.lis:7:3]
+ 6 │ impl Widget {
+ 7 │   #[go(array_return)]
+   ·   ─────────┬─────────
+   ·            ╰── not one of the hints `lis add` emits
+ 8 │   fn Bytes(self) -> Slice<byte>
+   ╰────
+  help: Regenerate this typedef by re-running `lis add`. The hint in this attribute is not recognized · code: [attribute.unknown]

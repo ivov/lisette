@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Foo { x: int }
+  
+  fn main() {
+    let items = [Foo { x: 1 }, Foo { x: 2 }]
+    for Foo { x: _ } in items {
+      let _ = 0
+    }
+  }
+---
+package main
+
+type Foo struct {
+	x int
+}
+
+func main() {
+	items := []Foo{{x: 1}, {x: 2}}
+	for range items {
+	}
+}

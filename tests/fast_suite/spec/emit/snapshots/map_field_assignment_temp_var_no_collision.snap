@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Box { x: int }
+  
+  fn main() {
+    let mut m = Map.from([("a", Box { x: 1 })])
+    let mut entry = m["a"]
+    entry.x = 2
+    m["a"] = entry
+    let entry_1 = 3
+    fmt.Println(entry_1)
+  }
+---
+package main
+
+import "fmt"
+
+type Box struct {
+	x int
+}
+
+func main() {
+	m := map[string]Box{"a": {x: 1}}
+	entry := m["a"]
+	entry.x = 2
+	m["a"] = entry
+	entry1 := 3
+	fmt.Println(entry1)
+}

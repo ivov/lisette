@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match color { Red | Green => \"warm\", Blue => \"cool\" } }"
+---
+fn test() {
+  match color {
+    Red | Green => "warm",
+    Blue => "cool",
+  }
+}

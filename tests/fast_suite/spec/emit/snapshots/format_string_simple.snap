@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let name = "Alice";
+    fmt.Print(f"Hello, {name}!")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	name := "Alice"
+	fmt.Print("Hello, " + name + "!")
+}

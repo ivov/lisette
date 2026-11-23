@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() -> Result<Point, string> {
+    Ok(Point { x: 10, y: 20 })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Point struct {
+	x int
+	y int
+}
+
+func test() lisette.Result[Point, string] {
+	return lisette.MakeResultOk[Point, string](Point{
+		x: 10,
+		y: 20,
+	})
+}

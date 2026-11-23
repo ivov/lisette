@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn process(items: mut Slice<int>, count: int) -> Slice<int> { items }"
+---
+fn process(items: mut Slice<int>, count: int) -> Slice<int> {
+  items
+}

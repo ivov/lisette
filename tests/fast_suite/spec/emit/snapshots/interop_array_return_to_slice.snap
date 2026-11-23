@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:crypto/sha256"
+  
+  fn main() {
+    let data = "hi" as Slice<byte>
+    let bytes = sha256.Sum256(data).to_slice()
+    let _ = bytes
+  }
+---
+package main
+
+import (
+	"crypto/sha256"
+	"slices"
+)
+
+func main() {
+	data := ([]byte)("hi")
+	arr := sha256.Sum256(data)
+	bytes := slices.Clone(arr[:])
+	_ = bytes
+}

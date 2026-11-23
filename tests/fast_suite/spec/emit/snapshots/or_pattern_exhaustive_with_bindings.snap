@@ -1,0 +1,55 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum Shape {
+    Circle(int),
+    Square(int),
+    Triangle(int),
+  }
+  
+  fn shape_size(s: Shape) -> int {
+    match s {
+      Shape.Circle(r) | Shape.Square(r) | Shape.Triangle(r) => r,
+    }
+  }
+---
+package main
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeSquare(arg0 int) Shape {
+	return Shape{Tag: ShapeSquare, Square: arg0}
+}
+
+func MakeShapeTriangle(arg0 int) Shape {
+	return Shape{Tag: ShapeTriangle, Triangle: arg0}
+}
+
+type ShapeTag uint8
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeSquare
+	ShapeTriangle
+)
+
+type Shape struct {
+	Tag      ShapeTag
+	Circle   int
+	Square   int
+	Triangle int
+}
+
+func shapeSize(s Shape) int {
+	switch s.Tag {
+	case ShapeCircle:
+		return s.Circle
+	case ShapeSquare:
+		return s.Square
+	default:
+		return s.Triangle
+	}
+}

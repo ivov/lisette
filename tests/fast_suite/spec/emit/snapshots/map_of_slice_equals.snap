@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(a: Map<string, Slice<int>>, b: Map<string, Slice<int>>) -> bool {
+    a.equals(b)
+  }
+---
+package main
+
+import (
+	"maps"
+	"slices"
+)
+
+func test(a, b map[string][]int) bool {
+	return maps.EqualFunc(a, b, func(a2, b2 []int) bool { return slices.Equal(a2, b2) })
+}

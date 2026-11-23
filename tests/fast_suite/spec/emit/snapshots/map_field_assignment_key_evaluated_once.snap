@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct C { value: int }
+  
+  fn make_key() -> string {
+    fmt.Println("key")
+    "a"
+  }
+  
+  fn main() {
+    let mut m: mut Map<string, C> = Map.new()
+    m["a"] = C { value: 1 }
+    let key = make_key()
+    let mut entry = m[key]
+    entry.value = 2
+    m[key] = entry
+  }
+---
+package main
+
+import "fmt"
+
+type C struct {
+	value int
+}
+
+func makeKey() string {
+	fmt.Println("key")
+	return "a"
+}
+
+func main() {
+	m := make(map[string]C)
+	m["a"] = C{value: 1}
+	key := makeKey()
+	entry := m[key]
+	entry.value = 2
+	m[key] = entry
+}

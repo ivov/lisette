@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(flag: bool) -> () {
+    if flag {
+      return ()
+    }
+    let x = 10;
+    ()
+  }
+---
+package main
+
+func test(flag bool) {
+	if flag {
+		return
+	}
+}

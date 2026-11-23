@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:5:22]
+ 4 │ fn main() {
+ 5 │   fmt.Printf("%p\n", 1)
+   ·                      ┬
+   ·                      ╰── `int` argument for `%p`
+ 6 │ }
+   ╰────
+  help: Use `%d`, or convert the argument. `fmt.Printf` formats `%p`, which needs a pointer, but the argument has type `int` · code: [lint.printf_verb_mismatch]

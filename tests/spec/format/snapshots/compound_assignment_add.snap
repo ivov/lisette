@@ -1,7 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "fn test() { x += 5 }"
----
-fn test() {
-  x += 5
-}

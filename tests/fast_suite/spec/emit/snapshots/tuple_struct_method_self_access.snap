@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Point(int, int)
+  
+  impl Point {
+    fn x(self: Point) -> int {
+      self.0
+    }
+  
+    fn sum(self: Point) -> int {
+      self.0 + self.1
+    }
+  }
+  
+  fn test() -> int {
+    let p = Point(10, 20);
+    p.sum()
+  }
+---
+package main
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func (p Point) x() int {
+	return p.F0
+}
+
+func (p Point) sum() int {
+	return p.F0 + p.F1
+}
+
+func test() int {
+	p := Point{
+		F0: 10,
+		F1: 20,
+	}
+	return p.sum()
+}

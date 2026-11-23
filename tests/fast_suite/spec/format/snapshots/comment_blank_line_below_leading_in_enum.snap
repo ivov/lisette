@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  enum E {
+    A,
+    // about B
+  
+    B,
+  }
+---
+enum E {
+  A,
+  // about B
+
+  B,
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Incompatible bit mask
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5
+ 4 │   let _ = x & 7 > 100
+   ·           ─────┬─────
+   ·                ╰── always `false`
+ 5 │ }
+   ╰────
+  help: Check the mask or the constant. The mask makes this value unable to satisfy the comparison, so it is always `false` · code: [lint.bad_bit_mask]

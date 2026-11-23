@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn background() {
+    fmt.Print(f"Running in background");
+  }
+  
+  fn test() -> int {
+    let x = 42;
+    task background();
+    x
+  }
+---
+package main
+
+import "fmt"
+
+func background() {
+	fmt.Print("Running in background")
+}
+
+func test() int {
+	x := 42
+	go background()
+	return x
+}

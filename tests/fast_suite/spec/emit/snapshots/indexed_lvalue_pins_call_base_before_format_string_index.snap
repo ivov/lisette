@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut m = Map.new<string, int>()
+    m["0"] = 100
+    let mut i = 0
+    let make = || -> mut Map<string, int> { i += 1; m }
+    make()[f"{i}"] = 99
+    let _ = m
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	m := make(map[string]int)
+	m["0"] = 100
+	i := 0
+	make_ := func() map[string]int {
+		i++
+		return m
+	}
+	base := make_()
+	base[fmt.Sprint(i)] = 99
+	_ = m
+}

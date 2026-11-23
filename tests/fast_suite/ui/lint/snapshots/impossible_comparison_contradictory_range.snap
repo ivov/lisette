@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ✕ Impossible comparison
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5;
+ 4 │   let _ = x < 5 && x > 10
+   ·           ───────┬───────
+   ·                  ╰── always `false`
+ 5 │ }
+   ╰────
+  help: Check the bounds, or did you mean `||`? No value satisfies both sides, so this `&&` is always `false` · code: [infer.impossible_comparison]

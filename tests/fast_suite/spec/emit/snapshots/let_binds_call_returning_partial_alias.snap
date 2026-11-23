@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type MyPartial = Partial<int, error>
+  
+  fn source() -> MyPartial {
+    Partial.Ok(3)
+  }
+  
+  fn main() {
+    let a = source()
+    let _ = a
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyPartial = lisette.Partial[int, error]
+
+func source() MyPartial {
+	return lisette.MakePartialOk[int, error](3)
+}
+
+func main() {
+	a := source()
+	_ = a
+}

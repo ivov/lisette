@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct UserId(int)
+  struct Box { v: UserId }
+  
+  fn test(i: int) -> Box {
+    Box { v: i as UserId }
+  }
+---
+package main
+
+type UserId int
+
+type Box struct {
+	v UserId
+}
+
+func test(i int) Box {
+	return Box{v: UserId(i)}
+}

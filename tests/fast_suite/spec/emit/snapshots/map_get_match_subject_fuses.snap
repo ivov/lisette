@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(m: Map<string, int>, key: string) -> int {
+    match m.get(key) {
+      Some(v) => v,
+      None => { fmt.Print("missing\n"); 0 },
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func test(m map[string]int, key string) int {
+	if v, ok := m[key]; ok {
+		return v
+	}
+	fmt.Print("missing\n")
+	return 0
+}

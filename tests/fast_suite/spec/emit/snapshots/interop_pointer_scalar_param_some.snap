@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/cfg"
+  
+  fn main() {
+    cfg.Configure(Some("custom"))
+  }
+---
+package main
+
+import "example.com/cfg"
+
+func main() {
+	var ptr string = "custom"
+	cfg.Configure(&ptr)
+}

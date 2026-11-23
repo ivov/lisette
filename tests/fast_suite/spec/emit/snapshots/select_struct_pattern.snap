@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  struct Message { id: int, data: int }
+  
+  fn test(ch: Receiver<Message>) -> int {
+    select {
+      let Some(Message { id, data }) = ch.receive() => id + data,
+      _ => 0,
+    }
+  }
+---
+package main
+
+type Message struct {
+	id   int
+	data int
+}
+
+func test(ch <-chan Message) int {
+	for {
+		select {
+		case recv, ok := <-ch:
+			if ok {
+				return recv.id + recv.data
+			}
+			ch = nil
+			continue
+		default:
+			return 0
+		}
+	}
+}

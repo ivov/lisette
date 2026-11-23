@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn id<T: Ordered>(x: T) -> T {
+    x
+  }
+  
+  fn main() {
+    let _ = id(1)
+  }
+---
+package main
+
+import "cmp"
+
+func id[T cmp.Ordered](x T) T {
+	return x
+}
+
+func main() {
+	id(1)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid method value
+    ╭─[test.lis:10:11]
+  9 │   let p: Pair<int, int> = Pair { a: 1, b: 2 };
+ 10 │   let f = p.first;
+    ·           ───┬───
+    ·              ╰── taking value not allowed
+ 11 │ }
+    ╰────
+  help: Call the method directly: `obj.method(...)`. This method cannot be taken as a value · code: [infer.taking_value_of_ufcs_method]

@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Caseless { value: string }
+  
+  impl Caseless {
+    fn equals(self, other: Caseless) -> bool {
+      self.value == other.value
+    }
+  }
+---
+package main
+
+type Caseless struct {
+	value string
+}
+
+func (c Caseless) equals(other Caseless) bool {
+	return c.value == other.value
+}

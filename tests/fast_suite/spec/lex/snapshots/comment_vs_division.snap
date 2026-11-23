@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: 10 / 2; // division before comment
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Integer,
+            text: "10",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: Slash,
+            text: "/",
+            byte_offset: 3,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "2",
+            byte_offset: 5,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: Comment,
+            text: "// division before comment",
+            byte_offset: 8,
+            byte_length: 26,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 34,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

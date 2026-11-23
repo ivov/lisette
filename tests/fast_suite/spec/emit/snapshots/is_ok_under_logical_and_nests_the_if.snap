@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let ready = true
+    if ready && strconv.Atoi("1").is_ok() {
+      fmt.Println("both")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	ready := true
+	if ready {
+		if _, err := strconv.Atoi("1"); err == nil {
+			fmt.Println("both")
+		}
+	}
+}

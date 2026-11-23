@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Map<string, fn()> {
+    Map.new()
+  }
+---
+package main
+
+func test() map[string]func() struct{} {
+	return make(map[string]func() struct{})
+}

@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn use_ref(r: Ref<int>) -> Ref<int> {
+    r
+  }
+  
+  struct Holder {
+    r: Ref<int>,
+    s: Slice<int>,
+    m: Map<string, int>,
+  }
+---
+package main
+
+func useRef(r *int) *int {
+	return r
+}
+
+type Holder struct {
+	r *int
+	s []int
+	m map[string]int
+}

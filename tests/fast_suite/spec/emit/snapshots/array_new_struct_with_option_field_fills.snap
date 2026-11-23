@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  struct Horse {
+    speed: int,
+    fast: Option<int>,
+  }
+  
+  fn herd() -> Array<Horse, 2> {
+    Array.new<Horse, 2>()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Horse struct {
+	speed int
+	fast  lisette.Option[int]
+}
+
+func herd() [2]Horse {
+	return [2]Horse{}
+}

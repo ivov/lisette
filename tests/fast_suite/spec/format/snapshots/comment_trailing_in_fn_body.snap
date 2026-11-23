@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f() {
+    let x = 1
+    x
+    // trailing in fn body
+  }
+---
+fn f() {
+  let x = 1
+  x
+  // trailing in fn body
+}

@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    flag.Func("verbose", "enable verbose", |_val: string| -> Result<(), error> {
+      Ok(())
+    })
+  }
+---
+package main
+
+import "flag"
+
+func main() {
+	flag.Func("verbose", "enable verbose", func(_ string) error {
+		return nil
+	})
+}

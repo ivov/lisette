@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Foo {}
+  
+  impl Foo {
+    fn need_ref(self: Ref<Foo>) {}
+  }
+  
+  fn test() {
+    Foo {}.need_ref()
+  }
+---
+package main
+
+type Foo struct{}
+
+func (f *Foo) needRef() {}
+
+func test() {
+	(&Foo{}).needRef()
+}

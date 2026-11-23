@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Foo {
+    a: int,
+    // a standalone note about the missing field
+    c: string,
+  }
+---
+struct Foo {
+  a: int,
+  // a standalone note about the missing field
+  c: string,
+}

@@ -1,0 +1,50 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn apply(f: fn() -> Slice<Option<string>>) -> Slice<Option<string>> {
+    f()
+  }
+  
+  fn main() {
+    let xs = apply(aws.Make)
+    for x in xs {
+      match x {
+        Some(v) => { let _ = v },
+        None => {},
+      }
+    }
+  }
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func apply(f func() []lisette.Option[string]) []lisette.Option[string] {
+	return f()
+}
+
+func main() {
+	xs := apply(func() []lisette.Option[string] {
+		src := aws.Make()
+		wrapped := make([]lisette.Option[string], len(src))
+		for i, v := range src {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[string](*v)
+			} else {
+				wrapped[i] = lisette.MakeOptionNone[string]()
+			}
+		}
+		return wrapped
+	})
+	for _, x := range xs {
+		if x.Tag == lisette.OptionSome {
+			_ = x.SomeVal
+		}
+	}
+}

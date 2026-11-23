@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Misplaced `pub`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ pub import "go:fmt"
+   · ─┬─
+   ·  ╰── not allowed here
+ 3 │ 
+   ╰────
+  help: Remove `pub`. An import is always private to the file that declares it · code: [parse.pub_import]

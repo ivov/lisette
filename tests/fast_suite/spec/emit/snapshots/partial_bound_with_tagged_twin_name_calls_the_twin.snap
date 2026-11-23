@@ -1,0 +1,114 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:fmt"
+  import "go:errors"
+  
+  interface Getter<T> {
+    fn get() -> T
+  }
+  
+  interface Loader {
+    fn get() -> Partial<int, error>
+  }
+  
+  struct Cell { v: int }
+  
+  impl Cell {
+    fn get(self) -> int { self.v }
+  }
+  
+  struct Src { n: int }
+  
+  impl Src {
+    fn get(self) -> Partial<int, error> {
+      if self.n > 0 { Partial.Ok(self.n) } else { Partial.Both(1, errors.New("low")) }
+    }
+  }
+  
+  fn read<G: Getter<int>>(g: G) -> int { g.get() }
+  
+  fn load<L: Loader>(l: L) -> string {
+    match l.get() {
+      Partial.Ok(n) => f"ok {n}",
+      Partial.Err(e) => f"err {e}",
+      Partial.Both(n, e) => f"both {n} {e}",
+    }
+  }
+  
+  fn main() {
+    fmt.Println(read(Cell { v: 4 }))
+    fmt.Println(load(Src { n: 2 }))
+    fmt.Println(load(Src { n: 0 }))
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Getter[T any] interface {
+	get_() T
+}
+
+type Loader interface {
+	get_() lisette.Partial[int, error]
+}
+
+type Cell struct {
+	v int
+}
+
+func (c Cell) get() int {
+	return c.v
+}
+
+func (c Cell) get_() int {
+	return c.get()
+}
+
+type Src struct {
+	n int
+}
+
+func (s Src) get() (int, error) {
+	if s.n > 0 {
+		return s.n, nil
+	}
+	return 1, errors.New("low")
+}
+
+func (s Src) get_() lisette.Partial[int, error] {
+	ret, ret2 := s.get()
+	if ret2 != nil {
+		return lisette.MakePartialBoth[int, error](ret, ret2)
+	}
+	return lisette.MakePartialOk[int, error](ret)
+}
+
+func read[G Getter[int]](g G) int {
+	return g.get_()
+}
+
+func load[L Loader](l L) string {
+	subject := l.get_()
+	switch subject.Tag {
+	case lisette.PartialOk:
+		return fmt.Sprintf("ok %d", subject.OkVal)
+	case lisette.PartialErr:
+		return fmt.Sprintf("err %v", subject.ErrVal)
+	default:
+		return fmt.Sprintf("both %d %v", subject.OkVal, subject.ErrVal)
+	}
+}
+
+func main() {
+	fmt.Println(read(Cell{v: 4}))
+	fmt.Println(load(Src{n: 2}))
+	fmt.Println(load(Src{n: 0}))
+}

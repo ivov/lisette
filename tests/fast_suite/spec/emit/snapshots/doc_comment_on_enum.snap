@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  /// Represents the status of a task.
+  enum Status { Pending, Running, Complete }
+---
+package main
+
+func MakeStatusPending() Status {
+	return Status{Tag: StatusPending}
+}
+
+func MakeStatusRunning() Status {
+	return Status{Tag: StatusRunning}
+}
+
+func MakeStatusComplete() Status {
+	return Status{Tag: StatusComplete}
+}
+
+type StatusTag uint8
+
+const (
+	StatusPending StatusTag = iota
+	StatusRunning
+	StatusComplete
+)
+
+// Represents the status of a task.
+type Status struct {
+	Tag StatusTag
+}

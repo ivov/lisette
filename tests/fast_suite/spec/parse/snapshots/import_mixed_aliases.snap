@@ -1,0 +1,69 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  import router "go:github.com/gorilla/mux"
+  import _ "go:database/sql"
+  import "go:fmt"
+---
+[
+    PackageImport {
+        name: "go:github.com/gorilla/mux",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 15,
+            byte_length: 27,
+        },
+        alias: Some(
+            Named(
+                "router",
+                Span {
+                    file_id: 0,
+                    byte_offset: 8,
+                    byte_length: 6,
+                },
+            ),
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 41,
+        },
+    },
+    PackageImport {
+        name: "go:database/sql",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 52,
+            byte_length: 17,
+        },
+        alias: Some(
+            Blank(
+                Span {
+                    file_id: 0,
+                    byte_offset: 50,
+                    byte_length: 1,
+                },
+            ),
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 43,
+            byte_length: 26,
+        },
+    },
+    PackageImport {
+        name: "go:fmt",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 77,
+            byte_length: 8,
+        },
+        alias: None,
+        span: Span {
+            file_id: 0,
+            byte_offset: 70,
+            byte_length: 15,
+        },
+    },
+]

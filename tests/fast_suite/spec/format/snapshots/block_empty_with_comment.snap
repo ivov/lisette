@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn foo() {
+    // nothing here
+  }
+---
+fn foo() {
+  // nothing here
+}

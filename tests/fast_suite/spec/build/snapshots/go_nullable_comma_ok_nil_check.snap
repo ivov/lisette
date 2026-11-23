@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"runtime/debug"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret, ret2 := debug.ReadBuildInfo()
+	var info lisette.Option[*debug.BuildInfo]
+	if ret2 && ret != nil {
+		info = lisette.MakeOptionSome[*debug.BuildInfo](ret)
+	} else {
+		info = lisette.MakeOptionNone[*debug.BuildInfo]()
+	}
+	fmt.Print(info.IsSome())
+}

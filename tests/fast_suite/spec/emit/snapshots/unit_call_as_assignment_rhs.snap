@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn noop() {}
+  
+  fn test() {
+    let mut x: () = ()
+    x = noop()
+    let _ = x
+  }
+---
+package main
+
+func noop() {}
+
+func test() {
+	x := struct{}{}
+	noop()
+	x = struct{}{}
+	_ = x
+}

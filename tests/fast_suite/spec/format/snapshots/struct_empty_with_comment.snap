@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Empty {
+    // no fields yet
+  }
+---
+struct Empty {
+  // no fields yet
+}

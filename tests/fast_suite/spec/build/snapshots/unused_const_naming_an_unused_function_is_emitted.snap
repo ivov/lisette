@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func helper() int {
+	return 1
+}
+
+var F func() int = helper
+
+func main() {}

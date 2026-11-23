@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ✕ File permission written in decimal
+   ╭─[test.lis:5:32]
+ 4 │ fn main() {
+ 5 │   let _ = os.Chmod("/tmp/foo", 644)
+   ·                                ─┬─
+   ·                                 ╰── decimal 644 is octal 0o1204
+ 6 │ }
+   ╰────
+  help: Use a `0o` prefix (for example `0o644`) so the bits line up with the rwx triples. File permissions are conventionally written in octal · code: [infer.decimal_file_mode]

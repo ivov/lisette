@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> string {
+    let s = r"first `tick
+  second"
+    s
+  }
+---
+package main
+
+func test() string {
+	s := "first `tick\nsecond"
+	return s
+}

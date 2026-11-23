@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  fn make() -> Option<Slice<Option<string>>> {
+    Some([Some("hi"), None])
+  }
+  
+  fn use_it(o: Option<Slice<Option<string>>>) {
+    match o {
+      Some(inner) => { for x in inner { let _ = x } },
+      None => {},
+    }
+  }
+  
+  fn main() {
+    use_it(make())
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func make_() ([]lisette.Option[string], bool) {
+	return []lisette.Option[string]{
+		lisette.MakeOptionSome("hi"),
+		lisette.MakeOptionNone[string](),
+	}, true
+}
+
+func useIt(o lisette.Option[[]lisette.Option[string]]) {
+	if o.Tag == lisette.OptionSome {
+		for _, x := range o.SomeVal {
+			_ = x
+		}
+	}
+}
+
+func main() {
+	useIt(lisette.OptionFromCommaOk[[]lisette.Option[string]](make_()))
+}

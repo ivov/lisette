@@ -1,0 +1,25 @@
+
+fn find(n: int) -> int {
+  let mut i = 0
+  let r = loop {
+    i += 1
+    if i > n {
+  let mut i = 0
+  let r = loop {
+    i += 1
+    if i > n {
+      let r = 3
+      break r
+    }
+  }
+  r + 1
+}
+  }
+  r + 1
+}
+
+fn test() -> int {
+  find(3)
+}
+
+fn main() { let _ = test(); }

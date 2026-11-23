@@ -1,0 +1,50 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Store<T> { items: Slice<T> }
+  
+  impl<T> Store<T> {
+    fn get<U>(self, i: int) -> Option<U> {
+      let _ = (self.items, i)
+      None
+    }
+  }
+  
+  fn ident<T>(x: T) -> T { x }
+  
+  fn main() {
+    let s = Store { items: [1, 2] }
+    let missing = s.get<Unknown>(0)
+    let f: fn(Unknown) -> Unknown = ident
+    let _ = f(1)
+    if missing.is_some() { panic("wrong value") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Store[T any] struct {
+	items []T
+}
+
+func storeGet[T any, U any](self Store[T], i int) (U, bool) {
+	_ = lisette.MakeTuple2[[]T, int](self.items, i)
+	var zero U
+	return zero, false
+}
+
+func ident[T any](x T) T {
+	return x
+}
+
+func main() {
+	s := Store[int]{items: []int{1, 2}}
+	_, ok := storeGet[int, any](s, 0)
+	f := ident[any]
+	f(1)
+	if ok {
+		panic("wrong value")
+	}
+}

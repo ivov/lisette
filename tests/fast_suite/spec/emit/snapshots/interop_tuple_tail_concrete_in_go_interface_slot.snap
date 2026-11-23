@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Counter {
+    count: int,
+  }
+  
+  impl Counter {
+    fn String(self) -> string {
+      f"{self.count}"
+    }
+  }
+  
+  fn make_pair(c: Counter) -> (fmt.Stringer, int) {
+    (c, c.count)
+  }
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	count int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprint(c.count)
+}
+
+func makePair(c Counter) (fmt.Stringer, int) {
+	return c, c.count
+}

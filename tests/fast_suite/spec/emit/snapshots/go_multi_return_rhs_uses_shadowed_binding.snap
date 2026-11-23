@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:math"
+  
+  fn main() {
+    let x = 1.25
+    let (x, y) = math.Modf(x)
+    let _ = (x, y)
+  }
+---
+package main
+
+import (
+	"math"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	x := 1.25
+	x2, y := math.Modf(x)
+	_ = lisette.MakeTuple2[float64, float64](x2, y)
+}

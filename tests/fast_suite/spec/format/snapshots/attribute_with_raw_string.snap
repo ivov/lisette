@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct User {
+    #[tag(`validate:"required,email"`)]
+    email: string,
+  }
+---
+struct User {
+  #[tag(`validate:"required,email"`)]
+  email: string,
+}

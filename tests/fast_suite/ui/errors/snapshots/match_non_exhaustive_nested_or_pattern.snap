@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `match` is not exhaustive
+   ╭─[test.lis:3:3]
+ 2 │ fn test(o: Option<(bool, bool)>) -> int {
+ 3 │   match o {
+   ·   ───┬───
+   ·      ╰── not all patterns covered
+ 4 │     Some((true | false, true)) => 1,
+   ╰────
+  help: Handle the missing cases `Option.Some((false, false))` and `Option.Some((true, false))` · code: [infer.non_exhaustive]

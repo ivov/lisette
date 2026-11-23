@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid `task`
+   ╭─[test.lis:5:13]
+ 4 │ fn f() {
+ 5 │   consume({ task work() });
+   ·             ─────┬─────
+   ·                  ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `task` to its own statement · code: [infer.task_in_expression_position]
+
+  ✕ Complex expression used as sub-expression
+   ╭─[test.lis:5:11]
+ 4 │ fn f() {
+ 5 │   consume({ task work() });
+   ·           ───────┬───────
+   ·                  ╰── expected simple expression
+ 6 │ }
+   ╰────
+  help: Hoist to a `let` binding · code: [infer.complex_sub_expression]

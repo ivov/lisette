@@ -1,0 +1,47 @@
+---
+source: tests/fast_suite/spec/emit/partial.rs
+description: |
+  
+  fn pair<A, B>(a: A, b: B) -> Partial<(A, B), error> {
+    Partial.Ok((a, b))
+  }
+  
+  fn test() {
+    match pair<int, string>(1, "x") {
+      Partial.Ok((first, second)) => {
+        let _ = first
+        let _ = second
+      },
+      Partial.Err(e) => {
+        let _ = e
+      },
+      Partial.Both((first, second), e) => {
+        let _ = first
+        let _ = second
+        let _ = e
+      },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair[A any, B any](a A, b B) lisette.Partial[lisette.Tuple2[A, B], error] {
+	return lisette.MakePartialOk[lisette.Tuple2[A, B], error](lisette.MakeTuple2[A, B](a, b))
+}
+
+func test() {
+	subject := pair[int, string](1, "x")
+	switch subject.Tag {
+	case lisette.PartialOk:
+		_ = subject.OkVal.First
+		_ = subject.OkVal.Second
+	case lisette.PartialErr:
+		_ = subject.ErrVal
+	default:
+		_ = subject.OkVal.First
+		_ = subject.OkVal.Second
+		_ = subject.ErrVal
+	}
+}

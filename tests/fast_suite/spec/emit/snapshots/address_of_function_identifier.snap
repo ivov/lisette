@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn add1(x: int) -> int { x + 1 }
+  
+  fn main() {
+    let f = &add1
+    let _ = f
+  }
+---
+package main
+
+func add1(x int) int {
+	return x + 1
+}
+
+func main() {
+	ref := add1
+	f := &ref
+	_ = f
+}

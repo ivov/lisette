@@ -1,0 +1,100 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === bar/bar.go ===
+package bar
+
+type Bar struct {
+	Name string
+}
+
+
+// === foo/foo.go ===
+package foo
+
+type Foo struct {
+	Value int
+}
+
+func NewFoo(v int) Foo {
+	return Foo{Value: v}
+}
+
+
+// === gizmo/gizmo.go ===
+package gizmo
+
+type Widget struct {
+	Name string
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/foo"
+	"github.com/user/myproject/types"
+)
+
+func main() {
+	f := foo.NewFoo(42)
+	types.MakeMyEnumSingle(f)
+	fmt.Println("OK")
+}
+
+
+// === types/enums.go ===
+package types
+
+import (
+	"github.com/user/myproject/bar"
+	"github.com/user/myproject/foo"
+	g "github.com/user/myproject/gizmo"
+)
+
+func MakeMyEnumSingle(arg0 foo.Foo) MyEnum {
+	return MyEnum{Tag: MyEnumSingle, Single: arg0}
+}
+
+func MakeMyEnumMulti(arg0 foo.Foo, arg1 bar.Bar) MyEnum {
+	return MyEnum{Tag: MyEnumMulti, Multi0: arg0, Multi1: arg1}
+}
+
+func MakeMyEnumContainerSlice(arg0 []foo.Foo) MyEnum {
+	return MyEnum{Tag: MyEnumContainerSlice, ContainerSlice: arg0}
+}
+
+func MakeMyEnumAliased(arg0 g.Widget) MyEnum {
+	return MyEnum{Tag: MyEnumAliased, Aliased: arg0}
+}
+
+type MyEnumTag uint8
+
+const (
+	MyEnumSingle MyEnumTag = iota
+	MyEnumMulti
+	MyEnumContainerSlice
+	MyEnumAliased
+)
+
+type MyEnum struct {
+	Tag            MyEnumTag
+	Single         foo.Foo
+	Multi0         foo.Foo
+	Multi1         bar.Bar
+	ContainerSlice []foo.Foo
+	Aliased        g.Widget
+}
+
+
+// === types/helpers.go ===
+package types
+
+import "github.com/user/myproject/foo"
+
+func MakeSomething() foo.Foo {
+	return foo.NewFoo(99)
+}

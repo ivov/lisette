@@ -1,0 +1,45 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Greetable {
+    fn greet() -> string
+  }
+  
+  struct Person { name: string }
+  
+  impl Person {
+    fn greet(self) -> string { f"Hello, {self.name}" }
+  }
+  
+  fn greet_ref<T: Greetable>(item: Ref<T>) -> string {
+    item.*.greet()
+  }
+  
+  fn test() {
+    let p = Person { name: "Alice" }
+    greet_ref(&p)
+  }
+---
+package main
+
+type Greetable interface {
+	greet() string
+}
+
+type Person struct {
+	name string
+}
+
+func (p Person) greet() string {
+	return "Hello, " + p.name
+}
+
+func greetRef[T Greetable](item *T) string {
+	return (*item).greet()
+}
+
+func test() {
+	p := Person{name: "Alice"}
+	greetRef(&p)
+}

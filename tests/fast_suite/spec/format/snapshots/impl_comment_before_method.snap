@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Foo {}
+  
+  impl Foo {
+    // test
+    fn foo() {}
+  }
+---
+struct Foo {}
+
+impl Foo {
+  // test
+  fn foo() {}
+}

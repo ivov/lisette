@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[equality]
+  struct Inner { items: Slice<int> }
+  
+  #[equality]
+  struct Outer { name: string, inner: Inner }
+---
+package main
+
+import "slices"
+
+type Inner struct {
+	items []int
+}
+
+func (i Inner) equals(other Inner) bool {
+	return slices.Equal(i.items, other.items)
+}
+
+type Outer struct {
+	name  string
+	inner Inner
+}
+
+func (o Outer) equals(other Outer) bool {
+	return o.name == other.name && o.inner.equals(other.inner)
+}

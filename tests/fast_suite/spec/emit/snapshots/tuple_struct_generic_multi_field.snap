@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Pair<A, B>(A, B)
+  
+  fn test() -> Pair<int, string> {
+    Pair(42, "hello")
+  }
+---
+package main
+
+type Pair[A any, B any] struct {
+	F0 A
+	F1 B
+}
+
+func test() Pair[int, string] {
+	return Pair[int, string]{
+		F0: 42,
+		F1: "hello",
+	}
+}

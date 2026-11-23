@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct UserId(int)
+  
+  fn test() -> UserId {
+    UserId(42)
+  }
+---
+package main
+
+type UserId int
+
+func test() UserId {
+	return UserId(42)
+}

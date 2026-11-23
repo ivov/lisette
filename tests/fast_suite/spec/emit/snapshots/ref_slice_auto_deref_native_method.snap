@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn main() {
+    let s = [1, 2, 3]
+    let r = &s
+    let _ = r.length()
+  }
+---
+package main
+
+func main() {
+	s := []int{1, 2, 3}
+	r := &s
+	_ = len(*r)
+}

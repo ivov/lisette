@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:path"
+  
+  fn main() {
+    let r = path.Split("/foo/bar.txt")
+    let _ = r
+  }
+---
+package main
+
+import (
+	"path"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret, ret2 := path.Split("/foo/bar.txt")
+	r := lisette.MakeTuple2(ret, ret2)
+	_ = r
+}

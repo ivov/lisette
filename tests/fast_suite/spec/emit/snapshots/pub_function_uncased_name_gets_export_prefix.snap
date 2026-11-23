@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  pub fn 挨拶() -> string {
+    "こんにちは"
+  }
+  
+  fn main() {
+    fmt.Println(挨拶())
+  }
+---
+package main
+
+import "fmt"
+
+func X挨拶() string {
+	return "こんにちは"
+}
+
+func main() {
+	fmt.Println(X挨拶())
+}

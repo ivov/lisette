@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 { Err("division by zero") } else { Ok(a / b) }
+  }
+  
+  fn describe(r: Result<int, string>) -> string {
+    match r { Ok(v) => f"{v}", Err(e) => e }
+  }
+  
+  fn test() -> string {
+    describe(divide(10, 2))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func divide(a, b int) lisette.Result[int, string] {
+	if b == 0 {
+		return lisette.MakeResultErr[int, string]("division by zero")
+	}
+	return lisette.MakeResultOk[int, string](a / b)
+}
+
+func describe(r lisette.Result[int, string]) string {
+	if r.Tag == lisette.ResultOk {
+		return fmt.Sprint(r.OkVal)
+	}
+	return r.ErrVal
+}
+
+func test() string {
+	return describe(divide(10, 2))
+}

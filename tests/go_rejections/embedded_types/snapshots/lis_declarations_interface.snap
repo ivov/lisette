@@ -1,0 +1,13 @@
+---
+source: tests/go_rejections/embedded_types/render_lis.rs
+---
+pub interface N0 {
+  fn Speak() -> string
+}
+
+struct N1 {}
+impl N1 {
+  pub fn Speak(self) -> string {
+    "N1.Speak"
+  }
+}

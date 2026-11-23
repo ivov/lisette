@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	body := strings.NewReader("hello")
+	ret, ret2 := http.NewRequest("POST", "https://example.com", body)
+	var req lisette.Result[*http.Request, error]
+	if ret2 != nil {
+		req = lisette.MakeResultErr[*http.Request, error](ret2)
+	} else if ret == nil {
+		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
+	} else {
+		req = lisette.MakeResultOk[*http.Request, error](ret)
+	}
+	fmt.Println(req)
+}

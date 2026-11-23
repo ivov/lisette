@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn id<T>(x: T) -> T { x }
+  
+  fn main() {
+    let f = id
+    let _ = f(1)
+  }
+---
+package main
+
+func id[T any](x T) T {
+	return x
+}
+
+func main() {
+	f := id[int]
+	f(1)
+}

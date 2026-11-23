@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> int {
+    let result = {
+      let result = 42;
+      result * 2
+    }
+    result
+  }
+---
+package main
+
+func test() int {
+	var result2 int
+	{
+		result := 42
+		result2 = result * 2
+	}
+	return result2
+}

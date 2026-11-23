@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() -> Option<int> {
+    let ch = Channel.new<int>();
+    ch.receive()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() (int, bool) {
+	ch := make(chan int)
+	v := lisette.ChannelReceive(ch)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return 0, false
+}

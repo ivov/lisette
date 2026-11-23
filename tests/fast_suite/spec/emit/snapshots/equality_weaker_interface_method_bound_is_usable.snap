@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Parent {
+    fn p()
+  }
+  
+  interface Child {
+    embed Parent
+  
+    fn c()
+  }
+  
+  #[equality]
+  struct Box<T: Child> { value: T }
+  
+  impl<T: Parent> Box<T> {
+    fn equals(self, other: Box<T>) -> bool {
+      true
+    }
+  }
+---
+package main
+
+type Parent interface {
+	p()
+}
+
+type Child interface {
+	Parent
+	c()
+}
+
+type Box[T Child] struct {
+	value T
+}
+
+func (b Box[T]) equals(_ Box[T]) bool {
+	return true
+}

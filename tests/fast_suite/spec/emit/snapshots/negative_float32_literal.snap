@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> float32 {
+    let f: float32 = -1.5;
+    f
+  }
+---
+package main
+
+func test() float32 {
+	var f float32 = -1.5
+	return f
+}

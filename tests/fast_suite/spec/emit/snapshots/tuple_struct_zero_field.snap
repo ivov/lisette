@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Marker()
+  
+  fn test() -> Marker {
+    Marker()
+  }
+---
+package main
+
+type Marker struct{}
+
+func test() Marker {
+	return Marker{}
+}

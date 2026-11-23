@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn die() -> Never { panic("dead") }
+  
+  fn test() -> int {
+    if true { die() } else { 1 }
+  }
+---
+package main
+
+func die() {
+	panic("dead")
+}
+
+func test() int {
+	if true {
+		die()
+	}
+	return 1
+}

@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct Box<T> { v: T }
+  
+  fn test() -> int {
+    if Box { v: 1 }.v != 1 {
+      0
+    } else {
+      1
+    }
+  }
+---
+package main
+
+type Box[T any] struct {
+	v T
+}
+
+func test() int {
+	if (Box[int]{v: 1}).v != 1 {
+		return 0
+	}
+	return 1
+}

@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test(s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
+    let mut s = s
+    s = s.append(extra, more...)
+    s
+  }
+---
+package main
+
+func test(s []int, extra int, more []int) []int {
+	s = append(s, append([]int{extra}, more...)...)
+	return s
+}

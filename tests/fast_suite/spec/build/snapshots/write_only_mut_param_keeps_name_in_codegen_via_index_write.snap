@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func indexWrite(items []int) {
+	items[0] = 99
+}
+
+func main() {
+	data := []int{1, 2, 3}
+	indexWrite(data)
+}

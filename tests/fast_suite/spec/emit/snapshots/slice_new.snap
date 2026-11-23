@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Slice<int> {
+    Slice.new<int>()
+  }
+---
+package main
+
+func test() []int {
+	return []int{}
+}

@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func parseInt(s string) (int, error) {
+	return strconv.Atoi(s)
+}
+
+func main() {
+	if n, e := parseInt("42"); e == nil {
+		fmt.Println(n)
+	} else {
+		fmt.Println(e)
+	}
+}

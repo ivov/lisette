@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() {
+    let mut m = Map.new<string, Unknown>()
+    m["key"] = "value"
+  }
+---
+package main
+
+func test() {
+	m := make(map[string]any)
+	m["key"] = "value"
+}

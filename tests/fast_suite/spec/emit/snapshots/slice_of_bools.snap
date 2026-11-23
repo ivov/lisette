@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> Slice<bool> {
+    [true, false, true]
+  }
+---
+package main
+
+func test() []bool {
+	return []bool{true, false, true}
+}

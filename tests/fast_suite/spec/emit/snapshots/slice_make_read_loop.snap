@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  import "go:strings"
+  
+  fn main() {
+    let mut reader = strings.NewReader("hello world")
+    let mut buffer = Slice.make<byte>(8)
+    let n = reader.Read(buffer).unwrap_or(0)
+    if n != 8 {
+      panic("expected to read 8 bytes into the buffer")
+    }
+    let head = buffer[..n] as string
+    if head != "hello wo" {
+      panic("expected the first 8 bytes of the input")
+    }
+  }
+---
+package main
+
+import (
+	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	reader := strings.NewReader("hello world")
+	buffer := make([]byte, 8)
+	ret, ret2 := reader.Read(buffer)
+	var result lisette.Partial[int, error]
+	if ret2 != nil {
+		result = lisette.MakePartialBoth[int, error](ret, ret2)
+	} else {
+		result = lisette.MakePartialOk[int, error](ret)
+	}
+	n := result.UnwrapOr(0)
+	if n != 8 {
+		panic("expected to read 8 bytes into the buffer")
+	}
+	head := string(buffer[:n:n])
+	if head != "hello wo" {
+		panic("expected the first 8 bytes of the input")
+	}
+}

@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> string {
+    let result = "final"
+    let mut i = 0
+    while i < 3 {
+      let result = i * 10
+      let _ = result
+      i += 1
+    }
+    result
+  }
+---
+package main
+
+func test() string {
+	result := "final"
+	i := 0
+	for i < 3 {
+		i++
+	}
+	return result
+}

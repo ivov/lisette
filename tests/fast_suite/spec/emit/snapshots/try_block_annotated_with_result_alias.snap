@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type MyRes = Result<int, error>
+  
+  fn source() -> MyRes {
+    Ok(5)
+  }
+  
+  fn main() {
+    let r: MyRes = try {
+      let n = source()?
+      n + 1
+    }
+    let _ = r
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyRes = lisette.Result[int, error]
+
+func source() (int, error) {
+	return 5, nil
+}
+
+func main() {
+	r := func() lisette.Result[int, error] {
+		n, err := source()
+		if err != nil {
+			return lisette.MakeResultErr[int, error](err)
+		}
+		return lisette.MakeResultOk[int, error](n + 1)
+	}()
+	_ = r
+}

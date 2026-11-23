@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unnecessary prelude import
+   ╭─[main.lis:1:1]
+ 1 │ import "prelude"
+   · ────────┬───────
+   ·         ╰── prelude is automatically available
+   ╰────
+  help: Remove this import. Use e.g. `Option` or `prelude.Option` directly · code: [resolve.cannot_import_prelude]

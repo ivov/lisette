@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() -> rune {
+    65 as rune
+  }
+---
+package main
+
+func test() rune {
+	return rune(65)
+}

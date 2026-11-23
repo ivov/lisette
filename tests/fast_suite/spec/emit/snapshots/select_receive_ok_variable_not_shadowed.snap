@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let ok = "everything is fine"
+    let ch = Channel.buffered<int>(1)
+    ch.send(42)
+    select {
+      match ch.receive() {
+        Some(val) => {
+          fmt.Println(f"received: {val}")
+          fmt.Println(f"ok is: {ok}")
+        },
+        None => fmt.Println("closed"),
+      },
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	ok := "everything is fine"
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 42)
+	select {
+	case val, ok2 := <-ch:
+		if ok2 {
+			fmt.Printf("received: %d\n", val)
+			fmt.Println("ok is: " + ok)
+		} else {
+			fmt.Println("closed")
+		}
+	}
+}

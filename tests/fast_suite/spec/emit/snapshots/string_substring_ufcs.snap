@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: string) -> string {
+    string.substring(s, 0..5)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s string) string {
+	return lisette.Substring(s, 0, 5)
+}

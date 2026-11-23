@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn identity<T>(x: T) -> T {
+    x
+  }
+  
+  fn test() -> int {
+    identity(42)
+  }
+---
+package main
+
+func identity[T any](x T) T {
+	return x
+}
+
+func test() int {
+	return identity(42)
+}

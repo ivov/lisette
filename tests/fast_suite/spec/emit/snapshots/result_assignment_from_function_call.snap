@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn get_value() -> Result<int, string> {
+    Ok(42)
+  }
+  
+  fn test() {
+    let mut res: Result<int, string> = Err("initial");
+    res = get_value();
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func getValue() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func test() {
+	lisette.MakeResultErr[int, string]("initial")
+	getValue()
+}

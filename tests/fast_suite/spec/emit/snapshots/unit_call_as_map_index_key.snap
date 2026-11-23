@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn noop() {}
+  
+  fn main() {
+    let mut m = Map.new<(), int>()
+    m[()] = 7
+    let x = m[noop()]
+    let _ = x
+  }
+---
+package main
+
+func noop() {}
+
+func main() {
+	m := make(map[struct{}]int)
+	m[struct{}{}] = 7
+	base := m
+	noop()
+	x := base[struct{}{}]
+	_ = x
+}

@@ -1,0 +1,17 @@
+---
+source: tests/go_rejections/embedded_types/render_lis.rs
+---
+struct N0 {}
+impl N0 {
+  pub fn M(self) -> string {
+    "N0.M"
+  }
+}
+
+struct N1 {
+  embed N0,
+}
+
+fn __sel_0(r: Ref<N1>) {
+  let _ = r.M()
+}

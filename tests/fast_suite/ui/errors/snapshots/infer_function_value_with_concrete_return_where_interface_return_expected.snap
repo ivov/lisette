@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:17:7]
+ 16 │ fn test() -> string {
+ 17 │   run(make_foo_err)
+    ·       ──────┬─────
+    ·             ╰── expected `fn () -> error`, found `fn () -> FooError`
+ 18 │ }
+    ╰────
+  help: Wrap the value in a closure to convert at the call site, e.g. `|value| callee(value)`. Function types must match exactly · code: [infer.type_mismatch]

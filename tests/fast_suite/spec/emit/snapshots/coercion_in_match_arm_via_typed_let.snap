@@ -1,0 +1,56 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:io"
+  
+  struct A {}
+  struct B {}
+  
+  impl A {
+    fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  impl B {
+    fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  fn main() {
+    let flag = true
+    let r: io.Reader = match flag {
+      true => A {},
+      false => B {},
+    }
+    let _ = r
+  }
+---
+package main
+
+import "io"
+
+type A struct{}
+
+type B struct{}
+
+func (a A) Read(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func (b B) Read(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func main() {
+	flag := true
+	var r io.Reader
+	if flag {
+		r = A{}
+	} else {
+		r = B{}
+	}
+	_ = r
+}

@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    defer {
+      let p = P { v: 1 }
+      match p { P { v } => () }
+    }
+  }
+---
+package main
+
+type P struct {
+	v int
+}
+
+func test() {
+	defer func() {
+	}()
+}

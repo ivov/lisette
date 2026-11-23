@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Use of deprecated API
+    ╭─[test.lis:16:3]
+ 15 │ fn read(s: Store) -> int {
+ 16 │   s.old_get()
+    ·   ────┬────
+    ·       ╰── not intended for new code
+ 17 │ }
+    ╰────
+  help: Use `fetch` instead · code: [lint.deprecated]

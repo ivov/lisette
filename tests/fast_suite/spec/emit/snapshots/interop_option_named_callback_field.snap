@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/lib"
+  import "go:errors"
+  
+  fn lookup(path: string) -> Result<string, error> {
+    if path == "" {
+      return Err(errors.New("empty"))
+    }
+    Ok(path)
+  }
+  
+  fn main() {
+    let mut opts = lib.Opts { Lookup: Some(lookup) }
+    opts.Lookup = Some(lookup)
+    let _ = lib.Run(opts)
+  }
+---
+package main
+
+import (
+	"errors"
+
+	"example.com/lib"
+)
+
+func lookup(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("empty")
+	}
+	return path, nil
+}
+
+func main() {
+	opts := lib.Opts{Lookup: lookup}
+	opts.Lookup = lookup
+	lib.Run(opts)
+}

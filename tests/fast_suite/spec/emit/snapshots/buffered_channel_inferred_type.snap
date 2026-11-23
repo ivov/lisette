@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() -> Channel<string> {
+    Channel.buffered(5)
+  }
+---
+package main
+
+func test() chan string {
+	return make(chan string, 5)
+}

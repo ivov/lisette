@@ -1,0 +1,5 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "pub const MAX: int = 100"
+---
+pub const MAX: int = 100

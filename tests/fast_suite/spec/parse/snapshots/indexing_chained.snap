@@ -1,0 +1,229 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  fn test(matrix: Slice<Slice<int>>, row: int, col: int) {
+    let cell = matrix[row][col];
+  }
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "matrix",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 6,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Slice",
+                        params: [
+                            Constructor {
+                                name: "Slice",
+                                params: [
+                                    Constructor {
+                                        name: "int",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 29,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 23,
+                                    byte_length: 10,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 17,
+                            byte_length: 17,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "row",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 36,
+                        byte_length: 3,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 41,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "col",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 46,
+                        byte_length: 3,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 51,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Var {
+            id: uninferred,
+        },
+        visibility: Private,
+        body: Definition(
+            Block {
+                items: [
+                    Let {
+                        binding: Binding {
+                            pattern: Identifier {
+                                identifier: "cell",
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 64,
+                                    byte_length: 4,
+                                },
+                                binding: None,
+                            },
+                            annotation: None,
+                            ty: Var {
+                                id: uninferred,
+                            },
+                        },
+                        value: IndexedAccess {
+                            expression: IndexedAccess {
+                                expression: Identifier {
+                                    value: "matrix",
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 71,
+                                        byte_length: 6,
+                                    },
+                                    resolution: Unresolved,
+                                },
+                                index: Identifier {
+                                    value: "row",
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 78,
+                                        byte_length: 3,
+                                    },
+                                    resolution: Unresolved,
+                                },
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 71,
+                                    byte_length: 11,
+                                },
+                                from_colon_syntax: false,
+                            },
+                            index: Identifier {
+                                value: "col",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 83,
+                                    byte_length: 3,
+                                },
+                                resolution: Unresolved,
+                            },
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 71,
+                                byte_length: 16,
+                            },
+                            from_colon_syntax: false,
+                        },
+                        mode: Plain,
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 60,
+                            byte_length: 27,
+                        },
+                    },
+                ],
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 56,
+                    byte_length: 34,
+                },
+            },
+        ),
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 89,
+        },
+    },
+]

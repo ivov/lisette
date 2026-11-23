@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  struct Buf {
+    data: Array<int, 4>,
+  }
+  
+  fn empty() -> Buf {
+    Buf { .. }
+  }
+---
+package main
+
+type Buf struct {
+	data [4]int
+}
+
+func empty() Buf {
+	return Buf{}
+}

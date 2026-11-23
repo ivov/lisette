@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `impl` cannot strengthen receiver bounds
+    ╭─[test.lis:11:9]
+ 10 │ 
+ 11 │ impl<T: Parent<int>> Box<T> {
+    ·         ─────┬─────
+    ·              ╰── this bound is not guaranteed by `Box`'s declaration
+ 12 │   fn less(self, _other: Box<T>) -> bool {
+    ╰────
+  help: Declare this bound on `Box`, or remove it from the `impl` · code: [infer.impl_bound_strengthens_type]

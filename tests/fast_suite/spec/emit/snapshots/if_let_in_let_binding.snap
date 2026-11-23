@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(opt: Option<int>) -> int {
+    let result = if let Some(x) = opt { x } else { 0 };
+    result
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) int {
+	var result int
+	if opt.Tag == lisette.OptionSome {
+		result = opt.SomeVal
+	} else {
+		result = 0
+	}
+	return result
+}

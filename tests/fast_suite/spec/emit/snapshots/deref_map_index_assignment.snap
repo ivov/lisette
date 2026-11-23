@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn update(m: mut Ref<mut Map<string, int>>, key: string, val: int) {
+    m.*[key] = val
+  }
+---
+package main
+
+func update(m *map[string]int, key string, val int) {
+	(*m)[key] = val
+}

@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn lookup(m: Map<string, int>) -> Result<int, PanicValue> {
+    recover {
+      let v = m.get("a")
+      (&v).unwrap_or(4)
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func lookup(m map[string]int) lisette.Result[int, lisette.PanicValue] {
+	recoverResult := lisette.RecoverBlock(func() int {
+		v, ok := m["a"]
+		if !ok {
+			v = 4
+		}
+		return v
+	})
+	return recoverResult
+}

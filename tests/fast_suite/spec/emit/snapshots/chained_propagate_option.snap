@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn get_nested(outer: Option<Option<int>>) -> Option<int> {
+    let inner = outer?;
+    let val = inner?;
+    Some(val)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func getNested(outer lisette.Option[lisette.Option[int]]) (int, bool) {
+	if outer.Tag != lisette.OptionSome {
+		return 0, false
+	}
+	inner := outer.SomeVal
+	if inner.Tag != lisette.OptionSome {
+		return 0, false
+	}
+	val := inner.SomeVal
+	return val, true
+}

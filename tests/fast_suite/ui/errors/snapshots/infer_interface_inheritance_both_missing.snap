@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `File` does not implement `Logger`
+    ╭─[test.lis:18:14]
+ 17 │ fn test() {
+ 18 │   use_logger(File { path: "test.txt" })
+    ·              ────────────┬────────────
+    ·                          ╰── `Logger` needed here
+ 19 │ }
+    ╰────
+  help: `Logger` embeds `Display`, so both contracts apply:
+        Missing:
+          fn log(self: File) -> ()       from `Logger`
+          fn show(self: File) -> string  from `Display`, embedded in `Logger`
+  code: [infer.interface_not_implemented]

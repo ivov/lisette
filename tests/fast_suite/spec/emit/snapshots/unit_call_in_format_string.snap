@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn noop() {}
+  
+  fn test() -> string {
+    f"x:{noop()}"
+  }
+---
+package main
+
+func noop() {}
+
+func test() string {
+	noop()
+	return "x:()"
+}

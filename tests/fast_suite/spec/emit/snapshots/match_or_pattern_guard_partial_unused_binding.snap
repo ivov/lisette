@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum E { A((int, int)), B((int, int)), C }
+  fn eval(e: E) -> int {
+    match e {
+      E.A((x, y)) | E.B((x, y)) if x > 0 => x,
+      _ => 0,
+    }
+  }
+  fn test() {
+    if eval(E.B((4, 9))) != 4 { panic("bad") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeEA(arg0 lisette.Tuple2[int, int]) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 lisette.Tuple2[int, int]) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   lisette.Tuple2[int, int]
+	B   lisette.Tuple2[int, int]
+}
+
+func eval(e E) int {
+	if e.Tag == EA {
+		x := e.A.First
+		if x > 0 {
+			return x
+		}
+	}
+	if e.Tag == EB {
+		x := e.B.First
+		if x > 0 {
+			return x
+		}
+	}
+	return 0
+}
+
+func test() {
+	if eval(MakeEB(lisette.MakeTuple2[int, int](4, 9))) != 4 {
+		panic("bad")
+	}
+}

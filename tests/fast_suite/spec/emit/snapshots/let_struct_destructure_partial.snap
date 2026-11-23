@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() -> int {
+    let p = Point { x: 10, y: 20 };
+    let Point { x, .. } = p;
+    x
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test() int {
+	p := Point{
+		x: 10,
+		y: 20,
+	}
+	x := p.x
+	return x
+}

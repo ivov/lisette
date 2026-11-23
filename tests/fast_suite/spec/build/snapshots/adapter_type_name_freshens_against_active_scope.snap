@@ -1,0 +1,60 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[T any] interface {
+	get() T
+}
+
+type Bar[T any] struct {
+	value lisette.Option[T]
+}
+
+func (b Bar[T]) get() (T, bool) {
+	v := b.value
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	var zero T
+	return zero, false
+}
+
+func consume[T any](_ Box[lisette.Option[T]]) {}
+
+func genericCollision[_lisAdapter_Bar_Box_0 any](bar Bar[_lisAdapter_Bar_Box_0]) {
+	consume(_lisAdapter_Bar_Box_0_[_lisAdapter_Bar_Box_0]{inner: bar})
+}
+
+func primeCache(bar Bar[int]) {
+	consume(_lisAdapter_Bar_Box_1{inner: bar})
+}
+
+func cachedCollision(bar Bar[int]) {
+	consume(_lisAdapter_Bar_Box_1{inner: bar})
+}
+
+func main() {
+	genericCollision(Bar[int]{value: lisette.MakeOptionSome(1)})
+	primeCache(Bar[int]{value: lisette.MakeOptionSome(2)})
+	cachedCollision(Bar[int]{value: lisette.MakeOptionSome(3)})
+}
+
+type _lisAdapter_Bar_Box_0_[_lisAdapter_Bar_Box_0 any] struct {
+	inner Bar[_lisAdapter_Bar_Box_0]
+}
+
+func (a _lisAdapter_Bar_Box_0_[_lisAdapter_Bar_Box_0]) get() lisette.Option[_lisAdapter_Bar_Box_0] {
+	return lisette.OptionFromCommaOk[_lisAdapter_Bar_Box_0](a.inner.get())
+}
+
+type _lisAdapter_Bar_Box_1 struct {
+	inner Bar[int]
+}
+
+func (a _lisAdapter_Bar_Box_1) get() lisette.Option[int] {
+	return lisette.OptionFromCommaOk[int](a.inner.get())
+}

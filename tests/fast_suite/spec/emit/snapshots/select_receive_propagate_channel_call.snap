@@ -1,0 +1,55 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn g() -> Result<Channel<int>, string> { Ok(Channel.buffered<int>(1)) }
+  
+  fn f() -> Result<int, string> {
+    let ch = Channel.buffered<int>(1)
+    ch.send(7)
+    let x = select {
+      let Some(v) = g()?.receive() => v,
+      _ => 0,
+    }
+    Ok(x)
+  }
+  
+  fn main() { let _ = f() }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func g() lisette.Result[chan int, string] {
+	return lisette.MakeResultOk[chan int, string](make(chan int, 1))
+}
+
+func f() lisette.Result[int, string] {
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 7)
+	var x int
+	check := g()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check.ErrVal)
+	}
+	ch2 := check.OkVal
+	for {
+		select {
+		case v, ok := <-ch2:
+			if ok {
+				x = v
+			} else {
+				ch2 = nil
+				continue
+			}
+		default:
+			x = 0
+		}
+		break
+	}
+	return lisette.MakeResultOk[int, string](x)
+}
+
+func main() {
+	f()
+}

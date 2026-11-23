@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn noop() {}
+  
+  fn f() -> Result<(), string> {
+    Ok(noop())
+  }
+  
+  fn main() { let _ = f() }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func noop() {}
+
+func f() lisette.Result[struct{}, string] {
+	noop()
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}
+
+func main() {
+	f()
+}

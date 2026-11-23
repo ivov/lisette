@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:example.com/info"
+  
+  fn build_info() -> Option<Ref<info.BuildInfo>> {
+    info.Read()
+  }
+  
+  fn main() {
+    let _ = build_info()
+  }
+---
+package main
+
+import (
+	"example.com/info"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func buildInfo() *info.BuildInfo {
+	ret, ret2 := info.Read()
+	var option lisette.Option[*info.BuildInfo]
+	if ret2 && ret != nil {
+		option = lisette.MakeOptionSome[*info.BuildInfo](ret)
+	} else {
+		option = lisette.MakeOptionNone[*info.BuildInfo]()
+	}
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal
+	}
+	return nil
+}
+
+func main() {
+	buildInfo()
+}

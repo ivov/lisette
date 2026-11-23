@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `(int, int)` does not implement `Display`
+    ╭─[test.lis:12:15]
+ 11 │   let tuple = (1, 2);
+ 12 │   print_value(tuple);
+    ·               ──┬──
+    ·                 ╰── `Display` needed here
+ 13 │ }
+    ╰────
+  help: One method does not satisfy `Display`:
+        Missing:
+          fn show(self: (int, int)) -> string
+  code: [infer.interface_not_implemented]

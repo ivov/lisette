@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+      select {
+          let x = rx.Receive() => handle(x),
+          _ => default(),
+      }
+  }
+---
+fn test() {
+  select {
+    let x = rx.Receive() => handle(x),
+    _ => default(),
+  }
+}

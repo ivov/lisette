@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  struct Horse {
+    speed: int,
+    fast: Option<int>,
+  }
+  
+  struct Stable {
+    horses: Array<Horse, 2>,
+  }
+  
+  fn empty() -> Stable {
+    Stable { .. }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Horse struct {
+	speed int
+	fast  lisette.Option[int]
+}
+
+type Stable struct {
+	horses [2]Horse
+}
+
+func empty() Stable {
+	return Stable{}
+}

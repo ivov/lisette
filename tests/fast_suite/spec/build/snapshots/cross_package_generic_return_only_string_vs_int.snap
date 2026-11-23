@@ -1,0 +1,63 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+func MakeValidatedValid[T any](arg0 T) Validated[T] {
+	return Validated[T]{Tag: ValidatedValid, Valid: arg0}
+}
+
+func MakeValidatedInvalid[T any](arg0 string) Validated[T] {
+	return Validated[T]{Tag: ValidatedInvalid, Invalid: arg0}
+}
+
+type ValidatedTag uint8
+
+const (
+	ValidatedValid ValidatedTag = iota
+	ValidatedInvalid
+)
+
+type Validated[T any] struct {
+	Tag     ValidatedTag
+	Valid   T
+	Invalid string
+}
+
+type ValidationResult[T any] struct {
+	Value     Validated[T]
+	FieldName string
+}
+
+func ValidationResultNewInvalid[T any](field, msg string) ValidationResult[T] {
+	return ValidationResult[T]{
+		Value:     MakeValidatedInvalid[T](msg),
+		FieldName: field,
+	}
+}
+
+func ValidatePositive(field string, _ int) ValidationResult[int] {
+	return ValidationResultNewInvalid[int](field, "must be positive")
+}
+
+func ValidateNonEmpty(field, _ string) ValidationResult[string] {
+	return ValidationResultNewInvalid[string](field, "must not be empty")
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/lib"
+)
+
+func main() {
+	r1 := lib.ValidatePositive("age", -1)
+	r2 := lib.ValidateNonEmpty("name", "")
+	fmt.Println(r1.FieldName)
+	fmt.Println(r2.FieldName)
+}

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Wrap(int)
+  
+  fn main() {
+    let mut w = Wrap(0)
+    let mut r = &w
+    let _ = { r.* = Wrap(1) }
+    let _ = w.0
+  }
+---
+package main
+
+type Wrap int
+
+func main() {
+	w := Wrap(0)
+	r := &w
+	*r = Wrap(1)
+	_ = int(w)
+}

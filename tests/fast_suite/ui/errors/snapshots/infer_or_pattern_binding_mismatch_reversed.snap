@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid or-pattern
+   ╭─[test.lis:4:17]
+ 3 │   match opt {
+ 4 │     None | Some(x) => x,
+   ·                 ┬
+   ·                 ╰── only bound here
+ 5 │   }
+   ╰────
+  help: Use a wildcard `_` instead of a binding, or ensure all alternatives bind the same variable. Variable x is not bound in all alternatives · code: [infer.or_pattern_binding_mismatch]

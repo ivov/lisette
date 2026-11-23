@@ -1,0 +1,75 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:errors"
+  import "go:fmt"
+  import "go:text/template"
+  import "go:text/template/parse"
+  
+  fn root(t: mut Ref<template.Template>) -> Result<mut Ref<parse.ListNode>, error> {
+    t.Root.ok_or_else(|| errors.New("root is unavailable"))
+  }
+  
+  fn main() {
+    let mut t = template.New("greeting")
+    match t.Parse("hello {{.}}") {
+      Ok(parsed) => {
+        match root(parsed) {
+          Ok(_) => fmt.Println("root is available"),
+          Err(e) => fmt.Println("error", e),
+        }
+        parsed.Root = None
+        match root(parsed) {
+          Ok(_) => fmt.Println("root is available"),
+          Err(e) => fmt.Println("error", e),
+        }
+      },
+      Err(e) => fmt.Println("parse failed", e),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	"text/template"
+	"text/template/parse"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func root(t *template.Template) (*parse.ListNode, error) {
+	raw := t.Root
+	option := lisette.OptionFromNilable[*parse.ListNode](raw, raw == nil)
+	v := lisette.OptionOkOrElse(option, func() error {
+		return errors.New("root is unavailable")
+	})
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
+	}
+	return nil, v.ErrVal
+}
+
+func main() {
+	t := template.New("greeting")
+	if parsed, e := t.Parse("hello {{.}}"); e == nil && parsed != nil {
+		if _, e := root(parsed); e == nil {
+			fmt.Println("root is available")
+		} else {
+			fmt.Println("error", e)
+		}
+		parsed.Root = nil
+		if _, e := root(parsed); e == nil {
+			fmt.Println("root is available")
+		} else {
+			fmt.Println("error", e)
+		}
+	} else {
+		if e == nil {
+			e = errors.New("unexpected nil")
+		}
+		fmt.Println("parse failed", e)
+	}
+}

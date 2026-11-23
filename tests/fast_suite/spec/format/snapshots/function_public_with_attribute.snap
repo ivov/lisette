@@ -1,0 +1,8 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  #[go(comma_ok)]
+  pub fn ReadBuildInfo() -> Option<Ref<BuildInfo>>
+---
+#[go(comma_ok)]
+pub fn ReadBuildInfo() -> Option<Ref<BuildInfo>>

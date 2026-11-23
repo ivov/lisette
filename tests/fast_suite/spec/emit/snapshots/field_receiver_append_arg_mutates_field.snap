@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Holder { slc: Slice<int> }
+  
+  fn run() -> int {
+    let mut h = Holder { slc: [10] }
+    let bump = || -> int { h.slc = [99]; 7 }
+    let ys = h.slc.append(bump())
+    ys[0]
+  }
+---
+package main
+
+import "slices"
+
+type Holder struct {
+	slc []int
+}
+
+func run() int {
+	h := Holder{slc: []int{10}}
+	bump := func() int {
+		h.slc = []int{99}
+		return 7
+	}
+	arg := h.slc
+	ys := append(slices.Clip(arg), bump())
+	return ys[0]
+}

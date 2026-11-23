@@ -1,0 +1,5 @@
+# Accepted infer spec inputs whose Go does not type-check, or whose emit panics.
+# One name per line (`<spec file>__<test fn>`), with an optional `#` note.
+# The test fails when a name here passes, so remove each name that a fix closes.
+types__interface_value_narrowed_with_assert_type_satisfies_concrete_positions # emit panic: internal error: emit did not apply a conversion that the checker recorded
+types__never_in_generic_actual_position_coerces # go/types: test_types__never_in_generic_actual_position_coerces/test.go:29:36: diverges() (no value) used as...

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:net/http"
+  
+  struct Wrapper { srv: http.Server }
+  
+  fn test() -> Wrapper {
+    Wrapper { .. }
+  }
+---
+package main
+
+import "net/http"
+
+type Wrapper struct {
+	srv http.Server
+}
+
+func test() Wrapper {
+	return Wrapper{}
+}

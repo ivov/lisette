@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:time"
+  
+  struct Wrapper { d: time.Duration }
+  
+  fn test() -> Wrapper {
+    Wrapper { .. }
+  }
+---
+package main
+
+import "time"
+
+type Wrapper struct {
+	d time.Duration
+}
+
+func test() Wrapper {
+	return Wrapper{}
+}

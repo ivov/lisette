@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:context"
+  
+  struct Wrapper { ctx: context.Context }
+  
+  fn test() -> Wrapper {
+    Wrapper { ctx: context.Background() }
+  }
+---
+package main
+
+import "context"
+
+type Wrapper struct {
+	ctx context.Context
+}
+
+func test() Wrapper {
+	return Wrapper{ctx: context.Background()}
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(items: Slice<int>) -> Slice<int> {
+ 3 │   append(items, 1)
+   ·   ───┬──
+   ·      ╰── not a Lisette builtin
+ 4 │ }
+   ╰────
+  help: Use `items.append(1)`. Lisette has no `append` builtin · code: [resolve.name_not_found]

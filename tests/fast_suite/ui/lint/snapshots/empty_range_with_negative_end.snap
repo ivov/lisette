@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ✕ Empty range
+   ╭─[test.lis:4:12]
+ 3 │ fn main() {
+ 4 │   for i in 0..-5 {
+   ·            ──┬──
+   ·              ╰── start is greater than end
+ 5 │     fmt.Println(i)
+   ╰────
+  help: Swap the bounds · code: [infer.empty_range]

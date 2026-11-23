@@ -1,0 +1,39 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/colors.go ===
+package lib
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag uint8
+
+const (
+	ColorRed ColorTag = iota
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	L "github.com/user/myproject/lib"
+)
+
+func main() {
+	c := L.MakeColorRed()
+	fmt.Println(c)
+}

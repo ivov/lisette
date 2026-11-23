@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot call `append` on `Ref<Slice>`
+   ╭─[test.lis:5:3]
+ 4 │   let r: Ref<Slice<int>> = &s
+ 5 │   r.append(4)
+   ·   ────┬───
+   ·       ╰── dereference the ref first
+ 6 │ }
+   ╰────
+  help: Use `r.*.append(...)` to deref first · code: [infer.ref_slice_growth]

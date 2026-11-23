@@ -1,0 +1,25 @@
+
+import "go:fmt"
+import i "go:strings"
+import result "go:strconv"
+
+fn qualified_call(s: string) {
+  for b in s.bytes() {
+    fmt.Println(i.ToUpper("x"), b)
+  }
+}
+
+fn qualified_type(s: string) {
+  for b in s.bytes() {
+    let xs: Slice<i.Builder> = []
+    fmt.Println(xs, b)
+  }
+}
+
+fn mapped(xs: Slice<int>) {
+  fmt.Println(xs.map(|x| x + 1), result.Itoa(1))
+}
+
+fn pair(ch: Channel<int>) -> (int, int) { ch.send(7); (1, 2) }
+
+fn main() { }

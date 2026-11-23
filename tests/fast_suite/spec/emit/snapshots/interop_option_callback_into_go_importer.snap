@@ -1,0 +1,75 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:errors"
+  import "go:go/importer"
+  import "go:go/token"
+  import "go:io"
+  import "go:strings"
+  
+  fn refuse(path: string) -> Result<io.ReadCloser, error> {
+    Err(errors.New("refused " + path))
+  }
+  
+  fn main() {
+    let fset = token.NewFileSet()
+    let Some(custom) = importer.ForCompiler(fset, "gc", Some(refuse)) else {
+      panic("no gc importer")
+    }
+    match custom.Import("fmt") {
+      Ok(_) => panic("custom lookup was not used"),
+      Err(e) => {
+        if !strings.Contains(e.Error(), "refused fmt") {
+          panic(e.Error())
+        }
+      },
+    }
+    let Some(source) = importer.ForCompiler(fset, "source", None) else {
+      panic("no source importer")
+    }
+    let Ok(_) = source.Import("errors") else {
+      panic("source import")
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	"go/importer"
+	"go/token"
+	"io"
+	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func refuse(path string) (io.ReadCloser, error) {
+	return nil, errors.New("refused " + path)
+}
+
+func main() {
+	fset := token.NewFileSet()
+	custom := importer.ForCompiler(fset, "gc", refuse)
+	if lisette.IsNilInterface(custom) {
+		panic("no gc importer")
+	}
+	ret, e := custom.Import("fmt")
+	if e == nil && ret != nil {
+		panic("custom lookup was not used")
+	}
+	if e == nil {
+		e = errors.New("unexpected nil")
+	}
+	if !strings.Contains(e.Error(), "refused fmt") {
+		panic(e.Error())
+	}
+	source := importer.ForCompiler(fset, "source", nil)
+	if lisette.IsNilInterface(source) {
+		panic("no source importer")
+	}
+	if ret2, err := source.Import("errors"); err != nil || ret2 == nil {
+		panic("source import")
+	}
+}

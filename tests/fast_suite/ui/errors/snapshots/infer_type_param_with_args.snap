@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid type argument
+   ╭─[test.lis:2:15]
+ 1 │ 
+ 2 │ fn test<T>(x: T<int>) -> T {
+   ·               ───┬──
+   ·                  ╰── type is not parameterized
+ 3 │   x
+   ╰────
+  help: Remove type argument · code: [infer.type_param_with_args]

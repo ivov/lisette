@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  // first group
+  
+  // second group
+  fn foo() {}
+---
+// first group
+
+// second group
+fn foo() {}

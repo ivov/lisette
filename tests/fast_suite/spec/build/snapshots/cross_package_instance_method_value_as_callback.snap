@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+type Point struct {
+	X int
+	Y int
+}
+
+func (p Point) Sum() int {
+	return p.X + p.Y
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/lib"
+
+func apply(p lib.Point, f func(lib.Point) int) int {
+	return f(p)
+}
+
+func main() {
+	p := lib.Point{
+		X: 3,
+		Y: 4,
+	}
+	result := apply(p, lib.Point.Sum)
+	_ = result
+}

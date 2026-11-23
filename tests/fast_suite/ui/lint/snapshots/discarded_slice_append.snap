@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Unused `append()` output
+   ╭─[test.lis:4:3]
+ 3 │   let items: Slice<int> = []
+ 4 │   items.append(1)
+   ·   ───────┬───────
+   ·          ╰── output is discarded
+ 5 │   let _ = items
+   ╰────
+  help: Assign the output back to grow the slice `let s = s.append(...)` or discard the output with `let _ = s.append(...)`. `append()` outputs a new slice, leaving the original slice intact · code: [lint.unused_value]

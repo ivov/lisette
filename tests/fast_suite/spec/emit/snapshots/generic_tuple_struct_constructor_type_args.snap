@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Wrapper<T>(T)
+  
+  fn main() {
+    let w = Wrapper<int>(1)
+    let z = w.0 + 1
+    let _ = z
+  }
+---
+package main
+
+type Wrapper[T any] struct {
+	F0 T
+}
+
+func main() {
+	w := Wrapper[int]{F0: 1}
+	z := w.F0 + 1
+	_ = z
+}

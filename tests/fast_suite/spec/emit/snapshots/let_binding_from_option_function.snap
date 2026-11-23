@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn get_value() -> Option<int> {
+    Some(42)
+  }
+  
+  fn test() {
+    let x = get_value();
+  }
+---
+package main
+
+func getValue() (int, bool) {
+	return 42, true
+}
+
+func test() {
+	getValue()
+}

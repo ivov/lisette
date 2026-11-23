@@ -1,0 +1,55 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn choose(tag: int, ch: Channel<int>) -> Channel<int> {
+    ch
+  }
+  
+  fn main() {
+    let ch1 = Channel.buffered<int>(1)
+    let ch2 = Channel.buffered<int>(1)
+    ch1.send(10)
+    ch2.send(20)
+  
+    let _ = select {
+      choose(1, ch1).receive() => 0,
+      let Some(v) = choose(2, ch2).receive() => v,
+      _ => -2,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func choose(_ int, ch chan int) chan int {
+	return ch
+}
+
+func main() {
+	ch1 := make(chan int, 1)
+	ch2 := make(chan int, 1)
+	lisette.ChannelSend(ch1, 10)
+	lisette.ChannelSend(ch2, 20)
+	var tmp int
+	ch := choose(1, ch1)
+	ch3 := choose(2, ch2)
+	for {
+		select {
+		case <-ch:
+			tmp = 0
+		case v, ok := <-ch3:
+			if ok {
+				tmp = v
+			} else {
+				ch3 = nil
+				continue
+			}
+		default:
+			tmp = -2
+		}
+		break
+	}
+	_ = tmp
+}

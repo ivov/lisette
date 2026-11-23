@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:io"
+  import "go:os"
+  import "go:fs"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Multiple imports")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	fmt.Print("Multiple imports")
+}

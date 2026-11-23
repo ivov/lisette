@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn g<T>(head: int, rest: VarArgs<T>) -> Option<T> { None }
+  
+  fn test() {
+    let r: Option<int> = g(5)
+    if r.unwrap_or(9) != 9 {
+      panic("expected 9")
+    }
+  }
+---
+package main
+
+func g[T any](_ int, _ ...T) (T, bool) {
+	var zero T
+	return zero, false
+}
+
+func test() {
+	r, ok := g[int](5)
+	if !ok {
+		r = 9
+	}
+	if r != 9 {
+		panic("expected 9")
+	}
+}

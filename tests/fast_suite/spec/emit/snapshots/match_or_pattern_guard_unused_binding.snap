@@ -1,0 +1,48 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum E { A(int), B(int), C }
+  fn test() {
+    let e = E.C
+    match e {
+      E.A(x) | E.B(x) if false => (),
+      _ => (),
+    }
+  }
+---
+package main
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+}
+
+func test() {
+	e := MakeEC()
+	switch {
+	case e.Tag == EA && false:
+	case e.Tag == EB && false:
+	}
+}

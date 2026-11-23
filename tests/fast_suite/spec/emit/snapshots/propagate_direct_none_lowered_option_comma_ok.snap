@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn missing() -> Option<int> {
+    None?
+    Some(1)
+  }
+  
+  fn main() {
+    let _ = missing()
+  }
+---
+package main
+
+func missing() (int, bool) {
+	return 0, false
+}
+
+func main() {
+	missing()
+}

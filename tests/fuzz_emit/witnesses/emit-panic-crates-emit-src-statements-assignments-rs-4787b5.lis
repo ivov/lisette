@@ -1,0 +1,17 @@
+
+type U = ()
+
+fn id<T>(v: T) -> T {
+  v
+}
+
+fn test() {
+  let mut a: Unknown = id<U>(())
+  a = 1
+  let mut b: Unknown = id<()>(())
+  a = 1
+  let _ = test()
+  let _ = b
+}
+
+fn main() { let _ = test(); }

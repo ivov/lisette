@@ -1,0 +1,59 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  type M = Option<int>
+  type R = Result<int, string>
+  
+  fn get(m: M) -> int {
+    match m {
+      Some(x) => x,
+      None => 0,
+    }
+  }
+  
+  fn read(r: Ref<R>) -> int {
+    match r.* {
+      Ok(x) => x,
+      Err(_) => 0,
+    }
+  }
+  
+  fn main() {
+    let r: R = Ok(4)
+    fmt.Println(get(Some(3)), read(&r))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type M = lisette.Option[int]
+
+type R = lisette.Result[int, string]
+
+func get(m M) int {
+	if m.Tag == lisette.OptionSome {
+		return m.SomeVal
+	}
+	return 0
+}
+
+func read(r *R) int {
+	subject := *r
+	if subject.Tag == lisette.ResultOk {
+		return subject.OkVal
+	}
+	return 0
+}
+
+func main() {
+	r := lisette.MakeResultOk[int, string](4)
+	fmt.Println(get(lisette.MakeOptionSome(3)), read(&r))
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Variables are not swapped
+    ╭─[test.lis:10:5]
+  9 │         let mut b = risky()?
+ 10 │ ╭─▶     a = b
+ 11 │ ├─▶     b = a
+    · ╰──── does not swap values
+ 12 │         a + b
+    ╰────
+  help: Save one value in a temporary variable first. `a = b` overwrites `a`, so `b = a` writes `b`'s own value back and the original `a` is lost · code: [lint.almost_swapped]

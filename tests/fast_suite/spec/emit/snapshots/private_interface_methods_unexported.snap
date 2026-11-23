@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Describable {
+    fn describe() -> string
+  }
+---
+package main
+
+type Describable interface {
+	describe() string
+}

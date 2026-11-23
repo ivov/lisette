@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Duplicate binding
+   ╭─[test.lis:6:28]
+ 5 │   match o {
+ 6 │     Some(P.One(x) | P.Pair(x, x)) => x,
+   ·                            ┬  ┬
+   ·                            │  ╰── used again
+   ·                            ╰── first use of `x`
+ 7 │     _ => 0,
+   ╰────
+  help: Remove the duplicate binding · code: [infer.duplicate_binding_in_pattern]

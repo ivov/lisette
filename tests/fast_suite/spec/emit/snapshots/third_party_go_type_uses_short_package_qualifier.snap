@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:github.com/bwmarrin/discordgo"
+  
+  fn make() -> Ref<discordgo.Session> {
+    &discordgo.Session{}
+  }
+---
+package main
+
+import "github.com/bwmarrin/discordgo"
+
+func make_() *discordgo.Session {
+	return &discordgo.Session{}
+}

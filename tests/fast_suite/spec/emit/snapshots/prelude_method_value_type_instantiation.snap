@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn main() {
+    let f = Option.map
+    let x = f(Some(1), |v| v + 1)
+    let _ = x
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	f := lisette.OptionMap[int, int]
+	x := f(lisette.MakeOptionSome(1), func(v int) int {
+		return v + 1
+	})
+	_ = x
+}

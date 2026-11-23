@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/bubbletea"
+  
+  struct Model {}
+  
+  impl Model {
+    fn Init(self: Model) -> tea.Cmd {
+      || ()
+    }
+  }
+---
+package main
+
+import (
+	tea "example.com/bubbletea"
+	uv "example.com/ultraviolet"
+)
+
+type Model struct{}
+
+func (m Model) Init() tea.Cmd {
+	return func() uv.Event {
+		return nil
+	}
+}

@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Inner { items: Slice<int> }
+  struct Wrap(Inner)
+  struct Outer { w: mut Ref<Wrap> }
+  
+  fn main() {
+    let mut w = Wrap(Inner { items: [1] })
+    let mut m = Map.new<string, mut Outer>()
+    m["a"] = Outer { w: &w }
+    let Some(o) = m.get("a") else { return; };
+    let mut inner = Inner { items: o.w.0.items.clone() }
+    inner.items = inner.items.append(2)
+    o.w.* = Wrap(inner)
+    let _ = w
+  }
+---
+package main
+
+import "slices"
+
+type Inner struct {
+	items []int
+}
+
+type Wrap Inner
+
+type Outer struct {
+	w *Wrap
+}
+
+func main() {
+	w := Wrap(Inner{items: []int{1}})
+	m := make(map[string]Outer)
+	m["a"] = Outer{w: &w}
+	o, ok := m["a"]
+	if !ok {
+		return
+	}
+	inner := Inner{items: slices.Clone(Inner(*o.w).items)}
+	inner.items = append(inner.items, 2)
+	*o.w = Wrap(inner)
+	_ = w
+}

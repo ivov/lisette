@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn g() -> Result<Option<int>, string> { Ok(Some(1)) }
+  
+  fn f() -> Result<int, string> {
+    if let Some(n) = g()? { Ok(n) } else { Ok(0) }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func g() lisette.Result[lisette.Option[int], string] {
+	return lisette.MakeResultOk[lisette.Option[int], string](lisette.MakeOptionSome(1))
+}
+
+func f() lisette.Result[int, string] {
+	check := g()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check.ErrVal)
+	}
+	subject := check.OkVal
+	if subject.Tag == lisette.OptionSome {
+		return lisette.MakeResultOk[int, string](subject.SomeVal)
+	}
+	return lisette.MakeResultOk[int, string](0)
+}

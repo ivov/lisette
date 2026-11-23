@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface Drawable {
+    fn draw();
+  }
+  
+  fn test() {
+    fmt.Print("Interfaces work")
+  }
+---
+package main
+
+import "fmt"
+
+type Drawable interface {
+	draw()
+}
+
+func test() {
+	fmt.Print("Interfaces work")
+}

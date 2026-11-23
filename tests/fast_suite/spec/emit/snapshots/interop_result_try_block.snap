@@ -1,0 +1,54 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn make() -> Result<fn(string) -> Result<int, error>, error> {
+    try {
+      let _ = Ok(1)?
+      strconv.Atoi
+    }
+  }
+  
+  fn main() {
+    let r = make()
+    match r {
+      Ok(f) => {
+        let r2 = f("1")
+        match r2 {
+          Ok(v) => { let _ = v },
+          Err(_) => { let _ = 0 },
+        }
+      },
+      Err(_) => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import (
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func make_() (func(string) lisette.Result[int, error], error) {
+	check := lisette.MakeResultOk[int, error](1)
+	if check.Tag != lisette.ResultOk {
+		return nil, check.ErrVal
+	}
+	return func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}, nil
+}
+
+func main() {
+	r, err := make_()
+	if err == nil {
+		r2 := r("1")
+		if r2.Tag == lisette.ResultOk {
+			_ = r2.OkVal
+		}
+	}
+}

@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn score<T: Comparable>() -> int {
+    if Map.new<T, int>().is_empty() {
+      1
+    } else {
+      0
+    }
+  }
+  
+  fn main() {
+    let _ = score<int>()
+  }
+---
+package main
+
+func score[T comparable]() int {
+	if len(make(map[T]int)) == 0 {
+		return 1
+	}
+	return 0
+}
+
+func main() {
+	score[int]()
+}

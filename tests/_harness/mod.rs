@@ -3,8 +3,14 @@ pub mod builders;
 pub mod emit;
 pub mod filesystem;
 pub mod formatting;
+#[allow(dead_code)]
+pub mod go;
+#[allow(dead_code)]
+pub mod go_types;
 pub mod infer;
 pub mod lint;
+#[allow(dead_code)]
+pub mod lists;
 pub mod macros;
 pub mod pipeline;
 pub mod wrap;
@@ -18,6 +24,8 @@ use syntax::program::ValueKind;
 
 pub const TEST_PACKAGE_ID: &str = "test";
 
+use std::env;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -132,4 +140,19 @@ pub fn assert_completes_within(timeout: Duration, check: impl FnOnce()) {
         output.contains("1 passed;"),
         "child did not run the regression:\n{output}"
     );
+}
+
+/// The `lis` binary that `cargo build -p lisette` writes.
+#[allow(dead_code)]
+pub fn lis_binary() -> PathBuf {
+    let target = env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../target"));
+    let binary = target.join("debug/lis");
+    assert!(
+        binary.exists(),
+        "{} not found: run `cargo build -p lisette` first",
+        binary.display()
+    );
+    binary
 }

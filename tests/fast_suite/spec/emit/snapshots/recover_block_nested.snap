@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/recover.rs
+description: |
+  
+  fn test() {
+    let outer = recover {
+      let inner = recover { 1 };
+      2
+    };
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	recoverResult := lisette.RecoverBlock(func() int {
+		recoverResult2 := lisette.RecoverBlock(func() int {
+			return 1
+		})
+		_ = recoverResult2
+		return 2
+	})
+	_ = recoverResult
+}

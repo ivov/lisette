@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  type MyString = string
+  
+  fn main() {
+    let n = MyString.length("hi")
+    fmt.Println(n)
+  }
+---
+package main
+
+import "fmt"
+
+type MyString = string
+
+func main() {
+	n := len("hi")
+	fmt.Println(n)
+}

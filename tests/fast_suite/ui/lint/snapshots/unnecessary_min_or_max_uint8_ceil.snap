@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Unnecessary `min` call
+   ╭─[test.lis:4:11]
+ 3 │   let b: uint8 = 5
+ 4 │   let _ = min(b, 255)
+   ·           ─────┬─────
+   ·                ╰── always returns the same operand
+ 5 │ }
+   ╰────
+  help: Replace this `min` with the operand it always returns. The call has no effect · code: [lint.unnecessary_min_or_max]

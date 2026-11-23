@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Variant not found
+   ╭─[test.lis:6:5]
+ 5 │   match c {
+ 6 │     Color => 0,
+   ·     ──┬──
+   ·       ╰── no variant `Color` on `Color`
+ 7 │   }
+   ╰────
+  help: Available variants for `Color` are `Red` and `Blue` · code: [resolve.variant_not_found]

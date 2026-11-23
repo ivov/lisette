@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> int {
+    0b1010
+  }
+---
+package main
+
+func test() int {
+	return 0b1010
+}

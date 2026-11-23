@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import pb "go:example.com/pb"
+  
+  interface Sized {
+    fn XXX_Size() -> int
+  }
+  
+  fn measure(s: Sized) -> int { s.XXX_Size() }
+  
+  fn sizes() -> int {
+    let m = pb.New()
+    measure(m.*)
+  }
+---
+package main
+
+import "example.com/pb"
+
+type Sized interface {
+	XXXSize() int
+}
+
+func measure(s Sized) int {
+	return s.XXXSize()
+}
+
+func sizes() int {
+	m := pb.New()
+	return measure(_lisAdapter_Msg_Sized_0{inner: *m})
+}
+
+type _lisAdapter_Msg_Sized_0 struct {
+	inner pb.Msg
+}
+
+func (a _lisAdapter_Msg_Sized_0) XXXSize() int {
+	return a.inner.XXX_Size()
+}

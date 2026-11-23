@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/evts"
+  import "go:fmt"
+  
+  fn main() {
+    match evts.Peek() {
+      Some(e) => fmt.Println(e),
+      None => fmt.Println("none"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	"example.com/evts"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	if e := evts.Peek(); !lisette.IsNilInterface(e) {
+		fmt.Println(e)
+	} else {
+		fmt.Println("none")
+	}
+}

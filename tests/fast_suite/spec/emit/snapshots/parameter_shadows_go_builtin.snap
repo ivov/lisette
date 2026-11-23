@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test(len: int) -> int {
+    len + 1
+  }
+---
+package main
+
+func test(len int) int {
+	return len + 1
+}

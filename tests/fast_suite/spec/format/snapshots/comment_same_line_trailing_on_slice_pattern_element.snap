@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f() -> int {
+    match [1, 2] {
+      [a, // trailing slice elem
+      b] => a + b,
+      _ => 0,
+    }
+  }
+---
+fn f() -> int {
+  match [1, 2] {
+    [
+      a, // trailing slice elem
+      b,
+    ] => a + b,
+    _ => 0,
+  }
+}

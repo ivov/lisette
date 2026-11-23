@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/fixes.rs
+---
+fn consume() -> Option<int> {
+  let x: Option<int> = Some(1)
+  Some(x?)
+}
+=== fixed ===
+fn consume() -> Option<int> {
+  let x: Option<int> = Some(1)
+  x
+}

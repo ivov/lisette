@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ fn f(x int) -> int {
+   ·        ─┬─
+   ·         ╰── expected `:`
+ 3 │   x
+   ╰────
+  code: [parse.unexpected_token]

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Reserved import alias
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ import nil "go:fmt"
+   ·        ─┬─
+   ·         ╰── reserved name
+ 3 │ 
+   ╰────
+  help: Choose a different alias, e.g. `import my_nil "..."`. `nil` is a reserved name and cannot be used as an import alias · code: [resolve.reserved_import_alias]

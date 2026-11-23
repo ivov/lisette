@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { 0..10 }"
+---
+fn test() {
+  0..10
+}

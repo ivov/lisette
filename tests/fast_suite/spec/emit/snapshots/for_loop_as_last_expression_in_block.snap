@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() {
+    let _ = {
+      for x in [1, 2, 3] {
+        let _ = x
+      }
+    }
+  }
+---
+package main
+
+func test() {
+	for _, x := range []int{1, 2, 3} {
+		_ = x
+	}
+}

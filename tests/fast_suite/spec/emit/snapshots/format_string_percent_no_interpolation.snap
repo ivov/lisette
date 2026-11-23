@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> string {
+    f"100% done"
+  }
+---
+package main
+
+func test() string {
+	return "100% done"
+}

@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  interface I {
+    fn first()
+    // between methods
+    fn second()
+  }
+---
+interface I {
+  fn first()
+  // between methods
+  fn second()
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:4:3]
+ 3 │   x: i32,
+ 4 │   ^
+   ·   ┬
+   ·   ╰── expected field name
+ 5 │   y: i32,
+   ╰────
+  help: Field names must be identifiers · code: [parse.syntax_error]

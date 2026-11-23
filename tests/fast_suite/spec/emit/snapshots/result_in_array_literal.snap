@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn try_value(x: int) -> Result<int, string> {
+    if x > 0 { Ok(x) } else { Err("negative") }
+  }
+  
+  fn test() {
+    let arr = [try_value(1), try_value(-1), try_value(3)];
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func tryValue(x int) lisette.Result[int, string] {
+	if x > 0 {
+		return lisette.MakeResultOk[int, string](x)
+	}
+	return lisette.MakeResultErr[int, string]("negative")
+}
+
+func test() {
+	_ = []lisette.Result[int, string]{tryValue(1), tryValue(-1), tryValue(3)}
+}

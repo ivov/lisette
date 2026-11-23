@@ -1,0 +1,39 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  type StrRef = Ref<string>
+  
+  fn walk(s: Ref<string>, t: StrRef) {
+    for b in s.bytes() { fmt.Print(b) }
+    for r in s.runes() { fmt.Print(r) }
+    for b in t.bytes() { fmt.Print(b) }
+    for r in t.runes() { fmt.Print(r) }
+  }
+---
+package main
+
+import "fmt"
+
+type StrRef = *string
+
+func walk(s *string, t StrRef) {
+	s2 := *s
+	for i := 0; i < len(s2); i++ {
+		b := s2[i]
+		fmt.Print(b)
+	}
+	for _, r := range *s {
+		fmt.Print(r)
+	}
+	s3 := *t
+	for i2 := 0; i2 < len(s3); i2++ {
+		b := s3[i2]
+		fmt.Print(b)
+	}
+	for _, r := range *t {
+		fmt.Print(r)
+	}
+}

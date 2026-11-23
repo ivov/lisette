@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(x: int) {
+    let mut count = x;
+    while count > 0 {
+      count = count - 1;
+    };
+  }
+---
+package main
+
+func test(x int) {
+	count := x
+	for count > 0 {
+		count--
+	}
+}

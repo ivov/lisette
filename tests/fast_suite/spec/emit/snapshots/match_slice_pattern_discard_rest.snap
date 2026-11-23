@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(items: Slice<int>) -> int {
+    match items {
+      [] => 0,
+      [first, ..] => first,
+    }
+  }
+---
+package main
+
+func test(items []int) int {
+	if len(items) == 0 {
+		return 0
+	}
+	return items[0]
+}

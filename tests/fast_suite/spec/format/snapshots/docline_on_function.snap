@@ -1,0 +1,8 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  /// This is a docline
+  fn foo() {}
+---
+/// This is a docline
+fn foo() {}

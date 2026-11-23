@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> string {
+    "\u{00E9}"
+  }
+---
+package main
+
+func test() string {
+	return "\u00E9"
+}

@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test(opt: Option<(int, int)>) { while let Some((a, b)) = opt { use(a + b); } }"
+---
+fn test(opt: Option<(int, int)>) {
+  while let Some((a, b)) = opt {
+    use(a + b)
+  }
+}

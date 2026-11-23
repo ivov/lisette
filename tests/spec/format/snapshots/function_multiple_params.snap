@@ -1,7 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "fn calculate(a: int, b: int, c: int, d: int) -> int { a + b + c + d }"
----
-fn calculate(a: int, b: int, c: int, d: int) -> int {
-  a + b + c + d
-}

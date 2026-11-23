@@ -1,0 +1,69 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum Shape { Circle(int), Square(int), Line(int, int) }
+  
+  fn total(p: (Shape, Shape)) -> int {
+    match p {
+      (Shape.Circle(a) | Shape.Square(a), Shape.Circle(b) | Shape.Square(b)) => a + b,
+      _ => 0,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeSquare(arg0 int) Shape {
+	return Shape{Tag: ShapeSquare, Square: arg0}
+}
+
+func MakeShapeLine(arg0, arg1 int) Shape {
+	return Shape{Tag: ShapeLine, Line0: arg0, Line1: arg1}
+}
+
+type ShapeTag uint8
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeSquare
+	ShapeLine
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	Circle int
+	Square int
+	Line0  int
+	Line1  int
+}
+
+func total(p lisette.Tuple2[Shape, Shape]) int {
+	switch p.First.Tag {
+	case ShapeCircle:
+		switch p.Second.Tag {
+		case ShapeCircle:
+			return p.First.Circle + p.Second.Circle
+		case ShapeSquare:
+			return p.First.Circle + p.Second.Square
+		default:
+			return 0
+		}
+	case ShapeSquare:
+		switch p.Second.Tag {
+		case ShapeCircle:
+			return p.First.Square + p.Second.Circle
+		case ShapeSquare:
+			return p.First.Square + p.Second.Square
+		default:
+			return 0
+		}
+	default:
+		return 0
+	}
+}

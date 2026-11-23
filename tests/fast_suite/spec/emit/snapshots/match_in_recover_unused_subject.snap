@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    let out = recover {
+      let p = P { v: 1 }
+      match p { P { v } => () }
+    }
+    let _ = out
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type P struct {
+	v int
+}
+
+func test() {
+	out := lisette.RecoverBlock(func() struct{} {
+		return struct{}{}
+	})
+	_ = out
+}

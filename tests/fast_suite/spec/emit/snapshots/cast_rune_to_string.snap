@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() -> string {
+    'A' as string
+  }
+---
+package main
+
+func test() string {
+	return string('A')
+}

@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:example.com/shapes"
+  
+  fn area_or_neg(s: shapes.Shape) -> int {
+    let shapes.Rect { W: w, H: h } | shapes.Box { width: w, height: h } = s else { return -1 }
+    w * h
+  }
+---
+package main
+
+import "example.com/shapes"
+
+func areaOrNeg(s shapes.Shape) int {
+	var w int
+	var h int
+	asserted, ok := s.(shapes.Rect)
+	asserted2, ok2 := s.(shapes.Box)
+	if ok {
+		w = asserted.W
+		h = asserted.H
+	} else if ok2 {
+		w = asserted2.Width
+		h = asserted2.Height
+	} else {
+		return -1
+	}
+	return w * h
+}

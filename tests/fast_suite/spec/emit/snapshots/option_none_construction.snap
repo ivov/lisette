@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> Option<int> {
+    None
+  }
+---
+package main
+
+func test() (int, bool) {
+	return 0, false
+}

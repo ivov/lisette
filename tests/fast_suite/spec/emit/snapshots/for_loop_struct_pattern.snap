@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(points: Slice<Point>) -> int {
+    let mut sum = 0;
+    for Point { x, y } in points {
+      sum = sum + x + y;
+    };
+    sum
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test(points []Point) int {
+	sum := 0
+	for _, item := range points {
+		x := item.x
+		y := item.y
+		sum = sum + x + y
+	}
+	return sum
+}

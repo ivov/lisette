@@ -1,0 +1,14 @@
+
+import "go:strconv"
+import "go:fmt"
+
+fn test(text: string) -> int {
+  let parsed = "outer"
+  fmt.Println(strconv.Atoi)
+  let Ok(parsed) = strconv.Atoi(text) else {
+    return -1
+  }
+  parsed
+}
+
+fn main() { }

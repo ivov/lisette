@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn foo() -> Result<int, string> {
+    let y = Ok(1)? + 1
+    let result3 = 7
+    let _ = result3
+    Ok(y)
+  }
+  
+  fn main() {
+    let _ = foo()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func foo() lisette.Result[int, string] {
+	check := lisette.MakeResultOk[int, string](1)
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	y := check.OkVal + 1
+	return lisette.MakeResultOk[int, string](y)
+}
+
+func main() {
+	foo()
+}

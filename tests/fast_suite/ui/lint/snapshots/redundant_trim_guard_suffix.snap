@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Redundant `strings.HasSuffix` guard
+   ╭─[test.lis:6:3]
+ 5 │       let mut out = "example.com/"
+ 6 │ ╭─▶   if strings.HasSuffix(out, "/") {
+ 7 │ │       out = strings.TrimSuffix(out, "/")
+ 8 │ ├─▶   }
+   · ╰──── can be simpler
+ 9 │       let _ = out
+   ╰────
+  help: Replace the `if` with `out = strings.TrimSuffix(out, "/")`. `strings.TrimSuffix` already returns the string unchanged when the suffix is absent · code: [lint.redundant_trim_guard]

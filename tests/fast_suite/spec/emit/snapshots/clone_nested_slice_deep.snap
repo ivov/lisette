@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn main() {
+    let mut a = [[1, 2], [3, 4]]
+    let mut b = a.clone()
+    b[0][0] = 9
+    let _ = a
+    let _ = b
+  }
+---
+package main
+
+import (
+	"slices"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	a := [][]int{{1, 2}, {3, 4}}
+	b := lisette.SliceCloneFunc(a, func(e []int) []int { return slices.Clone(e) })
+	b[0][0] = 9
+	_ = a
+	_ = b
+}

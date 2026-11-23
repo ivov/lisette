@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() -> string {
+    let bytes: Slice<byte> = "hello" as Slice<byte>;
+    bytes as string
+  }
+---
+package main
+
+func test() string {
+	bytes := ([]byte)("hello")
+	return string(bytes)
+}

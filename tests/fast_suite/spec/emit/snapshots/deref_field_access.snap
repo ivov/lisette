@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Counter { value: int }
+  
+  impl Counter {
+    fn increment(self: mut Ref<Counter>) {
+      self.*.value = self.*.value + 1
+    }
+  
+    fn get(self: Ref<Counter>) -> int {
+      self.*.value
+    }
+  }
+---
+package main
+
+type Counter struct {
+	value int
+}
+
+func (c *Counter) increment() {
+	c.value++
+}
+
+func (c *Counter) get() int {
+	return c.value
+}

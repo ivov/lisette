@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn bump(i: mut Ref<int>) -> int {
+    i.* = 1
+    10
+  }
+  
+  fn sum(a: int, b: int) -> int { a + b }
+  
+  fn main() {
+    let mut i = 0
+    let z = sum(i, bump(&i))
+    let _ = z
+  }
+---
+package main
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func sum(a, b int) int {
+	return a + b
+}
+
+func main() {
+	i := 0
+	arg := i
+	z := sum(arg, bump(&i))
+	_ = z
+}

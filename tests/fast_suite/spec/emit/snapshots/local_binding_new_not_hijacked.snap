@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn mk() -> int { 42 }
+  
+  fn test() -> int {
+    let new = mk
+    new()
+  }
+---
+package main
+
+func mk() int {
+	return 42
+}
+
+func test() int {
+	new := mk
+	return new()
+}

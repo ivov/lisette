@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  import "go:iter"
+  
+  type PairsRef = Ref<iter.Seq2<string, int>>
+  type ValuesRef = Ref<iter.Seq<int>>
+  
+  fn walk(p: PairsRef, v: ValuesRef) {
+    for (k, n) in p { fmt.Println(k, n) }
+    for x in v { fmt.Println(x) }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"iter"
+)
+
+type PairsRef = *iter.Seq2[string, int]
+
+type ValuesRef = *iter.Seq[int]
+
+func walk(p PairsRef, v ValuesRef) {
+	for k, n := range *p {
+		fmt.Println(k, n)
+	}
+	for x := range *v {
+		fmt.Println(x)
+	}
+}

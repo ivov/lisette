@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> Slice<int> {
+    [1, 2, 3]
+  }
+---
+package main
+
+func test() []int {
+	return []int{1, 2, 3}
+}

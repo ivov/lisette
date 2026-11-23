@@ -1,0 +1,52 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let x = 100
+    fmt.Println(x)
+    let x = 200
+  
+    let ch = Channel.buffered<int>(1)
+    ch.send(99)
+  
+    select {
+      let Some(x) = ch.receive() => fmt.Println(x),
+      _ => fmt.Println("default"),
+    }
+  
+    fmt.Println(x)
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	x := 100
+	fmt.Println(x)
+	x = 200
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 99)
+	for {
+		select {
+		case x, ok := <-ch:
+			if ok {
+				fmt.Println(x)
+			} else {
+				ch = nil
+				continue
+			}
+		default:
+			fmt.Println("default")
+		}
+		break
+	}
+	fmt.Println(x)
+}

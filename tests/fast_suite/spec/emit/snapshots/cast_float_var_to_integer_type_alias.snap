@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  type MyInt = int
+  
+  fn main() {
+    let f = 3.14
+    let x: MyInt = f as MyInt
+    let _ = x
+  }
+---
+package main
+
+type MyInt = int
+
+func main() {
+	f := 3.14
+	x := MyInt(f)
+	_ = x
+}

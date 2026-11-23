@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "r\"\\n\\t\\u{1234}\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: RawString,
+            text: "r\"\\n\\t\\u{1234}\"",
+            byte_offset: 0,
+            byte_length: 15,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 15,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

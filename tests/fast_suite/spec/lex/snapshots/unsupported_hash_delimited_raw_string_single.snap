@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "r#\"foo\"#"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 8,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Hash-delimited raw strings are not supported yet",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 8,
+                    },
+                    "not supported yet",
+                ),
+            ],
+            help: Some(
+                "Use a regular string with escaped quotes for now",
+            ),
+            code: "lex.unsupported_hash_delimited_raw_string",
+        },
+    ],
+    blank_lines: [],
+}

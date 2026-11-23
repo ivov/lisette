@@ -1,0 +1,36 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn main() {
+    let mut r = 0..3
+    let mut n = 0
+    for i in r {
+      n += 1
+      r = 0..0
+      let _ = i
+    }
+    let _ = n
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	r := lisette.Range[int]{
+		Start: 0,
+		End:   3,
+	}
+	n := 0
+	range2 := r
+	for i := range2.Start; i < range2.End; i++ {
+		n++
+		r = lisette.Range[int]{
+			Start: 0,
+			End:   0,
+		}
+		_ = i
+	}
+	_ = n
+}

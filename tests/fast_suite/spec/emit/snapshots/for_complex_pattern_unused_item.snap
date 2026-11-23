@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct P { v: int }
+  fn test() {
+    for P { v } in [P { v: 1 }] {
+      ()
+    }
+  }
+---
+package main
+
+type P struct {
+	v int
+}
+
+func test() {
+	for _, item := range []P{{v: 1}} {
+		_ = item
+	}
+}

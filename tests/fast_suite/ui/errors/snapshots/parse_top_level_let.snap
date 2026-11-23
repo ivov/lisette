@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ let x = 1
+   · ─┬─
+   ·  ╰── `let` is not allowed at the top level
+   ╰────
+  help: Use `const` for a primitive, or a function that returns the value, e.g. `fn origin() -> Point { ... }` for a composite · code: [parse.top_level_let]

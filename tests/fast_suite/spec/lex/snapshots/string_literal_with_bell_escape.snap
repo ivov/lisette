@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "\"\\x1b]11;?\\a\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: String,
+            text: "\"\\x1b]11;?\\a\"",
+            byte_offset: 0,
+            byte_length: 13,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 13,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

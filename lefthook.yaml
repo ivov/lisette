@@ -12,7 +12,7 @@ pre-commit:
   commands:
     check:
       glob: "**/*.{rs,lis,toml}"
-      run: just check && cargo run -p lisette -- check crates/stdlib/typedefs/
+      run: just pre-commit && cargo run -p lisette -- check crates/stdlib/typedefs/
     bindgen:
       glob: "bindgen/**/*.go"
       root: "bindgen"

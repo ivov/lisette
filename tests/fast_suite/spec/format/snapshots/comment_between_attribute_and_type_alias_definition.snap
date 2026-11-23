@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  #[go(alias)]
+  // alias detail
+  type UserId = int
+---
+#[go(alias)]
+// alias detail
+type UserId = int

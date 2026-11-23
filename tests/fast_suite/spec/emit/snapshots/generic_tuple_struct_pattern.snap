@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Box<T>(T)
+  
+  fn test(b: Box<int>) -> int {
+    match b {
+      Box(x) => x,
+    }
+  }
+---
+package main
+
+type Box[T any] struct {
+	F0 T
+}
+
+func test(b Box[int]) int {
+	return b.F0
+}

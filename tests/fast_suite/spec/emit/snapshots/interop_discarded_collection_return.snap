@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    aws.Make()
+  }
+---
+package main
+
+import "example.com/aws"
+
+func main() {
+	aws.Make()
+}

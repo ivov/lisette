@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid select match
+   ╭─[test.lis:6:7]
+ 5 │     match ch.receive() {
+ 6 │       Some(v) => v,
+   ·       ───┬───
+   ·          ╰── missing `None` arm
+ 7 │     },
+   ╰────
+  help: Add a `None => ...` arm to handle channel close, or simplify to `let Some(v) = ch.receive() => ...`. Matching on `ch.receive()` requires handling channel close · code: [infer.select_match_missing_none_arm]

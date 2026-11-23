@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Wrap(Ref<int>)
+  
+  fn test(w: Wrap) -> int {
+    match w {
+      Wrap(r) => r.*,
+    }
+  }
+---
+package main
+
+type Wrap *int
+
+func test(w Wrap) int {
+	return *(*int)(w)
+}

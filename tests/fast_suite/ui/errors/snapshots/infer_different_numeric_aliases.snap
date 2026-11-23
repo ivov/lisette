@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[main.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let x = time.SecondA + time.SecondB;
+   ·           ─────────────┬─────────────
+   ·                        ╰── cannot compute
+ 6 │ }
+   ╰────
+  help: Convert one to the other's type, or convert both to `int64` · code: [infer.incompatible_named_types]

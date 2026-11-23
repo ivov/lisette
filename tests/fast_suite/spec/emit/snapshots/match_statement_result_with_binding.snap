@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn use_value(x: int) {}
+  
+  fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 { Err("err") } else { Ok(a / b) }
+  }
+  
+  fn test() {
+    match divide(10, 2) {
+      Ok(v) => use_value(v),
+      Err(_) => use_value(0),
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func useValue(_ int) {}
+
+func divide(a, b int) lisette.Result[int, string] {
+	if b == 0 {
+		return lisette.MakeResultErr[int, string]("err")
+	}
+	return lisette.MakeResultOk[int, string](a / b)
+}
+
+func test() {
+	subject := divide(10, 2)
+	if subject.Tag == lisette.ResultOk {
+		useValue(subject.OkVal)
+	} else {
+		useValue(0)
+	}
+}

@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut s = [1]
+    s = (s).append(2)
+    let _ = s
+  }
+---
+package main
+
+func main() {
+	s := []int{1}
+	s = append(s, 2)
+	_ = s
+}

@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn get() -> Ref<Slice<int>> {
+    let mut s = [1]
+    &s
+  }
+  fn arg() -> int { 2 }
+  
+  fn main() {
+    let x = { get().*.append(arg()) }
+    let _ = x[1]
+  }
+---
+package main
+
+import "slices"
+
+func get() *[]int {
+	s := []int{1}
+	return &s
+}
+
+func arg() int {
+	return 2
+}
+
+func main() {
+	recv := *get()
+	x := append(slices.Clip(recv), arg())
+	_ = x[1]
+}

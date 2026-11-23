@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn make<T>() -> Slice<T> {
+    Slice.new<T>()
+  }
+  
+  fn test() -> Slice<int> {
+    (make)()
+  }
+---
+package main
+
+func make_[T any]() []T {
+	return []T{}
+}
+
+func test() []int {
+	return make_[int]()
+}

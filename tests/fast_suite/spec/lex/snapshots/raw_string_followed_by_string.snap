@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "r\"a\"\"b\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: RawString,
+            text: "r\"a\"",
+            byte_offset: 0,
+            byte_length: 4,
+        },
+        Token {
+            kind: String,
+            text: "\"b\"",
+            byte_offset: 4,
+            byte_length: 3,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 7,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

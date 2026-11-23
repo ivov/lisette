@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn sum_positives(items: Slice<int>) -> int {
+    let mut sum = 0
+    for item in items {
+      match item {
+        n if n > 0 => sum += n,
+        _ => continue,
+      }
+    }
+    sum
+  }
+---
+package main
+
+func sumPositives(items []int) int {
+	sum := 0
+	for _, item := range items {
+		switch {
+		case item > 0:
+			sum += item
+		default:
+			continue
+		}
+	}
+	return sum
+}

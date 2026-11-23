@@ -1,0 +1,9 @@
+
+import "go:fmt"
+fn test(s: string) {
+  for b in s.bytes() {
+    s.bytes()
+  }
+}
+
+fn main() { }

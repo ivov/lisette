@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(p: Point) -> int {
+    let outer = 100
+    let result = match p {
+      Point { x, .. } as outer => outer.x + x,
+    }
+    result + outer
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test(p Point) int {
+	outer := 100
+	var result int
+	{
+		result = p.x + p.x
+	}
+	return result + outer
+}

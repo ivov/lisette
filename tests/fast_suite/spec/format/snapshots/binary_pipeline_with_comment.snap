@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    x
+    |> foo()
+    // comment before bar
+    |> bar()
+  }
+---
+fn test() {
+  x
+    |> foo()
+    // comment before bar
+    |> bar()
+}

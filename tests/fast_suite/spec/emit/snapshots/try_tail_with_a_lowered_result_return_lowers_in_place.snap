@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:errors"
+  
+  fn parse_port(text: string) -> Result<int, error> {
+    if text == "80" { Ok(80) } else { Err(errors.New("bad port")) }
+  }
+  
+  fn address(host: string, port: string) -> Result<string, error> {
+    try {
+      let n = parse_port(port)?
+      f"{host}:{n}"
+    }
+  }
+  
+  fn main() {
+    let _ = address("localhost", "80")
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func parsePort(text string) (int, error) {
+	if text == "80" {
+		return 80, nil
+	}
+	return 0, errors.New("bad port")
+}
+
+func address(host, port string) (string, error) {
+	n, err := parsePort(port)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s:%d", host, n), nil
+}
+
+func main() {
+	address("localhost", "80")
+}

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let xs = ["a", "b", "c"]
+    fmt.Println(xs...)
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	xs := []string{"a", "b", "c"}
+	fmt.Println(lisette.SliceToAny(xs)...)
+}

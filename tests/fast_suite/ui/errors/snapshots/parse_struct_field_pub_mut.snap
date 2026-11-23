@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Misplaced `mut`
+   ╭─[test.lis:3:7]
+ 2 │ struct Foo {
+ 3 │   pub mut diffs: Slice<string>,
+   ·       ─┬─
+   ·        ╰── `mut` goes on the field's type
+ 4 │ }
+   ╰────
+  help: Place the permission right before the type, e.g. `items: mut Slice<int>` · code: [parse.misplaced_mut]

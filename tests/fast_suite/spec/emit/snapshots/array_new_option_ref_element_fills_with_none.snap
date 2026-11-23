@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn flags() -> Array<Option<Ref<bool>>, 2> {
+    Array.new<Option<Ref<bool>>, 2>()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func flags() [2]lisette.Option[*bool] {
+	return [2]lisette.Option[*bool]{}
+}

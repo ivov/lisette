@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[tag]
+  struct User {
+    #[tag(`json:"name,omitempty" validate:"required"`)]
+    name: string,
+  }
+---
+package main
+
+type User struct {
+	Name string `json:"name,omitempty" validate:"required"`
+}

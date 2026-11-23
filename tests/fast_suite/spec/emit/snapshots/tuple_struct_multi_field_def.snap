@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Point(int, int)
+---
+package main
+
+type Point struct {
+	F0 int
+	F1 int
+}

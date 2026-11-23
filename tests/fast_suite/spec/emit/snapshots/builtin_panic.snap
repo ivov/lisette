@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() {
+    panic("something went wrong")
+  }
+---
+package main
+
+func test() {
+	panic("something went wrong")
+}

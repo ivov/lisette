@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() {
+    let mut m: mut Map<string, fn(int) -> int> = Map.new()
+    m["square"] = |x| x * x
+  }
+---
+package main
+
+func test() {
+	m := make(map[string]func(int) int)
+	m["square"] = func(x int) int {
+		return x * x
+	}
+}

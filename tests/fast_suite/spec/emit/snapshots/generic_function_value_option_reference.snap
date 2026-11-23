@@ -1,0 +1,58 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn some<T>(x: T) -> Option<T> { Some(x) }
+  fn consume(f: fn(Ref<int>) -> Option<Ref<int>>, x: Ref<int>) -> Option<Ref<int>> { f(x) }
+  fn main() {
+    let x = 3
+    let stored: fn(Ref<int>) -> Option<Ref<int>> = some
+    let Some(first) = stored(&x) else { panic("stored generic option") }
+    let Some(second) = consume(some, &x) else { panic("generic option callback") }
+    if first != &x || second != &x { panic("generic option payload") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func some[T any](x T) (T, bool) {
+	return x, true
+}
+
+func consume(f func(*int) lisette.Option[*int], x *int) *int {
+	v := f(x)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal
+	}
+	return nil
+}
+
+func main() {
+	x := 3
+	stored := func(arg0 *int) lisette.Option[*int] {
+		ret, ret2 := some[*int](arg0)
+		if ret2 && ret != nil {
+			return lisette.MakeOptionSome[*int](ret)
+		}
+		return lisette.MakeOptionNone[*int]()
+	}
+	subject := stored(&x)
+	if subject.Tag != lisette.OptionSome {
+		panic("stored generic option")
+	}
+	first := subject.SomeVal
+	second := consume(func(arg0 *int) lisette.Option[*int] {
+		ret3, ret4 := some[*int](arg0)
+		if ret4 && ret3 != nil {
+			return lisette.MakeOptionSome[*int](ret3)
+		}
+		return lisette.MakeOptionNone[*int]()
+	}, &x)
+	if second == nil {
+		panic("generic option callback")
+	}
+	if first != &x || second != &x {
+		panic("generic option payload")
+	}
+}

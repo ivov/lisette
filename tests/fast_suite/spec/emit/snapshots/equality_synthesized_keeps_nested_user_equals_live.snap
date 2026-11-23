@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Inner { x: int }
+  
+  impl Inner {
+    fn equals(self, other: Inner) -> bool {
+      self.x == other.x
+    }
+  }
+  
+  #[equality]
+  struct Outer { inner: Inner }
+---
+package main
+
+type Inner struct {
+	x int
+}
+
+func (i Inner) equals(other Inner) bool {
+	return i.x == other.x
+}
+
+type Outer struct {
+	inner Inner
+}
+
+func (o Outer) equals(other Outer) bool {
+	return o.inner.equals(other.inner)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Unknown attribute
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[foo]
+   · ───┬──
+   ·    ╰── not recognized
+ 3 │ enum Color {
+   ╰────
+  help: `foo` is not a recognized attribute. Known attributes: `#[json]`, `#[xml]`, `#[yaml]`, `#[toml]`, `#[db]`, `#[bson]`, `#[mapstructure]`, `#[msgpack]`, `#[tag]`, `#[allow]`, `#[iterate]`, `#[display]`, `#[equality]`, `#[test]`, `#[default]` · code: [lint.unknown_attribute]

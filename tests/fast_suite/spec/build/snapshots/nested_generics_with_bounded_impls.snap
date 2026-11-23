@@ -1,0 +1,87 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/ops"
+	"github.com/user/myproject/types"
+)
+
+type Label struct {
+	text string
+}
+
+func (l Label) Show() string {
+	return l.text
+}
+
+func main() {
+	l1 := Label{text: "x"}
+	l2 := Label{text: "y"}
+	innerPair := types.Pair[Label, Label]{
+		First:  l1,
+		Second: l2,
+	}
+	taggedPair := types.Tagged[types.Pair[Label, Label]]{
+		Value: innerPair,
+		Label: "coords",
+	}
+	fmt.Println(ops.DescribeTaggedPair(taggedPair))
+}
+
+
+// === ops/lib.go ===
+package ops
+
+import (
+	"github.com/user/myproject/traits"
+	"github.com/user/myproject/types"
+)
+
+func DescribeTaggedPair[A traits.Showable, B traits.Showable](tp types.Tagged[types.Pair[A, B]]) string {
+	return "tagged_pair: " + tp.Display()
+}
+
+
+// === traits/lib.go ===
+package traits
+
+type Showable interface {
+	Show() string
+}
+
+
+// === types/lib.go ===
+package types
+
+import "github.com/user/myproject/traits"
+
+type Pair[A traits.Showable, B traits.Showable] struct {
+	First  A
+	Second B
+}
+
+func (p Pair[A, B]) Show() string {
+	return "(" + p.First.Show() + ", " + p.Second.Show() + ")"
+}
+
+func (p Pair[A, B]) Display() string {
+	return "Pair" + p.Show()
+}
+
+type Tagged[T traits.Showable] struct {
+	Value T
+	Label string
+}
+
+func (t Tagged[T]) Show() string {
+	return "[" + t.Label + "] " + t.Value.Show()
+}
+
+func (t Tagged[T]) Display() string {
+	return "Tagged" + t.Show()
+}

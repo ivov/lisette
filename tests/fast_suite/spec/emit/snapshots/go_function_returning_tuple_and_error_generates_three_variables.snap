@@ -1,0 +1,44 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:net"
+  
+  fn main() {
+    match net.SplitHostPort("localhost:8080") {
+      Ok((host, port)) => {
+        let _ = host
+        let _ = port
+        ()
+      },
+      Err(e) => {
+        let _ = e
+        ()
+      },
+    }
+  }
+---
+package main
+
+import (
+	"net"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret, ret2, ret3 := net.SplitHostPort("localhost:8080")
+	tup := lisette.MakeTuple2(ret, ret2)
+	var result lisette.Result[lisette.Tuple2[string, string], error]
+	if ret3 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[string, string], error](ret3)
+	} else {
+		result = lisette.MakeResultOk[lisette.Tuple2[string, string], error](tup)
+	}
+	if result.Tag == lisette.ResultOk {
+		_ = result.OkVal.First
+		_ = result.OkVal.Second
+	} else {
+		_ = result.ErrVal
+	}
+}

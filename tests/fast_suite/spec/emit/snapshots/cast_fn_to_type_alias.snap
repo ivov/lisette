@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  type Handler = fn(int) -> string
+  
+  fn my_handler(x: int) -> string {
+    "ok"
+  }
+  
+  fn test() -> Handler {
+    my_handler as Handler
+  }
+---
+package main
+
+type Handler = func(int) string
+
+func myHandler(_ int) string {
+	return "ok"
+}
+
+func test() Handler {
+	return Handler(myHandler)
+}

@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Entry struct {
+	name string
+}
+
+type Cache interface {
+	Get(string) (*Entry, bool)
+}
+
+type MyCache struct{}
+
+func (m MyCache) Get(_ string) *Entry {
+	return nil
+}
+
+func useCache(_ Cache) {}
+
+func main() {
+	c := MyCache{}
+	useCache(_lisAdapter_MyCache_Cache_0{inner: c})
+}
+
+type _lisAdapter_MyCache_Cache_0 struct {
+	inner MyCache
+}
+
+func (a _lisAdapter_MyCache_Cache_0) Get(arg0 string) (*Entry, bool) {
+	raw := a.inner.Get(arg0)
+	option := lisette.OptionFromNilable[*Entry](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
+	}
+	return nil, false
+}

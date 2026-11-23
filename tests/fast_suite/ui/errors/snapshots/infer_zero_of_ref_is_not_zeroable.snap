@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `Ref<int>` has no zero value
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let r = zero<Ref<int>>()
+   ·           ────────┬───────
+   ·                   ╰── `Ref<int>` does not satisfy `Zeroable`
+ 4 │ }
+   ╰────
+  help: Build this value explicitly, e.g. `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel. `Zeroable` admits only types whose zero value Lisette can produce, and `Ref<int>` has none · code: [infer.not_zeroable_bound]

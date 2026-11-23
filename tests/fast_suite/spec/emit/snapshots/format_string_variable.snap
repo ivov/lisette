@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let result = 15;
+    fmt.Print(f"Result: {result}")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	result := 15
+	fmt.Printf("Result: %d", result)
+}

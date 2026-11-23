@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid range argument
+   ╭─[test.lis:5:15]
+ 4 │ fn test(parts: Slice<string>) {
+ 5 │   fmt.Println(..parts)
+   ·               ───┬───
+   ·                  ╰── this is a range, not a spread
+ 6 │ }
+   ╰────
+  help: Use postfix: `parts...` · code: [infer.range_to_for_variadic]

@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Point { x: int, y: int, z: int }
+  
+  fn f(p: Point) -> int {
+    match p {
+      Point { x: 1, // trailing
+      .. } => 0,
+      _ => 1,
+    }
+  }
+---
+struct Point { x: int, y: int, z: int }
+
+fn f(p: Point) -> int {
+  match p {
+    Point {
+      x: 1, // trailing
+      ..,
+    } => 0,
+    _ => 1,
+  }
+}

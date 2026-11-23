@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Reference may mutate a value read in the same expression
+   ╭─[test.lis:7:16]
+ 6 │   let mut c = Counter { inner: Inner { n: 1 } }
+ 7 │   let _ = bump(&(c.inner)) + c.inner.n
+   ·                ─────┬────    ────┬────
+   ·                     │            ╰── may see the mutated value
+   ·                     ╰── may mutate `c.inner`
+ 8 │ }
+   ╰────
+  help: Make evaluation order explicit: to read the value before `&c.inner` runs, copy it first with `let before = c.inner.n`, and to read the value after, bind the reference-taking operand to a variable first · code: [infer.reference_aliases_sibling]

@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test(value: Unknown) -> Option<int> {
+    assert_type<int>(value)
+  }
+---
+package main
+
+func test(value any) (int, bool) {
+	ret, ok := value.(int)
+	return ret, ok
+}

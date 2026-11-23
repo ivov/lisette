@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Point { x: int, y: int }
+  
+  fn origin() -> Point { Point { x: 0, y: 0 } }
+  
+  fn add(a: Point, b: Point) -> Point { Point { x: a.x + b.x, y: a.y + b.y } }
+---
+struct Point { x: int, y: int }
+
+fn origin() -> Point {
+  Point { x: 0, y: 0 }
+}
+
+fn add(a: Point, b: Point) -> Point {
+  Point { x: a.x + b.x, y: a.y + b.y }
+}

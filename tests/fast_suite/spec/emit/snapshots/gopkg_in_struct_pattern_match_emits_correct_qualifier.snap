@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:gopkg.in/yaml.v3"
+  
+  fn describe(e: yaml.TypeError) -> int {
+    match e {
+      yaml.TypeError { Errors: errs } => errs.length(),
+    }
+  }
+---
+package main
+
+import yaml "gopkg.in/yaml.v3"
+
+func describe(e yaml.TypeError) int {
+	return len(e.Errors)
+}

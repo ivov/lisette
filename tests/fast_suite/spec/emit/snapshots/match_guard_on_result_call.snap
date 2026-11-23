@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn get_value() -> Result<int, string> { Ok(42) }
+  
+  fn test() -> int {
+    match get_value() {
+      Ok(x) if x > 0 => x,
+      Ok(_) => 0,
+      Err(_) => -1,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func getValue() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func test() int {
+	subject := getValue()
+	if subject.Tag == lisette.ResultOk {
+		x := subject.OkVal
+		if x > 0 {
+			return x
+		}
+		return 0
+	}
+	return -1
+}

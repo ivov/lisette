@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn try_parse(s: string) -> Result<int, string> {
+    if s == "42" { Ok(42) } else { Err("not 42") }
+  }
+  
+  fn test() {
+    if let Ok(x) = try_parse("42") {
+      let _ = fmt.Print(f"Parsed: {x}\n");
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func tryParse(s string) lisette.Result[int, string] {
+	if s == "42" {
+		return lisette.MakeResultOk[int, string](42)
+	}
+	return lisette.MakeResultErr[int, string]("not 42")
+}
+
+func test() {
+	subject := tryParse("42")
+	if subject.Tag == lisette.ResultOk {
+		fmt.Printf("Parsed: %d\n", subject.OkVal)
+	}
+}

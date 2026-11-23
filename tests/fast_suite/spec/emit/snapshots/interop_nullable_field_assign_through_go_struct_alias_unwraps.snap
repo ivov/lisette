@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:flag"
+  
+  type MyFlag = flag.Flag
+  
+  fn main() {
+    let mut f: MyFlag = flag.Flag { .. }
+    f.Value = None
+  }
+---
+package main
+
+import "flag"
+
+type MyFlag = flag.Flag
+
+func main() {
+	f := flag.Flag{}
+	f.Value = nil
+}

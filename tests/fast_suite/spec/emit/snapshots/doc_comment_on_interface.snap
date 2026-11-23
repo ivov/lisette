@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  /// Types that can be displayed as text.
+  interface Displayable {
+    fn display() -> string;
+  }
+---
+package main
+
+// Types that can be displayed as text.
+type Displayable interface {
+	display() string
+}

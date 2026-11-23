@@ -1,0 +1,58 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  enum ASTNode {
+    Number(int),
+    String(string),
+    Null,
+  }
+  
+  fn visit(node: ASTNode) -> string {
+    match node {
+      ASTNode.Number(n) => f"number:{n}",
+      ASTNode.String(s) => f"string:{s}",
+      ASTNode.Null => "null",
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func MakeASTNodeNumber(arg0 int) ASTNode {
+	return ASTNode{Tag: ASTNodeNumber, Number: arg0}
+}
+
+func MakeASTNodeString(arg0 string) ASTNode {
+	return ASTNode{Tag: ASTNodeString, ASTNodeString_: arg0}
+}
+
+func MakeASTNodeNull() ASTNode {
+	return ASTNode{Tag: ASTNodeNull}
+}
+
+type ASTNodeTag uint8
+
+const (
+	ASTNodeNumber ASTNodeTag = iota
+	ASTNodeString
+	ASTNodeNull
+)
+
+type ASTNode struct {
+	Tag            ASTNodeTag
+	Number         int
+	ASTNodeString_ string
+}
+
+func visit(node ASTNode) string {
+	switch node.Tag {
+	case ASTNodeNumber:
+		return fmt.Sprintf("number:%d", node.Number)
+	case ASTNodeString:
+		return "string:" + node.ASTNodeString_
+	default:
+		return "null"
+	}
+}

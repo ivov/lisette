@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn get() -> Ref<Slice<int>> {
+    let _ = fmt.Println("get")
+    let mut s = [1]
+    &s
+  }
+  
+  fn arg() -> int { let _ = fmt.Println("arg"); 2 }
+  
+  fn main() {
+    get().*.append(arg())
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+func get() *[]int {
+	fmt.Println("get")
+	s := []int{1}
+	return &s
+}
+
+func arg() int {
+	fmt.Println("arg")
+	return 2
+}
+
+func main() {
+	recv := *get()
+	_ = append(slices.Clip(recv), arg())
+}

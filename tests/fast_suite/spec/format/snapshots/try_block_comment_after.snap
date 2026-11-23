@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn foo() {
+    try {}
+    // comment
+  }
+---
+fn foo() {
+  try {}
+  // comment
+}

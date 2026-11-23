@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  import "go:os"
+  import "go:fmt"
+  
+  fn main() { fmt.Println("hello") }
+---
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  fmt.Println("hello")
+}

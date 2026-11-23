@@ -1,0 +1,45 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface Worker {
+    fn range() -> int
+  }
+  
+  struct S {
+    value: int,
+  }
+  
+  impl S {
+    fn range(self) -> int { self.value }
+  }
+  
+  fn main() {
+    let s = S { value: 3 }
+    let w: Worker = s
+    fmt.Println(w.range())
+  }
+---
+package main
+
+import "fmt"
+
+type Worker interface {
+	range_() int
+}
+
+type S struct {
+	value int
+}
+
+func (s S) range_() int {
+	return s.value
+}
+
+func main() {
+	s := S{value: 3}
+	var w Worker = s
+	fmt.Println(w.range_())
+}

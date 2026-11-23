@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  import "go:fmt"
+  fn pair(a: int, b: bool) -> string { f"{a} {b}" }
+  fn main() {
+      let values = [1]
+      fmt.Println(pair(values[0], values.contains(3)))
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+func pair(a int, b bool) string {
+	return fmt.Sprintf("%d %t", a, b)
+}
+
+func main() {
+	values := []int{1}
+	fmt.Println(pair(values[0], slices.Contains(values, 3)))
+}

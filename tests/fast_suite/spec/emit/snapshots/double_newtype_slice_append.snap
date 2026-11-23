@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct A(Slice<int>)
+  struct B(A)
+  
+  fn main() {
+    let mut w = B(A([]))
+    w = B(A(w.0.0.append(1)))
+  }
+---
+package main
+
+type A []int
+
+type B A
+
+func main() {
+	w := B(A([]int{}))
+	w = B(A(append(([]int)(A(w)), 1)))
+}

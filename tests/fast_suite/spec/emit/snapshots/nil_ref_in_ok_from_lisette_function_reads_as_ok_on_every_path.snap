@@ -1,0 +1,48 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:cmp"
+  
+  fn get() -> Result<Ref<int>, error> {
+    Ok(cmp.Or<Ref<int>>())
+  }
+  
+  fn is_ok(r: Result<Ref<int>, error>) -> bool {
+    r.is_ok()
+  }
+  
+  fn main() {
+    let stored = get()
+    if !is_ok(stored) { panic("stored result reads as Err") }
+    match get() {
+      Ok(_) => {},
+      Err(_) => panic("matched result reads as Err"),
+    }
+  }
+---
+package main
+
+import (
+	"cmp"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func get() (*int, error) {
+	return cmp.Or[*int](), nil
+}
+
+func isOk(r lisette.Result[*int, error]) bool {
+	return r.IsOk()
+}
+
+func main() {
+	stored := lisette.ResultFromPair[*int](get())
+	if !isOk(stored) {
+		panic("stored result reads as Err")
+	}
+	if _, err := get(); err != nil {
+		panic("matched result reads as Err")
+	}
+}

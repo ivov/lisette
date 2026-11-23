@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut m = Map.new<string, int>()
+    m["0"] = 100
+    let mut i = 0
+    m[f"{i}"] = if true { i += 1; 7 } else { 0 }
+    let _ = m
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	m := make(map[string]int)
+	m["0"] = 100
+	i := 0
+	base := m
+	idx := fmt.Sprint(i)
+	var tmp int
+	if true {
+		i++
+		tmp = 7
+	} else {
+		tmp = 0
+	}
+	base[idx] = tmp
+	_ = m
+}

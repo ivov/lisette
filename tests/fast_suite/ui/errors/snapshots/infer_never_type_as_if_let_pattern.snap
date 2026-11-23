@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Variant not found
+   ╭─[test.lis:5:10]
+ 4 │ fn test(s: Status) {
+ 5 │   if let Never = s {}
+   ·          ──┬──
+   ·            ╰── no variant `Never` on `Status`
+ 6 │ }
+   ╰────
+  help: Available variants for `Status` are `Status.Active` and `Status.Inactive` · code: [resolve.variant_not_found]

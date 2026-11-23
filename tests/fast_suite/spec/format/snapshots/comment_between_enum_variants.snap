@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  enum E {
+    A,
+    // between variants
+    B,
+    C,
+  }
+---
+enum E {
+  A,
+  // between variants
+  B,
+  C,
+}

@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(s: string) -> Result<int, error> {
+    strconv.Atoi(s)
+  }
+  
+  fn process() -> Result<int, error> {
+    let x = 42
+    let x = parse(f"{x}")?
+    Ok(x + 1)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func parse(s string) (int, error) {
+	return strconv.Atoi(s)
+}
+
+func process() (int, error) {
+	x := 42
+	x2, err := parse(fmt.Sprint(x))
+	if err != nil {
+		return 0, err
+	}
+	return x2 + 1, nil
+}

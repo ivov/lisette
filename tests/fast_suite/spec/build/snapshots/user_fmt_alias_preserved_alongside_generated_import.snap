@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	f "fmt"
+)
+
+type Thing struct {
+	X int
+}
+
+func (t Thing) String() string {
+	return fmt.Sprintf("Thing { x: %v }", t.X)
+}
+
+func (t Thing) toString() string {
+	return t.String()
+}
+
+func main() {
+	_ = Thing{X: 1}
+	f.Sprintf("x=%d", 1)
+}

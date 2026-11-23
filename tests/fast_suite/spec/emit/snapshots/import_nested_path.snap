@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "internal/api"
+  import "internal/handlers"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Nested path imports")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	fmt.Print("Nested path imports")
+}

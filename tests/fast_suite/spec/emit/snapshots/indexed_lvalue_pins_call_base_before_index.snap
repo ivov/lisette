@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut xs = [10, 20]
+    let mut i = 0
+    let make = || -> mut Slice<int> { i += 1; xs }
+    make()[i] = 99
+    let _ = xs
+  }
+---
+package main
+
+func main() {
+	xs := []int{10, 20}
+	i := 0
+	make := func() []int {
+		i++
+		return xs
+	}
+	base := make()
+	base[i] = 99
+	_ = xs
+}

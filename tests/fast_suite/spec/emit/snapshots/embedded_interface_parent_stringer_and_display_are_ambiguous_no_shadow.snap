@@ -1,0 +1,52 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct D { pub x: int }
+  
+  interface Base {
+    fn string() -> string
+  }
+  
+  interface I {
+    embed Base
+    fn area() -> int
+  }
+  
+  struct C {
+    embed D,
+    embed I,
+    pub n: int,
+  }
+---
+package main
+
+import "fmt"
+
+type D struct {
+	X int
+}
+
+func (d D) String() string {
+	return fmt.Sprintf("D { x: %v }", d.X)
+}
+
+func (d D) toString() string {
+	return d.String()
+}
+
+type Base interface {
+	String() string
+}
+
+type I interface {
+	Base
+	area() int
+}
+
+type C struct {
+	D
+	I
+	N int
+}

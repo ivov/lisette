@@ -1,0 +1,47 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn five(xs: Slice<int>) -> int {
+    if let Some(x) = xs.find(|n| n > 1) {
+      fmt.Println(x)
+    }
+    if let Some(x) = xs.find(|n| n > 2) {
+      fmt.Println(x)
+    }
+    0
+  }
+---
+package main
+
+import "fmt"
+
+func five(xs []int) int {
+	var x int
+	found := false
+	for _, n := range xs {
+		if n > 1 {
+			x = n
+			found = true
+			break
+		}
+	}
+	if found {
+		fmt.Println(x)
+	}
+	var x2 int
+	found2 := false
+	for _, n := range xs {
+		if n > 2 {
+			x2 = n
+			found2 = true
+			break
+		}
+	}
+	if found2 {
+		fmt.Println(x2)
+	}
+	return 0
+}

@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Conf { name: string, count: int, on: bool }
+  
+  fn test() -> Conf {
+    Conf { name: "x", .. }
+  }
+---
+package main
+
+type Conf struct {
+	name  string
+	count int
+	on    bool
+}
+
+func test() Conf {
+	return Conf{name: "x"}
+}

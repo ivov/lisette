@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Greetable {
+    fn greet() -> string;
+    fn name() -> string;
+    fn reset();
+  }
+---
+package main
+
+type Greetable interface {
+	greet() string
+	name() string
+	reset()
+}

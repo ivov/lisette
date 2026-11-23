@@ -1,0 +1,48 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn risky(n: int) -> Result<int, string> {
+    if n > 0 { Ok(n) } else { Err("bad") }
+  }
+  
+  fn run() -> Result<int, string> {
+    try {
+      let a = risky(1)?
+      let b = risky(2)?
+      a + b
+    }
+  }
+  
+  fn main() {
+    let _ = run()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func risky(n int) lisette.Result[int, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[int, string](n)
+	}
+	return lisette.MakeResultErr[int, string]("bad")
+}
+
+func run() lisette.Result[int, string] {
+	check := risky(1)
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	a := check.OkVal
+	check2 := risky(2)
+	if check2.Tag != lisette.ResultOk {
+		return check2
+	}
+	b := check2.OkVal
+	return lisette.MakeResultOk[int, string](a + b)
+}
+
+func main() {
+	run()
+}

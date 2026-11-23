@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Missing call parentheses
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let m = Map.new<string, (int, int)>
+   ·           ─────────────┬─────────────
+   ·                        ╰── expected `()` after type arguments
+ 4 │ }
+   ╰────
+  help: Add parentheses to call it: `Map.new<string, (int, int)>()` · code: [parse.call_missing_parens]

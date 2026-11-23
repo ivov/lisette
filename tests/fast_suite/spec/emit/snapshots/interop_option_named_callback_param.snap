@@ -1,0 +1,72 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/lib"
+  import "go:errors"
+  import "go:strconv"
+  
+  fn lookup(path: string) -> Result<string, error> {
+    if path == "" {
+      return Err(errors.New("empty"))
+    }
+    Ok(path)
+  }
+  
+  fn find(key: string) -> Option<Ref<lib.Item>> {
+    if key == "" {
+      return None
+    }
+    Some(&lib.Item { Name: key })
+  }
+  
+  fn split(s: string) -> (int, string) {
+    (s.length(), s)
+  }
+  
+  fn main() {
+    let _ = lib.UseLookup(Some(lookup))
+    let _ = lib.UseLookup(Some(|p| Ok(p)))
+    let _ = lib.UseLookup(None)
+    let _ = lib.UseFind(Some(find))
+    let _ = lib.UseSplit(Some(split))
+    let _ = lib.UseAtoi(Some(strconv.Atoi))
+  }
+---
+package main
+
+import (
+	"errors"
+	"strconv"
+
+	"example.com/lib"
+)
+
+func lookup(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("empty")
+	}
+	return path, nil
+}
+
+func find(key string) *lib.Item {
+	if key == "" {
+		return nil
+	}
+	return &lib.Item{Name: key}
+}
+
+func split(s string) (int, string) {
+	return len(s), s
+}
+
+func main() {
+	lib.UseLookup(lookup)
+	lib.UseLookup(func(p string) (string, error) {
+		return p, nil
+	})
+	lib.UseLookup(nil)
+	lib.UseFind(find)
+	lib.UseSplit(split)
+	lib.UseAtoi(strconv.Atoi)
+}

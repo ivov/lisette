@@ -1,0 +1,53 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Counter { n: int }
+  
+  impl Counter {
+    fn get(self) -> int { self.n }
+    fn add(self: mut Ref<Counter>, k: int) { self.n += k }
+  }
+  
+  fn main() {
+    let m = Map.from([("a", 1)])
+    let x = Map.get(m, "a")
+    let y = Option.unwrap_or(x, 0)
+    let mut c = Counter { n: 1 }
+    Counter.add(&c, 2)
+    let r = &c
+    let z = Counter.get(r.*)
+    fmt.Println(y, z, Counter.get(c))
+  }
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	n int
+}
+
+func (c Counter) get() int {
+	return c.n
+}
+
+func (c *Counter) add(k int) {
+	c.n += k
+}
+
+func main() {
+	m := map[string]int{"a": 1}
+	x, ok := m["a"]
+	y := x
+	if !ok {
+		y = 0
+	}
+	c := Counter{n: 1}
+	c.add(2)
+	r := &c
+	z := r.get()
+	fmt.Println(y, z, c.get())
+}

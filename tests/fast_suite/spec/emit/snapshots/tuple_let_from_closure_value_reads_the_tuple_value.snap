@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let pair = |n: int| (n, n + 1)
+    let (a, b) = pair(3)
+    fmt.Println(a, b)
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	pair := func(n int) lisette.Tuple2[int, int] {
+		return lisette.MakeTuple2[int, int](n, n+1)
+	}
+	tmp := pair(3)
+	a := tmp.First
+	b := tmp.Second
+	fmt.Println(a, b)
+}

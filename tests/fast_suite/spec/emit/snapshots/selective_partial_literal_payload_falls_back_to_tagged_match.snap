@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/partial.rs
+description: |
+  
+  import "go:os"
+  
+  fn write(file: Ref<os.File>) {
+    match file.Write(['h', 'i']) {
+      Partial.Ok(0) => panic("wrote nothing"),
+      _ => {},
+    }
+  }
+---
+package main
+
+import (
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func write(file *os.File) {
+	ret, ret2 := file.Write([]byte{'h', 'i'})
+	var result lisette.Partial[int, error]
+	if ret2 != nil {
+		result = lisette.MakePartialBoth[int, error](ret, ret2)
+	} else {
+		result = lisette.MakePartialOk[int, error](ret)
+	}
+	if result.Tag == lisette.PartialOk {
+		if result.OkVal == 0 {
+			panic("wrote nothing")
+		}
+	}
+}

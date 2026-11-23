@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/emit/zero.rs
+description: |
+  
+  fn f() -> Ref<()> {
+    let p = &zero<()>()
+    p
+  }
+---
+package main
+
+func f() *struct{} {
+	ref := struct{}{}
+	p := &ref
+	return p
+}

@@ -1,0 +1,79 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:encoding/pem"
+  
+  fn apply(f: fn(Slice<byte>) -> (Option<Ref<pem.Block>>, Slice<byte>), data: Slice<byte>) -> int {
+    let (ret, ret2) = f(data)
+    if ret.is_some() { panic("unexpected PEM") }
+    let read = || ret2.length()
+    read()
+  }
+  
+  fn main() {
+    let cb = 11
+    let f = || {
+      let cb = apply(pem.Decode, [65, 66])
+      let ch = Channel.buffered<int>(1)
+      ch.send(cb)
+      select {
+        let Some(ret) = ch.receive() => { let read = || ret; read() },
+        _ => 0,
+      }
+    }
+    if f() != 2 || cb != 11 { panic("tuple callback capture") }
+  }
+---
+package main
+
+import (
+	"encoding/pem"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func apply(f func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte], data []byte) int {
+	tmp := f(data)
+	ret := tmp.First
+	ret2 := tmp.Second
+	if ret.IsSome() {
+		panic("unexpected PEM")
+	}
+	read := func() int {
+		return len(ret2)
+	}
+	return read()
+}
+
+func main() {
+	cb := 11
+	f := func() int {
+		cb2 := apply(func(arg0 []byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte] {
+			ret2, ret3 := pem.Decode(arg0)
+			option := lisette.OptionFromNilable[*pem.Block](ret2, ret2 == nil)
+			tup := lisette.MakeTuple2(option, ret3)
+			return tup
+		}, []byte{65, 66})
+		ch := make(chan int, 1)
+		lisette.ChannelSend(ch, cb2)
+		for {
+			select {
+			case ret, ok := <-ch:
+				if ok {
+					read := func() int {
+						return ret
+					}
+					return read()
+				}
+				ch = nil
+				continue
+			default:
+				return 0
+			}
+		}
+	}
+	if f() != 2 || cb != 11 {
+		panic("tuple callback capture")
+	}
+}

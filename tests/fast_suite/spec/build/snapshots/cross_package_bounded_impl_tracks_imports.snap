@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === containers/lib.go ===
+package containers
+
+import "github.com/user/myproject/ifaces"
+
+type Box[T ifaces.Showable] struct {
+	Value T
+}
+
+func (b Box[T]) Display() string {
+	return "Box(" + b.Value.Show() + ")"
+}
+
+
+// === ifaces/lib.go ===
+package ifaces
+
+type Showable interface {
+	Show() string
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/containers"
+)
+
+type Item struct {
+	name string
+}
+
+func (i Item) Show() string {
+	return i.name
+}
+
+func main() {
+	b := containers.Box[Item]{Value: Item{name: "hello"}}
+	fmt.Println(b.Display())
+}

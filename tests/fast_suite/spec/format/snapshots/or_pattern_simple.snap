@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match x { 1 | 2 | 3 => \"small\", _ => \"other\" } }"
+---
+fn test() {
+  match x {
+    1 | 2 | 3 => "small",
+    _ => "other",
+  }
+}

@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() -> string {
+    let s = "x"
+    s
+  }
+---
+package main
+
+func test() string {
+	s := "x"
+	return s
+}

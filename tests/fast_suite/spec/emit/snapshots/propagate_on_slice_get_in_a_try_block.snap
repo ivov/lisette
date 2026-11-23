@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn main() {
+    let xs = [1, 2]
+    let r = try {
+      let x = xs.get(0)?
+      x + 1
+    }
+    let _ = r
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	xs := []int{1, 2}
+	r := func() lisette.Option[int] {
+		if len(xs) == 0 {
+			return lisette.MakeOptionNone[int]()
+		}
+		x := xs[0]
+		return lisette.MakeOptionSome[int](x + 1)
+	}()
+	_ = r
+}

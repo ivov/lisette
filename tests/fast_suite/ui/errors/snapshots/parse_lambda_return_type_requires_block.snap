@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Lambda return type without a block
+   ╭─[test.lis:3:27]
+ 2 │ fn test() {
+ 3 │   let f = |x: int| -> int x * 2;
+   ·                           ┬
+   ·                           ╰── needs a block body
+ 4 │ }
+   ╰────
+  help: A lambda with a return type requires a block body · code: [parse.lambda_return_type_without_block]

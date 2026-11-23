@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let ch = Channel.new<int>();
+    let (tx, rx) = ch.split();
+    tx.send(42);
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	ch := make(chan int)
+	var tx chan<- int = ch
+	lisette.SenderSend(tx, 42)
+}

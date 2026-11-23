@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid conversion
+   ╭─[test.lis:3:3]
+ 2 │ fn test() -> byte {
+ 3 │   "A" as byte
+   ·   ─────┬─────
+   ·        ╰── cannot convert `string` to `byte`
+ 4 │ }
+   ╰────
+  help: Use `strconv.Atoi()` to parse. Strings cannot be converted to numbers and require explicit parsing · code: [infer.invalid_conversion]

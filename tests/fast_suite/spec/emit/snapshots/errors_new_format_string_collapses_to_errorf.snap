@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  import "go:errors"
+  
+  fn fail(line: string) -> error {
+    errors.New(f"malformed line: {line}")
+  }
+  
+  fn percent(rate: int) -> error {
+    errors.New(f"{rate}% failed")
+  }
+  
+  fn main() {
+    let _ = fail("x")
+    let _ = percent(3)
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func fail(line string) error {
+	return errors.New("malformed line: " + line)
+}
+
+func percent(rate int) error {
+	return fmt.Errorf("%d%% failed", rate)
+}
+
+func main() {
+	fail("x")
+	percent(3)
+}

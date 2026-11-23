@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn run(x: int, y: Option<Ref<int>>) -> (int, Option<Ref<int>>) {
+    (x, y)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func run(x int, y lisette.Option[*int]) (int, *int) {
+	var unwrap *int
+	if y.Tag == lisette.OptionSome {
+		unwrap = y.SomeVal
+	}
+	return x, unwrap
+}

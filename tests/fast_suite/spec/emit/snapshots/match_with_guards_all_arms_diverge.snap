@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn main() {
+    match 0 {
+      _ if true => {return},
+      _ => {panic("")}
+    }
+  }
+---
+package main
+
+func main() {
+	if true {
+		return
+	}
+	panic("")
+}

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn process(v: int) {}
+  
+  fn test() {
+    let ch = Channel.new<int>();
+    for v in ch {
+      process(v);
+    }
+  }
+---
+package main
+
+func process(_ int) {}
+
+func test() {
+	ch := make(chan int)
+	for v := range ch {
+		process(v)
+	}
+}

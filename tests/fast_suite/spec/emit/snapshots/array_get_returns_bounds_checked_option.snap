@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn at(a: Array<int, 3>, i: int) -> Option<int> {
+    a.get(i)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func at(a [3]int, i int) (int, bool) {
+	v := lisette.SliceGet(a[:], i)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return 0, false
+}

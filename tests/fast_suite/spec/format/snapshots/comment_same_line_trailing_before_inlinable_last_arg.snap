@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f() {
+    foo(a, b, // trailing
+    |x| { x + 1 })
+  }
+---
+fn f() {
+  foo(
+    a,
+    b, // trailing
+    |x| {
+      x + 1
+    },
+  )
+}

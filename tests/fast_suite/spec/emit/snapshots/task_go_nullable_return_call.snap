@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:html/template"
+  
+  fn main() {
+    let t = template.New("x")
+    task t.Lookup("x")
+  }
+---
+package main
+
+import "html/template"
+
+func main() {
+	t := template.New("x")
+	go t.Lookup("x")
+}

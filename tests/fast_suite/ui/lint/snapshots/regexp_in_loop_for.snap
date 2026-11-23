@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Regexp recompiled on every iteration
+   ╭─[test.lis:6:32]
+ 5 │   for s in ["a", "b"] {
+ 6 │     let _ = regexp.MatchString("[0-9]+", s)
+   ·                                ────┬───
+   ·                                    ╰── recompiled
+ 7 │   }
+   ╰────
+  help: Compile the pattern once outside the loop and reuse it: `regexp.MustCompile`, or `regexp.Compile` to keep the error · code: [lint.regexp_in_loop]

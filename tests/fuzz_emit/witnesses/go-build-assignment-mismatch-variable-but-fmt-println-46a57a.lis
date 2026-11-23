@@ -1,0 +1,18 @@
+
+import "go:fmt"
+
+struct Flag(bool)
+struct Ticket(int)
+type FlagAlias = Flag
+type TicketAlias = Ticket
+type Deep = TicketAlias
+
+fn read(x: FlagAlias) -> bool { x.0 }
+fn deep(t: Deep) -> int { t.0 }
+
+fn main() {
+  let f: FlagAlias = Flag(true)
+  let t: TicketAlias = Ticket(3)
+  let o: Option<FlagAlias> = Some(Flag(false))
+  fmt.Println(f.0, fmt.Println, read(f), deep(t), o.unwrap_or(Flag(true)).0)
+}

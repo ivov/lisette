@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"container/list"
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	l := list.New()
+	l.PushBack(42)
+	raw := l.Front()
+	front := lisette.OptionFromNilable[*list.Element](raw, raw == nil)
+	fmt.Print(front.IsSome())
+}

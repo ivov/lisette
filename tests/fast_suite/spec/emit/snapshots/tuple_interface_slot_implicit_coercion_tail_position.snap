@@ -1,0 +1,45 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:example.com/tea"
+  
+  struct Model {}
+  
+  impl Model {
+    fn Init(self) -> Option<tea.Cmd> {
+      None
+    }
+    fn Update(self, msg: tea.Msg) -> (tea.Model, Option<tea.Cmd>) {
+      (self, Some(tea.Quit))
+    }
+    fn View(self) -> string {
+      ""
+    }
+  }
+  
+  fn main() {
+    let _ = tea.NewProgram(Model {} as tea.Model)
+  }
+---
+package main
+
+import "example.com/tea"
+
+type Model struct{}
+
+func (m Model) Init() tea.Cmd {
+	return nil
+}
+
+func (m Model) Update(_ tea.Msg) (tea.Model, tea.Cmd) {
+	return m, tea.Quit
+}
+
+func (m Model) View() string {
+	return ""
+}
+
+func main() {
+	tea.NewProgram(Model{})
+}

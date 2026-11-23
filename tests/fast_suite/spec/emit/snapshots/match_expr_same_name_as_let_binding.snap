@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn extract(opt: Option<int>) -> int {
+    let x = match opt {
+      Some(x) => x,
+      None => 0,
+    }
+    x
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func extract(opt lisette.Option[int]) int {
+	var x int
+	if opt.Tag == lisette.OptionSome {
+		x = opt.SomeVal
+	} else {
+		x = 0
+	}
+	return x
+}

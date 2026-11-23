@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn mixed_params(a: float64, b: int, c: float64) -> float64 {
+    a + c
+  }
+  
+  fn test() -> float64 {
+    mixed_params(1, 2, 3)
+  }
+---
+package main
+
+func mixedParams(a float64, _ int, c float64) float64 {
+	return a + c
+}
+
+func test() float64 {
+	return mixedParams(1, 2, 3)
+}

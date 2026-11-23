@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn first_even(nums: Slice<int>) -> int {
+    match nums.find(|n| n % 2 == 0) {
+      Some(n) => n,
+      None => -1,
+    }
+  }
+---
+package main
+
+func firstEven(nums []int) int {
+	var n int
+	found := false
+	for _, n2 := range nums {
+		if n2%2 == 0 {
+			n = n2
+			found = true
+			break
+		}
+	}
+	if found {
+		return n
+	}
+	return -1
+}

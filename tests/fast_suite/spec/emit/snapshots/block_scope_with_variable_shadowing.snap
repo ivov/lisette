@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> string {
+    let x = "outer"
+    {
+      let x = "inner"
+      let _ = x
+    }
+    x
+  }
+---
+package main
+
+func test() string {
+	x := "outer"
+	{
+	}
+	return x
+}

@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test(c: complex128) -> float64 {
+    (imaginary)(c)
+  }
+---
+package main
+
+func test(c complex128) float64 {
+	return imag(c)
+}

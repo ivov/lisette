@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Variant not found
+   ╭─[main.lis:7:5]
+ 6 │   match s {
+ 7 │     Shape.Circle(r) => {}
+   ·     ───────┬───────
+   ·            ╰── the enum is `shapes.Shape`
+ 8 │   }
+   ╰────
+  help: Use `shapes.Shape.Circle`, or just `Circle` · code: [resolve.variant_not_found]

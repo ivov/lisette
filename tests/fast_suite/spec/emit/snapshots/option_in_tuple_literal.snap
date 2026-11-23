@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn maybe_int(x: int) -> Option<int> {
+    if x > 0 { Some(x) } else { None }
+  }
+  
+  fn maybe_string(s: string) -> Option<string> {
+    if s != "" { Some(s) } else { None }
+  }
+  
+  fn test() {
+    let pair = (maybe_int(5), maybe_string("hello"));
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybeInt(x int) (int, bool) {
+	if x > 0 {
+		return x, true
+	}
+	return 0, false
+}
+
+func maybeString(s string) (string, bool) {
+	if s != "" {
+		return s, true
+	}
+	return "", false
+}
+
+func test() {
+	_ = lisette.MakeTuple2[lisette.Option[int], lisette.Option[string]](lisette.OptionFromCommaOk[int](maybeInt(5)), lisette.OptionFromCommaOk[string](maybeString("hello")))
+}

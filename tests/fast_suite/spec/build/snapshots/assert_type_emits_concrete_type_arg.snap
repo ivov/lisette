@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/store"
+)
+
+func main() {
+	raw := store.GetValue("count")
+	if n, ok := raw.(int); ok {
+		fmt.Print(n)
+	} else {
+		fmt.Print("not an int")
+	}
+}
+
+
+// === store/store.go ===
+package store
+
+func GetValue(key string) any {
+	return key
+}

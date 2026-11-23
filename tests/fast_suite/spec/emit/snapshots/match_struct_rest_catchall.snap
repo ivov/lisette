@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(p: Point) -> int {
+    match p {
+      Point { .. } => 1,
+    }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test(p Point) int {
+	_ = p
+	return 1
+}

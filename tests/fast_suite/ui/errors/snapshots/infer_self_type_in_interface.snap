@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Use of `Self` type
+   ╭─[test.lis:3:21]
+ 2 │ interface Ranked {
+ 3 │   fn compare(other: Self) -> int
+   ·                     ──┬─
+   ·                       ╰── disallowed
+ 4 │ }
+   ╰────
+  help: Use a type parameter, e.g. `interface Ranked<T> { fn compare(other: T) -> int }`. `Self` is only allowed inside an `impl` block · code: [resolve.self_type_not_supported]

@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn do_thing() -> Result<int, string> { Ok(1) }
+  
+  fn test() {
+    let result: Result<int, string> = try {
+      do_thing()?
+    };
+    let _ = result;
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func doThing() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func test() {
+	result := func() lisette.Result[int, string] {
+		check := doThing()
+		if check.Tag != lisette.ResultOk {
+			return check
+		}
+		return lisette.MakeResultOk[int, string](check.OkVal)
+	}()
+	_ = result
+}

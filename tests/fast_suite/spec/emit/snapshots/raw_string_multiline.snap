@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  fn test() -> string {
+    r"
+  SELECT foo FROM bar
+  WHERE id = 100
+  "
+  }
+---
+package main
+
+func test() string {
+	return `
+SELECT foo FROM bar
+WHERE id = 100
+`
+}

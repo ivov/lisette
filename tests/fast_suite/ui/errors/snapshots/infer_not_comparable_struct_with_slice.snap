@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid comparison
+    ╭─[test.lis:9:16]
+  8 │   let b = Foo { items: [3, 4] };
+  9 │   let result = a == b;
+    ·                ┬
+    ·                ╰── `Foo` cannot be compared with `==`
+ 10 │ }
+    ╰────
+  help: Mark `Foo` with `#[equality]` to compare it with `.equals()` · code: [infer.type_mismatch]

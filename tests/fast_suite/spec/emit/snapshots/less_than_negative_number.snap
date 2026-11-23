@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> bool {
+    let n = 5;
+    n < -3
+  }
+---
+package main
+
+func test() bool {
+	n := 5
+	return n < -3
+}

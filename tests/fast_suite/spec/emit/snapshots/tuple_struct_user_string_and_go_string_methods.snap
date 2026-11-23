@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct UserId(int)
+  
+  impl UserId {
+    pub fn string(self) -> string {
+      "custom display"
+    }
+  
+    pub fn goString(self) -> string {
+      "custom debug"
+    }
+  }
+  
+  fn main() {
+    let u = UserId(1)
+    let _ = u
+  }
+---
+package main
+
+type UserId int
+
+func (u UserId) String() string {
+	return "custom display"
+}
+
+func (u UserId) GoString() string {
+	return "custom debug"
+}
+
+func main() {
+	u := UserId(1)
+	_ = u
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot convert a float constant with a fraction to an integer
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let _ = F as int
+   ·           ────┬───
+   ·               ╰── Go rejects a constant conversion that loses the fraction
+ 6 │ }
+   ╰────
+  help: Bind to a variable first: `let f = F; f as int` · code: [infer.float_literal_int_conversion]

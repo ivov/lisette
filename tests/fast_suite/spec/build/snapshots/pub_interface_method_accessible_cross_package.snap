@@ -1,0 +1,32 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/types"
+
+func greetAnyone(g types.Greetable) string {
+	return g.Greet()
+}
+
+func main() {
+	p := types.Person{Name: "Alice"}
+	greetAnyone(p)
+}
+
+
+// === types/lib.go ===
+package types
+
+type Greetable interface {
+	Greet() string
+}
+
+type Person struct {
+	Name string
+}
+
+func (p Person) Greet() string {
+	return "Hello, I'm " + p.Name
+}

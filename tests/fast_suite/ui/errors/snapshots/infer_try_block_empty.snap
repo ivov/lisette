@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Empty `try` block
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let result = try {};
+   ·                ─┬─
+   ·                 ╰── no expressions to propagate from
+ 4 │ }
+   ╰────
+  help: Ensure the `try` block contains at least one expression · code: [infer.try_block_empty]

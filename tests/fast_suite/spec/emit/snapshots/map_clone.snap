@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(m: Map<string, int>) -> Map<string, int> {
+    m.clone()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(m map[string]int) map[string]int {
+	return lisette.MapClone(m)
+}

@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Box<T: Comparable> {
+    value: T,
+  }
+  
+  impl<T: Comparable> Box<T> {
+    fn make_map(self) -> Map<T, int> {
+      Map.new<T, int>()
+    }
+  }
+  
+  fn main() {
+    let b = Box { value: "a" }
+    let _ = b.make_map()
+  }
+---
+package main
+
+type Box[T comparable] struct {
+	value T
+}
+
+func (b Box[T]) makeMap() map[T]int {
+	return make(map[T]int)
+}
+
+func main() {
+	b := Box[string]{value: "a"}
+	b.makeMap()
+}

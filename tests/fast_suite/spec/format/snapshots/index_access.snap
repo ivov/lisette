@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { arr[0] }"
+---
+fn test() {
+  arr[0]
+}

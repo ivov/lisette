@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let _ = if true { 1 } else { 2 }
+    let tmp2 = 3
+    let _ = tmp2
+  }
+---
+package main
+
+func main() {
+	var tmp int
+	if true {
+		tmp = 1
+	} else {
+		tmp = 2
+	}
+	_ = tmp
+}

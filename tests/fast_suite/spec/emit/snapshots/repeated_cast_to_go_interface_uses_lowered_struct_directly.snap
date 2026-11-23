@@ -1,0 +1,51 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:io"
+  
+  struct Doubler {}
+  
+  impl Doubler {
+    fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
+      Partial.Ok(0)
+    }
+  }
+  
+  fn consume_a(r: io.Reader) {
+    let _ = r
+  }
+  
+  fn consume_b(r: io.Reader) {
+    let _ = r
+  }
+  
+  fn main() {
+    let d = Doubler {}
+    consume_a(d as io.Reader)
+    consume_b(d as io.Reader)
+  }
+---
+package main
+
+import "io"
+
+type Doubler struct{}
+
+func (d Doubler) Read(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func consumeA(r io.Reader) {
+	_ = r
+}
+
+func consumeB(r io.Reader) {
+	_ = r
+}
+
+func main() {
+	d := Doubler{}
+	consumeA(d)
+	consumeB(d)
+}

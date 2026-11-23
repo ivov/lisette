@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() -> Slice<byte> {
+    "hello" as Slice<byte>
+  }
+---
+package main
+
+func test() []byte {
+	return ([]byte)("hello")
+}

@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+func show(fmt_ int) string {
+	return fmt.Sprint(fmt_)
+}
+
+func main() {
+	ok := strings.Contains("abc", "a")
+	_ = ok
+	show(2)
+}

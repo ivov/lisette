@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Tautological comparison
+   ╭─[test.lis:5:11]
+ 4 │   let n: Id = 3
+ 5 │   let _ = n == n
+   ·           ───┬──
+   ·              ╰── comparing to itself
+ 6 │ }
+   ╰────
+  help: This condition is always `true`. Did you mean to compare different values? · code: [lint.self_comparison]

@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import anon "go:example.com/anon"
+  
+  fn annotated() -> int {
+    let x: anon.AnonX = anon.PlainReturn()
+    x.X
+  }
+---
+package main
+
+import "example.com/anon"
+
+func annotated() int {
+	x := anon.PlainReturn()
+	return x.X
+}

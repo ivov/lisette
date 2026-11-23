@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn test() {
+    let x = 1 // trailing comment
+  }
+---
+fn test() {
+  let x = 1 // trailing comment
+}

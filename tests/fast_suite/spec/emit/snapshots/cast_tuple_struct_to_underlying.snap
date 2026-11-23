@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Wrapper(int)
+  
+  fn test() -> int {
+    let w = Wrapper(42)
+    w as int
+  }
+---
+package main
+
+type Wrapper int
+
+func test() int {
+	w := Wrapper(42)
+	return int(w)
+}

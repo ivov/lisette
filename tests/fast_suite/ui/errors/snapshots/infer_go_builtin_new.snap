@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Name not found
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let p = new(int);
+   ·           ─┬─
+   ·            ╰── not a Lisette builtin
+ 4 │ }
+   ╰────
+  help: Use `MyStruct { field: value }` or `MyType.new()`. Lisette has no `new` builtin · code: [resolve.name_not_found]

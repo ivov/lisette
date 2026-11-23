@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"github.com/user/myproject/resolver"
+)
+
+func main() {
+	cb := resolver.Resultant
+	var adapted func(int) lisette.Result[int, resolver.Face]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Result[int, resolver.Face] {
+			ret, ret2 := cb(arg0)
+			if ret2 != nil {
+				return lisette.MakeResultErr[int, resolver.Face](ret2)
+			}
+			return lisette.MakeResultOk[int, resolver.Face](ret)
+		}
+	}
+	rez := resolver.Resolve(42, adapted)
+	_ = rez
+}
+
+
+// === resolver/resolver.go ===
+package resolver
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Face interface {
+}
+
+func Resultant(arg int) (int, Face) {
+	return arg, nil
+}
+
+func Resolve[T any, R any, E any](a T, f func(T) lisette.Result[R, E]) lisette.Result[R, E] {
+	return f(a)
+}

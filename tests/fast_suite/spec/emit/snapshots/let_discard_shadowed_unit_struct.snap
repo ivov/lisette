@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Blank {}
+  
+  fn test() {
+    let _ = Blank {}
+  }
+---
+package main
+
+type Blank struct{}
+
+func test() {
+	_ = Blank{}
+}

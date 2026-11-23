@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let imag_part = 4.0
+    let c = 3.0 + imag_part * 1.0i
+    fmt.Println(f"complex: {c}")
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	imagPart := 4.0
+	c := 3.0 + complex(0, imagPart*1)
+	fmt.Printf("complex: %v\n", c)
+}

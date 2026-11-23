@@ -1,0 +1,193 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  fn test(ch: Sender<int>) {
+    select {
+      ch.send(42) => print("sent"),
+    }
+  }
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "ch",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 2,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Sender",
+                        params: [
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 20,
+                                    byte_length: 3,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 11,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Var {
+            id: uninferred,
+        },
+        visibility: Private,
+        body: Definition(
+            Block {
+                items: [
+                    Select {
+                        arms: [
+                            Send {
+                                send_expression: Call {
+                                    expression: DotAccess {
+                                        expression: Identifier {
+                                            value: "ch",
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 43,
+                                                byte_length: 2,
+                                            },
+                                            resolution: Unresolved,
+                                        },
+                                        member: "send",
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 43,
+                                            byte_length: 7,
+                                        },
+                                        resolution: Unresolved,
+                                    },
+                                    args: [
+                                        Literal {
+                                            literal: Integer {
+                                                value: 42,
+                                                text: None,
+                                            },
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 51,
+                                                byte_length: 2,
+                                            },
+                                        },
+                                    ],
+                                    spread: None,
+                                    type_arguments: None,
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 43,
+                                        byte_length: 11,
+                                    },
+                                },
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "print",
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 58,
+                                            byte_length: 5,
+                                        },
+                                        resolution: Unresolved,
+                                    },
+                                    args: [
+                                        Literal {
+                                            literal: String {
+                                                value: "sent",
+                                                raw: false,
+                                            },
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 64,
+                                                byte_length: 6,
+                                            },
+                                        },
+                                    ],
+                                    spread: None,
+                                    type_arguments: None,
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 58,
+                                        byte_length: 13,
+                                    },
+                                },
+                            },
+                        ],
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 30,
+                            byte_length: 46,
+                        },
+                    },
+                ],
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 26,
+                    byte_length: 52,
+                },
+            },
+        ),
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 77,
+        },
+    },
+]

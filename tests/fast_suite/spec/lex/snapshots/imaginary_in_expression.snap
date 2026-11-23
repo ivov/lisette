@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: 3 + 4i
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Integer,
+            text: "3",
+            byte_offset: 0,
+            byte_length: 1,
+        },
+        Token {
+            kind: Plus,
+            text: "+",
+            byte_offset: 2,
+            byte_length: 1,
+        },
+        Token {
+            kind: Imaginary,
+            text: "4i",
+            byte_offset: 4,
+            byte_length: 2,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 6,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

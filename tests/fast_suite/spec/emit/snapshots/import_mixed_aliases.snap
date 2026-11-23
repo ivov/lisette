@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import mystrings "go:strings"
+  import _ "go:os"
+  import "go:fmt"
+  
+  fn test() {
+    let _ = fmt.Print("Mixed alias imports");
+  }
+---
+package main
+
+import (
+	"fmt"
+	_ "os"
+)
+
+func test() {
+	fmt.Print("Mixed alias imports")
+}

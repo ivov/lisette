@@ -1,0 +1,36 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn parse(raw: string, attempt: int) -> Result<int, error> {
+    let n = strconv.Atoi(raw).wrap_err(f"attempt {attempt} at 100% of {raw}")?
+    Ok(n)
+  }
+  
+  fn main() {
+    fmt.Println(parse("1", 2))
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func parse(raw string, attempt int) (int, error) {
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("attempt %d at 100%% of %s: %w", attempt, raw, err)
+	}
+	return n, nil
+}
+
+func main() {
+	fmt.Println(lisette.ResultFromPair[int](parse("1", 2)))
+}

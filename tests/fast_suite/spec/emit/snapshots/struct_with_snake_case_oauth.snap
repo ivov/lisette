@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[json(snake_case)]
+  struct Auth {
+    OAuth2Token: string,
+  }
+---
+package main
+
+type Auth struct {
+	OAuth2Token string `json:"oauth2_token"`
+}

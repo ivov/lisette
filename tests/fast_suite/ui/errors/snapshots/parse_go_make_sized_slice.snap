@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unsupported `make` call
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let buffer = make([]byte, 1024)
+   ·                ──┬─
+   ·                  ╰── Lisette has no `make` builtin
+ 4 │ }
+   ╰────
+  help: Use `Slice.make<T>(n)` for a zero-filled slice · code: [parse.go_make_builtin]

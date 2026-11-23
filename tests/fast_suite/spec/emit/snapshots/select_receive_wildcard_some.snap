@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let ch = Channel.new<int>();
+    select {
+      let Some(_) = ch.receive() => {},
+      _ => {},
+    }
+  }
+---
+package main
+
+func test() {
+	ch := make(chan int)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				ch = nil
+				continue
+			}
+		default:
+		}
+		break
+	}
+}

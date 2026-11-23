@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn xs() -> Slice<int> { [1, 2] }
+  fn idx() -> int { 1 }
+  
+  fn run() -> int {
+    let Some(v) = xs().get(idx()) else { return 0 }
+    v
+  }
+---
+package main
+
+func xs() []int {
+	return []int{1, 2}
+}
+
+func idx() int {
+	return 1
+}
+
+func run() int {
+	recv := xs()
+	idx2 := idx()
+	if idx2 < 0 || idx2 >= len(recv) {
+		return 0
+	}
+	v := recv[idx2]
+	return v
+}

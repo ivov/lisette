@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test(pts: Slice<Point>) -> int {
+    match pts {
+      [Point { x, .. } as p, ..] => p.x,
+      _ => 0,
+    }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test(pts []Point) int {
+	if len(pts) >= 1 {
+		return pts[0].x
+	}
+	return 0
+}

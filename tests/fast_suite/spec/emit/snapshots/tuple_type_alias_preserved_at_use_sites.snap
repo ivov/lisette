@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type Pair = (int, int)
+  
+  struct Holder { p: Pair }
+  
+  fn use_it(h: Holder, x: Pair) -> int { h.p.0 + x.1 }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Pair = lisette.Tuple2[int, int]
+
+type Holder struct {
+	p Pair
+}
+
+func useIt(h Holder, x Pair) int {
+	return h.p.First + x.Second
+}

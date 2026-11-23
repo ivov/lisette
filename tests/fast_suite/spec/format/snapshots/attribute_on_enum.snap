@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  #[json]
+  enum Shape { Circle, Square }
+---
+#[json]
+enum Shape {
+  Circle,
+  Square,
+}

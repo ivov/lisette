@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn make_a() -> int { 0 }
+  fn make_b() -> int { 1 }
+  
+  fn main() {
+    let mut s = [0, 0, 0]
+    s[make_a()] = if true { make_b() } else { 0 }
+  }
+---
+package main
+
+func makeA() int {
+	return 0
+}
+
+func makeB() int {
+	return 1
+}
+
+func main() {
+	s := []int{0, 0, 0}
+	base := s
+	idx := makeA()
+	var tmp int
+	if true {
+		tmp = makeB()
+	} else {
+		tmp = 0
+	}
+	base[idx] = tmp
+}

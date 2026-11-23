@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Slice<Unknown> {
+    let mut s = Slice.new<Unknown>()
+    s = { s.append("Lilian") }
+    s
+  }
+---
+package main
+
+func test() []any {
+	s := []any{}
+	s = append(s, "Lilian")
+	return s
+}

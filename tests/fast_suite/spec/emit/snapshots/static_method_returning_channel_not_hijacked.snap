@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Foo { ch: Channel<int> }
+  
+  impl Foo {
+    fn new() -> Channel<int> {
+      Channel.new<int>()
+    }
+  }
+  
+  fn test() -> Channel<int> {
+    Foo.new()
+  }
+---
+package main
+
+type Foo struct {
+	ch chan int
+}
+
+func newFoo() chan int {
+	return make(chan int)
+}
+
+func test() chan int {
+	return newFoo()
+}

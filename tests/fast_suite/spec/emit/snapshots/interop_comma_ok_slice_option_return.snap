@@ -1,0 +1,58 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/aws"
+  
+  fn main() {
+    match aws.Fetch() {
+      Some(xs) => {
+        for x in xs {
+          match x {
+            Some(v) => fmt.Println(v),
+            None => fmt.Println("none"),
+          }
+        }
+      },
+      None => fmt.Println("missing"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret, ret2 := aws.Fetch()
+	var option lisette.Option[[]lisette.Option[string]]
+	if ret2 {
+		wrapped := make([]lisette.Option[string], len(ret))
+		for i, v := range ret {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[string](*v)
+			} else {
+				wrapped[i] = lisette.MakeOptionNone[string]()
+			}
+		}
+		option = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped)
+	} else {
+		option = lisette.MakeOptionNone[[]lisette.Option[string]]()
+	}
+	if option.Tag == lisette.OptionSome {
+		for _, x := range option.SomeVal {
+			if x.Tag == lisette.OptionSome {
+				fmt.Println(x.SomeVal)
+			} else {
+				fmt.Println("none")
+			}
+		}
+	} else {
+		fmt.Println("missing")
+	}
+}

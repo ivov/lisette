@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Public type is not exportable
+   ╭─[test.lis:2:15]
+ 1 │ 
+ 2 │ pub interface reader {
+   ·               ───┬──
+   ·                  ╰── `reader` cannot be exported from Go
+ 3 │   fn read() -> int
+   ╰────
+  help: Rename to `Reader`. Public types become exported Go identifiers, which must start with an uppercase letter · code: [infer.pub_type_not_exportable]

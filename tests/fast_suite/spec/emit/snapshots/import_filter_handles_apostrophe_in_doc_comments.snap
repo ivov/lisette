@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/lib"
+  
+  /// Doesn't do much.
+  pub fn first() {
+    fmt.Println(lib.Value)
+  }
+  
+  /// Doesn't do much either.
+  pub fn second() {
+    fmt.Println("done")
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	"example.com/lib"
+)
+
+// Doesn't do much.
+func First() {
+	fmt.Println(lib.Value)
+}
+
+// Doesn't do much either.
+func Second() {
+	fmt.Println("done")
+}

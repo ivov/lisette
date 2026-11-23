@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn run() -> int {
+    let mut xs = [10, 20]
+    let mut i = 0
+    let bump = || -> int { i = 1; 5 }
+    xs[i] += bump()
+    xs[0]
+  }
+---
+package main
+
+func run() int {
+	xs := []int{10, 20}
+	i := 0
+	bump := func() int {
+		i = 1
+		return 5
+	}
+	idx := i
+	left := xs[idx]
+	xs[idx] = left + bump()
+	return xs[0]
+}

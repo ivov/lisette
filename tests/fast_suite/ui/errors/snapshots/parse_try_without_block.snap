@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid `try`
+   ╭─[test.lis:4:3]
+ 3 │ fn f() {
+ 4 │   try foo()
+   ·   ─┬─
+   ·    ╰── requires a block
+ 5 │ }
+   ╰────
+  help: Use `try { expression }` instead of `try expression` · code: [parse.try_without_block]

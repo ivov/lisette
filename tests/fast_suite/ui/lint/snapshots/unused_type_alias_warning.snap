@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Unused type
+   ╭─[test.lis:2:6]
+ 1 │ 
+ 2 │ type Unused = int
+   ·      ───┬──
+   ·         ╰── never used
+ 3 │ 
+   ╰────
+  help: Use or remove this type · code: [lint.unused_type]

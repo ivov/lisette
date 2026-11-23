@@ -1,0 +1,294 @@
+# Case ids of the constants family where Lisette and Go disagree, one per line, with an optional `#` note.
+# The test fails when a listed case passes, so remove each id that a fix closes.
+binary_untyped/NF/'a'/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/NF/'a'/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/NF/-1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/NF/-1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/NF/1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/NF/1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/NF/127/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/NF/127/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/'a'/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/'a'/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/-1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/-1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/127/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/complex128/127/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/'a'/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/'a'/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/-1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/-1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/127/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float32/127/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/'a'/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/'a'/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/-1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/-1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/1/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/1/<</64 # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/127/<</'a' # too strict: folded constant checked against int, not the target type
+binary_untyped/float64/127/<</64 # too strict: folded constant checked against int, not the target type
+complement_let/NF/18446744073709551615 # too strict: folded constant checked against int, not the target type
+complement_let/NF/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+complement_let/NF/9223372036854775808 # too strict: folded constant checked against int, not the target type
+complement_let/complex128/18446744073709551615 # too strict: folded constant checked against int, not the target type
+complement_let/complex128/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+complement_let/complex128/9223372036854775808 # too strict: folded constant checked against int, not the target type
+complement_let/complex64/18446744073709551615 # too strict: folded constant checked against int, not the target type
+complement_let/complex64/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+complement_let/complex64/9223372036854775808 # too strict: folded constant checked against int, not the target type
+complement_let/float32/18446744073709551615 # too strict: folded constant checked against int, not the target type
+complement_let/float32/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+complement_let/float32/9223372036854775808 # too strict: folded constant checked against int, not the target type
+complement_let/float64/18446744073709551615 # too strict: folded constant checked against int, not the target type
+complement_let/float64/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+complement_let/float64/9223372036854775808 # too strict: folded constant checked against int, not the target type
+constant_cast/complex128/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/complex128/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_cast/complex128/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/complex64/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/complex64/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_cast/complex64/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/float32/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/float32/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_cast/float32/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/float64/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/float64/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_cast/float64/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/string/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/string/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_cast/string/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/uint/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/uint/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/uint64/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/uint64/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/uintptr/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_cast/uintptr/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/NF/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/NF/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_let/NF/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/complex128/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/complex128/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_let/complex128/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/complex64/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/complex64/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_let/complex64/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/float32/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/float32/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_let/float32/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/float64/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/float64/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
+constant_let/float64/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/uint/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/uint/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/uint64/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/uint64/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/uintptr/18446744073709551615 # too strict: an untyped constant past int64 is rejected where Go converts it
+constant_let/uintptr/9223372036854775808 # too strict: an untyped constant past int64 is rejected where Go converts it
+shift_cast/AU/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/AU/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/AU/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/AU/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/AU/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/AU/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/N8/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/N8/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/N8/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/int/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/int/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/int/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/int8/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/int8/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/int8/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/rune/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/rune/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/rune/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint64/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint64/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint64/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint8/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint8/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint8/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint8/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint8/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_cast/uint8/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/AU/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/AU/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/AU/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/AU/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/AU/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/AU/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/N8/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/N8/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/N8/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/N8/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/N8/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/N8/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int8/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int8/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int8/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int8/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int8/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/int8/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/rune/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/rune/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/rune/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint64/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint64/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint64/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint64/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint64/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint64/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint8/'a'/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint8/'a'/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint8/'a'/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint8/1.0/int=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint8/1.0/int=70 # emit/bug-shift-of-untyped-constant-wrong-type.md
+shift_typed/uint8/1.0/uint=3 # emit/bug-shift-of-untyped-constant-wrong-type.md
+cast/complex128/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+cast/complex64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+cast/float32/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+cast/float32/1e300 # Lisette accepts, Go rejects: e03305/main.go:12:15: cannot convert 1e300 (untyped float constant 1e+300) to ...
+cast/float32/1e39 # Lisette accepts, Go rejects: e03297/main.go:12:15: cannot convert 1e39 (untyped float constant 1e+39) to ty...
+cast/float64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+cast/string/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+cast/uintptr/-1 # Lisette accepts, Go rejects: e02849/main.go:12:15: constant -1 overflows uintptr
+cast/uintptr/-128 # Lisette accepts, Go rejects: e02857/main.go:12:15: constant -128 overflows uintptr
+cast/uintptr/-129 # Lisette accepts, Go rejects: e02865/main.go:12:15: constant -129 overflows uintptr
+constant_cast/AU/1e10 # Lisette accepts, Go rejects: e05600/main.go:14:10: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/AU/1e300 # Lisette accepts, Go rejects: e05616/main.go:14:10: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/AU/1e39 # Lisette accepts, Go rejects: e05608/main.go:14:10: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/byte/1e10 # Lisette accepts, Go rejects: e04410/main.go:14:12: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/byte/1e300 # Lisette accepts, Go rejects: e04426/main.go:14:12: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/byte/1e39 # Lisette accepts, Go rejects: e04418/main.go:14:12: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/float32/1e300 # Lisette accepts, Go rejects: e03306/main.go:14:15: cannot convert C (constant 1e+300 of type float64) to ty...
+constant_cast/float32/1e39 # Lisette accepts, Go rejects: e03298/main.go:14:15: cannot convert C (constant 1e+39 of type float64) to typ...
+constant_cast/int/1e300 # Lisette accepts, Go rejects: e00226/main.go:14:11: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/int/1e39 # Lisette accepts, Go rejects: e00218/main.go:14:11: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/int16/1e10 # Lisette accepts, Go rejects: e00770/main.go:14:13: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/int16/1e300 # Lisette accepts, Go rejects: e00786/main.go:14:13: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/int16/1e39 # Lisette accepts, Go rejects: e00778/main.go:14:13: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/int32/1e10 # Lisette accepts, Go rejects: e01050/main.go:14:13: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/int32/1e300 # Lisette accepts, Go rejects: e01066/main.go:14:13: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/int32/1e39 # Lisette accepts, Go rejects: e01058/main.go:14:13: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/int64/1e300 # Lisette accepts, Go rejects: e01346/main.go:14:13: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/int64/1e39 # Lisette accepts, Go rejects: e01338/main.go:14:13: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/int8/1e10 # Lisette accepts, Go rejects: e00490/main.go:14:12: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/int8/1e300 # Lisette accepts, Go rejects: e00506/main.go:14:12: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/int8/1e39 # Lisette accepts, Go rejects: e00498/main.go:14:12: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/rune/1e10 # Lisette accepts, Go rejects: e04690/main.go:14:12: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/rune/1e300 # Lisette accepts, Go rejects: e04706/main.go:14:12: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/rune/1e39 # Lisette accepts, Go rejects: e04698/main.go:14:12: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/uint/1e300 # Lisette accepts, Go rejects: e01626/main.go:14:12: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/uint/1e39 # Lisette accepts, Go rejects: e01618/main.go:14:12: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/uint16/1e10 # Lisette accepts, Go rejects: e02170/main.go:14:14: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/uint16/1e300 # Lisette accepts, Go rejects: e02186/main.go:14:14: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/uint16/1e39 # Lisette accepts, Go rejects: e02178/main.go:14:14: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/uint32/1e10 # Lisette accepts, Go rejects: e02450/main.go:14:14: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/uint32/1e300 # Lisette accepts, Go rejects: e02466/main.go:14:14: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/uint32/1e39 # Lisette accepts, Go rejects: e02458/main.go:14:14: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/uint64/1e300 # Lisette accepts, Go rejects: e02746/main.go:14:14: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/uint64/1e39 # Lisette accepts, Go rejects: e02738/main.go:14:14: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/uint8/1e10 # Lisette accepts, Go rejects: e01890/main.go:14:13: cannot convert C (constant 10000000000 of type float64) ...
+constant_cast/uint8/1e300 # Lisette accepts, Go rejects: e01906/main.go:14:13: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/uint8/1e39 # Lisette accepts, Go rejects: e01898/main.go:14:13: cannot convert C (constant 99999999999999993970916637160...
+constant_cast/uintptr/1e300 # Lisette accepts, Go rejects: e03026/main.go:14:15: cannot convert C (constant 10000000000000000525047602552...
+constant_cast/uintptr/1e39 # Lisette accepts, Go rejects: e03018/main.go:14:15: cannot convert C (constant 99999999999999993970916637160...
+constructor/NF/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+let/NF/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+let/complex128/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+let/complex64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+let/float32/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+let/float64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+negated_let/NF/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+negated_let/complex128/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+negated_let/complex64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+negated_let/float32/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+negated_let/float64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+shift_cast/N8/255/int=3 # Lisette accepts, Go rejects: e29678/main.go:13:10: 255 (untyped int constant) overflows int8
+shift_cast/N8/255/int=70 # Lisette accepts, Go rejects: e29681/main.go:13:10: 255 (untyped int constant) overflows int8
+shift_cast/N8/255/uint=3 # Lisette accepts, Go rejects: e29675/main.go:13:10: 255 (untyped int constant) overflows int8
+shift_cast/int8/255/int=3 # Lisette accepts, Go rejects: e29318/main.go:13:12: 255 (untyped int constant) overflows int8
+shift_cast/int8/255/int=70 # Lisette accepts, Go rejects: e29321/main.go:13:12: 255 (untyped int constant) overflows int8
+shift_cast/int8/255/uint=3 # Lisette accepts, Go rejects: e29315/main.go:13:12: 255 (untyped int constant) overflows int8
+shift_cast/string/'a'/int=3 # Lisette accepts, Go rejects: e29579/main.go:13:14: invalid operation: shifted operand 'a' (type string) mus...
+shift_cast/string/'a'/int=70 # Lisette accepts, Go rejects: e29582/main.go:13:14: invalid operation: shifted operand 'a' (type string) mus...
+shift_cast/string/'a'/uint=3 # Lisette accepts, Go rejects: e29576/main.go:13:14: invalid operation: shifted operand 'a' (type string) mus...
+shift_typed/AU/1/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/AU/1/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/AU/1/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/AU/255/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/AU/255/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/AU/255/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/N8/1/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/N8/1/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/N8/1/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/int/1/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/int/255/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/int8/1/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/int8/1/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/int8/1/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/rune/1/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/rune/1/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/rune/1/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/rune/255/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/rune/255/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/rune/255/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint64/1/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint64/1/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint64/1/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint64/255/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint64/255/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint64/255/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint8/1/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint8/1/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint8/1/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint8/255/int=3 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint8/255/int=70 # Lisette rejects with infer.type_mismatch, Go accepts
+shift_typed/uint8/255/uint=3 # Lisette rejects with infer.type_mismatch, Go accepts
+typed_constant/complex128/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+typed_constant/complex64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+typed_constant/float32/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+typed_constant/float64/18446744073709551616 # Lisette rejects with parse.literal_out_of_range, Go accepts
+variable_cast/AU/18446744073709551615 # Lisette accepts, Go rejects: e05529/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/AU/9223372036854775808 # Lisette accepts, Go rejects: e05521/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/byte/18446744073709551615 # Lisette accepts, Go rejects: e04339/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/byte/9223372036854775808 # Lisette accepts, Go rejects: e04331/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/float32/18446744073709551615 # Lisette accepts, Go rejects: e03219/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/float32/9223372036854775808 # Lisette accepts, Go rejects: e03211/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/float64/18446744073709551615 # Lisette accepts, Go rejects: e03499/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/float64/9223372036854775808 # Lisette accepts, Go rejects: e03491/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/int/18446744073709551615 # Lisette accepts, Go rejects: e00139/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/int/9223372036854775808 # Lisette accepts, Go rejects: e00131/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/int16/18446744073709551615 # Lisette accepts, Go rejects: e00699/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/int16/9223372036854775808 # Lisette accepts, Go rejects: e00691/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/int32/18446744073709551615 # Lisette accepts, Go rejects: e00979/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/int32/9223372036854775808 # Lisette accepts, Go rejects: e00971/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/int64/18446744073709551615 # Lisette accepts, Go rejects: e01259/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/int64/9223372036854775808 # Lisette accepts, Go rejects: e01251/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/int8/18446744073709551615 # Lisette accepts, Go rejects: e00419/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/int8/9223372036854775808 # Lisette accepts, Go rejects: e00411/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/rune/18446744073709551615 # Lisette accepts, Go rejects: e04619/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/rune/9223372036854775808 # Lisette accepts, Go rejects: e04611/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/uint/18446744073709551615 # Lisette accepts, Go rejects: e01539/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/uint/9223372036854775808 # Lisette accepts, Go rejects: e01531/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/uint16/18446744073709551615 # Lisette accepts, Go rejects: e02099/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/uint16/9223372036854775808 # Lisette accepts, Go rejects: e02091/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/uint32/18446744073709551615 # Lisette accepts, Go rejects: e02379/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/uint32/9223372036854775808 # Lisette accepts, Go rejects: e02371/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/uint64/18446744073709551615 # Lisette accepts, Go rejects: e02659/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/uint64/9223372036854775808 # Lisette accepts, Go rejects: e02651/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/uint8/18446744073709551615 # Lisette accepts, Go rejects: e01819/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/uint8/9223372036854775808 # Lisette accepts, Go rejects: e01811/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...
+variable_cast/uintptr/18446744073709551615 # Lisette accepts, Go rejects: e02939/main.go:12:7: cannot use 18446744073709551615 (untyped int constant) as...
+variable_cast/uintptr/9223372036854775808 # Lisette accepts, Go rejects: e02931/main.go:12:7: cannot use 9223372036854775808 (untyped int constant) as ...

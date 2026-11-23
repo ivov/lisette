@@ -1,0 +1,14 @@
+
+#[display]
+struct Logger { pub prefix: string }
+
+impl Logger {
+  fn string(self) -> string fn main() { }
+}
+
+struct Server {
+  embed Logger,
+  pub port: int,
+}
+
+fn main() { }

@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn f() -> Result<int, string> {
+    Err("e")?
+  }
+  
+  fn test() -> Result<int, string> {
+    f()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func f() lisette.Result[int, string] {
+	check := lisette.MakeResultErr[lisette.Result[int, string], string]("e")
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check.ErrVal)
+	}
+	return check.OkVal
+}
+
+func test() lisette.Result[int, string] {
+	return f()
+}

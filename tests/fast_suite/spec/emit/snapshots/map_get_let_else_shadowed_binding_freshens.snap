@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(m: Map<string, string>, v: int) -> string {
+    let _ = v + 1
+    let Some(v) = m.get("a") else {
+      return ""
+    }
+    v
+  }
+---
+package main
+
+func test(m map[string]string, v int) string {
+	_ = v + 1
+	v2, ok := m["a"]
+	if !ok {
+		return ""
+	}
+	return v2
+}

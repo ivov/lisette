@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/recover.rs
+description: |
+  
+  fn may_panic() -> int { 42 }
+  
+  fn test() -> Result<int, PanicValue> {
+    recover { may_panic() }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func mayPanic() int {
+	return 42
+}
+
+func test() lisette.Result[int, lisette.PanicValue] {
+	recoverResult := lisette.RecoverBlock(func() int {
+		return mayPanic()
+	})
+	return recoverResult
+}

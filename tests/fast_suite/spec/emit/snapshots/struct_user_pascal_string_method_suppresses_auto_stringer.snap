@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct A { a: string }
+  
+  impl A {
+    fn String(self) -> string {
+      self.a + "asdf"
+    }
+  }
+  
+  fn main() {
+    let a = A { a: "text" }
+    let _ = a
+  }
+---
+package main
+
+type A struct {
+	a string
+}
+
+func (a A) String() string {
+	return a.a + "asdf"
+}
+
+func main() {}

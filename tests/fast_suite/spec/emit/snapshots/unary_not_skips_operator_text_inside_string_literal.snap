@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test(s: string) -> bool {
+    !("x == y" == s)
+  }
+---
+package main
+
+func test(s string) bool {
+	return "x == y" != s
+}

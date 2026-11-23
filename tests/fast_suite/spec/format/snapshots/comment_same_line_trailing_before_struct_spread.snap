@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  struct Point { x: int, y: int }
+  
+  fn f(other: Point) -> Point {
+    Point { x: 1, // trailing
+    ..other }
+  }
+---
+struct Point { x: int, y: int }
+
+fn f(other: Point) -> Point {
+  Point {
+    x: 1, // trailing
+    ..other,
+  }
+}

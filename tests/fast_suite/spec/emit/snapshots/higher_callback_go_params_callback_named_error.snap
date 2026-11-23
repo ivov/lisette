@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:path/filepath"
+  fn give<T>(f:fn(string,filepath.WalkFunc)->T)->fn(string,filepath.WalkFunc)->T{f}
+  fn main(){let mut calls=0;let f=give(filepath.Walk);let cb:filepath.WalkFunc=|_,_,_|{calls+=1;Ok(())};if f("/__lisette_nonexistent_callback_review__",cb).is_err(){panic("walk")};if calls!=1{panic("calls")}}
+---
+package main
+
+import (
+	"io/fs"
+	"path/filepath"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func give[T any](f func(string, filepath.WalkFunc) T) func(string, filepath.WalkFunc) T {
+	return f
+}
+
+func main() {
+	calls := 0
+	f := give(func(arg0 string, arg1 filepath.WalkFunc) lisette.Result[struct{}, error] {
+		ret := filepath.Walk(arg0, arg1)
+		if ret != nil {
+			return lisette.MakeResultErr[struct{}, error](ret)
+		}
+		return lisette.MakeResultOk[struct{}, error](struct{}{})
+	})
+	cb2 := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {
+		calls++
+		return nil
+	}
+	var cb filepath.WalkFunc = func(arg0 string, arg1 fs.FileInfo, arg2 error) error {
+		option := lisette.OptionFromNilable[fs.FileInfo](arg1, lisette.IsNilInterface(arg1))
+		option2 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
+		return cb2(arg0, option, option2)
+	}
+	if f("/__lisette_nonexistent_callback_review__", filepath.WalkFunc(cb)).IsErr() {
+		panic("walk")
+	}
+	if calls != 1 {
+		panic("calls")
+	}
+}

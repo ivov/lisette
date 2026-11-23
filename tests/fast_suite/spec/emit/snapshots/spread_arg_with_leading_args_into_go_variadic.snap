@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import filepath "go:path/filepath"
+  
+  fn test(base: string, rest: Slice<string>) -> string {
+    filepath.Join(base, rest...)
+  }
+---
+package main
+
+import "path/filepath"
+
+func test(base string, rest []string) string {
+	return filepath.Join(append([]string{base}, rest...)...)
+}

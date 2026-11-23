@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  interface Cache {
+    #[go(comma_ok)]
+    fn Get(key: string) -> Option<Ref<Value>>
+    fn Put(key: string, val: Ref<Value>)
+  }
+---
+interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Value>>
+  fn Put(key: string, val: Ref<Value>)
+}

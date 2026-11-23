@@ -1,0 +1,45 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct GameModeParam(string)
+  
+  struct Inner { pub x: int }
+  struct Wrapper(Inner)
+  
+  struct Name(string)
+  struct DoubleName(Name)
+  
+  struct Command {
+    pub gamemode: GameModeParam,
+    pub wrapper: Wrapper,
+    pub double: DoubleName,
+  }
+  
+  fn register() -> Command {
+    Command { .. }
+  }
+---
+package main
+
+type GameModeParam string
+
+type Inner struct {
+	X int
+}
+
+type Wrapper Inner
+
+type Name string
+
+type DoubleName Name
+
+type Command struct {
+	Gamemode GameModeParam
+	Wrapper  Wrapper
+	Double   DoubleName
+}
+
+func register() Command {
+	return Command{}
+}

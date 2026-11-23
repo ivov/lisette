@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Format specifiers not supported
+   ╭─[test.lis:4:20]
+ 3 │   let n = 255
+ 4 │   let s = f"hex: {n:02x}"
+   ·                    ──┬─
+   ·                      ╰── not supported in format strings
+ 5 │ }
+   ╰────
+  help: Use `fmt.Sprintf` for formatted output, e.g. `fmt.Sprintf("%02x", n)` · code: [parse.format_specifier]

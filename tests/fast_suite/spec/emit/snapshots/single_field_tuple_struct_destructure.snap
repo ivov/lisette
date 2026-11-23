@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Wrapper(int)
+  
+  fn test() -> int {
+    let w = Wrapper(42);
+    let Wrapper(val) = w;
+    val
+  }
+---
+package main
+
+type Wrapper int
+
+func test() int {
+	w := Wrapper(42)
+	val := int(w)
+	return val
+}

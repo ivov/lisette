@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Variant not found
+   ╭─[test.lis:7:5]
+ 6 │   match s {
+ 7 │     Nope => {}
+   ·     ──┬─
+   ·       ╰── no variant `Nope` on `Status`
+ 8 │   }
+   ╰────
+  help: Available variants for `Status` are `Active` and `Inactive` · code: [resolve.variant_not_found]

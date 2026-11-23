@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn get_value() -> int {
+    42
+  }
+  
+  fn test() -> int {
+    get_value()
+  }
+---
+package main
+
+func getValue() int {
+	return 42
+}
+
+func test() int {
+	return getValue()
+}

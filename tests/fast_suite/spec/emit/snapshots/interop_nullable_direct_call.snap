@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    let r = flag.Lookup("verbose")
+    match r {
+      Some(f) => { let _ = f },
+      None => {},
+    }
+  }
+---
+package main
+
+import (
+	"flag"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	raw := flag.Lookup("verbose")
+	r := lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+	if r.Tag == lisette.OptionSome {
+		_ = r.SomeVal
+	}
+}

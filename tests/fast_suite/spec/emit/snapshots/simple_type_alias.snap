@@ -1,0 +1,9 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type UserId = int
+---
+package main
+
+type UserId = int

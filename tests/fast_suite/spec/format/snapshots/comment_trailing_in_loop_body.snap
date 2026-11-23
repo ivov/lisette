@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f() {
+    loop {
+      break
+      // trailing in loop body
+    }
+  }
+---
+fn f() {
+  loop {
+    break
+    // trailing in loop body
+  }
+}

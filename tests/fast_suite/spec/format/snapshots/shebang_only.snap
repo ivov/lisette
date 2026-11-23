@@ -1,0 +1,5 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "#!/usr/bin/env -S lis run"
+---
+#!/usr/bin/env -S lis run

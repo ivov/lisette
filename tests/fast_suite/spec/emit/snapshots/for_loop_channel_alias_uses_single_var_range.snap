@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  type Inbox = Channel<int>
+  
+  fn drain(ch: Inbox) -> int {
+    let mut total = 0
+    for value in ch {
+      total = total + value
+    }
+    total
+  }
+---
+package main
+
+type Inbox = chan int
+
+func drain(ch Inbox) int {
+	total := 0
+	for value := range ch {
+		total += value
+	}
+	return total
+}

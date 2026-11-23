@@ -1,0 +1,54 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Span {
+    start: int,
+    end: int,
+  }
+  
+  impl Span {
+    fn new(start: int, end: int) -> Span {
+      Span { start: start, end: end }
+    }
+  
+    fn contains(self: Span, val: int) -> bool {
+      val >= self.start && val < self.end
+    }
+  
+    fn len(self: Span) -> int {
+      self.end - self.start
+    }
+  }
+  
+  fn test() -> int {
+    let r = Span.new(0, 10);
+    r.len()
+  }
+---
+package main
+
+type Span struct {
+	start int
+	end   int
+}
+
+func newSpan(start, end int) Span {
+	return Span{
+		start: start,
+		end:   end,
+	}
+}
+
+func (s Span) contains(val int) bool {
+	return val >= s.start && val < s.end
+}
+
+func (s Span) len() int {
+	return s.end - s.start
+}
+
+func test() int {
+	r := newSpan(0, 10)
+	return r.len()
+}

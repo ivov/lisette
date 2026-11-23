@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  #!/usr/bin/env -S lis run
+  fn main() {
+    let _ = 1
+  }
+---
+#!/usr/bin/env -S lis run
+
+fn main() {
+  let _ = 1
+}

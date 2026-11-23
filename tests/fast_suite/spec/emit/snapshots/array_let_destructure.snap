@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<int, 3>) -> int {
+    let [a, b, c] = arr
+    a + b + c
+  }
+---
+package main
+
+func f(arr [3]int) int {
+	a := arr[0]
+	b := arr[1]
+	c := arr[2]
+	return a + b + c
+}

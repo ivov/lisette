@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Conf { name: string, opt: Option<int> }
+  
+  fn test() -> Conf {
+    Conf { name: "x", .. }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Conf struct {
+	name string
+	opt  lisette.Option[int]
+}
+
+func test() Conf {
+	return Conf{name: "x"}
+}

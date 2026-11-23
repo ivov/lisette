@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  fn test() -> int {
+    let x = 10;
+    let x = "now a string";
+    let x = x.length();
+    x
+  }
+---
+package main
+
+func test() int {
+	x := "now a string"
+	x2 := len(x)
+	return x2
+}

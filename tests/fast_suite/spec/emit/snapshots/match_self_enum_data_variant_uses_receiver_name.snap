@@ -1,0 +1,49 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  enum Shape {
+    Circle(int),
+    Rectangle { width: int, height: int },
+  }
+  
+  impl Shape {
+    fn area(self) -> int {
+      match self {
+        Shape.Circle(r) => r * r * 3,
+        Shape.Rectangle { width, height } => width * height,
+      }
+    }
+  }
+---
+package main
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeRectangle(arg0, arg1 int) Shape {
+	return Shape{Tag: ShapeRectangle, Width: arg0, Height: arg1}
+}
+
+type ShapeTag uint8
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeRectangle
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	Circle int
+	Width  int
+	Height int
+}
+
+func (s Shape) area() int {
+	if s.Tag == ShapeCircle {
+		r := s.Circle
+		return r * r * 3
+	}
+	return s.Width * s.Height
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Private type `PrivateOutput` in public API
+   ╭─[test.lis:6:43]
+ 5 │ 
+ 6 │ pub fn make_handler(seed: int) -> fn() -> PrivateOutput {
+   ·                                           ──────┬──────
+   ·                                                 ╰── exposed by `make_handler`
+ 7 │   || PrivateOutput { _result: seed }
+   ╰────
+  help: Add `pub` to the private type or remove it from the public API. `PrivateOutput` is private but exposed by `make_handler`, which is public · code: [lint.internal_type_leak]

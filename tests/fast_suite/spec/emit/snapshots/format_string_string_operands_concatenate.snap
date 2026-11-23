@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn greet(first: string, last: string) -> string {
+    f"Hello, {first} {last}!"
+  }
+---
+package main
+
+func greet(first, last string) string {
+	return "Hello, " + first + " " + last + "!"
+}

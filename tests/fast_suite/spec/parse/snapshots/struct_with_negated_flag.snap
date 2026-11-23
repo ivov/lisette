@@ -1,0 +1,86 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  #[json(omitempty)]
+  struct User {
+    #[json(!omitempty)]
+    name: string,
+  }
+---
+[
+    Struct {
+        doc: None,
+        attributes: [
+            Attribute {
+                name: "json",
+                args: [
+                    Flag(
+                        "omitempty",
+                    ),
+                ],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 1,
+                    byte_length: 18,
+                },
+            },
+        ],
+        name: "User",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 27,
+            byte_length: 4,
+        },
+        generics: [],
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    name: "name",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 58,
+                        byte_length: 4,
+                    },
+                    annotation: Constructor {
+                        name: "string",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 64,
+                            byte_length: 6,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    kind: Named {
+                        attributes: [
+                            Attribute {
+                                name: "json",
+                                args: [
+                                    NegatedFlag(
+                                        "omitempty",
+                                    ),
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 36,
+                                    byte_length: 19,
+                                },
+                            },
+                        ],
+                    },
+                },
+            ],
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 20,
+            byte_length: 53,
+        },
+    },
+]

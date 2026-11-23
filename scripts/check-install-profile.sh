@@ -44,4 +44,4 @@ esac
 "${MEASURE[@]}" cargo install --path "$WORK/lisette-$VERSION" --root "$WORK/root" --target-dir "$WORK/target" "${PATCHES[@]}"
 
 "$WORK/root/bin/lis" version
-"$WORK/root/bin/lis" check tests/e2e_smoke_project
+"$WORK/root/bin/lis" check tests/cli_language/project

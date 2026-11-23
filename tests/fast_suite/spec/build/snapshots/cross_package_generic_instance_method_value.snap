@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+type Box[T any] struct {
+	Value T
+}
+
+func (b Box[T]) Get() T {
+	return b.Value
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/lib"
+
+func main() {
+	b := lib.Box[int]{Value: 42}
+	f := lib.Box[int].Get
+	val := f(b)
+	_ = val
+}

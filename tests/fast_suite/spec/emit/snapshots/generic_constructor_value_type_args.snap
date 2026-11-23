@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  enum Wrap<T> { W(T) }
+  
+  fn main() {
+    let f = Wrap.W
+    let w = f(1)
+    let _ = w
+  }
+---
+package main
+
+func MakeWrapW[T any](arg0 T) Wrap[T] {
+	return Wrap[T]{Tag: WrapW, W: arg0}
+}
+
+type WrapTag uint8
+
+const (
+	WrapW WrapTag = iota
+)
+
+type Wrap[T any] struct {
+	Tag WrapTag
+	W   T
+}
+
+func main() {
+	f := MakeWrapW[int]
+	w := f(1)
+	_ = w
+}

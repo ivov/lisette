@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot write to `b[0]`
+   ╭─[test.lis:5:3]
+ 4 │   let mut b = { a }
+ 5 │   b[0] = 9
+   ·   ────┬───
+   ·       ╰── `b` is read-only
+ 6 │ }
+   ╰────
+  help: Make it `mut Slice<int>` where it is created, or write to a `.clone()` for an independent copy · code: [infer.write_through_read_only]

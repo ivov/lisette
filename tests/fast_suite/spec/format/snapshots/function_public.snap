@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "pub fn greet() { \"hello\" }"
+---
+pub fn greet() {
+  "hello"
+}

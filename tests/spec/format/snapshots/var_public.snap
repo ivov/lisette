@@ -1,5 +1,0 @@
----
-source: tests/spec/format/mod.rs
-description: "pub var Stdin: Ref<File>"
----
-pub var Stdin: Ref<File>

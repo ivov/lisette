@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Lost query mutation
+   ╭─[test.lis:6:3]
+ 5 │   let Ok(u) = url.Parse("http://example.com?a=1") else { return }
+ 6 │   u.Query().Add("b", "2")
+   ·   ───────────┬───────────
+   ·              ╰── mutates a discarded copy
+ 7 │ }
+   ╰────
+  help: Bind the result of `URL.Query`, mutate it, then assign `values.Encode()` to `RawQuery`. `URL.Query` returns a fresh copy, so this `Add` has no effect · code: [lint.lost_query_mutation]

@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn empty() -> Array<int, 0> {
+    []
+  }
+---
+package main
+
+func empty() [0]int {
+	return [0]int{}
+}

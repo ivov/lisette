@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  
+  fn fallible(ok: bool) -> Result<int, error> {
+    if ok { Ok(1) } else { Err(errors.New("nope")) }
+  }
+  
+  fn test() {
+    match fallible(true) {
+      Ok(x) => { let _ = x },
+      Err(e) => {},
+    }
+  }
+---
+package main
+
+import "errors"
+
+func fallible(ok bool) (int, error) {
+	if ok {
+		return 1, nil
+	}
+	return 0, errors.New("nope")
+}
+
+func test() {
+	if x, err := fallible(true); err == nil {
+		_ = x
+	}
+}

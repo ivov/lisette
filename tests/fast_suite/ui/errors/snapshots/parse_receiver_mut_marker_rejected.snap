@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Misplaced `mut`
+   ╭─[test.lis:5:11]
+ 4 │ impl Counter {
+ 5 │   fn bump(mut self) {
+   ·           ─┬─
+   ·            ╰── `mut` goes on the receiver's type
+ 6 │     let _ = self
+   ╰────
+  help: A writable receiver is `self: mut Ref<T>`, where `T` is the type this `impl` targets · code: [parse.misplaced_mut]

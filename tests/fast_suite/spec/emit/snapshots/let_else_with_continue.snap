@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(items: Slice<Option<int>>) {
+    for item in items {
+      let Some(x) = item else { continue; };
+      let _ = x;
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(items []lisette.Option[int]) {
+	for _, item := range items {
+		if item.Tag != lisette.OptionSome {
+			continue
+		}
+	}
+}

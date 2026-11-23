@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Unnecessary boolean if-else
+   ╭─[test.lis:5:11]
+ 4 │   let b = 10;
+ 5 │   let x = if a > b { true } else { false };
+   ·           ────────────────┬───────────────
+   ·                           ╰── can be simpler
+ 6 │   let _ = x
+   ╰────
+  help: Replace this `if... else` with the condition itself · code: [lint.unnecessary_bool]

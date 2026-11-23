@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  /// A publicly exported function.
+  pub fn greet(name: string) -> string {
+    f"Hello, {name}!"
+  }
+---
+package main
+
+// A publicly exported function.
+func Greet(name string) string {
+	return "Hello, " + name + "!"
+}

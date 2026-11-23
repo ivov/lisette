@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  type Handler = fn(int) -> int
+  
+  fn double(x: int) -> int {
+    x * 2
+  }
+  
+  struct Wrapper {
+    pub f: Option<Handler>,
+  }
+  
+  fn main() {
+    let _w = Wrapper { f: Some(double) }
+    let _ = _w.f
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Handler = func(int) int
+
+func double(x int) int {
+	return x * 2
+}
+
+type Wrapper struct {
+	F lisette.Option[Handler]
+}
+
+func main() {
+	_w := Wrapper{F: lisette.MakeOptionSome(double)}
+	_ = _w.F
+}

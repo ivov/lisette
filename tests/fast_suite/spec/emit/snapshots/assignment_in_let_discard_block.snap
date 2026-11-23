@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() {
+    let mut x = 0
+    let _ = {
+      x = 10
+    }
+    x
+  }
+---
+package main
+
+func test() {
+	x := 0
+	x = 10
+	_ = x
+}

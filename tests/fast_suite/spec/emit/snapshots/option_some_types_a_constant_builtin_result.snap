@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> Option<float64> {
+    let widened: Option<float64> = Some(min(1, 2))
+    widened
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() (float64, bool) {
+	widened := lisette.MakeOptionSome(float64(min(1, 2)))
+	if widened.Tag == lisette.OptionSome {
+		return widened.SomeVal, true
+	}
+	return 0.0, false
+}

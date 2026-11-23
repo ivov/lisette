@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import fmt "go:fmt"
+  import os "go:os"
+  
+  fn main() {
+    let f = fmt.Fprintf
+    let _ = f(os.Stdout, "hi %d", 3)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	f := func(arg0 io.Writer, arg1 string, arg2 ...any) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](fmt.Fprintf(arg0, arg1, arg2...))
+	}
+	f(os.Stdout, "hi %d", 3)
+}

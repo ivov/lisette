@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn count(xs: Array<int, 3>) -> int {
+    xs.length()
+  }
+---
+package main
+
+func count(xs [3]int) int {
+	return len(xs)
+}

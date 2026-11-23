@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[main.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let x = time.Second * 1.5;
+   ·           ─────┬─────
+   ·                ╰── expected `int` or `float`, found `time.Duration`
+ 6 │ }
+   ╰────
+  help: The `*` operator can only be used with `int` or `float` · code: [infer.type_mismatch]

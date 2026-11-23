@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Variant not found
+   ╭─[main.lis:7:5]
+ 6 │   match s {
+ 7 │     Circl(r) => {}
+   ·     ────┬───
+   ·         ╰── no variant `Circl` on `shapes.Shape`
+ 8 │   }
+   ╰────
+  help: Did you mean `Circle`? · code: [resolve.variant_not_found]

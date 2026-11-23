@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `#[iterate]` on enum with payload variant
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[iterate]
+   · ─────┬────
+   ·      ╰── disallowed if a variant has a payload
+ 3 │ enum Token {
+ 4 │   Eof,
+ 5 │   Ident(string),
+   ·   ──┬──
+   ·     ╰── this variant has a payload
+ 6 │ }
+   ╰────
+  help: Remove the payload, or drop `#[iterate]` · code: [attribute.iterate_non_unit_variant]

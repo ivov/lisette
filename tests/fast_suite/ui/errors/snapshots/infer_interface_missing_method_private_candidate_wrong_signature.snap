@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `Shouter` does not implement `Writer`
+    ╭─[test.lis:14:15]
+ 13 │   let mut shouter = Shouter {}
+ 14 │   fmt.Fprintf(&shouter, "x")
+    ·               ────┬───
+    ·                   ╰── `Writer` needed here
+ 15 │ }
+    ╰────
+  help: One method does not satisfy `Writer`:
+        Missing:
+          fn Write(self: Shouter, p: Slice<byte>) -> Partial<int, error>
+  code: [infer.interface_not_implemented]

@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Config {
+    range: int,
+    name: string,
+  }
+  
+  fn test() {
+      let mut m = Map.new<string, Config>()
+      m["a"] = Config { range: 10, name: "first" }
+      let mut entry = m["a"]
+      entry.range = 20
+      m["a"] = entry
+  }
+---
+package main
+
+type Config struct {
+	range_ int
+	name   string
+}
+
+func test() {
+	m := make(map[string]Config)
+	m["a"] = Config{
+		range_: 10,
+		name:   "first",
+	}
+	entry := m["a"]
+	entry.range_ = 20
+	m["a"] = entry
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Duplicate type alias
+   ╭─[test.lis:3:6]
+ 2 │ type Id = int
+ 3 │ type Id = string
+   ·      ─┬
+   ·       ╰── already defined
+ 4 │ 
+   ╰────
+  help: Rename or remove this definition. `Id` is already defined in this package · code: [infer.duplicate_definition]

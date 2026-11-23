@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `::` in a path
+   ╭─[test.lis:6:10]
+ 5 │   match s {
+ 6 │     Shape::Circle(r) => r,
+   ·          ─┬
+   ·           ╰── Rust-style path
+ 7 │     _ => 0,
+   ╰────
+  help: Use `.` instead of `::` for enum variant access, e.g. `Shape.Circle` · code: [parse.double_colon_path]

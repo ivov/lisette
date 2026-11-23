@@ -1,0 +1,48 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:example.com/shapes"
+  
+  struct Square {}
+  
+  impl Square {
+    fn Area(self) -> Result<int, error> {
+      Ok(4)
+    }
+    fn Name(self) -> string {
+      "sq"
+    }
+  }
+  
+  fn describe(s: shapes.Shape) -> string {
+    s.Name()
+  }
+  
+  fn main() {
+    let s = Square {}
+    let _ = describe(s as shapes.Shape)
+  }
+---
+package main
+
+import "example.com/shapes"
+
+type Square struct{}
+
+func (s Square) Area() (int, error) {
+	return 4, nil
+}
+
+func (s Square) Name() string {
+	return "sq"
+}
+
+func describe(s shapes.Shape) string {
+	return s.Name()
+}
+
+func main() {
+	s := Square{}
+	describe(s)
+}

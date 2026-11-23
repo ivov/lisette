@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() -> Point {
+    Point { x: 10, y: 20 }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test() Point {
+	return Point{
+		x: 10,
+		y: 20,
+	}
+}

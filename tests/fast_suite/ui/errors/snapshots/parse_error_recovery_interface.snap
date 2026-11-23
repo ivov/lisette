@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid interface item
+   ╭─[test.lis:3:3]
+ 2 │ interface Foo {
+ 3 │   ^
+   ·   ┬
+   ·   ╰── expected `fn` or `embed`
+ 4 │   fn bar();
+   ╰────
+  help: Only method signatures (`fn`) and embeddings (`embed`) are allowed in interfaces · code: [parse.invalid_interface_item]

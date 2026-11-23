@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Miscased name
+   ╭─[test.lis:2:7]
+ 1 │ 
+ 2 │ const maxRetries = 3
+   ·       ─────┬────
+   ·            ╰── expected SCREAMING_SNAKE_CASE
+ 3 │ 
+   ╰────
+  help: Rename to `MAX_RETRIES` · code: [infer.constant_not_screaming_snake_case]

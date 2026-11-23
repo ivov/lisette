@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let opt = Some(1);
+    match opt {
+      Some(x) => { let _ = x; },
+      None => { let _ = 0; },
+    }
+    let subject_1 = 7;
+    let _ = subject_1;
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	opt := lisette.MakeOptionSome(1)
+	if opt.Tag == lisette.OptionSome {
+		_ = opt.SomeVal
+	}
+}

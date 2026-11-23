@@ -1,0 +1,24 @@
+
+import "go:fmt"
+
+fn parse(s: string) -> Result<int, string> {
+  if s == "42" { Ok(42) } else { Err("bad") }
+}
+
+fn main() {
+  let x = 100
+  fmt.Println(x)
+  let x = 200
+
+  let result = try {
+    let x = fmt.Println(x)?
+    x + 1
+  }
+
+  match result {
+    Ok(v) => Ok(1),
+    Err(e) => fmt.Println(e),
+  }
+
+  fmt.Println(x)
+}

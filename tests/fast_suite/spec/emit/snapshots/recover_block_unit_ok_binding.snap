@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/recover.rs
+description: |
+  
+  fn test() {
+    let result = recover { panic("boom") };
+    match result {
+      Ok(v) => v,
+      Err(_) => {},
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	result := lisette.RecoverBlock(func() struct{} {
+		panic("boom")
+	})
+	if result.Tag == lisette.ResultOk {
+	}
+}

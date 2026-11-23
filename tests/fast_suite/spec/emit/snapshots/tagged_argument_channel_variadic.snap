@@ -1,0 +1,64 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:time"
+  
+  fn channel(n: int) -> Option<Receiver<time.Time>> {
+    time.Tick(n as time.Duration)
+  }
+  
+  fn label(n: int) -> Option<string> { Some(fmt.Sprint(n)) }
+  
+  fn main() {
+    if Option.and_then(Some(0), channel).is_some() { panic("nil channel") }
+    let value = Option.and_then(Some(7), label)
+    let absent: Option<string> = None
+    let rendered = fmt.Sprint(value, absent)
+    if value.unwrap_or("bad") != "7" || rendered.is_empty() { panic("variadic options") }
+    let ch = Channel.buffered<Option<string>>(2)
+    ch.send(value)
+    ch.send(absent)
+    if ch.receive().unwrap_or(None).unwrap_or("bad") != "7" || ch.receive().unwrap_or(None).is_some() { panic("channel options") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func channel(n int) <-chan time.Time {
+	return time.Tick(time.Duration(n))
+}
+
+func label(n int) (string, bool) {
+	return fmt.Sprint(n), true
+}
+
+func main() {
+	if lisette.OptionAndThen(lisette.MakeOptionSome(0), func(arg0 int) lisette.Option[<-chan time.Time] {
+		raw := channel(arg0)
+		return lisette.OptionFromNilable[<-chan time.Time](raw, raw == nil)
+	}).IsSome() {
+		panic("nil channel")
+	}
+	value := lisette.OptionAndThen(lisette.MakeOptionSome(7), func(arg0 int) lisette.Option[string] {
+		return lisette.OptionFromCommaOk[string](label(arg0))
+	})
+	absent := lisette.MakeOptionNone[string]()
+	rendered := fmt.Sprint(value, absent)
+	if value.UnwrapOr("bad") != "7" || rendered == "" {
+		panic("variadic options")
+	}
+	ch := make(chan lisette.Option[string], 2)
+	lisette.ChannelSend(ch, value)
+	lisette.ChannelSend(ch, absent)
+	if lisette.ChannelReceive(ch).UnwrapOr(lisette.MakeOptionNone[string]()).UnwrapOr("bad") != "7" || lisette.ChannelReceive(ch).UnwrapOr(lisette.MakeOptionNone[string]()).IsSome() {
+		panic("channel options")
+	}
+}

@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type K = int
+  
+  fn test() -> (Map<int, string>, Map<K, string>) {
+    let a: Map<int, string> = Map.from([(1, "a"), (2, "b")])
+    let b: Map<K, string> = Map.from([(1, "a"), (2, "b")])
+    (a, b)
+  }
+---
+package main
+
+type K = int
+
+func test() (map[int]string, map[K]string) {
+	a := map[int]string{1: "a", 2: "b"}
+	b := map[K]string{1: "a", 2: "b"}
+	return a, b
+}

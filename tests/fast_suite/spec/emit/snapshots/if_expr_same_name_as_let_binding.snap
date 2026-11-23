@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> int {
+    let val = if true {
+      let val = 100;
+      val + 1
+    } else {
+      0
+    }
+    val
+  }
+---
+package main
+
+func test() int {
+	var val2 int
+	if true {
+		val := 100
+		val2 = val + 1
+	} else {
+		val2 = 0
+	}
+	return val2
+}

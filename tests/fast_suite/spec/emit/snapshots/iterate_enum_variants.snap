@@ -1,0 +1,60 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[iterate]
+  pub enum BuildPhase {
+    Validate,
+    Parse,
+    Codegen,
+  }
+  
+  fn count() -> int {
+    let mut total = 0
+    for _phase in BuildPhase.variants() {
+      total = total + 1
+    }
+    total
+  }
+---
+package main
+
+func MakeBuildPhaseValidate() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseValidate}
+}
+
+func MakeBuildPhaseParse() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseParse}
+}
+
+func MakeBuildPhaseCodegen() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseCodegen}
+}
+
+type BuildPhaseTag uint8
+
+const (
+	BuildPhaseValidate BuildPhaseTag = iota
+	BuildPhaseParse
+	BuildPhaseCodegen
+)
+
+type BuildPhase struct {
+	Tag BuildPhaseTag
+}
+
+func BuildPhaseVariants() []BuildPhase {
+	return []BuildPhase{
+		{Tag: BuildPhaseValidate},
+		{Tag: BuildPhaseParse},
+		{Tag: BuildPhaseCodegen},
+	}
+}
+
+func count() int {
+	total := 0
+	for range BuildPhaseVariants() {
+		total++
+	}
+	return total
+}

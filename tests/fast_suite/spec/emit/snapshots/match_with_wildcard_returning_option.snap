@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test(n: int) -> Option<int> {
+    match n {
+      1 => Some(10),
+      2 => Some(20),
+      _ => None,
+    }
+  }
+---
+package main
+
+func test(n int) (int, bool) {
+	switch n {
+	case 1:
+		return 10, true
+	case 2:
+		return 20, true
+	default:
+		return 0, false
+	}
+}

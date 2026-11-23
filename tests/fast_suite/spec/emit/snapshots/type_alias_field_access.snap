@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Point { pub x: int, pub y: int }
+  
+  type Location = Point
+  
+  fn get_x(loc: Location) -> int {
+    loc.x
+  }
+---
+package main
+
+type Point struct {
+	X int
+	Y int
+}
+
+type Location = Point
+
+func getX(loc Location) int {
+	return loc.X
+}

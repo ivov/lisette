@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  import "go:os"
+  import "go:fmt"
+  import "go:io"
+---
+import "go:fmt"
+import "go:io"
+import "go:os"

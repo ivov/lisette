@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === bootstrap.go ===
+package main
+
+
+// === main.go ===
+package main
+
+func MakeAA() A {
+	return A{Tag: AA}
+}
+
+func main() {
+	_ = MakeAA()
+}
+
+type ATag uint8
+
+const (
+	AA ATag = iota
+)
+
+type A struct {
+	Tag ATag
+}

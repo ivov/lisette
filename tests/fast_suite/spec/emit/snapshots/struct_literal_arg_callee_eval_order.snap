@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Box { v: int }
+  fn f0(b: Box) -> int { b.v }
+  fn f1(b: Box) -> int { b.v }
+  
+  fn run() -> int {
+    let fs = [f0, f1]
+    let mut i = 0
+    let bump = || -> int { i = 1; 7 }
+    let y = fs[i](Box { v: bump() })
+    y
+  }
+---
+package main
+
+type Box struct {
+	v int
+}
+
+func f0(b Box) int {
+	return b.v
+}
+
+func f1(b Box) int {
+	return b.v
+}
+
+func run() int {
+	fs := []func(Box) int{f0, f1}
+	i := 0
+	bump := func() int {
+		i = 1
+		return 7
+	}
+	callee := fs[i]
+	y := callee(Box{v: bump()})
+	return y
+}

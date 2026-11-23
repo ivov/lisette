@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Literal out of range
+   ╭─[test.lis:4:5]
+ 3 │   match x {
+ 4 │     -9223372036854775809 => "low",
+   ·     ──────────┬─────────
+   ·               ╰── negative integer out of range
+ 5 │     _ => "other",
+   ╰────
+  help: Negative integer must be ≥ -9223372036854775808 (the `int64` minimum) · code: [parse.literal_out_of_range]

@@ -1,0 +1,5 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: const MaxFloat64 = 1.7976931348623157e+308
+---
+const MaxFloat64 = 1.7976931348623157e+308

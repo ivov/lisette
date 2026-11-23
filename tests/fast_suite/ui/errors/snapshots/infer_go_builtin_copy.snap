@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(dst: Slice<int>, src: Slice<int>) {
+ 3 │   copy(dst, src);
+   ·   ──┬─
+   ·     ╰── not a Lisette builtin
+ 4 │ }
+   ╰────
+  help: Use `dst.copy_from(src)`. Lisette has no `copy` builtin · code: [resolve.name_not_found]

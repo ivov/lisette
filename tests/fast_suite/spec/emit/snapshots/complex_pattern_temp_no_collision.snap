@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let (a, (b, c)) = (1, (2, 3));
+    let tmp2 = 7;
+    let _ = a;
+    let _ = b;
+    let _ = c;
+    let _ = tmp2;
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	tmp := lisette.MakeTuple2[int, lisette.Tuple2[int, int]](1, lisette.MakeTuple2[int, int](2, 3))
+	c := tmp.Second.Second
+	_ = c
+}

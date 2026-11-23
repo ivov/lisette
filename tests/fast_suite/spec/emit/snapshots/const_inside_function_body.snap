@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    const MAX = 100
+    let x = MAX + 1
+  }
+---
+package main
+
+func main() {
+	const Max int = 100
+	_ = Max + 1
+}

@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  pub struct Base { pub id: int }
+  type p = Base
+  
+  struct Outer {
+    embed p,
+  }
+  
+  fn read(o: Outer) -> int {
+    o.p.id
+  }
+---
+package main
+
+type Base struct {
+	Id int
+}
+
+type p = Base
+
+type Outer struct {
+	p
+}
+
+func read(o Outer) int {
+	return o.p.Id
+}

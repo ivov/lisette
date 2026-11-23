@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === http/foo.go ===
+package http
+
+type Foo struct{}
+
+func NewFoo() Foo {
+	return Foo{}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	foo "github.com/user/myproject/http"
+)
+
+func main() {
+	made := foo.NewFoo()
+	built := foo.Foo{}
+	n := 1
+	pinned := float64(int(http.StatusOK << n))
+	fmt.Println(made)
+	fmt.Println(built)
+	fmt.Println(http.MethodGet)
+	fmt.Println(pinned)
+}

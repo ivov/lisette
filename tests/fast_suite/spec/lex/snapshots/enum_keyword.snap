@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: enum
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Enum,
+            text: "enum",
+            byte_offset: 0,
+            byte_length: 4,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 4,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

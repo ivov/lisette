@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn do_nothing() {}
+  
+  fn main() {
+    let x = { do_nothing() }
+    let _ = x
+  }
+---
+package main
+
+func doNothing() {}
+
+func main() {
+	doNothing()
+}

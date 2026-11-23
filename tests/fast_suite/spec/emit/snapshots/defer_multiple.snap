@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    defer fmt.Print("first");
+    defer fmt.Print("second");
+    defer fmt.Print("third")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	defer fmt.Print("first")
+	defer fmt.Print("second")
+	defer fmt.Print("third")
+}

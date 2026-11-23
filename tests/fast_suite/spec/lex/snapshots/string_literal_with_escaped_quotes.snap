@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "\"She said \\\"hello\\\"\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: String,
+            text: "\"She said \\\"hello\\\"\"",
+            byte_offset: 0,
+            byte_length: 20,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 20,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

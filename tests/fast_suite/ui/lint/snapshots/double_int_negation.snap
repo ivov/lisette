@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Double numeric negation
+   ╭─[test.lis:4:11]
+ 3 │   let x = 5;
+ 4 │   let _ = --x
+   ·           ─┬
+   ·            ╰── accidental double negation
+ 5 │ }
+   ╰────
+  help: Remove one of the negation operators · code: [lint.double_int_negation]

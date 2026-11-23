@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(s: string) -> int {
+    match s {
+      "yes" | "y" | "true" => 1,
+      "no" | "n" | "false" => 0,
+      _ => -1,
+    }
+  }
+---
+package main
+
+func test(s string) int {
+	switch s {
+	case "yes", "y", "true":
+		return 1
+	case "no", "n", "false":
+		return 0
+	default:
+		return -1
+	}
+}

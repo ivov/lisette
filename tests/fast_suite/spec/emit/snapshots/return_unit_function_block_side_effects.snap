@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn side() -> int { fmt.Println("side"); 1 }
+  
+  fn main() {
+    return {
+      let _ = side()
+      ()
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func side() int {
+	fmt.Println("side")
+	return 1
+}
+
+func main() {
+	{
+		side()
+	}
+	return
+}

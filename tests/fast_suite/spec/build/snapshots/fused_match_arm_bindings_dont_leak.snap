@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+func parse() (int, error) {
+	return 1, nil
+}
+
+func main() {
+	x := 100
+	fmt.Println(x)
+	x = 200
+	if x2, err := parse(); err == nil {
+		fmt.Println(x2)
+	} else {
+		fmt.Println("err")
+	}
+	fmt.Println(x)
+}

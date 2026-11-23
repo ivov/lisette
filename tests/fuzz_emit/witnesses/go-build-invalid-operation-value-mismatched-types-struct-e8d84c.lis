@@ -1,0 +1,11 @@
+
+fn do_nothing() {}
+
+fn test() {
+  let unit = { { do_nothing() } }
+  let value = { panic(30) }
+  let _ = unit
+  if value != 1 { panic(30) }
+}
+
+fn main() { let _ = test(); }

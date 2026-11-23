@@ -1,0 +1,90 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[json]
+  enum Message {
+    Move { x: int, y: int },
+    Quit,
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+func MakeMessageMove(arg0, arg1 int) Message {
+	return Message{Tag: MessageMove, X: arg0, Y: arg1}
+}
+
+func MakeMessageQuit() Message {
+	return Message{Tag: MessageQuit}
+}
+
+type MessageTag uint8
+
+const (
+	MessageMove MessageTag = iota
+	MessageQuit
+)
+
+type Message struct {
+	Tag MessageTag
+	X   int
+	Y   int
+}
+
+func (m Message) MarshalJSON() ([]byte, error) {
+	switch m.Tag {
+	case MessageMove:
+		return json.Marshal(map[string]any{"Move": map[string]any{"x": m.X, "y": m.Y}})
+	case MessageQuit:
+		return json.Marshal("Quit")
+	default:
+		return nil, fmt.Errorf("unknown Message tag: %d", m.Tag)
+	}
+}
+
+func (m *Message) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		switch name {
+		case "Quit":
+			m.Tag = MessageQuit
+			return nil
+		default:
+			return fmt.Errorf("unknown Message variant: %s", name)
+		}
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return errors.New("invalid Message JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Move":
+			m.Tag = MessageMove
+			var inner map[string]json.RawMessage
+			if err := json.Unmarshal(val, &inner); err != nil {
+				return err
+			}
+			if v, ok := inner["x"]; ok {
+				if err := json.Unmarshal(v, &m.X); err != nil {
+					return err
+				}
+			}
+			if v, ok := inner["y"]; ok {
+				if err := json.Unmarshal(v, &m.Y); err != nil {
+					return err
+				}
+			}
+			return nil
+		default:
+			return fmt.Errorf("unknown Message variant: %s", key)
+		}
+	}
+	return errors.New("empty Message JSON object")
+}

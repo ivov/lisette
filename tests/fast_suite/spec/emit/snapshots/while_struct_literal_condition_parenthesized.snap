@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn test() {
+    while Point { x: 1, y: 2 }.x > 0 {
+      break
+    }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test() {
+	for (Point{
+		x: 1,
+		y: 2,
+	}).x > 0 {
+		break
+	}
+}

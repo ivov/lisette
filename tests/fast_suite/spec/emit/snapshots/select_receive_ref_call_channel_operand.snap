@@ -1,0 +1,39 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn get_channel(ch: Ref<Channel<int>>) -> Ref<Channel<int>> {
+    ch
+  }
+  
+  fn test(ch: Ref<Channel<int>>) {
+    select {
+      let Some(v) = get_channel(ch).receive() => {
+        let _ = v
+      },
+      _ => {},
+    }
+  }
+---
+package main
+
+func getChannel(ch *chan int) *chan int {
+	return ch
+}
+
+func test(ch *chan int) {
+	ch2 := *getChannel(ch)
+	for {
+		select {
+		case v, ok := <-ch2:
+			if ok {
+				_ = v
+			} else {
+				ch2 = nil
+				continue
+			}
+		default:
+		}
+		break
+	}
+}

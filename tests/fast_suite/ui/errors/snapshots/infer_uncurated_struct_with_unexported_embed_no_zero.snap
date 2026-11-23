@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ `os.File` has no zero value
+   ╭─[test.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let f = os.File { .. };
+   ·           ───────┬──────
+   ·                  ╰── no zero available
+ 6 │ }
+   ╰────
+  help: Construct it through its documented Go constructor. `os.File` has Go-side state hidden from Lisette whose zero value is not safe to use directly · code: [infer.hidden_state_no_zero]

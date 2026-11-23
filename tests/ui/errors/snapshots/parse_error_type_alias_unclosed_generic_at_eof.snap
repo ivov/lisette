@@ -1,8 +1,0 @@
----
-source: tests/ui/errors/mod.rs
----
-  ✕ Syntax error
-   ╭─[test.lis:1:8]
- 1 │ type T<
-   ╰────
-  code: [parse.unexpected_token]

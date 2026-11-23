@@ -1,0 +1,61 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:example.com/box"
+  
+  fn use_ref(r: box.Ref<int>) -> int {
+    r.inner
+  }
+  
+  fn use_slice(s: box.Slice<int>) -> int {
+    s.value
+  }
+  
+  fn use_map(m: box.Map<string, int>) -> int {
+    m.val
+  }
+  
+  fn make_ref() -> box.Ref<int> {
+    box.Ref { inner: 1 }
+  }
+  
+  fn maybe_ref(r: box.Ref<int>) -> Option<box.Ref<int>> {
+    Some(r)
+  }
+  
+  struct Holder {
+    r: box.Ref<int>,
+    s: box.Slice<int>,
+    m: box.Map<string, int>,
+  }
+---
+package main
+
+import "example.com/box"
+
+func useRef(r box.Ref[int]) int {
+	return r.Inner
+}
+
+func useSlice(s box.Slice[int]) int {
+	return s.Value
+}
+
+func useMap(m box.Map[string, int]) int {
+	return m.Val
+}
+
+func makeRef() box.Ref[int] {
+	return box.Ref[int]{Inner: 1}
+}
+
+func maybeRef(r box.Ref[int]) (box.Ref[int], bool) {
+	return r, true
+}
+
+type Holder struct {
+	r box.Ref[int]
+	s box.Slice[int]
+	m box.Map[string, int]
+}

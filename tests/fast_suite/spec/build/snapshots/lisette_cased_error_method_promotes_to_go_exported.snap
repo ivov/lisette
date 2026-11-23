@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type MyErr struct {
+	msg string
+}
+
+func (m MyErr) Error() string {
+	return "ERR: " + m.msg
+}
+
+func main() {
+	e := MyErr{msg: "boom"}
+	fmt.Println(e)
+}

@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> string {
+    min("a", "b")
+  }
+---
+package main
+
+func test() string {
+	return min("a", "b")
+}

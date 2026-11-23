@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  fn test() -> string {
+    r"line1
+  has `tick
+  line3"
+  }
+---
+package main
+
+func test() string {
+	return "line1\nhas `tick\nline3"
+}

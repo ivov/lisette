@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid `task`
+   ╭─[test.lis:4:8]
+ 3 │ fn f() {
+ 4 │   task work
+   ·        ──┬─
+   ·          ╰── expected `()`
+ 5 │ }
+   ╰────
+  help: Add parentheses to call the function · code: [parse.task_missing_parens]

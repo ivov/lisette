@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:sync"
+  
+  fn test() {
+    let mut wg = sync.WaitGroup { .. }
+    wg.Add(1)
+    wg.Wait()
+  }
+---
+package main
+
+import "sync"
+
+func test() {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	wg.Wait()
+}

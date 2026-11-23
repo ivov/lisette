@@ -1,0 +1,36 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+type Printable interface {
+	Display() string
+}
+
+func PrintAll[T Printable](items []T) string {
+	return items[0].Display()
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/lib"
+)
+
+type Name struct {
+	value string
+}
+
+func (n Name) Display() string {
+	return n.value
+}
+
+func main() {
+	names := []Name{{value: "alice"}}
+	fmt.Println(lib.PrintAll(names))
+}

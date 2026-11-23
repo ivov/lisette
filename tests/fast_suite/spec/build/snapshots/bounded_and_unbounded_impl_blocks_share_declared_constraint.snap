@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Printable interface {
+	ToString() string
+}
+
+type Box[T Printable] struct {
+	value T
+}
+
+func (b Box[T]) print() {
+	fmt.Println(b.value.ToString())
+}
+
+func (b Box[T]) get() T {
+	return b.value
+}
+
+type Name struct {
+	name string
+}
+
+func (n Name) ToString() string {
+	return n.name
+}
+
+func main() {
+	b := Box[Name]{value: Name{name: "Alice"}}
+	b.print()
+	fmt.Println(b.get().ToString())
+}

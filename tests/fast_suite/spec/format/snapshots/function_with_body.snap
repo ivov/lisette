@@ -1,0 +1,7 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn add(a: int, b: int) -> int { a + b }"
+---
+fn add(a: int, b: int) -> int {
+  a + b
+}

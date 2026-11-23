@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:4:11]
+ 3 │   select {
+ 4 │     let x | y = <-ch => (),
+   ·           ┬
+   ·           ╰── expected `=`
+ 5 │   }
+   ╰────
+  code: [parse.unexpected_token]

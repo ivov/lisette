@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/ext"
+  
+  type Ints = Slice<int>
+  
+  fn convert_all(xs: Ints) {
+    let _ = xs.map(ext.Parse)
+  }
+---
+package main
+
+import (
+	"example.com/ext"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Ints = []int
+
+func convertAll(xs Ints) {
+	lisette.SliceMap(xs, func(arg0 int) lisette.Result[string, error] {
+		return lisette.ResultFromPair[string](ext.Parse(arg0))
+	})
+}

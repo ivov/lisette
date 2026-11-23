@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  
+  fn fail() -> Result<int, error> {
+    Err(errors.New("boom"))?
+    Ok(1)
+  }
+  
+  fn main() {
+    let _ = fail()
+  }
+---
+package main
+
+import "errors"
+
+func fail() (int, error) {
+	return 0, errors.New("boom")
+}
+
+func main() {
+	fail()
+}

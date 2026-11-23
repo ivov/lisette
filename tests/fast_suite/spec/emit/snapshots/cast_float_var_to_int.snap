@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn test() -> int {
+    let f = 3.14
+    f as int
+  }
+---
+package main
+
+func test() int {
+	f := 3.14
+	return int(f)
+}

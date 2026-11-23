@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Method shadows struct field
+    ╭─[test.lis:11:6]
+ 10 │ impl<T> Event<T> {
+ 11 │   fn id(self) -> int {
+    ·      ─┬
+    ·       ╰── same as field
+ 12 │     match self {
+    ╰────
+  help: Rename either the field or the method. `Event` has a field `id` and a method `id` · code: [infer.method_shadows_field]

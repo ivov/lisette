@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  fn identity(value: int) -> int {
+    value
+  }
+  
+  fn describe(value: Unknown) -> string {
+    match assert_type<string>(value) {
+      Some(text) => text,
+      None => "",
+    }
+  }
+  
+  fn test() {
+    let mut value: Unknown = identity(1)
+    value = "two"
+    if describe(value) != "two" {
+      panic("annotated Unknown binding was declared at the concrete type")
+    }
+  }
+---
+package main
+
+func identity(value int) int {
+	return value
+}
+
+func describe(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
+func test() {
+	var value any = identity(1)
+	value = "two"
+	if describe(value) != "two" {
+		panic("annotated Unknown binding was declared at the concrete type")
+	}
+}

@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot write to `d2.tags[0]`
+   ╭─[test.lis:6:3]
+ 5 │   let mut d2 = d1
+ 6 │   d2.tags[0] = "y"
+   ·   ────────┬───────
+   ·           ╰── `d2.tags` is read-only
+ 7 │ }
+   ╰────
+  help: Declare the field `tags` as `mut Slice<string>` · code: [infer.write_through_read_only]

@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: "fn test() { match items { [a, b, c] => a + b + c, _ => 0 } }"
+---
+fn test() {
+  match items {
+    [a, b, c] => a + b + c,
+    _ => 0,
+  }
+}

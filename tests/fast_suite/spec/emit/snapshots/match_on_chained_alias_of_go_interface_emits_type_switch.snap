@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:example.com/events"
+  
+  fn handle(m: events.Outer) -> int {
+    match m {
+      events.Click { x, y } => x + y,
+      events.KeyPress { key } => key.length(),
+      _ => 0,
+    }
+  }
+---
+package main
+
+import "example.com/events"
+
+func handle(m events.Outer) int {
+	switch m := m.(type) {
+	case events.Click:
+		return m.X + m.Y
+	case events.KeyPress:
+		return len(m.Key)
+	default:
+		return 0
+	}
+}

@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn do_something() {
+    // unit return
+  }
+  
+  fn test() {
+    let _ = do_something();
+  }
+---
+package main
+
+func doSomething() {}
+
+func test() {
+	doSomething()
+}

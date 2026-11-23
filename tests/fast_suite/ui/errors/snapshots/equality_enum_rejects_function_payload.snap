@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Cannot derive equality
+   ╭─[test.lis:4:3]
+ 3 │ enum Action {
+ 4 │   Run(fn(int) -> int),
+   ·   ─┬─
+   ·    ╰── `Run` cannot be compared
+ 5 │   Stop,
+   ╰────
+  help: Give `Action` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field. `#[equality]` cannot compare functions · code: [attribute.cannot_derive_equality]

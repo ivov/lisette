@@ -1,0 +1,3 @@
+# Emit snapshots in `go_emit/typecheck_only.txt` whose Go does not type-check.
+# One snapshot stem per line, with an optional `#` note.
+# The test fails when a name here passes, so remove each name that a fix closes.

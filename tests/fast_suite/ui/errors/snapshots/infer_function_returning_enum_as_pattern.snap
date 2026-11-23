@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Variant not found
+    ╭─[test.lis:10:5]
+  9 │   match s {
+ 10 │     Make(x) => x,
+    ·     ───┬───
+    ·        ╰── no variant `Make` on `Status`
+ 11 │     _ => 1,
+    ╰────
+  help: Available variants for `Status` are `Active` and `Inactive` · code: [resolve.variant_not_found]

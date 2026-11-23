@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test(opt: Option<int>) -> int {
+    let subject_1 = 42
+    let val = match opt {
+      Some(v) => v,
+      None => 0,
+    }
+    subject_1 + val
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) int {
+	subject1 := 42
+	var val int
+	if opt.Tag == lisette.OptionSome {
+		val = opt.SomeVal
+	} else {
+		val = 0
+	}
+	return subject1 + val
+}

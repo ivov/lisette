@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn write_all(file: Ref<os.File>) {
+    if file.Write(['h', 'i']).is_ok() {
+      fmt.Println("written")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func writeAll(file *os.File) {
+	ret, ret2 := file.Write([]byte{'h', 'i'})
+	var result lisette.Partial[int, error]
+	if ret2 != nil {
+		result = lisette.MakePartialBoth[int, error](ret, ret2)
+	} else {
+		result = lisette.MakePartialOk[int, error](ret)
+	}
+	if result.IsOk() {
+		fmt.Println("written")
+	}
+}

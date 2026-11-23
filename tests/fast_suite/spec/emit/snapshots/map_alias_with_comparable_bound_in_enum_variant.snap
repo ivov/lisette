@@ -1,0 +1,38 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  type Table<T: Comparable> = Map<T, int>
+  
+  enum Holder<T: Comparable> {
+    Some(Table<T>),
+  }
+  
+  fn main() {
+    let h = Holder.Some(Map.new<string, int>())
+    let _ = h
+  }
+---
+package main
+
+func MakeHolderSome[T comparable](arg0 Table[T]) Holder[T] {
+	return Holder[T]{Tag: HolderSome, Some: arg0}
+}
+
+type Table[T comparable] = map[T]int
+
+type HolderTag uint8
+
+const (
+	HolderSome HolderTag = iota
+)
+
+type Holder[T comparable] struct {
+	Tag  HolderTag
+	Some Table[T]
+}
+
+func main() {
+	h := MakeHolderSome(make(map[string]int))
+	_ = h
+}

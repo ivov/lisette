@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/lex/mod.rs
+description: "\"hello!@#$%^&*()_+{}|:<>?~`-=[]\\;',./\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: String,
+            text: "\"hello!@#$%^&*()_+{}|:<>?~`-=[]\\;',./\"",
+            byte_offset: 0,
+            byte_length: 38,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 38,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Invalid escape sequence",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 2,
+                    },
+                    "`\\;` is not a valid escape",
+                ),
+            ],
+            help: Some(
+                "Valid escapes are `\\a`, `\\b`, `\\f`, `\\n`, `\\r`, `\\t`, `\\v`, `\\\\`, `\\\"`, `\\xHH` (hex), `\\ooo` (octal), and `\\u{HEX}` or `\\UHHHHHHHH` (unicode)",
+            ),
+            code: "lex.invalid_escape_sequence",
+        },
+    ],
+    blank_lines: [],
+}

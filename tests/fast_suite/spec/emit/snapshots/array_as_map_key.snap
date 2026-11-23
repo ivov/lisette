@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn count(m: Map<Array<int, 2>, string>) -> int {
+    m.length()
+  }
+---
+package main
+
+func count(m map[[2]int]string) int {
+	return len(m)
+}

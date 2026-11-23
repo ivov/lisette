@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn maybe_get() -> Option<int> {
+    None
+  }
+  
+  fn process() -> Option<int> {
+    let x = maybe_get()?;
+    Some(x + 1)
+  }
+---
+package main
+
+func maybeGet() (int, bool) {
+	return 0, false
+}
+
+func process() (int, bool) {
+	x, ok := maybeGet()
+	if !ok {
+		return 0, false
+	}
+	return x + 1, true
+}

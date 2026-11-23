@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Duplicate import
+   ╭─[main.lis:3:10]
+ 2 │ import a "utils"
+ 3 │ import b "utils"
+   ·          ───┬───
+   ·             ╰── already imported above
+ 4 │ 
+   ╰────
+  help: Remove the duplicate import. Package `utils` is already imported · code: [resolve.duplicate_import]

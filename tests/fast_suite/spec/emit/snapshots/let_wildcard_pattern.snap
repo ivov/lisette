@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn compute() -> int { 42 }
+  
+  fn test() {
+    let _ = compute();
+  }
+---
+package main
+
+func compute() int {
+	return 42
+}
+
+func test() {
+	compute()
+}

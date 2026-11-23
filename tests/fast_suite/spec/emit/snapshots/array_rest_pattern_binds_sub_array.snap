@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<int, 3>) -> Array<int, 2> {
+    let [_first, ..rest] = arr
+    rest
+  }
+---
+package main
+
+func f(arr [3]int) [2]int {
+	rest := ([2]int)(arr[1:])
+	return rest
+}

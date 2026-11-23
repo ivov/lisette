@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Box { value: int }
+  
+  fn run() -> Result<(), string> {
+    let mut a = Box { value: 10 }
+    let mut b = Box { value: 20 }
+    let mut p = &a
+    let bump = || -> Result<int, string> {
+      p = &b
+      Ok(5)
+    }
+    p.*.value = bump()?
+    Ok(())
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box struct {
+	value int
+}
+
+func run() lisette.Result[struct{}, string] {
+	a := Box{value: 10}
+	b := Box{value: 20}
+	p := &a
+	bump := func() lisette.Result[int, string] {
+		p = &b
+		return lisette.MakeResultOk[int, string](5)
+	}
+	ref := p
+	check := bump()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check.ErrVal)
+	}
+	ref.value = check.OkVal
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}

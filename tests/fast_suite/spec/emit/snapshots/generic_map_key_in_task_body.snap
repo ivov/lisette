@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn use_map_in_task<K: Comparable, V>(key: K, value: V) {
+    task {
+      let mut m: mut Map<K, V> = Map.new()
+      m[key] = value
+    }
+  }
+---
+package main
+
+func useMapInTask[K comparable, V any](key K, value V) {
+	go func() {
+		m := make(map[K]V)
+		m[key] = value
+	}()
+}

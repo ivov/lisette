@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn mark() -> int {
+    2
+  }
+  
+  fn test() {
+    let mut xs = [1]
+    defer xs.append(mark())
+  }
+---
+package main
+
+import "slices"
+
+func mark() int {
+	return 2
+}
+
+func test() {
+	xs := []int{1}
+	arg := mark()
+	defer func() {
+		_ = append(slices.Clip(xs), arg)
+	}()
+}

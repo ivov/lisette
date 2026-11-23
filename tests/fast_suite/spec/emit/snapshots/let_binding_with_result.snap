@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() {
+    let x = Ok(42);
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	lisette.MakeResultOk[int, any](42)
+}

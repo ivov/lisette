@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import router "go:github.com/gorilla/mux"
+  import "go:fmt"
+  
+  fn test() {
+    fmt.Print("Named alias import")
+  }
+---
+package main
+
+import "fmt"
+
+func test() {
+	fmt.Print("Named alias import")
+}

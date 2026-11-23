@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut s = [1]
+    let r = &s
+    let _ = r.*.append(2)
+  }
+---
+package main
+
+import "slices"
+
+func main() {
+	s := []int{1}
+	r := &s
+	recv := *r
+	_ = append(slices.Clip(recv), 2)
+}

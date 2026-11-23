@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Resource {}
+  
+  impl Resource {
+    fn close(self) {
+      fmt.Print("closed");
+    }
+  }
+  
+  fn test() {
+    let r = Resource {};
+    defer r.close()
+  }
+---
+package main
+
+import "fmt"
+
+type Resource struct{}
+
+func (r Resource) close() {
+	fmt.Print("closed")
+}
+
+func test() {
+	r := Resource{}
+	defer r.close()
+}

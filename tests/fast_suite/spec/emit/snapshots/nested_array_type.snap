@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/arrays.rs
+description: |
+  
+  fn grid() -> Array<Array<int, 3>, 2> {
+    [[1, 2, 3], [4, 5, 6]]
+  }
+---
+package main
+
+func grid() [2][3]int {
+	return [2][3]int{{1, 2, 3}, {4, 5, 6}}
+}

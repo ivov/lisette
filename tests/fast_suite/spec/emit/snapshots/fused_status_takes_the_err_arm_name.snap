@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    match strconv.Atoi("1") {
+      Ok(n) => fmt.Println(n),
+      Err(failure) => fmt.Println(failure),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	if n, failure := strconv.Atoi("1"); failure == nil {
+		fmt.Println(n)
+	} else {
+		fmt.Println(failure)
+	}
+}

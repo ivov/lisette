@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> bool {
+    true && false
+  }
+---
+package main
+
+func test() bool {
+	return true && false
+}

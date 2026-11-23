@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+func main() {
+	reader := strings.NewReader("hello")
+	if ret, err := io.ReadAll(reader); err == nil {
+		fmt.Print("ok")
+	} else if ret == nil {
+		fmt.Print("err")
+	} else {
+		fmt.Print("both")
+	}
+}

@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unicode escape out of range
+   ╭─[test.lis:1:10]
+ 1 │ let x = '\u{110000}'
+   ·          ─────┬────
+   ·               ╰── codepoint exceeds U+10FFFF or is a surrogate (U+D800-U+DFFF)
+   ╰────
+  help: Unicode escapes must be in the range `0` to `0xD7FF` or `0xE000` to `0x10FFFF` · code: [lex.unicode_escape_out_of_range]

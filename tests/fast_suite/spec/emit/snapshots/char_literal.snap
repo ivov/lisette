@@ -1,0 +1,11 @@
+---
+source: tests/fast_suite/spec/emit/literals.rs
+description: |
+  
+  fn test() {
+    'a'
+  }
+---
+package main
+
+func test() {}

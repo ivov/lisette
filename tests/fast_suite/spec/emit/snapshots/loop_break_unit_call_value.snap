@@ -1,0 +1,25 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn noop() {}
+  
+  fn test() {
+    let _ = loop {
+      break noop()
+    }
+  }
+---
+package main
+
+func noop() {}
+
+func test() {
+	var tmp struct{}
+	for {
+		noop()
+		tmp = struct{}{}
+		break
+	}
+	_ = tmp
+}

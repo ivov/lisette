@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  enum E { Triple(int, int, int), Other }
+  
+  fn f(e: E) -> int {
+    match e {
+      Triple(1, // trailing
+      ..) => 0,
+      _ => 1,
+    }
+  }
+---
+enum E {
+  Triple(int, int, int),
+  Other,
+}
+
+fn f(e: E) -> int {
+  match e {
+    Triple(
+      1, // trailing
+      ..,
+    ) => 0,
+    _ => 1,
+  }
+}

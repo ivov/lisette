@@ -1,0 +1,85 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  enum Event { KeyDown(int), KeyUp(int), Click }
+  
+  fn read() -> Result<Event, error> {
+    Ok(Event.Click)
+  }
+  
+  fn key() -> int {
+    match read() {
+      Ok(Event.KeyDown(c) | Event.KeyUp(c)) => c,
+      _ => 0,
+    }
+  }
+  
+  fn key_or_fail() -> int {
+    let Ok(Event.KeyDown(c) | Event.KeyUp(c)) = read() else {
+      return -1
+    }
+    c
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeEventKeyDown(arg0 int) Event {
+	return Event{Tag: EventKeyDown, KeyDown: arg0}
+}
+
+func MakeEventKeyUp(arg0 int) Event {
+	return Event{Tag: EventKeyUp, KeyUp: arg0}
+}
+
+func MakeEventClick() Event {
+	return Event{Tag: EventClick}
+}
+
+type EventTag uint8
+
+const (
+	EventKeyDown EventTag = iota
+	EventKeyUp
+	EventClick
+)
+
+type Event struct {
+	Tag     EventTag
+	KeyDown int
+	KeyUp   int
+}
+
+func read() (Event, error) {
+	return MakeEventClick(), nil
+}
+
+func key() int {
+	subject := lisette.ResultFromPair[Event](read())
+	if subject.Tag == lisette.ResultOk {
+		switch subject.OkVal.Tag {
+		case EventKeyDown:
+			return subject.OkVal.KeyDown
+		case EventKeyUp:
+			return subject.OkVal.KeyUp
+		default:
+			return 0
+		}
+	}
+	return 0
+}
+
+func keyOrFail() int {
+	subject := lisette.ResultFromPair[Event](read())
+	var c int
+	if subject.Tag == lisette.ResultOk && subject.OkVal.Tag == EventKeyDown {
+		c = subject.OkVal.KeyDown
+	} else if subject.Tag == lisette.ResultOk && subject.OkVal.Tag == EventKeyUp {
+		c = subject.OkVal.KeyUp
+	} else {
+		return -1
+	}
+	return c
+}

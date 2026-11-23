@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  fn f(c: Channel<int>) -> int {
+    select {
+      match c.receive() {
+        Some(v) => v, // trailing nested arm
+        None => 0,
+      },
+    }
+  }
+---
+fn f(c: Channel<int>) -> int {
+  select {
+    match c.receive() {
+      Some(v) => v, // trailing nested arm
+      None => 0,
+    },
+  }
+}

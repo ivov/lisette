@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Foo { value: int }
+  
+  impl Foo {
+    fn increment(self: mut Ref<Foo>) {
+      self.value = self.value + 1
+    }
+  }
+  
+  fn test() {
+    (Foo { value: 42 }).increment()
+  }
+---
+package main
+
+type Foo struct {
+	value int
+}
+
+func (f *Foo) increment() {
+	f.value++
+}
+
+func test() {
+	(&Foo{value: 42}).increment()
+}

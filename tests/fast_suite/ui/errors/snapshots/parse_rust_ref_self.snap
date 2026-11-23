@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Rust-style receiver
+   ╭─[test.lis:5:16]
+ 4 │ impl Counter {
+ 5 │   fn get_count(&self) -> int {
+   ·                ──┬──
+   ·                  ╰── not a receiver form
+ 6 │     self.count
+   ╰────
+  help: A read-only receiver is `self: Ref<T>`, where `T` is the type this `impl` targets. For a copy, use `self` · code: [parse.rust_style_receiver]

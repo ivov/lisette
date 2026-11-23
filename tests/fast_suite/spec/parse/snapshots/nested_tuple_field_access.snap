@@ -1,0 +1,173 @@
+---
+source: tests/fast_suite/spec/parse/mod.rs
+description: |
+  
+  fn test(nested: ((int, int), int)) {
+    let x = nested.0.0;
+  }
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "nested",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 6,
+                    },
+                    binding: None,
+                },
+                annotation: Some(
+                    Tuple {
+                        elements: [
+                            Tuple {
+                                elements: [
+                                    Constructor {
+                                        name: "int",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 19,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                    Constructor {
+                                        name: "int",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 24,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 18,
+                                    byte_length: 10,
+                                },
+                            },
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 30,
+                                    byte_length: 3,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 17,
+                            byte_length: 17,
+                        },
+                    },
+                ),
+                ty: Var {
+                    id: uninferred,
+                },
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Var {
+            id: uninferred,
+        },
+        visibility: Private,
+        body: Definition(
+            Block {
+                items: [
+                    Let {
+                        binding: Binding {
+                            pattern: Identifier {
+                                identifier: "x",
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 44,
+                                    byte_length: 1,
+                                },
+                                binding: None,
+                            },
+                            annotation: None,
+                            ty: Var {
+                                id: uninferred,
+                            },
+                        },
+                        value: DotAccess {
+                            expression: DotAccess {
+                                expression: Identifier {
+                                    value: "nested",
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 48,
+                                        byte_length: 6,
+                                    },
+                                    resolution: Unresolved,
+                                },
+                                member: "0",
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 48,
+                                    byte_length: 8,
+                                },
+                                resolution: Unresolved,
+                            },
+                            member: "0",
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 48,
+                                byte_length: 10,
+                            },
+                            resolution: Unresolved,
+                        },
+                        mode: Plain,
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 40,
+                            byte_length: 18,
+                        },
+                    },
+                ],
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 36,
+                    byte_length: 25,
+                },
+            },
+        ),
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 60,
+        },
+    },
+]

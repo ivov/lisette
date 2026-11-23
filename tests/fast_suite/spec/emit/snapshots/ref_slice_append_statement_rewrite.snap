@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut s = [1]
+    let mut r: mut Ref<mut Slice<int>> = &s
+    r.* = r.*.append(2)
+    let _ = s
+  }
+---
+package main
+
+func main() {
+	s := []int{1}
+	r := &s
+	*r = append(*r, 2)
+	_ = s
+}

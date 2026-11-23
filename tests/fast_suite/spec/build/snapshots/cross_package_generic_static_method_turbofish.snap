@@ -1,0 +1,28 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+type Box[T any] struct {
+	Val T
+}
+
+func NewBox[T any](v T) Box[T] {
+	return Box[T]{Val: v}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+
+	"github.com/user/myproject/lib"
+)
+
+func main() {
+	b := lib.NewBox[int](42)
+	fmt.Println(b.Val)
+}

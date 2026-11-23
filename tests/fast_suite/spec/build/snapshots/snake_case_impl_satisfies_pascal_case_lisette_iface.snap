@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+type Runner interface {
+	Run() int
+}
+
+type Job struct{}
+
+func (j Job) Run() int {
+	return 1
+}
+
+func useIt(r Runner) int {
+	return r.Run()
+}
+
+func main() {
+	useIt(Job{})
+}

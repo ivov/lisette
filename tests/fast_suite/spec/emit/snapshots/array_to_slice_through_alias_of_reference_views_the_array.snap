@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  type Grid = Array<int, 3>
+  type GridRef = Ref<Grid>
+  
+  fn main() {
+    let g: Grid = [1, 2, 3]
+    let r: GridRef = &g
+    let s = r.to_slice()
+    fmt.Println(g.to_slice().contains(2), r.to_slice().length(), r.to_slice().contains(5), s)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+type Grid = [3]int
+
+type GridRef = *Grid
+
+func main() {
+	g := [3]int{1, 2, 3}
+	r := &g
+	s := slices.Clone((*r)[:])
+	fmt.Println(slices.Contains(g[:], 2), len((*r)[:]), slices.Contains((*r)[:], 5), s)
+}

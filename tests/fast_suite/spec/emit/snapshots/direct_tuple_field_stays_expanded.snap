@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Holder { p: (int, int) }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Holder struct {
+	p lisette.Tuple2[int, int]
+}

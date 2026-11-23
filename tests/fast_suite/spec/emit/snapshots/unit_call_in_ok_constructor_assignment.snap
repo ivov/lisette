@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn noop() {}
+  
+  fn test() -> Result<(), string> {
+    let r: Result<(), string> = if true { Ok(noop()) } else { Ok(()) }
+    r
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func noop() {}
+
+func test() lisette.Result[struct{}, string] {
+	var r lisette.Result[struct{}, string]
+	if true {
+		noop()
+		r = lisette.MakeResultOk[struct{}, string](struct{}{})
+	} else {
+		r = lisette.MakeResultOk[struct{}, string](struct{}{})
+	}
+	return r
+}

@@ -1,0 +1,16 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  fn test() -> string {
+    let x = 42;
+    let x = "hello";
+    x
+  }
+---
+package main
+
+func test() string {
+	x := "hello"
+	return x
+}

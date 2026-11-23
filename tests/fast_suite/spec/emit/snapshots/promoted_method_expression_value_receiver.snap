@@ -1,0 +1,40 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Base { pub id: int }
+  
+  impl Base {
+    pub fn describe(self) -> string { "base" }
+  }
+  
+  struct Mid { embed Base }
+  struct Top { embed Mid }
+  
+  fn main() {
+    let f = Top.describe
+    let _ = f(Top { Mid: Mid { Base: Base { id: 1 } } })
+  }
+---
+package main
+
+type Base struct {
+	Id int
+}
+
+func (b Base) Describe() string {
+	return "base"
+}
+
+type Mid struct {
+	Base
+}
+
+type Top struct {
+	Mid
+}
+
+func main() {
+	f := Top.Describe
+	f(Top{Mid: Mid{Base: Base{Id: 1}}})
+}

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/math_utils"
+
+func main() {
+	math_utils.DoubleSquare(3.0)
+}
+
+
+// === math_utils/lib.go ===
+package math_utils
+
+func Square(x float64) float64 {
+	return x * x
+}
+
+func DoubleSquare(x float64) float64 {
+	return Square(x) * 2.0
+}

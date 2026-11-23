@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test(opt: Option<int>) -> int {
+    match opt {
+      Some(n) if n > 100 => n * 2,
+      Some(n) if n > 0 => n,
+      Some(_) => 0,
+      None => -1,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) int {
+	if opt.Tag == lisette.OptionSome {
+		n := opt.SomeVal
+		if n > 100 {
+			return n * 2
+		}
+		if n > 0 {
+			return n
+		}
+		return 0
+	}
+	return -1
+}

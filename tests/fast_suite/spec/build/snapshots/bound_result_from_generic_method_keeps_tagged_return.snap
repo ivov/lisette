@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Face interface {
+}
+
+func Resultant(arg int) (int, Face) {
+	return arg, nil
+}
+
+type Holder struct {
+	N int
+}
+
+func HolderResolve[R any, E any](self Holder, f func(int) lisette.Result[R, E]) lisette.Result[R, E] {
+	return f(self.N)
+}
+
+func main() {
+	rez := HolderResolve(Holder{N: 4}, func(arg0 int) lisette.Result[int, Face] {
+		ret, ret2 := Resultant(arg0)
+		if ret2 != nil {
+			return lisette.MakeResultErr[int, Face](ret2)
+		}
+		return lisette.MakeResultOk[int, Face](ret)
+	})
+	_ = rez
+}

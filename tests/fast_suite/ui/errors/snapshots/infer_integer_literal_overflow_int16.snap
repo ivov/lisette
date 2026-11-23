@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Integer literal overflow
+   ╭─[test.lis:3:18]
+ 2 │ fn test() {
+ 3 │   let x: int16 = 40000;
+   ·                  ──┬──
+   ·                    ╰── overflows `int16`
+ 4 │ }
+   ╰────
+  help: `int16` must be in range `-32768` to `32767` · code: [infer.integer_literal_overflow]

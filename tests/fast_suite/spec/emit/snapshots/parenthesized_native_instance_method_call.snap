@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() -> int {
+    let xs = [1, 2, 3]
+    (xs.length)()
+  }
+---
+package main
+
+func test() int {
+	xs := []int{1, 2, 3}
+	return len(xs)
+}

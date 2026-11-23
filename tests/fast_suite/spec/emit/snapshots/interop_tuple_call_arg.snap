@@ -1,0 +1,39 @@
+---
+source: tests/fast_suite/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:path"
+  
+  fn use_split(f: fn(string) -> (string, string), p: string) -> string {
+    let (dir, file) = f(p)
+    f"{dir}/{file}"
+  }
+  
+  fn main() {
+    let r = use_split(path.Split, "/foo/bar.txt")
+    let _ = r
+  }
+---
+package main
+
+import (
+	"path"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func useSplit(f func(string) lisette.Tuple2[string, string], p string) string {
+	tmp := f(p)
+	dir := tmp.First
+	file := tmp.Second
+	return dir + "/" + file
+}
+
+func main() {
+	r := useSplit(func(arg0 string) lisette.Tuple2[string, string] {
+		ret, ret2 := path.Split(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
+		return tup
+	}, "/foo/bar.txt")
+	_ = r
+}

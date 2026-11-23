@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/format/mod.rs
+description: |-
+  interface Reader {
+    embed Closable;
+    fn read() -> string;
+  }
+---
+interface Reader {
+  embed Closable
+  fn read() -> string
+}

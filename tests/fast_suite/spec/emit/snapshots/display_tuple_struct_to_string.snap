@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct UserId(int)
+---
+package main
+
+import "fmt"
+
+type UserId int
+
+func (u UserId) String() string {
+	return fmt.Sprintf("UserId(%v)", int(u))
+}
+
+func (u UserId) toString() string {
+	return u.String()
+}

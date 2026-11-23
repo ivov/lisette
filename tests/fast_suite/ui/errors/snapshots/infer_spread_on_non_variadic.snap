@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Invalid spread argument
+   ╭─[test.lis:5:3]
+ 4 │ fn test(args: Slice<int>) {
+ 5 │   takes_int(args...)
+   ·   ─────────┬────────
+   ·            ╰── this function does not accept variadic arguments
+ 6 │ }
+   ╰────
+  help: Only functions with a `VarArgs<T>` parameter accept a `xs...` spread · code: [infer.spread_on_non_variadic]

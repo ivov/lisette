@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/recover.rs
+description: |
+  
+  fn risky() {
+    panic("oops");
+  }
+  
+  fn test() {
+    let result = recover { risky() };
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func risky() {
+	panic("oops")
+}
+
+func test() {
+	recoverResult := lisette.RecoverBlock(func() struct{} {
+		risky()
+		return struct{}{}
+	})
+	_ = recoverResult
+}

@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let mut x = 0
+    x = { { return 1 } }
+    let _ = x
+    2
+  }
+---
+package main
+
+func test() int {
+	{
+		return 1
+	}
+	return 2
+}

@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn external() -> Result<int, string> {
+    Ok(1)
+  }
+  
+  fn test() -> Result<int, string> {
+    external()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func external() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func test() lisette.Result[int, string] {
+	return external()
+}

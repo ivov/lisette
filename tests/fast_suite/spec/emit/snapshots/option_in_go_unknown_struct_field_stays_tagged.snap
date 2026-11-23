@@ -1,0 +1,26 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:example.com/dyn"
+  
+  fn main() {
+    let _ = dyn.Bag {
+      Decl: Some("decl"),
+      Data: None,
+    }
+  }
+---
+package main
+
+import (
+	"example.com/dyn"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	_ = dyn.Bag{
+		Decl: lisette.MakeOptionSome("decl"),
+		Data: lisette.MakeOptionNone[any](),
+	}
+}

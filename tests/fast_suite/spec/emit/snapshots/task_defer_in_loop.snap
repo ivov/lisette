@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:sync"
+  
+  fn test() {
+    let mut wg = sync.WaitGroup{};
+    for _ in 0..5 {
+      wg.Add(1);
+      task {
+        defer wg.Done()
+      }
+    }
+    wg.Wait()
+  }
+---
+package main
+
+import "sync"
+
+func test() {
+	wg := sync.WaitGroup{}
+	for range 5 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+		}()
+	}
+	wg.Wait()
+}

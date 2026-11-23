@@ -1,0 +1,31 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let mut sum = 0;
+    for i in [1, 2, 3, 4, 5] {
+      let v = if i % 2 == 0 {
+        continue
+      } else {
+        i
+      };
+      sum += v;
+    }
+    sum
+  }
+---
+package main
+
+func test() int {
+	sum := 0
+	for _, i := range []int{1, 2, 3, 4, 5} {
+		var v int
+		if i%2 == 0 {
+			continue
+		}
+		v = i
+		sum += v
+	}
+	return sum
+}

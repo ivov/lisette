@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  struct Cache<K: Comparable, V> {
+    data: Map<K, V>,
+  }
+---
+package main
+
+type Cache[K comparable, V any] struct {
+	data map[K]V
+}

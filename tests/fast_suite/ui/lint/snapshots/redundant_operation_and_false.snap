@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ● Operation always evaluates to `false`
+   ╭─[test.lis:4:11]
+ 3 │   let b = true
+ 4 │   let _ = b && false
+   ·           ─────┬────
+   ·                ╰── the other operand cannot change the result
+ 5 │ }
+   ╰────
+  help: Simplify this operation to `false` · code: [lint.redundant_operation]

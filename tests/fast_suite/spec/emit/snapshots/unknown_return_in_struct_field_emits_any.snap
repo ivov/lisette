@@ -1,0 +1,13 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Bag {
+    pub callback: fn() -> Unknown,
+  }
+---
+package main
+
+type Bag struct {
+	Callback func() any
+}

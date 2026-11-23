@@ -1,0 +1,37 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let ch = Channel.buffered<int>(1)
+    let to_send = if true { 1 } else { 2 }
+    let result = select {
+      ch.send(to_send) => 0,
+      _ => 1,
+    }
+    fmt.Println(result)
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	ch := make(chan int, 1)
+	var toSend int
+	if true {
+		toSend = 1
+	} else {
+		toSend = 2
+	}
+	var result int
+	select {
+	case ch <- toSend:
+		result = 0
+	default:
+		result = 1
+	}
+	fmt.Println(result)
+}

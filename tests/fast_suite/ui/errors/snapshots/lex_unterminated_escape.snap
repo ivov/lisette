@@ -1,0 +1,10 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Unterminated escape sequence
+   ╭─[test.lis:1:9]
+ 1 │ let x = '\
+   ·         ┬
+   ·         ╰── escape sequence not completed
+   ╰────
+  help: Complete the escape sequence or remove the backslash · code: [lex.unterminated_escape]
