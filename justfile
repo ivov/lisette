@@ -46,9 +46,9 @@ test-cli:
         --test cli_lsp \
         -- --format terse
 
-# `go_*` tests: Lisette against the Go toolchain.
-test-go:
-    cargo test -p tests --locked --test go_emit --test go_rejections -- --nocapture
+# `go_*` tests: Lisette against the Go toolchain. Name tests to run only those, e.g. `just test-go go_emit`.
+test-go +tests="go_emit go_rejections go_equivalents":
+    cargo test -p tests --locked {{prepend("--test ", tests)}} -- --nocapture
 
 # `fuzz_*` tests: random changes to test programs. `seconds` limits the run.
 test-fuzz seconds="600":

@@ -6,7 +6,7 @@ Tests are grouped by prefix, from fast to slow.
 |---|---|---|---|
 | `fast_` | compiler (and LSP) as a lib | `just test-fast` | every PR |
 | `cli_` | `lis` CLI commands | `just test-cli` | every PR |
-| `go_` | Lis-emitted Go via Go toolchain | `just test-go` | every PR |
+| `go_` | Lis-emitted Go via Go toolchain | `just test-go` | every PR, `go_equivalents` nightly |
 | `fuzz_` | random changes to test programs | `just test-fuzz` | nightly |
 
 Each crate also has unit tests in its source files.
@@ -38,7 +38,8 @@ These tests run the `lis` binary on small projects, as a user does.
 
 These tests check Lis-emitted Go via the Go toolchain: `go build`, `go vet`, `go test` or `go/types`.
 
-- `go_emit` checks that the Go of the `fast_suite` programs builds and passes its tests. It also checks generated programs with type conversions, e.g. a struct where Go expects an `error`. A program with no test, or one that cannot run, only needs to type-check. It also checks equivalent copies of the emit snapshot programs, e.g. with extra parens or type aliases.
+- `go_emit` checks that the Go of the `fast_suite` programs builds and passes its tests. It also checks generated programs with type conversions, e.g. a struct where Go expects an `error`. A program with no test, or one that cannot run, only needs to type-check.
+- `go_equivalents` checks equivalent copies of the emit snapshot programs, e.g. with extra parens or type aliases.
 - `go_rejections` checks with `go/types` that `lis check` rejects exactly the programs that Go rejects, for small programs about constants, operators, interfaces and embedded types. When `lis check` rejects a program, Go checks a Go version of the same program.
 
 `fuzz_`

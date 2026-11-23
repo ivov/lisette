@@ -1,14 +1,7 @@
-//! Rewrites each emit snapshot program in ways that keep its meaning, and
-//! checks that each variant compiles to Go that builds and vets. The other
-//! `go_emit` tests build the originals, so this test does not. A variant that only adds parentheses or a block around one
-//! expression must compile to the Go of the original. A variant that replaces
-//! an annotation with an alias of it must compile to the Go of the original,
-//! after the alias is replaced by its target. A variant that reads a place
-//! `p` as `(&p).*`, a receiver `p` as `(&p)`, or a receiver `r.*` as `r` must
-//! compile to the Go of the original. Lisette errors on a variant are
-//! ignored.
+#[allow(dead_code, unused_imports)]
+mod _harness;
 
-use crate::_harness::go::go_available;
+use _harness::go::go_available;
 
 use std::any::Any;
 use std::collections::HashMap;
@@ -21,13 +14,13 @@ use syntax::ast::{Annotation, Expression, LetMode, Span, UnaryOperator};
 use syntax::program::{DotAccessResolution, ReceiverCoercion};
 use syntax::types::Type;
 
-use crate::_harness::go::{
+use _harness::go::{
     CompileError, compile_go_test, harvest_snapshots, prelude_dir, read_go_toolchain, repo_root,
     run_go_build, run_go_vet, skip_reason_for_imports, snapshots_dir, write_go_mod,
     write_subpackage,
 };
-use crate::_harness::pipeline::TestPipeline;
-use crate::_harness::wrap::wrap;
+use _harness::pipeline::TestPipeline;
+use _harness::wrap::wrap;
 
 const SITES_PER_REWRITE: usize = 3;
 

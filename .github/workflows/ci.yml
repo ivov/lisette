@@ -291,10 +291,14 @@ jobs:
           exit $fail
 
   test-go:
-    name: Go toolchain tests
+    name: Go toolchain tests (${{ matrix.test }})
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [go_emit, go_rejections]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
@@ -306,10 +310,10 @@ jobs:
         id: go-build-cache
         with:
           path: ~/.cache/go-build
-          key: go-build-go-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          key: go-build-${{ matrix.test }}-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
           restore-keys: |
-            go-build-go-${{ runner.os }}-
-      - run: just test-go
+            go-build-${{ matrix.test }}-${{ runner.os }}-
+      - run: just test-go ${{ matrix.test }}
       - if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6
         with:

@@ -1,4 +1,4 @@
-name: Fuzz
+name: Nightly
 on:
   schedule:
     - cron: "0 4 * * *"
@@ -161,3 +161,18 @@ jobs:
             --body-file "$body"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  go-equivalents:
+    name: Go equivalents
+    if: github.repository == 'ivov/lisette'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+          go: 'true'
+          go-cache: 'false'
+
+      - run: just test-go go_equivalents

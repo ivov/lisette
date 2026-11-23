@@ -71,7 +71,7 @@ path = "cli_learn.rs"
 name = "cli_lsp"
 path = "cli_lsp.rs"
 
-# `go_*`: Lisette against the Go toolchain. CI runs these on every PR.
+# `go_*`: Lisette against the Go toolchain.
 
 [[test]]
 name = "go_emit"
@@ -80,6 +80,10 @@ path = "go_emit.rs"
 [[test]]
 name = "go_rejections"
 path = "go_rejections.rs"
+
+[[test]]
+name = "go_equivalents"
+path = "go_equivalents.rs"
 
 # `fuzz_*`: random changes to test programs. CI runs these nightly.
 

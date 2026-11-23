@@ -7,8 +7,6 @@ use _harness::lists::read_names;
 mod build_snapshots;
 #[path = "go_emit/conversions.rs"]
 mod conversions;
-#[path = "go_emit/equivalents.rs"]
-mod equivalents;
 #[path = "go_emit/typecheck.rs"]
 mod typecheck;
 
