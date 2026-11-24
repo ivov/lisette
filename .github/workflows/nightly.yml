@@ -97,9 +97,24 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  test-fuzz-open-issue:
+    name: Fuzz tests open issue
+    if: github.repository == 'ivov/lisette'
+    runs-on: ubuntu-latest
+    outputs:
+      open: ${{ steps.count.outputs.open }}
+    steps:
+      - id: count
+        run: |
+          open=$(gh issue list --repo ivov/lisette --state open --search 'in:title "Fuzz run findings"' --json title --jq '[.[] | select(.title == "Fuzz run findings")] | length')
+          echo "open=$open" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   test-fuzz:
     name: Fuzz tests
-    if: github.repository == 'ivov/lisette'
+    needs: test-fuzz-open-issue
+    if: github.event_name == 'workflow_dispatch' || needs.test-fuzz-open-issue.outputs.open == '0'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
@@ -128,36 +143,16 @@ jobs:
           if-no-files-found: ignore
 
       - name: Create issue on failure
-        if: failure()
+        if: failure() && needs.test-fuzz-open-issue.outputs.open == '0'
         run: |
-          open=$(gh issue list --repo ivov/lisette --state open --search 'in:title "test-fuzz failure"' --json title --jq '[.[] | select(.title == "test-fuzz failure")] | length')
-          if [ "$open" != "0" ]; then
-            echo "An open test-fuzz issue already exists"
-            exit 0
+          body="$RUNNER_TEMP/fuzz-emit/issue.md"
+          if [ ! -f "$body" ]; then
+            body="$RUNNER_TEMP/issue.md"
+            echo "\`fuzz_emit\` failed in [this run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) without a report. The run log has the cause." > "$body"
           fi
-          out="$RUNNER_TEMP/fuzz-emit"
-          body="$RUNNER_TEMP/issue.md"
-          {
-            echo "\`fuzz_emit\` failed in a scheduled run: a program that \`lis check\` accepts crashed or failed \`go build\`, or a failure in \`tests/fuzz_emit/failing.txt\` changed. The \`test-fuzz-findings\` artifact holds all failing programs."
-            echo
-            echo "**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            if [ -f "$out/summary.txt" ]; then
-              printf '\n## Summary\n\n```\n'
-              head -c 20000 "$out/summary.txt"
-              printf '\n```\n'
-            fi
-            first=$(ls "$out"/new/*.lis 2>/dev/null | head -1)
-            if [ -n "$first" ]; then
-              printf '\n## First failing program: `%s`\n\n```rust\n' "$(basename "$first")"
-              head -c 15000 "$first"
-              printf '\n```\n\n## Its error\n\n```\n'
-              head -c 15000 "${first%.lis}.txt"
-              printf '\n```\n'
-            fi
-          } > "$body"
           gh issue create \
             --repo ivov/lisette \
-            --title "test-fuzz failure" \
+            --title "Fuzz run findings" \
             --body-file "$body"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
