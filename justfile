@@ -1,7 +1,5 @@
 export INSTA_YAML_BLOCK_STYLE := "1"
 
-filter := ""
-
 build:
     cargo build --release
 
@@ -49,9 +47,8 @@ test-cli:
         -- --format terse
 
 # `go_*` tests: Lisette against the Go toolchain. Name tests to run only those, e.g. `just test-go go_emit`.
-# Set `filter` to pass test filters, e.g. `just filter='--skip constants_match_go' test-go go_rejections`.
 test-go +tests="go_emit go_rejections go_equivalents":
-    cargo test --profile go-tests -p tests --locked {{prepend("--test ", tests)}} -- --nocapture {{filter}}
+    cargo test --profile go-tests -p tests --locked {{prepend("--test ", tests)}} -- --nocapture
 
 # `fuzz_*` tests: random changes to test programs. `seconds` limits the run.
 test-fuzz seconds="600":
