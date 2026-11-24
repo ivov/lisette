@@ -52,6 +52,11 @@ debug = "line-tables-only"
 [profile.dev.build-override]
 opt-level = 3
 
+[profile.go-tests]
+inherits = "dev"
+opt-level = 1
+debug = false
+
 [profile.flamegraph]
 inherits = "release"
 debug = true

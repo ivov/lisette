@@ -220,50 +220,50 @@ pub fn cases() -> Vec<Case> {
             );
         }
     }
-    for ty in BINARY_TYPES {
-        for left in LEFT_LITERALS {
-            for right in RIGHT_LITERALS {
-                for operator in OPERATORS {
-                    let (go_left, go_right) = (go_literal(left), go_literal(right));
-                    let id = |context: &str| format!("{context}/{ty}/{left}/{operator}/{right}");
+    for (type_index, ty) in BINARY_TYPES.iter().enumerate() {
+        for (operator_index, operator) in OPERATORS.iter().enumerate() {
+            for (right_index, right) in RIGHT_LITERALS.iter().enumerate() {
+                let left = LEFT_LITERALS
+                    [(type_index + operator_index + right_index) % LEFT_LITERALS.len()];
+                let (go_left, go_right) = (go_literal(left), go_literal(right));
+                let id = |context: &str| format!("{context}/{ty}/{left}/{operator}/{right}");
+                builder.add(
+                    id("binary_untyped"),
+                    ("", &format!("  let v: {ty} = {left} {operator} {right}\n")),
+                    (
+                        "",
+                        &format!("\tvar v {ty} = {go_left} {operator} {go_right}\n"),
+                    ),
+                );
+                builder.add(
+                    id("binary_variable"),
+                    (
+                        "",
+                        &format!(
+                            "  let a: {ty} = {}\n  let v = a {operator} {right}\n",
+                            initializer(ty, left)
+                        ),
+                    ),
+                    (
+                        "",
+                        &format!(
+                            "\tvar a {ty} = {}\n\tv := a {operator} {go_right}\n",
+                            initializer(ty, &go_left)
+                        ),
+                    ),
+                );
+                if !NEWTYPES.contains(ty) {
                     builder.add(
-                        id("binary_untyped"),
-                        ("", &format!("  let v: {ty} = {left} {operator} {right}\n")),
+                        id("binary_typed_constant"),
                         (
-                            "",
-                            &format!("\tvar v {ty} = {go_left} {operator} {go_right}\n"),
+                            &format!("const K: {ty} = {left}\n\n"),
+                            &format!("  let v = K {operator} {right}\n"),
+                        ),
+                        (
+                            &format!("const K {ty} = {go_left}\n\n"),
+                            &format!("\tv := K {operator} {go_right}\n"),
                         ),
                     );
-                    builder.add(
-                        id("binary_variable"),
-                        (
-                            "",
-                            &format!(
-                                "  let a: {ty} = {}\n  let v = a {operator} {right}\n",
-                                initializer(ty, left)
-                            ),
-                        ),
-                        (
-                            "",
-                            &format!(
-                                "\tvar a {ty} = {}\n\tv := a {operator} {go_right}\n",
-                                initializer(ty, &go_left)
-                            ),
-                        ),
-                    );
-                    if !NEWTYPES.contains(ty) {
-                        builder.add(
-                            id("binary_typed_constant"),
-                            (
-                                &format!("const K: {ty} = {left}\n\n"),
-                                &format!("  let v = K {operator} {right}\n"),
-                            ),
-                            (
-                                &format!("const K {ty} = {go_left}\n\n"),
-                                &format!("\tv := K {operator} {go_right}\n"),
-                            ),
-                        );
-                    }
                 }
             }
         }

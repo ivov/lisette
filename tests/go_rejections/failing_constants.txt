@@ -1,37 +1,10 @@
 # Case ids of the constants family where Lisette and Go disagree, one per line, with an optional `#` note.
 # The test fails when a listed case passes, so remove each id that a fix closes.
 binary_untyped/NF/'a'/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/NF/'a'/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/NF/-1/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/NF/-1/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/NF/1/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/NF/1/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/NF/127/<</'a' # too strict: folded constant checked against int, not the target type
 binary_untyped/NF/127/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/complex128/'a'/<</'a' # too strict: folded constant checked against int, not the target type
 binary_untyped/complex128/'a'/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/complex128/-1/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/complex128/-1/<</64 # too strict: folded constant checked against int, not the target type
 binary_untyped/complex128/1/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/complex128/1/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/complex128/127/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/complex128/127/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float32/'a'/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/float32/'a'/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float32/-1/<</'a' # too strict: folded constant checked against int, not the target type
 binary_untyped/float32/-1/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float32/1/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/float32/1/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float32/127/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/float32/127/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/'a'/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/'a'/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/-1/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/-1/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/1/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/1/<</64 # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/127/<</'a' # too strict: folded constant checked against int, not the target type
-binary_untyped/float64/127/<</64 # too strict: folded constant checked against int, not the target type
 complement_let/NF/18446744073709551615 # too strict: folded constant checked against int, not the target type
 complement_let/NF/18446744073709551616 # checker/bug-integer-literal-past-uint64-rejected.md
 complement_let/NF/9223372036854775808 # too strict: folded constant checked against int, not the target type

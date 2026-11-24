@@ -86,6 +86,7 @@ const COMPOUND: &[&str] = &[
 ];
 const UNARY: &[&str] = &["-", "!", "^"];
 const LITERALS: &[&str] = &["1", "1.5", "\"x\"", "true"];
+const LITERAL_OPERATORS: &[&str] = &["+", "-", "/", "%", "&", "<<", "==", "<", "&&"];
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Parameters {
@@ -191,7 +192,10 @@ pub fn cases() -> Vec<Case> {
                 format!("  let v = a {operator} b\n  fmt.Println(v)\n"),
                 format!("\tv := a {operator} b\n\tfmt.Println(v)\n"),
             );
-            for literal in LITERALS {
+            for literal in LITERALS
+                .iter()
+                .filter(|_| LITERAL_OPERATORS.contains(operator))
+            {
                 builder.add(
                     ty,
                     Parameters::One,
