@@ -37,13 +37,26 @@ impl UnusedImports {
 #[derive(Debug, Clone, Default)]
 pub struct EmitBindings {
     mutations: HashMap<AstBindingId, BindingMutation>,
+    hidden: HashMap<AstBindingId, AstBindingId>,
 }
 
 impl EmitBindings {
-    pub fn record(&mut self, id: AstBindingId, mutation: Option<BindingMutation>) {
+    pub fn record(
+        &mut self,
+        id: AstBindingId,
+        mutation: Option<BindingMutation>,
+        hides: Option<AstBindingId>,
+    ) {
         if let Some(mutation) = mutation {
             self.mutations.insert(id, mutation);
         }
+        if let Some(hidden) = hides {
+            self.hidden.insert(id, hidden);
+        }
+    }
+
+    pub fn hidden_binding(&self, id: AstBindingId) -> Option<AstBindingId> {
+        self.hidden.get(&id).copied()
     }
 
     pub fn is_mutated(&self, id: AstBindingId) -> bool {

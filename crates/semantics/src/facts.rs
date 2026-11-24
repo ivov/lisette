@@ -376,9 +376,16 @@ impl Facts {
                 mutation: None,
                 origin,
                 shadows,
+                hides: None,
             },
         );
         id
+    }
+
+    pub(crate) fn record_hidden_binding(&mut self, id: BindingId, hidden: BindingId) {
+        if let Some(fact) = self.bindings.get_mut(&id) {
+            fact.hides = Some(hidden);
+        }
     }
 
     pub(crate) fn binding_span(&self, id: BindingId) -> Option<Span> {
@@ -599,6 +606,7 @@ pub struct BindingFact {
     pub mutation: Option<BindingMutation>,
     pub origin: BindingOrigin,
     pub shadows: Option<Span>,
+    pub hides: Option<BindingId>,
 }
 
 #[derive(Debug, Clone, Copy)]

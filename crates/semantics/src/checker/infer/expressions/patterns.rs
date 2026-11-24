@@ -314,9 +314,13 @@ impl InferCtx<'_> {
         self.check_binding_shadows_import(&name, span, origin.is_typedef());
 
         let shadows = self.shadowed_capture_span(&name);
+        let hidden = self.scopes.lookup_binding_id(&name);
         let binding_id = self
             .facts
             .add_binding(name.clone(), span, kind, origin, shadows);
+        if let Some(hidden) = hidden {
+            self.facts.record_hidden_binding(binding_id, hidden);
+        }
         let scope = self.scopes.current_mut();
         scope.insert_binding(name, ty, binding_id, kind.is_mutable());
         binding_id

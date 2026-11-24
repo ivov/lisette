@@ -1,0 +1,88 @@
+use crate::lookup::state::scope::ScopeState;
+use crate::target::ir::bodies::Statement;
+use crate::target::ir::go_expression::GoExpressionNode;
+use crate::target::ir::local::{GoIdentifier, LocalId};
+use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
+use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashSet as HashSet;
+
+pub(crate) fn identify_body_locals(
+    statements: &mut Vec<Statement>,
+    parameters: &[GoIdentifier],
+    scope: &mut ScopeState,
+) -> HashSet<LocalId> {
+    struct Resolve<'a> {
+        scope: &'a mut ScopeState,
+        frames: Vec<HashMap<String, LocalId>>,
+        shadowing: HashSet<LocalId>,
+    }
+
+    impl VisitorMut for Resolve<'_> {
+        fn expression(&mut self, node: &mut GoExpressionNode) {
+            let GoExpressionNode::Identifier(name) = node else {
+                return;
+            };
+            if let Some(id) = name.id() {
+                assert!(
+                    self.frames
+                        .iter()
+                        .any(|frame| frame.values().any(|local| *local == id)),
+                    "identified read of `{}` has no visible declaration",
+                    name.spelling()
+                );
+                return;
+            }
+            assert!(
+                !name.is_pending(),
+                "read has no producer-assigned identity: {}",
+                name.spelling()
+            );
+        }
+
+        fn local_binding(&mut self, name: &mut GoIdentifier) {
+            if name.spelling() == "_" {
+                name.finish();
+                return;
+            }
+            let current = self
+                .frames
+                .last()
+                .expect("a local scope exists")
+                .get(name.spelling())
+                .copied();
+            let id =
+                current.unwrap_or_else(|| name.id().unwrap_or_else(|| self.scope.new_local_id()));
+            name.identify(id);
+            if self.frames[..self.frames.len() - 1]
+                .iter()
+                .any(|frame| frame.get(name.spelling()).is_some_and(|outer| *outer != id))
+            {
+                self.shadowing.insert(id);
+            }
+            self.frames
+                .last_mut()
+                .expect("a local scope exists")
+                .insert(name.spelling().to_string(), id);
+        }
+
+        fn enter_scope(&mut self) {
+            self.frames.push(HashMap::default());
+        }
+
+        fn exit_scope(&mut self) {
+            self.frames.pop().expect("a local scope exists");
+        }
+    }
+
+    let mut resolver = Resolve {
+        scope,
+        frames: vec![HashMap::default()],
+        shadowing: HashSet::default(),
+    };
+    for name in parameters {
+        let mut name = name.clone();
+        resolver.local_binding(&mut name);
+    }
+    visit_statements_mut(statements, &mut resolver);
+    resolver.shadowing
+}

@@ -1,0 +1,377 @@
+use crate::EmitFacts;
+use crate::target::ir::prelude as fallible;
+use crate::target::ir::prelude::Fallible;
+use crate::target::ir::values::GoExpression;
+use crate::target::names::go_name;
+use crate::target::names::source_name::SourceName;
+use crate::target::types::enum_layout::VariantLayout;
+use std::borrow::Cow;
+use syntax::ast::{Expression, Literal, Pattern, RestPattern, StructFieldDefinition, StructFields};
+use syntax::go_names;
+use syntax::program::NativeTypeKind;
+use syntax::program::{Definition, DefinitionBody, DotAccessResolution, constructor_fields};
+use syntax::program::{FieldSelection, GoHint, ReceiverCoercion};
+use syntax::types::{CompoundKind, build_substitution_map};
+use syntax::types::{Symbol, Type};
+
+pub(crate) struct ResolvedNominal<'a> {
+    pub(crate) id: Symbol,
+    pub(crate) definition: &'a Definition,
+}
+
+fn is_scalar_literal(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Literal {
+            literal: Literal::Integer { .. }
+                | Literal::Float { .. }
+                | Literal::Imaginary(_)
+                | Literal::Boolean(_)
+                | Literal::String { .. }
+                | Literal::Char(_),
+            ..
+        }
+    )
+}
+
+pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
+    !(is_scalar_literal(expression) || matches!(expression, Expression::Identifier { .. }))
+}
+
+impl<'a> EmitFacts<'a> {
+    pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<SourceName> {
+        let name = match pattern {
+            Pattern::Identifier { identifier, .. } => identifier,
+            Pattern::AsBinding { name, .. } => name,
+            _ => return None,
+        };
+        Some(SourceName::new(name))
+    }
+
+    pub(crate) fn go_name_for_rest_binding(&self, rest: &RestPattern) -> Option<SourceName> {
+        match rest {
+            RestPattern::Bind { name, .. } => Some(SourceName::new(name)),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn field_read_cannot_panic(&self, ty: &Type) -> bool {
+        !self.is_nilable_go_type(ty) && !ty.is_variable() && !ty.is_placeholder()
+    }
+
+    pub(crate) fn enum_struct_field_name(
+        &self,
+        enum_id: &str,
+        variant_name: &str,
+        field_name: &str,
+    ) -> Option<String> {
+        self.enum_layout(enum_id)?
+            .struct_field_name(variant_name, field_name)
+    }
+
+    pub(crate) fn is_enum_field_recursive(&self, ty: &Type, variant: &str, index: usize) -> bool {
+        self.enum_variant_layout(ty, variant)
+            .and_then(|variant_layout| variant_layout.fields.get(index))
+            .is_some_and(|field| field.is_recursive())
+    }
+
+    fn enum_variant_layout(&self, ty: &Type, variant: &str) -> Option<&'a VariantLayout> {
+        let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
+            return None;
+        };
+        self.enum_layout(&id)?.variant(variant)
+    }
+
+    pub(crate) fn enum_struct_field_index(
+        &self,
+        ty: &Type,
+        variant: &str,
+        field_name: &str,
+    ) -> Option<usize> {
+        let Type::Nominal { id, .. } = ty else {
+            return None;
+        };
+        constructor_fields(id, Some(variant), ty, |id| self.definition(id))?
+            .fields
+            .iter()
+            .position(|field| field.name == field_name)
+    }
+
+    pub(crate) fn resolve_nominal(&self, ty: &Type) -> Option<ResolvedNominal<'a>> {
+        let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
+            return None;
+        };
+        let definition = self.definition(id.as_str())?;
+        Some(ResolvedNominal { id, definition })
+    }
+
+    pub(crate) fn embedded_field(
+        &self,
+        struct_ty: &Type,
+        field_name: &str,
+    ) -> Option<&StructFieldDefinition> {
+        let resolved = self.resolve_nominal(struct_ty)?;
+        let DefinitionBody::Struct { fields, .. } = &resolved.definition.body else {
+            return None;
+        };
+        fields
+            .iter()
+            .find(|f| f.name == field_name && f.is_embedded())
+    }
+
+    pub(crate) fn field_access(
+        &self,
+        base: GoExpression,
+        ty: &Type,
+        field: String,
+    ) -> GoExpression {
+        if self.field_read_cannot_panic(ty) {
+            GoExpression::value_field(base, field)
+        } else {
+            GoExpression::selector(base, field)
+        }
+    }
+
+    pub(crate) fn is_tuple_struct_type(&self, ty: &Type) -> bool {
+        self.resolve_nominal(ty).is_some_and(|resolved| {
+            matches!(
+                &resolved.definition.body,
+                DefinitionBody::Struct {
+                    fields: StructFields::Tuple(_),
+                    ..
+                }
+            )
+        })
+    }
+
+    pub(crate) fn newtype_underlying(&self, ty: &Type) -> Option<Type> {
+        self.resolve_nominal(ty)?
+            .definition
+            .newtype_field()
+            .cloned()
+    }
+
+    pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
+        let resolved = self.resolve_nominal(ty)?;
+        matches!(&resolved.definition.body, DefinitionBody::Enum { .. })
+            .then(|| resolved.id.to_string())
+    }
+
+    pub(crate) fn enum_tuple_field_name(&self, ty: &Type, variant: &str, index: usize) -> String {
+        let ty = &self.receiver_shape(ty);
+        if let Some(variants) = fallible::tagged_payload_fields(ty) {
+            return variants
+                .iter()
+                .find(|tagged| tagged.name == variant)
+                .and_then(|tagged| tagged.fields.get(index))
+                .map_or_else(|| variant.to_string(), |field| field.to_string());
+        }
+
+        if let Some(field) = self
+            .enum_variant_layout(ty, variant)
+            .and_then(|variant_layout| variant_layout.fields.get(index))
+        {
+            return field.go_name.clone();
+        }
+
+        unreachable!("enum `{ty:?}` has no layout for field {index} of `{variant}`")
+    }
+
+    pub(crate) fn is_newtype_struct(&self, ty: &Type) -> bool {
+        self.newtype_underlying(ty).is_some()
+    }
+
+    pub(crate) fn reads_value_member(
+        &self,
+        resolution: &DotAccessResolution,
+        base: &Expression,
+        base_ty: &Type,
+    ) -> bool {
+        resolution.is_field_read() && base.deref_inner().is_none() && !self.is_reference(base_ty)
+    }
+
+    pub(crate) fn is_clone_container(&self, ty: &Type) -> bool {
+        matches!(
+            self.peel_alias(ty),
+            Type::Compound {
+                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
+                ..
+            }
+        )
+    }
+
+    pub(crate) fn first_type_argument(&self, ty: &Type) -> Option<Type> {
+        self.receiver_shape(ty).get_type_params()?.first().cloned()
+    }
+
+    pub(crate) fn fallible(&self, ty: &Type) -> Option<Fallible> {
+        Fallible::from_type(&self.peel_alias(ty))
+    }
+
+    pub(crate) fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
+        let mut current = self.peel_alias(ty);
+        while current.is_ref() {
+            value = GoExpression::dereference(value);
+            let pointee = current.inner().expect("Ref<T> must have inner");
+            current = self.peel_alias(&pointee);
+        }
+        value
+    }
+
+    pub(crate) fn dot_receiver_coercion(
+        &self,
+        receiver: &Expression,
+        member: &str,
+    ) -> Option<ReceiverCoercion> {
+        self.checked(receiver).receiver_change().filter(|coercion| {
+            *coercion != ReceiverCoercion::AutoAddress
+                || !self.has_go_value_receiver(&receiver.get_type(), member)
+        })
+    }
+
+    pub(crate) fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
+        let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
+        receiver_ty
+            .get_qualified_id()
+            .filter(|owner| go_name::is_go_import(owner))
+            .and_then(|owner| self.method(owner, method))
+            .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
+    }
+
+    pub(crate) fn has_stringer_signature(&self, id: &str, method_name: &str) -> bool {
+        self.method(id, method_name)
+            .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
+            && self.emits_go_method(id, method_name)
+    }
+
+    pub(crate) fn struct_fields(
+        &self,
+        ty: &Type,
+    ) -> Option<Vec<(ecow::EcoString, FieldSelection)>> {
+        let stripped = ty.strip_refs();
+        let Type::Nominal { id, .. } = &stripped else {
+            return None;
+        };
+        let constructor = constructor_fields(id, None, &stripped, |id| self.definition(id))?;
+        let Type::Nominal { id: owner, .. } = self.peel_alias(&stripped) else {
+            return None;
+        };
+        let substitutions = build_substitution_map(constructor.generics, &constructor.type_args);
+        Some(
+            constructor
+                .fields
+                .into_iter()
+                .map(|field| {
+                    let selection = FieldSelection {
+                        owner: owner.clone(),
+                        declared_ty: field.declared_ty.clone(),
+                        substitutions: substitutions.clone(),
+                    };
+                    (field.name.clone(), selection)
+                })
+                .collect(),
+        )
+    }
+
+    pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
+        let peeled = self.peel_alias(ty);
+        !self.is_go_named_function_type(ty)
+            && !self.is_interface_or_unknown(&peeled)
+            && !(matches!(peeled, Type::Nominal { .. })
+                && self.underlying_simple_kind(&peeled).is_some())
+    }
+
+    pub(crate) fn member_owner_type(&self, ty: &Type) -> Type {
+        self.receiver_shape(ty)
+    }
+
+    fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
+        let Some(resolved) = self.resolve_nominal(struct_ty) else {
+            return false;
+        };
+        let id = resolved.id.as_str();
+
+        match &resolved.definition.body {
+            DefinitionBody::Struct { fields, .. } => {
+                if let Some(field) = fields.iter().find(|f| f.name == field_name) {
+                    return go_names::struct_field_is_exported(
+                        field,
+                        resolved.definition.is_serialized(),
+                    );
+                }
+                self.method(id, field_name)
+                    .map(|method| method.visibility.is_public())
+                    .unwrap_or(false)
+            }
+            DefinitionBody::Enum { .. } => self
+                .method(id, field_name)
+                .map(|method| method.visibility.is_public())
+                .unwrap_or(false),
+            _ => false,
+        }
+    }
+
+    fn type_uses_exported_members(&self, ty: &Type) -> bool {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
+            return false;
+        };
+        go_name::is_prelude_id(&id) || go_name::is_go_import(&id)
+    }
+
+    pub(crate) fn resolve_is_exported(
+        &self,
+        expression: &Expression,
+        expression_ty: &Type,
+        member: &str,
+    ) -> bool {
+        self.compute_is_exported_context(expression, expression_ty)
+            || self.field_is_public(expression_ty, member)
+            || self.method_needs_export(member)
+    }
+
+    fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
+        let is_import_namespace_identifier = matches!(
+            expression,
+            Expression::Identifier { ty, .. } if ty.as_import_namespace().is_some()
+        );
+        is_import_namespace_identifier || self.type_uses_exported_members(expression_ty)
+    }
+
+    fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {
+        self.field_is_public(ty, field) || self.type_uses_exported_members(ty)
+    }
+
+    pub(crate) fn struct_field_go_name(
+        &self,
+        ty: &Type,
+        field: &str,
+        semantic_exported: bool,
+    ) -> String {
+        self.member_go_name(
+            ty,
+            field,
+            semantic_exported || self.struct_field_is_exported(ty, field),
+        )
+    }
+
+    pub(crate) fn type_member_go_name<'n>(&self, package: &str, name: &'n str) -> Cow<'n, str> {
+        if package == go_name::PRELUDE_PACKAGE || self.is_foreign_package(package) {
+            go_name::escape_keyword(name)
+        } else {
+            go_name::escape_type_name(name)
+        }
+    }
+
+    pub(crate) fn native_kind(&self, ty: &Type) -> Option<NativeTypeKind> {
+        NativeTypeKind::from_type(&self.receiver_shape(ty))
+    }
+
+    pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeTypeKind> {
+        self.native_kind(ty)
+            .filter(|kind| *kind != NativeTypeKind::Array)
+    }
+
+    pub(crate) fn is_native_shape(&self, ty: &Type, kind: NativeTypeKind) -> bool {
+        self.native_shape(ty).is_some_and(|shape| shape == kind)
+    }
+}

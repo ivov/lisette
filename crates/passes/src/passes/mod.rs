@@ -100,7 +100,7 @@ pub fn run(
 pub fn emit_bindings(facts: &Facts) -> EmitBindings {
     let mut bindings = EmitBindings::default();
     for (&id, b) in &facts.bindings {
-        bindings.record(id, b.mutation);
+        bindings.record(id, b.mutation, b.hides);
     }
     bindings
 }

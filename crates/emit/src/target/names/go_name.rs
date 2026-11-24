@@ -1,0 +1,370 @@
+use std::borrow::Cow;
+
+use syntax::ast::StructFieldDefinition;
+use syntax::go_names::{ENUM_TAG_FIELD, struct_field_go_name};
+use syntax::parse::TUPLE_FIELDS;
+use syntax::program::go_import_default_name;
+use syntax::types::Type;
+
+pub(crate) const GO_IMPORT_PREFIX: &str = "go:";
+
+pub(crate) fn is_go_import(id: &str) -> bool {
+    id.starts_with(GO_IMPORT_PREFIX)
+}
+
+pub(crate) const PRELUDE_PACKAGE: &str = "prelude";
+
+pub(crate) const PRELUDE_PREFIX: &str = "prelude.";
+
+pub(crate) const RANGE_START_FIELD: &str = "Start";
+
+pub(crate) const RANGE_END_FIELD: &str = "End";
+
+pub(crate) fn tuple_struct_field(index: usize) -> String {
+    format!("F{index}")
+}
+
+pub(crate) fn enum_tag_type(enum_name: &str) -> String {
+    format!("{enum_name}Tag")
+}
+
+pub(crate) fn is_prelude_id(id: &str) -> bool {
+    id.starts_with(PRELUDE_PREFIX)
+}
+
+const GO_STDLIB_PKG: &str = "lisette";
+
+pub(crate) const ADAPTER_TYPE_PREFIX: &str = "_lisAdapter_";
+
+const TEST_HANDLE_PREFIX: &str = "_lisTest_";
+
+pub(crate) const TEST_CTX_PARAM: &str = "_lisTest_ctx";
+
+const RESERVED_GO_PREFIXES: &[&str] = &[ADAPTER_TYPE_PREFIX, TEST_HANDLE_PREFIX];
+
+pub(crate) fn reserved_prefix_of(go: &str) -> Option<&'static str> {
+    RESERVED_GO_PREFIXES
+        .iter()
+        .find(|&&prefix| go.starts_with(prefix))
+        .copied()
+}
+
+pub const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
+
+pub(crate) const TEST_PRELUDE_PACKAGE: &str = "**test_prelude";
+pub(crate) const TEST_LOG_METHOD: &str = "**test_prelude.TestContext.log";
+pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
+const TESTKIT_PKG: &str = "testkit";
+
+pub(crate) use syntax::go_names::{
+    GO_BUILTINS, GO_KEYWORDS, escape_keyword, escape_type_name, is_go_reserved_word,
+    screaming_snake_to_camel, snake_to_camel, snake_to_lower_camel, unexported_method_go_name,
+};
+pub(crate) use syntax::types::unqualified_name;
+
+fn make_exported(name: &str) -> String {
+    escape_keyword(&snake_to_camel(name)).into_owned()
+}
+
+pub(crate) fn keeps_go_spelling(owner_id: Option<&str>, member: &str) -> bool {
+    owner_id.is_some_and(is_go_import) && member.starts_with(char::is_uppercase)
+}
+
+fn exported_member(owner: &Type, member: &str) -> String {
+    if keeps_go_spelling(owner.get_qualified_id(), member) {
+        return member.to_string();
+    }
+    make_exported(member)
+}
+
+pub(crate) fn member_go_name(
+    owner: &Type,
+    member: &str,
+    is_exported: bool,
+    embedded: Option<&StructFieldDefinition>,
+) -> String {
+    if let Some(field) = embedded {
+        struct_field_go_name(field, false).into_owned()
+    } else if is_exported {
+        exported_member(owner, member)
+    } else {
+        unexported_method_go_name(member)
+    }
+}
+
+pub(crate) fn tagged_twin(go_name: &str) -> String {
+    format!("{go_name}_")
+}
+
+pub fn go_test_function_name(fn_name: &str) -> String {
+    format!("Test{}", snake_to_camel(fn_name))
+}
+
+pub(crate) fn associated_function_go_name(
+    type_name: &str,
+    function: &str,
+    exported: bool,
+) -> String {
+    let camel = snake_to_camel(function);
+    let suffix = if camel.is_empty() { function } else { &camel };
+    match (function == "new", exported) {
+        (true, true) => format!("New{type_name}"),
+        (true, false) => format!("new{type_name}"),
+        (false, true) => format!("{type_name}{suffix}"),
+        (false, false) => format!("{}{suffix}", lowercase_first_word(type_name)),
+    }
+}
+
+fn lowercase_first_word(type_name: &str) -> String {
+    let chars: Vec<char> = type_name.chars().collect();
+    let run = chars.iter().take_while(|c| c.is_uppercase()).count();
+    let lowered = if run > 1 && chars.get(run).is_some_and(|c| c.is_lowercase()) {
+        run - 1
+    } else {
+        run
+    };
+    chars
+        .iter()
+        .enumerate()
+        .map(|(index, &c)| {
+            let mut lower = c.to_lowercase();
+            match (lower.next(), lower.next()) {
+                (Some(single), None) if index < lowered => single,
+                _ => c,
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn package_go_path(go_module: &str, package: &str) -> String {
+    match package.strip_prefix(GO_IMPORT_PREFIX) {
+        Some(path) => path.to_string(),
+        None => format!("{go_module}/{package}"),
+    }
+}
+
+pub(crate) fn go_package_name(package: &str) -> &str {
+    package.rsplit('/').next().unwrap_or(package)
+}
+
+pub(crate) fn fresh_suffixed(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    let separator = if base.ends_with(|c: char| c.is_ascii_digit()) {
+        "_"
+    } else {
+        ""
+    };
+    (2..)
+        .map(|n| format!("{base}{separator}{n}"))
+        .find(|candidate| !taken(candidate))
+        .expect("freshening counter is unbounded")
+}
+
+pub(crate) fn is_plain_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(c) if c.is_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
+    if (name.is_empty() || is_plain_identifier(name)) && !is_reserved_package_name(name) {
+        return Cow::Borrowed(name);
+    }
+
+    let mut result: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    if result.starts_with(|c: char| c.is_ascii_digit()) {
+        result.insert(0, '_');
+    }
+
+    if is_reserved_package_name(&result) {
+        result.push('_');
+    }
+
+    Cow::Owned(result)
+}
+
+pub(crate) fn tuple_field(index: usize) -> &'static str {
+    TUPLE_FIELDS
+        .get(index)
+        .expect("the parser limits tuple arity to the tuple field names")
+}
+
+pub(crate) fn tuple_field_index(field: &str) -> Option<usize> {
+    TUPLE_FIELDS
+        .iter()
+        .position(|tuple_field| *tuple_field == field)
+}
+
+pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {
+    if variant_name == ENUM_TAG_FIELD {
+        return format!("{}_", enum_tag_type(enum_name));
+    }
+    let constant = format!("{enum_name}{variant_name}");
+    if is_go_reserved_word(&constant) {
+        format!("{constant}_")
+    } else {
+        constant
+    }
+}
+
+pub(crate) fn enum_make_function(enum_name: &str, variant_name: &str) -> String {
+    format!("Make{}{}", escape_type_name(enum_name), variant_name)
+}
+
+pub(crate) fn make_tuple_constructor(arity: usize) -> String {
+    format!("MakeTuple{arity}")
+}
+
+const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
+
+pub(crate) fn is_prelude_go_builtin(qualified_name: &str) -> bool {
+    qualified_name
+        .strip_prefix("prelude.")
+        .is_some_and(|name| PRELUDE_BUILTIN_NAMES.contains(&name))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum GeneratedPackage {
+    Prelude,
+    Fmt,
+    Errors,
+    Slices,
+    Strings,
+    Maps,
+    Json,
+    Cmp,
+    TestKit,
+    Testing,
+}
+
+impl GeneratedPackage {
+    const ALL: &'static [GeneratedPackage] = &[
+        GeneratedPackage::Prelude,
+        GeneratedPackage::Fmt,
+        GeneratedPackage::Errors,
+        GeneratedPackage::Slices,
+        GeneratedPackage::Strings,
+        GeneratedPackage::Maps,
+        GeneratedPackage::Json,
+        GeneratedPackage::Cmp,
+        GeneratedPackage::TestKit,
+        GeneratedPackage::Testing,
+    ];
+
+    pub(crate) fn path(self) -> &'static str {
+        match self {
+            GeneratedPackage::Prelude => PRELUDE_IMPORT_PATH,
+            GeneratedPackage::Fmt => "fmt",
+            GeneratedPackage::Errors => "errors",
+            GeneratedPackage::Slices => "slices",
+            GeneratedPackage::Strings => "strings",
+            GeneratedPackage::Maps => "maps",
+            GeneratedPackage::Json => "encoding/json",
+            GeneratedPackage::Cmp => "cmp",
+            GeneratedPackage::TestKit => TESTKIT_IMPORT_PATH,
+            GeneratedPackage::Testing => "testing",
+        }
+    }
+
+    pub(crate) fn qualifier(self) -> &'static str {
+        match self {
+            GeneratedPackage::Prelude => GO_STDLIB_PKG,
+            GeneratedPackage::Fmt => "fmt",
+            GeneratedPackage::Errors => "errors",
+            GeneratedPackage::Slices => "slices",
+            GeneratedPackage::Strings => "strings",
+            GeneratedPackage::Maps => "maps",
+            GeneratedPackage::Json => "json",
+            GeneratedPackage::Cmp => "cmp",
+            GeneratedPackage::TestKit => TESTKIT_PKG,
+            GeneratedPackage::Testing => "testing",
+        }
+    }
+}
+
+pub(crate) fn testkit_qualifier() -> &'static str {
+    GeneratedPackage::TestKit.qualifier()
+}
+
+pub(crate) fn testing_qualifier() -> &'static str {
+    GeneratedPackage::Testing.qualifier()
+}
+
+pub(crate) fn is_generated_import_qualifier(name: &str) -> bool {
+    GeneratedPackage::ALL
+        .iter()
+        .any(|package| package.qualifier() == name)
+}
+
+fn is_reserved_package_name(name: &str) -> bool {
+    name == "main" || name == "documentation" || is_go_reserved_word(name)
+}
+
+fn is_reserved_identifier(name: &str) -> bool {
+    GO_KEYWORDS.contains(&name)
+        || GO_BUILTINS.contains(&name)
+        || is_generated_import_qualifier(name)
+}
+
+pub(crate) fn escape_reserved(name: &str) -> Cow<'_, str> {
+    if is_reserved_identifier(name) {
+        Cow::Owned(format!("{}_", name))
+    } else {
+        Cow::Borrowed(name)
+    }
+}
+
+const KEYWORD_LOCAL_NAMES: &[(&str, &str)] = &[
+    ("case", "c"),
+    ("chan", "ch"),
+    ("default", "def"),
+    ("func", "fn"),
+    ("map", "m"),
+    ("package", "pkg"),
+    ("range", "rng"),
+    ("switch", "sw"),
+];
+
+pub(crate) fn keyword_local_name(name: &str) -> Option<&'static str> {
+    KEYWORD_LOCAL_NAMES
+        .iter()
+        .find(|(keyword, _)| *keyword == name)
+        .map(|(_, short)| *short)
+}
+
+pub(crate) fn escape_local(name: &str) -> Cow<'_, str> {
+    match keyword_local_name(name) {
+        Some(short) => Cow::Borrowed(short),
+        None => escape_reserved(name),
+    }
+}
+
+const SHADOWABLE_BUILTINS: &[&str] = &[
+    "append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "init", "len", "make",
+    "max", "min", "new", "panic", "print", "println", "real", "recover",
+];
+
+pub(crate) fn escaped_shadowable_builtin(spelling: &str) -> Option<&str> {
+    spelling
+        .strip_suffix('_')
+        .filter(|name| SHADOWABLE_BUILTINS.contains(name))
+}
+
+pub fn root_package_name(go_module: &str) -> String {
+    sanitize_package_name(go_import_default_name(go_module)).into_owned()
+}
