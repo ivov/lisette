@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::lookup::facts::package_names::PackageNames;
 use crate::target::names::go_name;
@@ -9,7 +9,7 @@ use syntax::program::File;
 pub(in crate::lowering) fn collect_escape_remap(
     names: &PackageNames,
     files: &[&File],
-) -> HashMap<String, String> {
+) -> FxHashMap<String, String> {
     let entries: Vec<(&str, String)> = files
         .iter()
         .flat_map(|f| &f.items)
@@ -27,8 +27,8 @@ pub(in crate::lowering) fn collect_escape_remap(
         })
         .collect();
 
-    let mut remap = HashMap::default();
-    let mut taken: HashSet<String> = entries
+    let mut remap = FxHashMap::default();
+    let mut taken: FxHashSet<String> = entries
         .iter()
         .filter(|(name, natural)| *name == natural)
         .map(|(_, natural)| natural.clone())
@@ -48,12 +48,12 @@ pub(in crate::lowering) fn collect_escape_remap(
 pub(in crate::lowering) fn collect_generic_renames(
     names: &PackageNames,
     files: &[&File],
-) -> HashMap<String, String> {
-    let mut generic_names: HashSet<EcoString> = HashSet::default();
+) -> FxHashMap<String, String> {
+    let mut generic_names: FxHashSet<EcoString> = FxHashSet::default();
     for item in files.iter().flat_map(|file| &file.items) {
         collect_item_generic_names(item, &mut generic_names);
     }
-    let mut renames = HashMap::default();
+    let mut renames = FxHashMap::default();
     if generic_names.is_empty() {
         return renames;
     }
@@ -67,7 +67,7 @@ pub(in crate::lowering) fn collect_generic_renames(
     }
     colliding.sort();
 
-    let mut taken: HashSet<String> = generic_names.iter().map(EcoString::to_string).collect();
+    let mut taken: FxHashSet<String> = generic_names.iter().map(EcoString::to_string).collect();
     for name in colliding {
         let fresh = names.fresh_package_name(name, |candidate| taken.contains(candidate));
         taken.insert(fresh.clone());
@@ -76,8 +76,8 @@ pub(in crate::lowering) fn collect_generic_renames(
     renames
 }
 
-fn collect_item_generic_names(item: &Expression, out: &mut HashSet<EcoString>) {
-    let extend = |out: &mut HashSet<EcoString>, generics: &[Generic]| {
+fn collect_item_generic_names(item: &Expression, out: &mut FxHashSet<EcoString>) {
+    let extend = |out: &mut FxHashSet<EcoString>, generics: &[Generic]| {
         out.extend(generics.iter().map(|g| g.name.clone()));
     };
     match item {

@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
@@ -31,13 +31,18 @@ fn nested_reason(inner: &'static str, wrapper: &'static str) -> &'static str {
 }
 
 pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
-    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), false, &mut |_| {
-        false
-    })
+    check_not_comparable_impl(
+        env,
+        store,
+        ty,
+        &mut FxHashSet::default(),
+        false,
+        &mut |_| false,
+    )
 }
 
 pub fn check_never_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
-    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), true, &mut |_| {
+    check_not_comparable_impl(env, store, ty, &mut FxHashSet::default(), true, &mut |_| {
         false
     })
 }
@@ -52,7 +57,7 @@ pub(crate) fn check_not_comparable_with_bounds(
         env,
         store,
         ty,
-        &mut HashSet::default(),
+        &mut FxHashSet::default(),
         false,
         comparable_parameter,
     )
@@ -68,7 +73,7 @@ pub(crate) fn check_never_comparable_with_bounds(
         env,
         store,
         ty,
-        &mut HashSet::default(),
+        &mut FxHashSet::default(),
         true,
         comparable_parameter,
     )
@@ -78,7 +83,7 @@ fn check_not_comparable_impl(
     env: &TypeEnv,
     store: &Store,
     ty: &Type,
-    visiting: &mut HashSet<Type>,
+    visiting: &mut FxHashSet<Type>,
     definite_only: bool,
     comparable_parameter: &mut dyn FnMut(&str) -> bool,
 ) -> Option<&'static str> {
@@ -269,7 +274,7 @@ fn definition_reaches_itself(env: &TypeEnv, store: &Store, target: &str) -> bool
     let Some(definition) = store.get_definition(target) else {
         return false;
     };
-    let mut visited = HashSet::default();
+    let mut visited = FxHashSet::default();
     let mut field_reaches = |field_ty: &Type| {
         reaches_definition(
             env,
@@ -295,7 +300,7 @@ fn reaches_definition(
     store: &Store,
     ty: &Type,
     target: &str,
-    visited: &mut HashSet<Type>,
+    visited: &mut FxHashSet<Type>,
     depth: usize,
 ) -> bool {
     if depth > REACHES_DEPTH_LIMIT {

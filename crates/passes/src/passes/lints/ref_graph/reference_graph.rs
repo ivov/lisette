@@ -1,5 +1,5 @@
 use ecow::EcoString;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use syntax::ast::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -66,9 +66,9 @@ impl EnumVariantId {
 
 #[derive(Debug, Default)]
 pub struct ReferenceGraph {
-    index: HashMap<PackageItemId, NodeId>,
+    index: FxHashMap<PackageItemId, NodeId>,
     nodes: Vec<Node>,
-    unused_members: HashMap<MemberId, Span>,
+    unused_members: FxHashMap<MemberId, Span>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

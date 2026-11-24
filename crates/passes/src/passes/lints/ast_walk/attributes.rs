@@ -1,6 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, AttributeArg, Expression, StructFieldDefinition};
 use syntax::attributes;
 use syntax::attributes::is_serialization_key;
@@ -79,7 +79,7 @@ pub fn check_struct_attributes(expression: &Expression, ctx: &NodeCtx) {
     }
     check_misplaced_default(struct_attributes, sink);
 
-    let struct_keys: HashSet<&str> = struct_attributes
+    let struct_keys: FxHashSet<&str> = struct_attributes
         .iter()
         .filter_map(|a| get_attribute_key(a))
         .filter(|k| is_serialization_key(k))
@@ -104,7 +104,7 @@ fn check_unknown_attribute(attribute: &Attribute, sink: &LocalSink) {
 
 fn check_field_attributes(
     field: &StructFieldDefinition,
-    struct_keys: &HashSet<&str>,
+    struct_keys: &FxHashSet<&str>,
     sink: &LocalSink,
 ) {
     let mut seen_keys: Vec<(&str, &Attribute)> = Vec::new();

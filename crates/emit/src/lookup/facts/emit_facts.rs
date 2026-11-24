@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::program::{
     CallOperation, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection, ValueUseKey,
 };
@@ -108,13 +108,13 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn type_parameter_alias_index(&self, id: &str) -> Option<usize> {
-        self.type_parameter_alias_index_inner(id, &mut HashSet::default())
+        self.type_parameter_alias_index_inner(id, &mut FxHashSet::default())
     }
 
     fn type_parameter_alias_index_inner(
         &self,
         id: &str,
-        visiting: &mut HashSet<String>,
+        visiting: &mut FxHashSet<String>,
     ) -> Option<usize> {
         let DefinitionBody::TypeAlias {
             generics,
@@ -279,7 +279,7 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn peel_go_alias(&self, ty: &Type) -> Type {
         let mut current = ty.unwrap_forall().clone();
-        let mut seen: HashSet<Symbol> = HashSet::default();
+        let mut seen: FxHashSet<Symbol> = FxHashSet::default();
         while let Type::Nominal {
             id,
             params,
@@ -576,7 +576,7 @@ impl<'a> EmitFacts<'a> {
         go_name::package_go_path(self.shared.go_module, package)
     }
 
-    pub(crate) fn go_package_names(&self) -> &'a HashMap<String, String> {
+    pub(crate) fn go_package_names(&self) -> &'a FxHashMap<String, String> {
         &self.input.go_package_names
     }
 
@@ -693,10 +693,10 @@ impl<'a> EmitFacts<'a> {
     }
 }
 
-fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
+fn is_nilable_go_type(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> bool {
     types::is_nilable_go_type(ty, |id| definitions.get(id))
 }
 
-fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {
+fn peel_alias(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> Type {
     types::peel_alias(ty, |id| definitions.get(id))
 }

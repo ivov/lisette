@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::program::GoHint;
 use syntax::program::{Definition, DefinitionBody, ValueKind};
 use syntax::types::{Symbol, Type};
@@ -10,9 +10,9 @@ use syntax::program::SlotOrigin;
 
 #[derive(Debug, Default)]
 pub(crate) struct GoAbiCatalog {
-    callables: HashMap<String, GoCallableSlots>,
-    fields: HashMap<String, HashMap<String, GoSlotDescriptor>>,
-    variables: HashMap<String, GoSlotDescriptor>,
+    callables: FxHashMap<String, GoCallableSlots>,
+    fields: FxHashMap<String, FxHashMap<String, GoSlotDescriptor>>,
+    variables: FxHashMap<String, GoSlotDescriptor>,
 }
 
 #[derive(Debug)]
@@ -29,7 +29,7 @@ pub(crate) struct GoSlotDescriptor {
 }
 
 impl GoAbiCatalog {
-    pub(crate) fn from_definitions(definitions: &HashMap<Symbol, Definition>) -> Self {
+    pub(crate) fn from_definitions(definitions: &FxHashMap<Symbol, Definition>) -> Self {
         let mut catalog = Self::default();
         for (qualified_name, definition) in definitions {
             if !go_name::is_go_import(qualified_name) {
@@ -89,7 +89,7 @@ impl GoAbiCatalog {
 
     fn register_callable(
         &mut self,
-        definitions: &HashMap<Symbol, Definition>,
+        definitions: &FxHashMap<Symbol, Definition>,
         qualified_name: &str,
         ty: &Type,
         go_hints: &[GoHint],
@@ -130,7 +130,7 @@ impl GoAbiCatalog {
 
     fn register_fields(
         &mut self,
-        definitions: &HashMap<Symbol, Definition>,
+        definitions: &FxHashMap<Symbol, Definition>,
         qualified_name: &str,
         definition: &Definition,
     ) {
@@ -153,7 +153,7 @@ impl GoAbiCatalog {
 
     fn register_variable(
         &mut self,
-        definitions: &HashMap<Symbol, Definition>,
+        definitions: &FxHashMap<Symbol, Definition>,
         qualified_name: &str,
         definition: &Definition,
     ) {

@@ -6,7 +6,7 @@ use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
 use crate::target::ir::visit::VisitorMut;
 use crate::target::types::go_type::GoType;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 pub(crate) fn define(name: impl Into<GoIdentifier>, value: GoExpression) -> Statement {
     LoweredStatement::Define(Definition::single(name, value)).into()
@@ -771,8 +771,8 @@ pub(crate) fn for_each_statements_mut(
 
 #[derive(Default)]
 pub(crate) struct GoUses {
-    locals: HashSet<LocalId>,
-    spellings: HashSet<String>,
+    locals: FxHashSet<LocalId>,
+    spellings: FxHashSet<String>,
 }
 
 impl GoUses {

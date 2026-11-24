@@ -2,7 +2,7 @@ use crate::target::names::go_name::escape_local;
 use std::ptr;
 
 use super::local_names::LocalNames;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::lookup::facts::reusable_bindings::ReusableBindings;
 use crate::lookup::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
@@ -24,7 +24,7 @@ pub(crate) struct ScopeState {
     frames: Vec<ScopeFrame>,
     type_params: Vec<TypeParam>,
     reusable_bindings: ReusableBindings,
-    local_constants: HashMap<BindingId, Constant>,
+    local_constants: FxHashMap<BindingId, Constant>,
 }
 
 #[derive(Clone)]
@@ -71,7 +71,7 @@ impl FunctionScope {
 
 #[derive(Clone, Default)]
 struct Declarations {
-    names: HashSet<String>,
+    names: FxHashSet<String>,
     spent_errors: Vec<(GoIdentifier, Type)>,
 }
 
@@ -125,7 +125,7 @@ impl ScopeState {
             ))],
             type_params: Vec::new(),
             reusable_bindings: ReusableBindings::default(),
-            local_constants: HashMap::default(),
+            local_constants: FxHashMap::default(),
         }
     }
 
@@ -280,7 +280,7 @@ impl ScopeState {
     }
 
     fn visible_bindings(&self) -> impl Iterator<Item = &Binding> {
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         self.bindings()
             .filter(move |binding| seen.insert(binding.name.as_str()))
     }

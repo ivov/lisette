@@ -3,7 +3,7 @@ use crate::analysis::{GoPackageSources, GoTypedef};
 use crate::diagnostics::ReplaceImporter;
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::mem;
 use syntax::ast::ImportAlias;
 use syntax::ast::Span;
@@ -154,8 +154,8 @@ impl TaskState {
     }
 }
 
-fn take_unsupported_go_symbols(items: &mut Vec<Expression>) -> HashMap<EcoString, String> {
-    let mut symbols = HashMap::default();
+fn take_unsupported_go_symbols(items: &mut Vec<Expression>) -> FxHashMap<EcoString, String> {
+    let mut symbols = FxHashMap::default();
     items.retain(|item| {
         let Some((name, reason)) = unsupported_go_symbol(item) else {
             return true;

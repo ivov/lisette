@@ -13,7 +13,7 @@ use unread_temps::drop_unread_temps;
 
 use std::mem;
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::lookup::facts::package_names::PackageNames;
 use crate::lookup::state::scope::ScopeState;
@@ -29,7 +29,7 @@ use crate::target::types::go_type::GoType;
 
 pub(crate) fn clean_up(
     statements: &mut Vec<Statement>,
-    shadowing: &HashSet<LocalId>,
+    shadowing: &FxHashSet<LocalId>,
     parameters: &[GoIdentifier],
     scope: &ScopeState,
 ) {

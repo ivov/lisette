@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use syntax::ast::{
     Annotation, Attribute, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition,
@@ -20,7 +20,7 @@ impl CachedDefinition {
 
     pub(crate) fn from_definition(
         definition: &Definition,
-        file_id_to_index: &HashMap<u32, u32>,
+        file_id_to_index: &FxHashMap<u32, u32>,
     ) -> Self {
         debug_assert!(
             definition
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn cached_methods_preserve_dictionary_format_and_iteration_order() {
-        let methods: rustc_hash::FxHashMap<EcoString, Method> = ["get", "set", "compare"]
+        let methods: FxHashMap<EcoString, Method> = ["get", "set", "compare"]
             .into_iter()
             .map(|name| {
                 let name = EcoString::from(name);
@@ -385,8 +385,7 @@ mod tests {
             .collect();
         let bytes = bincode::serialize(&methods).unwrap();
         let restored: Methods = bincode::deserialize(&bytes).unwrap();
-        let original_format: rustc_hash::FxHashMap<EcoString, Method> =
-            bincode::deserialize(&bytes).unwrap();
+        let original_format: FxHashMap<EcoString, Method> = bincode::deserialize(&bytes).unwrap();
 
         assert_eq!(
             restored.iter().collect::<Vec<_>>(),

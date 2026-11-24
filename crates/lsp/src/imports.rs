@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use deps::{ImportablePackage, TypedefLocator};
 use syntax::ast::Expression;
@@ -129,11 +129,11 @@ pub(crate) fn not_yet_imported<'a>(
     let imports = file.imports();
     let go_package_names = &snapshot.analysis.emit_input.go_package_names;
 
-    let bound: HashSet<String> = imports
+    let bound: FxHashSet<String> = imports
         .iter()
         .filter_map(|import| import.effective_alias(go_package_names))
         .collect();
-    let imported: HashSet<&str> = imports
+    let imported: FxHashSet<&str> = imports
         .iter()
         .filter_map(|import| import.name.as_str().strip_prefix("go:"))
         .collect();

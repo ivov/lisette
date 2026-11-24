@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ pub struct PreludeCache {
     version: u32,
     content_hash: u64,
     compiler_version: u64,
-    definitions: HashMap<String, CachedDefinition>,
+    definitions: FxHashMap<String, CachedDefinition>,
 }
 
 fn cache_file_name() -> &'static str {
@@ -48,8 +48,8 @@ pub(crate) fn save_prelude_cache(store: &Store) {
         return;
     };
 
-    let file_id_to_index: HashMap<u32, u32> = [(PRELUDE_FILE_ID, 0)].into_iter().collect();
-    let definitions: HashMap<String, CachedDefinition> = package
+    let file_id_to_index: FxHashMap<u32, u32> = [(PRELUDE_FILE_ID, 0)].into_iter().collect();
+    let definitions: FxHashMap<String, CachedDefinition> = package
         .definitions
         .iter()
         .map(|(name, definition)| {

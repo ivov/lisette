@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use semantics::facts::{DeferredChecks, GenericBoundOrigin};
 use semantics::generics::bound_display_name;
@@ -17,7 +17,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         empty_literals,
         slice_makes,
     } = checks;
-    let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
+    let mut reported_vars: FxHashSet<(String, TypeVarId)> = FxHashSet::default();
     let mut collected = Vec::new();
     let mut report_vars = |ty: &Type, package_id: &str| {
         collected.clear();
@@ -69,7 +69,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
             ));
         }
     }
-    let mut reported_literal_spans = HashSet::default();
+    let mut reported_literal_spans = FxHashSet::default();
     for check in empty_literals {
         if !check.ty.has_unbound_variables() {
             continue;

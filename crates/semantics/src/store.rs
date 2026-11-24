@@ -3,7 +3,7 @@ use std::sync::Arc;
 use syntax::collections::DenseMap;
 use syntax::constant::ConstantSource;
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use syntax::EcoString;
 use syntax::ast::{EnumVariant, StructFieldDefinition};
@@ -21,7 +21,7 @@ pub const ENTRY_FILE_ID: u32 = 0;
 
 pub struct PackageMetadataMut<'a> {
     pub definitions: &'a mut DenseMap<Symbol, Definition>,
-    pub unsupported_go_symbols: &'a mut HashMap<EcoString, String>,
+    pub unsupported_go_symbols: &'a mut FxHashMap<EcoString, String>,
     pub uninferred_exports: &'a mut Option<UninferredExports>,
 }
 
@@ -29,11 +29,11 @@ pub struct PackageMetadataMut<'a> {
 pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
     /// writes stay zero-copy while a package has a single owner.
-    packages: HashMap<String, Arc<Package>>,
+    packages: FxHashMap<String, Arc<Package>>,
     /// Avoids scanning every package on the hot file-lookup path (see #1227).
-    file_packages: HashMap<u32, String>,
+    file_packages: FxHashMap<u32, String>,
     /// Go package ID -> package name from the typedef `// Package:` directive.
-    pub go_package_names: HashMap<String, String>,
+    pub go_package_names: FxHashMap<String, String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
     next_file_id: u32,
     pub equality_index: EqualityIndex,
@@ -61,7 +61,7 @@ impl Store {
 
         Self {
             packages,
-            file_packages: HashMap::default(),
+            file_packages: FxHashMap::default(),
             go_package_names: Default::default(),
             next_file_id: 2, // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
@@ -140,11 +140,11 @@ impl Store {
             .get_mut(&file_id)
     }
 
-    pub fn packages(&self) -> &HashMap<String, Arc<Package>> {
+    pub fn packages(&self) -> &FxHashMap<String, Arc<Package>> {
         &self.packages
     }
 
-    pub fn take_packages(&mut self) -> HashMap<String, Arc<Package>> {
+    pub fn take_packages(&mut self) -> FxHashMap<String, Arc<Package>> {
         self.file_packages.clear();
         take(&mut self.packages)
     }
@@ -709,11 +709,16 @@ impl Store {
     }
 
     pub(crate) fn get_all_methods(&self, ty: &Type) -> Methods {
-        methods_for_type(ty, &HashMap::default(), |id| self.get_definition(id))
+        methods_for_type(ty, &FxHashMap::default(), |id| self.get_definition(id))
     }
 
     pub(crate) fn get_method_for_type(&self, ty: &Type, name: &str) -> Option<Method> {
-        method_for_type(ty, &HashMap::default(), |id| self.get_definition(id), name)
+        method_for_type(
+            ty,
+            &FxHashMap::default(),
+            |id| self.get_definition(id),
+            name,
+        )
     }
 
     pub(crate) fn type_has_any_method(&self, ty: &Type) -> bool {

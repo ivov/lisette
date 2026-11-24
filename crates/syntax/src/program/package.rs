@@ -1,6 +1,6 @@
 use crate::collections::DenseMap;
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Borrow;
 use std::fmt;
 use std::ops::Deref;
@@ -76,11 +76,11 @@ pub fn is_internal_package_id(id: &str) -> bool {
 pub struct Package {
     pub id: String,
     /// file ID -> file. Source and declaration files are classified by [`File::is_d_lis`].
-    pub files: HashMap<u32, File>,
+    pub files: FxHashMap<u32, File>,
     /// qualified name -> definition
     pub definitions: DenseMap<Symbol, Definition>,
     /// Go symbol name -> reason Lisette cannot support it, from `#[go(skipped, "...")]`
-    pub unsupported_go_symbols: HashMap<EcoString, String>,
+    pub unsupported_go_symbols: FxHashMap<EcoString, String>,
     /// Set when an import cycle keeps the package out of inference: nothing
     /// registers its files, so its exports are read from syntax.
     pub uninferred_exports: Option<UninferredExports>,
@@ -89,7 +89,7 @@ pub struct Package {
 #[derive(Debug, Clone)]
 pub enum UninferredExports {
     /// Read from the syntax of the package's files.
-    Known(HashSet<EcoString>),
+    Known(FxHashSet<EcoString>),
     /// A file did not parse, so its declarations cannot be read.
     Unreadable,
 }

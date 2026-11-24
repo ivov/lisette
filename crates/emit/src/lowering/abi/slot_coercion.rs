@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, Span};
 use syntax::program::{Adaptation, File, SlotOrigin, ValueUseKey};
 use syntax::types::Type;
@@ -220,7 +220,7 @@ impl Planner<'_> {
 pub(in crate::lowering) fn check_applied_conversions(
     facts: &EmitFacts<'_>,
     files: &[&File],
-    applied: &HashSet<ValueUseKey>,
+    applied: &FxHashSet<ValueUseKey>,
     dropped_code: &[Span],
 ) {
     if !cfg!(debug_assertions) {

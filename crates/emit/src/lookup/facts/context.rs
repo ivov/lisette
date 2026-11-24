@@ -3,7 +3,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::go_expression::Position;
 use crate::target::names::go_name;
 use crate::target::types::enum_layout::EnumLayout;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use syntax::ast::Span;
 use syntax::program::{Definition, DefinitionBody, GoMethodPolicy};
@@ -13,18 +13,18 @@ use syntax::types::Symbol;
 pub(crate) struct GlobalEmitData {
     pub(crate) go_abi_catalog: GoAbiCatalog,
     pub(crate) method_policy: GoMethodPolicy,
-    pub(crate) tagged_method_names: HashSet<String>,
-    pub(crate) enum_layouts: HashMap<Symbol, EnumLayout>,
+    pub(crate) tagged_method_names: FxHashSet<String>,
+    pub(crate) enum_layouts: FxHashMap<Symbol, EnumLayout>,
 }
 
 impl GlobalEmitData {
-    pub(crate) fn compute(definitions: &HashMap<Symbol, Definition>) -> Self {
+    pub(crate) fn compute(definitions: &FxHashMap<Symbol, Definition>) -> Self {
         let policy = GoMethodPolicy::compute(definitions.iter(), |id| definitions.get(id));
         let mut globals = GlobalEmitData {
             go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
             tagged_method_names: policy.tagged_method_names.iter().cloned().collect(),
             method_policy: policy,
-            enum_layouts: HashMap::default(),
+            enum_layouts: FxHashMap::default(),
         };
 
         for (key, definition) in definitions.iter() {
@@ -38,7 +38,7 @@ impl GlobalEmitData {
         &mut self,
         key: &Symbol,
         definition: &Definition,
-        definitions: &HashMap<Symbol, Definition>,
+        definitions: &FxHashMap<Symbol, Definition>,
     ) {
         let DefinitionBody::Enum {
             generics,
@@ -63,7 +63,7 @@ pub(crate) struct SharedEmitContext<'a> {
     pub(crate) go_module: &'a str,
     pub(crate) entry_package_name: &'a str,
     pub(crate) emit_tests: bool,
-    pub(crate) line_indexes: Option<HashMap<u32, LineIndex>>,
+    pub(crate) line_indexes: Option<FxHashMap<u32, LineIndex>>,
     pub(crate) globals: GlobalEmitData,
 }
 

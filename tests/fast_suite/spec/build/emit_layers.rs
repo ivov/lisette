@@ -4,7 +4,7 @@ use super::package_namespace::source_files;
 
 const EMIT_SOURCE: &str = "crates/emit/src/";
 
-const RANKS: [(&str, usize); 8] = [
+const RANKS: [(&str, usize); 11] = [
     ("target/names", 0),
     ("target/types", 1),
     ("target/ir", 2),
@@ -12,7 +12,10 @@ const RANKS: [(&str, usize); 8] = [
     ("lookup/state", 4),
     ("output/finish", 5),
     ("output/render", 5),
-    ("lowering", 6),
+    ("lowering/plan", 6),
+    ("lowering/planner", 7),
+    ("lowering", 8),
+    ("lowering/driver", 9),
 ];
 
 fn rank(module: &str) -> Option<usize> {
@@ -29,6 +32,17 @@ fn module_of(segments: &[String]) -> Option<String> {
             Some(format!("{first}/{second}"))
         }
         _ => None,
+    }
+}
+
+fn layer_of(segments: &[String]) -> Option<String> {
+    match segments {
+        [first, second, ..]
+            if first == "lowering" && ["plan", "planner", "driver"].contains(&second.as_str()) =>
+        {
+            Some(format!("{first}/{second}"))
+        }
+        _ => module_of(segments),
     }
 }
 
@@ -172,18 +186,18 @@ fn emit_layers_use_only_lower_layers() {
     let roots = root_reexports(lib);
     let mut failures = Vec::new();
     for (path, text) in &files {
-        let Some(module) = module_of(&file_segments(path)) else {
+        let Some(module) = layer_of(&file_segments(path)) else {
             continue;
         };
         let Some(own_rank) = rank(&module) else {
             failures.push(format!("{path}: module `{module}` has no layer in `RANKS`"));
             continue;
         };
-        if module == "lowering" {
-            continue;
-        }
         for segments in referenced_paths(path, text, &roots) {
-            let Some(target) = module_of(&segments) else {
+            if segments == ["lowering"] {
+                continue;
+            }
+            let Some(target) = layer_of(&segments) else {
                 continue;
             };
             if target == module {
@@ -203,6 +217,142 @@ fn emit_layers_use_only_lower_layers() {
     assert!(
         failures.is_empty(),
         "each emit module may use only modules in lower layers:\n{}",
+        failures.join("\n")
+    );
+}
+
+fn strip_visibility(line: &str) -> (&str, Option<&str>) {
+    let Some(rest) = line.strip_prefix("pub") else {
+        return (line, None);
+    };
+    if let Some(inner) = rest.strip_prefix('(') {
+        let end = inner.find(')').unwrap_or(inner.len());
+        let after = inner.get(end + 1..).unwrap_or("").trim_start();
+        return (after, Some(&inner[..end]));
+    }
+    (rest.trim_start(), Some("crate"))
+}
+
+fn last_type_segment(text: &str) -> String {
+    let text = text.trim_start_matches(['&', ' ']);
+    let text = text.strip_prefix("mut ").unwrap_or(text);
+    let end = text
+        .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
+        .unwrap_or(text.len());
+    text[..end].rsplit("::").next().unwrap_or("").to_string()
+}
+
+fn defined_types(files: &[(String, String)]) -> BTreeMap<String, Vec<String>> {
+    let mut types: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (path, text) in files {
+        let Some(module) = module_of(&file_segments(path)) else {
+            continue;
+        };
+        for line in text.lines() {
+            let (item, _) = strip_visibility(line.trim_start());
+            for keyword in ["struct ", "enum ", "type ", "trait "] {
+                if let Some(rest) = item.strip_prefix(keyword) {
+                    let (name, _) = identifier(rest);
+                    types
+                        .entry(name.to_string())
+                        .or_default()
+                        .push(module.clone());
+                }
+            }
+        }
+    }
+    types
+}
+
+fn impl_target(header: &str) -> (bool, String) {
+    let mut rest = header.trim_start().trim_start_matches("impl");
+    if rest.starts_with('<') {
+        let mut depth = 0;
+        for (index, c) in rest.char_indices() {
+            depth += match c {
+                '<' => 1,
+                '>' => -1,
+                _ => 0,
+            };
+            if depth == 0 {
+                rest = &rest[index + 1..];
+                break;
+            }
+        }
+    }
+    let rest = rest.split(" where").next().unwrap_or(rest);
+    let rest = rest.trim_end_matches(['{', ' ']);
+    match rest.split_once(" for ") {
+        Some((_, target)) => (true, last_type_segment(target)),
+        None => (false, last_type_segment(rest)),
+    }
+}
+
+fn visible_outside(path: &str, module: &str, restriction: &str) -> bool {
+    let scope = match restriction {
+        "self" => return false,
+        "crate" => return true,
+        "super" => {
+            let mut segments = file_segments(path);
+            segments.pop();
+            segments
+        }
+        other => match other.strip_prefix("in crate::") {
+            Some(scope) => scope.split("::").map(str::to_string).collect(),
+            None => return true,
+        },
+    };
+    module_of(&scope).is_none_or(|scope_module| scope_module != module)
+}
+
+#[test]
+fn emit_types_get_callable_methods_only_from_their_own_module() {
+    let files = source_files("crates/emit/src");
+    let types = defined_types(&files);
+    let mut failures = Vec::new();
+    for (path, text) in &files {
+        let Some(module) = module_of(&file_segments(path)) else {
+            continue;
+        };
+        let lines: Vec<&str> = text.lines().collect();
+        for (index, line) in lines.iter().enumerate() {
+            if !line.trim_start().starts_with("impl") {
+                continue;
+            }
+            let indent = &line[..line.len() - line.trim_start().len()];
+            let header_end = (index..lines.len())
+                .find(|&end| lines[end].trim_end().ends_with('{'))
+                .unwrap_or(index);
+            let header = lines[index..=header_end].join(" ");
+            let (is_trait, target) = impl_target(&header);
+            let Some(homes) = types.get(&target) else {
+                continue;
+            };
+            if homes.contains(&module) {
+                continue;
+            }
+            let closing = format!("{indent}}}");
+            let body = lines[header_end + 1..]
+                .iter()
+                .take_while(|body_line| **body_line != closing);
+            let exposed = is_trait
+                || body.into_iter().any(|body_line| {
+                    let (item, restriction) = strip_visibility(body_line.trim_start());
+                    item.starts_with("fn ")
+                        && restriction.is_some_and(|scope| visible_outside(path, &module, scope))
+                });
+            if exposed {
+                failures.push(format!(
+                    "{path}:{}: `{module}` adds callable methods to `{target}` from `{}`",
+                    index + 1,
+                    homes.join("`, `")
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "add a method to a type in the module that defines the type, or keep it private to its own module:\n{}",
         failures.join("\n")
     );
 }

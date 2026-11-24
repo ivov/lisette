@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::checker::EnvResolve;
 use crate::zero::{MapZero, NoZero, NoZeroReason};
@@ -681,7 +681,7 @@ impl InferCtx<'_> {
             via_alias,
         } = target;
         let mut unset_fields = Vec::new();
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         for (name, ty) in fields {
             if !seen.insert(name) {
                 continue;
@@ -717,7 +717,7 @@ impl InferCtx<'_> {
         resolved_enum: &Type,
         written_name: &str,
         variant_fields: &[EnumFieldDefinition],
-        matched_fields: &HashSet<EcoString>,
+        matched_fields: &FxHashSet<EcoString>,
         spread_span: Span,
     ) {
         let store = self.store;
@@ -794,11 +794,11 @@ impl InferCtx<'_> {
         &mut self,
         ctx: StructishCtx<'_, impl Iterator<Item = (&'a EcoString, &'a Type)> + Clone>,
         mut find_def: FindDef,
-    ) -> (Vec<StructFieldAssignment>, HashSet<EcoString>)
+    ) -> (Vec<StructFieldAssignment>, FxHashSet<EcoString>)
     where
         FindDef: FnMut(&mut Self, &StructFieldAssignment) -> Option<&'a Type>,
     {
-        let mut matched = HashSet::default();
+        let mut matched = FxHashSet::default();
         let mut unknown_fields: Vec<EcoString> = vec![];
         let new_assignments: Vec<StructFieldAssignment> = ctx
             .field_assignments
@@ -870,7 +870,7 @@ impl InferCtx<'_> {
         &mut self,
         owner_name: &str,
         fields: impl Iterator<Item = (&'a EcoString, &'a Type)>,
-        matched_fields: &HashSet<EcoString>,
+        matched_fields: &FxHashSet<EcoString>,
         map: &SubstitutionMap,
         spread_span: Span,
     ) {

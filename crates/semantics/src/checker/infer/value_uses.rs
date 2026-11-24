@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::mem;
 
 use syntax::ast::{Expression, ExpressionId, FormatStringPart, Literal, MatchArm, SelectArm, Span};
@@ -185,7 +185,7 @@ impl InferCtx<'_> {
         self.facts.value_uses.selected_witnesses.clear();
         let mut finalizer = Finalizer {
             store: self.store,
-            obligations: HashMap::default(),
+            obligations: FxHashMap::default(),
             callees: callees.into_iter().collect(),
             receivers: receivers.into_iter().collect(),
             bodies: CheckedBodiesBuilder::default(),
@@ -261,7 +261,7 @@ impl InferCtx<'_> {
             self.facts.checked_bodies.merge(bodies);
         }
         let mut reported_variables = if uninferred.is_empty() {
-            HashSet::default()
+            FxHashSet::default()
         } else {
             self.deferred_variables()
         };
@@ -290,7 +290,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn deferred_variables(&self) -> HashSet<TypeVarId> {
+    fn deferred_variables(&self) -> FxHashSet<TypeVarId> {
         let package_id = self.cursor.package_id();
         let deferred = &self.facts.deferred;
         let bounds = deferred
@@ -391,9 +391,9 @@ fn method_value_operation(store: &Store, definition: &str) -> CallOperation {
 
 struct Finalizer<'s> {
     store: &'s Store,
-    obligations: HashMap<ValueUseKey, ValueUseObligation>,
-    callees: HashMap<ValueUseKey, CheckedCallee>,
-    receivers: HashMap<ValueUseKey, ReceiverCoercion>,
+    obligations: FxHashMap<ValueUseKey, ValueUseObligation>,
+    callees: FxHashMap<ValueUseKey, CheckedCallee>,
+    receivers: FxHashMap<ValueUseKey, ReceiverCoercion>,
     bodies: CheckedBodiesBuilder,
     failures: Vec<(Span, &'static str)>,
     mismatches: Vec<Mismatch>,

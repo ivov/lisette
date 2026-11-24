@@ -1,5 +1,5 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use syntax::ast::Generic;
@@ -13,7 +13,7 @@ use crate::lookup::facts::synthesized_methods::StructShape;
 use crate::target::names::go_name;
 use syntax::go_names::ENUM_TAG_FIELD;
 
-type SpanMap = HashMap<String, Vec<Span>>;
+type SpanMap = FxHashMap<String, Vec<Span>>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PrivateFunctions {
@@ -24,13 +24,13 @@ enum PrivateFunctions {
 #[derive(Default)]
 pub(in crate::lowering) struct CollectedNames {
     package_block: SpanMap,
-    selectors: HashMap<String, SpanMap>,
-    interfaces: HashMap<String, SpanMap>,
+    selectors: FxHashMap<String, SpanMap>,
+    interfaces: FxHashMap<String, SpanMap>,
     diagnostics: Vec<LisetteDiagnostic>,
 }
 
 impl CollectedNames {
-    pub(in crate::lowering) fn declared_names(&self) -> HashSet<String> {
+    pub(in crate::lowering) fn declared_names(&self) -> FxHashSet<String> {
         self.package_block.keys().cloned().collect()
     }
 }
@@ -67,7 +67,7 @@ impl Planner<'_> {
         self.collect_names_with(files, PrivateFunctions::Include)
     }
 
-    pub(in crate::lowering) fn collect_fixed_names(&self, files: &[&File]) -> HashSet<String> {
+    pub(in crate::lowering) fn collect_fixed_names(&self, files: &[&File]) -> FxHashSet<String> {
         self.collect_names_with(files, PrivateFunctions::Skip)
             .declared_names()
     }
@@ -156,7 +156,7 @@ impl Planner<'_> {
         &self,
         item: &Expression,
         package_block: &mut SpanMap,
-        selectors: &mut HashMap<String, SpanMap>,
+        selectors: &mut FxHashMap<String, SpanMap>,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
         let Expression::Struct {
@@ -278,7 +278,7 @@ impl Planner<'_> {
         generics: &[Generic],
         out: &mut Vec<LisetteDiagnostic>,
     ) {
-        let mut emitted: SpanMap = HashMap::default();
+        let mut emitted: SpanMap = FxHashMap::default();
         for generic in generics {
             check_reserved_qualifier(&generic.name, &generic.span, out);
             emitted
@@ -295,14 +295,14 @@ impl Planner<'_> {
         method_generics: &[Generic],
         out: &mut Vec<LisetteDiagnostic>,
     ) {
-        let mut emitted: SpanMap = HashMap::default();
+        let mut emitted: SpanMap = FxHashMap::default();
         for generic in impl_generics {
             emitted
                 .entry(self.generic_go_name(&generic.name).into_owned())
                 .or_default()
                 .push(generic.span);
         }
-        let mut method_names: HashSet<String> = HashSet::default();
+        let mut method_names: FxHashSet<String> = FxHashSet::default();
         for generic in method_generics {
             check_reserved_qualifier(&generic.name, &generic.span, out);
             let go = self.generic_go_name(&generic.name).into_owned();
@@ -327,7 +327,7 @@ fn report_collisions(map: SpanMap, diagnostics: &mut Vec<LisetteDiagnostic>) {
     }
 }
 
-fn sort_by_key(map: HashMap<String, SpanMap>) -> Vec<(String, SpanMap)> {
+fn sort_by_key(map: FxHashMap<String, SpanMap>) -> Vec<(String, SpanMap)> {
     let mut entries: Vec<(String, SpanMap)> = map.into_iter().collect();
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     entries
@@ -340,7 +340,7 @@ fn collect_enum_payload_fields(
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     let slots = go_names::enum_field_slots(name, variants);
-    let mut seen: HashSet<String> = HashSet::default();
+    let mut seen: FxHashSet<String> = FxHashSet::default();
     for (variant_index, variant) in variants.iter().enumerate() {
         let field_names = &slots[variant_index];
         for field_name in field_names {
@@ -352,7 +352,7 @@ fn collect_enum_payload_fields(
             }
         }
         if let VariantFields::Struct(fields) = &variant.fields {
-            let mut variant_fields: SpanMap = HashMap::default();
+            let mut variant_fields: SpanMap = FxHashMap::default();
             for (field, field_name) in fields.iter().zip(field_names) {
                 variant_fields
                     .entry(field_name.clone())
@@ -437,7 +437,7 @@ fn collect_impl_block(
     facts: &EmitFacts<'_>,
     item: &Expression,
     package_block: &mut SpanMap,
-    selectors: &mut HashMap<String, SpanMap>,
+    selectors: &mut FxHashMap<String, SpanMap>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     let Expression::ImplBlock {
@@ -485,7 +485,7 @@ fn collect_interface(
     facts: &EmitFacts<'_>,
     item: &Expression,
     package_block: &mut SpanMap,
-    interfaces: &mut HashMap<String, SpanMap>,
+    interfaces: &mut FxHashMap<String, SpanMap>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     let Expression::Interface {
@@ -525,7 +525,7 @@ fn collect_enum(
     facts: &EmitFacts<'_>,
     item: &Expression,
     package_block: &mut SpanMap,
-    selectors: &mut HashMap<String, SpanMap>,
+    selectors: &mut FxHashMap<String, SpanMap>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     let Expression::Enum {

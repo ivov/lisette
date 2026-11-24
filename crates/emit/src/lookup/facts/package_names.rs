@@ -1,32 +1,32 @@
-use rustc_hash::FxHashMap as HashMap;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use syntax::go_names::is_go_reserved_word;
 
 use crate::target::names::go_name;
 
 #[derive(Clone, Default)]
 pub(crate) struct PackageNames {
-    escape_remap: HashMap<String, String>,
-    generic_renames: HashMap<String, String>,
-    declared_names: HashSet<String>,
-    import_qualifiers: HashSet<String>,
+    escape_remap: FxHashMap<String, String>,
+    generic_renames: FxHashMap<String, String>,
+    declared_names: FxHashSet<String>,
+    import_qualifiers: FxHashSet<String>,
 }
 
 impl PackageNames {
     pub(crate) fn set_block_names(
         &mut self,
-        declared_names: HashSet<String>,
-        import_qualifiers: HashSet<String>,
+        declared_names: FxHashSet<String>,
+        import_qualifiers: FxHashSet<String>,
     ) {
         self.declared_names = declared_names;
         self.import_qualifiers = import_qualifiers;
     }
 
-    pub(crate) fn set_escape_remap(&mut self, escape_remap: HashMap<String, String>) {
+    pub(crate) fn set_escape_remap(&mut self, escape_remap: FxHashMap<String, String>) {
         self.escape_remap = escape_remap;
     }
 
-    pub(crate) fn set_generic_renames(&mut self, generic_renames: HashMap<String, String>) {
+    pub(crate) fn set_generic_renames(&mut self, generic_renames: FxHashMap<String, String>) {
         self.generic_renames = generic_renames;
     }
 

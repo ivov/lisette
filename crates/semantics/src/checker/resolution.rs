@@ -22,9 +22,9 @@ enum MethodSource<'a> {
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct ImportState {
-    pub(super) prefixed: HashMap<String, PrefixedImport>,
+    pub(super) prefixed: FxHashMap<String, PrefixedImport>,
     /// Packages whose exports are available without prefix (current package and prelude)
-    pub(super) unprefixed_imports: HashSet<String>,
+    pub(super) unprefixed_imports: FxHashSet<String>,
     pub(super) has_unnamed_failure: bool,
 }
 
@@ -468,8 +468,8 @@ impl TaskState {
     }
 
     pub fn put_imported_packages_in_scope(&mut self, store: &Store, imports: &[FileImport]) {
-        let mut seen_aliases: HashMap<String, String> = HashMap::default(); // alias -> path
-        let mut seen_paths: HashSet<String> = HashSet::default();
+        let mut seen_aliases: FxHashMap<String, String> = FxHashMap::default(); // alias -> path
+        let mut seen_paths: FxHashSet<String> = FxHashSet::default();
 
         for import in imports {
             if seen_paths.contains(import.name.as_str()) {

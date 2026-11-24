@@ -17,7 +17,7 @@ pub use witness::format_witness;
 
 pub use self::PatternAnalysisContext as Context;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use diagnostics::{IssueKind, LocalSink};
 use semantics::store::Store;
@@ -35,7 +35,7 @@ use normalize::normalize_arm;
 pub struct PatternAnalysisContext<'a, 'sink> {
     pub store: &'a Store,
     cache: InhabitanceCache,
-    pattern_error_spans: &'a HashSet<Span>,
+    pattern_error_spans: &'a FxHashSet<Span>,
     sink: &'sink LocalSink,
     lint_sink: Option<&'sink LocalSink>,
 }
@@ -43,7 +43,7 @@ pub struct PatternAnalysisContext<'a, 'sink> {
 impl<'a, 'sink> PatternAnalysisContext<'a, 'sink> {
     pub fn new(
         store: &'a Store,
-        pattern_error_spans: &'a HashSet<Span>,
+        pattern_error_spans: &'a FxHashSet<Span>,
         sink: &'sink LocalSink,
         lint_sink: Option<&'sink LocalSink>,
     ) -> Self {
@@ -178,7 +178,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
                 return;
             }
 
-            let mut unions = HashMap::default();
+            let mut unions = FxHashMap::default();
             let norm_ctx = ctx.normalize_context_for_match(subject.get_type());
 
             let rejected_spans = ctx.pattern_error_spans;
@@ -328,7 +328,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
 
 fn check_redundancy_with_guards(
     arms: &[MatchArm],
-    rejected_spans: &HashSet<Span>,
+    rejected_spans: &FxHashSet<Span>,
     unions: &mut UnionTable,
     norm_ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
@@ -491,7 +491,7 @@ fn is_rejected(value: &Expression) -> bool {
     value.get_type().is_error()
 }
 
-fn has_rejected_pattern(pattern: &Pattern, rejected_spans: &HashSet<Span>) -> bool {
+fn has_rejected_pattern(pattern: &Pattern, rejected_spans: &FxHashSet<Span>) -> bool {
     if rejected_spans.contains(&pattern.get_span()) {
         return true;
     }
@@ -548,7 +548,7 @@ fn check_refutability(pattern: &Pattern, ctx: &mut PatternAnalysisContext) -> bo
         return true;
     }
 
-    let mut unions = HashMap::default();
+    let mut unions = FxHashMap::default();
     let norm_ctx = ctx.normalize_context();
     let row = vec![normalize_pattern(
         pattern,
@@ -618,7 +618,7 @@ pub fn is_pattern_irrefutable(pattern: &Pattern, store: &Store) -> bool {
         scrutinee_type: None,
     };
 
-    let mut unions = HashMap::default();
+    let mut unions = FxHashMap::default();
 
     let rows: Vec<Row> = expand_or_patterns(pattern, &|_| true)
         .iter()

@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -17,11 +17,11 @@ struct GoStdlibHeader {
     version: u32,
     content_hash: u64,
     compiler_version: u64,
-    block_ranges: HashMap<String, (usize, usize)>,
+    block_ranges: FxHashMap<String, (usize, usize)>,
 }
 
 pub struct GoStdlibCache {
-    packages: HashMap<String, Range<usize>>,
+    packages: FxHashMap<String, Range<usize>>,
     bytes: Vec<u8>,
 }
 
@@ -64,7 +64,7 @@ impl GoStdlibCache {
     }
 
     fn encode(blocks: &[(&str, &[u8])]) -> Option<Vec<u8>> {
-        let mut block_ranges = HashMap::default();
+        let mut block_ranges = FxHashMap::default();
         let mut offset = 0;
         for (package_id, block) in blocks {
             block_ranges.insert(package_id.to_string(), (offset, offset + block.len()));
@@ -91,8 +91,8 @@ const HEADER_LENGTH_SIZE: usize = size_of::<u64>();
 
 #[derive(Serialize, Deserialize)]
 pub struct GoPackageCache {
-    pub definitions: HashMap<String, CachedDefinition>,
-    unsupported_go_symbols: HashMap<String, String>,
+    pub definitions: FxHashMap<String, CachedDefinition>,
+    unsupported_go_symbols: FxHashMap<String, String>,
     /// Go package imports (e.g., `["go:io", "go:sync"]`).
     go_imports: Vec<String>,
 }
@@ -126,13 +126,13 @@ pub(crate) fn save_go_stdlib_cache(
     };
 
     // Go definitions don't reference files, so file_id_to_index is always empty.
-    let empty_file_map = HashMap::default();
+    let empty_file_map = FxHashMap::default();
     let mut encoded: Vec<(&str, Vec<u8>)> = Vec::with_capacity(go_package_ids.len());
     for package_id in go_package_ids {
         let Some(package) = store.get_package(package_id) else {
             continue;
         };
-        let definitions: HashMap<String, CachedDefinition> = package
+        let definitions: FxHashMap<String, CachedDefinition> = package
             .definitions
             .iter()
             .map(|(name, definition)| {

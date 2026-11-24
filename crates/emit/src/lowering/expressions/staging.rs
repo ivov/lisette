@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::callable::CallableAbi;
-use crate::lowering::plan::calls::{CallableOrigin, FunctionLayoutChange};
+use crate::lowering::calls::call_plan::{CallableOrigin, FunctionLayoutChange};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::{SequencedValues, ValuePlan};
 use crate::output::finish::verify::verify_operand_order;

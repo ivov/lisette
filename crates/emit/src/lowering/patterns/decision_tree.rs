@@ -3,7 +3,7 @@ use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::binding_decls::pattern_has_bindings;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::local::GoIdentifier;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use syntax::go_names::ENUM_TAG_FIELD;
 
@@ -947,7 +947,8 @@ fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
 }
 
 pub(super) fn share_alternative_bindings(alternatives: &mut [&mut Vec<PatternBinding>]) {
-    let mut shared_by_name: HashMap<String, (Vec<BindingId>, BindingTarget)> = HashMap::default();
+    let mut shared_by_name: FxHashMap<String, (Vec<BindingId>, BindingTarget)> =
+        FxHashMap::default();
     for bindings in alternatives.iter() {
         for binding in bindings.iter() {
             let (ids, target) = shared_by_name

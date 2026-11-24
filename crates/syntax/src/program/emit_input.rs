@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::ast::{BindingId as AstBindingId, Span};
 use crate::types::Symbol;
@@ -8,7 +8,7 @@ use super::{Definition, EqualityRecipe, File, FileImport};
 /// Name spans of imports that no code in their file uses.
 #[derive(Debug, Clone, Default)]
 pub struct UnusedImports {
-    keys: HashSet<ImportKey>,
+    keys: FxHashSet<ImportKey>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,8 +36,8 @@ impl UnusedImports {
 
 #[derive(Debug, Clone, Default)]
 pub struct EmitBindings {
-    mutations: HashMap<AstBindingId, BindingMutation>,
-    hidden: HashMap<AstBindingId, AstBindingId>,
+    mutations: FxHashMap<AstBindingId, BindingMutation>,
+    hidden: FxHashMap<AstBindingId, AstBindingId>,
 }
 
 impl EmitBindings {
@@ -132,8 +132,8 @@ impl TestIndex {
 
 #[derive(Debug, Clone, Default)]
 pub struct EqualityIndex {
-    by_id: HashMap<String, EqualityInfo>,
-    synthesized_fields: HashMap<String, Vec<EqualityRecipe>>,
+    by_id: FxHashMap<String, EqualityInfo>,
+    synthesized_fields: FxHashMap<String, Vec<EqualityRecipe>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,16 +251,16 @@ impl BindingMutation {
 #[derive(Default)]
 pub struct EmitInput {
     pub checked_bodies: super::CheckedBodies,
-    pub files: HashMap<u32, File>,
-    pub definitions: HashMap<Symbol, Definition>,
+    pub files: FxHashMap<u32, File>,
+    pub definitions: FxHashMap<Symbol, Definition>,
     pub entry_package_id: String,
     pub unused_imports: UnusedImports,
     pub bindings: EmitBindings,
-    pub cached_packages: HashSet<String>,
+    pub cached_packages: FxHashSet<String>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
-    pub go_package_names: HashMap<String, String>,
-    pub go_package_ids: HashSet<String>,
+    pub go_package_names: FxHashMap<String, String>,
+    pub go_package_ids: FxHashSet<String>,
 }
 
 #[cfg(test)]

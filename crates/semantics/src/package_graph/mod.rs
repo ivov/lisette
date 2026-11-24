@@ -1,6 +1,6 @@
 pub mod kahn;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use deps::TypedefLocator;
 use syntax::ast::{ImportAlias, Span};
@@ -57,12 +57,12 @@ impl Dependency {
 /// One canonical classification for every direct package dependency.
 #[derive(Debug, Default)]
 pub struct DependencyGraph {
-    edges: HashMap<PackageId, HashMap<PackageId, Dependency>>,
+    edges: FxHashMap<PackageId, FxHashMap<PackageId, Dependency>>,
 }
 
 impl DependencyGraph {
-    pub fn reverse_dependency_closure(&self, package_id: &str) -> HashSet<PackageId> {
-        let mut importers: HashMap<&str, Vec<&str>> = HashMap::default();
+    pub fn reverse_dependency_closure(&self, package_id: &str) -> FxHashSet<PackageId> {
+        let mut importers: FxHashMap<&str, Vec<&str>> = FxHashMap::default();
         for (package, dependencies) in &self.edges {
             for dependency in dependencies.keys() {
                 importers
@@ -71,7 +71,7 @@ impl DependencyGraph {
                     .push(package.as_str());
             }
         }
-        let mut result = HashSet::default();
+        let mut result = FxHashSet::default();
         let mut pending = vec![package_id];
         while let Some(package) = pending.pop() {
             if result.insert(PackageId::from(package))
@@ -111,7 +111,7 @@ impl DependencyGraph {
         self.edges
             .get(package_id)
             .into_iter()
-            .flat_map(HashMap::keys)
+            .flat_map(FxHashMap::keys)
     }
 
     pub(crate) fn imports(&self, package_id: &str) -> impl Iterator<Item = (&PackageId, Span)> {
@@ -157,16 +157,16 @@ impl DependencyGraph {
             && uses.all(|usage| usage == ImportUse::LinkOnly)
     }
 
-    fn insert(&mut self, package_id: PackageId, dependencies: HashMap<PackageId, Dependency>) {
+    fn insert(&mut self, package_id: PackageId, dependencies: FxHashMap<PackageId, Dependency>) {
         self.edges.insert(package_id, dependencies);
     }
 }
 
-impl<T> From<HashMap<T, HashSet<T>>> for DependencyGraph
+impl<T> From<FxHashMap<T, FxHashSet<T>>> for DependencyGraph
 where
     T: Eq + Hash + Into<PackageId>,
 {
-    fn from(edges: HashMap<T, HashSet<T>>) -> Self {
+    fn from(edges: FxHashMap<T, FxHashSet<T>>) -> Self {
         Self {
             edges: edges
                 .into_iter()
@@ -227,10 +227,10 @@ impl ScannedFile {
 pub struct PackageGraphResult {
     pub order: Vec<PackageId>,
     pub cycles: Vec<kahn::Cycle>,
-    pub files: HashMap<PackageId, Vec<ScannedFile>>,
+    pub files: FxHashMap<PackageId, Vec<ScannedFile>>,
     pub dependencies: DependencyGraph,
     /// Reachable from the primary roots, snapshotted before `additional` runs.
-    pub primary_reachable: HashSet<PackageId>,
+    pub primary_reachable: FxHashSet<PackageId>,
 }
 
 /// `primary` defines the target. `additional` widens what is analyzed.
@@ -275,9 +275,9 @@ pub fn build_package_graph(
         include_tests,
         project_kind,
         dependencies: DependencyGraph::default(),
-        visited: HashSet::default(),
-        files: HashMap::default(),
-        import_spans: HashMap::default(),
+        visited: FxHashSet::default(),
+        files: FxHashMap::default(),
+        import_spans: FxHashMap::default(),
     };
     builder.visit(primary);
     let primary_reachable = builder.visited.clone();
@@ -294,9 +294,9 @@ struct GraphBuilder<'a> {
     include_tests: bool,
     project_kind: ProjectKind,
     dependencies: DependencyGraph,
-    visited: HashSet<PackageId>,
-    files: HashMap<PackageId, Vec<ScannedFile>>,
-    import_spans: HashMap<PackageId, Span>,
+    visited: FxHashSet<PackageId>,
+    files: FxHashMap<PackageId, Vec<ScannedFile>>,
+    import_spans: FxHashMap<PackageId, Span>,
 }
 
 impl<'a> GraphBuilder<'a> {
@@ -430,7 +430,7 @@ impl<'a> GraphBuilder<'a> {
         }
     }
 
-    fn finish(self, primary_reachable: HashSet<PackageId>) -> PackageGraphResult {
+    fn finish(self, primary_reachable: FxHashSet<PackageId>) -> PackageGraphResult {
         let (order, cycles) = kahn::topological_sort(&self.dependencies);
 
         PackageGraphResult {
@@ -498,9 +498,9 @@ fn batch_scan_packages(
     sink: &LocalSink,
     include_tests: bool,
     has_project_root: bool,
-) -> HashMap<PackageId, Vec<ScannedFile>> {
+) -> FxHashMap<PackageId, Vec<ScannedFile>> {
     let Some(fs) = loader else {
-        return HashMap::default();
+        return FxHashMap::default();
     };
 
     let to_read: Vec<&PackageId> = packages.iter().filter(|m| !store.has(m)).collect();
@@ -570,7 +570,7 @@ fn batch_scan_packages(
         jobs.into_par_iter().map(scan_one).collect()
     };
 
-    let mut grouped: HashMap<PackageId, Vec<ScannedFile>> = HashMap::default();
+    let mut grouped: FxHashMap<PackageId, Vec<ScannedFile>> = FxHashMap::default();
     for (package_id, file) in scanned {
         grouped.entry(package_id).or_default().push(file);
     }
@@ -608,8 +608,8 @@ struct ImportContext<'a> {
 fn check_import_paths<'a>(
     file_imports: &'a [ClassifiedImport],
     sink: &LocalSink,
-) -> HashSet<&'a str> {
-    let mut unresolvable = HashSet::default();
+) -> FxHashSet<&'a str> {
+    let mut unresolvable = FxHashSet::default();
 
     for classified in file_imports {
         let file_import = &classified.import;
@@ -702,7 +702,7 @@ fn entry_span(
 fn process_file_imports(
     file_imports: Vec<ClassifiedImport>,
     ctx: ImportContext<'_>,
-) -> HashMap<PackageId, Dependency> {
+) -> FxHashMap<PackageId, Dependency> {
     let ImportContext {
         sink,
         scope,
@@ -713,8 +713,8 @@ fn process_file_imports(
     } = ctx;
     let unresolvable = check_import_paths(&file_imports, sink);
 
-    let mut imports = HashMap::default();
-    let mut pending_go_imports: HashMap<&str, Dependency> = HashMap::default();
+    let mut imports = FxHashMap::default();
+    let mut pending_go_imports: FxHashMap<&str, Dependency> = FxHashMap::default();
     for classified in &file_imports {
         let file_import = &classified.import;
         if !file_import.name.starts_with("go:") {
@@ -907,15 +907,15 @@ mod tests {
 
     #[test]
     fn reverse_dependency_closure_follows_importers_and_stops_at_cycles() {
-        let graph = DependencyGraph::from(HashMap::from_iter([
-            ("base", HashSet::from_iter(["support", "middle"])),
-            ("middle", HashSet::from_iter(["base"])),
-            ("main", HashSet::from_iter(["middle"])),
-            ("unrelated", HashSet::from_iter(["support"])),
+        let graph = DependencyGraph::from(FxHashMap::from_iter([
+            ("base", FxHashSet::from_iter(["support", "middle"])),
+            ("middle", FxHashSet::from_iter(["base"])),
+            ("main", FxHashSet::from_iter(["middle"])),
+            ("unrelated", FxHashSet::from_iter(["support"])),
         ]));
         let closure = graph.reverse_dependency_closure("base");
-        let names: HashSet<_> = closure.iter().map(PackageId::as_str).collect();
-        assert_eq!(names, HashSet::from_iter(["base", "middle", "main"]));
+        let names: FxHashSet<_> = closure.iter().map(PackageId::as_str).collect();
+        assert_eq!(names, FxHashSet::from_iter(["base", "middle", "main"]));
     }
 
     fn go_import(is_blank: bool, offset: u32) -> FileImport {
@@ -1066,11 +1066,11 @@ mod tests {
         let mut graph = DependencyGraph::default();
         graph.insert(
             "blank_importer".into(),
-            HashMap::from_iter([("go:fmt".into(), dependency(ImportUse::LinkOnly))]),
+            FxHashMap::from_iter([("go:fmt".into(), dependency(ImportUse::LinkOnly))]),
         );
         graph.insert(
             "referencing_importer".into(),
-            HashMap::from_iter([("go:fmt".into(), dependency(ImportUse::Referenced))]),
+            FxHashMap::from_iter([("go:fmt".into(), dependency(ImportUse::Referenced))]),
         );
 
         assert!(!graph.is_link_only_package("go:fmt"));

@@ -1,5 +1,5 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use semantics::loader::Loader;
 use semantics::loader::ParseMode;
 use semantics::{
@@ -83,7 +83,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         },
     );
 
-    let mut parsed: HashMap<String, Vec<File>> = graph_result
+    let mut parsed: FxHashMap<String, Vec<File>> = graph_result
         .files
         .drain()
         .map(|(package_id, files)| {
@@ -100,7 +100,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         .collect();
 
     if sink.has_errors() {
-        return InferResult::new(vec![], sink.into_diagnostics(), HashMap::default());
+        return InferResult::new(vec![], sink.into_diagnostics(), FxHashMap::default());
     }
 
     let ast = {
@@ -193,7 +193,7 @@ pub fn format_errors_for_snapshot(
 pub struct InferResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
-    definitions: HashMap<Symbol, Definition>,
+    definitions: FxHashMap<Symbol, Definition>,
     claims: ErrorClaims,
 }
 
@@ -252,7 +252,7 @@ impl InferResult {
     pub(crate) fn new(
         ast: Vec<Expression>,
         errors: Vec<LisetteDiagnostic>,
-        definitions: HashMap<Symbol, Definition>,
+        definitions: FxHashMap<Symbol, Definition>,
     ) -> Self {
         Self {
             ast,
@@ -568,14 +568,14 @@ impl VarBijection {
     }
 }
 
-fn types_equal(t1: &Type, t2: &Type, definitions: &HashMap<Symbol, Definition>) -> bool {
+fn types_equal(t1: &Type, t2: &Type, definitions: &FxHashMap<Symbol, Definition>) -> bool {
     types_equal_with(t1, t2, definitions, &mut VarBijection::default())
 }
 
 fn types_equal_with(
     t1: &Type,
     t2: &Type,
-    definitions: &HashMap<Symbol, Definition>,
+    definitions: &FxHashMap<Symbol, Definition>,
     vars: &mut VarBijection,
 ) -> bool {
     let resolved1 = if matches!(t1, Type::Nominal { .. }) {

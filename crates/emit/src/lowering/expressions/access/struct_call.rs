@@ -2,7 +2,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::layout::is_go_abi_type;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::prelude::option_variant;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
 use syntax::program::DefinitionBody;
@@ -46,7 +46,7 @@ struct EnumCallContext {
     enum_id: String,
     variant_name: String,
     tag_constant: GoExpression,
-    pointer_fields: HashSet<String>,
+    pointer_fields: FxHashSet<String>,
 }
 
 struct PlannedStructFields {
@@ -639,10 +639,10 @@ impl Planner<'_> {
                     .map(|f| f.source_name.clone())
                     .collect()
             } else {
-                HashSet::default()
+                FxHashSet::default()
             }
         } else {
-            HashSet::default()
+            FxHashSet::default()
         };
 
         EnumCallContext {

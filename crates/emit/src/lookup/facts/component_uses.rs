@@ -7,7 +7,7 @@ pub(crate) enum ValueDemand {
     Whole,
 }
 use crate::target::ir::prelude::{PreludeVariant, prelude_variant};
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{
     BindingId, Expression, IdentifierResolution, MatchArm, Pattern, collect_pattern_bindings,
 };
@@ -18,7 +18,7 @@ const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
 #[derive(Clone, Default)]
 pub(crate) struct ComponentDemand {
     pub(crate) value: ValueDemand,
-    pub(crate) read_indices: HashSet<usize>,
+    pub(crate) read_indices: FxHashSet<usize>,
     pub(crate) defaults: usize,
 }
 

@@ -1,14 +1,14 @@
 use std::iter;
 
 use crate::lookup::facts::emit_facts::EmitFacts;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::{DotAccessResolution, ReceiverCoercion};
 use syntax::types::Type;
 
 #[derive(Clone, Default)]
 pub(crate) struct ReusableBindings {
-    hidden: HashMap<BindingId, BindingId>,
+    hidden: FxHashMap<BindingId, BindingId>,
 }
 
 impl ReusableBindings {
@@ -17,8 +17,8 @@ impl ReusableBindings {
         body: &Expression,
         facts: &EmitFacts<'_>,
     ) -> Self {
-        let mut hidden = HashMap::default();
-        let mut shared = HashSet::default();
+        let mut hidden = FxHashMap::default();
+        let mut shared = FxHashSet::default();
         collect(body, params, false, facts, &mut hidden, &mut shared);
         hidden.retain(|_, id| !shared.contains(id));
         Self { hidden }
@@ -29,7 +29,7 @@ impl ReusableBindings {
     }
 }
 
-type BlockBindings = HashMap<BindingId, Type>;
+type BlockBindings = FxHashMap<BindingId, Type>;
 
 fn simple_binding(binding: &Binding) -> Option<BindingId> {
     match &binding.pattern {
@@ -51,8 +51,8 @@ fn collect(
     params: &[Binding],
     captured: bool,
     facts: &EmitFacts<'_>,
-    hidden: &mut HashMap<BindingId, BindingId>,
-    shared: &mut HashSet<BindingId>,
+    hidden: &mut FxHashMap<BindingId, BindingId>,
+    shared: &mut FxHashSet<BindingId>,
 ) {
     let captured = match expression {
         Expression::Block { items, .. } => {
@@ -133,7 +133,7 @@ fn pair_let(
     binding: &Binding,
     value: &Expression,
     mode: &LetMode,
-    hidden: &mut HashMap<BindingId, BindingId>,
+    hidden: &mut FxHashMap<BindingId, BindingId>,
     facts: &EmitFacts<'_>,
 ) {
     let Some(id) = simple_binding(binding) else {

@@ -13,7 +13,7 @@ use crate::passes::walk::{
 };
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use semantics::facts::{Facts, UsageFacts};
 use semantics::store::Store;
 use syntax::ast::{Expression, Pattern, Span};
@@ -271,8 +271,8 @@ fn run_pattern_checks(pattern: &Pattern, ctx: &mut NodeCtx<'_>, role: PatternRol
 }
 
 struct OlderApis<'a> {
-    deprecated: HashMap<Span, String>,
-    superseded: HashMap<Span, String>,
+    deprecated: FxHashMap<Span, String>,
+    superseded: FxHashMap<Span, String>,
     usages: &'a UsageFacts,
 }
 

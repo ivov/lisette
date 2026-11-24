@@ -1,6 +1,6 @@
 use diagnostics::LisetteDiagnostic;
 use ecow::EcoString;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Annotation, Binding, Expression, Generic};
 use syntax::types::Type;
 
@@ -25,12 +25,12 @@ fn visit_expression(expression: &Expression, diagnostics: &mut Vec<LisetteDiagno
             body,
             ..
         } if !generics.is_empty() => {
-            let mut still_missing: HashSet<EcoString> =
+            let mut still_missing: FxHashSet<EcoString> =
                 generics.iter().map(|g| g.name.clone()).collect();
             if let Some(body) = body.definition() {
                 body_remove_found_type_names(body, &mut still_missing);
             }
-            let found_in_body: HashSet<EcoString> = generics
+            let found_in_body: FxHashSet<EcoString> = generics
                 .iter()
                 .map(|g| g.name.clone())
                 .filter(|name| !still_missing.contains(name))
@@ -62,10 +62,10 @@ fn check_unused_type_parameters(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
-    found_in_body: &HashSet<EcoString>,
+    found_in_body: &FxHashSet<EcoString>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
-    let mut remaining: HashSet<EcoString> = generics.iter().map(|g| g.name.clone()).collect();
+    let mut remaining: FxHashSet<EcoString> = generics.iter().map(|g| g.name.clone()).collect();
     for param in params {
         param.ty.remove_found_type_names(&mut remaining);
     }
@@ -92,7 +92,7 @@ fn check_type_params_only_in_bound(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
-    found_in_body: &HashSet<EcoString>,
+    found_in_body: &FxHashSet<EcoString>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     if generics.iter().all(|generic| generic.bound_count() == 0) {
@@ -120,9 +120,9 @@ fn collect_type_params_only_in_bound(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
-    found_in_body: &HashSet<EcoString>,
-) -> HashSet<EcoString> {
-    let mut unseen_outside_bound_rhs: HashSet<EcoString> =
+    found_in_body: &FxHashSet<EcoString>,
+) -> FxHashSet<EcoString> {
+    let mut unseen_outside_bound_rhs: FxHashSet<EcoString> =
         generics.iter().map(|g| g.name.clone()).collect();
     for param in params {
         param
@@ -146,7 +146,7 @@ fn collect_type_params_only_in_bound(
 }
 
 /// Stops at nested function/lambda boundaries, which may shadow the name.
-fn body_remove_found_type_names(expression: &Expression, names: &mut HashSet<EcoString>) {
+fn body_remove_found_type_names(expression: &Expression, names: &mut FxHashSet<EcoString>) {
     if names.is_empty() {
         return;
     }
@@ -170,7 +170,7 @@ fn body_remove_found_type_names(expression: &Expression, names: &mut HashSet<Eco
     }
 }
 
-fn annotation_remove_names(annotation: &Annotation, names: &mut HashSet<EcoString>) {
+fn annotation_remove_names(annotation: &Annotation, names: &mut FxHashSet<EcoString>) {
     match annotation {
         Annotation::Constructor { name, params, .. } => {
             names.remove(name.as_str());

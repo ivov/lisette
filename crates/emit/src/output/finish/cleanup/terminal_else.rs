@@ -1,6 +1,6 @@
 use std::mem;
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::lookup::state::scope::{ScopeState, TypeParam};
 use crate::target::ir::bodies::{
@@ -299,7 +299,7 @@ struct Resolution {
 }
 
 struct Resolve {
-    frames: Vec<HashMap<String, usize>>,
+    frames: Vec<FxHashMap<String, usize>>,
     bindings: usize,
     resolution: Resolution,
 }
@@ -307,7 +307,7 @@ struct Resolve {
 impl Resolution {
     fn of(statements: &mut Vec<Statement>, parameters: &[GoIdentifier]) -> Self {
         let mut resolve = Resolve {
-            frames: vec![HashMap::default()],
+            frames: vec![FxHashMap::default()],
             bindings: 0,
             resolution: Resolution {
                 reads: Vec::new(),
@@ -365,7 +365,7 @@ impl VisitorMut for Resolve {
     }
 
     fn enter_scope(&mut self) {
-        self.frames.push(HashMap::default());
+        self.frames.push(FxHashMap::default());
     }
 
     fn exit_scope(&mut self) {

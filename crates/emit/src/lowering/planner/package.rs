@@ -8,7 +8,7 @@ use crate::lookup::state::imports::ImportPlan;
 use crate::lowering::planner::collectors::{collect_escape_remap, collect_generic_renames};
 use crate::target::names::go_name;
 use diagnostics::LisetteDiagnostic;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::Span;
 use syntax::program::File;
 
@@ -42,7 +42,7 @@ pub(in crate::lowering) fn build_package_plan<'f>(
                 .used_qualifiers(|key| facts.is_unused_import(key))
         })
         .collect();
-    let qualifier_names: HashSet<String> = file_plans
+    let qualifier_names: FxHashSet<String> = file_plans
         .iter()
         .flat_map(|plan| plan.imports.qualifiers())
         .collect();

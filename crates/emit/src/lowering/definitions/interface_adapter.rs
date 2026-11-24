@@ -23,7 +23,7 @@ use crate::target::names::receiver::fresh_receiver_name;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
 use ecow::EcoString;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, FunctionDefinitionView};
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, CheckedMethod, ConformanceWitness, InterfaceConversion};
@@ -222,7 +222,7 @@ impl Planner<'_> {
             return None;
         };
         let mut methods = Vec::new();
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
             if !seen.insert(self.facts.method_go_name(&requirement.name, false)) {
                 continue;
@@ -398,7 +398,7 @@ impl Planner<'_> {
 
         let mut methods = Vec::new();
         let mut any_adapted = false;
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         for requirement in requirements {
             let selector = self.facts.method_go_name(&requirement.name, false);
             if !seen.insert(selector) {

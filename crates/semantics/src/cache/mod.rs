@@ -6,7 +6,7 @@ pub mod types;
 use crate::path::DisplayPathBase;
 use crate::{CompilePhase, ProjectKind};
 use diagnostics::LisetteDiagnostic;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io;
@@ -75,7 +75,7 @@ pub struct CacheKey {
     stdlib: u64,
     target: String,
     sources: u64,
-    dependencies: HashMap<String, u64>,
+    dependencies: FxHashMap<String, u64>,
     /// All declared Go modules, because a typedef can reach typedefs that load later.
     third_party_typedefs: String,
     diagnostic_mode: DiagnosticMode,
@@ -84,7 +84,7 @@ pub struct CacheKey {
 pub(crate) struct CacheKeyInputs {
     pub(crate) target: Target,
     pub(crate) sources: u64,
-    pub(crate) dependencies: HashMap<String, u64>,
+    pub(crate) dependencies: FxHashMap<String, u64>,
     pub(crate) third_party_typedefs: String,
     pub(crate) diagnostic_mode: DiagnosticMode,
 }
@@ -127,7 +127,7 @@ pub struct PackageInterface {
 
     pub(crate) files: Vec<CachedFile>,
 
-    definitions: HashMap<String, CachedDefinition>,
+    definitions: FxHashMap<String, CachedDefinition>,
 
     /// Artifact hash of the on-disk Go files produced for this package.
     /// `None` after a Check-phase save or before the post-write stamp call;
@@ -253,7 +253,10 @@ fn hash_package_sources<'a>(files: impl Iterator<Item = (&'a str, &'a str)>) -> 
 /// Compute a package's hash from its production hash and dependency hashes.
 /// This ensures transitive invalidation: if C changes, B's package_hash changes
 /// (even though B's source didn't), which invalidates A's cache.
-pub(crate) fn compute_package_hash(production_hash: u64, dep_hashes: &HashMap<String, u64>) -> u64 {
+pub(crate) fn compute_package_hash(
+    production_hash: u64,
+    dep_hashes: &FxHashMap<String, u64>,
+) -> u64 {
     let mut hasher = FnvHasher::new();
     production_hash.hash(&mut hasher);
 
@@ -269,8 +272,8 @@ pub(crate) fn compute_package_hash(production_hash: u64, dep_hashes: &HashMap<St
 
 pub(crate) fn get_dependency_package_hashes<'a, T: AsRef<str> + ?Sized + 'a>(
     dependencies: impl IntoIterator<Item = &'a T>,
-    package_hashes: &HashMap<String, u64>,
-) -> HashMap<String, u64> {
+    package_hashes: &FxHashMap<String, u64>,
+) -> FxHashMap<String, u64> {
     dependencies
         .into_iter()
         .map(|dep_id| {
@@ -373,7 +376,7 @@ pub fn save_package_cache(
     let mut all_files: Vec<_> = package.files.values().collect();
     all_files.sort_by_key(|f| &f.name);
 
-    let file_id_to_index: HashMap<u32, u32> = all_files
+    let file_id_to_index: FxHashMap<u32, u32> = all_files
         .iter()
         .enumerate()
         .map(|(idx, f)| (f.id, idx as u32))
@@ -416,10 +419,10 @@ pub fn save_package_cache(
 fn extract_cached_definitions(
     store: &Store,
     package_id: &str,
-    file_id_to_index: &HashMap<u32, u32>,
-) -> HashMap<String, CachedDefinition> {
+    file_id_to_index: &FxHashMap<u32, u32>,
+) -> FxHashMap<String, CachedDefinition> {
     let Some(package) = store.get_package(package_id) else {
-        return HashMap::default();
+        return FxHashMap::default();
     };
 
     package
@@ -571,7 +574,7 @@ pub(crate) fn is_cache_disabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustc_hash::FxHashSet as HashSet;
+    use rustc_hash::FxHashSet;
     use syntax::ast::{Annotation, Generic, Span, StructFields};
     use syntax::program::{Attributes, ConstantValue, Definition, DefinitionBody, Visibility};
     use syntax::types::{FunctionParameter, Symbol, Type};
@@ -579,7 +582,7 @@ mod tests {
     fn load_test_cache(
         package_id: &str,
         full_hash: u64,
-        dep_hashes: &HashMap<String, u64>,
+        dep_hashes: &FxHashMap<String, u64>,
         artifact_hash: Option<u64>,
         root: &Path,
         target: Target,
@@ -671,7 +674,7 @@ mod tests {
             "editing a test file must not change the production hash"
         );
 
-        let deps = HashMap::default();
+        let deps = FxHashMap::default();
         assert_eq!(
             compute_package_hash(production_a, &deps),
             compute_package_hash(production_b, &deps),
@@ -687,10 +690,10 @@ mod tests {
     #[test]
     fn test_compute_package_hash_includes_deps() {
         let source_hash = 12345u64;
-        let mut deps1 = HashMap::default();
+        let mut deps1 = FxHashMap::default();
         deps1.insert("dep_a".to_string(), 111u64);
 
-        let mut deps2 = HashMap::default();
+        let mut deps2 = FxHashMap::default();
         deps2.insert("dep_a".to_string(), 222u64);
 
         let hash1 = compute_package_hash(source_hash, &deps1);
@@ -702,7 +705,7 @@ mod tests {
     #[test]
     fn test_compute_package_hash_deterministic() {
         let source_hash = 12345u64;
-        let mut deps = HashMap::default();
+        let mut deps = FxHashMap::default();
         deps.insert("dep_b".to_string(), 222u64);
         deps.insert("dep_a".to_string(), 111u64);
 
@@ -712,7 +715,7 @@ mod tests {
         assert_eq!(hash1, hash2);
     }
 
-    fn test_key(sources: u64, dependencies: HashMap<String, u64>) -> CacheKey {
+    fn test_key(sources: u64, dependencies: FxHashMap<String, u64>) -> CacheKey {
         CacheKey::new(CacheKeyInputs {
             target: Target::host(),
             sources,
@@ -724,7 +727,7 @@ mod tests {
 
     #[test]
     fn cache_key_checks_format_version() {
-        let current = test_key(100, HashMap::default());
+        let current = test_key(100, FxHashMap::default());
         let older = CacheKey {
             format_version: CACHE_FORMAT_VERSION + 1,
             ..current.clone()
@@ -734,7 +737,7 @@ mod tests {
 
     #[test]
     fn cache_key_checks_compiler_build() {
-        let current = test_key(100, HashMap::default());
+        let current = test_key(100, FxHashMap::default());
         let other_build = CacheKey {
             compiler_build: COMPILER_BUILD_HASH + 1,
             ..current.clone()
@@ -752,22 +755,22 @@ mod tests {
     #[test]
     fn cache_key_checks_sources() {
         assert_ne!(
-            test_key(200, HashMap::default()),
-            test_key(100, HashMap::default())
+            test_key(200, FxHashMap::default()),
+            test_key(100, FxHashMap::default())
         );
         assert_eq!(
-            test_key(100, HashMap::default()),
-            test_key(100, HashMap::default())
+            test_key(100, FxHashMap::default()),
+            test_key(100, FxHashMap::default())
         );
     }
 
     #[test]
     fn cache_key_checks_target() {
-        let host = test_key(100, HashMap::default());
+        let host = test_key(100, FxHashMap::default());
         let cross = CacheKey::new(CacheKeyInputs {
             target: Target::new("plan9", "386"),
             sources: 100,
-            dependencies: HashMap::default(),
+            dependencies: FxHashMap::default(),
             third_party_typedefs: String::new(),
             diagnostic_mode: DiagnosticMode::default(),
         });
@@ -776,7 +779,7 @@ mod tests {
 
     #[test]
     fn cache_key_checks_third_party_typedefs() {
-        let before = test_key(100, HashMap::default());
+        let before = test_key(100, FxHashMap::default());
         let after = CacheKey {
             third_party_typedefs: "other".into(),
             ..before.clone()
@@ -788,7 +791,7 @@ mod tests {
     fn go_dependencies_use_the_stdlib_hash() {
         let hashes = get_dependency_package_hashes(
             ["go:example.com/lib", "go:fmt", "prelude"].iter().copied(),
-            &HashMap::default(),
+            &FxHashMap::default(),
         );
         assert!(hashes.values().all(|hash| *hash == STDLIB_HASH));
     }
@@ -799,10 +802,10 @@ mod tests {
         let root = tmp.path();
         let target = Target::host();
         let mut interface = PackageInterface {
-            key: test_key(100, HashMap::default()),
+            key: test_key(100, FxHashMap::default()),
             diagnostics: Vec::new(),
             files: vec![],
-            definitions: HashMap::default(),
+            definitions: FxHashMap::default(),
             emit_stamp: None,
             go_method_context: 0,
         };
@@ -812,15 +815,15 @@ mod tests {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
-        assert!(load_test_cache("greet", 100, &HashMap::default(), None, root, target).is_none());
+        assert!(load_test_cache("greet", 100, &FxHashMap::default(), None, root, target).is_none());
         assert!(path.exists(), "a mode-only mismatch must keep the file");
-        assert!(load_test_cache("greet", 200, &HashMap::default(), None, root, target).is_none());
+        assert!(load_test_cache("greet", 200, &FxHashMap::default(), None, root, target).is_none());
         assert!(!path.exists(), "any other mismatch removes the file");
     }
 
     #[test]
     fn mode_only_difference_keeps_file() {
-        let check = test_key(100, HashMap::default());
+        let check = test_key(100, FxHashMap::default());
         let emit = CacheKey {
             diagnostic_mode: DiagnosticMode::new(CompilePhase::Check, ProjectKind::Library),
             ..check.clone()
@@ -859,7 +862,7 @@ mod tests {
             },
         };
 
-        let empty_files = HashMap::default();
+        let empty_files = FxHashMap::default();
         let const_def = make_value(ValueKind::Constant(ConstantValue::Integer {
             value: 5,
             text: None,
@@ -867,7 +870,7 @@ mod tests {
         let declaration_def = make_value(ValueKind::ConstantDeclaration);
         let var_def = make_value(ValueKind::Variable);
 
-        let mut definitions = HashMap::default();
+        let mut definitions = FxHashMap::default();
         definitions.insert(
             "mymod.MAX".to_string(),
             CachedDefinition::from_definition(&const_def, &empty_files),
@@ -882,7 +885,7 @@ mod tests {
         );
 
         let interface = PackageInterface {
-            key: test_key(0, HashMap::default()),
+            key: test_key(0, FxHashMap::default()),
             diagnostics: Vec::new(),
             files: vec![],
             definitions,
@@ -952,7 +955,7 @@ mod tests {
             },
         };
 
-        let empty_files = HashMap::default();
+        let empty_files = FxHashMap::default();
         let cached = CachedDefinition::from_definition(&struct_def, &empty_files);
         let bytes = bincode::serialize(&cached).unwrap();
         let restored: CachedDefinition = bincode::deserialize(&bytes).unwrap();
@@ -996,12 +999,12 @@ mod tests {
 
     #[test]
     fn test_cache_validity_checks_dep_hashes() {
-        let mut cached_deps = HashMap::default();
+        let mut cached_deps = FxHashMap::default();
         cached_deps.insert("dep".to_string(), 111u64);
 
         let cached = test_key(100, cached_deps.clone());
 
-        let mut different_deps = HashMap::default();
+        let mut different_deps = FxHashMap::default();
         different_deps.insert("dep".to_string(), 222u64);
 
         assert_ne!(cached, test_key(100, different_deps));
@@ -1070,14 +1073,14 @@ mod tests {
 
     #[test]
     fn test_get_dependency_package_hashes_uses_stdlib_hash() {
-        let mut edges = HashMap::default();
-        let mut deps = HashSet::default();
+        let mut edges = FxHashMap::default();
+        let mut deps = FxHashSet::default();
         deps.insert("go:fmt".to_string());
         deps.insert("prelude".to_string());
         deps.insert("user_mod".to_string());
         edges.insert("my_mod".to_string(), deps);
 
-        let mut package_hashes = HashMap::default();
+        let mut package_hashes = FxHashMap::default();
         package_hashes.insert("user_mod".to_string(), 12345u64);
 
         let result = get_dependency_package_hashes(&edges["my_mod"], &package_hashes);
@@ -1138,10 +1141,10 @@ mod tests {
         let target = Target::host();
 
         let interface = PackageInterface {
-            key: test_key(100, HashMap::default()),
+            key: test_key(100, FxHashMap::default()),
             diagnostics: Vec::new(),
             files: vec![],
-            definitions: HashMap::default(),
+            definitions: FxHashMap::default(),
             emit_stamp: None,
             go_method_context: 0,
         };
@@ -1156,7 +1159,7 @@ mod tests {
         apply_emit_stamps(root, &[(stamp.clone(), Some(999))], target).unwrap();
         let reread: PackageInterface = bincode::deserialize(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, Some(999));
-        assert_eq!(reread.key, test_key(100, HashMap::default()));
+        assert_eq!(reread.key, test_key(100, FxHashMap::default()));
 
         apply_emit_stamps(root, &[(stamp, None)], target).unwrap();
         let reread: PackageInterface = bincode::deserialize(&fs::read(&path).unwrap()).unwrap();
@@ -1199,10 +1202,10 @@ mod tests {
 
         let stamped = |target| {
             let interface = PackageInterface {
-                key: test_key(100, HashMap::default()),
+                key: test_key(100, FxHashMap::default()),
                 diagnostics: Vec::new(),
                 files: vec![],
-                definitions: HashMap::default(),
+                definitions: FxHashMap::default(),
                 emit_stamp: Some(7),
                 go_method_context: 0,
             };
@@ -1235,13 +1238,13 @@ mod tests {
         fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
         let interface = PackageInterface {
-            key: test_key(100, HashMap::default()),
+            key: test_key(100, FxHashMap::default()),
             diagnostics: Vec::new(),
             files: vec![CachedFile {
                 name: "greet.lis".to_string(),
                 source: String::new(),
             }],
-            definitions: HashMap::default(),
+            definitions: FxHashMap::default(),
             emit_stamp: None,
             go_method_context: 0,
         };
@@ -1249,13 +1252,13 @@ mod tests {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
-        let loaded = load_test_cache("greet", 100, &HashMap::default(), None, root, target);
+        let loaded = load_test_cache("greet", 100, &FxHashMap::default(), None, root, target);
         assert!(loaded.is_some(), "Check phase must accept unstamped cache");
 
         let loaded = load_test_cache(
             "greet",
             100,
-            &HashMap::default(),
+            &FxHashMap::default(),
             Some(compute_emit_artifact_hash(100, "github.com/test/x", 0)),
             root,
             target,
@@ -1277,13 +1280,13 @@ mod tests {
         let artifact_hash = compute_emit_artifact_hash(100, "github.com/test/x", 0);
 
         let interface = PackageInterface {
-            key: test_key(100, HashMap::default()),
+            key: test_key(100, FxHashMap::default()),
             diagnostics: Vec::new(),
             files: vec![CachedFile {
                 name: "greet.lis".to_string(),
                 source: String::new(),
             }],
-            definitions: HashMap::default(),
+            definitions: FxHashMap::default(),
             emit_stamp: Some(artifact_hash),
             go_method_context: 0,
         };
@@ -1295,7 +1298,7 @@ mod tests {
             load_test_cache(
                 "greet",
                 100,
-                &HashMap::default(),
+                &FxHashMap::default(),
                 Some(artifact_hash),
                 root,
                 target,
@@ -1313,7 +1316,7 @@ mod tests {
             load_test_cache(
                 "greet",
                 100,
-                &HashMap::default(),
+                &FxHashMap::default(),
                 Some(artifact_hash),
                 root,
                 target,
@@ -1345,7 +1348,7 @@ mod tests {
         let compiled = CompiledPackage {
             package_id: "example".into(),
             artifact_hash: 1,
-            key: test_key(2, HashMap::default()),
+            key: test_key(2, FxHashMap::default()),
             go_method_context: 0,
         };
         save_package_cache(
@@ -1359,7 +1362,7 @@ mod tests {
         let mut cache = load_test_cache(
             "example",
             2,
-            &HashMap::default(),
+            &FxHashMap::default(),
             None,
             root.path(),
             Target::host(),
@@ -1391,7 +1394,7 @@ mod tests {
         let compiled = CompiledPackage {
             package_id: "example".into(),
             artifact_hash: 1,
-            key: test_key(2, HashMap::default()),
+            key: test_key(2, FxHashMap::default()),
             go_method_context: 0,
         };
         let foreign = diagnostics::lint::unused_mut(&Span::new(37, 0, 1))

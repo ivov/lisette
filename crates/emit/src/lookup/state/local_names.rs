@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::go_names::is_go_reserved_word;
 
 use super::scope::ScopeState;
@@ -8,9 +8,9 @@ use crate::target::names::go_name;
 
 #[derive(Clone, Default)]
 pub(super) struct LocalNames {
-    issued: HashSet<String>,
-    generated: HashMap<LocalId, String>,
-    struct_update_copies: HashSet<LocalId>,
+    issued: FxHashSet<String>,
+    generated: FxHashMap<LocalId, String>,
+    struct_update_copies: FxHashSet<LocalId>,
 }
 
 impl ScopeState {
@@ -60,10 +60,10 @@ impl ScopeState {
 
     pub(crate) fn settle_generated_names(
         &self,
-        present: &HashMap<LocalId, String>,
-        pinned: &HashSet<String>,
+        present: &FxHashMap<LocalId, String>,
+        pinned: &FxHashSet<String>,
         package: &PackageNames,
-    ) -> HashMap<LocalId, String> {
+    ) -> FxHashMap<LocalId, String> {
         let mut taken = pinned.clone();
         taken.extend(
             present
@@ -73,7 +73,7 @@ impl ScopeState {
         );
         let mut locals: Vec<_> = self.names.generated.iter().collect();
         locals.sort_by_key(|(id, _)| id.0);
-        let mut settled: HashMap<LocalId, String> = HashMap::default();
+        let mut settled: FxHashMap<LocalId, String> = FxHashMap::default();
         for (id, base) in locals {
             let Some(current) = present.get(id) else {
                 continue;
@@ -100,12 +100,12 @@ impl ScopeState {
 
     pub(crate) fn restore_builtin_names(
         &self,
-        present: &HashMap<LocalId, String>,
-        pinned: &HashSet<String>,
-        settled: &mut HashMap<LocalId, String>,
+        present: &FxHashMap<LocalId, String>,
+        pinned: &FxHashSet<String>,
+        settled: &mut FxHashMap<LocalId, String>,
         package: &PackageNames,
     ) {
-        let mut taken: HashSet<String> = pinned
+        let mut taken: FxHashSet<String> = pinned
             .iter()
             .chain(present.values())
             .chain(settled.values())
@@ -135,10 +135,10 @@ impl ScopeState {
 
     pub(crate) fn avoid_qualifier_capture(
         &self,
-        present: &HashMap<LocalId, String>,
-        pinned: &HashSet<String>,
-        qualifiers: &HashSet<String>,
-        settled: &mut HashMap<LocalId, String>,
+        present: &FxHashMap<LocalId, String>,
+        pinned: &FxHashSet<String>,
+        qualifiers: &FxHashSet<String>,
+        settled: &mut FxHashMap<LocalId, String>,
     ) {
         let mut locals: Vec<_> = present.iter().collect();
         locals.sort_by_key(|(id, _)| id.0);

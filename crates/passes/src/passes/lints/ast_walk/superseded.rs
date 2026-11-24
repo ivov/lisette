@@ -1,12 +1,12 @@
 use diagnostics::LocalSink;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::ast::Span;
 
 use semantics::facts::Usage;
 use semantics::store::Store;
 
-pub(super) fn build_index(store: &Store) -> HashMap<Span, String> {
-    let mut index = HashMap::default();
+pub(super) fn build_index(store: &Store) -> FxHashMap<Span, String> {
+    let mut index = FxHashMap::default();
     for package in store.packages().values() {
         for definition in package.definitions.values() {
             if let (Some(name_span), Some(successor)) =
@@ -33,7 +33,7 @@ pub(super) fn build_index(store: &Store) -> HashMap<Span, String> {
 
 pub(super) fn sweep<'a>(
     usages: impl Iterator<Item = &'a Usage>,
-    index: &HashMap<Span, String>,
+    index: &FxHashMap<Span, String>,
     sink: &LocalSink,
 ) {
     for usage in usages {

@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::program::CheckedBodies;
 
 use diagnostics::LisetteDiagnostic;
@@ -214,7 +214,7 @@ impl CompiledTest {
                 }
             }
 
-            let definitions: HashMap<Symbol, Definition> = store
+            let definitions: FxHashMap<Symbol, Definition> = store
                 .packages()
                 .values()
                 .flat_map(|m| m.definitions.iter())
@@ -226,7 +226,7 @@ impl CompiledTest {
 
             let equality_index = mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
-            let go_package_ids: HashSet<String> = store
+            let go_package_ids: FxHashSet<String> = store
                 .packages()
                 .keys()
                 .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
@@ -265,14 +265,14 @@ impl CompiledTest {
 pub struct InferenceResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
-    pub definitions: HashMap<Symbol, Definition>,
+    pub definitions: FxHashMap<Symbol, Definition>,
     pub package_id: String,
     pub unused_imports: UnusedImports,
     pub bindings: EmitBindings,
     pub checked_bodies: CheckedBodies,
     pub equality_index: EqualityIndex,
-    pub go_package_names: HashMap<String, String>,
-    pub go_package_ids: HashSet<String>,
+    pub go_package_names: FxHashMap<String, String>,
+    pub go_package_ids: FxHashSet<String>,
 }
 
 fn unwrap_hoisted_test_wrapper(expression: Expression) -> Option<Expression> {

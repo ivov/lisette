@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::mem;
@@ -1764,7 +1764,7 @@ impl Type {
         }
     }
 
-    pub fn remove_found_type_names(&self, names: &mut HashSet<EcoString>) {
+    pub fn remove_found_type_names(&self, names: &mut FxHashSet<EcoString>) {
         if names.is_empty() {
             return;
         }
@@ -1972,7 +1972,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = ty.unwrap_forall().clone();
-    let mut seen: HashSet<Type> = HashSet::default();
+    let mut seen: FxHashSet<Type> = FxHashSet::default();
     while let Type::Nominal {
         id,
         params,
@@ -1998,7 +1998,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = peel_alias(ty, &lookup);
-    let mut seen: HashSet<Symbol> = HashSet::default();
+    let mut seen: FxHashSet<Symbol> = FxHashSet::default();
     while current.is_ref() {
         let stripped = current.strip_refs();
         if let Type::Nominal { id, .. } = stripped.unwrap_forall()
@@ -2036,7 +2036,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = ty.unwrap_forall().clone();
-    let mut seen: HashSet<Symbol> = HashSet::default();
+    let mut seen: FxHashSet<Symbol> = FxHashSet::default();
     while let Type::Nominal {
         id,
         params,
@@ -2589,7 +2589,7 @@ impl Type {
     }
 
     pub fn remove_vars(types: &[&Type]) -> (Vec<Type>, Vec<EcoString>) {
-        let mut vars = HashMap::default();
+        let mut vars = FxHashMap::default();
         let types = types
             .iter()
             .map(|v| Self::remove_vars_impl(v, &mut vars))
@@ -2598,7 +2598,7 @@ impl Type {
         (types, vars.into_values().collect())
     }
 
-    fn remove_vars_impl(ty: &Type, vars: &mut HashMap<u32, EcoString>) -> Type {
+    fn remove_vars_impl(ty: &Type, vars: &mut FxHashMap<u32, EcoString>) -> Type {
         match ty {
             Type::Nominal {
                 id: name,

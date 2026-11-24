@@ -5,7 +5,7 @@ use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
 use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,8 +129,8 @@ pub(crate) fn verify_local_scopes(
     bindings: &[GoIdentifier],
 ) -> Result<(), BodyError> {
     struct Check {
-        frames: Vec<HashMap<String, LocalId>>,
-        spellings: HashMap<LocalId, String>,
+        frames: Vec<FxHashMap<String, LocalId>>,
+        spellings: FxHashMap<LocalId, String>,
         error: Option<BodyErrorKind>,
     }
 
@@ -201,7 +201,7 @@ pub(crate) fn verify_local_scopes(
         }
 
         fn enter_scope(&mut self) {
-            self.frames.push(HashMap::default());
+            self.frames.push(FxHashMap::default());
         }
 
         fn exit_scope(&mut self) {
@@ -210,8 +210,8 @@ pub(crate) fn verify_local_scopes(
     }
 
     let mut check = Check {
-        frames: vec![HashMap::default()],
-        spellings: HashMap::default(),
+        frames: vec![FxHashMap::default()],
+        spellings: FxHashMap::default(),
         error: None,
     };
     for name in bindings {

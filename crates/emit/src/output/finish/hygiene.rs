@@ -1,7 +1,7 @@
 use std::mem;
 use std::slice;
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::output::finish::cleanup::name_uses::NameUses;
 use crate::output::finish::cleanup::terminal_else::{drop_empty_else, flip_branches};
@@ -107,7 +107,7 @@ fn keep_effects(value: GoExpression, line: Option<Position>) -> Option<Statement
 
 struct Liveness {
     uses: NameUses,
-    compound: HashSet<LocalId>,
+    compound: FxHashSet<LocalId>,
 }
 
 impl Liveness {
@@ -292,8 +292,8 @@ fn blank_unused_header_names(statement: &mut LoweredStatement, liveness: &Livene
     }
 }
 
-fn compound_targets(statements: &mut Vec<Statement>) -> HashSet<LocalId> {
-    let mut targets = HashSet::default();
+fn compound_targets(statements: &mut Vec<Statement>) -> FxHashSet<LocalId> {
+    let mut targets = FxHashSet::default();
     for_each_statements_mut(statements, &mut |list| {
         for statement in list.iter() {
             if let LoweredStatement::Assign(AssignForm::Compound { target, .. }) = &statement.kind

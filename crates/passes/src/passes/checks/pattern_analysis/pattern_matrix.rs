@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use syntax::ast::Literal;
 
@@ -9,7 +9,7 @@ pub enum ScrutineeSignature {
     Constructors {
         type_name: TypeName,
         union: Union,
-        seen_tags: HashSet<TagId>,
+        seen_tags: FxHashSet<TagId>,
     },
     WildcardsOrLiterals,
 }
@@ -86,7 +86,7 @@ pub fn get_scrutinee_signature(rows: &[Row], unions: &UnionTable) -> Option<Scru
 
     let mut type_name: Option<TypeName> = None;
     let mut union: Option<Union> = None;
-    let mut seen_tags = HashSet::default();
+    let mut seen_tags = FxHashSet::default();
 
     for row in rows {
         if let Some(NormalizedPattern::Constructor {

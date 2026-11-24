@@ -1,6 +1,6 @@
 use crate::lowering::abi::layout::is_nullable_option;
+use crate::lowering::calls::call_plan::is_prelude_dispatch;
 use crate::lowering::definitions::interface_adapter::requirement_go_return_abi;
-use crate::lowering::plan::calls::is_prelude_dispatch;
 use crate::target::types::return_abi::{
     CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout, go_payload_layout,
     go_return_abi,
@@ -19,7 +19,10 @@ pub(in crate::lowering) mod slot_coercion;
 
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lowering::plan::calls::{CallableDeclaration, CallableOrigin, FunctionLayoutChange};
+use crate::lookup::state::enclosing::ReturnContext;
+use crate::lowering::calls::call_plan::{
+    CallableDeclaration, CallableOrigin, FunctionLayoutChange,
+};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::prelude::prelude_constructor;
 use crate::target::names::go_name;
@@ -51,6 +54,27 @@ pub(in crate::lowering) struct CalleeSignature<'s, 'a> {
 }
 
 impl Planner<'_> {
+    pub(in crate::lowering) fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
+        let abi = return_abi(&self.facts, &return_ty, ReturnSlot::Function);
+        Self::return_context_from_abi(return_ty, abi)
+    }
+
+    pub(in crate::lowering) fn return_context_for_method(&self, return_ty: Type) -> ReturnContext {
+        let abi = return_abi(&self.facts, &return_ty, ReturnSlot::Method);
+        Self::return_context_from_abi(return_ty, abi)
+    }
+
+    pub(in crate::lowering) fn return_context_from_abi(
+        return_ty: Type,
+        abi: CallableReturnAbi,
+    ) -> ReturnContext {
+        match abi {
+            CallableReturnAbi::Void => ReturnContext::Void(return_ty),
+            CallableReturnAbi::Lowered(shape) => ReturnContext::Lowered { return_ty, shape },
+            CallableReturnAbi::Value => ReturnContext::Tagged(return_ty),
+        }
+    }
+
     pub(in crate::lowering) fn callee_return_abi(
         &self,
         signature: CalleeSignature<'_, '_>,

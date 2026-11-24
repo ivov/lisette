@@ -4,8 +4,8 @@ use crate::lowering::calls::regular::receiver_type_binding;
 
 use crate::Planner;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
+use crate::lowering::calls::call_plan::{CallPlan, ResolvedCallee};
 use crate::lowering::expressions::staging::SpreadSequenceOptions;
-use crate::lowering::plan::calls::{CallPlan, ResolvedCallee};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::Statement;

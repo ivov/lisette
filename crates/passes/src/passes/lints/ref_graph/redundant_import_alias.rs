@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use diagnostics::{Edit, Fix, LisetteDiagnostic};
 use semantics::store::Store;
@@ -7,9 +7,9 @@ use syntax::ast::{Expression, ImportAlias, Span};
 use syntax::program::{File, Package, unaliased_binding_name};
 
 pub(super) fn check_redundant_aliases(
-    files: &HashMap<u32, File>,
+    files: &FxHashMap<u32, File>,
     store: &Store,
-    unused_import_spans: &HashSet<Span>,
+    unused_import_spans: &FxHashSet<Span>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     for file in files.values().filter(|file| !file.is_d_lis()) {

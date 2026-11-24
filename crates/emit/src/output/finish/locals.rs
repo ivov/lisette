@@ -3,18 +3,18 @@ use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
-use rustc_hash::FxHashMap as HashMap;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 pub(crate) fn identify_body_locals(
     statements: &mut Vec<Statement>,
     parameters: &[GoIdentifier],
     scope: &mut ScopeState,
-) -> HashSet<LocalId> {
+) -> FxHashSet<LocalId> {
     struct Resolve<'a> {
         scope: &'a mut ScopeState,
-        frames: Vec<HashMap<String, LocalId>>,
-        shadowing: HashSet<LocalId>,
+        frames: Vec<FxHashMap<String, LocalId>>,
+        shadowing: FxHashSet<LocalId>,
     }
 
     impl VisitorMut for Resolve<'_> {
@@ -66,7 +66,7 @@ pub(crate) fn identify_body_locals(
         }
 
         fn enter_scope(&mut self) {
-            self.frames.push(HashMap::default());
+            self.frames.push(FxHashMap::default());
         }
 
         fn exit_scope(&mut self) {
@@ -76,8 +76,8 @@ pub(crate) fn identify_body_locals(
 
     let mut resolver = Resolve {
         scope,
-        frames: vec![HashMap::default()],
-        shadowing: HashSet::default(),
+        frames: vec![FxHashMap::default()],
+        shadowing: FxHashSet::default(),
     };
     for name in parameters {
         let mut name = name.clone();

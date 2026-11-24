@@ -2,6 +2,7 @@ mod abi;
 mod calls;
 mod control_flow;
 mod definitions;
+pub(crate) mod driver;
 mod expressions;
 mod patterns;
 mod plan;

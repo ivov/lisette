@@ -35,7 +35,7 @@ use crate::target::names::receiver::fresh_receiver_name;
 use crate::target::names::source_name::SourceName;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::EcoString;
 use syntax::ast::{
     Binding, Expression, FunctionDefinitionView, Pattern, SelectArm, collect_pattern_bindings,
@@ -133,9 +133,9 @@ impl Planner<'_> {
     ) {
         #[derive(Default)]
         struct Names {
-            present: HashMap<LocalId, String>,
-            pinned: HashSet<String>,
-            qualifiers: HashSet<String>,
+            present: FxHashMap<LocalId, String>,
+            pinned: FxHashSet<String>,
+            qualifiers: FxHashSet<String>,
         }
 
         impl VisitorMut for Names {

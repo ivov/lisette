@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::target::names::go_name::GeneratedPackage;
 
@@ -44,7 +44,7 @@ impl PackageUse {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct PackageRequirements {
-    uses: HashSet<PackageUse>,
+    uses: FxHashSet<PackageUse>,
 }
 
 impl PackageRequirements {

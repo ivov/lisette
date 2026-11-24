@@ -1,6 +1,6 @@
 mod diagnostic_cache;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use diagnostics::LocalSink;
 use semantics::AnalysisScope;
@@ -64,10 +64,10 @@ fn has_diagnostic_code(sink: &LocalSink, code: &str) -> bool {
 
 #[test]
 fn kahn_simple_dependency_chain() {
-    let mut edges = HashMap::default();
-    edges.insert("a".to_string(), HashSet::from_iter(["b".to_string()]));
-    edges.insert("b".to_string(), HashSet::from_iter(["c".to_string()]));
-    edges.insert("c".to_string(), HashSet::default());
+    let mut edges = FxHashMap::default();
+    edges.insert("a".to_string(), FxHashSet::from_iter(["b".to_string()]));
+    edges.insert("b".to_string(), FxHashSet::from_iter(["c".to_string()]));
+    edges.insert("c".to_string(), FxHashSet::default());
 
     let (order, cycles) = topological_sort(&DependencyGraph::from(edges));
 
@@ -81,14 +81,14 @@ fn kahn_simple_dependency_chain() {
 
 #[test]
 fn kahn_diamond_dependency() {
-    let mut edges = HashMap::default();
+    let mut edges = FxHashMap::default();
     edges.insert(
         "a".to_string(),
-        HashSet::from_iter(["b".to_string(), "c".to_string()]),
+        FxHashSet::from_iter(["b".to_string(), "c".to_string()]),
     );
-    edges.insert("b".to_string(), HashSet::from_iter(["d".to_string()]));
-    edges.insert("c".to_string(), HashSet::from_iter(["d".to_string()]));
-    edges.insert("d".to_string(), HashSet::default());
+    edges.insert("b".to_string(), FxHashSet::from_iter(["d".to_string()]));
+    edges.insert("c".to_string(), FxHashSet::from_iter(["d".to_string()]));
+    edges.insert("d".to_string(), FxHashSet::default());
 
     let (order, cycles) = topological_sort(&DependencyGraph::from(edges));
 
@@ -105,14 +105,14 @@ fn kahn_diamond_dependency() {
 
 #[test]
 fn kahn_ready_package_order_is_stable() {
-    let mut edges = HashMap::default();
+    let mut edges = FxHashMap::default();
     edges.insert(
         "a".to_string(),
-        HashSet::from_iter(["b".to_string(), "c".to_string()]),
+        FxHashSet::from_iter(["b".to_string(), "c".to_string()]),
     );
-    edges.insert("b".to_string(), HashSet::from_iter(["d".to_string()]));
-    edges.insert("c".to_string(), HashSet::from_iter(["d".to_string()]));
-    edges.insert("d".to_string(), HashSet::default());
+    edges.insert("b".to_string(), FxHashSet::from_iter(["d".to_string()]));
+    edges.insert("c".to_string(), FxHashSet::from_iter(["d".to_string()]));
+    edges.insert("d".to_string(), FxHashSet::default());
 
     let (order, _) = topological_sort(&DependencyGraph::from(edges));
 
@@ -121,10 +121,10 @@ fn kahn_ready_package_order_is_stable() {
 
 #[test]
 fn kahn_simple_cycle() {
-    let mut edges = HashMap::default();
-    edges.insert("a".to_string(), HashSet::from_iter(["b".to_string()]));
-    edges.insert("b".to_string(), HashSet::from_iter(["c".to_string()]));
-    edges.insert("c".to_string(), HashSet::from_iter(["a".to_string()]));
+    let mut edges = FxHashMap::default();
+    edges.insert("a".to_string(), FxHashSet::from_iter(["b".to_string()]));
+    edges.insert("b".to_string(), FxHashSet::from_iter(["c".to_string()]));
+    edges.insert("c".to_string(), FxHashSet::from_iter(["a".to_string()]));
 
     let (_, cycles) = topological_sort(&DependencyGraph::from(edges));
 
@@ -133,10 +133,10 @@ fn kahn_simple_cycle() {
 
 #[test]
 fn kahn_no_dependencies() {
-    let mut edges = HashMap::default();
-    edges.insert("a".to_string(), HashSet::default());
-    edges.insert("b".to_string(), HashSet::default());
-    edges.insert("c".to_string(), HashSet::default());
+    let mut edges = FxHashMap::default();
+    edges.insert("a".to_string(), FxHashSet::default());
+    edges.insert("b".to_string(), FxHashSet::default());
+    edges.insert("c".to_string(), FxHashSet::default());
 
     let (order, cycles) = topological_sort(&DependencyGraph::from(edges));
 
@@ -1357,13 +1357,13 @@ fn analysis_retains_transitive_dependencies_on_package_cache_hits() {
 
 #[test]
 fn kahn_reports_cycle_when_two_imported_packages_are_missing() {
-    let mut edges = HashMap::default();
+    let mut edges = FxHashMap::default();
     edges.insert(
         "main".to_string(),
-        HashSet::from_iter(["a".to_string(), "x".to_string(), "y".to_string()]),
+        FxHashSet::from_iter(["a".to_string(), "x".to_string(), "y".to_string()]),
     );
-    edges.insert("a".to_string(), HashSet::from_iter(["b".to_string()]));
-    edges.insert("b".to_string(), HashSet::from_iter(["a".to_string()]));
+    edges.insert("a".to_string(), FxHashSet::from_iter(["b".to_string()]));
+    edges.insert("b".to_string(), FxHashSet::from_iter(["a".to_string()]));
 
     let (_, cycles) = topological_sort(&DependencyGraph::from(edges));
 

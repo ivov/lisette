@@ -1,7 +1,7 @@
 //! Go identifier computation shared by the checker and the emitter, so
 //! neither has to mirror the other's naming policy.
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 
 use crate::EcoString;
@@ -463,9 +463,9 @@ pub fn enum_field_slots(enum_name: &str, variants: &[EnumVariant]) -> Vec<Vec<St
     slots
 }
 
-fn contested_slots(variants: &[EnumVariant], slots: &[Vec<String>]) -> HashSet<String> {
-    let mut claimed: HashMap<&str, &Type> = HashMap::default();
-    let mut contested = HashSet::default();
+fn contested_slots(variants: &[EnumVariant], slots: &[Vec<String>]) -> FxHashSet<String> {
+    let mut claimed: FxHashMap<&str, &Type> = FxHashMap::default();
+    let mut contested = FxHashSet::default();
 
     for (variant, names) in variants.iter().zip(slots) {
         for (field, name) in variant.fields.iter().zip(names) {

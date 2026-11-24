@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, Span, StructSpread};
 use syntax::types::Type;
 
@@ -35,7 +35,7 @@ pub fn check_needless_update(expression: &Expression, ctx: &NodeCtx) {
     let Some(fields) = struct_field_names(ctx.store, ty, name) else {
         return;
     };
-    let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
+    let assigned: FxHashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
     if !fields.iter().all(|f| assigned.contains(f.as_str())) {
         return;
     }

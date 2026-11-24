@@ -3,18 +3,18 @@ use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::abi::return_abi;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::EcoString;
 
 use crate::Planner;
 use crate::lowering::abi::callable::CallableParamAbi;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::abi::layout::ValueLayout;
-use crate::lowering::expressions::staging::{SpreadSequenceOptions, takes_prelude_callback};
-use crate::lowering::plan::calls::{
+use crate::lowering::calls::call_plan::{
     ArgumentPlan, ArgumentSlotLayoutChange, ArgumentValueSource, CallPlan, CallableOrigin,
     FunctionLayoutChange, ResolvedCallee,
 };
+use crate::lowering::expressions::staging::{SpreadSequenceOptions, takes_prelude_callback};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::{SequencedValues, ValuePlan};
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
@@ -35,8 +35,8 @@ pub(super) struct CallArgsContext<'plan, 'facts> {
 }
 
 impl CallArgsContext<'_, '_> {
-    fn receiver_bound_parameters(&self) -> HashSet<String> {
-        let mut mapping: HashMap<String, Type> = HashMap::default();
+    fn receiver_bound_parameters(&self) -> FxHashSet<String> {
+        let mut mapping: FxHashMap<String, Type> = FxHashMap::default();
         if let Some((declared, instantiated)) = &self.receiver_binding {
             extract_type_mapping(declared, instantiated, &mut mapping);
         }
@@ -158,7 +158,7 @@ impl Planner<'_> {
                 continue;
             }
             if let Some((declared, instantiated)) = slot {
-                let mut mapping: HashMap<String, Type> = HashMap::default();
+                let mut mapping: FxHashMap<String, Type> = FxHashMap::default();
                 extract_type_mapping(declared, instantiated, &mut mapping);
                 bound.extend(mapping.into_keys());
             }
@@ -176,7 +176,7 @@ impl Planner<'_> {
                 if !direct || constant.is_none() {
                     return stage;
                 }
-                let mut mapping: HashMap<String, Type> = HashMap::default();
+                let mut mapping: FxHashMap<String, Type> = FxHashMap::default();
                 extract_type_mapping(declared, instantiated, &mut mapping);
                 let inferred = mapping.keys().any(|name| {
                     (vars.is_empty() || vars.iter().any(|var| var == name)) && !bound.contains(name)

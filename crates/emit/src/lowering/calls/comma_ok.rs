@@ -3,7 +3,7 @@ use crate::lookup::state::bindings::{BindingValue, ComponentBinding, ComponentKi
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::calls::bound_value::{BoundValue, LoweredPair, PairValue};
-use crate::lowering::plan::calls::CallableOrigin;
+use crate::lowering::calls::call_plan::CallableOrigin;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::bodies::{Statement, define, define_many};
 use crate::target::ir::local::GoIdentifier;

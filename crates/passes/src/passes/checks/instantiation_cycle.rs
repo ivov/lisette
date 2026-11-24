@@ -15,7 +15,7 @@ use std::ptr;
 
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use semantics::store::Store;
 use syntax::ast::{Binding, EnumVariant, Expression, Generic, Pattern, Span};
 use syntax::program::{AliasKind, DefinitionBody};
@@ -56,30 +56,30 @@ struct AliasUse {
     identity: Option<usize>,
 }
 
-type Scope = HashMap<EcoString, usize>;
+type Scope = FxHashMap<EcoString, usize>;
 
 struct Graph<'a> {
     store: &'a Store,
-    vertices: HashMap<(EcoString, usize), usize>,
+    vertices: FxHashMap<(EcoString, usize), usize>,
     edges: Vec<Vec<usize>>,
     growing: Vec<Growing>,
-    functions: HashMap<EcoString, Scope>,
-    ordered_parameters: HashMap<EcoString, (Vec<(EcoString, usize)>, usize)>,
-    aliases: HashMap<Symbol, Option<AliasUse>>,
-    summarizing: HashSet<Symbol>,
+    functions: FxHashMap<EcoString, Scope>,
+    ordered_parameters: FxHashMap<EcoString, (Vec<(EcoString, usize)>, usize)>,
+    aliases: FxHashMap<Symbol, Option<AliasUse>>,
+    summarizing: FxHashSet<Symbol>,
 }
 
 impl<'a> Graph<'a> {
     fn new(store: &'a Store) -> Self {
         Self {
             store,
-            vertices: HashMap::default(),
+            vertices: FxHashMap::default(),
             edges: Vec::new(),
             growing: Vec::new(),
-            functions: HashMap::default(),
-            ordered_parameters: HashMap::default(),
-            aliases: HashMap::default(),
-            summarizing: HashSet::default(),
+            functions: FxHashMap::default(),
+            ordered_parameters: FxHashMap::default(),
+            aliases: FxHashMap::default(),
+            summarizing: FxHashSet::default(),
         }
     }
 
@@ -462,7 +462,7 @@ impl<'a> Graph<'a> {
             Type::Parameter(name) => Some(name.clone()),
             _ => None,
         };
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         for parameter in parameters {
             let Some(&source) = scope.get(&parameter) else {
                 continue;
@@ -575,8 +575,8 @@ impl<'a> Graph<'a> {
             let is_declaration = matches!(edge.site, Site::Declaration { .. });
             (is_declaration, edge.span.file_id, edge.span.byte_offset)
         });
-        let mut reported = HashSet::default();
-        let mut reported_spans = HashSet::default();
+        let mut reported = FxHashSet::default();
+        let mut reported_spans = FxHashSet::default();
         for edge in &self.growing {
             let component = components[edge.source];
             if component != components[edge.target]
@@ -648,7 +648,7 @@ fn embeds_itself(store: &Store, name: &Symbol) -> bool {
             .collect::<Vec<_>>()
     };
     let mut pending = parents(name);
-    let mut visited = HashSet::default();
+    let mut visited = FxHashSet::default();
     while let Some(parent) = pending.pop() {
         if parent == name.as_str() {
             return true;

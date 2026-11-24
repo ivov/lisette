@@ -2,7 +2,7 @@ use super::name_uses::NameUses;
 use super::terminal_else::drop_empty_else;
 use std::mem;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::target::ir::bodies::{
     Definition, LoweredStatement, Statement, direct_first, for_each_statements_mut,
@@ -11,7 +11,7 @@ use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
 
-pub(super) fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalId>) {
+pub(super) fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &FxHashSet<LocalId>) {
     while let Some(name) = find_unread_temp(statements, shadowing) {
         remove_temp(statements, &name);
     }
@@ -19,7 +19,7 @@ pub(super) fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &Has
 
 fn find_unread_temp(
     statements: &mut Vec<Statement>,
-    shadowing: &HashSet<LocalId>,
+    shadowing: &FxHashSet<LocalId>,
 ) -> Option<GoIdentifier> {
     let uses = NameUses::of(statements);
     let discards = discard_counts(statements);
@@ -34,8 +34,8 @@ fn find_unread_temp(
     found
 }
 
-fn discard_counts(statements: &mut Vec<Statement>) -> HashMap<LocalId, usize> {
-    let mut discards: HashMap<LocalId, usize> = HashMap::default();
+fn discard_counts(statements: &mut Vec<Statement>) -> FxHashMap<LocalId, usize> {
+    let mut discards: FxHashMap<LocalId, usize> = FxHashMap::default();
     for_each_statements_mut(statements, &mut |list| {
         for statement in list.iter() {
             if let Some(id) = discarded_name(&statement.kind).and_then(GoIdentifier::id) {
@@ -49,8 +49,8 @@ fn discard_counts(statements: &mut Vec<Statement>) -> HashMap<LocalId, usize> {
 fn unread_temp(
     statement: &Statement,
     uses: &NameUses,
-    discards: &HashMap<LocalId, usize>,
-    shadowing: &HashSet<LocalId>,
+    discards: &FxHashMap<LocalId, usize>,
+    shadowing: &FxHashSet<LocalId>,
 ) -> Option<GoIdentifier> {
     let (name, value) = pure_define(&statement.kind)?;
     if name.id().is_some_and(|id| shadowing.contains(&id)) {

@@ -1,6 +1,6 @@
 use std::{collections::hash_map, iter::Flatten, mem};
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::Usage;
 
@@ -8,7 +8,7 @@ use super::Usage;
 /// Merging a previously unseen file transfers its allocation intact.
 #[derive(Debug, Default)]
 pub struct UsageFacts {
-    files: HashMap<u32, HashSet<Usage>>,
+    files: FxHashMap<u32, FxHashSet<Usage>>,
 }
 
 impl UsageFacts {
@@ -38,7 +38,7 @@ impl UsageFacts {
     }
 
     pub fn len(&self) -> usize {
-        self.files.values().map(HashSet::len).sum()
+        self.files.values().map(FxHashSet::len).sum()
     }
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
@@ -77,7 +77,7 @@ impl UsageFacts {
 
 impl<'a> IntoIterator for &'a UsageFacts {
     type Item = &'a Usage;
-    type IntoIter = Flatten<hash_map::Values<'a, u32, HashSet<Usage>>>;
+    type IntoIter = Flatten<hash_map::Values<'a, u32, FxHashSet<Usage>>>;
     fn into_iter(self) -> Self::IntoIter {
         self.files.values().flatten()
     }
@@ -87,7 +87,7 @@ impl<'a> IntoIterator for &'a UsageFacts {
 /// ordered by usage position and then definition position.
 #[derive(Debug, Default)]
 pub struct UsageIndex {
-    files: HashMap<u32, Box<[Usage]>>,
+    files: FxHashMap<u32, Box<[Usage]>>,
 }
 
 impl UsageIndex {

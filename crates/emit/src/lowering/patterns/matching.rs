@@ -9,6 +9,7 @@ use crate::target::ir::prelude::{PartialVariant, PreludeVariant, prelude_variant
 use crate::target::types::return_abi::LoweredReturnAbi;
 
 use crate::lookup::state::scope::PairStatusKind;
+use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
 use crate::lowering::calls::wrap_err::WrapMessage;
 use crate::lowering::patterns::binding_decls::{
     has_binding_or_pattern, pattern_binds_name, pattern_has_bindings,
@@ -16,7 +17,6 @@ use crate::lowering::patterns::binding_decls::{
 use crate::lowering::patterns::decision_tree;
 use crate::lowering::patterns::sites::ResolvedSubject;
 use crate::lowering::patterns::tree_planner::{MatchSubject, TreePlanner};
-use crate::lowering::plan::calls::{CallPlan, CallableOrigin};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::place::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;

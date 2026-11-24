@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::program::{Definition, DefinitionBody, Visibility};
 
 use semantics::store::Store;
@@ -11,7 +11,7 @@ pub(crate) fn run_package(package_id: &str, store: &Store, sink: &LocalSink) {
 
     let package_prefix = format!("{}.", package_id);
 
-    let non_pub_interfaces: HashMap<String, HashSet<String>> = package
+    let non_pub_interfaces: FxHashMap<String, FxHashSet<String>> = package
         .definitions
         .iter()
         .filter(|(key, _)| key.starts_with(&package_prefix))

@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use syntax::EcoString;
 use syntax::ast::Generic;
@@ -7,7 +7,7 @@ use syntax::types::Type;
 pub(crate) fn extract_type_mapping(
     generic: &Type,
     concrete: &Type,
-    mapping: &mut HashMap<String, Type>,
+    mapping: &mut FxHashMap<String, Type>,
 ) {
     if let Type::Parameter(name) = generic {
         mapping

@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::fs::{read_dir, read_to_string};
 use std::io;
@@ -129,12 +129,12 @@ pub(crate) struct OverlayLoader {
 
 #[derive(Clone, Default)]
 struct Overlays {
-    production: HashMap<String, HashMap<String, String>>,
-    external_tests: HashMap<String, HashMap<String, String>>,
+    production: FxHashMap<String, FxHashMap<String, String>>,
+    external_tests: FxHashMap<String, FxHashMap<String, String>>,
 }
 
 impl Overlays {
-    fn packages(&self, external_test: bool) -> &HashMap<String, HashMap<String, String>> {
+    fn packages(&self, external_test: bool) -> &FxHashMap<String, FxHashMap<String, String>> {
         if external_test {
             &self.external_tests
         } else {
@@ -145,7 +145,7 @@ impl Overlays {
     fn packages_mut(
         &mut self,
         external_test: bool,
-    ) -> &mut HashMap<String, HashMap<String, String>> {
+    ) -> &mut FxHashMap<String, FxHashMap<String, String>> {
         if external_test {
             &mut self.external_tests
         } else {
@@ -208,12 +208,12 @@ pub(crate) struct AnalysisLoader {
     overlays: Arc<Overlays>,
     entry_package_path: PathBuf,
     external_test_root: Option<String>,
-    captured: Option<Arc<HashMap<PathBuf, Files>>>,
+    captured: Option<Arc<FxHashMap<PathBuf, Files>>>,
 }
 
 impl AnalysisLoader {
     pub(crate) fn capture_project(&self) -> io::Result<Self> {
-        let mut captured: HashMap<PathBuf, Files> = HashMap::default();
+        let mut captured: FxHashMap<PathBuf, Files> = FxHashMap::default();
         for external in [false, true] {
             for (package, files) in self.overlays.packages(external) {
                 let directory = if external {
@@ -378,7 +378,7 @@ impl Loader for AnalysisLoader {
         if let Some(captured) = &self.captured {
             return captured.get(&folder_path).cloned().unwrap_or_default();
         }
-        let mut files = HashMap::default();
+        let mut files = FxHashMap::default();
 
         if let Ok(entries) = read_dir(&folder_path) {
             for entry in entries.flatten() {
@@ -432,7 +432,7 @@ impl Loader for AnalysisLoader {
 
 fn capture_directory(
     directory: &Path,
-    captured: &mut HashMap<PathBuf, Files>,
+    captured: &mut FxHashMap<PathBuf, Files>,
     ancestors: &mut Vec<PathBuf>,
 ) -> io::Result<()> {
     let canonical = directory.canonicalize()?;

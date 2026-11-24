@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use super::NormalizedPattern::{Literal, OpaqueConst, Wildcard};
 use super::pattern_matrix::{
@@ -18,7 +18,7 @@ enum AlgorithmCase {
     IncompleteConstructors {
         type_name: TypeName,
         union: Union,
-        seen_tags: HashSet<TagId>,
+        seen_tags: FxHashSet<TagId>,
     },
     AllConstructors {
         type_name: TypeName,

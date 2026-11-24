@@ -1,6 +1,7 @@
 mod arguments;
 pub(in crate::lowering) mod bound_value;
 pub(in crate::lowering) mod bounds;
+pub(in crate::lowering) mod call_plan;
 mod clone;
 pub(in crate::lowering) mod comma_ok;
 pub(in crate::lowering) mod dispatch;
@@ -15,7 +16,7 @@ pub(in crate::lowering) mod wrap_err;
 
 use crate::Planner;
 use crate::lowering::abi::callable::CallableAbi;
-use crate::lowering::plan::calls::CallableOrigin;
+use crate::lowering::calls::call_plan::CallableOrigin;
 use crate::target::ir::values::CaptureBoundary;
 use syntax::ast::Expression;
 use syntax::program::{CallOperation, NativeTypeKind};

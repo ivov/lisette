@@ -1,14 +1,14 @@
 use std::cell::{Cell, RefCell};
 
 use diagnostics::LisetteDiagnostic;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::Span;
 
 #[derive(Clone, Default)]
 pub(crate) struct Rejections {
     focus: Cell<Option<Span>>,
     found: RefCell<Vec<LisetteDiagnostic>>,
-    seen: RefCell<HashSet<(Span, String)>>,
+    seen: RefCell<FxHashSet<(Span, String)>>,
 }
 
 impl Rejections {

@@ -6,7 +6,7 @@ use syntax::program::{
 mod usages;
 pub use usages::{UsageFacts, UsageIndex};
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -54,17 +54,17 @@ pub struct Facts {
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub redundant_pipeline_placeholders: Vec<Span>,
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
-    pub interface_satisfied_methods: HashMap<String, HashMap<String, InterfaceSatisfactions>>,
+    pub interface_satisfied_methods: FxHashMap<String, FxHashMap<String, InterfaceSatisfactions>>,
 
-    pub suggested_names: HashMap<String, HashSet<String>>,
+    pub suggested_names: FxHashMap<String, FxHashSet<String>>,
 
     pub(crate) deferred: DeferredChecks,
 
     /// Patterns the checker rejected. Pattern checks skip them.
-    pub pattern_error_spans: HashSet<Span>,
+    pub pattern_error_spans: FxHashSet<Span>,
 
     /// Spans of binary expressions the checker rejected, so lints can skip them.
-    pub type_error_spans: HashSet<Span>,
+    pub type_error_spans: FxHashSet<Span>,
 
     /// Span of every inferred function, so lints can attribute errors to
     /// the containing function.
@@ -218,7 +218,7 @@ enum InterfaceMatch {
 
 #[derive(Debug, Default)]
 pub struct InterfaceSatisfactions {
-    impl_types: HashMap<String, InterfaceMatch>,
+    impl_types: FxHashMap<String, InterfaceMatch>,
 }
 
 impl InterfaceSatisfactions {
@@ -336,16 +336,16 @@ impl Facts {
             redundant_pipeline_placeholders: Vec::new(),
             unprefixed_fstrings: Vec::new(),
             deferred: DeferredChecks::default(),
-            pattern_error_spans: HashSet::default(),
-            type_error_spans: HashSet::default(),
+            pattern_error_spans: FxHashSet::default(),
+            type_error_spans: FxHashSet::default(),
             function_spans: Vec::new(),
             usages: UsageFacts::default(),
             conformances: ConformanceIndex::default(),
             checked_bodies: CheckedBodiesBuilder::default(),
             selections: Selections::default(),
             value_uses: ValueUseObligations::default(),
-            interface_satisfied_methods: HashMap::default(),
-            suggested_names: HashMap::default(),
+            interface_satisfied_methods: FxHashMap::default(),
+            suggested_names: FxHashMap::default(),
         }
     }
 
@@ -819,9 +819,9 @@ mod tests {
 #[derive(Debug, Clone, Default)]
 pub struct Selections {
     /// Keyed by the callee of each call.
-    pub(crate) operations: HashMap<ExpressionId, CallOperation>,
+    pub(crate) operations: FxHashMap<ExpressionId, CallOperation>,
     /// Keyed as `CheckedBodies` keys its equalities.
-    pub(crate) equalities: HashMap<ExpressionId, EqualityRecipe>,
+    pub(crate) equalities: FxHashMap<ExpressionId, EqualityRecipe>,
 }
 
 impl Selections {

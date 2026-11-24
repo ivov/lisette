@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use ecow::EcoString;
 use syntax::ast::{Expression, IdentifierResolution, Span};
@@ -42,9 +42,9 @@ impl TaskState {
             return;
         }
 
-        let const_names: HashSet<&EcoString> = consts.iter().map(|c| c.name).collect();
+        let const_names: FxHashSet<&EcoString> = consts.iter().map(|c| c.name).collect();
 
-        let mut nodes: HashMap<&EcoString, ConstNode<'_>> = HashMap::default();
+        let mut nodes: FxHashMap<&EcoString, ConstNode<'_>> = FxHashMap::default();
         for entry in &consts {
             let mut refs: Vec<&EcoString> = Vec::new();
             collect_const_refs(entry.body, &const_names, &mut refs);
@@ -59,12 +59,12 @@ impl TaskState {
             );
         }
 
-        let mut color: HashMap<&EcoString, Color> = HashMap::default();
+        let mut color: FxHashMap<&EcoString, Color> = FxHashMap::default();
         for entry in &consts {
             color.insert(entry.name, Color::White);
         }
 
-        let mut reported: HashSet<&EcoString> = HashSet::default();
+        let mut reported: FxHashSet<&EcoString> = FxHashSet::default();
         for entry in &consts {
             if color[&entry.name] == Color::White {
                 let mut path: Vec<&EcoString> = Vec::new();
@@ -90,10 +90,10 @@ enum Color {
 
 fn dfs<'a>(
     node: &'a EcoString,
-    nodes: &HashMap<&'a EcoString, ConstNode<'a>>,
-    color: &mut HashMap<&'a EcoString, Color>,
+    nodes: &FxHashMap<&'a EcoString, ConstNode<'a>>,
+    color: &mut FxHashMap<&'a EcoString, Color>,
     path: &mut Vec<&'a EcoString>,
-    reported: &mut HashSet<&'a EcoString>,
+    reported: &mut FxHashSet<&'a EcoString>,
     sink: &diagnostics::LocalSink,
 ) {
     color.insert(node, Color::Gray);
@@ -124,7 +124,7 @@ fn dfs<'a>(
 
 fn collect_const_refs<'a>(
     expression: &'a Expression,
-    const_names: &HashSet<&'a EcoString>,
+    const_names: &FxHashSet<&'a EcoString>,
     out: &mut Vec<&'a EcoString>,
 ) {
     if let Expression::Identifier {

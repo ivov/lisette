@@ -8,9 +8,9 @@ use crate::lowering::expressions::literals::format_string_lowers_to_sprintf;
 use syntax::program::ReceiverCoercion;
 
 use crate::Planner;
+use crate::lowering::calls::call_plan::{CallPlan, ResolvedCallee};
 use crate::lowering::expressions::staging::LaterStages;
 use crate::lowering::expressions::staging::SpreadSequenceOptions;
-use crate::lowering::plan::calls::{CallPlan, ResolvedCallee};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::{SequencedValues, ValuePlan};
 use crate::target::ir::bodies::Statement;

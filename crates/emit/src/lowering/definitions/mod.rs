@@ -1,6 +1,7 @@
 pub(in crate::lowering) mod enum_layout;
 mod enums;
 pub(in crate::lowering) mod functions;
+mod generics;
 mod impls;
 pub(in crate::lowering) mod interface_adapter;
 mod interfaces;

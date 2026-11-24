@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
@@ -252,7 +252,7 @@ fn push_suppressible(
     if produced.is_empty() {
         return;
     }
-    let reported: HashSet<u32> = produced
+    let reported: FxHashSet<u32> = produced
         .iter()
         .filter_map(LisetteDiagnostic::file_id)
         .collect();

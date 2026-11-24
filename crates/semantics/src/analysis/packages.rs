@@ -11,7 +11,7 @@ use crate::checker::infer::constant_values;
 use crate::loader;
 use crate::path::DisplayPathBase;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::ParseError;
 use syntax::ast::Span;
 use syntax::program::UninferredExports;
@@ -103,7 +103,7 @@ struct RegistrationOutput {
 
 pub(super) struct PackageInferenceInput<'a> {
     pub(super) order: Vec<String>,
-    pub(super) files: HashMap<String, Vec<ScannedFile>>,
+    pub(super) files: FxHashMap<String, Vec<ScannedFile>>,
     pub(super) dependencies: DependencyGraph,
     pub(super) sink: LocalSink,
     pub(super) compile_phase: CompilePhase,
@@ -150,7 +150,7 @@ impl<'a> CacheKeyContext<'a> {
 pub(super) struct PackageInferenceOutput {
     pub(super) dependencies: DependencyGraph,
     pub(super) facts: Facts,
-    pub(super) cached_packages: HashSet<String>,
+    pub(super) cached_packages: FxHashSet<String>,
     pub(super) cached_diagnostics: Vec<LisetteDiagnostic>,
     pub(super) compiled_packages: Vec<CompiledPackage>,
     pub(super) sink: LocalSink,
@@ -168,8 +168,8 @@ pub(super) fn infer_all_packages(
     let mut checker =
         TaskState::with_sink(input.sink, input.project_kind, input.scope.script_unit());
 
-    let mut package_hashes: HashMap<String, u64> = HashMap::default();
-    let mut cached_packages: HashSet<String> = HashSet::default();
+    let mut package_hashes: FxHashMap<String, u64> = FxHashMap::default();
+    let mut cached_packages: FxHashSet<String> = FxHashSet::default();
     let order = input.order;
     let dependencies = &input.dependencies;
 
@@ -177,7 +177,8 @@ pub(super) fn infer_all_packages(
     let mut candidates: Vec<CacheCandidate> = Vec::new();
     let mut unparsed: Vec<UnparsedPackage> = Vec::new();
 
-    let mut source_hashes: HashMap<String, (u64, u64)> = if input.files.len() < PARALLEL_THRESHOLD {
+    let mut source_hashes: FxHashMap<String, (u64, u64)> = if input.files.len() < PARALLEL_THRESHOLD
+    {
         input
             .files
             .iter()
@@ -329,11 +330,11 @@ pub(super) fn infer_all_packages(
 
     checker.finalize_registration(store);
     let policy = store.go_method_policy();
-    let emit_contexts: HashMap<_, _> = store
+    let emit_contexts: FxHashMap<_, _> = store
         .packages()
         .keys()
         .map(|package_id| {
-            let mut reachable = HashSet::default();
+            let mut reachable = FxHashSet::default();
             let mut pending = vec![package_id.clone(), "prelude".to_string()];
             while let Some(id) = pending.pop() {
                 if reachable.insert(id.clone()) {
@@ -506,7 +507,7 @@ fn parse_and_store_packages(
 fn store_uninferred_packages(
     checker: &mut TaskState,
     store: &mut Store,
-    packages: HashMap<String, Vec<ScannedFile>>,
+    packages: FxHashMap<String, Vec<ScannedFile>>,
     recover_target: &RecoverTarget,
 ) {
     for (package_id, scanned) in packages {
@@ -592,7 +593,7 @@ struct CachedArtifact {
 
 #[derive(Default)]
 struct CacheLoad {
-    cached: HashSet<String>,
+    cached: FxHashSet<String>,
     diagnostics: Vec<LisetteDiagnostic>,
     missed: Vec<UnparsedPackage>,
     artifacts: Vec<CachedArtifact>,
@@ -689,7 +690,7 @@ fn register_packages(
     }
 
     let package_ids: Vec<_> = packages.iter().map(|package| package.id.clone()).collect();
-    let mut inputs: HashMap<_, _> = packages
+    let mut inputs: FxHashMap<_, _> = packages
         .into_iter()
         .map(|package| (package.id.clone(), package))
         .collect();
@@ -770,9 +771,9 @@ fn evaluate_constants_in_dependency_order(
     fn visit(
         store: &mut Store,
         package_id: &str,
-        batch: &HashSet<&str>,
+        batch: &FxHashSet<&str>,
         dependencies: &DependencyGraph,
-        evaluated: &mut HashSet<String>,
+        evaluated: &mut FxHashSet<String>,
     ) {
         if !evaluated.insert(package_id.to_string()) {
             return;
@@ -788,8 +789,8 @@ fn evaluate_constants_in_dependency_order(
         constant_values::evaluate_package_constants(store, package_id);
     }
 
-    let batch: HashSet<&str> = package_ids.iter().map(String::as_str).collect();
-    let mut evaluated = HashSet::default();
+    let batch: FxHashSet<&str> = package_ids.iter().map(String::as_str).collect();
+    let mut evaluated = FxHashSet::default();
     for package_id in package_ids {
         visit(store, package_id, &batch, dependencies, &mut evaluated);
     }
@@ -828,7 +829,7 @@ fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<Regi
 /// Groups topologically ordered packages into dependency waves, so a wave only
 /// reads packages registered in earlier waves.
 fn registration_waves(packages: &[String], dependencies: &DependencyGraph) -> Vec<Vec<String>> {
-    let mut wave_of: HashMap<&str, usize> = HashMap::default();
+    let mut wave_of: FxHashMap<&str, usize> = FxHashMap::default();
     let mut waves: Vec<Vec<String>> = Vec::new();
     for package_id in packages {
         let wave = dependencies

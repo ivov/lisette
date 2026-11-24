@@ -6,7 +6,7 @@
 
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, Span};
 
 use syntax::ast::{collect_pattern_bindings, expand_or_patterns};
@@ -61,7 +61,7 @@ fn check_pattern(pattern: &Pattern, sink: &LocalSink) {
     let mut reported: Vec<(Span, Span)> = vec![];
     for expansion in expand_or_patterns(pattern, &|_| true) {
         let bindings = collect_pattern_bindings(&expansion.pattern);
-        let mut seen: HashMap<&str, Span> = HashMap::default();
+        let mut seen: FxHashMap<&str, Span> = FxHashMap::default();
         for (name, span) in &bindings {
             if let Some(first_span) = seen.get(name.as_str()) {
                 if !reported.contains(&(*first_span, *span)) {

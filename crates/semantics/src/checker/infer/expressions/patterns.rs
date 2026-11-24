@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::sync::Arc;
 use syntax::ast::{BindingId, BindingKind};
@@ -1146,12 +1146,12 @@ impl InferCtx<'_> {
             false,
         );
         let first_bindings = collect_pattern_bindings(&first);
-        let first_names: HashSet<&str> = first_bindings
+        let first_names: FxHashSet<&str> = first_bindings
             .iter()
             .map(|(name, _)| name.as_str())
             .collect();
 
-        let first_binding_types: HashMap<String, Type> = first_bindings
+        let first_binding_types: FxHashMap<String, Type> = first_bindings
             .iter()
             .filter_map(|(name, _)| {
                 self.scopes
@@ -1169,7 +1169,7 @@ impl InferCtx<'_> {
                     let alt =
                         this.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
                     let alt_bindings = collect_pattern_bindings(&alt);
-                    let alt_names: HashSet<&str> =
+                    let alt_names: FxHashSet<&str> =
                         alt_bindings.iter().map(|(name, _)| name.as_str()).collect();
 
                     if first_names != alt_names {
@@ -1216,7 +1216,7 @@ impl InferCtx<'_> {
             inferred.push(alt);
         }
 
-        let mut bound_late: HashSet<String> = HashSet::default();
+        let mut bound_late: FxHashSet<String> = FxHashSet::default();
         for (name, name_span) in only_in_later_alternatives {
             if bound_late.insert(name.clone()) {
                 self.bind_name_in_scope(
@@ -1241,7 +1241,7 @@ impl InferCtx<'_> {
     fn check_or_pattern_binding_types(
         &mut self,
         alt_bindings: &[(String, Span)],
-        first_binding_types: &HashMap<String, Type>,
+        first_binding_types: &FxHashMap<String, Type>,
     ) {
         for (name, alt_span) in alt_bindings {
             if let Some(first_ty) = first_binding_types.get(name)

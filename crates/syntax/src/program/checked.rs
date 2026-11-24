@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::hash_map::Entry;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
@@ -280,20 +280,20 @@ pub struct CheckedStructLiteral {
 /// The records that the checker published for the bodies it checked, which no consumer changes.
 #[derive(Debug, Clone, Default)]
 pub struct CheckedBodies {
-    uses: HashMap<ValueUseKey, CheckedValueUse>,
-    callees: HashMap<ValueUseKey, CheckedCallee>,
+    uses: FxHashMap<ValueUseKey, CheckedValueUse>,
+    callees: FxHashMap<ValueUseKey, CheckedCallee>,
     /// Keyed by the callee of a built-in operation that compares elements, or by an `assert` of an `equals` call.
-    equalities: HashMap<ExpressionId, EqualityRecipe>,
+    equalities: FxHashMap<ExpressionId, EqualityRecipe>,
     /// The unit value of each `if let` with no `else`, keyed by the `if let`.
-    implicit_units: HashMap<ExpressionId, ExpressionId>,
+    implicit_units: FxHashMap<ExpressionId, ExpressionId>,
     /// Keyed by the binary expression whose operand converts.
-    operand_conversions: HashMap<ExpressionId, OperandConversion>,
-    struct_literals: HashMap<ExpressionId, CheckedStructLiteral>,
-    field_selections: HashMap<FieldKey, FieldSelection>,
-    iterable_kinds: HashMap<ExpressionId, IterableKind>,
-    range_kinds: HashMap<ExpressionId, RangeKind>,
-    forwarded_failures: HashSet<ExpressionId>,
-    receiver_generics: HashMap<ExpressionId, Vec<(EcoString, Vec<Type>)>>,
+    operand_conversions: FxHashMap<ExpressionId, OperandConversion>,
+    struct_literals: FxHashMap<ExpressionId, CheckedStructLiteral>,
+    field_selections: FxHashMap<FieldKey, FieldSelection>,
+    iterable_kinds: FxHashMap<ExpressionId, IterableKind>,
+    range_kinds: FxHashMap<ExpressionId, RangeKind>,
+    forwarded_failures: FxHashSet<ExpressionId>,
+    receiver_generics: FxHashMap<ExpressionId, Vec<(EcoString, Vec<Type>)>>,
 }
 
 impl CheckedBodies {
@@ -479,7 +479,7 @@ impl CheckedBodiesBuilder {
     }
 }
 
-fn insert_unique<K: Eq + Hash + Debug, V>(map: &mut HashMap<K, V>, key: K, value: V) {
+fn insert_unique<K: Eq + Hash + Debug, V>(map: &mut FxHashMap<K, V>, key: K, value: V) {
     match map.entry(key) {
         Entry::Occupied(entry) => {
             panic!(

@@ -1,6 +1,6 @@
 use std::collections::BinaryHeap;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use syntax::ast::Span;
 
@@ -15,7 +15,7 @@ pub struct CycleHop {
 pub type Cycle = Vec<CycleHop>;
 
 pub fn topological_sort(edges: &DependencyGraph) -> (Vec<PackageId>, Vec<Cycle>) {
-    let mut in_degree: HashMap<PackageId, usize> = HashMap::default();
+    let mut in_degree: FxHashMap<PackageId, usize> = FxHashMap::default();
     let mut order = Vec::new();
 
     for package in edges.packages() {
@@ -56,14 +56,14 @@ pub fn topological_sort(edges: &DependencyGraph) -> (Vec<PackageId>, Vec<Cycle>)
 }
 
 fn find_cycles(edges: &DependencyGraph, processed: &[PackageId]) -> Vec<Cycle> {
-    let processed_set: HashSet<_> = processed.iter().collect();
+    let processed_set: FxHashSet<_> = processed.iter().collect();
     let unprocessed: Vec<_> = edges
         .packages()
         .filter(|k| !processed_set.contains(k))
         .collect();
 
     let mut cycles = Vec::new();
-    let mut visited = HashSet::default();
+    let mut visited = FxHashSet::default();
 
     for start in unprocessed {
         if visited.contains(start) {

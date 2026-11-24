@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::{GoExpressionNode, verbatim_identifiers};
@@ -8,7 +8,7 @@ use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
 #[derive(Default)]
 pub(crate) struct NameUses {
     reads: LocalCounts,
-    opaque_reads: HashMap<String, usize>,
+    opaque_reads: FxHashMap<String, usize>,
     assigned: LocalCounts,
     writes: LocalCounts,
     bindings: LocalCounts,
@@ -16,8 +16,8 @@ pub(crate) struct NameUses {
 
 #[derive(Default)]
 struct LocalCounts {
-    by_id: HashMap<LocalId, usize>,
-    by_spelling: HashMap<String, usize>,
+    by_id: FxHashMap<LocalId, usize>,
+    by_spelling: FxHashMap<String, usize>,
 }
 
 impl LocalCounts {

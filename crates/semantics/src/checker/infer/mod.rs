@@ -13,7 +13,7 @@ pub use context::InferCtx;
 pub(crate) use unify::BuiltinBound;
 
 use crate::facts::BindingOrigin;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::ast::BindingKind;
 
 use super::freeze::FreezeFolder;
@@ -138,7 +138,7 @@ impl InferCtx<'_> {
         imports: &[FileImport],
     ) {
         let store = self.store;
-        let alias_to_path: HashMap<String, String> = imports
+        let alias_to_path: FxHashMap<String, String> = imports
             .iter()
             .filter_map(|imp| {
                 imp.effective_alias(&store.go_package_names)

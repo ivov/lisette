@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::target::names::go_name;
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
@@ -27,7 +27,7 @@ impl ImportPlan {
     pub(crate) fn build(
         file: &File,
         go_module: &str,
-        go_package_names: &HashMap<String, String>,
+        go_package_names: &FxHashMap<String, String>,
     ) -> Self {
         let mut imports = Vec::new();
 
@@ -127,7 +127,7 @@ fn detect_collisions(entries: &[OutputImport]) -> Vec<LisetteDiagnostic> {
     if entries.len() < 2 {
         return Vec::new();
     }
-    let mut groups: HashMap<&str, Vec<&str>> = HashMap::default();
+    let mut groups: FxHashMap<&str, Vec<&str>> = FxHashMap::default();
     for entry in entries {
         if let Some(qualifier) = &entry.qualifier {
             groups
@@ -151,7 +151,7 @@ fn detect_collisions(entries: &[OutputImport]) -> Vec<LisetteDiagnostic> {
 
 fn source_import_qualifier(
     import: &FileImport,
-    go_package_names: &HashMap<String, String>,
+    go_package_names: &FxHashMap<String, String>,
 ) -> Option<String> {
     if matches!(import.alias, Some(ImportAlias::Blank(_))) {
         return None;

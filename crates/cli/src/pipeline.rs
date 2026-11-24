@@ -3,7 +3,7 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::thread;
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
@@ -26,7 +26,7 @@ pub struct SourceInfo {
 }
 
 /// Per-file source, with key as file_id, for mapping diagnostics back to source text.
-pub type Sources = HashMap<u32, SourceInfo>;
+pub type Sources = FxHashMap<u32, SourceInfo>;
 
 #[derive(Debug)]
 pub struct CompileConfig<'a> {

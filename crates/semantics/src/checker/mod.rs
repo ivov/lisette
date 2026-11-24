@@ -10,7 +10,7 @@ mod state;
 mod type_env;
 
 use crate::store::PackageMetadataMut;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 
 use crate::facts::{BindingIdAllocator, Facts};
