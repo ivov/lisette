@@ -220,7 +220,7 @@ impl InferCtx<'_> {
                 if other.is_structural_alias_body()
                     && let Some(u) = store.underlying_type(&r1) =>
             {
-                if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
+                if self.newtype_differs_from(id, other) {
                     Err(UnifyError::TypeMismatch)
                 } else {
                     self.try_unify(&u, &r2, span)
@@ -231,7 +231,7 @@ impl InferCtx<'_> {
                 if other.is_structural_alias_body()
                     && let Some(u) = store.underlying_type(&r2) =>
             {
-                if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
+                if self.newtype_differs_from(id, other) {
                     Err(UnifyError::TypeMismatch)
                 } else {
                     self.try_unify(&r1, &u, span)
@@ -320,16 +320,27 @@ impl InferCtx<'_> {
                 actual @ (Type::Simple(_) | Type::Compound { .. } | Type::Array { .. }),
             ) => self.try_satisfy_interface(actual, interface_ty, span),
 
-            (Nominal { .. }, Function(_)) if let Some(u) = store.underlying_type(&r1) => {
+            (Nominal { id, .. }, Function(_))
+                if let Some(u) = store.underlying_type(&r1)
+                    && !self.newtype_differs_from(id, &r2) =>
+            {
                 self.try_unify(&u, &r2, span)
             }
 
-            (Function(_), Nominal { .. }) if let Some(u) = store.underlying_type(&r2) => {
+            (Function(_), Nominal { id, .. })
+                if let Some(u) = store.underlying_type(&r2)
+                    && !self.newtype_differs_from(id, &r1) =>
+            {
                 self.try_unify(&r1, &u, span)
             }
 
             _ => Err(UnifyError::TypeMismatch),
         }
+    }
+
+    fn newtype_differs_from(&self, id: &str, other: &Type) -> bool {
+        self.store.is_nominal_defined_type(id)
+            && (matches!(other, Type::Simple(_)) || self.is_inside_invariant_position())
     }
 
     fn should_unify_refs(&self, t1: &Type, t2: &Type) -> bool {
@@ -377,8 +388,10 @@ impl InferCtx<'_> {
                 // One `Ref` layer at a time, so every nested qualifier is compared.
                 let inner1 = t1.inner().unwrap_or(Type::Error);
                 let inner2 = t2.inner().unwrap_or(Type::Error);
-                self.in_qualifier_invariant(expected_writable, |this| {
-                    this.try_unify(&inner1, &inner2, span)
+                self.in_invariant_position(|this| {
+                    this.in_qualifier_invariant(expected_writable, |this| {
+                        this.try_unify(&inner1, &inner2, span)
+                    })
                 })
             }
             (true, false) | (false, true) => Err(UnifyError::TypeMismatch),
@@ -1178,7 +1191,7 @@ fn slice_to_array_help_applies(expected: &Type, actual: &Type) -> bool {
         .is_some_and(|actual_element| actual_element == element.as_ref())
 }
 
-fn are_go_type_aliases(a: &str, b: &str) -> bool {
+pub(super) fn are_go_type_aliases(a: &str, b: &str) -> bool {
     matches!(
         (a, b),
         ("prelude.byte", "prelude.uint8")
@@ -1341,7 +1354,7 @@ fn overlay_qualifiers(expected: &Type, actual: &Type) -> Type {
 
 /// Go-level aliases between scalar builtins: `byte` is an alias for `uint8`,
 /// and `rune` is an alias for `int32`.
-fn simple_kinds_are_go_aliases(a: SimpleKind, b: SimpleKind) -> bool {
+pub(super) fn simple_kinds_are_go_aliases(a: SimpleKind, b: SimpleKind) -> bool {
     use SimpleKind;
     matches!(
         (a, b),

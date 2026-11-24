@@ -11,8 +11,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	recoverResult := lisette.RecoverBlock(func() struct{} {
+	lisette.RecoverBlock(func() struct{} {
 		panic("oh no!")
 	})
-	_ = recoverResult
 }

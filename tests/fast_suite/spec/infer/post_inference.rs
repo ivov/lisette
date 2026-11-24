@@ -1317,3 +1317,43 @@ fn speculation_scales_with_function_count() {
         );
     }
 }
+
+#[test]
+fn constructions_in_closures_and_tasks_use_bounds_of_enclosing_function() {
+    infer(
+        r#"
+interface Show { fn show() -> string }
+struct Holder<T: Show> { value: T }
+enum Choice<T: Show> { One(T), Named { v: T } }
+struct Wrap<T: Show>(T)
+
+fn build<T: Show>(v: T) {
+  let make = || Holder { value: v }
+  let one = Choice.One
+  let _ = one(v)
+  let _ = Choice.Named { v }
+  let _ = Wrap(v)
+  task { let _ = Holder { value: v } }
+  let _ = make()
+}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn constructions_in_closures_and_tasks_check_bounds() {
+    infer(
+        r#"
+struct Holder<T: error> { value: T }
+struct Wrap<T: error>(T)
+
+fn main() {
+  let make = || Holder { value: 1 }
+  task { let _ = Wrap(2) }
+  let _ = make()
+}
+        "#,
+    )
+    .assert_infer_code_count("interface_not_implemented", 2);
+}

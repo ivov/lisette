@@ -7,7 +7,9 @@ use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::LoweredProducer;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
-use crate::ir::bodies::{LoweredBlock, LoweredStatement, PlacePlan, Statement};
+use crate::ir::bodies::{
+    LoweredBlock, LoweredStatement, PlacePlan, Statement, diverging_statement,
+};
 use crate::ir::values::GoExpression;
 use crate::plan::calls::CallPlan;
 use crate::state::expression::ExpressionContext;
@@ -18,7 +20,7 @@ impl Planner<'_> {
     pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> LoweredBlock {
         let return_ctx = self.return_ctx();
         if self.facts.is_never(&expression.get_type()) {
-            let mut statements = vec![self.lower_statement(expression)];
+            let mut statements = vec![self.lower_never_value(expression)];
             if !matches!(return_ctx, ReturnContext::Void(_)) {
                 statements.push(LoweredStatement::UnreachablePanic.into());
             }
@@ -26,7 +28,8 @@ impl Planner<'_> {
         }
         let is_unit = return_ctx
             .ty()
-            .is_some_and(|ty| self.facts.resolves_to_unit(ty));
+            .is_some_and(|ty| self.facts.resolves_to_unit(ty))
+            || self.facts.resolves_to_unit(&expression.get_type());
         if is_unit {
             let is_pure = matches!(
                 expression,
@@ -41,7 +44,7 @@ impl Planner<'_> {
             statements.push(if matches!(return_ctx, ReturnContext::Void(_)) {
                 LoweredStatement::Return(Vec::new()).into()
             } else {
-                plain_return(GoExpression::unit())
+                plain_return(self.unit_value(Some(expression), return_ctx.ty()))
             });
             return LoweredBlock { statements };
         }
@@ -81,13 +84,7 @@ impl Planner<'_> {
                 .plan_call_expression(expression, None, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
-            statements.push(
-                LoweredStatement::ExpressionStatement {
-                    expression: call,
-                    diverges: true,
-                }
-                .into(),
-            );
+            statements.push(diverging_statement(call));
             return Some(statements);
         }
 
@@ -206,7 +203,7 @@ impl Planner<'_> {
             }
             Some(shape) if args.is_empty() => {
                 statements.push(transition::multi_value_return(
-                    shape.ok_values(vec![GoExpression::unit()]),
+                    shape.ok_values(vec![self.unit_value(None, None)]),
                 ));
             }
             Some(shape)

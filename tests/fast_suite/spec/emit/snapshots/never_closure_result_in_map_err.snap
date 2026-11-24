@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(s: string) -> Result<int, error> {
+    let n = strconv.Atoi(s).map_err(|e| { panic("bad") })?
+    Ok(n)
+  }
+---
+package main
+
+import "strconv"
+
+func parse(s string) (int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		panic("bad")
+	}
+	return n, nil
+}

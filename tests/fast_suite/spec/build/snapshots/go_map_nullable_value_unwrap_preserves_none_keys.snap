@@ -12,12 +12,13 @@ import (
 )
 
 func main() {
+	none := lisette.MakeOptionNone[int]()
 	obj := ast.Object{
 		Kind: ast.Bad,
 		Name: "x",
-		Decl: lisette.MakeOptionNone[any](),
-		Data: lisette.MakeOptionNone[any](),
-		Type: lisette.MakeOptionNone[any](),
+		Decl: none,
+		Data: none,
+		Type: none,
 	}
 	objects := make(map[string]lisette.Option[*ast.Object])
 	objects["present"] = lisette.MakeOptionSome(&obj)

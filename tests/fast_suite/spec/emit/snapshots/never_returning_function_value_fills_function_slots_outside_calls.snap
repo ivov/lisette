@@ -1,0 +1,75 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn die() -> Never { panic("x") }
+  
+  fn pick() -> fn() -> int { die }
+  
+  fn main() {
+    let f: fn() -> int = die
+    let mut g: fn() -> int = || 1
+    g = die
+    let fs: Slice<fn() -> int> = [die]
+    let h = pick()
+    let _ = (f, g, h)
+    fmt.Println(fs.length())
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func die() {
+	panic("x")
+}
+
+func pick() func() int {
+	cb := func() struct{} {
+		die()
+		panic("unreachable")
+	}
+	return func() int {
+		cb()
+		panic("unreachable")
+	}
+}
+
+func main() {
+	cb := func() struct{} {
+		die()
+		panic("unreachable")
+	}
+	f := func() int {
+		cb()
+		panic("unreachable")
+	}
+	g := func() int {
+		return 1
+	}
+	cb2 := func() struct{} {
+		die()
+		panic("unreachable")
+	}
+	g = func() int {
+		cb2()
+		panic("unreachable")
+	}
+	cb3 := func() struct{} {
+		die()
+		panic("unreachable")
+	}
+	fs := []func() int{func() int {
+		cb3()
+		panic("unreachable")
+	}}
+	h := pick()
+	_ = lisette.MakeTuple3[func() int, func() int, func() int](f, g, h)
+	fmt.Println(len(fs))
+}

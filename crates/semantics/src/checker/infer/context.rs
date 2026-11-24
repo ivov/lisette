@@ -403,6 +403,8 @@ pub struct InferCtx<'a> {
         FxHashSet<(BindingId, super::expressions::aliasing::PlaceKey)>,
     /// By span, for the diagnostic when the construction misses a writable expectation.
     pub(super) read_only_constructions: FxHashMap<Span, Vec<diagnostics::infer::ReadOnlyComponent>>,
+    pub(super) constructions_typed_by_context: FxHashSet<Span>,
+    pub(super) function_values_without_context: FxHashSet<Span>,
     traversal: TraversalContext,
     generated_expressions: Cell<u32>,
 }
@@ -418,6 +420,8 @@ impl<'a> InferCtx<'a> {
             binding_inference: FxHashMap::default(),
             reported_read_only_writes: FxHashSet::default(),
             read_only_constructions: FxHashMap::default(),
+            constructions_typed_by_context: FxHashSet::default(),
+            function_values_without_context: FxHashSet::default(),
             traversal: TraversalContext::default(),
             generated_expressions: Cell::new(0),
         }
@@ -602,20 +606,6 @@ impl<'a> InferCtx<'a> {
         result
     }
 
-    /// Whether unification accepts a value of type `actual` where `expected` is expected, keeping no binding, fact or diagnostic.
-    pub(crate) fn admits(&mut self, expected: &Type, actual: &Type, span: &Span) -> bool {
-        let speculation = self.env.begin_speculation();
-        let diagnostics = self.sink.checkpoint();
-        let delta = Facts::new(self.facts.allocator());
-        let previous = mem::replace(&mut self.state.facts, delta);
-        let admitted = self.try_unify(expected, actual, span).is_ok();
-        self.state.facts = previous;
-        self.sink.rollback(diagnostics);
-        self.env
-            .end_speculation(speculation, SpeculationOutcome::Rollback);
-        admitted
-    }
-
     /// Runs `f` and discards every unification and diagnostic it produced.
     pub(crate) fn probe<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         self.with_speculation(|this| (f(this), SpeculationOutcome::Rollback))
@@ -643,6 +633,8 @@ impl<'a> InferCtx<'a> {
             binding_inference,
             reported_read_only_writes,
             read_only_constructions,
+            constructions_typed_by_context,
+            function_values_without_context,
             traversal,
             generated_expressions: _,
         } = self;
@@ -692,6 +684,8 @@ impl<'a> InferCtx<'a> {
             reported_immutable.clone(),
             reported_read_only_writes.clone(),
             read_only_constructions.clone(),
+            constructions_typed_by_context.clone(),
+            function_values_without_context.clone(),
             traversal.clone(),
         );
         let speculation = self.env.begin_speculation();
@@ -722,6 +716,8 @@ impl<'a> InferCtx<'a> {
                     self.reported_immutable,
                     self.reported_read_only_writes,
                     self.read_only_constructions,
+                    self.constructions_typed_by_context,
+                    self.function_values_without_context,
                     self.traversal,
                 ) = saved_context;
             }

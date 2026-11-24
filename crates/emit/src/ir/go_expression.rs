@@ -148,6 +148,7 @@ impl From<&BinaryOperator> for BinaryOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CallPurity {
     Constructor,
+    Conversion,
     ReadOnly,
     Effectful,
 }
@@ -185,12 +186,14 @@ pub(crate) enum GoExpressionNode {
     Index {
         base: Operand,
         index: Operand,
+        in_bounds: bool,
     },
     Slice {
         base: Operand,
         low: Option<Operand>,
         high: Option<Operand>,
         max: Option<Operand>,
+        in_bounds: bool,
     },
     TypeAssertion {
         base: Operand,
@@ -561,7 +564,7 @@ impl GoExpressionNode {
             Self::Instantiation { base, .. }
             | Self::Selector { base, .. }
             | Self::TypeAssertion { base, .. } => visit(base),
-            Self::Index { base, index } => {
+            Self::Index { base, index, .. } => {
                 visit(base);
                 visit(index);
             }
@@ -570,6 +573,7 @@ impl GoExpressionNode {
                 low,
                 high,
                 max,
+                ..
             } => {
                 visit(base);
                 for bound in [low, high, max].into_iter().flatten() {
@@ -616,7 +620,7 @@ impl GoExpressionNode {
             Self::Instantiation { base, .. }
             | Self::Selector { base, .. }
             | Self::TypeAssertion { base, .. } => visit(base),
-            Self::Index { base, index } => {
+            Self::Index { base, index, .. } => {
                 visit(base);
                 visit(index);
             }
@@ -625,6 +629,7 @@ impl GoExpressionNode {
                 low,
                 high,
                 max,
+                ..
             } => {
                 visit(base);
                 for bound in [low, high, max].into_iter().flatten() {
@@ -821,7 +826,7 @@ impl GoExpressionNode {
                 output.push('.');
                 output.push_str(field);
             }
-            Self::Index { base, index } => {
+            Self::Index { base, index, .. } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push('[');
                 index.write(output, Slot::FREE);
@@ -832,6 +837,7 @@ impl GoExpressionNode {
                 low,
                 high,
                 max,
+                ..
             } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push('[');

@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Span};
-use syntax::program::{Adaptation, CheckedValueUse, File, SlotOrigin, ValueUseKey};
+use syntax::program::{Adaptation, File, SlotOrigin, ValueUseKey};
 use syntax::types::Type;
 
 use crate::Planner;
@@ -228,7 +228,6 @@ pub(crate) fn check_applied_conversions(
             || dropped_code
                 .iter()
                 .any(|dropped| dropped.contains(&value_use.span))
-            || open_bug_unit_into_unknown(facts, value_use)
         {
             continue;
         }
@@ -271,13 +270,9 @@ fn adaptation_kind(adaptation: &Adaptation) -> &'static str {
         Adaptation::Newtype => "newtype",
         Adaptation::Tuple(_) => "tuple",
         Adaptation::Array(_) => "array",
+        Adaptation::DivergingFunction => "diverging function",
         Adaptation::Receiver(_) => "receiver",
     }
-}
-
-fn open_bug_unit_into_unknown(facts: &EmitFacts<'_>, value_use: &CheckedValueUse) -> bool {
-    matches!(value_use.adaptation, Adaptation::Interface(_))
-        && facts.has_no_go_value(&value_use.value_type)
 }
 
 fn needs_application(adaptation: &Adaptation) -> bool {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::EmitFacts;
+use crate::ir::bodies::effect_statement;
 
 impl Planner<'_> {
     pub(crate) fn try_lower_fused_result_match_into(
@@ -93,13 +93,13 @@ impl Planner<'_> {
             {
                 return None;
             }
-            self.facts.arm_payload_name(ok.arm)
+            simple_payload_binding(ok.arm).flatten()
         };
         let err_name = if err.is_catch_all {
             None
         } else {
             simple_payload_binding(err.arm)?;
-            self.facts.arm_payload_name(err.arm)
+            simple_payload_binding(err.arm).flatten()
         };
 
         if let Some(name) = destination {
@@ -119,10 +119,13 @@ impl Planner<'_> {
             && arm_body_is_noop(&ok.arm.expression)
             && arm_body_is_noop(&err.arm.expression)
         {
+            if fuse.is_bound() {
+                return Some(Vec::new());
+            }
             let (mut statements, call) = self
                 .plan_call_expression(subject, None, ExpressionContext::value())
                 .into_parts();
-            statements.push(expression_statement(call));
+            statements.push(effect_statement(call));
             return Some(statements);
         }
 
@@ -138,7 +141,7 @@ impl Planner<'_> {
             fuse.bind_wrapped(self, slot, err_hint.as_ref(), err_hint.is_some());
         let error = || GoExpression::identifier(bound.status_identifier().clone());
 
-        let unit = GoExpression::unit();
+        let unit = self.unit_value(None, None);
         let then_body = destination.is_none().then(|| {
             let ok_binding = if carries_payload {
                 ArmBinding::alias_at(ok_name, bound.payload_identifier())
@@ -258,10 +261,7 @@ impl Planner<'_> {
         if ok_arms.is_empty() {
             return None;
         }
-        let err_name = err_payload
-            .filter(|payload| !self.facts.is_unused_binding(payload))
-            .and_then(field_binding)
-            .flatten();
+        let err_name = err_payload.and_then(field_binding).flatten();
         let err_hint = err_name.map(|err| err.go_name());
 
         let has_nil_guard = fuse.has_nil_guard();
@@ -445,7 +445,7 @@ impl Planner<'_> {
             self.lower_fused_arm(&[ok_binding], &arms.ok.expression, place);
         let failure_body = self.lower_partial_failure_arm(arms, &error, place);
         if ok_body.renders_empty() && failure_body.renders_empty() {
-            statements.push(expression_statement(call));
+            statements.push(effect_statement(call));
             return Some(statements);
         }
 
@@ -502,7 +502,7 @@ impl Planner<'_> {
         if !arms.selects_both && nil_guard.is_none() {
             self.package
                 .record_dropped_code(arms.selected.expression.get_span());
-            statements.push(expression_statement(call));
+            statements.push(effect_statement(call));
             let fallback = self
                 .lower_fused_arm(&[], &arms.fallback.expression, place)
                 .0;
@@ -533,7 +533,7 @@ impl Planner<'_> {
             .0;
 
         if selected.renders_empty() && fallback.renders_empty() {
-            statements.push(expression_statement(call));
+            statements.push(effect_statement(call));
             return Some(statements);
         }
 
@@ -951,21 +951,6 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
         | LoweredReturnAbi::Partial { .. }
         | LoweredReturnAbi::Option(_)
         | LoweredReturnAbi::Tuple { .. } => false,
-    }
-}
-
-impl EmitFacts<'_> {
-    fn arm_payload_name<'a>(&self, arm: &'a MatchArm) -> Option<FusedName<'a>> {
-        let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
-            return None;
-        };
-        let [field] = fields.as_slice() else {
-            return None;
-        };
-        if self.is_unused_binding(field) {
-            return None;
-        }
-        simple_payload_binding(arm).flatten()
     }
 }
 

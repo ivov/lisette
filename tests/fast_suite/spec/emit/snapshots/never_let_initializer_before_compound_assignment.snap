@@ -1,0 +1,14 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn f() {
+    let mut n = { panic("stop") }
+    n += 1
+  }
+---
+package main
+
+func f() {
+	panic("stop")
+}

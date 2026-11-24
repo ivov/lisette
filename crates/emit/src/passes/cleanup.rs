@@ -4,7 +4,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::ir::bodies::{
     AssignForm, CompoundKind, Definition, ElseArm, IfOrigin, IfPlan, LoopKind, LoopTransfer,
-    LoweredBlock, LoweredStatement, SelectArmKind, Statement, SwitchKind, for_each_statements_mut,
+    LoweredBlock, LoweredStatement, SelectArmKind, Statement, SwitchKind, direct_first,
+    for_each_statements_mut,
 };
 use crate::ir::evaluation::Effects;
 use crate::ir::go_expression::{
@@ -14,6 +15,7 @@ use crate::ir::local::{GoIdentifier, LocalId};
 use crate::ir::values::GoExpression;
 use crate::ir::visit::{VisitorMut, visit_statements_mut};
 use crate::names::go_name;
+use crate::passes::hygiene::drop_unused_locals;
 use crate::passes::source_reuse::reuse_dead_copy_sources;
 use crate::state::package_state::PackageState;
 use crate::state::scope::{ScopeState, TypeParam};
@@ -33,6 +35,28 @@ pub(crate) fn clean_up(
     return_found_elements_directly(statements);
     unwrap_terminal_else(statements);
     unwrap_scoped_terminal_else(statements, parameters, scope);
+}
+
+pub(crate) fn drop_unreachable_statements(statements: &mut Vec<Statement>) {
+    let mut dropped = false;
+    for_each_statements_mut(statements, &mut |list| {
+        let Some(end) = list
+            .iter()
+            .position(|statement| statement.kind.blocks_fallthrough())
+        else {
+            return;
+        };
+        let terminated = matches!(
+            list.get(end + 1).map(|statement| &statement.kind),
+            Some(LoweredStatement::UnreachablePanic)
+        );
+        let kept = end + 1 + usize::from(terminated);
+        dropped |= kept < list.len();
+        list.truncate(kept);
+    });
+    if dropped {
+        drop_unused_locals(statements);
+    }
 }
 
 pub(crate) fn declare_zero_values(
@@ -490,7 +514,7 @@ fn flips_to_early_exit(plan: &IfPlan) -> bool {
         && negated(plan.condition.node()).is_some()
 }
 
-fn flip_branches(plan: &mut IfPlan) {
+pub(crate) fn flip_branches(plan: &mut IfPlan) {
     let else_label = match &mut plan.origin {
         IfOrigin::Match { else_label } => else_label.take(),
         IfOrigin::User => None,
@@ -756,7 +780,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
 }
 
 #[derive(Default)]
-struct NameUses {
+pub(crate) struct NameUses {
     reads: LocalCounts,
     opaque_reads: HashMap<String, usize>,
     assigned: LocalCounts,
@@ -794,7 +818,7 @@ impl LocalCounts {
 }
 
 impl NameUses {
-    fn of(statements: &mut Vec<Statement>) -> Self {
+    pub(crate) fn of(statements: &mut Vec<Statement>) -> Self {
         let mut uses = Self::default();
         visit_statements_mut(statements, &mut uses);
         uses
@@ -809,15 +833,19 @@ impl NameUses {
                 .unwrap_or_default()
     }
 
-    fn bindings(&self, name: &GoIdentifier) -> usize {
+    pub(crate) fn references(&self, name: &GoIdentifier) -> usize {
+        self.reads(name)
+    }
+
+    pub(crate) fn bindings(&self, name: &GoIdentifier) -> usize {
         self.bindings.get(name)
     }
 
-    fn value_reads(&self, name: &GoIdentifier) -> usize {
+    pub(crate) fn value_reads(&self, name: &GoIdentifier) -> usize {
         self.reads(name).saturating_sub(self.assigned.get(name))
     }
 
-    fn is_written(&self, name: &GoIdentifier) -> bool {
+    pub(crate) fn is_written(&self, name: &GoIdentifier) -> bool {
         self.writes.get(name) > 0
     }
 }
@@ -1115,34 +1143,55 @@ fn unread_temp(
 }
 
 fn remove_temp(statements: &mut Vec<Statement>, name: &GoIdentifier) {
+    let defines = |statement: &Statement| {
+        pure_define(&statement.kind).is_some_and(|(defined, _)| defined.refers_to_same(name))
+    };
+    for_each_statements_mut(statements, &mut |list| {
+        for statement in mem::take(list) {
+            match statement.kind {
+                LoweredStatement::Block(mut body)
+                    if body.statements.iter().any(defines)
+                        && body.statements.iter().filter(|s| declares(s)).count() == 1 =>
+                {
+                    body.statements.retain(|statement| !defines(statement));
+                    direct_first(&mut body.statements, statement.line);
+                    list.extend(body.statements);
+                }
+                kind => list.push(Statement {
+                    line: statement.line,
+                    kind,
+                }),
+            }
+        }
+    });
     for_each_statements_mut(statements, &mut |list| {
         list.retain(|statement| {
-            pure_define(&statement.kind).is_none_or(|(defined, _)| !defined.refers_to_same(name))
+            !defines(statement)
                 && discarded_name(&statement.kind)
                     .is_none_or(|discarded| !discarded.refers_to_same(name))
         });
     });
     for_each_statements_mut(statements, &mut |list| {
         for statement in list {
-            drop_empty_else(&mut statement.kind);
+            if let LoweredStatement::If(plan) = &mut statement.kind {
+                drop_empty_else(plan);
+            }
         }
     });
 }
 
-fn drop_empty_else(statement: &mut LoweredStatement) {
-    let mut plan = match statement {
-        LoweredStatement::If(plan) => plan,
-        _ => return,
-    };
-    loop {
-        if matches!(&plan.else_arm, ElseArm::Else { body, .. } if body.renders_empty()) {
-            plan.else_arm = ElseArm::None;
-            return;
-        }
-        match &mut plan.else_arm {
-            ElseArm::ElseIf(inner) => plan = inner,
-            ElseArm::Else { .. } | ElseArm::None => return,
-        }
+fn declares(statement: &Statement) -> bool {
+    matches!(
+        statement.kind,
+        LoweredStatement::Define(_) | LoweredStatement::VarDecl { .. } | LoweredStatement::Const(_)
+    )
+}
+
+pub(crate) fn drop_empty_else(plan: &mut IfPlan) {
+    match &mut plan.else_arm {
+        ElseArm::Else { body, .. } if body.renders_empty() => plan.else_arm = ElseArm::None,
+        ElseArm::ElseIf(next) => drop_empty_else(next),
+        _ => {}
     }
 }
 

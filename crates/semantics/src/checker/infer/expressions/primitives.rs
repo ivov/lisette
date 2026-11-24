@@ -179,10 +179,14 @@ impl InferCtx<'_> {
         let (new_items, block_ty) = self.with_scope(|this| {
             this.register_block_local_items(&mut items);
             let new_items = this.infer_block_items(items, expected_ty.clone());
-            let block_ty = new_items
-                .last()
-                .expect("block must have at least one item")
-                .get_type();
+            let last = new_items.last().expect("block must have at least one item");
+            let block_ty = match last {
+                Expression::Assignment { .. }
+                | Expression::While { .. }
+                | Expression::WhileLet { .. }
+                | Expression::For { .. } => Type::unit(),
+                _ => last.get_type(),
+            };
             (new_items, block_ty)
         });
 
@@ -453,29 +457,15 @@ impl InferCtx<'_> {
 
         let (identifier_ty, instantiation) = self.instantiate(&ty);
 
-        let coerced_to_unconstrained_value = !self.is_callee_context()
+        let expected = expected_ty.resolve_in(&self.env);
+        if !self.is_callee_context()
             && !self.is_assignment_target_context()
-            && expected_ty.resolve_in(&self.env).is_variable();
+            && (expected.is_variable() || expected.is_unknown())
+        {
+            self.function_values_without_context.insert(span);
+        }
 
         self.unify(expected_ty, &identifier_ty, &span);
-
-        if coerced_to_unconstrained_value {
-            self.register_function_value_obligations(&value, &identifier_ty, span);
-        }
-
-        if let Some(enum_id) = self.enum_of_variant(store, &value) {
-            let nominal = match &identifier_ty {
-                Type::Nominal { .. } => Some(&identifier_ty),
-                Type::Function(function) => match function.return_type.as_ref() {
-                    nominal @ Type::Nominal { .. } => Some(nominal),
-                    _ => None,
-                },
-                _ => None,
-            };
-            if let Some(nominal) = nominal {
-                self.register_construction_obligations(&enum_id, nominal, span);
-            }
-        }
 
         let resolution = match (binding_id, qualified) {
             (Some(id), None) => IdentifierResolution::Binding(id),
@@ -828,13 +818,15 @@ impl InferCtx<'_> {
         &mut self,
         tails: Vec<StatementTailCheck>,
     ) {
-        for check in &tails {
-            if check.expected_ty.resolve_in(&self.env).is_variable() {
+        for check in tails {
+            let expected = check.expected_ty.resolve_in(&self.env);
+            if expected.is_variable() {
                 self.unify(&check.expected_ty, &Type::unit(), &check.span);
+            } else if !expected.is_unit() && !expected.is_ignored() && !expected.is_error() {
+                self.sink
+                    .push(diagnostics::infer::statement_as_tail(check.span, &expected));
             }
         }
-
-        self.facts.deferred.statement_tails.extend(tails);
     }
 
     pub(super) fn infer_block_items(

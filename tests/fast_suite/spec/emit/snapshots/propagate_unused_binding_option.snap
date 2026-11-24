@@ -16,7 +16,8 @@ func maybe() (int, bool) {
 }
 
 func test() (struct{}, bool) {
-	if _, ok := maybe(); !ok {
+	_, ok := maybe()
+	if !ok {
 		return struct{}{}, false
 	}
 	return struct{}{}, true

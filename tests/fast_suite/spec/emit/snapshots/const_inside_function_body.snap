@@ -11,5 +11,4 @@ package main
 
 func main() {
 	const Max int = 100
-	_ = Max + 1
 }

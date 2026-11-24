@@ -1,0 +1,24 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn main() {
+    let r = strconv.Atoi("1")
+    match r {
+      Ok(v) => {},
+      Err(e) => { let _ = e },
+    }
+  }
+---
+package main
+
+import "strconv"
+
+func main() {
+	_, err := strconv.Atoi("1")
+	if err != nil {
+		_ = err
+	}
+}

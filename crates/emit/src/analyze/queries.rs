@@ -121,28 +121,14 @@ impl<'a> EmitFacts<'a> {
             Pattern::AsBinding { name, .. } => name,
             _ => return None,
         };
-        if self.is_unused_binding(pattern) {
-            None
-        } else {
-            Some(SourceName::new(name))
-        }
+        Some(SourceName::new(name))
     }
 
     pub(crate) fn go_name_for_rest_binding(&self, rest: &RestPattern) -> Option<SourceName> {
-        if let RestPattern::Bind { name, .. } = rest {
-            if self.is_unused_rest_binding(rest) {
-                None
-            } else {
-                Some(SourceName::new(name))
-            }
-        } else {
-            None
+        match rest {
+            RestPattern::Bind { name, .. } => Some(SourceName::new(name)),
+            _ => None,
         }
-    }
-
-    pub(crate) fn method_needs_export(&self, method_name: &str) -> bool {
-        self.has_global_exported_method_name(method_name)
-            || matches!(method_name, "string" | "goString" | "error")
     }
 
     pub(crate) fn field_read_cannot_panic(&self, ty: &Type) -> bool {

@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn unit() {}
+  
+  fn id<T>(v: T) -> T { v }
+  
+  fn test() {
+    let mut a = unit()
+    a = ()
+    let mut b: Unknown = id(())
+    b = 1
+  }
+---
+package main
+
+func unit() {}
+
+func id[T any](v T) T {
+	return v
+}
+
+func test() {
+	unit()
+	id(struct{}{})
+}

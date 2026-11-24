@@ -71,6 +71,12 @@ impl ImportPlan {
         })
     }
 
+    pub(crate) fn qualifiers(&self) -> impl Iterator<Item = String> + '_ {
+        self.imports
+            .iter()
+            .filter_map(|import| import.qualifier.clone())
+    }
+
     pub(crate) fn used_qualifiers(
         &self,
         is_unused: impl Fn(ImportKey) -> bool,

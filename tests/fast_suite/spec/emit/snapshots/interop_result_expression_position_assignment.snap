@@ -27,7 +27,7 @@ func main() {
 	f := func(_ string) lisette.Result[int, error] {
 		return lisette.MakeResultOk[int, error](0)
 	}
-	var u any
+	var u struct{}
 	f = func(arg0 string) lisette.Result[int, error] {
 		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
 	}

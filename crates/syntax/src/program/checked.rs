@@ -72,6 +72,7 @@ pub enum Adaptation {
     Newtype,
     Tuple(Vec<Adaptation>),
     Array(Box<Adaptation>),
+    DivergingFunction,
     /// A method receiver that takes its address or reads through its reference.
     Receiver(ReceiverCoercion),
 }
@@ -87,6 +88,7 @@ impl Adaptation {
             | Self::ImplicitSome { .. }
             | Self::Tuple(_)
             | Self::Array(_)
+            | Self::DivergingFunction
             | Self::Receiver(_) => true,
         }
     }
@@ -348,6 +350,10 @@ pub struct CheckedBodiesBuilder {
 }
 
 impl CheckedBodiesBuilder {
+    pub fn value_use(&self, key: &ValueUseKey) -> Option<&CheckedValueUse> {
+        self.records.value_use(key)
+    }
+
     /// Record `value_use` for `key`, which no other record names.
     pub fn insert_use(&mut self, key: ValueUseKey, value_use: CheckedValueUse) {
         insert_unique(&mut self.records.uses, key, value_use);

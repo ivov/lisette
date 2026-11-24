@@ -232,10 +232,6 @@ impl Planner<'_> {
         fields: Vec<StructCallField>,
         ctx: &StructCallContext<'_>,
     ) -> GoExpression {
-        if base.get_type().is_never() {
-            setup.push(self.lower_statement(base));
-            return GoExpression::empty_composite(ctx.go_type.clone());
-        }
         let base_staged = self.plan_operand(base, ExpressionContext::value());
         let (spread_setup, value) = if ctx.enum_ctx.is_some() {
             let field_pairs = self.hoist_observable_fields(setup, fields);
@@ -386,7 +382,7 @@ impl Planner<'_> {
                     SimpleKind::String => {
                         GoExpression::constant("\"\"".to_string(), ConstantKind::String)
                     }
-                    SimpleKind::Unit => GoExpression::unit(),
+                    SimpleKind::Unit => self.unit_value(None, None),
                     _ => GoExpression::constant("0".to_string(), ConstantKind::Int),
                 };
                 return Some(zero);

@@ -9,7 +9,7 @@ use crate::calls::wrap_err::WrapMessage;
 use crate::ir::bodies::GoUses;
 use crate::ir::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement,
-    SwitchKind, assign, define, define_many, discard, expression_statement,
+    SwitchKind, assign, define, define_many, discard,
 };
 use crate::ir::go_expression::{BinaryOp, GoExpressionNode};
 use crate::ir::local::GoIdentifier;
@@ -190,8 +190,8 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let mut statements: Vec<Statement> = Vec::new();
 
-        if subject.get_type().is_never() {
-            statements.push(self.lower_statement(subject));
+        if self.facts.is_never(&subject.get_type()) {
+            statements.push(self.lower_never_value(subject));
             return LoweredBlock { statements };
         }
 

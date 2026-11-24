@@ -23,6 +23,6 @@ type Model struct{}
 
 func (m Model) Init() tea.Cmd {
 	return func() uv.Event {
-		return nil
+		return struct{}{}
 	}
 }

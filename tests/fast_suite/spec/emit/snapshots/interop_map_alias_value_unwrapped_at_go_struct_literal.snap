@@ -7,12 +7,13 @@ description: |
   type Objects = mut Map<string, Option<mut Ref<ast.Object>>>
   
   fn scope() -> ast.Scope {
+    let none: Option<int> = None
     let mut obj = ast.Object {
       Kind: ast.Bad,
       Name: "x",
-      Decl: None,
-      Data: None,
-      Type: None,
+      Decl: none,
+      Data: none,
+      Type: none,
     }
     let mut objects: Objects = Map.new<string, Option<mut Ref<ast.Object>>>()
     objects["present"] = Some(&obj)
@@ -34,12 +35,13 @@ import (
 type Objects = map[string]lisette.Option[*ast.Object]
 
 func scope() ast.Scope {
+	none := lisette.MakeOptionNone[int]()
 	obj := ast.Object{
 		Kind: ast.Bad,
 		Name: "x",
-		Decl: lisette.MakeOptionNone[any](),
-		Data: lisette.MakeOptionNone[any](),
-		Type: lisette.MakeOptionNone[any](),
+		Decl: none,
+		Data: none,
+		Type: none,
 	}
 	objects := make(map[string]lisette.Option[*ast.Object])
 	objects["present"] = lisette.MakeOptionSome(&obj)

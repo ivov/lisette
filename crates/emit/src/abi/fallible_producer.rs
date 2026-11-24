@@ -114,6 +114,10 @@ impl ResultFusePlan<'_> {
         !self.wraps.is_empty()
     }
 
+    pub(crate) fn is_bound(&self) -> bool {
+        self.bound.is_some()
+    }
+
     pub(crate) fn has_nil_guard(&self) -> bool {
         self.nil_guard.is_some()
     }

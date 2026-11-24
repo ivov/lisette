@@ -18,7 +18,7 @@ import "example.com/scheduler"
 
 func make_() scheduler.Cmd {
 	return func() scheduler.Event {
-		return nil
+		return struct{}{}
 	}
 }
 

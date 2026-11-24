@@ -2379,3 +2379,31 @@ fn width(s: Shape<Option<int>>) -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn irrefutable_if_let_drops_its_unused_temp() {
+    let input = r#"
+fn f(x: int) -> int {
+  if let y = if x > 0 { 1 } else { 0 } { 1 } else { 0 }
+}
+
+fn main() { let _ = f(1) }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn if_let_without_else_as_a_value() {
+    let input = r#"
+import "go:fmt"
+
+fn g() -> Option<int> { None }
+
+fn main() {
+  let _ = if let None = g() {
+    let _ = fmt.Print("x")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

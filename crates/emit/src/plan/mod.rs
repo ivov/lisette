@@ -1,6 +1,8 @@
 pub(crate) mod calls;
 pub(crate) mod lower;
+pub(crate) mod never;
 pub(crate) mod placement;
+pub(crate) mod unit;
 
 use crate::Planner;
 use crate::names::go_name;
@@ -41,8 +43,10 @@ impl Planner<'_> {
                     .used_qualifiers(|key| self.facts.is_unused_import(key))
             })
             .collect();
-        let qualifier_names: HashSet<String> =
-            import_qualifiers.iter().map(|(q, _)| q.clone()).collect();
+        let qualifier_names: HashSet<String> = file_plans
+            .iter()
+            .flat_map(|plan| plan.imports.qualifiers())
+            .collect();
         self.package
             .record_package_block_names(self.collect_fixed_names(files), qualifier_names.clone());
         self.collect_escape_remap(files);

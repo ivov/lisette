@@ -133,6 +133,32 @@ impl ScopeState {
         }
     }
 
+    pub(crate) fn avoid_qualifier_capture(
+        &self,
+        present: &HashMap<LocalId, String>,
+        pinned: &HashSet<String>,
+        qualifiers: &HashSet<String>,
+        settled: &mut HashMap<LocalId, String>,
+    ) {
+        let mut locals: Vec<_> = present.iter().collect();
+        locals.sort_by_key(|(id, _)| id.0);
+        for (id, spelling) in locals {
+            let current = settled.get(id).unwrap_or(spelling).clone();
+            if !qualifiers.contains(&current) {
+                continue;
+            }
+            let name = go_name::fresh_suffixed(&current, |candidate| {
+                qualifiers.contains(candidate)
+                    || pinned.contains(candidate)
+                    || present.values().any(|name| name == candidate)
+                    || settled.values().any(|name| name == candidate)
+                    || is_go_reserved_word(candidate)
+                    || self.declares_type_param(candidate)
+            });
+            settled.insert(*id, name);
+        }
+    }
+
     fn is_go_name_taken(&self, go_name: &str, package: &PackageState) -> bool {
         is_go_reserved_word(go_name)
             || self.names.issued.contains(go_name)

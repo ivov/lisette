@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::mem;
 
 use syntax::ast::{Expression, ExpressionId, FormatStringPart, Literal, MatchArm, SelectArm, Span};
@@ -8,12 +8,15 @@ use syntax::program::{
     InterfaceConversion, InterfaceRequirement, NativeOperation, ReceiverCoercion, ValueUseKey,
     constructor_fields, interface_requirements, resolved_definition, resolved_instantiation,
 };
-use syntax::types::{CompoundKind, SubstitutionMap, Symbol, Type, build_substitution_map};
+use syntax::types::{
+    CompoundKind, FunctionType, SubstitutionMap, Symbol, Type, TypeVarId, build_substitution_map,
+};
 
 use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::equality;
-use crate::facts::ValueUseObligation;
+use crate::checker::infer::unify::{are_go_type_aliases, simple_kinds_are_go_aliases};
+use crate::facts::{GenericBoundOrigin, ValueUseObligation};
 use crate::store::Store;
 
 impl InferCtx<'_> {
@@ -108,7 +111,7 @@ impl InferCtx<'_> {
         type_arguments: SubstitutionMap,
         interface_method: Option<Box<InterfaceRequirement>>,
     ) {
-        let callee = callee.unwrap_parens();
+        let callee = callee.unwrap_value_wrappers();
         let definition =
             resolved_definition(callee).map(|definition| unaliased_owner(self.store, definition));
         let copies_storage = matches!(
@@ -182,12 +185,13 @@ impl InferCtx<'_> {
         self.facts.value_uses.selected_witnesses.clear();
         let mut finalizer = Finalizer {
             store: self.store,
-            context: self,
             obligations: HashMap::default(),
             callees: callees.into_iter().collect(),
             receivers: receivers.into_iter().collect(),
             bodies: CheckedBodiesBuilder::default(),
             failures: Vec::new(),
+            mismatches: Vec::new(),
+            uninferred: Vec::new(),
             loop_slots: Vec::new(),
             failure_slots: Vec::new(),
             delegated_witnesses: Vec::new(),
@@ -208,6 +212,8 @@ impl InferCtx<'_> {
         let Finalizer {
             mut bodies,
             failures,
+            mismatches,
+            uninferred,
             ..
         } = finalizer;
         for (if_let, unit) in mem::take(&mut self.facts.value_uses.implicit_units) {
@@ -251,13 +257,73 @@ impl InferCtx<'_> {
         if has_errors {
             return;
         }
-        if failures.is_empty() {
+        if failures.is_empty() && mismatches.is_empty() && uninferred.is_empty() {
             self.facts.checked_bodies.merge(bodies);
+        }
+        let mut reported_variables = if uninferred.is_empty() {
+            HashSet::default()
+        } else {
+            self.deferred_variables()
+        };
+        for value in uninferred {
+            let is_new = value.variables.iter().fold(false, |is_new, variable| {
+                reported_variables.insert(*variable) | is_new
+            });
+            if !is_new {
+                continue;
+            }
+            self.sink.push(match value.kind {
+                UninferredKind::Closure => diagnostics::infer::closure_not_inferred(value.span),
+                UninferredKind::Value => diagnostics::infer::type_must_be_known(value.span),
+            });
+        }
+        for mismatch in mismatches {
+            self.sink.push(diagnostics::infer::no_go_conversion(
+                &mismatch.slot.to_string(),
+                &mismatch.source.to_string(),
+                mismatch.span,
+            ));
         }
         for (span, reason) in failures {
             self.sink
                 .push(diagnostics::infer::unchecked_value_use(reason, span));
         }
+    }
+
+    fn deferred_variables(&self) -> HashSet<TypeVarId> {
+        let package_id = self.cursor.package_id();
+        let deferred = &self.facts.deferred;
+        let bounds = deferred
+            .generic_bounds
+            .iter()
+            .filter(|obligation| {
+                obligation.package_id == package_id
+                    && !matches!(
+                        obligation.origin,
+                        GenericBoundOrigin::FunctionReference { is_call: true, .. }
+                    )
+            })
+            .map(|obligation| &obligation.argument);
+        let calls = deferred
+            .generic_calls
+            .iter()
+            .filter(|check| check.package_id == package_id)
+            .map(|check| &check.ty);
+        let collections = deferred
+            .empty_collections
+            .iter()
+            .filter(|check| check.package_id == package_id)
+            .map(|check| &check.ty);
+        let literals = deferred
+            .empty_literals
+            .iter()
+            .filter(|check| check.package_id == package_id)
+            .map(|check| &check.ty);
+        let mut variables = Vec::new();
+        for ty in bounds.chain(calls).chain(collections).chain(literals) {
+            collect_variables(&ty.resolve_in(&self.env), &mut variables);
+        }
+        variables.into_iter().collect()
     }
 }
 
@@ -323,15 +389,15 @@ fn method_value_operation(store: &Store, definition: &str) -> CallOperation {
     }
 }
 
-struct Finalizer<'f, 's> {
+struct Finalizer<'s> {
     store: &'s Store,
-    /// The inference whose unification rules decide whether a value fits its slot.
-    context: &'f mut InferCtx<'s>,
     obligations: HashMap<ValueUseKey, ValueUseObligation>,
     callees: HashMap<ValueUseKey, CheckedCallee>,
     receivers: HashMap<ValueUseKey, ReceiverCoercion>,
     bodies: CheckedBodiesBuilder,
     failures: Vec<(Span, &'static str)>,
+    mismatches: Vec<Mismatch>,
+    uninferred: Vec<Uninferred>,
     loop_slots: Vec<Option<LoopSlot>>,
     failure_slots: Vec<Type>,
     /// The conformances that enclosing delegating constructs selected for the value they produce.
@@ -342,10 +408,19 @@ struct Finalizer<'f, 's> {
     discards_next: bool,
 }
 
-impl Finalizer<'_, '_> {
+impl Finalizer<'_> {
     /// Check one value use, in the slot that a delegating parent passes down if any.
     fn value_use(&mut self, expression: &Expression, inherited: Option<Type>) {
         let expression = expression.unwrap_parens();
+        if matches!(expression, Expression::Lambda { .. }) && is_unresolved(&expression.get_type())
+        {
+            self.not_inferred(
+                expression.get_span(),
+                &expression.get_type(),
+                UninferredKind::Closure,
+                "this closure has an unresolved type",
+            );
+        }
         let key = ValueUseKey::value(expression);
         let is_discarded = mem::take(&mut self.discards_next);
         let (recorded, mut witnesses) = match self.obligations.get(&key) {
@@ -386,7 +461,7 @@ impl Finalizer<'_, '_> {
             witnesses.extend(self.delegated_witnesses.iter().cloned());
         }
         let adaptation = self.adaptation(
-            &expression.get_type(),
+            &fallible_block_source(self.store, expression, &use_slot),
             &use_slot,
             expression.get_span(),
             &witnesses,
@@ -405,8 +480,10 @@ impl Finalizer<'_, '_> {
             // A value that never arrives, or that already reported an error, constrains no slot.
             Type::Var { .. } if value_type.is_never() || value_type.is_error() => value_type,
             slot if is_unresolved(&slot) => {
-                self.fail(
+                self.not_inferred(
                     expression.get_span(),
+                    &slot,
+                    UninferredKind::Value,
                     "this value goes into a slot of unresolved type",
                 );
                 value_type
@@ -521,6 +598,7 @@ impl Finalizer<'_, '_> {
 
     /// Publish the selected operation of a callee.
     fn callee(&mut self, callee: &Expression) {
+        let callee = callee.unwrap_value_wrappers();
         let key = ValueUseKey::value(callee);
         let Some(checked) = self.callees.get(&key).cloned() else {
             self.fail(callee.get_span(), "this call has no selected operation");
@@ -626,6 +704,20 @@ impl Finalizer<'_, '_> {
         self.failures.push((span, reason));
     }
 
+    fn not_inferred(&mut self, span: Span, ty: &Type, kind: UninferredKind, reason: &'static str) {
+        let mut variables = Vec::new();
+        collect_variables(ty, &mut variables);
+        if !variables.is_empty() {
+            self.uninferred.push(Uninferred {
+                span,
+                variables,
+                kind,
+            });
+        } else if is_unresolved(ty) {
+            self.fail(span, reason);
+        }
+    }
+
     /// The value-use positions of `expression`, from the syntax of each construct.
     fn positions(&mut self, expression: &Expression, slot: &Type) {
         match expression {
@@ -695,8 +787,8 @@ impl Finalizer<'_, '_> {
                 ..
             } => {
                 // An instance method access publishes its own callee at its position.
-                if !is_instance_method_access(callee.unwrap_parens()) {
-                    self.callee(callee.unwrap_parens());
+                if !is_instance_method_access(callee.unwrap_value_wrappers()) {
+                    self.callee(callee);
                 }
                 self.value_use(callee, None);
                 for argument in args {
@@ -941,18 +1033,40 @@ impl Finalizer<'_, '_> {
             return Adaptation::Identity;
         }
         if is_unresolved(written_source) || is_unresolved(written_slot) {
-            return self.failed(span, "this value use has an unresolved type");
-        }
-        let store = self.store;
-        let source = store.peel_alias(written_source);
-        let slot = store.peel_alias(written_slot);
-        if source == slot {
+            let both = Type::Tuple(vec![written_source.clone(), written_slot.clone()]);
+            self.not_inferred(
+                span,
+                &both,
+                UninferredKind::Value,
+                "this value use has an unresolved type",
+            );
             return Adaptation::Identity;
         }
+        let store = self.store;
+        if is_go_identical(store, written_source, written_slot) {
+            return Adaptation::Identity;
+        }
+        let source = store.peel_alias(written_source);
+        let slot = store.peel_alias(written_slot);
         if let Type::Nominal { id, .. } = &slot
-            && store.get_definition(id).and_then(Definition::newtype_field) == Some(written_source)
+            && store.is_nominal_defined_type(id)
+            && store
+                .underlying_type(&slot)
+                .is_some_and(|underlying| is_go_identical(store, &underlying, written_source))
         {
             return Adaptation::Newtype;
+        }
+        if let Type::Nominal { id, .. } = &source
+            && store.is_nominal_defined_type(id)
+            && store
+                .underlying_type(&source)
+                .is_some_and(|underlying| is_go_identical(store, &underlying, written_slot))
+        {
+            return if matches!(slot, Type::Tuple(_)) {
+                Adaptation::Newtype
+            } else {
+                Adaptation::Identity
+            };
         }
         match (&source, &slot) {
             (Type::Tuple(sources), Type::Tuple(slots)) if sources.len() == slots.len() => {
@@ -1000,9 +1114,6 @@ impl Finalizer<'_, '_> {
                 }
             }
             _ if store.is_interface(&slot) || store.resolves_to_unknown(&slot) => {
-                if same_nominal(&source, &slot) {
-                    return Adaptation::Identity;
-                }
                 let witness = witnesses
                     .iter()
                     .find(|witness| {
@@ -1021,17 +1132,24 @@ impl Finalizer<'_, '_> {
                     witness,
                 }))
             }
-            _ if self.context.admits(written_slot, written_source, &span) => Adaptation::Identity,
+            (Type::Function(source_function), Type::Function(slot_function))
+                if source_function.return_type.is_never()
+                    && !slot_function.return_type.is_never()
+                    && same_parameters(store, source_function, slot_function) =>
+            {
+                Adaptation::DivergingFunction
+            }
             // The cast operation converts its operand to the cast type.
             _ if is_cast => Adaptation::Identity,
-            _ => self.failed(span, "this value does not fit its slot"),
+            _ => {
+                self.mismatches.push(Mismatch {
+                    source: written_source.clone(),
+                    slot: written_slot.clone(),
+                    span,
+                });
+                Adaptation::Identity
+            }
         }
-    }
-
-    /// Record a failure, after which the body is not published, so the adaptation it returns reaches no consumer.
-    fn failed(&mut self, span: Span, reason: &'static str) -> Adaptation {
-        self.fail(span, reason);
-        Adaptation::Identity
     }
 
     fn is_go_package_interface(&self, ty: &Type) -> bool {
@@ -1097,10 +1215,125 @@ fn is_unresolved(ty: &Type) -> bool {
         || ty.children().into_iter().any(is_unresolved)
 }
 
-fn same_nominal(source: &Type, slot: &Type) -> bool {
-    matches!(
-        (source, slot),
-        (Type::Nominal { id: source, params: source_parameters, .. }, Type::Nominal { id: slot, params: slot_parameters, .. })
-            if source == slot && source_parameters == slot_parameters
-    )
+struct Uninferred {
+    span: Span,
+    variables: Vec<TypeVarId>,
+    kind: UninferredKind,
+}
+
+#[derive(Clone, Copy)]
+enum UninferredKind {
+    Closure,
+    Value,
+}
+
+fn collect_variables(ty: &Type, variables: &mut Vec<TypeVarId>) {
+    if let Type::Var { id, .. } = ty {
+        variables.push(*id);
+    }
+    for child in ty.children() {
+        collect_variables(child, variables);
+    }
+}
+
+struct Mismatch {
+    source: Type,
+    slot: Type,
+    span: Span,
+}
+
+fn fallible_block_source(store: &Store, expression: &Expression, slot: &Type) -> Type {
+    let ty = expression.get_type();
+    if !matches!(
+        expression,
+        Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
+    ) || !ty.ok_type().is_never()
+    {
+        return ty;
+    }
+    let slot = store.peel_alias(slot);
+    if (slot.is_option() && ty.is_option()) || (slot.is_result() && ty.is_result()) {
+        slot
+    } else {
+        ty
+    }
+}
+
+fn is_go_identical(store: &Store, left: &Type, right: &Type) -> bool {
+    let left = store.peel_alias(left);
+    let right = store.peel_alias(right);
+    let all_identical = |lefts: &[Type], rights: &[Type]| {
+        lefts.len() == rights.len()
+            && lefts
+                .iter()
+                .zip(rights)
+                .all(|(left, right)| is_go_identical(store, left, right))
+    };
+    match (&left, &right) {
+        (Type::Simple(left), Type::Simple(right)) => {
+            left == right || simple_kinds_are_go_aliases(*left, *right)
+        }
+        (
+            Type::Compound {
+                kind: left_kind,
+                args: left_arguments,
+                ..
+            },
+            Type::Compound {
+                kind: right_kind,
+                args: right_arguments,
+                ..
+            },
+        ) => left_kind == right_kind && all_identical(left_arguments, right_arguments),
+        (
+            Type::Nominal {
+                id: left_id,
+                params: left_parameters,
+                ..
+            },
+            Type::Nominal {
+                id: right_id,
+                params: right_parameters,
+                ..
+            },
+        ) => {
+            (left_id == right_id || are_go_type_aliases(left_id, right_id))
+                && all_identical(left_parameters, right_parameters)
+        }
+        (Type::Function(left), Type::Function(right)) => {
+            same_parameters(store, left, right)
+                && is_go_identical(store, &left.return_type, &right.return_type)
+        }
+        (Type::Tuple(left), Type::Tuple(right)) => all_identical(left, right),
+        (
+            Type::Array {
+                length: left_length,
+                element: left_element,
+            },
+            Type::Array {
+                length: right_length,
+                element: right_element,
+            },
+        ) => left_length == right_length && is_go_identical(store, left_element, right_element),
+        (
+            Type::Forall {
+                vars: left_variables,
+                body: left_body,
+            },
+            Type::Forall {
+                vars: right_variables,
+                body: right_body,
+            },
+        ) => left_variables == right_variables && is_go_identical(store, left_body, right_body),
+        _ => left == right,
+    }
+}
+
+fn same_parameters(store: &Store, left: &FunctionType, right: &FunctionType) -> bool {
+    left.params.len() == right.params.len()
+        && left
+            .params
+            .iter()
+            .zip(&right.params)
+            .all(|(left, right)| is_go_identical(store, &left.ty, &right.ty))
 }

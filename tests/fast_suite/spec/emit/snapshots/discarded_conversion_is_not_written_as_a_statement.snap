@@ -1,0 +1,20 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn f(s: string) {
+    s.bytes()
+    let _ = 1
+  }
+  
+  fn main() { f("a") }
+---
+package main
+
+func f(s string) {
+	_ = []byte(s)
+}
+
+func main() {
+	f("a")
+}

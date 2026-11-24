@@ -54,12 +54,13 @@ use checks::{
     check_replaceable_with_autofill, check_rest_only_pattern, check_self_assignment,
     check_self_comparison, check_self_named_constructors, check_single_arm_select,
     check_single_element_loop, check_task_argument_call, check_type_limit_comparison,
-    check_uninterpolated_fstring, check_unnecessary_bool, check_unnecessary_first_then_check,
-    check_unnecessary_lazy_evaluations, check_unnecessary_map_on_constructor,
-    check_unnecessary_min_or_max, check_unnecessary_range_loop,
-    check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
-    check_unnecessary_return, check_unreachable_partial_err, check_unsigned_comparison,
-    check_verbose_failure_propagation, check_while_let_loop, check_wildcard_in_or_patterns,
+    check_uninterpolated_fstring, check_unit_go_callback_result, check_unnecessary_bool,
+    check_unnecessary_first_then_check, check_unnecessary_lazy_evaluations,
+    check_unnecessary_map_on_constructor, check_unnecessary_min_or_max,
+    check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
+    check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unreachable_partial_err,
+    check_unsigned_comparison, check_verbose_failure_propagation, check_while_let_loop,
+    check_wildcard_in_or_patterns,
 };
 
 fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: FunctionRole<'_>) {
@@ -109,6 +110,7 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
         (check_match_same_arms, &[Match]),
         (check_redundant_guards, &[Match]),
         (check_loop_runs_once, &[Loop, While, WhileLet, For]),
+        (check_unit_go_callback_result, &[Lambda, Call]),
         (check_needless_continue, &[Loop, While, WhileLet, For]),
         (check_regexp_in_loop, &[Loop, While, WhileLet, For]),
         (check_single_element_loop, &[For]),

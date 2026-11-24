@@ -1,0 +1,27 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn f() -> int {
+    let y = 20
+    let z = {
+      let y = 20
+      y
+    }
+    let y = 10
+    y
+  }
+  
+  fn main() { let _ = f() }
+---
+package main
+
+func f() int {
+	y := 20
+	y = 10
+	return y
+}
+
+func main() {
+	f()
+}

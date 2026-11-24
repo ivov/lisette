@@ -25,10 +25,8 @@ func test() {
 	lisette.ChannelSend(ch, P{v: 1})
 	for {
 		select {
-		case recv, ok := <-ch:
-			if ok {
-				_ = recv
-			} else {
+		case _, ok := <-ch:
+			if !ok {
 				ch = nil
 				continue
 			}

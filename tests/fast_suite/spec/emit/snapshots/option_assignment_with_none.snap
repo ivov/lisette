@@ -9,9 +9,4 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func test() {
-	lisette.MakeOptionSome(1)
-	_ = lisette.MakeOptionNone[int]()
-}
+func test() {}

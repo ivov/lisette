@@ -629,6 +629,71 @@ pub fn call() {
 }
 
 #[test]
+fn cached_package_rechecks_conformance_when_exported_method_names_change() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/r")).unwrap();
+    fs::create_dir_all(project.join("src/q")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/methodnames\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/r/r.lis"),
+        "interface G { fn get() -> int }\n\npub fn use_it(g: G) -> int { g.get() }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/q/q.lis"),
+        r#"import "r"
+
+struct T { v: int }
+
+impl T {
+  fn get(self) -> int { self.v }
+}
+
+pub fn run() -> int { r.use_it(T { v: 1 }) }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+import "q"
+
+pub interface Unrelated { fn get() -> int }
+
+fn main() { fmt.Println(q.run()) }
+"#,
+    )
+    .unwrap();
+
+    let first = lis(&project, "check");
+    assert!(
+        first.status.success(),
+        "first check should cache `q`:\nstderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let cached = fs::read_dir(project.join("target/.lisette/cache"))
+        .unwrap()
+        .any(|entry| entry.unwrap().path().join("q.cache").exists());
+    assert!(cached, "first check should write the cache of `q`");
+
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"go:fmt\"\nimport \"q\"\n\nfn main() { fmt.Println(q.run()) }\n",
+    )
+    .unwrap();
+
+    assert_rejected_at_check(
+        &lis(&project, "check"),
+        "add `pub` to the private method `get`",
+    );
+}
+
+#[test]
 fn parallel_registration_validates_bounds_with_dependency_ufcs_methods() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let project = scratch.path().join("proj");
@@ -2335,7 +2400,11 @@ fn single_file_check_ignores_unrelated_test_packages() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();
     fs::create_dir_all(dir.join("sub")).unwrap();
-    fs::write(dir.join("script.lis"), "pub fn hi() -> int { 1 }\n").unwrap();
+    fs::write(
+        dir.join("script.lis"),
+        "pub fn hi() -> int { 1 }\n\nfn main() {}\n",
+    )
+    .unwrap();
     fs::write(
         dir.join("sub/broken.test.lis"),
         "#[test]\nfn bad() { let _: int = \"type error\" }\n",
@@ -4174,14 +4243,9 @@ pub fn same(a: X, b: X) -> bool { a.equals(b) }
         let consumer = r#"import "go:fmt"
 import "p"
 import "s"
-interface Eq { fn equals(other: p.X) -> bool }
-fn accept(e: Eq) -> bool { e.equals(p.X { v: 1 }) }
-fn main() { fmt.Println(accept(p.X { v: 1 }), s.s()) }
+fn main() { fmt.Println(p.same(p.X { v: 1 }, p.X { v: 1 }), s.s()) }
 "#;
-
-        let initial_consumer =
-            consumer.replace("accept(p.X { v: 1 })", "p.same(p.X { v: 1 }, p.X { v: 1 })");
-        fs::write(root.join("src/main.lis"), &initial_consumer).unwrap();
+        fs::write(root.join("src/main.lis"), consumer).unwrap();
         let sibling = if lint {
             "pub fn s() -> int { let unused = 1; 1 }\n"
         } else {
@@ -4197,11 +4261,6 @@ fn main() { fmt.Println(accept(p.X { v: 1 }), s.s()) }
         let initial_go = fs::read_to_string(root.join("target/p/lib.go")).unwrap();
         assert!(initial_go.contains("func (x X) equals("), "{initial_go}");
         for derived in [true, false] {
-            fs::write(
-                root.join("src/main.lis"),
-                if derived { consumer } else { &initial_consumer },
-            )
-            .unwrap();
             let source = if derived {
                 format!("#[equality]\npub struct Y {{ pub v: int }}\n{sibling}")
             } else {
@@ -4776,4 +4835,90 @@ fn main() {
         stdout.trim(),
         "18446744073709551615 9223372036854775807\n8 8\n9223372036854775807 18446744073709551615"
     );
+}
+
+#[test]
+fn method_called_through_type_of_another_package_runs() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/shapes")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"ufcs\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/shapes/shapes.lis"),
+        r#"pub struct Rect { pub w: int, pub h: int }
+
+impl Rect {
+  pub fn new(w: int, h: int) -> Rect { Rect { w, h } }
+  pub fn area(self) -> int { self.w * self.h }
+}
+
+pub interface Shape {
+  fn area() -> int
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+import "shapes"
+
+fn main() {
+  let r = shapes.Rect.new(2, 3)
+  fmt.Println(shapes.Rect.area(r))
+  let f = shapes.Rect.area
+  fmt.Println(f(r))
+  let s: shapes.Shape = r
+  fmt.Println(shapes.Shape.area(s))
+}
+"#,
+    )
+    .unwrap();
+    let output = lis(&project, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert_eq!(stdout.trim(), "6\n6\n6");
+}
+
+#[test]
+fn interface_method_value_takes_receiver_and_runs() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let source = scratch.path().join("shape.lis");
+    fs::write(
+        &source,
+        r#"import "go:fmt"
+
+interface Shape {
+  fn area() -> int
+}
+
+struct Sq { s: int }
+impl Sq { fn area(self) -> int { self.s * self.s } }
+
+fn main() {
+  let s: Shape = Sq { s: 3 }
+  let f = Shape.area
+  fmt.Println(f(s))
+  fmt.Println(Shape.area(s))
+  fmt.Println(error.Error(fmt.Errorf("boom")))
+}
+"#,
+    )
+    .unwrap();
+    let output = lis(&source, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert_eq!(stdout.trim(), "9\n9\nboom");
 }

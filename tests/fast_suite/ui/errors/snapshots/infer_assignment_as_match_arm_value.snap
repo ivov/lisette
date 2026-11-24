@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:4:34]
+ 3 │   let mut n = 0
+ 4 │   let s: string = match n { _ => n = 2 }
+   ·                                  ──┬──
+   ·                                    ╰── expected `string`, found `()`
+ 5 │   let _ = s
+   ╰────
+  help: Every `match` arm must produce the same type · code: [infer.type_mismatch]

@@ -167,7 +167,7 @@ impl InferCtx<'_> {
         callee: &Expression,
         call_kind: CallKind,
     ) -> Option<CallOperation> {
-        let callee = callee.unwrap_parens();
+        let callee = callee.unwrap_value_wrappers();
         let native_method = || match callee {
             Expression::DotAccess { member, .. } => member.clone(),
             Expression::Identifier { value, .. } => value
@@ -218,7 +218,7 @@ impl InferCtx<'_> {
         explicit: &CallTypeArguments,
         declared: &Type,
     ) -> SubstitutionMap {
-        let mut type_arguments = resolved_instantiation(callee.unwrap_parens())
+        let mut type_arguments = resolved_instantiation(callee.unwrap_value_wrappers())
             .cloned()
             .unwrap_or_default();
         if let Type::Forall { vars, .. } = declared

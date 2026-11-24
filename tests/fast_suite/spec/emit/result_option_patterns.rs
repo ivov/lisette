@@ -127,7 +127,7 @@ fn test_int_error() -> Result<string, int> {
 fn let_binding_with_result() {
     let input = r#"
 fn test() {
-  let x = Ok(42);
+  let x: Result<int, string> = Ok(42);
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1604,7 +1604,7 @@ fn main() {
 fn try_block_result_temp_var_no_collision() {
     let input = r#"
 fn foo() -> Result<int, string> {
-  let result = try {
+  let result: Result<int, string> = try {
     Ok(1)?
   }
   let tryResult_1 = 7
@@ -5932,6 +5932,38 @@ fn h() -> int {
 fn main() {
   let _ = g()
   let _ = h()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_bound_go_pair_match_with_unused_ok_payload() {
+    let input = r#"
+import "go:strconv"
+
+fn main() {
+  let r = strconv.Atoi("1")
+  match r {
+    Ok(v) => {},
+    Err(e) => { let _ = e },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_bound_go_pair_match_with_empty_arms() {
+    let input = r#"
+import "go:strconv"
+
+fn main() {
+  let r = strconv.Atoi("1")
+  match r {
+    Ok(_) => {},
+    Err(_) => {},
+  }
 }
 "#;
     assert_emit_snapshot!(input);

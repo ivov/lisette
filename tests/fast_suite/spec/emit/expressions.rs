@@ -6944,6 +6944,19 @@ fn main() {
 }
 
 #[test]
+fn discarded_conversion_is_not_written_as_a_statement() {
+    let input = r#"
+fn f(s: string) {
+  s.bytes()
+  let _ = 1
+}
+
+fn main() { f("a") }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn shift_of_untyped_constant_by_variable_takes_count_type() {
     let input = r#"
 fn test(n: uint) -> uint {
@@ -6967,6 +6980,151 @@ fn f(n: Tiny) -> Tiny {
   x = 2 << n
   let y = take(1 << n)
   x + y
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unused_typed_let_of_large_constant_is_dropped() {
+    let input = r#"
+fn test() {
+  let c: uint64 = 1 << 63
+  let d: uint64 = 1 + 18446744073709551614
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn call_of_block_holding_closure() {
+    let input = r#"
+fn compose(f: fn(int) -> int, g: fn(int) -> int) -> fn(int) -> int {
+  |x: int| f({
+  |x: int| g(f(g(x)))
+}(g(x)))
+}
+
+fn main() { }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_with_diverging_element() {
+    let input = r#"
+import "go:fmt"
+
+fn side() {
+  fmt.Println("side")
+}
+
+fn test() -> int {
+  let t = ({ side() }, 1)
+  t.1
+}
+
+fn main() { let t = ({ panic("a one should match") }, 1); }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn code_after_diverging_let_is_dropped() {
+    let input = r#"
+fn identity(value: int) -> int {
+  value
+}
+
+fn describe(value: Unknown) -> string {
+  match assert_type<string>(value) {
+    Some(text) => text,
+    None => "",
+  }
+}
+
+fn shadow() {
+  let value = {
+    panic("shadowing Unknown binding was declared at the concrete type")
+  }
+  let mut value: Unknown = identity(value)
+  value = "two"
+  if describe(value) != "two" {
+    panic("shadowing Unknown binding was declared at the concrete type")
+  }
+}
+
+fn main() { }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn code_after_infinite_loop_is_dropped() {
+    let input = r#"
+fn unit() {}
+
+fn test(c: bool) -> (Unknown, Unknown, Unknown, Unknown, Unknown) {
+  let bare: Unknown = loop { () }
+  let empty: Unknown = loop {
+    break {}
+  }
+  let paren: Unknown = loop {
+    break ({ () })
+  }
+  let no_else: Unknown = loop {
+    break if c { unit() }
+  }
+  let arms: Unknown = loop {
+    break if c {} else { () }
+  }
+  (bare, empty, paren, no_else, arms)
+}
+
+fn main() { }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn code_after_diverging_argument_is_dropped() {
+    let input = r#"import "go:fmt"
+struct Item { id: int, change: fn() }
+impl Item { fn equals(self, other: Item) -> bool { self.change(); self.id == other.id } }
+fn pair(a: int, b: bool) -> string { f"{a} {b}" }
+fn run() {
+    let mut values = [1]
+    let item = Item { id: 3, change: || { values[0] = 9 } }
+    let items = [item]
+    fmt.Println(pair(values[0], items.contains(item)))
+    fmt.Println(values[0])
+    values[0] = 1
+    let needle = || { panic("the first arm should return one") }
+    fmt.Println(pair(values[0], values.contains(needle())))
+    fmt.Println(values[0])
+}
+
+fn main() { }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn call_of_block_holding_function_value() {
+    let input = r#"
+struct Bar { n: int }
+
+impl Bar {
+  fn get(self: Ref<Bar>) -> int { self.n }
+}
+
+fn id<T>(x: T) -> T { x }
+
+fn test() -> int {
+  let mut b = Bar { n: 1 }
+  let g = |y: int| y
+  let wrapped = { Some }(2)
+  { id }(3) + { b.get }() + { g }(4) + wrapped.unwrap_or(0)
 }
 "#;
     assert_emit_snapshot!(input);

@@ -20,31 +20,30 @@ impl InferCtx<'_> {
         self.register_generic_bound_obligation(applied_function_bound(bound), &origin, span);
     }
 
+    pub(crate) fn record_construction_context(
+        &mut self,
+        constructed_ty: &Type,
+        declared_ty: &Type,
+        span: Span,
+    ) {
+        let declared = self.store.peel_alias(declared_ty);
+        let constructed = self.store.peel_alias(constructed_ty);
+        if declared.get_qualified_id().is_some()
+            && declared.get_qualified_id() == constructed.get_qualified_id()
+            && !declared.has_unbound_variables()
+        {
+            self.constructions_typed_by_context.insert(span);
+        }
+    }
+
     pub(crate) fn register_construction_obligations(
         &mut self,
         written_name: &str,
         constructed_ty: &Type,
         span: Span,
     ) {
-        self.register_construction_obligations_against(written_name, constructed_ty, None, span);
-    }
-
-    pub(crate) fn register_construction_obligations_against(
-        &mut self,
-        written_name: &str,
-        constructed_ty: &Type,
-        declared_ty: Option<&Type>,
-        span: Span,
-    ) {
-        if let Some(declared) = declared_ty {
-            let declared = self.store.peel_alias(declared);
-            let constructed = self.store.peel_alias(constructed_ty);
-            if declared.get_qualified_id().is_some()
-                && declared.get_qualified_id() == constructed.get_qualified_id()
-                && !declared.has_unbound_variables()
-            {
-                return;
-            }
+        if self.constructions_typed_by_context.contains(&span) {
+            return;
         }
         let has_equals_method = constructed_ty
             .get_qualified_id()

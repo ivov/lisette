@@ -1,7 +1,0 @@
-
-fn test() -> int {
-  let x = loop { let _ = test(); };
-  x
-}
-
-fn main() { let _ = test(); }

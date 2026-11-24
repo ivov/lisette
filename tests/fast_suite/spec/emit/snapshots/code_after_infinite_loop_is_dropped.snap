@@ -1,0 +1,35 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn unit() {}
+  
+  fn test(c: bool) -> (Unknown, Unknown, Unknown, Unknown, Unknown) {
+    let bare: Unknown = loop { () }
+    let empty: Unknown = loop {
+      break {}
+    }
+    let paren: Unknown = loop {
+      break ({ () })
+    }
+    let no_else: Unknown = loop {
+      break if c { unit() }
+    }
+    let arms: Unknown = loop {
+      break if c {} else { () }
+    }
+    (bare, empty, paren, no_else, arms)
+  }
+  
+  fn main() { }
+---
+package main
+
+func unit() {}
+
+func test(_ bool) (any, any, any, any, any) {
+	for {
+	}
+}
+
+func main() {}

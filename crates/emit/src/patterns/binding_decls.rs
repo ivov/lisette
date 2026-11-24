@@ -88,7 +88,7 @@ impl Planner<'_> {
                     .iter()
                     .any(|e| self.pattern_has_binding_collisions(e))
                     || if let RestPattern::Bind { name, .. } = rest {
-                        !self.facts.is_unused_rest_binding(rest) && self.shadows_declaration(name)
+                        self.shadows_declaration(name)
                     } else {
                         false
                     }
@@ -96,14 +96,11 @@ impl Planner<'_> {
             Pattern::Or { patterns, .. } => patterns
                 .iter()
                 .any(|p| self.pattern_has_binding_collisions(p)),
-            p @ Pattern::AsBinding {
+            Pattern::AsBinding {
                 pattern: inner,
                 name,
                 ..
-            } => {
-                self.pattern_has_binding_collisions(inner)
-                    || (!self.facts.is_unused_binding(p) && self.shadows_declaration(name))
-            }
+            } => self.pattern_has_binding_collisions(inner) || self.shadows_declaration(name),
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
     }

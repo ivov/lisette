@@ -633,7 +633,12 @@ impl InferCtx<'_> {
                     let is_string_like = |ty: &Type| {
                         self.store.underlying_simple_kind(ty) == Some(SimpleKind::String)
                     };
-                    let numeric_ok = if !is_string_like(&resolved_left_operand)
+                    let ordered_parameter = same_operand_types
+                        && matches!(&resolved_left_operand, Type::Parameter(name)
+                            if self.parameter_satisfies_bound(name, BuiltinBound::Ordered));
+                    let numeric_ok = if ordered_parameter {
+                        true
+                    } else if !is_string_like(&resolved_left_operand)
                         && !is_string_like(&resolved_right_operand)
                     {
                         let left_ok =

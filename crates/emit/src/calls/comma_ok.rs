@@ -281,9 +281,8 @@ impl Planner<'_> {
                 let Expression::Call { args, .. } = expression else {
                     unreachable!("comma_ok_source only accepts Call expressions");
                 };
-                let (setup, operand) = self
-                    .plan_composite_value(&args[0], ExpressionContext::value())
-                    .into_parts();
+                let plan = self.plan_composite_value(&args[0], ExpressionContext::value());
+                let (setup, operand) = self.convert_to_recorded_slot(&args[0], plan).into_parts();
                 let target_ty = self.facts.ok_payload(&expression.get_type());
                 let target = self.go_type(&target_ty);
                 (setup, GoExpression::type_assertion(operand, target))

@@ -2,7 +2,6 @@ use crate::Planner;
 use crate::expressions::top_items::item_doc_text;
 use crate::ir::bodies::{ConstPlan, LoweredStatement};
 use crate::ir::declarations::{DeclarationKind, GoDeclaration};
-use crate::ir::values::GoExpression;
 use crate::names::generics::generic_bounds;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
@@ -34,7 +33,7 @@ impl Planner<'_> {
             .facts
             .definition(&self.facts.qualified_current(name))
             .and_then(|definition| definition.instantiate_alias_target(&params, false));
-        let underlying_type = self.go_type(declared_target.as_ref().unwrap_or(ty));
+        let underlying_type = self.component_go_type(declared_target.as_ref().unwrap_or(ty));
 
         let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
 
@@ -72,7 +71,7 @@ impl Planner<'_> {
         }
         let raw_value = self.plan_value(expression, ExpressionContext::value());
         let value = if raw_value.is_empty() {
-            GoExpression::unit()
+            self.unit_value(Some(expression), Some(ty))
         } else {
             raw_value.into_parts().1
         };

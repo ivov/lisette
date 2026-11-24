@@ -167,7 +167,7 @@ impl GoExpressionNode {
             Self::Identifier(_) => Effects::local_read(),
             Self::Qualified { .. } => reference_read(false),
             Self::Call {
-                purity: CallPurity::Constructor,
+                purity: CallPurity::Constructor | CallPurity::Conversion,
                 ..
             } => Effects {
                 calls: EvaluationEffect::PureCall,
@@ -187,7 +187,10 @@ impl GoExpressionNode {
                 writes: Writes::Any,
                 ..Effects::default()
             },
-            Self::Index { .. } | Self::Slice { .. } | Self::Dereference(_) => reference_read(true),
+            Self::Index { in_bounds, .. } | Self::Slice { in_bounds, .. } => {
+                reference_read(!in_bounds)
+            }
+            Self::Dereference(_) => reference_read(true),
             Self::Selector { may_panic, .. } if *may_panic => reference_read(true),
             Self::Selector { .. } => Effects::default(),
             Self::TypeAssertion { .. } => Effects {

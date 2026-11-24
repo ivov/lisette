@@ -28,9 +28,7 @@ type P struct {
 
 func test() int {
 	opt := lisette.MakeOptionSome(1)
-	result := lisette.OptionMap(opt, func(x int) int {
-		p := P{v: x}
-		_ = p
+	result := lisette.OptionMap(opt, func(_ int) int {
 		return 1
 	})
 	if result.Tag == lisette.OptionSome {

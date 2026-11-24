@@ -146,7 +146,6 @@ pub struct DeferredChecks {
     pub empty_collections: Vec<EmptyCollectionCheck>,
     pub empty_literals: Vec<EmptyLiteralCheck>,
     pub slice_makes: Vec<SliceMakeCheck>,
-    pub statement_tails: Vec<StatementTailCheck>,
 }
 
 impl DeferredChecks {
@@ -157,14 +156,12 @@ impl DeferredChecks {
             empty_collections,
             empty_literals,
             slice_makes,
-            statement_tails,
         } = other;
         self.generic_calls.extend(generic_calls);
         self.generic_bounds.extend(generic_bounds);
         self.empty_collections.extend(empty_collections);
         self.empty_literals.extend(empty_literals);
         self.slice_makes.extend(slice_makes);
-        self.statement_tails.extend(statement_tails);
     }
 
     pub(crate) fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {
@@ -174,7 +171,6 @@ impl DeferredChecks {
             empty_collections,
             empty_literals,
             slice_makes,
-            statement_tails,
         } = self;
         for check in generic_calls {
             visit(&mut check.ty);
@@ -210,9 +206,6 @@ impl DeferredChecks {
         }
         for check in slice_makes {
             visit(&mut check.ty);
-        }
-        for check in statement_tails {
-            visit(&mut check.expected_ty);
         }
     }
 }

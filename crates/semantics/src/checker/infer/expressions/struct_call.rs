@@ -491,13 +491,7 @@ impl InferCtx<'_> {
 
         let final_expected = self.peel_resolved(expected_ty);
         self.unify(&final_expected, &struct_call_ty, &span);
-
-        self.register_construction_obligations_against(
-            &struct_name,
-            &struct_call_ty,
-            Some(&declared_ty),
-            span,
-        );
+        self.record_construction_context(&struct_call_ty, &declared_ty, span);
 
         let id = self.fresh_expression_id();
         self.record_struct_literal(
@@ -629,15 +623,7 @@ impl InferCtx<'_> {
             );
         }
 
-        if let Type::Nominal { id, .. } = &resolved_enum {
-            let enum_id = id.as_str();
-            self.register_construction_obligations_against(
-                enum_id,
-                &enum_ty,
-                Some(&declared_ty),
-                span,
-            );
-        }
+        self.record_construction_context(&enum_ty, &declared_ty, span);
 
         self.mark_writable_initializer_uses(
             variant_fields

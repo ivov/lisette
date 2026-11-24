@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn f() {
+    let g = || { panic("stop") }
+    if g() != 1 { panic("no") }
+  }
+---
+package main
+
+func f() {
+	g := func() struct{} {
+		panic("stop")
+	}
+	g()
+}

@@ -5990,9 +5990,10 @@ fn option_in_go_unknown_struct_field_stays_tagged() {
 import "go:example.com/dyn"
 
 fn main() {
+  let none: Option<string> = None
   let _ = dyn.Bag {
     Decl: Some("decl"),
-    Data: None,
+    Data: none,
   }
 }
 "#;
@@ -6011,8 +6012,9 @@ fn option_assigned_to_go_unknown_field_stays_tagged() {
 import "go:example.com/dyn"
 
 fn main() {
-  let mut obj = dyn.Bag { Decl: "", Data: None }
-  obj.Decl = None
+  let none: Option<string> = None
+  let mut obj = dyn.Bag { Decl: "", Data: none }
+  obj.Decl = none
   let _ = obj
 }
 "#;
@@ -6031,7 +6033,8 @@ fn option_in_go_unknown_call_arg_stays_tagged() {
 import "go:example.com/dyn"
 
 fn main() {
-  let _ = dyn.Store("k", None)
+  let none: Option<int> = None
+  let _ = dyn.Store("k", none)
   let _ = dyn.Store("k", Some(1))
 }
 "#;
@@ -8157,6 +8160,26 @@ fn main() {
   let mut c = Counter { n: 1 }
   pick(&c).n = 5
   fmt.Println(c.n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_of_tuple_converts_into_its_underlying_tuple() {
+    let input = r#"
+import "go:fmt"
+
+struct P((int, int))
+
+fn un(p: P) -> (int, int) { p }
+
+fn main() {
+  let p = P((1, 2))
+  let mut ts: Slice<(int, int)> = []
+  ts = ts.append(p)
+  let t: (int, int) = p
+  fmt.Println(ts, t, un(p))
 }
 "#;
     assert_emit_snapshot!(input);

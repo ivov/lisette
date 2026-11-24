@@ -343,12 +343,12 @@ impl Planner<'_> {
             } else {
                 this.lower_block_to_place(ctx.body, ctx.place).statements
             };
-            let mut then_statements: Vec<Statement> = Vec::new();
-            if !GoUses::of(&body_statements).contains_identifier(&receiver_var) {
-                then_statements.push(discard(GoExpression::identifier(receiver_var.clone())));
-            }
-            then_statements.extend(body_statements);
-            (receiver_var, ok_var, then_statements)
+            let receiver_var = if GoUses::of(&body_statements).contains_identifier(&receiver_var) {
+                receiver_var
+            } else {
+                GoIdentifier::external("_".to_string())
+            };
+            (receiver_var, ok_var, body_statements)
         });
 
         let else_arm = ElseArm::from_body(retry_closed_channel(ctx.channel), false);

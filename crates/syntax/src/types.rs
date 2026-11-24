@@ -1972,7 +1972,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = ty.unwrap_forall().clone();
-    let mut seen: HashSet<Symbol> = HashSet::default();
+    let mut seen: HashSet<Type> = HashSet::default();
     while let Type::Nominal {
         id,
         params,
@@ -1980,7 +1980,7 @@ where
     } = &current
     {
         let writable = *writable;
-        if !seen.insert(id.clone()) {
+        if !seen.insert(current.clone()) {
             break;
         }
         let Some(target) = lookup(id.as_str())

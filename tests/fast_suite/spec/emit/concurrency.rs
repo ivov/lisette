@@ -1899,3 +1899,23 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn defer_of_a_value_only_builtin_runs_in_a_closure() {
+    let input = r#"
+fn main() {
+  defer Channel.new<int>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn task_of_a_value_only_builtin_runs_in_a_closure() {
+    let input = r#"
+fn main() {
+  task Channel.new<int>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

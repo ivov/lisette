@@ -41,6 +41,12 @@ fn visit_expression(
                 visit_expression(arg, Position::Value, package_id, store, sink);
             }
             if let Some(s) = spread.as_ref() {
+                if let Some(builtin) = fixed_arity_go_builtin(callee) {
+                    sink.push(diagnostics::infer::spread_into_go_builtin(
+                        builtin,
+                        s.get_span(),
+                    ));
+                }
                 visit_expression(s, Position::Value, package_id, store, sink);
             }
         }
@@ -82,6 +88,10 @@ fn check_one(
     let value = value.as_str();
     let span = *span;
     if matches!(resolution, IdentifierResolution::Binding(_)) {
+        return;
+    }
+    if let Some(builtin) = fixed_arity_go_builtin(identifier) {
+        sink.push(diagnostics::infer::go_builtin_value(builtin, span));
         return;
     }
     if matches!(
@@ -185,6 +195,17 @@ fn check_one(
 
     if !is_public {
         sink.push(diagnostics::infer::private_method_expression(span));
+    }
+}
+
+fn fixed_arity_go_builtin(callee: &Expression) -> Option<&'static str> {
+    let Expression::Identifier { resolution, .. } = callee.unwrap_parens() else {
+        return None;
+    };
+    match resolution.definition()? {
+        "prelude.min" => Some("min"),
+        "prelude.max" => Some("max"),
+        _ => None,
     }
 }
 

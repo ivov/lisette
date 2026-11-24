@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Missing value at end of block
+   ╭─[test.lis:4:16]
+ 3 │   let mut n = 0
+ 4 │   let bump = { n = 1 }
+   ·                ──┬──
+   ·                  ╰── produces `()`
+ 5 │   bump()
+   ╰────
+  help: End the block with an expression that produces `fn () -> A`. The block must produce `fn () -> A` · code: [infer.statement_as_tail]

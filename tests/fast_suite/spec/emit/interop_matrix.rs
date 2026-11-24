@@ -1893,12 +1893,13 @@ import "go:go/ast"
 type Objects = mut Map<string, Option<mut Ref<ast.Object>>>
 
 fn scope() -> ast.Scope {
+  let none: Option<int> = None
   let mut obj = ast.Object {
     Kind: ast.Bad,
     Name: "x",
-    Decl: None,
-    Data: None,
-    Type: None,
+    Decl: none,
+    Data: none,
+    Type: none,
   }
   let mut objects: Objects = Map.new<string, Option<mut Ref<ast.Object>>>()
   objects["present"] = Some(&obj)

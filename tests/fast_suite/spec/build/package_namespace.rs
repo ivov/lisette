@@ -280,6 +280,7 @@ fn import_used_beside_a_sibling_function_of_its_name_is_not_unused() {
 fn duplicate_definition_does_not_depend_on_declaration_order() {
     let declarations = [
         "struct Foo { x: int }",
+        "struct Foo(int)",
         "enum Foo { A }",
         "interface Foo { fn get() -> int }",
         "type Foo = int",

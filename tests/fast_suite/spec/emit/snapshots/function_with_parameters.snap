@@ -8,6 +8,4 @@ description: |
 ---
 package main
 
-func add(a, b int) {
-	_ = a + b
-}
+func add(_, _ int) {}

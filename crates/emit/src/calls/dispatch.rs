@@ -728,9 +728,8 @@ impl<'a> Planner<'a> {
         };
         let (mut setup, arguments) = match args.first() {
             Some(a) => {
-                let (setup, value) = self
-                    .plan_composite_value(a, ExpressionContext::value())
-                    .into_parts();
+                let plan = self.plan_composite_value(a, ExpressionContext::value());
+                let (setup, value) = self.convert_to_recorded_slot(a, plan).into_parts();
                 (setup, vec![value])
             }
             None => (Vec::new(), Vec::new()),

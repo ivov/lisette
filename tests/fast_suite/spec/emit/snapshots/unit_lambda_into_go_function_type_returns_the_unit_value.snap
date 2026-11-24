@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:expvar"
+  
+  fn test() {
+    let f = expvar.Func(|| ())
+    if f.String() != "{}" { panic(f.String()) }
+  }
+---
+package main
+
+import "expvar"
+
+func test() {
+	f := expvar.Func(func() any {
+		return struct{}{}
+	})
+	if f.String() != "{}" {
+		panic(f.String())
+	}
+}

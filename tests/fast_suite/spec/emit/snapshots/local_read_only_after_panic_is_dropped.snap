@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:net/url"
+  
+  fn f() -> string {
+    let v = url.Values{..}
+    panic("stop")
+    v.Get("k")
+  }
+  
+  fn main() {}
+---
+package main
+
+func f() string {
+	panic("stop")
+}
+
+func main() {}

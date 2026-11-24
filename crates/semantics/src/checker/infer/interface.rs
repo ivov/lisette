@@ -502,7 +502,12 @@ impl InferCtx<'_> {
                     {
                         return None;
                     }
-                    let receiver = &method.signature.get_function_params()?.first()?.ty;
+                    let receiver = &method
+                        .signature
+                        .unwrap_forall()
+                        .get_function_params()?
+                        .first()?
+                        .ty;
                     Some((method.selected_name.to_string(), receiver.is_writable()))
                 })
                 .collect();
@@ -702,6 +707,7 @@ impl InferCtx<'_> {
                             name: method_name.to_string(),
                             signature: method_ty.clone(),
                             private_candidate: None,
+                            private_to_package: None,
                         }),
                     );
                     continue;
@@ -715,6 +721,7 @@ impl InferCtx<'_> {
                             name: method_name.to_string(),
                             signature: method_ty.clone(),
                             private_candidate,
+                            private_to_package: None,
                         }),
                     );
                     continue;
@@ -779,6 +786,7 @@ impl InferCtx<'_> {
                                     name: method_name.to_string(),
                                     signature: method_ty.clone(),
                                     private_candidate: None,
+                                    private_to_package: None,
                                 }),
                             );
                         }
@@ -789,6 +797,26 @@ impl InferCtx<'_> {
                     };
                     let owner = member.declaring_type;
                     let is_exported = selected_method.visibility.is_public();
+                    if !is_exported
+                        && let Some(hidden) = self.private_method_hidden_from_conversion(
+                            &owner,
+                            &impl_method_name,
+                            interface_qualified_id,
+                            &span,
+                        )
+                    {
+                        check.push_violation(
+                            interface_qualified_id,
+                            requirement.parent_of.as_ref(),
+                            InterfaceMethodViolation::Missing(MissingMethod {
+                                name: method_name.to_string(),
+                                signature: method_ty.clone(),
+                                private_candidate: Some(impl_method_name.to_string()),
+                                private_to_package: hidden.private_to_package,
+                            }),
+                        );
+                        continue;
+                    }
                     let declaring_instance = *member.declaring_instance;
                     let declared_signature = store
                         .get_method(&owner, &impl_method_name)
@@ -833,6 +861,7 @@ impl InferCtx<'_> {
                             name: method_name.to_string(),
                             signature: method_ty.clone(),
                             private_candidate: None,
+                            private_to_package: None,
                         }),
                     );
                 }
@@ -1014,6 +1043,34 @@ impl InferCtx<'_> {
         }
     }
 
+    fn private_method_hidden_from_conversion(
+        &self,
+        owner: &str,
+        method_name: &str,
+        interface_id: &str,
+        span: &Span,
+    ) -> Option<HiddenPrivateMethod> {
+        let store = self.store;
+        let method_package = store.package_for_qualified_name(owner)?;
+        if method_package.starts_with(GO_IMPORT_PREFIX) || method_package == "prelude" {
+            return None;
+        }
+        if store.package_for_qualified_name(interface_id) == Some(method_package) {
+            return None;
+        }
+        let conversion_package = store
+            .get_file(span.file_id)
+            .map_or_else(|| self.cursor.package_id(), |file| file.package_id.as_str());
+        if conversion_package != method_package {
+            return Some(HiddenPrivateMethod {
+                private_to_package: Some(method_package.to_string()),
+            });
+        }
+        (!store.go_method_policy().exports_method(method_name)).then_some(HiddenPrivateMethod {
+            private_to_package: None,
+        })
+    }
+
     fn record_conformance_use(&mut self, ty: &Type, impl_method_name: &str, spelling_pinned: bool) {
         let store = self.store;
         if let Type::Nominal { id, .. } = self.conformance_receiver(ty)
@@ -1036,6 +1093,10 @@ impl InferCtx<'_> {
             _ => ty.clone(),
         }
     }
+}
+
+struct HiddenPrivateMethod {
+    private_to_package: Option<String>,
 }
 
 enum SelectedMethod {

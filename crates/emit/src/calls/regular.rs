@@ -116,6 +116,21 @@ fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Opti
 }
 
 impl<'a> Planner<'a> {
+    fn call_of(
+        &self,
+        function: &Expression,
+        callee: GoExpression,
+        arguments: Vec<GoExpression>,
+    ) -> GoExpression {
+        if self.callee_lowers_to_type_construction(function) {
+            GoExpression::type_name_call(callee, arguments)
+        } else if self.is_pure_constructor_callee(function) {
+            GoExpression::pure_call(callee, arguments)
+        } else {
+            GoExpression::call(callee, arguments)
+        }
+    }
+
     pub(super) fn plan_regular_call(
         &mut self,
         call_expression: &Expression,
@@ -207,11 +222,8 @@ impl<'a> Planner<'a> {
 
         let call = match self.collapse_fmt_print(&callee, args, &arguments) {
             Some(collapsed) => collapsed,
-            None if self.is_pure_constructor_callee(function) => GoExpression::pure_call(
-                GoExpression::instantiation(callee, type_args_string),
-                arguments,
-            ),
-            None => GoExpression::call(
+            None => self.call_of(
+                function,
                 GoExpression::instantiation(callee, type_args_string),
                 arguments,
             ),
@@ -284,11 +296,7 @@ impl<'a> Planner<'a> {
             },
         );
         let callee = GoExpression::external_name(go_name);
-        let expression = if self.is_pure_constructor_callee(function) {
-            GoExpression::pure_call(callee, sequenced.values)
-        } else {
-            GoExpression::call(callee, sequenced.values)
-        };
+        let expression = self.call_of(function, callee, sequenced.values);
         Some(if self.callee_lowers_to_type_construction(function) {
             ValuePlan::computed(sequenced.setup, expression)
         } else {

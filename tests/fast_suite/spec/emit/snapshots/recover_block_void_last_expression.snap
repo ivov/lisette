@@ -19,9 +19,8 @@ func risky() {
 }
 
 func test() {
-	recoverResult := lisette.RecoverBlock(func() struct{} {
+	lisette.RecoverBlock(func() struct{} {
 		risky()
 		return struct{}{}
 	})
-	_ = recoverResult
 }

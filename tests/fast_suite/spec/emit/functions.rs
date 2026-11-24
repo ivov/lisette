@@ -5508,3 +5508,87 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn never_returning_function_value_fills_function_slots_outside_calls() {
+    let input = r#"
+import "go:fmt"
+
+fn die() -> Never { panic("x") }
+
+fn pick() -> fn() -> int { die }
+
+fn main() {
+  let f: fn() -> int = die
+  let mut g: fn() -> int = || 1
+  g = die
+  let fs: Slice<fn() -> int> = [die]
+  let h = pick()
+  let _ = (f, g, h)
+  fmt.Println(fs.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_read_only_after_panic_is_dropped() {
+    let input = r#"
+import "go:net/url"
+
+fn f() -> string {
+  let v = url.Values{..}
+  panic("stop")
+  v.Get("k")
+}
+
+fn main() {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shadowed_block_local_is_kept_apart() {
+    let input = r#"
+fn f() -> int {
+  let y = 20
+  let z = {
+    let y = 20
+    y
+  }
+  let y = 10
+  y
+}
+
+fn main() { let _ = f() }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn loop_value_from_a_panicking_break_terminates() {
+    let input = r#"
+fn f() -> Unknown {
+  let x: Unknown = loop {
+    break ({ panic("stop") })
+  }
+  x
+}
+
+fn main() {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_named_like_a_go_builtin_is_called_as_a_statement() {
+    let input = r#"
+fn main() {
+  let make = || 1
+  let len = |x: int| x
+  let _ = make()
+  let _ = len(2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -148,7 +148,10 @@ impl Planner<'_> {
     }
 
     fn lower_try_tail(&mut self, last: &Expression, fallible: &Fallible) -> Vec<Statement> {
-        if last.diverges().is_some() || last.get_type().is_never() {
+        if self.facts.is_never(&last.get_type()) {
+            return vec![self.lower_never_value(last)];
+        }
+        if last.diverges().is_some() {
             return vec![self.lower_statement(last)];
         }
 
@@ -187,7 +190,7 @@ impl Planner<'_> {
 
     fn lower_try_unit_return(&mut self, fallible: &Fallible) -> Vec<Statement> {
         let mut statements = Vec::new();
-        let unit_val = self.unit_value(&mut statements, fallible.ok_ty());
+        let unit_val = self.unit_value(None, Some(fallible.ok_ty()));
         statements.extend(self.success_return(fallible, unit_val));
         statements
     }
@@ -240,7 +243,7 @@ impl Planner<'_> {
             .expect("recover block type must be Result<T, PanicValue>");
 
         let result_var = self.fresh_declared("recoverResult");
-        let inner_ty_str = self.go_type(fallible.ok_ty());
+        let inner_ty_str = self.component_go_type(fallible.ok_ty());
 
         let ok_ty = fallible.ok_ty().clone();
         let body_return_ctx = if ok_ty.is_never() {
@@ -288,8 +291,8 @@ impl Planner<'_> {
 
     fn lower_recover_tail(&mut self, last: &Expression, fallible: &Fallible) -> Vec<Statement> {
         let item_ty = last.get_type();
-        if item_ty.is_never() {
-            return vec![self.lower_statement(last)];
+        if self.facts.is_never(&item_ty) {
+            return vec![self.lower_never_value(last)];
         }
         if item_ty.is_unit() || item_ty.is_ignored() || item_ty.is_variable() {
             let mut statements = vec![self.lower_statement(last)];
@@ -307,16 +310,8 @@ impl Planner<'_> {
 
     fn lower_unit_return(&mut self, ok_ty: &Type) -> Vec<Statement> {
         let mut statements = Vec::new();
-        let unit_val = self.unit_value(&mut statements, ok_ty);
+        let unit_val = self.unit_value(None, Some(ok_ty));
         statements.push(plain_return(unit_val));
         statements
-    }
-
-    fn unit_value(&mut self, statements: &mut Vec<Statement>, ok_ty: &Type) -> GoExpression {
-        let unit_ty = Type::unit();
-        let unit_val = self.go_zero(&unit_ty);
-        let (setup, value) = CoercionPlan::internal(self, &unit_ty, ok_ty).lower(self, unit_val);
-        statements.extend(setup);
-        value
     }
 }

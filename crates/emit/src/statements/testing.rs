@@ -1,9 +1,8 @@
 use crate::EmitFacts;
 use crate::Planner;
 use crate::expressions::{BinaryOperand, flip_comparison};
-use crate::ir::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
-};
+use crate::ir::bodies::effect_statement;
+use crate::ir::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define};
 use crate::ir::go_expression::{CompositeLayout, UnaryOp};
 use crate::ir::values::CaptureBoundary;
 use crate::ir::values::{GoExpression, OperandForm, ValuePlan};
@@ -97,7 +96,7 @@ impl Planner<'_> {
         let test = LoweredStatement::If(IfPlan::plain(
             failure_condition,
             LoweredBlock {
-                statements: vec![expression_statement(fail)],
+                statements: vec![effect_statement(fail)],
             },
             ElseArm::None,
         ));
@@ -110,7 +109,7 @@ impl Planner<'_> {
 
     pub(crate) fn lower_test_log_statement(&mut self, expression: &Expression) -> LoweredStatement {
         let (mut statements, call) = self.plan_test_log_call(expression);
-        statements.push(expression_statement(call));
+        statements.push(effect_statement(call));
         LoweredStatement::Block(LoweredBlock { statements })
     }
 

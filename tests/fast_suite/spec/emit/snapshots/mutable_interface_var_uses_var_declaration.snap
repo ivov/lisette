@@ -29,6 +29,4 @@ func (b Box) ToString() string {
 	return b.label
 }
 
-func test() {
-	_ = Box{label: "hello"}
-}
+func test() {}

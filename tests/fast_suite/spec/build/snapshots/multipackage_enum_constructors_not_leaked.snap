@@ -27,7 +27,6 @@ type Color struct {
 
 func main() {
 	x := utils.Add(1, 2)
-	_ = MakeColorRed()
 	_ = x
 }
 

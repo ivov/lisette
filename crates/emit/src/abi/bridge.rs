@@ -8,9 +8,10 @@ use crate::calls::go_interop::LoweredProducer;
 use crate::control_flow::fallible as tags;
 use crate::control_flow::fallible::prelude_call;
 use crate::control_flow::propagation::plain_return;
+use crate::ir::bodies::effect_statement;
 use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement,
-    Statement, assign, declare, define_many, expression_statement,
+    Statement, assign, declare, define_many,
 };
 use crate::ir::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter};
 use crate::ir::local::GoIdentifier;
@@ -751,15 +752,18 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
+        if source.result_layout.logical_type().is_never()
+            && target.return_abi != CallableReturnAbi::Void
+        {
+            statements.push(effect_statement(call));
+            statements.push(LoweredStatement::UnreachablePanic.into());
+            return;
+        }
         if source.return_abi == CallableReturnAbi::Void
             && target.return_abi != CallableReturnAbi::Void
         {
-            statements.push(expression_statement(call));
-            statements.push(if source.result_layout.logical_type().is_never() {
-                LoweredStatement::UnreachablePanic.into()
-            } else {
-                plain_return(GoExpression::unit())
-            });
+            statements.push(effect_statement(call));
+            statements.push(plain_return(GoExpression::unit()));
             return;
         }
         if matches!(
@@ -857,7 +861,7 @@ impl Planner<'_> {
         match source.return_abi.lowered() {
             None => {
                 if source.results.is_empty() {
-                    statements.push(expression_statement(call));
+                    statements.push(effect_statement(call));
                     if !target.results.is_empty() {
                         statements.push(if source.result_layout.logical_type().is_never() {
                             LoweredStatement::UnreachablePanic.into()
@@ -868,7 +872,7 @@ impl Planner<'_> {
                     return;
                 }
                 if target.results.is_empty() {
-                    statements.push(expression_statement(call));
+                    statements.push(effect_statement(call));
                     return;
                 }
                 let bridge = self.resolve_layout_bridge(&source.results[0], &target.results[0]);

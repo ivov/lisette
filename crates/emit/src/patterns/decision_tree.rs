@@ -102,13 +102,15 @@ impl AccessPath {
                 PathSegment::ValueField(name) => GoExpression::value_field(result, name.clone()),
                 PathSegment::Index(index) => {
                     GoExpression::index(result, GoExpression::literal(index.to_string()))
+                        .proven_in_bounds()
                 }
                 PathSegment::SliceFrom(offset) => GoExpression::slice(
                     result,
                     Some(&GoExpression::literal(offset.to_string())),
                     None,
                     None,
-                ),
+                )
+                .proven_in_bounds(),
                 PathSegment::ArraySliceFrom { offset, go_type } => GoExpression::conversion(
                     go_type.clone(),
                     GoExpression::slice(
@@ -116,7 +118,8 @@ impl AccessPath {
                         Some(&GoExpression::literal(offset.to_string())),
                         None,
                         None,
-                    ),
+                    )
+                    .proven_in_bounds(),
                 ),
                 PathSegment::Deref => GoExpression::dereference(result),
                 PathSegment::NewtypeCast(go_type) => {

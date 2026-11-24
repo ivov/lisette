@@ -2,9 +2,9 @@ use crate::EmitFacts;
 use crate::Planner;
 use crate::abi::ReturnSlot;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
-use crate::ir::bodies::{
-    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, expression_statement,
-};
+use crate::ir::bodies::async_statement;
+use crate::ir::bodies::effect_statement;
+use crate::ir::bodies::{AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement};
 use crate::ir::declarations::GoDeclaration;
 use crate::ir::go_expression::{BinaryOp, GoParameter};
 use crate::ir::local::GoIdentifier;
@@ -191,13 +191,10 @@ impl Planner<'_> {
         };
         let mut recover_args = vec![handle_value.clone()];
         recover_args.extend(location());
-        let mut statements = vec![
-            LoweredStatement::Async {
-                kind: AsyncKind::Defer,
-                call: testkit("Recover", recover_args),
-            }
-            .into(),
-        ];
+        let mut statements = vec![async_statement(
+            AsyncKind::Defer,
+            testkit("Recover", recover_args),
+        )];
         let call = GoExpression::call(
             GoExpression::external_name(callee),
             vec![testkit("New", vec![handle_value.clone()])],
@@ -219,7 +216,7 @@ impl Planner<'_> {
             let mut check = IfPlan::plain(
                 GoExpression::binary(error, BinaryOp::Ne, GoExpression::nil()),
                 LoweredBlock {
-                    statements: vec![expression_statement(testkit("Fail", arguments))],
+                    statements: vec![effect_statement(testkit("Fail", arguments))],
                 },
                 ElseArm::None,
             );
@@ -229,7 +226,7 @@ impl Planner<'_> {
             });
             statements.push(LoweredStatement::If(check).into());
         } else {
-            statements.push(expression_statement(call));
+            statements.push(effect_statement(call));
         }
         GoDeclaration::function(
             None,

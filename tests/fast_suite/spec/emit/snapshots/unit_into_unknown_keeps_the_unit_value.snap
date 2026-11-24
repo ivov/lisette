@@ -1,0 +1,56 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn tail() -> Unknown {
+    {}
+  }
+  
+  fn early(b: bool) -> Unknown {
+    if b {
+      return {}
+    }
+    1
+  }
+  
+  fn test() {
+    let direct: Unknown = ({})
+    if assert_type<()>(direct).is_none() { panic("direct") }
+    if assert_type<()>(tail()).is_none() { panic("tail") }
+    if assert_type<()>(early(true)).is_none() { panic("early") }
+    let lambda: fn() -> Unknown = || ()
+    if assert_type<()>(lambda()).is_none() { panic("lambda") }
+  }
+---
+package main
+
+func tail() any {
+	return struct{}{}
+}
+
+func early(b bool) any {
+	if b {
+		return struct{}{}
+	}
+	return 1
+}
+
+func test() {
+	var direct any
+	direct = struct{}{}
+	if _, ok := direct.(struct{}); !ok {
+		panic("direct")
+	}
+	if _, ok := tail().(struct{}); !ok {
+		panic("tail")
+	}
+	if _, ok := early(true).(struct{}); !ok {
+		panic("early")
+	}
+	lambda := func() any {
+		return struct{}{}
+	}
+	if _, ok := lambda().(struct{}); !ok {
+		panic("lambda")
+	}
+}

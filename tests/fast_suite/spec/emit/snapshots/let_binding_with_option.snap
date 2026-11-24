@@ -8,8 +8,4 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func test() {
-	lisette.MakeOptionSome(42)
-}
+func test() {}

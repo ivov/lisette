@@ -39,7 +39,7 @@ func test() {
 	r := lisette.RecoverBlock(func() struct{} {
 		next()
 		die()
-		return struct{}{}
+		panic("unreachable")
 	})
 	if r.IsOk() {
 		panic("die did not panic")

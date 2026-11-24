@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  struct P { x: Option<int> }
+  
+  fn f(p: P) -> int {
+    let P { x: Some(a) } = { return 0 } else { return 1 }
+    a
+  }
+  
+  fn test() {
+    if f(P { x: None }) != 0 { panic("wrong value") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type P struct {
+	x lisette.Option[int]
+}
+
+func f(_ P) int {
+	{
+		return 0
+	}
+}
+
+func test() {
+	if f(P{}) != 0 {
+		panic("wrong value")
+	}
+}

@@ -2859,6 +2859,16 @@ impl Expression {
         }
     }
 
+    pub fn unwrap_value_wrappers(&self) -> &Expression {
+        match self {
+            Expression::Paren { expression, .. } => expression.unwrap_value_wrappers(),
+            Expression::Block { items, .. } if self.removable_block(false) => {
+                items[0].unwrap_value_wrappers()
+            }
+            other => other,
+        }
+    }
+
     pub fn is_piped_call(&self) -> bool {
         let Expression::Call {
             expression: callee,
