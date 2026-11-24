@@ -2,8 +2,8 @@ use std::mem;
 
 use crate::lookup::state::scope::ScopeState;
 use crate::target::ir::bodies::{
-    AssignForm, CompoundKind, ElseArm, IfPlan, LoopHeader, LoopPlan, LoweredBlock,
-    LoweredStatement, SelectArmKind, Statement, SwitchKind,
+    AssignForm, ElseArm, IfPlan, LoopHeader, LoopPlan, LoweredBlock, LoweredStatement,
+    SelectArmKind, Statement, SwitchKind,
 };
 use crate::target::ir::go_expression::{GoExpressionNode, TreeVisitor, verbatim_identifiers};
 use crate::target::ir::local::GoIdentifier;
@@ -42,83 +42,16 @@ fn reuse_in_statement(statement: &mut LoweredStatement, scope: &ScopeState) {
     match statement {
         LoweredStatement::If(plan) => reuse_in_if(plan, &[], scope),
         LoweredStatement::Loop(plan) => reuse_in_loop(plan, scope),
-        LoweredStatement::Block(body) => reuse_in_list(&mut body.statements, &[], scope),
         LoweredStatement::Body(body) => {
             for statement in &mut body.statements {
                 reuse_in_statement(&mut statement.kind, scope);
             }
         }
-        LoweredStatement::Break(_)
-        | LoweredStatement::Continue(_)
-        | LoweredStatement::UnreachablePanic => {}
-        LoweredStatement::Const(plan) => reuse_in_expression(plan.value.node_mut(), scope),
-        LoweredStatement::Return(values) => {
-            for value in values {
-                reuse_in_expression(value.node_mut(), scope);
-            }
-        }
-        LoweredStatement::Assign(AssignForm::Compound { target, kind }) => {
-            reuse_in_expression(target.node_mut(), scope);
-            if let CompoundKind::OpAssign { rhs, .. } = kind {
-                reuse_in_expression(rhs.node_mut(), scope);
-            }
-        }
-        LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
-            reuse_in_expression(target.node_mut(), scope);
-            reuse_in_expression(value.node_mut(), scope);
-        }
-        LoweredStatement::Async { call, .. } => reuse_in_expression(call.node_mut(), scope),
-        LoweredStatement::Select(plan) => {
-            for arm in &mut plan.arms {
-                let body = match &mut arm.kind {
-                    SelectArmKind::Receive { channel, body, .. } => {
-                        reuse_in_expression(channel.node_mut(), scope);
-                        body
-                    }
-                    SelectArmKind::Send {
-                        channel,
-                        value,
-                        body,
-                    } => {
-                        reuse_in_expression(channel.node_mut(), scope);
-                        reuse_in_expression(value.node_mut(), scope);
-                        body
-                    }
-                    SelectArmKind::Default { body } => body,
-                };
-                reuse_in_list(&mut body.statements, &[], scope);
-            }
-        }
-        LoweredStatement::Switch(plan) => {
-            match &mut plan.kind {
-                SwitchKind::Conditional => {}
-                SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
-                    reuse_in_expression(subject.node_mut(), scope);
-                }
-            }
-            for case in &mut plan.cases {
-                for label in &mut case.labels {
-                    reuse_in_expression(label.node_mut(), scope);
-                }
-                reuse_in_list(&mut case.body.statements, &[], scope);
-            }
-            if let Some(default) = &mut plan.default {
-                reuse_in_list(&mut default.statements, &[], scope);
-            }
-        }
-        LoweredStatement::Define(definition) => {
-            reuse_in_expression(definition.value.node_mut(), scope)
-        }
-        LoweredStatement::VarDecl { value, .. } => {
-            if let Some(value) = value {
-                reuse_in_expression(value.node_mut(), scope);
-            }
-        }
-        LoweredStatement::Discard {
-            value: expression, ..
-        }
-        | LoweredStatement::ExpressionStatement { expression, .. } => {
-            reuse_in_expression(expression.node_mut(), scope);
+        statement => {
+            statement
+                .for_each_expression_mut(&mut |value| reuse_in_expression(value.node_mut(), scope));
+            statement
+                .for_each_block_mut(&mut |body| reuse_in_list(&mut body.statements, &[], scope));
         }
     }
 }
@@ -283,17 +216,6 @@ fn copy_keeps_no_name_of_its_own(
         .is_some_and(|copy_base| copy_base == base(source))
 }
 
-fn declares(statement: &LoweredStatement, name: &GoIdentifier) -> bool {
-    match statement {
-        LoweredStatement::Define(definition) => definition
-            .names
-            .iter()
-            .any(|declared| declared.refers_to_same(name)),
-        LoweredStatement::VarDecl { name: declared, .. } => declared.refers_to_same(name),
-        _ => false,
-    }
-}
-
 fn copy_field_write<'s>(
     statement: &'s LoweredStatement,
     copy: &GoIdentifier,
@@ -323,7 +245,7 @@ fn reuse_copy_source(
     let declared_here = parameters.iter().any(|name| name.refers_to_same(&source))
         || flat[..index]
             .iter()
-            .any(|statement| declares(&statement.kind, &source));
+            .any(|statement| statement.kind.binds_local(&source));
     if !declared_here {
         return false;
     }

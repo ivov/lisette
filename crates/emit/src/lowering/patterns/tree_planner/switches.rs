@@ -15,7 +15,7 @@ use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, Decision, GuardedLeaf, PatternBinding, SwitchBranch,
     SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch, boolean_literal, render_condition,
 };
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
 use crate::target::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
@@ -422,8 +422,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 GoIdentifier::local(name.to_string(), self.planner.scope.new_local_id())
             }
             _ => {
-                let name = self.planner.fresh_local(Some("subject"));
-                self.planner.declare(&name);
+                let name = self.planner.fresh_local("subject");
+                self.planner.scope.declare_go_name(&name);
                 name
             }
         };

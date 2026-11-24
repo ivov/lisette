@@ -357,7 +357,7 @@ impl Planner<'_> {
         let (index_setup, index_expression) = index_plan.into_parts();
         setup.extend(index_setup);
         let index_expression = if pin_index {
-            GoExpression::identifier(self.hoist_tmp_value_statement(setup, "idx", index_expression))
+            GoExpression::identifier(self.hoist_temp(setup, "idx", index_expression))
         } else {
             index_expression
         };
@@ -377,7 +377,7 @@ impl Planner<'_> {
         } else {
             GoExpression::address_of(expression)
         };
-        GoExpression::identifier(self.hoist_tmp_value_statement(setup, "base", pinned))
+        GoExpression::identifier(self.hoist_temp(setup, "base", pinned))
     }
 
     fn place_operand(
@@ -392,7 +392,7 @@ impl Planner<'_> {
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if pin {
-            GoExpression::identifier(self.hoist_tmp_value_statement(setup, prefix, value))
+            GoExpression::identifier(self.hoist_temp(setup, prefix, value))
         } else {
             value
         }
@@ -410,7 +410,7 @@ impl Planner<'_> {
         let (pointee_setup, pointee_value) = pointee_plan.into_parts();
         setup.extend(pointee_setup);
         if needs_capture {
-            let tmp = self.hoist_tmp_value_statement(setup, "ref", pointee_value);
+            let tmp = self.hoist_temp(setup, "ref", pointee_value);
             return GoExpression::dereference(GoExpression::identifier(tmp));
         }
         GoExpression::dereference(pointee_value)

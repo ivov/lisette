@@ -366,7 +366,7 @@ impl Planner<'_> {
         let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
         value.map_expression(|setup, value| {
             let mut coercion_setup = Vec::new();
-            let changed = self.plan_layout_change(&mut coercion_setup, value, &plan.change, true);
+            let changed = self.plan_layout_change(&mut coercion_setup, value, &plan.change);
             let (conversion_setup, coerced) = coercion.lower(self, changed);
             setup.extend(coercion_setup);
             setup.extend(conversion_setup);

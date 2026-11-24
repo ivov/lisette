@@ -1,9 +1,9 @@
 use crate::Planner;
-use crate::lowering::calls::bound_value::PairCondition;
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::placement::collapse_declared_temp;
+use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, directed_first,
     with_setup,
@@ -54,14 +54,12 @@ pub(in crate::lowering) struct Guard {
 
 impl Guard {
     fn into_if(self) -> IfPlan {
-        IfPlan {
-            initializer: self.condition.initializer,
-            condition: self.condition.condition,
-            then_body: self.then_body,
-            else_arm: ElseArm::None,
-            else_if_line: None,
-            origin: IfOrigin::User,
-        }
+        IfPlan::pair_if(
+            self.condition,
+            self.then_body,
+            ElseArm::None,
+            IfOrigin::User,
+        )
     }
 
     pub(in crate::lowering) fn into_statement(self) -> LoweredStatement {
@@ -175,14 +173,14 @@ impl Planner<'_> {
                 levels.push((outer_setup, merged));
             } else {
                 levels.push((setup, next));
-                self.enter_scope();
+                self.scope.enter_block();
             }
         }
         let mut then_body = body(self);
         let mut levels = levels.into_iter().rev().peekable();
         loop {
             let (setup, condition) = levels.next().expect("a conjunction has a first operand");
-            self.exit_scope();
+            self.scope.exit_block();
             let guard = Guard {
                 setup,
                 condition,
@@ -271,14 +269,12 @@ impl Planner<'_> {
 
         with_setup(
             condition_setup,
-            LoweredStatement::If(IfPlan {
-                initializer: condition.initializer,
-                condition: condition.condition,
+            LoweredStatement::If(IfPlan::pair_if(
+                condition,
                 then_body,
                 else_arm,
-                else_if_line: None,
-                origin: IfOrigin::User,
-            }),
+                IfOrigin::User,
+            )),
         )
     }
 
@@ -335,14 +331,12 @@ impl Planner<'_> {
                     );
                     let mut statements = condition_setup;
                     statements.push(
-                        LoweredStatement::If(IfPlan {
-                            initializer: condition.initializer,
-                            condition: condition.condition,
+                        LoweredStatement::If(IfPlan::pair_if(
+                            condition,
                             then_body,
-                            else_arm: inner,
-                            else_if_line: None,
-                            origin: IfOrigin::User,
-                        })
+                            inner,
+                            IfOrigin::User,
+                        ))
                         .into(),
                     );
                     LoweredBlock {
@@ -361,14 +355,9 @@ impl Planner<'_> {
                     preceding_diverges && then_body.ends_with_diverge(),
                     place,
                 );
-                ElseArm::ElseIf(Box::new(IfPlan {
-                    initializer: condition.initializer,
-                    condition: condition.condition,
-                    then_body,
-                    else_arm: inner,
-                    else_if_line: line,
-                    origin: IfOrigin::User,
-                }))
+                let mut plan = IfPlan::pair_if(condition, then_body, inner, IfOrigin::User);
+                plan.else_if_line = line;
+                ElseArm::ElseIf(Box::new(plan))
             }
         } else if preceding_diverges {
             let body =

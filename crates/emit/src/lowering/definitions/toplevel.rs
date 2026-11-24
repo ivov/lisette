@@ -56,10 +56,10 @@ impl Planner<'_> {
         let preferred = name.preferred();
         let hides_package_name =
             placement == ConstPlacement::Local && self.names.is_package_block_name(&preferred);
-        let go_name = if !hides_package_name && self.try_declare(&preferred) {
+        let go_name = if !hides_package_name && self.scope.try_declare_go_name(&preferred) {
             self.scope.new_local_identifier(preferred)
         } else {
-            self.fresh_declared_source(&name)
+            self.fresh_declared(&name)
         };
         let go_type = (!matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
             .then(|| self.go_type(ty));
@@ -78,7 +78,7 @@ impl Planner<'_> {
         LoweredStatement::Const(ConstPlan {
             name: self
                 .scope
-                .bind_go_const(identifier, binding.as_slice(), go_name),
+                .bind_new_const(identifier, binding.as_slice(), go_name),
             go_type,
             value,
         })

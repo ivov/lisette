@@ -3,7 +3,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::dispatch::callee_go_name;
 use crate::lowering::calls::dispatch::callee_is_go_builtin;
 use crate::lowering::calls::dispatch::go_builtin_name;
-use crate::lowering::calls::dispatch::{CallArgShape, CallTypeArgsRequest};
+use crate::lowering::calls::type_arguments::{CallArgShape, CallTypeArgsRequest};
 use crate::lowering::expressions::literals::format_string_lowers_to_sprintf;
 use syntax::program::ReceiverCoercion;
 
@@ -68,7 +68,7 @@ pub(super) fn receiver_type_binding(
         .clone();
     Some((
         declared,
-        facts.peel_go_alias(&facts.without_references(&receiver.get_type())),
+        facts.peel_go_alias(&facts.strip_refs(&receiver.get_type())),
     ))
 }
 
@@ -217,7 +217,7 @@ impl<'a> Planner<'a> {
         if type_args_string.is_empty()
             && self.callee_needs_pin(function, &call_plan.resolved, &args_setup, &arguments)
         {
-            let pinned = self.hoist_tmp_value_statement(&mut setup, "callee", callee);
+            let pinned = self.hoist_temp(&mut setup, "callee", callee);
             callee = GoExpression::identifier(pinned);
         }
 

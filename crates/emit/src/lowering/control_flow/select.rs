@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::lowering::expressions::staging::SequenceStage;
 use crate::lowering::patterns::sites::TypedSubject;
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::planner::OuterBindings;
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
@@ -288,7 +288,7 @@ impl Planner<'_> {
 
     fn fresh_ok_var(&mut self) -> GoIdentifier {
         if self.scope.has_binding_for_go_name("ok") || self.shadows_declaration("ok") {
-            self.fresh_local(Some("ok"))
+            self.fresh_local("ok")
         } else {
             GoIdentifier::local("ok".to_string(), self.scope.new_local_id())
         }
@@ -347,7 +347,7 @@ impl Planner<'_> {
             let receiver_var = if GoUses::of(&body_statements).contains_identifier(&receiver_var) {
                 receiver_var
             } else {
-                GoIdentifier::external("_".to_string())
+                GoIdentifier::blank()
             };
             (receiver_var, ok_var, body_statements)
         });
@@ -419,12 +419,12 @@ impl Planner<'_> {
                 (ok_var, body)
             });
             return SelectArmKind::Receive {
-                receive_vars: vec![GoIdentifier::external("_".to_string()), ok_var],
+                receive_vars: vec![GoIdentifier::blank(), ok_var],
                 channel: ctx.channel.clone(),
                 body: LoweredBlock { statements: body },
             };
         }
-        let receiver_var = self.fresh_local(Some("recv"));
+        let receiver_var = self.fresh_local("recv");
         self.lower_ok_guard(|_| receiver_var, Some(effective_pattern), ctx)
     }
 
@@ -636,33 +636,33 @@ impl Planner<'_> {
 
     fn classify_receive_var_pattern(&mut self, pattern: &Pattern) -> (GoIdentifier, bool) {
         match pattern {
-            Pattern::WildCard { .. } => (GoIdentifier::external("_".to_string()), false),
+            Pattern::WildCard { .. } => (GoIdentifier::blank(), false),
             Pattern::Identifier {
                 identifier,
                 binding,
                 ..
             } => {
                 let Some(go_name) = self.facts.go_name_for_binding(pattern) else {
-                    return (GoIdentifier::external("_".to_string()), false);
+                    return (GoIdentifier::blank(), false);
                 };
                 let preferred = go_name.preferred();
                 if self.scope.resolve_identifier_binding(identifier).is_some()
                     || self
                         .scope
-                        .binds_go_name_for_other_source_name(&preferred, identifier)
+                        .go_name_bound_by_other_lisette_name(&preferred, identifier)
                     || self.names.is_package_block_name(&preferred)
                 {
-                    let name = self.fresh_local(Some("recv"));
+                    let name = self.fresh_local("recv");
                     return (name.clone(), true);
                 }
                 (
                     self.scope
-                        .bind_source(identifier, binding.as_slice(), go_name),
+                        .bind_new_local(identifier, binding.as_slice(), go_name),
                     false,
                 )
             }
             _ => {
-                let name = self.fresh_local(Some("recv"));
+                let name = self.fresh_local("recv");
                 (name.clone(), true)
             }
         }

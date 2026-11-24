@@ -2,7 +2,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
-use syntax::ast::Generic;
+use syntax::ast::{Attribute, Generic};
 use syntax::ast::{EnumVariant, Expression, Span, StructFields, VariantFields, Visibility};
 use syntax::attributes;
 use syntax::go_names;
@@ -13,7 +13,35 @@ use crate::lookup::facts::synthesized_methods::StructShape;
 use crate::target::names::go_name;
 use syntax::go_names::ENUM_TAG_FIELD;
 
-type SpanMap = FxHashMap<String, Vec<Span>>;
+#[derive(Default)]
+struct SpanMap(FxHashMap<String, Vec<Span>>);
+
+impl SpanMap {
+    fn claim(&mut self, name: impl Into<String>, span: Span) {
+        self.0.entry(name.into()).or_default().push(span);
+    }
+
+    fn report(self, diagnostics: &mut Vec<LisetteDiagnostic>) {
+        let mut groups: Vec<(String, Vec<Span>)> = self.0.into_iter().collect();
+        groups.sort_by(|a, b| a.0.cmp(&b.0));
+        for (go, mut spans) in groups {
+            spans.sort_by_key(|span| (span.file_id, span.byte_offset));
+            spans.dedup();
+            let [first, second, rest @ ..] = spans.as_slice() else {
+                continue;
+            };
+            diagnostics.push(emit_diag::go_name_collision(&go, first, second, rest, None));
+        }
+    }
+
+    fn report_each(maps: FxHashMap<String, SpanMap>, diagnostics: &mut Vec<LisetteDiagnostic>) {
+        let mut entries: Vec<(String, SpanMap)> = maps.into_iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        for (_, map) in entries {
+            map.report(diagnostics);
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PrivateFunctions {
@@ -31,7 +59,7 @@ pub(in crate::lowering) struct CollectedNames {
 
 impl CollectedNames {
     pub(in crate::lowering) fn declared_names(&self) -> FxHashSet<String> {
-        self.package_block.keys().cloned().collect()
+        self.package_block.0.keys().cloned().collect()
     }
 }
 
@@ -51,13 +79,9 @@ impl Planner<'_> {
 
         collect_import_aliases(import_qualifiers, &mut package_block, &mut diagnostics);
 
-        report_collisions(package_block, &mut diagnostics);
-        for (_, members) in sort_by_key(selectors) {
-            report_collisions(members, &mut diagnostics);
-        }
-        for (_, methods) in sort_by_key(interfaces) {
-            report_collisions(methods, &mut diagnostics);
-        }
+        package_block.report(&mut diagnostics);
+        SpanMap::report_each(selectors, &mut diagnostics);
+        SpanMap::report_each(interfaces, &mut diagnostics);
         diagnostics.extend(self.check_generic_names(files));
 
         diagnostics
@@ -92,32 +116,45 @@ impl Planner<'_> {
         collected: &mut CollectedNames,
         private_functions: PrivateFunctions,
     ) {
-        let CollectedNames {
-            package_block,
-            selectors,
-            interfaces,
-            diagnostics,
-        } = collected;
         match item {
             Expression::Function { .. } => {
-                self.collect_function(item, package_block, diagnostics, private_functions)
+                self.collect_function(item, collected, private_functions)
             }
-            Expression::Const { .. } => collect_const(item, package_block, diagnostics),
-            Expression::TypeAlias { .. } => {
-                collect_type_alias(&self.facts, item, package_block, diagnostics)
-            }
-            Expression::Struct { .. } => {
-                self.collect_struct(item, package_block, selectors, diagnostics)
-            }
-            Expression::Enum { .. } => {
-                collect_enum(&self.facts, item, package_block, selectors, diagnostics)
-            }
-            Expression::Interface { .. } => {
-                collect_interface(&self.facts, item, package_block, interfaces, diagnostics)
-            }
-            Expression::ImplBlock { .. } => {
-                collect_impl_block(&self.facts, item, package_block, selectors, diagnostics)
-            }
+            Expression::Const {
+                identifier,
+                identifier_span,
+                ..
+            } => collect_const(identifier, *identifier_span, collected),
+            Expression::TypeAlias {
+                name, name_span, ..
+            } => collect_type_alias(&self.facts, name, *name_span, collected),
+            Expression::Struct {
+                name,
+                name_span,
+                fields,
+                attributes,
+                ..
+            } => self.collect_struct(name, *name_span, fields, attributes, collected),
+            Expression::Enum { .. } => collect_enum(&self.facts, item, collected),
+            Expression::Interface {
+                name,
+                name_span,
+                method_signatures,
+                visibility,
+                ..
+            } => collect_interface(
+                &self.facts,
+                name,
+                *name_span,
+                method_signatures,
+                visibility,
+                collected,
+            ),
+            Expression::ImplBlock {
+                receiver_name,
+                methods,
+                ..
+            } => collect_impl_block(&self.facts, receiver_name, methods, collected),
             _ => {}
         }
     }
@@ -125,8 +162,7 @@ impl Planner<'_> {
     fn collect_function(
         &self,
         item: &Expression,
-        package_block: &mut SpanMap,
-        diagnostics: &mut Vec<LisetteDiagnostic>,
+        collected: &mut CollectedNames,
         private_functions: PrivateFunctions,
     ) {
         let Expression::Function {
@@ -139,61 +175,47 @@ impl Planner<'_> {
         else {
             return;
         };
+        let name_span = *name_span;
         let is_public = matches!(visibility, Visibility::Public);
         if is_public || private_functions == PrivateFunctions::Include {
             let go = self.free_function_go_name(name, is_public);
-            check_reserved_prefix(name, name_span, diagnostics);
-            check_reserved_prefix(&go, name_span, diagnostics);
-            package_block.entry(go).or_default().push(*name_span);
+            check_reserved_prefix(name, &name_span, &mut collected.diagnostics);
+            check_reserved_prefix(&go, &name_span, &mut collected.diagnostics);
+            collected.package_block.claim(go, name_span);
         }
         if attributes::has_test_attribute(attributes) {
             let wrapper = go_name::go_test_function_name(name);
-            package_block.entry(wrapper).or_default().push(*name_span);
+            collected.package_block.claim(wrapper, name_span);
         }
     }
 
     fn collect_struct(
         &self,
-        item: &Expression,
-        package_block: &mut SpanMap,
-        selectors: &mut FxHashMap<String, SpanMap>,
-        diagnostics: &mut Vec<LisetteDiagnostic>,
+        name: &str,
+        name_span: Span,
+        fields: &StructFields,
+        attributes: &[Attribute],
+        collected: &mut CollectedNames,
     ) {
-        let Expression::Struct {
-            name,
-            name_span,
-            fields,
-            attributes,
-            ..
-        } = item
-        else {
-            return;
-        };
         let type_go = go_name::escape_type_name(name).into_owned();
-        check_reserved_prefix(&type_go, name_span, diagnostics);
-        check_reserved_qualifier(&type_go, name_span, diagnostics);
-        package_block
-            .entry(type_go.clone())
-            .or_default()
-            .push(*name_span);
+        check_reserved_prefix(&type_go, &name_span, &mut collected.diagnostics);
+        check_reserved_qualifier(&type_go, &name_span, &mut collected.diagnostics);
+        collected.package_block.claim(type_go.clone(), name_span);
 
-        let members = selectors.entry(type_go).or_default();
+        let members = collected.selectors.entry(type_go).or_default();
         match fields {
             StructFields::Record(fields) => {
                 let qualified = self.facts.qualified_current(name);
                 for field in fields {
                     let field_go = self.facts.declared_field_go_name(&qualified, field);
-                    members.entry(field_go).or_default().push(field.name_span);
+                    members.claim(field_go, field.name_span);
                 }
             }
             StructFields::Tuple(fields) => {
                 let is_newtype = self.facts.is_newtype_definition(name);
                 if !fields.is_empty() && !is_newtype {
                     for (index, field) in fields.iter().enumerate() {
-                        members
-                            .entry(go_name::tuple_struct_field(index))
-                            .or_default()
-                            .push(field.name_span);
+                        members.claim(go_name::tuple_struct_field(index), field.name_span);
                     }
                 }
             }
@@ -207,7 +229,7 @@ impl Planner<'_> {
             .struct_synthesized_methods(name, attributes, shape)
         {
             for go_name in self.facts.synthesized_method_go_names(method) {
-                members.entry(go_name).or_default().push(*name_span);
+                members.claim(go_name, name_span);
             }
         }
     }
@@ -216,10 +238,8 @@ impl Planner<'_> {
         let mut diagnostics = Vec::new();
         for item in files.iter().flat_map(|file| &file.items) {
             match item {
-                Expression::Function { generics, .. } => {
-                    self.check_reserved_qualifier_generics(generics, &mut diagnostics);
-                }
-                Expression::TypeAlias { generics, .. }
+                Expression::Function { generics, .. }
+                | Expression::TypeAlias { generics, .. }
                 | Expression::Struct { generics, .. }
                 | Expression::Enum { generics, .. } => {
                     self.check_reserved_qualifier_generics(generics, &mut diagnostics);
@@ -278,15 +298,12 @@ impl Planner<'_> {
         generics: &[Generic],
         out: &mut Vec<LisetteDiagnostic>,
     ) {
-        let mut emitted: SpanMap = FxHashMap::default();
+        let mut emitted = SpanMap::default();
         for generic in generics {
             check_reserved_qualifier(&generic.name, &generic.span, out);
-            emitted
-                .entry(self.generic_go_name(&generic.name).into_owned())
-                .or_default()
-                .push(generic.span);
+            emitted.claim(self.generic_go_name(&generic.name), generic.span);
         }
-        report_collisions(emitted, out);
+        emitted.report(out);
     }
 
     fn check_free_function_generics(
@@ -295,42 +312,20 @@ impl Planner<'_> {
         method_generics: &[Generic],
         out: &mut Vec<LisetteDiagnostic>,
     ) {
-        let mut emitted: SpanMap = FxHashMap::default();
+        let mut emitted = SpanMap::default();
         for generic in impl_generics {
-            emitted
-                .entry(self.generic_go_name(&generic.name).into_owned())
-                .or_default()
-                .push(generic.span);
+            emitted.claim(self.generic_go_name(&generic.name), generic.span);
         }
         let mut method_names: FxHashSet<String> = FxHashSet::default();
         for generic in method_generics {
             check_reserved_qualifier(&generic.name, &generic.span, out);
             let go = self.generic_go_name(&generic.name).into_owned();
-            emitted.entry(go.clone()).or_default().push(generic.span);
+            emitted.claim(go.clone(), generic.span);
             method_names.insert(go);
         }
-        emitted.retain(|go, _| method_names.contains(go));
-        report_collisions(emitted, out);
+        emitted.0.retain(|go, _| method_names.contains(go));
+        emitted.report(out);
     }
-}
-
-fn report_collisions(map: SpanMap, diagnostics: &mut Vec<LisetteDiagnostic>) {
-    let mut groups: Vec<(String, Vec<Span>)> = map.into_iter().collect();
-    groups.sort_by(|a, b| a.0.cmp(&b.0));
-    for (go, mut spans) in groups {
-        spans.sort_by_key(|span| (span.file_id, span.byte_offset));
-        spans.dedup();
-        let [first, second, rest @ ..] = spans.as_slice() else {
-            continue;
-        };
-        diagnostics.push(emit_diag::go_name_collision(&go, first, second, rest, None));
-    }
-}
-
-fn sort_by_key(map: FxHashMap<String, SpanMap>) -> Vec<(String, SpanMap)> {
-    let mut entries: Vec<(String, SpanMap)> = map.into_iter().collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
-    entries
 }
 
 fn collect_enum_payload_fields(
@@ -345,21 +340,15 @@ fn collect_enum_payload_fields(
         let field_names = &slots[variant_index];
         for field_name in field_names {
             if seen.insert(field_name.clone()) {
-                members
-                    .entry(field_name.clone())
-                    .or_default()
-                    .push(variant.name_span);
+                members.claim(field_name.clone(), variant.name_span);
             }
         }
         if let VariantFields::Struct(fields) = &variant.fields {
-            let mut variant_fields: SpanMap = FxHashMap::default();
+            let mut variant_fields = SpanMap::default();
             for (field, field_name) in fields.iter().zip(field_names) {
-                variant_fields
-                    .entry(field_name.clone())
-                    .or_default()
-                    .push(field.name_span);
+                variant_fields.claim(field_name.clone(), field.name_span);
             }
-            report_collisions(variant_fields, diagnostics);
+            variant_fields.report(diagnostics);
         }
     }
 }
@@ -376,44 +365,26 @@ fn check_reserved_qualifier(go: &str, span: &Span, out: &mut Vec<LisetteDiagnost
     }
 }
 
-fn collect_const(
-    item: &Expression,
-    package_block: &mut SpanMap,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
-    let Expression::Const {
-        identifier,
-        identifier_span,
-        ..
-    } = item
-    else {
-        return;
-    };
+fn collect_const(identifier: &str, identifier_span: Span, collected: &mut CollectedNames) {
     let go = go_name::screaming_snake_to_camel(identifier);
-    check_reserved_prefix(identifier, identifier_span, diagnostics);
-    check_reserved_prefix(&go, identifier_span, diagnostics);
-    package_block.entry(go).or_default().push(*identifier_span);
+    check_reserved_prefix(identifier, &identifier_span, &mut collected.diagnostics);
+    check_reserved_prefix(&go, &identifier_span, &mut collected.diagnostics);
+    collected.package_block.claim(go, identifier_span);
 }
 
 fn collect_type_alias(
     facts: &EmitFacts<'_>,
-    item: &Expression,
-    package_block: &mut SpanMap,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
+    name: &str,
+    name_span: Span,
+    collected: &mut CollectedNames,
 ) {
-    let Expression::TypeAlias {
-        name, name_span, ..
-    } = item
-    else {
-        return;
-    };
     if facts.alias_emits_nothing(name) {
         return;
     }
     let go = go_name::escape_type_name(name).into_owned();
-    check_reserved_prefix(&go, name_span, diagnostics);
-    check_reserved_qualifier(&go, name_span, diagnostics);
-    package_block.entry(go).or_default().push(*name_span);
+    check_reserved_prefix(&go, &name_span, &mut collected.diagnostics);
+    check_reserved_qualifier(&go, &name_span, &mut collected.diagnostics);
+    collected.package_block.claim(go, name_span);
 }
 
 fn collect_import_aliases(
@@ -423,7 +394,7 @@ fn collect_import_aliases(
 ) {
     for (qualifier, span) in import_qualifiers {
         check_reserved_prefix(qualifier, span, diagnostics);
-        if let Some(spans) = package_block.get_mut(qualifier)
+        if let Some(spans) = package_block.0.get_mut(qualifier)
             && spans
                 .iter()
                 .any(|declared| declared.file_id == span.file_id)
@@ -435,19 +406,10 @@ fn collect_import_aliases(
 
 fn collect_impl_block(
     facts: &EmitFacts<'_>,
-    item: &Expression,
-    package_block: &mut SpanMap,
-    selectors: &mut FxHashMap<String, SpanMap>,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
+    receiver_name: &str,
+    methods: &[Expression],
+    collected: &mut CollectedNames,
 ) {
-    let Expression::ImplBlock {
-        receiver_name,
-        methods,
-        ..
-    } = item
-    else {
-        return;
-    };
     let type_go = go_name::escape_type_name(receiver_name).into_owned();
     let qualified_type = facts.qualified_current(receiver_name);
     for method in methods {
@@ -463,51 +425,38 @@ fn collect_impl_block(
         let is_public = matches!(visibility, Visibility::Public);
         let go = if facts.emits_go_method(&qualified_type, name) {
             let method_go = facts.method_go_name(name, is_public);
-            check_reserved_prefix(name, name_span, diagnostics);
-            check_reserved_prefix(&method_go, name_span, diagnostics);
-            selectors
+            check_reserved_prefix(name, name_span, &mut collected.diagnostics);
+            check_reserved_prefix(&method_go, name_span, &mut collected.diagnostics);
+            collected
+                .selectors
                 .entry(type_go.clone())
                 .or_default()
-                .entry(method_go)
-                .or_default()
-                .push(*name_span);
+                .claim(method_go, *name_span);
             continue;
         } else {
             go_name::associated_function_go_name(receiver_name, name, is_public)
         };
-        check_reserved_prefix(name, name_span, diagnostics);
-        check_reserved_prefix(&go, name_span, diagnostics);
-        package_block.entry(go).or_default().push(*name_span);
+        check_reserved_prefix(name, name_span, &mut collected.diagnostics);
+        check_reserved_prefix(&go, name_span, &mut collected.diagnostics);
+        collected.package_block.claim(go, *name_span);
     }
 }
 
 fn collect_interface(
     facts: &EmitFacts<'_>,
-    item: &Expression,
-    package_block: &mut SpanMap,
-    interfaces: &mut FxHashMap<String, SpanMap>,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
+    name: &str,
+    name_span: Span,
+    method_signatures: &[Expression],
+    visibility: &Visibility,
+    collected: &mut CollectedNames,
 ) {
-    let Expression::Interface {
-        name,
-        name_span,
-        method_signatures,
-        visibility,
-        ..
-    } = item
-    else {
-        return;
-    };
     let type_go = go_name::escape_type_name(name).into_owned();
-    check_reserved_prefix(&type_go, name_span, diagnostics);
-    check_reserved_qualifier(&type_go, name_span, diagnostics);
-    package_block
-        .entry(type_go.clone())
-        .or_default()
-        .push(*name_span);
+    check_reserved_prefix(&type_go, &name_span, &mut collected.diagnostics);
+    check_reserved_qualifier(&type_go, &name_span, &mut collected.diagnostics);
+    collected.package_block.claim(type_go.clone(), name_span);
 
     let is_public = matches!(visibility, Visibility::Public);
-    let methods = interfaces.entry(type_go).or_default();
+    let methods = collected.interfaces.entry(type_go).or_default();
     for signature in method_signatures {
         if let Expression::Function {
             name: method_name,
@@ -516,18 +465,12 @@ fn collect_interface(
         } = signature
         {
             let method_go = facts.interface_method_go_name(method_name, is_public);
-            methods.entry(method_go).or_default().push(*method_span);
+            methods.claim(method_go, *method_span);
         }
     }
 }
 
-fn collect_enum(
-    facts: &EmitFacts<'_>,
-    item: &Expression,
-    package_block: &mut SpanMap,
-    selectors: &mut FxHashMap<String, SpanMap>,
-    diagnostics: &mut Vec<LisetteDiagnostic>,
-) {
+fn collect_enum(facts: &EmitFacts<'_>, item: &Expression, collected: &mut CollectedNames) {
     let Expression::Enum {
         name,
         name_span,
@@ -539,10 +482,12 @@ fn collect_enum(
     else {
         return;
     };
+    let name_span = *name_span;
     let type_go = go_name::escape_type_name(name).into_owned();
-    check_reserved_prefix(&type_go, name_span, diagnostics);
-    check_reserved_qualifier(&type_go, name_span, diagnostics);
+    check_reserved_prefix(&type_go, &name_span, &mut collected.diagnostics);
+    check_reserved_qualifier(&type_go, &name_span, &mut collected.diagnostics);
 
+    let package_block = &mut collected.package_block;
     if attributes
         .iter()
         .any(|attribute| attribute.name == "iterate")
@@ -552,42 +497,28 @@ fn collect_enum(
             "variants",
             matches!(visibility, Visibility::Public),
         );
-        package_block
-            .entry(variants_fn)
-            .or_default()
-            .push(*name_span);
+        package_block.claim(variants_fn, name_span);
     }
 
-    package_block
-        .entry(type_go.clone())
-        .or_default()
-        .push(*name_span);
-    package_block
-        .entry(go_name::enum_tag_type(name))
-        .or_default()
-        .push(*name_span);
+    package_block.claim(type_go.clone(), name_span);
+    package_block.claim(go_name::enum_tag_type(name), name_span);
     for variant in variants {
-        let tag_constant = go_name::enum_tag_constant(name, &variant.name);
-        package_block
-            .entry(tag_constant)
-            .or_default()
-            .push(variant.name_span);
-        let constructor = go_name::enum_make_function(name, &variant.name);
-        package_block
-            .entry(constructor)
-            .or_default()
-            .push(variant.name_span);
+        package_block.claim(
+            go_name::enum_tag_constant(name, &variant.name),
+            variant.name_span,
+        );
+        package_block.claim(
+            go_name::enum_make_function(name, &variant.name),
+            variant.name_span,
+        );
     }
 
-    let members = selectors.entry(type_go).or_default();
-    members
-        .entry(ENUM_TAG_FIELD.to_string())
-        .or_default()
-        .push(*name_span);
+    let members = collected.selectors.entry(type_go).or_default();
+    members.claim(ENUM_TAG_FIELD, name_span);
     for method in facts.enum_synthesized_methods(name, attributes) {
         for go_name in facts.synthesized_method_go_names(method) {
-            members.entry(go_name).or_default().push(*name_span);
+            members.claim(go_name, name_span);
         }
     }
-    collect_enum_payload_fields(name, variants, members, diagnostics);
+    collect_enum_payload_fields(name, variants, members, &mut collected.diagnostics);
 }

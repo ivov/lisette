@@ -136,7 +136,7 @@ impl Planner<'_> {
         receiver_param: &Type,
         go_method: String,
     ) -> GoExpression {
-        let receiver_type = self.go_type(&self.facts.without_references(receiver_param));
+        let receiver_type = self.go_type(&self.facts.strip_refs(receiver_param));
         let receiver = if self.facts.is_reference(receiver_param) {
             GoType::pointer_to(&receiver_type).parenthesized()
         } else {

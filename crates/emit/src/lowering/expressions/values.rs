@@ -203,7 +203,7 @@ impl Planner<'_> {
     ) -> Option<CoercionPlan> {
         match self.go_result_layout_change(&plan.resolved.abi, result_type)? {
             GoResultLayoutChange::Whole(change) => Some(change),
-            GoResultLayoutChange::Tuple(_) | GoResultLayoutChange::Payload { .. } => None,
+            GoResultLayoutChange::Tuple(_) | GoResultLayoutChange::Payload(_) => None,
         }
     }
 
@@ -313,9 +313,12 @@ impl Planner<'_> {
             Adaptation::Tuple(adaptations)
                 if !self
                     .facts
-                    .same_types(&self.facts.tuple_element_types(ty), slot_types) =>
+                    .same_types(&self.facts.tuple_or_type_arguments(ty), slot_types) =>
             {
-                Some((adaptations, self.facts.tuple_element_types(&tuple_use.slot)))
+                Some((
+                    adaptations,
+                    self.facts.tuple_or_type_arguments(&tuple_use.slot),
+                ))
             }
             _ => None,
         };
@@ -380,7 +383,9 @@ impl Planner<'_> {
         else {
             return None;
         };
-        let slots = self.facts.tuple_elements(self.return_ctx().ty()?)?;
+        let slots = self
+            .facts
+            .tuple_elements(self.scope.current_return_ctx().ty()?)?;
         (slots.len() == inferred.len()).then_some(slots)
     }
 
@@ -494,7 +499,7 @@ impl Planner<'_> {
                     setup.push(effect_statement(staged_value));
                 }
                 let unit = self.unit_value(Some(inner), None);
-                let tmp = self.hoist_tmp_value_statement(setup, "ref", unit);
+                let tmp = self.hoist_temp(setup, "ref", unit);
                 GoExpression::address_of(GoExpression::identifier(tmp))
             });
         }
@@ -519,7 +524,7 @@ impl Planner<'_> {
         };
         inner_plan.map_observable_expression(|setup, emitted| {
             if unaddressable {
-                let tmp = self.hoist_tmp_value_statement(setup, "ref", emitted);
+                let tmp = self.hoist_temp(setup, "ref", emitted);
                 GoExpression::address_of(GoExpression::identifier(tmp))
             } else {
                 GoExpression::address_of(emitted)
@@ -781,7 +786,7 @@ impl Planner<'_> {
             Expression::Propagate { expression, .. } => {
                 let (setup, value) = self.plan_propagate(expression);
                 let stability = self.path_read_stability(&value);
-                ValuePlan::built_from(setup, value, stability)
+                ValuePlan::new(setup, value, stability)
             }
             Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty),
             Expression::If { ty, .. }

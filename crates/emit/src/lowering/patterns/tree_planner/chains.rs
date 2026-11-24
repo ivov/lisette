@@ -7,7 +7,7 @@ use crate::lowering::patterns::binding_decls::is_unconditional_catchall;
 use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, ChainTail, ChainTest, render_condition,
 };
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, direct_first, directed_first,

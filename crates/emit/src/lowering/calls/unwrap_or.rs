@@ -4,7 +4,7 @@ use crate::lowering::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::patterns::matching::{FusedName, OptionArms, field_binding};
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::placement::collapse_declared_temp;
 use crate::target::ir::bodies::{
@@ -363,11 +363,11 @@ impl<'p> Planner<'p> {
         let call = self.defaulted_call(value)?;
         if let Some((mut statements, read)) = self.zero_defaulted_map_read(&call, &value.get_type())
         {
-            self.declare(go_name.spelling());
+            self.scope.declare_go_name(go_name.spelling());
             statements.push(define(go_name.clone(), read));
             return Some(statements);
         }
-        self.declare(go_name.spelling());
+        self.scope.declare_go_name(go_name.spelling());
         let ty = value.get_type();
         let Some(map) = call.map else {
             let slot = CommaOkValueSlot::Named(go_name.clone());

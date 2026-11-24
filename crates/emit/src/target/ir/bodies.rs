@@ -191,61 +191,17 @@ pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: O
         let line = statement.line.as_ref();
         match &mut statement.kind {
             LoweredStatement::If(plan) => inherit_into_if(plan, line),
-            LoweredStatement::Loop(plan) => inherit_into_loop(plan, line),
-            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
-                inherit_line_directives(&mut body.statements, line)
-            }
             LoweredStatement::Select(plan) => inherit_into_select(plan, line),
             LoweredStatement::Switch(plan) => inherit_into_switch(plan, line),
-            LoweredStatement::Return(values) => {
-                for value in values {
-                    inherit_into_expression(value, line);
-                }
+            kind => {
+                kind.for_each_expression_mut(&mut |value| inherit_into_expression(value, line));
+                kind.for_each_block_mut(&mut |body| {
+                    inherit_line_directives(&mut body.statements, line)
+                });
             }
-            LoweredStatement::Assign(AssignForm::Compound { target, kind }) => {
-                inherit_into_expression(target, line);
-                if let CompoundKind::OpAssign { rhs, .. } = kind {
-                    inherit_into_expression(rhs, line);
-                }
-            }
-            LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
-                inherit_into_expression(target, line);
-                inherit_into_expression(value, line);
-            }
-            LoweredStatement::Const(ConstPlan { value, .. })
-            | LoweredStatement::Define(Definition { value, .. })
-            | LoweredStatement::VarDecl {
-                value: Some(value), ..
-            }
-            | LoweredStatement::Async { call: value, .. }
-            | LoweredStatement::Discard { value, .. }
-            | LoweredStatement::ExpressionStatement {
-                expression: value, ..
-            } => inherit_into_expression(value, line),
-            LoweredStatement::VarDecl { value: None, .. }
-            | LoweredStatement::Break(_)
-            | LoweredStatement::Continue(_)
-            | LoweredStatement::UnreachablePanic => {}
         }
         previous = statement.line.clone();
     }
-}
-
-fn inherit_into_loop(plan: &mut LoopPlan, line: Option<&Position>) {
-    match &mut plan.header {
-        LoopHeader::Infinite => {}
-        LoopHeader::While(condition) => inherit_into_expression(condition, line),
-        LoopHeader::Range { iterable, .. } => inherit_into_expression(iterable, line),
-        LoopHeader::Counted {
-            start, condition, ..
-        } => {
-            inherit_into_expression(start, line);
-            if let Some(condition) = condition {
-                inherit_into_expression(condition, line);
-            }
-        }
-    }
-    inherit_line_directives(&mut plan.body.statements, line);
 }
 
 fn inherit_into_select(plan: &mut SelectStatementPlan, line: Option<&Position>) {
@@ -635,6 +591,11 @@ pub(crate) struct IfPlan {
     pub(crate) origin: IfOrigin,
 }
 
+pub(crate) struct PairCondition {
+    pub(crate) initializer: Option<Definition>,
+    pub(crate) condition: GoExpression,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum IfOrigin {
     User,
@@ -669,6 +630,22 @@ impl IfPlan {
             else_arm,
             else_if_line: None,
             origin: IfOrigin::Match { else_label: None },
+        }
+    }
+
+    pub(crate) fn pair_if(
+        test: PairCondition,
+        then_body: LoweredBlock,
+        else_arm: ElseArm,
+        origin: IfOrigin,
+    ) -> Self {
+        Self {
+            initializer: test.initializer,
+            condition: test.condition,
+            then_body,
+            else_arm,
+            else_if_line: None,
+            origin,
         }
     }
 
@@ -951,6 +928,132 @@ impl LoweredStatement {
             | LoweredStatement::ExpressionStatement { expression, .. } => {
                 expression.node().walk(visit)
             }
+        }
+    }
+
+    pub(crate) fn for_each_expression_mut(&mut self, visit: &mut impl FnMut(&mut GoExpression)) {
+        match self {
+            LoweredStatement::If(plan) => {
+                let mut link = Some(plan);
+                while let Some(plan) = link {
+                    if let Some(initializer) = &mut plan.initializer {
+                        visit(&mut initializer.value);
+                    }
+                    visit(&mut plan.condition);
+                    link = match &mut plan.else_arm {
+                        ElseArm::ElseIf(next) => Some(next),
+                        ElseArm::None | ElseArm::Else { .. } => None,
+                    };
+                }
+            }
+            LoweredStatement::Loop(plan) => match &mut plan.header {
+                LoopHeader::Infinite => {}
+                LoopHeader::While(condition) => visit(condition),
+                LoopHeader::Range { iterable, .. } => visit(iterable),
+                LoopHeader::Counted {
+                    start, condition, ..
+                } => {
+                    visit(start);
+                    if let Some(condition) = condition {
+                        visit(condition);
+                    }
+                }
+            },
+            LoweredStatement::Block(_)
+            | LoweredStatement::Body(_)
+            | LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::VarDecl { value: None, .. }
+            | LoweredStatement::UnreachablePanic => {}
+            LoweredStatement::Return(values) => values.iter_mut().for_each(visit),
+            LoweredStatement::Assign(AssignForm::Compound { target, kind }) => {
+                visit(target);
+                if let CompoundKind::OpAssign { rhs, .. } = kind {
+                    visit(rhs);
+                }
+            }
+            LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
+                visit(target);
+                visit(value);
+            }
+            LoweredStatement::Select(plan) => {
+                for arm in &mut plan.arms {
+                    match &mut arm.kind {
+                        SelectArmKind::Receive { channel, .. } => visit(channel),
+                        SelectArmKind::Send { channel, value, .. } => {
+                            visit(channel);
+                            visit(value);
+                        }
+                        SelectArmKind::Default { .. } => {}
+                    }
+                }
+            }
+            LoweredStatement::Switch(plan) => {
+                match &mut plan.kind {
+                    SwitchKind::Conditional => {}
+                    SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
+                        visit(subject)
+                    }
+                }
+                for case in &mut plan.cases {
+                    case.labels.iter_mut().for_each(&mut *visit);
+                }
+            }
+            LoweredStatement::Const(ConstPlan { value, .. })
+            | LoweredStatement::Define(Definition { value, .. })
+            | LoweredStatement::VarDecl {
+                value: Some(value), ..
+            }
+            | LoweredStatement::Async { call: value, .. }
+            | LoweredStatement::Discard { value, .. }
+            | LoweredStatement::ExpressionStatement {
+                expression: value, ..
+            } => visit(value),
+        }
+    }
+
+    pub(crate) fn for_each_block_mut(&mut self, visit: &mut impl FnMut(&mut LoweredBlock)) {
+        match self {
+            LoweredStatement::If(plan) => {
+                let mut link = Some(plan);
+                while let Some(plan) = link {
+                    visit(&mut plan.then_body);
+                    link = match &mut plan.else_arm {
+                        ElseArm::ElseIf(next) => Some(next),
+                        ElseArm::Else { body, .. } => {
+                            visit(body);
+                            None
+                        }
+                        ElseArm::None => None,
+                    };
+                }
+            }
+            LoweredStatement::Loop(plan) => visit(&mut plan.body),
+            LoweredStatement::Block(body) | LoweredStatement::Body(body) => visit(body),
+            LoweredStatement::Select(plan) => {
+                for arm in &mut plan.arms {
+                    visit(arm.body_mut());
+                }
+            }
+            LoweredStatement::Switch(plan) => {
+                for case in &mut plan.cases {
+                    visit(&mut case.body);
+                }
+                if let Some(default) = &mut plan.default {
+                    visit(default);
+                }
+            }
+            LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Const(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Assign(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Define(_)
+            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::Discard { .. }
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => {}
         }
     }
 

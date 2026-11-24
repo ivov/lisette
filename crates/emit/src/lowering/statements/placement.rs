@@ -6,7 +6,7 @@ use crate::lowering::expressions::staging::{LaterStages, SpreadSequenceOptions};
 use crate::lowering::expressions::values::contains_newtype_access;
 use crate::lowering::patterns::binding_decls::pattern_binds_name;
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::assignments::PlaceOrdering;
 use crate::lowering::statements::assignments::is_lvalue_chain;
@@ -435,20 +435,13 @@ impl<'p> Planner<'p> {
         }
 
         if let Expression::Loop { body, .. } = expression {
-            let plan = self.with_loop(target.clone(), target_ty.cloned(), |this| {
+            let plan = self.with_loop(Some(target.clone()), target_ty.cloned(), |this| {
                 this.lower_loop_with_header(LoopHeader::Infinite, body)
             });
             return vec![LoweredStatement::Loop(plan).into()];
         }
 
-        if let Expression::Block { items, .. } = expression
-            && items.len() > 1
-        {
-            let statements = self.lower_block_to_var(expression, target, target_ty, true);
-            return vec![LoweredStatement::Block(LoweredBlock { statements }).into()];
-        }
-
-        self.lower_block_to_var(expression, target, target_ty, false)
+        self.lower_braced_block_to_var(expression, target, target_ty)
     }
 
     fn lower_plain_assign(
@@ -544,7 +537,7 @@ impl<'p> Planner<'p> {
                     self.lower_plain_assign(target, target_ty, expression)
                 }
             }
-            _ => self.lower_block_to_var(expression, target, target_ty, false),
+            _ => self.lower_block_to_var(expression, target, target_ty),
         };
         directed_first(line, statements)
     }
@@ -554,49 +547,55 @@ impl<'p> Planner<'p> {
         expression: &Expression,
         target: &GoExpression,
         target_ty: Option<&Type>,
-        has_go_braces: bool,
     ) -> Vec<Statement> {
-        let is_block = matches!(expression, Expression::Block { .. });
+        if matches!(expression, Expression::Block { .. }) {
+            self.with_binding_frame(|this| this.lower_items_to_var(expression, target, target_ty))
+        } else {
+            self.lower_items_to_var(expression, target, target_ty)
+        }
+    }
+
+    fn lower_braced_block_to_var(
+        &mut self,
+        expression: &Expression,
+        target: &GoExpression,
+        target_ty: Option<&Type>,
+    ) -> Vec<Statement> {
+        if !matches!(expression, Expression::Block { items, .. } if items.len() > 1) {
+            return self.lower_block_to_var(expression, target, target_ty);
+        }
+        let statements =
+            self.with_scope(|this| this.lower_items_to_var(expression, target, target_ty));
+        vec![LoweredStatement::Block(LoweredBlock { statements }).into()]
+    }
+
+    fn lower_items_to_var(
+        &mut self,
+        expression: &Expression,
+        target: &GoExpression,
+        target_ty: Option<&Type>,
+    ) -> Vec<Statement> {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
         } else {
             slice::from_ref(expression)
         };
-
-        self.with_block_scope(is_block, has_go_braces, |this| {
-            let Some((last, rest)) = items.split_last() else {
-                if this.widens_unit(target_ty) {
-                    return this.lower_unit_into(expression, None, target, target_ty);
-                }
-                return Vec::new();
-            };
-            this.with_assign_target(target, |this| {
-                let mut statements = Vec::new();
-                for (index, item) in rest.iter().enumerate() {
-                    statements.push(this.lower_block_item(item, &items[index + 1..]));
-                }
-                let line = this.facts.source_position(&last.get_span());
-                let tail = this.lower_assign_tail(last, target, target_ty);
-                statements.extend(directed_first(line, tail));
-                statements
-            })
+        let Some((last, rest)) = items.split_last() else {
+            if self.widens_unit(target_ty) {
+                return self.lower_unit_into(expression, None, target, target_ty);
+            }
+            return Vec::new();
+        };
+        self.with_assign_target(target, |this| {
+            let mut statements = Vec::new();
+            for (index, item) in rest.iter().enumerate() {
+                statements.push(this.lower_block_item(item, &items[index + 1..]));
+            }
+            let line = this.facts.source_position(&last.get_span());
+            let tail = this.lower_assign_tail(last, target, target_ty);
+            statements.extend(directed_first(line, tail));
+            statements
         })
-    }
-
-    fn with_block_scope<R>(
-        &mut self,
-        is_block: bool,
-        has_go_braces: bool,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        if !is_block {
-            return f(self);
-        }
-        if has_go_braces {
-            self.with_scope(f)
-        } else {
-            self.with_binding_frame(f)
-        }
     }
 
     pub(in crate::lowering) fn widens_unit(&self, target_ty: Option<&Type>) -> bool {
@@ -729,11 +728,7 @@ impl<'p> Planner<'p> {
                 && !arguments.is_empty()
                 && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read, false))
             {
-                GoExpression::identifier(self.hoist_tmp_value_statement(
-                    &mut capture,
-                    "recv",
-                    receiver_lv,
-                ))
+                GoExpression::identifier(self.hoist_temp(&mut capture, "recv", receiver_lv))
             } else {
                 receiver_lv
             };
@@ -816,7 +811,7 @@ impl<'p> Planner<'p> {
         expression: &Expression,
         ty: &Type,
     ) -> ValuePlan {
-        if let Expression::Block { items, .. } = expression {
+        if let Expression::Block { .. } = expression {
             if self.facts.has_no_go_value(ty) || matches!(ty, Type::Forall { .. }) {
                 return ValuePlan::computed(
                     self.lower_block_as_body(expression).statements,
@@ -825,15 +820,9 @@ impl<'p> Planner<'p> {
             }
             let slot = self.facts.value_use_slot(expression).unwrap_or(ty);
             let (result_var, declaration) = self.operand_temp_declaration(slot);
-            let needs_braces = items.len() > 1;
             let target = GoExpression::identifier(result_var.clone());
-            let body = self.lower_block_to_var(expression, &target, Some(slot), needs_braces);
             let mut statements = vec![declaration];
-            if needs_braces {
-                statements.push(LoweredStatement::Block(LoweredBlock { statements: body }).into());
-            } else {
-                statements.extend(body);
-            }
+            statements.extend(self.lower_braced_block_to_var(expression, &target, Some(slot)));
             return ValuePlan::captured(statements, result_var);
         }
         if let Expression::Loop { .. } = expression {
@@ -847,9 +836,9 @@ impl<'p> Planner<'p> {
     }
 
     pub(in crate::lowering) fn build_break_value_plan(&mut self, val: &Expression) -> LoweredBlock {
-        let loop_target = self.current_loop().and_then(|loop_context| {
+        let loop_target = self.scope.current_loop().and_then(|loop_context| {
             let result_ty = loop_context.result_ty.clone()?;
-            Some((loop_context.result.clone(), result_ty))
+            Some((loop_context.result.clone()?, result_ty))
         });
         if let Some((target, result_ty)) = loop_target {
             let mut statements = self.lower_assign(val, &target, Some(&result_ty));
@@ -863,8 +852,9 @@ impl<'p> Planner<'p> {
             return LoweredBlock { statements };
         }
 
-        if let Some(loop_context) = self.current_loop().cloned() {
-            let target = loop_context.result;
+        if let Some(loop_context) = self.scope.current_loop().cloned()
+            && let Some(target) = loop_context.result
+        {
             if self.is_unit_call(val) {
                 if !value.is_empty() {
                     statements.push(effect_statement(value));

@@ -722,7 +722,7 @@ impl Planner<'_> {
         declaration: Option<&Type>,
     ) -> Vec<ValueLayout> {
         let declared = declaration
-            .map(|ty| self.facts.tuple_element_types(ty))
+            .map(|ty| self.facts.tuple_or_type_arguments(ty))
             .unwrap_or_default();
         tuple
             .tuple_elements()

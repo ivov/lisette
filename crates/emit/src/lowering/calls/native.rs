@@ -411,7 +411,7 @@ impl Planner<'_> {
                 staged.receiver.clone(),
                 staged.arguments[0].clone(),
                 &recipe,
-                false,
+                BinaryOp::Eq,
             );
             return Some(staged.finish(body));
         }
@@ -422,7 +422,7 @@ impl Planner<'_> {
                 &native_equality(&self.facts, context)
             {
                 let searched = staged.arguments[0].clone();
-                let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
+                let target = self.hoist_temp(&mut staged.setup, "want", searched);
                 let predicate = self.contains_predicate(element, GoExpression::identifier(target));
                 GoExpression::call(
                     GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
@@ -527,7 +527,7 @@ impl Planner<'_> {
         let base = if self.receiver_is_addressable(expression) {
             receiver
         } else {
-            GoExpression::identifier(self.hoist_tmp_value_statement(setup, "arr", receiver))
+            GoExpression::identifier(self.hoist_temp(setup, "arr", receiver))
         };
         GoExpression::slice(base, None, None, None)
     }
@@ -789,32 +789,13 @@ impl Planner<'_> {
         NativeCallResult::new(sequenced.setup, substring_call(deref(receiver), start, end))
     }
 
-    pub(in crate::lowering) fn equality_expression(
+    pub(in crate::lowering) fn equality_test(
         &mut self,
         lhs: GoExpression,
         rhs: GoExpression,
         recipe: &EqualityRecipe,
+        operator: BinaryOp,
     ) -> GoExpression {
-        self.equality_test(lhs, rhs, recipe, false)
-    }
-
-    pub(in crate::lowering) fn inequality_expression(
-        &mut self,
-        lhs: GoExpression,
-        rhs: GoExpression,
-        recipe: &EqualityRecipe,
-    ) -> GoExpression {
-        self.equality_test(lhs, rhs, recipe, true)
-    }
-
-    fn equality_test(
-        &mut self,
-        lhs: GoExpression,
-        rhs: GoExpression,
-        recipe: &EqualityRecipe,
-        negated: bool,
-    ) -> GoExpression {
-        let operator = if negated { BinaryOp::Ne } else { BinaryOp::Eq };
         let call = match recipe {
             EqualityRecipe::Operator => return GoExpression::binary(lhs, operator, rhs),
             EqualityRecipe::Method { .. } => GoExpression::call(
@@ -842,7 +823,7 @@ impl Planner<'_> {
                 }
             }
         };
-        if negated {
+        if operator == BinaryOp::Ne {
             GoExpression::unary(UnaryOp::Not, call)
         } else {
             call
@@ -851,12 +832,13 @@ impl Planner<'_> {
 
     fn equality_closure(&mut self, element: &ElementEquality) -> GoExpression {
         let go_ty = self.go_type(&element.ty);
-        let a = self.fresh_local(Some("a"));
-        let b = self.fresh_local(Some("b"));
-        let body = self.equality_expression(
+        let a = self.fresh_local("a");
+        let b = self.fresh_local("b");
+        let body = self.equality_test(
             GoExpression::identifier(a.clone()),
             GoExpression::identifier(b.clone()),
             &element.recipe,
+            BinaryOp::Eq,
         );
         predicate_literal(
             vec![
@@ -873,11 +855,12 @@ impl Planner<'_> {
         target: GoExpression,
     ) -> GoExpression {
         let go_ty = self.go_type(&element.ty);
-        let candidate = self.fresh_local(Some("e"));
-        let body = self.equality_expression(
+        let candidate = self.fresh_local("e");
+        let body = self.equality_test(
             GoExpression::identifier(candidate.clone()),
             target,
             &element.recipe,
+            BinaryOp::Eq,
         );
         predicate_literal(
             vec![GoParameter::new(candidate.clone(), go_ty.clone())],

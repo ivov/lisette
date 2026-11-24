@@ -139,7 +139,7 @@ impl Planner<'_> {
             left = GoExpression::conversion(self.go_type(left_ty), left);
         }
         let Some(casts) = casts else {
-            return ValuePlan::built_from(
+            return ValuePlan::new(
                 setup,
                 GoExpression::binary(left, operator.into(), right),
                 stability,

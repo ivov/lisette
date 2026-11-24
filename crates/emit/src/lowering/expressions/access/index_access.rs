@@ -172,12 +172,10 @@ impl Planner<'_> {
             if !base.effects().can_duplicate()
                 || (is_order_sensitive(base_expr) && runs_effectful_code)
             {
-                base = GoExpression::identifier(
-                    self.hoist_tmp_value_statement(&mut setup, "base", base),
-                );
+                base = GoExpression::identifier(self.hoist_temp(&mut setup, "base", base));
             }
             let Some(end_expression) = end_value else {
-                let length = GoExpression::identifier(self.hoist_tmp_value_statement(
+                let length = GoExpression::identifier(self.hoist_temp(
                     &mut setup,
                     "len",
                     GoExpression::call(
@@ -192,18 +190,11 @@ impl Planner<'_> {
             };
             if start.is_some_and(is_order_sensitive) {
                 start_value = start_value.map(|start_expression| {
-                    GoExpression::identifier(self.hoist_tmp_value_statement(
-                        &mut setup,
-                        "start",
-                        start_expression,
-                    ))
+                    GoExpression::identifier(self.hoist_temp(&mut setup, "start", start_expression))
                 });
             }
-            let end_variable = GoExpression::identifier(self.hoist_tmp_value_statement(
-                &mut setup,
-                "end",
-                end_expression,
-            ));
+            let end_variable =
+                GoExpression::identifier(self.hoist_temp(&mut setup, "end", end_expression));
             return ValuePlan::computed(
                 setup,
                 GoExpression::slice(

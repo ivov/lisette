@@ -3,7 +3,7 @@ use crate::lowering::abi::go_result_wrapping::{NilGuard, nil_condition, non_nil_
 use crate::lowering::calls::bounds::BoundsCheckedIndex;
 
 use crate::lookup::state::scope::PairStatusKind;
-use crate::target::ir::bodies::{Definition, Statement, define, discard};
+use crate::target::ir::bodies::{Definition, PairCondition, Statement, define, discard};
 use crate::target::ir::go_expression::{BinaryOp, UnaryOp};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -61,7 +61,7 @@ impl LoweredPair {
         let status = self.status.clone();
         match &self.value {
             PairValue::Named { name, .. } => vec![name.clone(), status],
-            PairValue::Discarded => vec![GoIdentifier::external("_".to_string()), status],
+            PairValue::Discarded => vec![GoIdentifier::blank(), status],
             PairValue::Absent => vec![status],
         }
     }
@@ -103,11 +103,6 @@ impl LoweredPair {
             condition,
         }
     }
-}
-
-pub(in crate::lowering) struct PairCondition {
-    pub(in crate::lowering) initializer: Option<Definition>,
-    pub(in crate::lowering) condition: GoExpression,
 }
 
 impl BoundValue {

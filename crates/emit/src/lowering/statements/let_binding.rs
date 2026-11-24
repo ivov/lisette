@@ -64,9 +64,9 @@ impl Planner<'_> {
         let escaped = escape_local(raw_go_name);
         if force_fresh
             || self.shadows_declaration(&escaped)
-            || self.scope.has_other_binding_for_go_name(&escaped, ids)
+            || self.scope.go_name_bound_outside_ids(&escaped, ids)
         {
-            self.fresh_source(&SourceName::new(identifier))
+            self.fresh_local(&SourceName::new(identifier))
         } else {
             self.scope.new_local_identifier(raw_go_name)
         }
@@ -91,9 +91,9 @@ impl Planner<'_> {
         }
         let needs_temp = requires_temp_var(value);
         let Some(raw_go_name) = raw_go_name else {
-            self.scope.bind_source(identifier, ids, "_");
+            self.scope.bind_new_local(identifier, ids, "_");
             return if needs_temp {
-                self.lower_let_temp(&GoIdentifier::external("_".to_string()), value, binding_ty)
+                self.lower_let_temp(&GoIdentifier::blank(), value, binding_ty)
             } else {
                 self.lower_discard_value(value)
             };
@@ -114,7 +114,7 @@ impl Planner<'_> {
                 .or_else(|| self.try_lower_defaulted_call_into(value, &local))
                 .or_else(|| self.try_lower_slice_loop_into(value, &local));
             if let Some(statements) = into {
-                self.scope.bind_identifier(identifier, ids, local);
+                self.scope.bind_existing_identifier(identifier, ids, local);
                 return statements;
             }
             if let Some(demand) = demand
@@ -135,12 +135,12 @@ impl Planner<'_> {
                 || expression_contains_binding(value, identifier)
                 || self.scope.expression_reads_go_name(value, &go_identifier)
             {
-                let fresh = self.fresh_source(&SourceName::new(identifier));
+                let fresh = self.fresh_local(&SourceName::new(identifier));
                 let statements = self.lower_let_temp(&fresh, value, binding_ty);
-                self.scope.bind_identifier(identifier, ids, fresh);
+                self.scope.bind_existing_identifier(identifier, ids, fresh);
                 return statements;
             }
-            let bound = self.scope.bind_source(identifier, ids, raw_go_name);
+            let bound = self.scope.bind_new_local(identifier, ids, raw_go_name);
             return self.lower_let_temp(&bound, value, binding_ty);
         }
         self.lower_let_direct(let_spec, raw_go_name)
@@ -189,7 +189,7 @@ impl Planner<'_> {
             ));
         }
         self.scope
-            .bind_identifier(identifier, binding_id.as_slice(), target);
+            .bind_existing_identifier(identifier, binding_id.as_slice(), target);
         statements
     }
 
@@ -225,7 +225,7 @@ impl Planner<'_> {
         };
         let source = self.component_producer(value, demand.value == ValueDemand::Whole, kind)?;
         let slot = if demand.value != ValueDemand::StatusOnly {
-            self.declare(go_identifier);
+            self.scope.declare_go_name(go_identifier);
             CommaOkValueSlot::Named(go_identifier.clone())
         } else {
             CommaOkValueSlot::Discarded
@@ -237,7 +237,7 @@ impl Planner<'_> {
             kind,
             demand.defaults > 1,
         )?;
-        self.scope.set_component_binding(
+        self.scope.bind_components_filling_ids(
             let_spec.identifier,
             let_spec.binding_id.as_slice(),
             components,
@@ -262,7 +262,7 @@ impl Planner<'_> {
             value,
             ..
         } = let_spec;
-        let elements = self.facts.tuple_element_types(ty);
+        let elements = self.facts.tuple_or_type_arguments(ty);
         if elements.len() < 2 {
             return None;
         }
@@ -278,9 +278,9 @@ impl Planner<'_> {
         let names: Vec<GoIdentifier> = (0..elements.len())
             .map(|index| {
                 if !is_read(index) {
-                    return GoIdentifier::external("_".to_string());
+                    return GoIdentifier::blank();
                 }
-                self.fresh_declared_source(&SourceName::new(identifier).component(index))
+                self.fresh_declared(&SourceName::new(identifier).component(index))
             })
             .collect();
         let (setup, call) = self
@@ -288,8 +288,11 @@ impl Planner<'_> {
             .into_parts();
         let mut statements = setup;
         statements.push(define_many(names.clone(), call));
-        self.scope
-            .set_tuple_binding(identifier, binding_id.as_slice(), TupleBinding { names });
+        self.scope.bind_tuple_filling_ids(
+            identifier,
+            binding_id.as_slice(),
+            TupleBinding { names },
+        );
         Some(statements)
     }
 
@@ -313,7 +316,7 @@ impl Planner<'_> {
             unreachable!("lower_let_propagate requires a Propagate value");
         };
         let Some(raw_go_name) = raw_go_name else {
-            self.scope.bind_source(identifier, ids, "_");
+            self.scope.bind_new_local(identifier, ids, "_");
             return self.lower_propagate_statement(inner);
         };
         let go_identifier = self.choose_let_go_name(identifier, ids, raw_go_name, false);
@@ -322,11 +325,11 @@ impl Planner<'_> {
         if widens_to_interface(&self.facts, value, binding_ty) {
             let var_ty = self.go_type(binding_ty);
             statements.push(declare(local.clone(), var_ty));
-            self.declare(&go_identifier);
+            self.scope.declare_go_name(&go_identifier);
         }
         statements.extend(self.lower_propagate_binding(inner, &local));
-        self.scope.bind_identifier(identifier, ids, local);
-        self.try_declare(&go_identifier);
+        self.scope.bind_existing_identifier(identifier, ids, local);
+        self.scope.try_declare_go_name(&go_identifier);
         statements
     }
 
@@ -349,17 +352,17 @@ impl Planner<'_> {
         statements.push(effect_statement(value_expression));
         let unit = self.unit_value(Some(value), Some(binding_ty));
         let Some(raw_go_name) = raw_go_name else {
-            self.scope.bind_source(identifier, ids, "_");
+            self.scope.bind_new_local(identifier, ids, "_");
             return statements;
         };
         let escaped = escape_local(raw_go_name);
         let go_identifier = if self.shadows_declaration(&escaped) {
-            let fresh = self.fresh_declared_source(&SourceName::new(identifier));
-            self.scope.bind_source(identifier, ids, &fresh);
+            let fresh = self.fresh_declared(&SourceName::new(identifier));
+            self.scope.bind_new_local(identifier, ids, &fresh);
             fresh
         } else {
-            let go_identifier = self.scope.bind_source(identifier, ids, raw_go_name);
-            self.try_declare(&go_identifier);
+            let go_identifier = self.scope.bind_new_local(identifier, ids, raw_go_name);
+            self.scope.try_declare_go_name(&go_identifier);
             go_identifier
         };
         if needs_explicit_type_declaration(&self.facts, value, binding_ty) {
@@ -481,7 +484,7 @@ impl Planner<'_> {
             target,
         )?;
         self.scope
-            .bind_identifier(identifier, binding_id.as_slice(), local);
+            .bind_existing_identifier(identifier, binding_id.as_slice(), local);
         Some(statements)
     }
 
@@ -494,17 +497,17 @@ impl Planner<'_> {
         let name = identifier.spelling();
         if let Expression::TryBlock { items, ty, .. } = value
             && name != "_"
-            && !self.is_declared(name)
+            && !self.scope.is_go_name_declared(name)
         {
             return self.lower_try_block_into(items, ty, binding_ty, identifier);
         }
         let mut statements = Vec::new();
-        if !self.is_declared(name) {
+        if !self.scope.is_go_name_declared(name) {
             if let Some(declaration) = self.let_temp_var_declaration(identifier, value, binding_ty)
             {
                 statements.push(declaration.into());
             }
-            self.try_declare(name);
+            self.scope.try_declare_go_name(name);
         }
         statements.extend(self.lower_assign(
             value,
@@ -637,7 +640,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         let value_ty = self.value.get_type();
         LoweredBlock {
             statements: self.planner.lower_irrefutable_pattern_site(
-                PatternSubject::expression(self.value, &self.binding.pattern, None),
+                PatternSubject::expression(self.value, &self.binding.pattern, "tmp"),
                 &self.binding.pattern,
                 &value_ty,
             ),
@@ -707,7 +710,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     &raw_go_name,
                     self.planner.scope.has_binding_for_go_name(&raw_go_name),
                 );
-                self.planner.declare(&go_name);
+                self.planner.scope.declare_go_name(&go_name);
                 Some((
                     identifier,
                     *binding,
@@ -720,7 +723,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             let local = self
                 .planner
                 .scope
-                .bind_source(identifier, id.as_slice(), &go_name);
+                .bind_new_local(identifier, id.as_slice(), &go_name);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: local,
@@ -744,7 +747,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         if !pair_of_names {
             return None;
         }
-        let slot_types = self.planner.facts.tuple_element_types(&self.binding.ty);
+        let slot_types = self.planner.facts.tuple_or_type_arguments(&self.binding.ty);
         let directional = [NativeTypeKind::Sender, NativeTypeKind::Receiver];
         (slot_types.len() == directional.len()
             && slot_types
@@ -799,9 +802,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             && self
                 .planner
                 .scope
-                .has_other_binding_for_go_name(&escape_local(raw), binding_id.as_slice())
+                .go_name_bound_outside_ids(&escape_local(raw), binding_id.as_slice())
         {
-            raw_go_name = Some(self.planner.fresh_source(&SourceName::new(identifier)));
+            raw_go_name = Some(self.planner.fresh_local(&SourceName::new(identifier)));
         }
         let statements = if matches!(self.value, Expression::Propagate { .. })
             && self
@@ -845,13 +848,13 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     || self
                         .planner
                         .scope
-                        .has_other_binding_for_go_name(&preferred, binding.as_slice())
+                        .go_name_bound_outside_ids(&preferred, binding.as_slice())
                 {
-                    self.planner.fresh_source(&go_name)
+                    self.planner.fresh_local(&go_name)
                 } else {
                     self.planner.scope.new_local_identifier(preferred)
                 };
-                self.planner.declare(&name);
+                self.planner.scope.declare_go_name(&name);
                 Some((identifier.as_str(), *binding, name))
             })
             .collect();
@@ -867,9 +870,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 Some((identifier, id, go_name)) => {
                     self.planner
                         .scope
-                        .bind_source(*identifier, id.as_slice(), go_name)
+                        .bind_new_local(*identifier, id.as_slice(), go_name)
                 }
-                None => GoIdentifier::external("_".to_string()),
+                None => GoIdentifier::blank(),
             })
             .collect();
         statements.push(if planned.iter().any(Option::is_some) {

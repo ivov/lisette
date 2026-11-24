@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::FallibleProducer;
-use crate::lowering::calls::bound_value::PairCondition;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
+use crate::target::ir::bodies::PairCondition;
 
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::Statement;

@@ -143,13 +143,13 @@ impl ScopeState {
             .any(|param| param.go_name == go_name)
     }
 
-    pub(crate) fn bind_source(
+    pub(crate) fn bind_new_local(
         &mut self,
         lisette_name: impl Into<String>,
         ids: &[BindingId],
         go_name: impl Into<GoIdentifier>,
     ) -> GoIdentifier {
-        self.bind_name(
+        self.bind_with_new_identifier(
             lisette_name.into(),
             ids,
             go_name.into(),
@@ -165,13 +165,13 @@ impl ScopeState {
         self.local_constants.get(&binding).cloned()
     }
 
-    pub(crate) fn bind_go_const(
+    pub(crate) fn bind_new_const(
         &mut self,
         lisette_name: &str,
         ids: &[BindingId],
         go_name: GoIdentifier,
     ) -> GoIdentifier {
-        self.bind_name(
+        self.bind_with_new_identifier(
             lisette_name.to_string(),
             ids,
             go_name,
@@ -179,7 +179,7 @@ impl ScopeState {
         )
     }
 
-    fn bind_name(
+    fn bind_with_new_identifier(
         &mut self,
         lisette_name: String,
         ids: &[BindingId],
@@ -187,7 +187,7 @@ impl ScopeState {
         value: fn(GoIdentifier) -> BindingValue,
     ) -> GoIdentifier {
         let identifier = self.new_local_identifier(go_name);
-        self.set_binding(lisette_name, ids, value(identifier.clone()));
+        self.push_binding(lisette_name, ids, value(identifier.clone()));
         identifier
     }
 
@@ -203,13 +203,13 @@ impl ScopeState {
         name
     }
 
-    pub(crate) fn bind_identifier(
+    pub(crate) fn bind_existing_identifier(
         &mut self,
         lisette_name: impl Into<String>,
         ids: &[BindingId],
         identifier: GoIdentifier,
     ) {
-        self.set_binding(lisette_name.into(), ids, BindingValue::GoName(identifier));
+        self.push_binding(lisette_name.into(), ids, BindingValue::GoName(identifier));
     }
 
     pub(crate) fn new_local_id(&mut self) -> LocalId {
@@ -218,7 +218,7 @@ impl ScopeState {
         id
     }
 
-    pub(crate) fn set_component_binding(
+    pub(crate) fn bind_components_filling_ids(
         &mut self,
         lisette_name: impl Into<String>,
         ids: &[BindingId],
@@ -226,14 +226,14 @@ impl ScopeState {
     ) {
         self.identify_binding_name(&mut components.value);
         self.identify_binding_name(&mut components.status);
-        self.set_binding(
+        self.push_binding(
             lisette_name.into(),
             ids,
             BindingValue::Components(components),
         );
     }
 
-    pub(crate) fn set_tuple_binding(
+    pub(crate) fn bind_tuple_filling_ids(
         &mut self,
         lisette_name: impl Into<String>,
         ids: &[BindingId],
@@ -242,7 +242,7 @@ impl ScopeState {
         for name in &mut tuple.names {
             self.identify_binding_name(name);
         }
-        self.set_binding(
+        self.push_binding(
             lisette_name.into(),
             ids,
             BindingValue::TupleComponents(tuple),
@@ -263,7 +263,7 @@ impl ScopeState {
         ids: &[BindingId],
         expr: InlineExpr,
     ) {
-        self.set_binding(lisette_name.into(), ids, BindingValue::InlineExpr(expr));
+        self.push_binding(lisette_name.into(), ids, BindingValue::InlineExpr(expr));
     }
 
     pub(crate) fn resolve_identifier_binding(&self, lisette_name: &str) -> Option<&BindingValue> {
@@ -386,7 +386,7 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn binds_go_name_for_other_source_name(
+    pub(crate) fn go_name_bound_by_other_lisette_name(
         &self,
         go_name: &str,
         lisette_name: &str,
@@ -395,7 +395,7 @@ impl ScopeState {
             .any(|binding| binding.name != lisette_name && binding.value.mentions(go_name))
     }
 
-    pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, ids: &[BindingId]) -> bool {
+    pub(crate) fn go_name_bound_outside_ids(&self, go_name: &str, ids: &[BindingId]) -> bool {
         self.visible_bindings().any(|binding| {
             binding.value.mentions(go_name)
                 && !ids.iter().any(|id| self.id_resolves_to(*id, binding))
@@ -525,7 +525,7 @@ impl ScopeState {
         self.pop_frame();
     }
 
-    pub(crate) fn push_loop(&mut self, result: GoExpression, result_ty: Option<Type>) {
+    pub(crate) fn push_loop(&mut self, result: Option<GoExpression>, result_ty: Option<Type>) {
         let id = LoopId(self.next_loop_id);
         self.next_loop_id += 1;
         self.current_function_mut().loops.push(LoopContext {
@@ -593,7 +593,7 @@ impl ScopeState {
             function
                 .loops
                 .iter()
-                .filter_map(|context| context.result.as_identifier())
+                .filter_map(|context| context.result.as_ref()?.as_identifier())
                 .filter(|name| name.spelling() != "_"),
         )
     }
@@ -641,7 +641,7 @@ impl ScopeState {
             .expect("scope state always retains a frame")
     }
 
-    fn set_binding(&mut self, name: String, ids: &[BindingId], value: BindingValue) {
+    fn push_binding(&mut self, name: String, ids: &[BindingId], value: BindingValue) {
         self.current_frame_mut().bindings.push(Binding {
             name,
             ids: ids.to_vec(),

@@ -37,7 +37,7 @@ impl EmitFacts<'_> {
         is_public: bool,
         tagged: bool,
     ) -> String {
-        let owner = self.without_references(receiver);
+        let owner = self.strip_refs(receiver);
         self.method_selector_go_name(owner.get_qualified_id(), method, is_public, tagged)
     }
 

@@ -8,7 +8,7 @@ use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define,
 };
-use crate::target::ir::go_expression::{CompositeLayout, UnaryOp};
+use crate::target::ir::go_expression::{BinaryOp, CompositeLayout, UnaryOp};
 use crate::target::ir::values::CaptureBoundary;
 use crate::target::ir::values::{GoExpression, OperandForm};
 use crate::target::names::go_name::{self, GeneratedPackage};
@@ -208,7 +208,7 @@ impl Planner<'_> {
     ) -> AssertShape {
         let (lhs, rhs) = self.stage_assert_operands(recv, arg, LiteralInlining::Denied, statements);
         let (lhs, rhs) = (lhs.value.expression(), rhs.value.expression());
-        let failure_condition = self.inequality_expression(lhs.clone(), rhs.clone(), recipe);
+        let failure_condition = self.equality_test(lhs.clone(), rhs.clone(), recipe, BinaryOp::Ne);
         AssertShape {
             failure_condition,
             kind: "labeled",

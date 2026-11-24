@@ -1,42 +1,29 @@
-use crate::lowering::abi::ReturnSlot;
-use crate::lowering::abi::return_abi;
-use crate::lowering::calls::call_plan::callable_declaration;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::lowering::expressions::staging::is_unmutated_identifier;
 use crate::lowering::expressions::values::with_source_positions;
-use crate::output::finish::function_literals::function_literal;
-use crate::output::render::expressions::rendered;
-use crate::target::types::go_type::ChannelDirection;
-use syntax::types::SimpleKind;
 
 use super::{NativeCallContext, NativeCallForm};
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
-use crate::lowering::abi::go_returns::multi_value_return;
 use crate::lowering::abi::layout::ValueLayout;
-use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin, ResolvedCallee};
+use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::planner::written_span;
+use crate::target::ir::bodies::Statement;
 use crate::target::ir::bodies::discard;
-use crate::target::ir::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
-use crate::target::ir::go_expression::{
-    BinaryOp, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
-};
-use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
+use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
 use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
-use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use syntax::EcoString;
-use syntax::ast::{Expression, Literal};
+use syntax::ast::Expression;
 use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, FieldSelection};
-use syntax::types::{CompoundKind, FunctionParameter, FunctionType, SubstitutionMap, Type};
+use syntax::types::Type;
 
 struct TupleStructTarget<'a> {
     go_ty: GoType,
@@ -45,318 +32,7 @@ struct TupleStructTarget<'a> {
     owner_type: Type,
 }
 
-fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKind>) -> bool {
-    let Some(literals) = keys
-        .iter()
-        .map(|key| match key {
-            Expression::Literal { literal, .. } => Some(literal),
-            _ => None,
-        })
-        .collect::<Option<Vec<_>>>()
-    else {
-        return false;
-    };
-    let integer_key = key_kind.is_some_and(SimpleKind::is_integer);
-    literals
-        .iter()
-        .all(|literal| matches!(literal, Literal::Boolean(_) | Literal::String { .. }))
-        || integer_key
-            && (literals
-                .iter()
-                .all(|literal| matches!(literal, Literal::Integer { .. }))
-                || literals
-                    .iter()
-                    .all(|literal| matches!(literal, Literal::Char(_))))
-}
-
-pub(in crate::lowering) struct CallTypeArgsRequest<'e, 'c> {
-    pub(in crate::lowering) function: &'e Expression,
-    pub(in crate::lowering) callee: &'e ResolvedCallee<'c>,
-    pub(in crate::lowering) written_type_arguments: usize,
-    pub(in crate::lowering) call_ty: Option<&'e Type>,
-    pub(in crate::lowering) arg_shape: CallArgShape,
-    pub(in crate::lowering) slot: Option<&'e Type>,
-    pub(in crate::lowering) receiver_passed: bool,
-}
-
-#[derive(Clone, Copy)]
-pub(in crate::lowering) struct CallArgShape {
-    pub value_count: usize,
-    pub has_spread: bool,
-}
-
-fn all_type_params_inferrable(
-    vars: &[EcoString],
-    params: &[FunctionParameter],
-    receiver_count: usize,
-    arg_shape: CallArgShape,
-) -> bool {
-    let variadic_idx = params
-        .iter()
-        .position(|p| p.ty.is_native(CompoundKind::VarArgs))
-        .filter(|&i| i == params.len() - 1);
-    let variadic_has_args = arg_shape.has_spread
-        || variadic_idx.is_some_and(|i| arg_shape.value_count + receiver_count > i);
-
-    vars.iter().all(|var| {
-        let param_ty = Type::Parameter(var.clone());
-        params.iter().enumerate().any(|(i, pt)| {
-            pt.ty.contains_type(&param_ty) && (Some(i) != variadic_idx || variadic_has_args)
-        })
-    })
-}
-
 impl<'a> Planner<'a> {
-    fn native_element_type(&mut self, function: &Expression) -> GoType {
-        let element = self.facts.checked(function).callee().first_type_argument();
-        self.go_type(element)
-    }
-
-    fn stage_size_argument(&mut self, ctx: &NativeCallContext) -> (Vec<Statement>, GoExpression) {
-        match ctx.args.first() {
-            Some(a) => self
-                .plan_operand(a, ExpressionContext::value())
-                .into_parts(),
-            None => (Vec::new(), GoExpression::literal("0".to_string())),
-        }
-    }
-
-    fn try_plan_native_constructor(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
-        match (ctx.native_type, ctx.method) {
-            (NativeTypeKind::Channel, "new") => {
-                let element = self.native_element_type(ctx.function);
-                Some(ValuePlan::computed(
-                    Vec::new(),
-                    GoExpression::call(
-                        GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(GoType::channel(
-                            ChannelDirection::Bidirectional,
-                            &element,
-                        ))],
-                    ),
-                ))
-            }
-            (NativeTypeKind::Channel, "buffered") => {
-                let element = self.native_element_type(ctx.function);
-                let (setup, capacity) = self.stage_size_argument(ctx);
-                Some(ValuePlan::computed(
-                    setup,
-                    GoExpression::call(
-                        GoExpression::external_name("make".to_string()),
-                        vec![
-                            GoExpression::type_name(GoType::channel(
-                                ChannelDirection::Bidirectional,
-                                &element,
-                            )),
-                            capacity,
-                        ],
-                    ),
-                ))
-            }
-            (NativeTypeKind::Map, "new") => {
-                let (key, val) = map_entry_types(&self.facts, ctx.function);
-                let (key, val) = (self.go_type(&key), self.go_type(&val));
-                Some(ValuePlan::computed(
-                    Vec::new(),
-                    GoExpression::call(
-                        GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(GoType::map_of(&key, &val))],
-                    ),
-                ))
-            }
-            (NativeTypeKind::Map, "from") => self.try_plan_map_from_pairs(ctx),
-            (NativeTypeKind::Slice, "new") => {
-                let element = self.native_element_type(ctx.function);
-                Some(ValuePlan::computed(
-                    Vec::new(),
-                    GoExpression::empty_composite(GoType::slice_of(&element)),
-                ))
-            }
-            (NativeTypeKind::Slice, "make") => Some(self.plan_slice_make(ctx)),
-            (NativeTypeKind::Array, "new") => {
-                let array_ty = ctx
-                    .call_ty
-                    .filter(|ty| self.facts.array_parts(ty).is_some())?;
-                Some(ValuePlan::computed(Vec::new(), self.lisette_zero(array_ty)))
-            }
-            (NativeTypeKind::Array, "from") => self.try_plan_array_from(ctx),
-            _ => None,
-        }
-    }
-
-    fn plan_slice_make(&mut self, ctx: &NativeCallContext) -> ValuePlan {
-        let element_ty = self
-            .facts
-            .checked(ctx.function)
-            .callee()
-            .first_type_argument()
-            .clone();
-        let element = self.go_type(&element_ty);
-        let (setup, length) = self.stage_size_argument(ctx);
-        let value = if self.facts.go_zero_is_lisette_zero(&element_ty) {
-            GoExpression::call(
-                GoExpression::external_name("make".to_string()),
-                vec![GoExpression::type_name(GoType::slice_of(&element)), length],
-            )
-        } else {
-            self.zero_filled(GoType::slice_of(&element), &element_ty, Some(length))
-        };
-        ValuePlan::computed(setup, value)
-    }
-
-    fn try_plan_array_from(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
-        let callee_ty = ctx.function.get_type();
-        let returned = callee_ty
-            .as_function_type()
-            .map(|f| f.return_type.as_ref())
-            .or(ctx.call_ty)?;
-        let inner = self
-            .facts
-            .prelude_container_arguments(returned)?
-            .into_iter()
-            .next()?;
-        let (length, element) = self.facts.array_parts(&inner)?;
-        let argument = ctx.args.first()?;
-        let abi = return_abi(&self.facts, returned, ReturnSlot::Function);
-        let CallableReturnAbi::Lowered(
-            shape @ LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }),
-        ) = &abi
-        else {
-            return None;
-        };
-        let result_list = self.return_go_type(&abi, returned);
-        let none_values = self.lowered_none_values(shape, returned);
-
-        let element_go = self.go_type(&element);
-        let array_go = GoType::array_of(length, &element_go);
-
-        let staged = self.plan_operand(argument, ExpressionContext::value());
-        let (setup, source) = staged.into_parts();
-
-        let slice_name = self.scope.helper_local("s", self.names);
-        let slice = || GoExpression::identifier(slice_name.clone());
-        let literal = |text: String| GoExpression::literal(text);
-        let value = GoExpression::call(
-            function_literal(
-                vec![GoParameter::new(
-                    slice_name.clone(),
-                    GoType::slice_of(&element_go),
-                )],
-                result_list,
-                LoweredBlock {
-                    statements: vec![
-                        LoweredStatement::If(IfPlan::plain(
-                            GoExpression::binary(
-                                GoExpression::call(
-                                    GoExpression::external_name("len".to_string()),
-                                    vec![slice()],
-                                ),
-                                BinaryOp::Ne,
-                                literal(length.to_string()),
-                            ),
-                            LoweredBlock {
-                                statements: vec![multi_value_return(none_values)],
-                            },
-                            ElseArm::None,
-                        ))
-                        .into(),
-                        multi_value_return(
-                            shape.ok_values(vec![GoExpression::conversion(array_go, slice())]),
-                        ),
-                    ],
-                },
-                FunctionLiteralLayout::MultiLine,
-            ),
-            vec![source],
-        );
-
-        Some(ValuePlan::computed(setup, value))
-    }
-
-    fn try_plan_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
-        if ctx.spread.is_some() {
-            return None;
-        }
-        let [argument] = ctx.args else {
-            return None;
-        };
-        let Expression::Literal {
-            literal: Literal::Slice(entries),
-            ..
-        } = argument
-        else {
-            return None;
-        };
-        let pairs = entries
-            .iter()
-            .map(|entry| match entry {
-                Expression::Tuple { elements, .. } => match elements.as_slice() {
-                    [key, value] => Some((key, value)),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect::<Option<Vec<_>>>()?;
-
-        let (key_ty, value_ty) = map_entry_types(&self.facts, ctx.function);
-        let keys: Vec<_> = pairs.iter().map(|(key, _)| *key).collect();
-        if !keys_checked_as_go_constants(&keys, self.facts.simple_kind(&key_ty)) {
-            return None;
-        }
-        let value_go_ty = self.go_type(&value_ty);
-        let map_ty = GoType::map_of(&self.go_type(&key_ty), &value_go_ty);
-
-        if pairs.is_empty() {
-            return Some(ValuePlan::computed(
-                Vec::new(),
-                GoExpression::empty_composite(map_ty),
-            ));
-        }
-
-        let stages: Vec<ValuePlan> = pairs
-            .iter()
-            .flat_map(|(key, value)| [(*key, &key_ty), (*value, &value_ty)])
-            .map(|(e, slot)| {
-                let origin = self.function_type_origin(slot, SlotOrigin::Lisette);
-                self.plan_composite_value(
-                    e,
-                    ExpressionContext::value().with_function_slot_origin(origin),
-                )
-            })
-            .collect();
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "entry");
-        let mut setup = sequenced.setup;
-        let mut values = sequenced.values.into_iter();
-
-        let mut lowered = Vec::with_capacity(pairs.len());
-        let mut widest = 0;
-        for (entry, (key, value)) in entries.iter().zip(&pairs) {
-            let staged_key = values.next().expect("each pair stages a key");
-            let staged_value = values.next().expect("each pair stages a value");
-            let [key_coercion, value_coercion] =
-                self.pair_slot_coercions(entry, [key, value], [&key_ty, &value_ty]);
-            let (key_setup, coerced_key) = key_coercion.lower(self, staged_key);
-            setup.extend(key_setup);
-            let is_whole_literal =
-                value_coercion.is_identity() && staged_value.is_composite_literal();
-            let (value_setup, coerced_value) = value_coercion.lower(self, staged_value);
-            setup.extend(value_setup);
-            widest = widest
-                .max(rendered(&coerced_key).len() + rendered(&coerced_value).len() + ": ".len());
-            let coerced_value = if is_whole_literal {
-                coerced_value.elide_composite_type(&value_go_ty)
-            } else {
-                coerced_value
-            };
-            lowered.push((Some(coerced_key), coerced_value));
-        }
-
-        let layout = CompositeLayout::for_elements(lowered.len(), widest);
-        let value = GoExpression::composite(Some(map_ty), lowered, layout)
-            .position_elements(|index, _| self.facts.source_position(&entries[index].get_span()));
-        Some(ValuePlan::computed(setup, value))
-    }
-
     pub(in crate::lowering) fn try_plan_negated_call(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -542,7 +218,7 @@ impl<'a> Planner<'a> {
         let reads_length = !is_constructor && matches!(context.method, "length" | "capacity");
         if reads_length
             && let Some((receiver, _)) = split
-            && let Some(length) = self.facts.array_length_behind_refs(&receiver.get_type())
+            && let Some(length) = self.facts.receiver_array_length(&receiver.get_type())
             && !is_constant_go_len(&result.value)
         {
             result.setup.push(discard(result.value));
@@ -738,188 +414,6 @@ impl<'a> Planner<'a> {
             false
         }
     }
-
-    pub(in crate::lowering) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<GoType> {
-        let params = self.facts.prelude_container_arguments(ty)?;
-        if params.is_empty() {
-            return None;
-        }
-        params
-            .iter()
-            .any(|p| {
-                self.facts.is_interface_or_unknown(p) || self.facts.is_go_named_function_type(p)
-            })
-            .then(|| self.format_type_args(&params))
-    }
-
-    pub(in crate::lowering) fn call_type_arguments(
-        &mut self,
-        request: CallTypeArgsRequest<'_, '_>,
-    ) -> GoType {
-        let CallTypeArgsRequest {
-            function,
-            callee,
-            written_type_arguments,
-            call_ty,
-            arg_shape,
-            slot,
-            receiver_passed,
-        } = request;
-        if !receiver_passed && callee_curries_receiver(callee) {
-            return GoType::default();
-        }
-        let receiver_count = if receiver_passed {
-            callee.receiver_offset.min(1)
-        } else {
-            0
-        };
-        if let Some(recipe) = callee
-            .declaration
-            .and_then(|declaration| declaration.go_type_param_recipe())
-        {
-            let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
-            if has_value_args
-                && generic_function(callee.declared_type()).is_some_and(|(vars, f)| {
-                    all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
-                })
-            {
-                return GoType::default();
-            }
-            let type_arguments = &self.facts.checked(function).callee().type_arguments;
-            return self
-                .reconstruct_collapsed_type_args(recipe, type_arguments)
-                .unwrap_or_default();
-        }
-
-        if written_type_arguments > 0 {
-            if receiver_passed {
-                let type_arguments = &self.facts.checked(function).callee().type_arguments;
-                return callee
-                    .declared_type()
-                    .and_then(|declared| {
-                        self.format_generic_instantiation(declared, type_arguments)
-                    })
-                    .unwrap_or_default();
-            }
-            let written = self
-                .facts
-                .checked(function)
-                .callee()
-                .written_type_arguments(written_type_arguments);
-            return self.format_type_arg_iter(written);
-        }
-
-        if let Some(inferred) = self.uninferable_type_args(
-            function,
-            callee.declared_type(),
-            receiver_count,
-            arg_shape,
-            !receiver_passed,
-        ) {
-            return match slot.filter(|_| !receiver_passed) {
-                Some(slot) => self.prelude_container_type_args(slot).unwrap_or(inferred),
-                None => inferred,
-            };
-        }
-
-        if matches!(
-            prelude_constructor(function),
-            Some(
-                PreludeVariant::Some
-                    | PreludeVariant::Ok
-                    | PreludeVariant::Err
-                    | PreludeVariant::Partial(_)
-            )
-        ) {
-            return call_ty
-                .and_then(|ty| self.prelude_container_type_args(ty))
-                .or_else(|| slot.and_then(|ty| self.prelude_container_type_args(ty)))
-                .unwrap_or_default();
-        }
-        GoType::default()
-    }
-
-    pub(in crate::lowering) fn constructor_reference_type_arguments(
-        &mut self,
-        fn_params: &[FunctionParameter],
-        ret_params: &[Type],
-        ctx: ExpressionContext<'_>,
-    ) -> GoType {
-        let return_params_are_inferrable = ret_params.len() <= fn_params.len()
-            && ret_params
-                .iter()
-                .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
-        let parameters_support_go_inference = fn_params
-            .iter()
-            .all(|param| !self.facts.is_go_named_function_type(&param.ty));
-        if ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference {
-            GoType::default()
-        } else {
-            self.format_type_args(ret_params)
-        }
-    }
-
-    fn uninferable_type_args(
-        &self,
-        function: &Expression,
-        declared: Option<&Type>,
-        receiver_count: usize,
-        arg_shape: CallArgShape,
-        function_alias_pins: bool,
-    ) -> Option<GoType> {
-        let (vars, f) = generic_function(declared)?;
-        let mapping = &self.facts.checked(function).callee().type_arguments;
-        if all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
-            && !(function_alias_pins
-                && vars.iter().any(|var| {
-                    mapping
-                        .get(var)
-                        .is_some_and(|ty| self.facts.is_go_named_function_type(ty))
-                }))
-        {
-            return None;
-        }
-        self.instantiated_type_args(vars, mapping)
-    }
-
-    pub(in crate::lowering) fn format_value_type_args(
-        &mut self,
-        expression: &Expression,
-    ) -> Option<GoType> {
-        let recorded = self.facts.checked(expression).function_value()?;
-        let declaration = callable_declaration(&self.facts, recorded.definition.as_deref()?)?;
-        let instantiation = &recorded.type_arguments;
-        match declaration.go_type_param_recipe() {
-            Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
-            None => self.format_generic_instantiation(declaration.ty(), instantiation),
-        }
-    }
-
-    fn format_generic_instantiation(
-        &self,
-        definition_ty: &Type,
-        mapping: &SubstitutionMap,
-    ) -> Option<GoType> {
-        let Type::Forall { vars, .. } = definition_ty else {
-            return None;
-        };
-        if vars.is_empty() {
-            return None;
-        }
-        self.instantiated_type_args(vars, mapping)
-    }
-
-    fn instantiated_type_args(
-        &self,
-        vars: &[EcoString],
-        mapping: &SubstitutionMap,
-    ) -> Option<GoType> {
-        let resolved = vars
-            .iter()
-            .map(|var| mapping.get(var.as_str()))
-            .collect::<Option<Vec<_>>>()?;
-        Some(self.format_type_arg_iter(resolved))
-    }
 }
 
 fn extract_receiver_ufcs_method(function: &Expression) -> String {
@@ -929,14 +423,6 @@ fn extract_receiver_ufcs_method(function: &Expression) -> String {
         return value[last_dot + 1..].to_string();
     }
     String::new()
-}
-
-fn map_entry_types<'a>(facts: &EmitFacts<'a>, function: &Expression) -> (Type, Type) {
-    let mut types = facts.checked(function).callee().type_arguments.types();
-    match (types.next(), types.next()) {
-        (Some(key), Some(value)) => (key.clone(), value.clone()),
-        _ => panic!("internal error: a map constructor has no checked entry types"),
-    }
 }
 
 pub(super) fn callee_go_name<'f>(
@@ -959,25 +445,6 @@ pub(super) fn go_builtin_name<'a>(facts: &EmitFacts<'a>, callee: &Expression) ->
         .as_deref()
         .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
         .and_then(|qualified| qualified.strip_prefix("prelude."))
-}
-
-fn generic_function(declared: Option<&Type>) -> Option<(&[EcoString], &FunctionType)> {
-    let Type::Forall { vars, body } = declared? else {
-        return None;
-    };
-    let Type::Function(f) = body.as_ref() else {
-        return None;
-    };
-    Some((vars, f))
-}
-
-fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
-    let Some(Type::Forall { body, .. }) = callee.declared_type() else {
-        return false;
-    };
-    matches!(body.as_ref(), Type::Function(_))
-        && callee.instantiated.as_function_type().is_some()
-        && callee.receiver_offset > 0
 }
 
 fn is_constant_go_len(value: &GoExpression) -> bool {

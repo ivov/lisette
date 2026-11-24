@@ -1,17 +1,13 @@
 use crate::Planner;
 use crate::lowering::abi::layout::{FunctionLayout, ValueLayout};
-use crate::target::ir::values::{ConstantKind, GoExpression};
 use crate::target::names::go_name;
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::{ChannelDirection, GoType, GoTypeKind, is_prelude_type};
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use syntax::program::GoTypeRecipe;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{
-    CompoundKind, SimpleKind, SubstitutionMap, Type, peel_underlying, unqualified_name,
-};
+use syntax::types::{CompoundKind, SimpleKind, Type, peel_underlying, unqualified_name};
 
 impl Planner<'_> {
     pub(in crate::lowering) fn plain_literal_go_type(&self, ty: &Type) -> Option<GoType> {
@@ -80,54 +76,6 @@ impl Planner<'_> {
                 self.native_go_type(native, ty)
             }
         }
-    }
-
-    pub(in crate::lowering) fn format_type_args(&self, parameters: &[Type]) -> GoType {
-        self.format_type_arg_iter(parameters)
-    }
-
-    pub(in crate::lowering) fn format_type_arg_iter<'t>(
-        &self,
-        parameters: impl IntoIterator<Item = &'t Type>,
-    ) -> GoType {
-        let arguments: Vec<GoType> = parameters
-            .into_iter()
-            .map(|param| self.component_go_type(param))
-            .collect();
-        GoType::type_arguments(&arguments)
-    }
-
-    pub(in crate::lowering) fn reconstruct_collapsed_type_args(
-        &self,
-        recipe: &[GoTypeRecipe],
-        mapping: &SubstitutionMap,
-    ) -> Option<GoType> {
-        let parts = recipe
-            .iter()
-            .map(|entry| self.render_recipe_entry(entry, mapping))
-            .collect::<Option<Vec<_>>>()?;
-        (!parts.is_empty()).then(|| GoType::type_arguments(&parts))
-    }
-
-    fn render_recipe_entry(
-        &self,
-        entry: &GoTypeRecipe,
-        mapping: &SubstitutionMap,
-    ) -> Option<GoType> {
-        Some(match entry {
-            GoTypeRecipe::Parameter(name) => self.component_go_type(mapping.get(name)?),
-            GoTypeRecipe::Slice(element) => {
-                GoType::slice_of(&self.render_recipe_entry(element, mapping)?)
-            }
-            GoTypeRecipe::Map(key, value) => GoType::map_of(
-                &self.render_recipe_entry(key, mapping)?,
-                &self.render_recipe_entry(value, mapping)?,
-            ),
-            GoTypeRecipe::Array(element, length) => GoType::array_of(
-                length.to_string(),
-                &self.render_recipe_entry(element, mapping)?,
-            ),
-        })
     }
 
     fn constructor_go_type(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
@@ -228,20 +176,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(in crate::lowering) fn format_type_args_with_receiver<'t>(
-        &self,
-        receiver_ty: &Type,
-        type_args: impl Iterator<Item = &'t Type>,
-    ) -> GoType {
-        let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
-        let arguments: Vec<GoType> = receiver_params
-            .iter()
-            .map(|ty| self.component_go_type(ty))
-            .chain(type_args.map(|ty| self.component_go_type(ty)))
-            .collect();
-        GoType::type_arguments(&arguments)
-    }
-
     pub(in crate::lowering) fn return_go_type(
         &self,
         abi: &CallableReturnAbi,
@@ -256,76 +190,6 @@ impl Planner<'_> {
         self.function_layout(Vec::new(), &result, abi.clone(), None)
             .result_go_type(self)
             .unwrap_or_default()
-    }
-
-    pub(in crate::lowering) fn go_zero(&self, ty: &Type) -> GoExpression {
-        self.go_zero_of_layout(&self.value_layout(ty, SlotOrigin::Lisette))
-    }
-
-    pub(in crate::lowering) fn go_zero_of_layout(&self, layout: &ValueLayout) -> GoExpression {
-        if self.facts.is_interface(layout.logical_type()) {
-            return GoExpression::nil();
-        }
-
-        let go_ty = layout.go_type(self);
-
-        let literal = |text: &str| GoExpression::literal(text.to_string());
-        let constant = |text: &str, kind| GoExpression::constant(text.to_string(), kind);
-
-        match layout {
-            ValueLayout::Plain(Type::Simple(kind)) => match kind {
-                SimpleKind::Int
-                | SimpleKind::Int8
-                | SimpleKind::Int16
-                | SimpleKind::Int32
-                | SimpleKind::Int64
-                | SimpleKind::Uint
-                | SimpleKind::Uint8
-                | SimpleKind::Uint16
-                | SimpleKind::Uint32
-                | SimpleKind::Uint64
-                | SimpleKind::Uintptr
-                | SimpleKind::Byte
-                | SimpleKind::Rune => constant("0", ConstantKind::Int),
-                SimpleKind::Float32 | SimpleKind::Float64 => constant("0.0", ConstantKind::Float),
-                SimpleKind::Bool => constant("false", ConstantKind::Bool),
-                SimpleKind::String => constant("\"\"", ConstantKind::String),
-                SimpleKind::Unit => self.unit_value(None, None),
-                SimpleKind::Complex64 | SimpleKind::Complex128 => GoExpression::new_zero(go_ty),
-            },
-            ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty),
-            ValueLayout::Slice { .. }
-            | ValueLayout::Map { .. }
-            | ValueLayout::Function { .. }
-            | ValueLayout::Reference { .. }
-            | ValueLayout::NullableOption { .. }
-            | ValueLayout::PointerOption { .. }
-            | ValueLayout::Plain(Type::Compound {
-                kind:
-                    CompoundKind::Ref
-                    | CompoundKind::Channel
-                    | CompoundKind::Sender
-                    | CompoundKind::Receiver,
-                ..
-            }) => literal("nil"),
-            ValueLayout::Tuple { .. }
-            | ValueLayout::TaggedOption { .. }
-            | ValueLayout::Fallible { .. } => GoExpression::empty_composite(go_ty),
-            ValueLayout::Plain(Type::Nominal { id, .. })
-                if self
-                    .facts
-                    .definition(id.as_str())
-                    .is_some_and(|definition| {
-                        matches!(
-                            definition.body,
-                            DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }
-                        )
-                    }) =>
-            {
-                GoExpression::empty_composite(go_ty)
-            }
-            _ => GoExpression::new_zero(go_ty),
-        }
     }
 
     fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {

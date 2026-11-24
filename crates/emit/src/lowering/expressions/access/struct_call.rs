@@ -1,33 +1,23 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::layout::is_go_abi_type;
-use crate::output::finish::function_literals::immediate_call;
-use crate::target::ir::prelude::option_variant;
 use rustc_hash::FxHashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
-use syntax::program::DefinitionBody;
-use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
+use syntax::types::{Type, unqualified_name};
 
 use crate::Planner;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lowering::abi::layout::ValueLayout;
-use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
-use crate::target::ir::bodies::{
-    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, declare,
-    define, discard,
-};
+use crate::target::ir::bodies::{Statement, assign, discard};
 use crate::target::ir::go_expression::Position;
-use crate::target::ir::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
+use crate::target::ir::go_expression::{CompositeKey, CompositeLayout};
 use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
-use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
-use crate::target::names::go_name;
-use crate::target::names::go_name::GeneratedPackage;
+use crate::target::ir::values::{CaptureBoundary, GoExpression, Stability};
 use crate::target::types::go_type::GoType;
 use syntax::go_names::ENUM_TAG_FIELD;
-use syntax::program::SlotOrigin;
-use syntax::program::{AliasKind, CheckedExpression, FieldSelection};
+use syntax::program::CheckedExpression;
 
 struct SpreadInput<'a> {
     base: &'a Expression,
@@ -118,7 +108,7 @@ impl Planner<'_> {
             _ => None,
         });
         if built_from_fields {
-            return ValuePlan::built_from(setup, value, fields_stability);
+            return ValuePlan::new(setup, value, fields_stability);
         }
         ValuePlan::computed(setup, value)
     }
@@ -279,289 +269,6 @@ impl Planner<'_> {
         }
     }
 
-    fn go_field_map_zero(
-        &mut self,
-        owner: &Type,
-        selection: &FieldSelection,
-        field: &str,
-        field_ty: &Type,
-    ) -> Option<GoExpression> {
-        let layout = self.field_slot_layout(owner, Some(selection), field, field_ty)?;
-        if !layout_is_map(&layout) {
-            return None;
-        }
-        Some(GoExpression::empty_composite(layout.go_type(self)))
-    }
-
-    fn go_imported_newtype_zero(&mut self, ty: &Type) -> Option<GoExpression> {
-        let Type::Nominal { id, .. } = ty else {
-            return None;
-        };
-        if !go_name::is_go_import(id.as_str()) {
-            return None;
-        }
-        let underlying = self.facts.newtype_underlying(ty)?;
-        let go_ty = self.go_type(ty);
-        self.go_newtype_zero(go_ty, &underlying)
-    }
-
-    fn go_newtype_zero(&mut self, go_ty: GoType, underlying: &Type) -> Option<GoExpression> {
-        let layout = self.value_layout(underlying, SlotOrigin::Lisette);
-        match layout.underlying() {
-            ValueLayout::Map { .. } | ValueLayout::Array { .. } => {
-                Some(GoExpression::empty_composite(go_ty))
-            }
-            ValueLayout::Slice { .. } => Some(GoExpression::conversion(go_ty, GoExpression::nil())),
-            ValueLayout::Plain(simple @ Type::Simple(_)) => {
-                let inner = self.lisette_zero(simple);
-                Some(GoExpression::conversion(go_ty, inner))
-            }
-            ValueLayout::Plain(nominal @ Type::Nominal { id, .. })
-                if go_name::is_go_import(id.as_str())
-                    && self
-                        .facts
-                        .definition(id.as_str())
-                        .is_some_and(|definition| {
-                            definition.is_newtype()
-                                || matches!(definition.body, DefinitionBody::Struct { .. })
-                        }) =>
-            {
-                let inner = self.lisette_zero(nominal);
-                Some(GoExpression::conversion(go_ty, inner))
-            }
-            _ => None,
-        }
-    }
-
-    fn go_imported_zero(&mut self, ty: &Type, id: &str) -> GoExpression {
-        let go_ty = self.go_type(ty);
-        let is_struct = matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::Struct { .. })
-        );
-        let is_opaque = matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::TypeAlias {
-                alias: AliasKind::Opaque(_),
-                ..
-            })
-        );
-        if !is_struct && !is_opaque {
-            return GoExpression::new_zero(go_ty);
-        }
-        if is_struct && let Some(fields) = self.facts.struct_fields(ty) {
-            let mut pairs: Vec<(String, GoExpression)> = Vec::new();
-            for (name, selection) in fields {
-                let field_ty = selection.field_ty();
-                let Some(zero) = self.go_field_map_zero(ty, &selection, &name, &field_ty) else {
-                    continue;
-                };
-                pairs.push((self.facts.struct_field_go_name(ty, &name, false), zero));
-            }
-            return plan_struct_literal(&go_ty, pairs);
-        }
-        GoExpression::empty_composite(go_ty)
-    }
-
-    pub(in crate::lowering) fn lisette_zero(&mut self, ty: &Type) -> GoExpression {
-        self.lisette_zero_expression(ty, false)
-            .expect("required zero expression")
-    }
-
-    fn lisette_zero_expression(&mut self, ty: &Type, omit_go_zero: bool) -> Option<GoExpression> {
-        if omit_go_zero && self.facts.go_zero_is_lisette_zero(ty) {
-            return None;
-        }
-        let layout = self.value_layout(ty, SlotOrigin::Lisette);
-        let zero = match (ty, &layout) {
-            (Type::Simple(kind), _) => {
-                let zero = match kind {
-                    SimpleKind::Bool => {
-                        GoExpression::constant("false".to_string(), ConstantKind::Bool)
-                    }
-                    SimpleKind::String => {
-                        GoExpression::constant("\"\"".to_string(), ConstantKind::String)
-                    }
-                    SimpleKind::Unit => self.unit_value(None, None),
-                    _ => GoExpression::constant("0".to_string(), ConstantKind::Int),
-                };
-                return Some(zero);
-            }
-            (
-                Type::Compound {
-                    kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
-                    ..
-                },
-                ValueLayout::Slice { element, .. },
-            ) => {
-                let element = element.go_type(self);
-                let go_type = GoType::slice_of(&element);
-                GoExpression::conversion(go_type, GoExpression::nil())
-            }
-            (
-                Type::Compound {
-                    kind: CompoundKind::Map,
-                    ..
-                },
-                ValueLayout::Map { key, value, .. },
-            ) => {
-                let key = key.go_type(self);
-                let value = value.go_type(self);
-                GoExpression::empty_composite(GoType::map_of(&key, &value))
-            }
-            (Type::Compound { .. }, _) => GoExpression::empty_composite(self.go_type(ty)),
-            (Type::Nominal { id, params, .. }, _) => {
-                return self.lisette_zero_nominal(ty, id.as_str(), params, omit_go_zero);
-            }
-            (Type::Tuple(slots), ValueLayout::Tuple { elements, .. }) => {
-                let parts: Vec<GoExpression> = elements
-                    .iter()
-                    .map(|element| self.lisette_zero(element.logical_type()))
-                    .collect();
-                let callee = self.make_tuple_callee(slots, parts.len());
-                GoExpression::pure_call(callee, parts)
-            }
-            (
-                Type::Array { .. },
-                ValueLayout::Array {
-                    length, element, ..
-                },
-            ) => self.array_zero(*length, element.logical_type()),
-            (Type::Parameter(name), _) => {
-                let go_name = self.generic_go_name(name);
-                GoExpression::new_zero(GoType::new(go_name.to_string()))
-            }
-            _ => GoExpression::empty_composite(self.go_type(ty)),
-        };
-        Some(zero)
-    }
-
-    fn lisette_zero_nominal(
-        &mut self,
-        ty: &Type,
-        id: &str,
-        params: &[Type],
-        omit_go_zero: bool,
-    ) -> Option<GoExpression> {
-        if id == "prelude.Option" {
-            let inner = params
-                .first()
-                .map(|a| self.go_type(a))
-                .unwrap_or_else(|| GoType::new("any"));
-            let zero = GoExpression::call(
-                GoExpression::instantiation(
-                    GoExpression::generated(
-                        GeneratedPackage::Prelude,
-                        option_variant("None").constructor,
-                    ),
-                    GoType::type_arguments(&[inner]),
-                ),
-                Vec::new(),
-            );
-            return Some(zero);
-        }
-        let go_import = go_name::is_go_import(id);
-        if go_import
-            && (self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some())
-        {
-            return Some(self.go_zero(ty));
-        }
-        if let Some(underlying) = self.facts.newtype_underlying(ty) {
-            let go_ty = self.go_type(ty);
-            if go_import {
-                let zero = self
-                    .go_newtype_zero(go_ty.clone(), &underlying)
-                    .unwrap_or_else(|| GoExpression::new_zero(go_ty));
-                return Some(zero);
-            }
-            let inner = self.lisette_zero(&underlying);
-            return Some(GoExpression::conversion(go_ty, inner));
-        }
-        if go_import {
-            return Some(self.go_imported_zero(ty, id));
-        }
-        if let Some(fields) = self.facts.struct_fields(ty) {
-            let is_tuple = self.facts.is_tuple_struct_type(ty);
-            let pairs: Vec<(String, GoExpression)> = fields
-                .into_iter()
-                .enumerate()
-                .map(|(index, (name, selection))| (index, name, selection.field_ty()))
-                .filter_map(|(index, name, field_ty)| {
-                    let zero = self.lisette_zero_expression(&field_ty, !is_tuple)?;
-                    let go_name = if is_tuple {
-                        go_name::tuple_struct_field(index)
-                    } else {
-                        self.facts.struct_field_go_name(ty, &name, false)
-                    };
-                    Some((go_name, zero))
-                })
-                .collect();
-            return Some(plan_struct_literal(&self.go_type(ty), pairs));
-        }
-        if let Some(underlying) = self.facts.underlying_type(ty) {
-            return self.lisette_zero_expression(&underlying, omit_go_zero);
-        }
-        Some(GoExpression::empty_composite(self.go_type(ty)))
-    }
-
-    fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
-        let elem_go = self.go_type(elem);
-        let array_type = GoType::array_of(len, &elem_go);
-        if len == 0 || self.facts.go_zero_is_lisette_zero(elem) {
-            return GoExpression::empty_composite(array_type);
-        }
-        self.zero_filled(array_type, elem, None)
-    }
-
-    pub(in crate::lowering) fn zero_filled(
-        &mut self,
-        container_type: GoType,
-        element: &Type,
-        make_length: Option<GoExpression>,
-    ) -> GoExpression {
-        let zero = self.lisette_zero(element);
-        let hint = if make_length.is_some() { "s" } else { "arr" };
-        let container_name = self.scope.helper_local(hint, self.names);
-        let index_name = self.scope.helper_local("i", self.names);
-        let container = || GoExpression::identifier(container_name.clone());
-        let index = || GoExpression::identifier(index_name.clone());
-        let initial = match make_length {
-            Some(length) => define(
-                container_name.clone(),
-                GoExpression::call(
-                    GoExpression::external_name("make".to_string()),
-                    vec![GoExpression::type_name(container_type.clone()), length],
-                ),
-            ),
-            None => declare(container_name.clone(), container_type.clone()),
-        };
-        immediate_call(
-            container_type,
-            LoweredBlock {
-                statements: vec![
-                    initial,
-                    LoweredStatement::Loop(LoopPlan {
-                        kind: LoopKind::Generated { label: None },
-                        header: LoopHeader::Range {
-                            key: Some(index_name.clone()),
-                            value: None,
-                            iterable: container(),
-                        },
-                        body: LoweredBlock {
-                            statements: vec![assign(
-                                GoExpression::index(container(), index()),
-                                zero,
-                            )],
-                        },
-                    })
-                    .into(),
-                    plain_return(container()),
-                ],
-            },
-            FunctionLiteralLayout::MultiLine,
-        )
-    }
-
     fn wrap_recursive_enum_field(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -576,7 +283,7 @@ impl Planner<'_> {
         if !needs_pointer {
             return value;
         }
-        let temp = self.hoist_tmp_value_statement(statements, "ptr", value);
+        let temp = self.hoist_temp(statements, "ptr", value);
         GoExpression::address_of(GoExpression::identifier(temp))
     }
 
@@ -701,7 +408,7 @@ impl Planner<'_> {
                 let has_observable_evaluation = field.has_observable_evaluation;
                 let (name, value) = field.into_pair();
                 if has_observable_evaluation {
-                    let temp = self.hoist_tmp_value_statement(statements, "field", value);
+                    let temp = self.hoist_temp(statements, "field", value);
                     (name, GoExpression::identifier(temp))
                 } else {
                     (name, value)
@@ -720,7 +427,7 @@ impl Planner<'_> {
         }
 
         let (mut statements, base_value) = base_staged.into_parts();
-        let tmp = self.hoist_tmp_value_statement(&mut statements, "copy", base_value);
+        let tmp = self.hoist_temp(&mut statements, "copy", base_value);
         if let Some(id) = tmp.id() {
             self.scope.mark_struct_update_copy(id);
         }
@@ -755,11 +462,7 @@ impl Planner<'_> {
         }
 
         let source = if is_order_sensitive(base) {
-            GoExpression::identifier(self.hoist_tmp_value_statement(
-                &mut statements,
-                "spread",
-                base_value,
-            ))
+            GoExpression::identifier(self.hoist_temp(&mut statements, "spread", base_value))
         } else {
             base_value
         };
@@ -768,14 +471,6 @@ impl Planner<'_> {
             field_pairs.push((slot.clone(), GoExpression::selector(source.clone(), slot)));
         }
         (statements, plan_struct_literal(&ctx.go_type, field_pairs))
-    }
-}
-
-fn layout_is_map(layout: &ValueLayout) -> bool {
-    match layout {
-        ValueLayout::Map { .. } => true,
-        ValueLayout::Named { underlying, .. } => layout_is_map(underlying),
-        _ => false,
     }
 }
 

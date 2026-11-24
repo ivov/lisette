@@ -451,7 +451,7 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         return_shape: Option<&LoweredReturnAbi>,
     ) -> GoType {
-        let abi = match (self.return_ctx(), return_shape) {
+        let abi = match (self.scope.current_return_ctx(), return_shape) {
             (ReturnContext::Void(_), _) => CallableReturnAbi::Void,
             (_, Some(shape)) => CallableReturnAbi::Lowered(shape.clone()),
             (_, None) => CallableReturnAbi::Value,
@@ -465,7 +465,7 @@ impl Planner<'_> {
         deferred_patterns: &[ParamDestructure<'_>],
         parameters: &mut [GoIdentifier],
     ) -> LoweredBlock {
-        let should_return = !matches!(self.return_ctx(), ReturnContext::Void(_));
+        let should_return = !matches!(self.scope.current_return_ctx(), ReturnContext::Void(_));
         let prefix = self.lower_param_destructures(deferred_patterns);
         self.lower_function_body_inner(
             function_definition
@@ -501,8 +501,8 @@ impl Planner<'_> {
         let self_id = self_param.pattern.binding_id();
         let receiver = self
             .scope
-            .bind_source("self", self_id.as_slice(), receiver_var.clone());
-        self.declare(&receiver_var);
+            .bind_new_local("self", self_id.as_slice(), receiver_var.clone());
+        self.scope.declare_go_name(&receiver_var);
 
         GoParameter::new(receiver, go_type)
     }
@@ -522,8 +522,8 @@ impl Planner<'_> {
                 } if identifier == go_name::TEST_CTX_PARAM => {
                     let go_name = self.scope.fresh_binding_go_name("ctx", self.names);
                     let name = self.scope.new_local_identifier(go_name);
-                    self.declare(&name);
-                    let name = self.scope.bind_source(identifier.as_str(), &[], name);
+                    self.scope.declare_go_name(&name);
+                    let name = self.scope.bind_new_local(identifier.as_str(), &[], name);
                     lowered.test_handle.get_or_insert_with(|| name.clone());
                     name
                 }
@@ -541,10 +541,10 @@ impl Planner<'_> {
                         name
                     } else {
                         self.scope
-                            .bind_source(identifier.as_str(), id.as_slice(), "_")
+                            .bind_new_local(identifier.as_str(), id.as_slice(), "_")
                     }
                 }
-                Pattern::WildCard { .. } => GoIdentifier::external("_".to_string()),
+                Pattern::WildCard { .. } => GoIdentifier::blank(),
                 _ => {
                     let var = self.fresh_declared("arg");
                     lowered

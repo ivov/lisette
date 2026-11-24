@@ -267,9 +267,7 @@ impl CoercionPlan {
                     vec![payload],
                 )
             }
-            Self::Layout(change) => {
-                planner.plan_layout_change(&mut statements, value, &change, true)
-            }
+            Self::Layout(change) => planner.plan_layout_change(&mut statements, value, &change),
             Self::RebuildArray {
                 array_type,
                 element,

@@ -1,6 +1,6 @@
 use crate::lowering::calls::arguments::CallArgsContext;
-use crate::lowering::calls::dispatch::{CallArgShape, CallTypeArgsRequest};
 use crate::lowering::calls::regular::receiver_type_binding;
+use crate::lowering::calls::type_arguments::{CallArgShape, CallTypeArgsRequest};
 
 use crate::Planner;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
@@ -53,7 +53,7 @@ impl Planner<'_> {
         if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
         {
             let source = self.value_layout(
-                &self.facts.without_references(&receiver.get_type()),
+                &self.facts.strip_refs(&receiver.get_type()),
                 SlotOrigin::Lisette,
             );
             let target = self.receiver_layout(&receiver.get_type());
@@ -174,7 +174,7 @@ impl Planner<'_> {
         match receiver {
             Expression::Call { .. } => stage
                 .map_expression(|setup, value| {
-                    let temp = self.hoist_tmp_value_statement(setup, "ref", value);
+                    let temp = self.hoist_temp(setup, "ref", value);
                     GoExpression::address_of(GoExpression::identifier(temp))
                 })
                 .with_stability(Stability::StableAcrossCalls),
@@ -187,7 +187,7 @@ impl Planner<'_> {
             _ => {
                 let (mut setup, value) = stage.into_parts();
                 let addressed = GoExpression::address_of(value);
-                let temp = self.hoist_tmp_value_statement(&mut setup, "ref", addressed);
+                let temp = self.hoist_temp(&mut setup, "ref", addressed);
                 ValuePlan::captured(setup, temp)
             }
         }

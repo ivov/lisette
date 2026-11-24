@@ -54,7 +54,7 @@ impl Planner<'_> {
         items: &[Expression],
         ty: &Type,
     ) -> ValuePlan {
-        let result_var = self.fresh_local(Some("tryResult"));
+        let result_var = self.fresh_local("tryResult");
         self.plan_try_block_as(items, ty, ty, result_var)
     }
 
@@ -109,7 +109,7 @@ impl Planner<'_> {
             .fallible(ty)
             .expect("`try` block must have Result or Option type");
 
-        self.declare(result_var.spelling());
+        self.scope.declare_go_name(result_var.spelling());
         let full_ty = self.go_type(ty);
         let source = self.value_layout(ty, SlotOrigin::Lisette);
         let target = self.value_layout(target_ty, SlotOrigin::Lisette);
@@ -138,7 +138,7 @@ impl Planner<'_> {
         let Expression::TryBlock { items, ty, .. } = block else {
             return None;
         };
-        if self.return_ctx().ty().is_none() || self.facts.converts(block) {
+        if self.scope.current_return_ctx().ty().is_none() || self.facts.converts(block) {
             return None;
         }
         let fallible = self.facts.fallible(ty)?;

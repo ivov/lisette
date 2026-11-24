@@ -127,7 +127,7 @@ impl Planner<'_> {
                     let recipe = recipes
                         .next()
                         .expect("internal error: the checker records the equality of every field");
-                    self.equality_expression(field(&receiver), field(&other), recipe)
+                    self.equality_test(field(&receiver), field(&other), recipe, BinaryOp::Eq)
                 })
                 .collect();
             let value = comparisons

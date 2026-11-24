@@ -293,7 +293,7 @@ impl Check {
                     LoweredBlock {
                         statements: vec![
                             define_many(
-                                vec![GoIdentifier::external("_".to_string()), ok.clone()],
+                                vec![GoIdentifier::blank(), ok.clone()],
                                 GoExpression::type_assertion(path.render(subject), go_type.clone()),
                             ),
                             plain_return(GoExpression::identifier(ok)),

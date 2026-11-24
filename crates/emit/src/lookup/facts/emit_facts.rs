@@ -139,7 +139,7 @@ impl<'a> EmitFacts<'a> {
         generics.iter().position(|generic| generic.name == *name)
     }
 
-    pub(crate) fn underlying_type(&self, ty: &Type) -> Option<Type> {
+    pub(crate) fn immediate_underlying(&self, ty: &Type) -> Option<Type> {
         types::underlying_type(ty, |id| self.definition(id))
     }
 
@@ -198,7 +198,7 @@ impl<'a> EmitFacts<'a> {
                         .iter()
                         .all(|(_, selection)| self.go_zero_is_lisette_zero(&selection.field_ty()));
                 }
-                self.underlying_type(&ty)
+                self.immediate_underlying(&ty)
                     .is_some_and(|underlying| self.go_zero_is_lisette_zero(&underlying))
             }
             _ => false,
@@ -266,7 +266,7 @@ impl<'a> EmitFacts<'a> {
         types::simple_kind(ty, |id| self.definition(id))
     }
 
-    pub(crate) fn without_references(&self, ty: &Type) -> Type {
+    pub(crate) fn strip_refs(&self, ty: &Type) -> Type {
         ty.strip_refs()
     }
 
@@ -339,10 +339,10 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_reference_underneath(&self, ty: &Type) -> bool {
-        self.underlying(ty).is_ref()
+        self.peel_underlying(ty).is_ref()
     }
 
-    pub(crate) fn array_length_behind_refs(&self, ty: &Type) -> Option<u64> {
+    pub(crate) fn receiver_array_length(&self, ty: &Type) -> Option<u64> {
         match self.receiver_shape(ty) {
             Type::Array { length, .. } => Some(length),
             _ => None,
@@ -384,7 +384,7 @@ impl<'a> EmitFacts<'a> {
                 .is_some_and(|elements| elements.len() >= 2)
     }
 
-    pub(crate) fn tuple_behind_refs(&self, ty: &Type) -> Option<Vec<Type>> {
+    pub(crate) fn receiver_tuple_elements(&self, ty: &Type) -> Option<Vec<Type>> {
         match self.receiver_shape(ty) {
             Type::Tuple(elements) => Some(elements),
             _ => None,
@@ -398,7 +398,7 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
-    pub(crate) fn type_parameter_behind_refs(&self, ty: &Type) -> Option<EcoString> {
+    pub(crate) fn ref_stripped_type_parameter(&self, ty: &Type) -> Option<EcoString> {
         match ty.strip_refs() {
             Type::Parameter(name) => Some(name),
             _ => None,
@@ -424,7 +424,7 @@ impl<'a> EmitFacts<'a> {
         )
     }
 
-    pub(crate) fn tuple_element_types(&self, ty: &Type) -> Vec<Type> {
+    pub(crate) fn tuple_or_type_arguments(&self, ty: &Type) -> Vec<Type> {
         types::tuple_element_types(ty, |id| self.definition(id))
     }
 
@@ -456,7 +456,7 @@ impl<'a> EmitFacts<'a> {
         types::go_nil_form(ty, |id| self.input.definitions.get(id))
     }
 
-    pub(crate) fn underlying(&self, ty: &Type) -> Type {
+    pub(crate) fn peel_underlying(&self, ty: &Type) -> Type {
         types::peel_underlying(ty, |id| self.input.definitions.get(id))
     }
 

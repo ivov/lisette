@@ -8,7 +8,7 @@ use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::is_go_never;
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::statements::placement::{ElidableTail, requires_temp_var};
 use crate::target::ir::bodies::{
@@ -26,7 +26,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> LoweredBlock {
-        let return_ctx = self.return_ctx();
+        let return_ctx = self.scope.current_return_ctx();
         if self.facts.is_never(&expression.get_type()) {
             let mut statements = vec![self.lower_never_value(expression)];
             if !matches!(return_ctx, ReturnContext::Void(_)) {
@@ -77,7 +77,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> Option<Vec<Statement>> {
-        let return_ctx = self.return_ctx();
+        let return_ctx = self.scope.current_return_ctx();
         let written_ty = return_ctx
             .ty()
             .filter(|ty| self.facts.fallible(ty).is_some())
@@ -85,73 +85,49 @@ impl Planner<'_> {
             .unwrap_or_else(|| expression.get_type());
         let fallible = self.facts.fallible(&written_ty)?;
 
-        let mut statements = Vec::new();
-
         if is_go_never(&self.facts, expression) {
-            let (setup, call) = self
+            let (mut statements, call) = self
                 .plan_call_expression(expression, None, ExpressionContext::value())
                 .into_parts();
-            statements.extend(setup);
             statements.push(diverging_statement(call));
             return Some(statements);
         }
 
         if fallible.classify_constructor(expression) == Some(ConstructorKind::Failure) {
-            statements.extend(self.lower_failure_constructor_return(&[], &fallible, &[]));
-            return Some(statements);
-        }
-
-        if !matches!(
-            expression,
-            Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
-        ) {
-            let coercion = self.value_slot_coercion(expression, &written_ty);
-            if !coercion.is_identity() {
-                let (setup, value) = self
-                    .plan_value(expression, ExpressionContext::value())
-                    .into_parts();
-                statements.extend(setup);
-                let (coercion_setup, value) = coercion.lower(self, value);
-                statements.extend(coercion_setup);
-                statements.extend(self.wrapped_value_return(value, &written_ty));
-                return Some(statements);
-            }
-        }
-
-        if matches!(expression, Expression::Call { .. }) {
-            statements.extend(self.lower_wrapped_call_return(expression, &fallible, &written_ty));
-            return Some(statements);
+            return Some(self.lower_failure_constructor_return(&[], &fallible, &[]));
         }
 
         if matches!(
             expression,
             Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
         ) {
-            let block = self.lower_branching_to_block(expression, &PlacePlan::Return);
-            statements.extend(block.statements);
-            return Some(statements);
+            return Some(
+                self.lower_branching_to_block(expression, &PlacePlan::Return)
+                    .statements,
+            );
         }
 
-        if let Expression::Propagate {
-            expression: inner, ..
-        } = expression
-        {
-            let (setup, value) = self.plan_propagate(inner);
-            statements.extend(setup);
-            statements.extend(self.wrapped_value_return(value, &written_ty));
-            return Some(statements);
+        let coercion = self.value_slot_coercion(expression, &written_ty);
+        if coercion.is_identity() && matches!(expression, Expression::Call { .. }) {
+            return Some(self.lower_wrapped_call_return(expression, &fallible, &written_ty));
         }
 
-        let (setup, value) = self
-            .plan_value(expression, ExpressionContext::value())
-            .into_parts();
-        statements.extend(setup);
+        let (mut statements, value) = match expression {
+            Expression::Propagate {
+                expression: inner, ..
+            } if coercion.is_identity() => self.plan_propagate(inner),
+            _ => self
+                .plan_value(expression, ExpressionContext::value())
+                .into_parts(),
+        };
+        let (coercion_setup, value) = coercion.lower(self, value);
+        statements.extend(coercion_setup);
         statements.extend(self.wrapped_value_return(value, &written_ty));
         Some(statements)
     }
 
     fn wrapped_value_return(&mut self, value: GoExpression, return_ty: &Type) -> Vec<Statement> {
-        let Some(shape) = self.return_ctx().lowered_shape() else {
+        let Some(shape) = self.scope.current_return_ctx().lowered_shape() else {
             return vec![plain_return(value)];
         };
         self.lower_result_return(value, "v", return_ty, &shape)
@@ -197,7 +173,7 @@ impl Planner<'_> {
         fallible: &Fallible,
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
-        match self.return_ctx().lowered_shape().as_ref() {
+        match self.scope.current_return_ctx().lowered_shape().as_ref() {
             Some(LoweredReturnAbi::BareError) => {
                 if !args.is_empty() {
                     let (setup, _) = self
@@ -286,7 +262,7 @@ impl Planner<'_> {
         expression: &Expression,
         return_ty: &Type,
     ) -> Vec<Statement> {
-        let lowered = self.return_ctx().lowered_shape();
+        let lowered = self.scope.current_return_ctx().lowered_shape();
         let lowered = lowered.as_ref();
         let mut statements = Vec::new();
         if let Some(LoweredReturnAbi::Option(_)) = lowered
@@ -413,7 +389,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn return_fallible(&self) -> Option<Fallible> {
-        self.facts.fallible(self.return_ctx().ty()?)
+        self.facts.fallible(self.scope.current_return_ctx().ty()?)
     }
 
     pub(in crate::lowering) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
@@ -445,7 +421,7 @@ impl Planner<'_> {
         fallible: &Fallible,
         error: Option<GoExpression>,
     ) -> Vec<GoExpression> {
-        let return_ctx = self.return_ctx();
+        let return_ctx = self.scope.current_return_ctx();
         if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
             return match error {
@@ -463,7 +439,7 @@ impl Planner<'_> {
         fallible: &Fallible,
         error: Option<GoExpression>,
     ) -> Statement {
-        let lowered = self.return_ctx().lowered_shape().is_some();
+        let lowered = self.scope.current_return_ctx().lowered_shape().is_some();
         let mut values = self.failure_return_values(fallible, error);
         if lowered {
             go_returns::multi_value_return(values)
@@ -477,7 +453,7 @@ impl Planner<'_> {
         fallible: &Fallible,
         value: GoExpression,
     ) -> Vec<Statement> {
-        let Some(shape) = self.return_ctx().lowered_shape() else {
+        let Some(shape) = self.scope.current_return_ctx().lowered_shape() else {
             let success = self.fallible_success(fallible, value);
             return vec![plain_return(success)];
         };
@@ -510,7 +486,7 @@ impl Planner<'_> {
         fallible: &Fallible,
         error: Option<GoExpression>,
     ) -> GoExpression {
-        let ok_ty = match self.return_ctx().ty() {
+        let ok_ty = match self.scope.current_return_ctx().ty() {
             Some(ty) => self.facts.ok_payload(ty),
             None => fallible.ok_ty().clone(),
         };
@@ -614,7 +590,7 @@ impl Planner<'_> {
             let expression = if self.tail_tuple_return_slots(last).is_some() {
                 expression
             } else {
-                let return_ctx = self.return_ctx();
+                let return_ctx = self.scope.current_return_ctx();
                 self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression)
             };
             statements.push(plain_return(expression));

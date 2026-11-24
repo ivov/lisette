@@ -11,12 +11,12 @@ use crate::lowering::abi::go_result_wrapping::{
 };
 use crate::lowering::abi::go_returns;
 use crate::lowering::abi::layout::ValueLayout;
-use crate::lowering::calls::bound_value::PairCondition;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::go_interop::{LoweredCall, RawPair};
 use crate::lowering::calls::unwrap_or::{MapLambda, map_lambda};
 use crate::lowering::patterns::matching::FusedName;
 use crate::lowering::plan::context::ExpressionContext;
+use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
     effect_statement,
@@ -182,7 +182,7 @@ impl Planner<'_> {
     ) {
         let inner_ty = fallible.ok_ty();
         let zero = self.go_zero(inner_ty);
-        if self.is_declared(var_name.spelling()) {
+        if self.scope.is_go_name_declared(var_name.spelling()) {
             statements.push(assign(GoExpression::identifier(var_name.clone()), zero));
         } else {
             let go_ty = self.go_type(inner_ty);
@@ -194,7 +194,7 @@ impl Planner<'_> {
                 }
                 .into(),
             );
-            self.declare(var_name.spelling());
+            self.scope.declare_go_name(var_name.spelling());
         }
     }
 
@@ -207,7 +207,7 @@ impl Planner<'_> {
             !matches!(expression, Expression::Identifier { .. }) || !plan.effects().can_duplicate();
         let (mut setup, value) = plan.into_parts();
         if requires_capture {
-            let check = self.hoist_tmp_value_statement(&mut setup, "check", value);
+            let check = self.hoist_temp(&mut setup, "check", value);
             (setup, GoExpression::identifier(check))
         } else {
             (setup, value)
@@ -221,7 +221,10 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> LoweredStatement {
         let expression_ty = &expression.get_type();
-        let return_layout = self.value_layout(&self.return_ctx().expect_ty(), SlotOrigin::Lisette);
+        let return_layout = self.value_layout(
+            &self.scope.current_return_ctx().expect_ty(),
+            SlotOrigin::Lisette,
+        );
         let source_layout = self.value_layout(expression_ty, SlotOrigin::Lisette);
         let (setup, values) = if self.returns_tagged_type(expression)
             && source_layout
@@ -256,7 +259,7 @@ impl Planner<'_> {
     }
 
     fn returns_tagged_type(&self, operand: &Expression) -> bool {
-        let return_ctx = self.return_ctx();
+        let return_ctx = self.scope.current_return_ctx();
         return_ctx.lowered_shape().is_none()
             && return_ctx.ty().is_some()
             && self.facts.checked(operand).forwards_failure()
@@ -378,9 +381,7 @@ impl Planner<'_> {
         let ok_value = value_var.map(|val| {
             let val = GoExpression::identifier(val);
             match &payload_layout_change {
-                Some(change) if want_value => {
-                    self.plan_layout_change(&mut statements, val, change, true)
-                }
+                Some(change) if want_value => self.plan_layout_change(&mut statements, val, change),
                 _ => val,
             }
         });
@@ -412,13 +413,9 @@ impl Planner<'_> {
             payload_is_index,
         } = producer.control_transfer(self, slot, failure_values);
         let payload = match (target, payload) {
-            (PropagateTarget::Value, Some(payload)) if payload_is_index => {
-                Some(GoExpression::identifier(self.hoist_tmp_value_statement(
-                    &mut statements,
-                    "elem",
-                    payload,
-                )))
-            }
+            (PropagateTarget::Value, Some(payload)) if payload_is_index => Some(
+                GoExpression::identifier(self.hoist_temp(&mut statements, "elem", payload)),
+            ),
             (_, payload) => payload,
         };
         let value = self.propagated_value(&mut statements, target, named, payload);
@@ -631,9 +628,7 @@ impl Planner<'_> {
                     let function = if names_function(function.node()) {
                         function
                     } else {
-                        GoExpression::identifier(
-                            self.hoist_tmp_value_statement(setup, "cb", function),
-                        )
+                        GoExpression::identifier(self.hoist_temp(setup, "cb", function))
                     };
                     GoExpression::call(function, vec![error])
                 }
@@ -681,7 +676,8 @@ impl Planner<'_> {
             return;
         }
         if let (Some(name), Some(Stability::Fixed)) = (error.as_identifier(), stability) {
-            self.scope.bind_identifier(param.name, ids, name.clone());
+            self.scope
+                .bind_existing_identifier(param.name, ids, name.clone());
             return;
         }
         let read_once = uses != InlineDecision::Keep;
@@ -694,8 +690,8 @@ impl Planner<'_> {
                 .bind_inline_expr(param.name, ids, InlineExpr::new(error.clone(), stability));
             return;
         }
-        let name = self.hoist_source_value(setup, &param.go_name(), error.clone());
-        self.scope.bind_identifier(param.name, ids, name);
+        let name = self.hoist_temp(setup, &param.go_name(), error.clone());
+        self.scope.bind_existing_identifier(param.name, ids, name);
     }
 
     fn try_plan_tagged_map_err_propagate(
@@ -720,7 +716,7 @@ impl Planner<'_> {
             let stability = self.path_read_stability(&value);
             (value, stability)
         } else {
-            let check = self.hoist_tmp_value_statement(&mut statements, "check", value);
+            let check = self.hoist_temp(&mut statements, "check", value);
             (GoExpression::identifier(check), Stability::Fixed)
         };
 
@@ -794,7 +790,7 @@ impl Planner<'_> {
         {
             return None;
         }
-        match self.return_ctx().lowered_shape() {
+        match self.scope.current_return_ctx().lowered_shape() {
             Some(LoweredReturnAbi::BareError) => self
                 .forwarded_error_call(inner)
                 .map(ForwardedTail::ErrorCall),
@@ -826,7 +822,7 @@ impl Planner<'_> {
     }
 
     fn forwarded_tagged_result<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
-        let return_ty = self.return_ctx().ty()?.clone();
+        let return_ty = self.scope.current_return_ctx().ty()?.clone();
         (self.facts.is_result(&return_ty)
             && self
                 .facts
@@ -836,7 +832,8 @@ impl Planner<'_> {
     }
 
     fn returns_fallible(&self) -> bool {
-        self.return_ctx().lowered_shape().is_some() || self.return_fallible().is_some()
+        self.scope.current_return_ctx().lowered_shape().is_some()
+            || self.return_fallible().is_some()
     }
 
     fn declare_propagate_target<'a>(
@@ -845,8 +842,8 @@ impl Planner<'_> {
     ) -> Option<&'a GoIdentifier> {
         let name = target
             .bound_name()
-            .filter(|name| !self.is_declared(name.spelling()))?;
-        self.declare(name.spelling());
+            .filter(|name| !self.scope.is_go_name_declared(name.spelling()))?;
+        self.scope.declare_go_name(name.spelling());
         Some(name)
     }
 
@@ -871,10 +868,10 @@ impl Planner<'_> {
     }
 
     fn bind_propagate_ok(&mut self, name: &GoIdentifier, ok_access: GoExpression) -> Statement {
-        if self.is_declared(name.spelling()) {
+        if self.scope.is_go_name_declared(name.spelling()) {
             assign(GoExpression::identifier(name.clone()), ok_access)
         } else {
-            self.declare(name.spelling());
+            self.scope.declare_go_name(name.spelling());
             define(name.clone(), ok_access)
         }
     }

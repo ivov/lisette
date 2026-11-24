@@ -124,12 +124,12 @@ impl Planner<'_> {
 
         let staged = self.plan_operand(expression, ExpressionContext::value());
         let (mut setup, value) = staged.into_parts();
-        let temp_var = self.hoist_tmp_value_statement(&mut setup, prefix, value);
+        let temp_var = self.hoist_temp(&mut setup, prefix, value);
         ValuePlan::captured(setup, temp_var)
     }
 
     pub(in crate::lowering) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &'static str) {
-        staged.pin(|setup, value| self.hoist_tmp_value_statement(setup, prefix, value));
+        staged.pin(|setup, value| self.hoist_temp(setup, prefix, value));
     }
 
     pub(in crate::lowering) fn eager_operand(
@@ -158,7 +158,7 @@ impl Planner<'_> {
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if requires_capture {
-            GoExpression::identifier(self.hoist_tmp_value_statement(setup, prefix, value))
+            GoExpression::identifier(self.hoist_temp(setup, prefix, value))
         } else {
             value
         }
@@ -403,7 +403,7 @@ impl Planner<'_> {
             let (stage_setup, expression, stage_stability) = plan.into_parts_with_stability();
             setup.extend(stage_setup);
             if pin || (eager && !can_delay) {
-                let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
+                let tmp = self.hoist_temp(&mut setup, prefix, expression);
                 results.push(GoExpression::identifier(tmp));
             } else {
                 stability = stability.max(stage_stability);

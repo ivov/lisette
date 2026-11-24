@@ -132,7 +132,7 @@ impl Planner<'_> {
     ) {
         let element_tys = self
             .facts
-            .tuple_behind_refs(path_ty)
+            .receiver_tuple_elements(path_ty)
             .unwrap_or_else(|| unreachable!("tuple pattern on a non-tuple type: {path_ty:?}"));
 
         for (i, element) in elements.iter().enumerate() {

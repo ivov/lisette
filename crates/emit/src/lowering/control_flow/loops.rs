@@ -54,7 +54,7 @@ impl Planner<'_> {
         let shape = classify_for(&self.facts, binding, iterable, kind);
 
         let line = self.facts.source_position(&full_expression.get_span());
-        let plan = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
+        let plan = self.with_loop(None, None, |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range => this.lower_range_for(binding, iterable, body),
                 ForShape::StoredRange(range_shape) => {
@@ -104,11 +104,7 @@ impl Planner<'_> {
             let range_var = if this.facts.is_reference(&iterable_ty) {
                 let reference = this.capture_operand_into(&mut prologue, iterable);
                 let range = this.facts.dereference_refs(&iterable_ty, reference);
-                GoExpression::identifier(this.hoist_tmp_value_statement(
-                    &mut prologue,
-                    "range",
-                    range,
-                ))
+                GoExpression::identifier(this.hoist_temp(&mut prologue, "range", range))
             } else if is_unmutated_identifier(&this.facts, iterable) {
                 this.capture_operand_into(&mut prologue, iterable)
             } else {
@@ -176,7 +172,7 @@ impl Planner<'_> {
             let receiver_var = if this.facts.is_reference(&receiver_ty) {
                 let reference = this.capture_operand_into(&mut prologue, receiver);
                 let value = this.facts.dereference_refs(&receiver_ty, reference);
-                GoExpression::identifier(this.hoist_tmp_value_statement(&mut prologue, "s", value))
+                GoExpression::identifier(this.hoist_temp(&mut prologue, "s", value))
             } else if is_unmutated_identifier(&this.facts, receiver) {
                 this.capture_operand_into(&mut prologue, receiver)
             } else {
@@ -187,7 +183,7 @@ impl Planner<'_> {
                     CaptureBoundary::Delayed,
                 )
             };
-            let index_var = this.fresh_local(Some("i"));
+            let index_var = this.fresh_local("i");
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = LoopHeader::Counted {
                 variable: index_var.clone(),
@@ -325,8 +321,8 @@ impl Planner<'_> {
         let first_ty = element_tys.first().unwrap_or(binding_ty);
         let second_ty = element_tys.get(1).unwrap_or(binding_ty);
 
-        let key_var = self.fresh_local(Some("key"));
-        let value_var = self.fresh_local(Some("value"));
+        let key_var = self.fresh_local("key");
+        let value_var = self.fresh_local("value");
         let key_identifier = key_var.clone();
         let value_identifier = value_var.clone();
         let header = LoopHeader::Range {
@@ -373,7 +369,7 @@ impl Planner<'_> {
             let header = range_header(None, None, iter_expression);
             return (header, self.lower_block_as_body(body));
         }
-        let item_var = self.fresh_local(Some("item"));
+        let item_var = self.fresh_local("item");
         let item_identifier = item_var.clone();
         let header = match yields {
             RangeYield::Single => range_header(Some(&item_identifier), None, iter_expression),
@@ -492,17 +488,17 @@ impl Planner<'_> {
             let go_name = if self.scope.has_binding_for_go_name(&preferred)
                 || self.shadows_declaration(&preferred)
             {
-                self.fresh_source(&go_name)
+                self.fresh_local(&go_name)
             } else {
                 self.scope.new_local_identifier(preferred)
             };
             return self
                 .scope
-                .bind_source(identifier, binding.as_slice(), go_name);
+                .bind_new_local(identifier, binding.as_slice(), go_name);
         }
         match fallback {
-            Some(hint) => self.fresh_local(Some(hint)),
-            None => GoIdentifier::external("_".to_string()),
+            Some(hint) => self.fresh_local(hint),
+            None => GoIdentifier::blank(),
         }
     }
 
@@ -516,7 +512,7 @@ impl Planner<'_> {
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let result = GoExpression::identifier(result_var.clone());
-        let plan = self.with_loop(result, Some(ty.clone()), |this| {
+        let plan = self.with_loop(Some(result), Some(ty.clone()), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
         ValuePlan::captured(
@@ -538,14 +534,14 @@ impl Planner<'_> {
         else {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
-        let body = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
+        let body = self.with_loop(None, None, |this| {
             this.lower_while_let(pattern, scrutinee, body)
         });
         directed_at(&self.facts, expression, LoweredStatement::Body(body))
     }
 
     pub(in crate::lowering) fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
-        self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
+        self.with_loop(None, None, |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         })
     }
@@ -555,7 +551,7 @@ impl Planner<'_> {
         condition: &Expression,
         body: &Expression,
     ) -> LoopPlan {
-        self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
+        self.with_loop(None, None, |this| {
             let (target, negated) = strip_negations(condition);
             if let Some(exit) = this.try_plan_fused_predicate_value(target, !negated) {
                 let (setup, failure) = exit.into_parts();
@@ -618,6 +614,7 @@ impl Planner<'_> {
         mut body: LoweredBlock,
     ) -> LoopPlan {
         let target = self
+            .scope
             .current_loop_id()
             .expect("source loop plan requires an active loop context");
         let label = legalize_source_loop(&mut body, target);

@@ -13,7 +13,6 @@ use syntax::types::Type;
 
 use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
-use crate::lowering::calls::bound_value::PairCondition;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::patterns::binding_decls::pattern_binds_name;
 use crate::lowering::patterns::binding_statements::AssertedPattern;
@@ -24,8 +23,9 @@ use crate::lowering::patterns::matching::{
     ArmBinding, FusedName, field_binding, ok_pattern_field, some_pattern_field,
 };
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::testing::{test_context_call, testkit_operand_type};
+use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, declare,
     define, discard,
@@ -55,7 +55,7 @@ pub(in crate::lowering) enum PatternSubject<'a> {
     Expression {
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
-        temp_hint: Option<&'static str>,
+        temp_hint: &'static str,
     },
 }
 
@@ -69,7 +69,7 @@ impl<'a> PatternSubject<'a> {
     pub(in crate::lowering) fn expression(
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
-        temp_hint: Option<&'static str>,
+        temp_hint: &'static str,
     ) -> Self {
         Self::Expression {
             scrutinee,
@@ -235,7 +235,7 @@ impl Planner<'_> {
                     };
                 }
                 let name = self.fresh_local(temp_hint);
-                self.declare(&name);
+                self.scope.declare_go_name(&name);
                 ResolvedSubject::Deferred { name, expression }
             }
         }
@@ -306,7 +306,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(
             &mut statements,
-            PatternSubject::expression(scrutinee, pattern, Some("subject")),
+            PatternSubject::expression(scrutinee, pattern, "subject"),
         );
         let subject = TypedSubject {
             var: &resolved.var(),
@@ -424,19 +424,17 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         let fail_body = self.lower_block_as_body(else_block);
         statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: fail_condition.initializer,
-                condition: fail_condition.condition,
-                then_body: fail_body,
-                else_arm: ElseArm::None,
-                else_if_line: None,
-                origin: IfOrigin::User,
-            })
+            LoweredStatement::If(IfPlan::pair_if(
+                fail_condition,
+                fail_body,
+                ElseArm::None,
+                IfOrigin::User,
+            ))
             .into(),
         );
         if let Some((name, go_name)) = binding {
             self.scope
-                .bind_identifier(name.name, name.binding.as_slice(), go_name);
+                .bind_existing_identifier(name.name, name.binding.as_slice(), go_name);
         }
         statements
     }
@@ -451,13 +449,13 @@ impl Planner<'_> {
         let go_name = if self.shadows_declaration(&preferred)
             || self
                 .scope
-                .binds_go_name_for_other_source_name(&preferred, name.name)
+                .go_name_bound_by_other_lisette_name(&preferred, name.name)
         {
-            self.fresh_source(&source)
+            self.fresh_local(&source)
         } else {
             self.scope.new_local_identifier(preferred)
         };
-        self.declare(&go_name);
+        self.scope.declare_go_name(&go_name);
         Some((name, go_name))
     }
 
@@ -485,7 +483,7 @@ impl Planner<'_> {
         {
             return (value, setup);
         }
-        let var = self.fresh_local(Some("subject"));
+        let var = self.fresh_local("subject");
         setup.push(define(var.clone(), value));
         (GoExpression::identifier(var), setup)
     }
@@ -545,16 +543,14 @@ impl Planner<'_> {
 
         let mut loop_body = bound.statements;
         loop_body.push(
-            LoweredStatement::If(IfPlan {
-                initializer: none_condition.initializer,
-                condition: none_condition.condition,
-                then_body: LoweredBlock {
+            LoweredStatement::If(IfPlan::pair_if(
+                none_condition,
+                LoweredBlock {
                     statements: vec![self.loop_break().into()],
                 },
-                else_arm: ElseArm::None,
-                else_if_line: None,
-                origin: IfOrigin::User,
-            })
+                ElseArm::None,
+                IfOrigin::User,
+            ))
             .into(),
         );
         loop_body.extend(late_binding);
@@ -645,7 +641,7 @@ impl Planner<'_> {
         if subject_is_fixed {
             asserted.checks.retain(|check| {
                 let condition = check.render(&mut self.scope, SubjectRoot::Var(&asserted.subject));
-                !self.is_condition_established(&condition)
+                !self.scope.is_condition_established(&condition)
             });
         }
 
@@ -777,7 +773,7 @@ impl Planner<'_> {
             let (go_name, ty) = match &binding.target {
                 BindingTarget::Unused => {
                     self.scope
-                        .bind_source(&binding.lisette_name, &binding.binding_ids, "_");
+                        .bind_new_local(&binding.lisette_name, &binding.binding_ids, "_");
                     continue;
                 }
                 BindingTarget::Unit => {
@@ -787,9 +783,9 @@ impl Planner<'_> {
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
             };
             let go_name = if failure_uses.is_some_and(|uses| uses.contains(&go_name.preferred())) {
-                let fresh = self.fresh_declared_source(go_name);
+                let fresh = self.fresh_declared(go_name);
                 self.scope
-                    .bind_source(&binding.lisette_name, &binding.binding_ids, fresh)
+                    .bind_new_local(&binding.lisette_name, &binding.binding_ids, fresh)
             } else {
                 self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, go_name)
             };

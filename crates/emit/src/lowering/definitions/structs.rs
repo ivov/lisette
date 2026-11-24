@@ -193,7 +193,7 @@ impl Planner<'_> {
                 let field = |base: &GoIdentifier| {
                     GoExpression::selector(GoExpression::identifier(base.clone()), go_field.clone())
                 };
-                self.equality_expression(field(&receiver), field(&other), recipe)
+                self.equality_test(field(&receiver), field(&other), recipe, BinaryOp::Eq)
             })
             .collect();
         let body = comparisons

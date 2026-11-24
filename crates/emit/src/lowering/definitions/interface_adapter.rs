@@ -217,7 +217,7 @@ impl Planner<'_> {
         target: &Type,
         witness: Option<&ConformanceWitness>,
     ) -> Option<AdapterPlan> {
-        let name = self.facts.type_parameter_behind_refs(source)?;
+        let name = self.facts.ref_stripped_type_parameter(source)?;
         let Type::Nominal { id, .. } = target else {
             return None;
         };
@@ -290,8 +290,8 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         if !method.source.same_representation(alternate) {
             let local_type = self.dynamic_method_interface(&method.source_go_name, &method.source);
-            let local = self.fresh_local(Some("receiver"));
-            let ok = self.fresh_local(Some("ok"));
+            let local = self.fresh_local("receiver");
+            let ok = self.fresh_local("ok");
             statements.push(define_many(
                 vec![local.clone(), ok.clone()],
                 GoExpression::type_assertion(inner.clone(), local_type),
@@ -563,7 +563,7 @@ impl Planner<'_> {
         let cacheable = plan.generic_context.is_empty();
         if cacheable
             && let Some(name) = self.adapter_registry.lookup(&key)
-            && !self.is_declared(name)
+            && !self.scope.is_go_name_declared(name)
         {
             return name.to_string();
         }
@@ -664,11 +664,11 @@ impl Planner<'_> {
     }
 
     fn declare_adapter_method_binding(&mut self, preferred: String) -> GoIdentifier {
-        if self.try_declare(&preferred) {
+        if self.scope.try_declare_go_name(&preferred) {
             return GoIdentifier::local(preferred, self.scope.new_local_id());
         }
-        let name = self.fresh_like(&GoIdentifier::name(preferred));
-        self.declare(&name);
+        let name = self.fresh_local(&GoIdentifier::name(preferred));
+        self.scope.declare_go_name(&name);
         name
     }
 

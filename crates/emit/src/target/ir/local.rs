@@ -65,6 +65,10 @@ impl GoIdentifier {
         }
     }
 
+    pub(crate) fn blank() -> Self {
+        Self::external("_".to_string())
+    }
+
     pub(crate) fn local(spelling: String, id: LocalId) -> Self {
         Self {
             spelling,

@@ -5,6 +5,7 @@ use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{ConstantKind, GoExpression, OperandForm, Stability};
 use crate::target::types::go_type::GoType;
 use std::mem;
+use syntax::types::Type;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::lowering) struct ValuePlan {
@@ -48,7 +49,11 @@ impl ValuePlan {
         (setup, Self::new(Vec::new(), expression, stability))
     }
 
-    fn new(setup: Vec<Statement>, expression: GoExpression, stability: Stability) -> Self {
+    pub(in crate::lowering) fn new(
+        setup: Vec<Statement>,
+        expression: GoExpression,
+        stability: Stability,
+    ) -> Self {
         Self {
             setup,
             expression,
@@ -96,14 +101,6 @@ impl ValuePlan {
 
     pub(in crate::lowering) fn plain_call(setup: Vec<Statement>, expression: GoExpression) -> Self {
         Self::new(setup, expression, Stability::StableAcrossCalls)
-    }
-
-    pub(in crate::lowering) fn built_from(
-        setup: Vec<Statement>,
-        expression: GoExpression,
-        stability: Stability,
-    ) -> Self {
-        Self::new(setup, expression, stability)
     }
 
     pub(in crate::lowering) fn verbatim(source: String) -> Self {
@@ -221,5 +218,20 @@ impl ValuePlan {
         self.expression = GoExpression::dereference(self.expression);
         self.stability = Stability::Observable;
         self
+    }
+}
+
+pub(in crate::lowering) enum PlacePlan<'a> {
+    Statement,
+    Return,
+    Assign {
+        local: &'a GoExpression,
+        target_ty: Option<&'a Type>,
+    },
+}
+
+impl PlacePlan<'_> {
+    pub(in crate::lowering) fn is_return(&self) -> bool {
+        matches!(self, PlacePlan::Return)
     }
 }

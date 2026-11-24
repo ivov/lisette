@@ -10,7 +10,7 @@ use crate::Planner;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::control_flow::branches::is_conjunction;
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::{
     ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
@@ -363,13 +363,13 @@ impl Planner<'_> {
                     (_, LoopCallback::Lambda { patterns, .. }) if kind == SliceLoop::Fold => {
                         self.accumulator_slot_name(patterns[0], receiver)
                     }
-                    _ => self.fresh_local(Some("result")),
+                    _ => self.fresh_local("result"),
                 };
-                self.declare(result.spelling());
+                self.scope.declare_go_name(result.spelling());
                 match kind {
                     SliceLoop::Map => {
-                        let index = self.fresh_local(Some("i"));
-                        self.declare(index.spelling());
+                        let index = self.fresh_local("i");
+                        self.scope.declare_go_name(index.spelling());
                         PlannedLoop::Map { result, index }
                     }
                     SliceLoop::Filter => PlannedLoop::Filter { result },
@@ -417,7 +417,7 @@ impl Planner<'_> {
 
     fn accumulator_slot_name(&mut self, pattern: &Pattern, receiver: &Expression) -> GoIdentifier {
         let Pattern::Identifier { binding, .. } = pattern else {
-            return self.fresh_local(Some("result"));
+            return self.fresh_local("result");
         };
         match self.facts.go_name_for_binding(pattern) {
             Some(name)
@@ -425,10 +425,10 @@ impl Planner<'_> {
                     .scope
                     .expression_reads_go_name(receiver, &name.preferred()) =>
             {
-                self.fresh_source(&name)
+                self.fresh_local(&name)
             }
             Some(name) => self.claim_declared_go_name(binding.as_slice(), &name),
-            None => self.fresh_local(Some("result")),
+            None => self.fresh_local("result"),
         }
     }
 
@@ -441,8 +441,8 @@ impl Planner<'_> {
                 return name;
             }
         }
-        let name = self.fresh_local(Some("v"));
-        self.declare(name.spelling());
+        let name = self.fresh_local("v");
+        self.scope.declare_go_name(name.spelling());
         name
     }
 
@@ -461,14 +461,17 @@ impl Planner<'_> {
         };
         match existing {
             Some(name) => {
-                self.declare(name.spelling());
-                self.scope
-                    .bind_identifier(identifier.as_str(), ids.as_slice(), name.clone());
+                self.scope.declare_go_name(name.spelling());
+                self.scope.bind_existing_identifier(
+                    identifier.as_str(),
+                    ids.as_slice(),
+                    name.clone(),
+                );
                 name
             }
             None => match self.facts.go_name_for_binding(pattern) {
                 Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), &name),
-                None => GoIdentifier::external("_".to_string()),
+                None => GoIdentifier::blank(),
             },
         }
     }
@@ -690,7 +693,7 @@ fn slice_loop_statement(
                 Some(index.clone())
             }
             (_, "_") => None,
-            _ => Some(GoIdentifier::external("_".to_string())),
+            _ => Some(GoIdentifier::blank()),
         },
         value: (element_name.spelling() != "_").then_some(element_name),
         iterable: source,

@@ -8,13 +8,10 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::package_names::PackageNames;
 use crate::lookup::state::adapter_registry::AdapterRegistry;
 use crate::lookup::state::conversion_record::ConversionRecord;
-use crate::lookup::state::enclosing::LoopContext;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lookup::state::scope::ScopeState;
-use crate::target::ir::bodies::{
-    LoopId, LoopTransfer, LoweredBlock, LoweredStatement, Statement, define,
-};
+use crate::target::ir::bodies::{LoopTransfer, LoweredBlock, LoweredStatement, Statement, define};
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration};
 use crate::target::ir::go_expression::{GoExpressionNode, TreeVisitor};
 use crate::target::ir::local::GoIdentifier;
@@ -183,7 +180,7 @@ impl<'a> Planner<'a> {
 
     pub(in crate::lowering) fn with_loop<R>(
         &mut self,
-        result: GoExpression,
+        result: Option<GoExpression>,
         result_ty: Option<Type>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
@@ -193,41 +190,14 @@ impl<'a> Planner<'a> {
         result
     }
 
-    pub(in crate::lowering) fn current_loop(&self) -> Option<&LoopContext> {
-        self.scope.current_loop()
-    }
-
-    pub(in crate::lowering) fn current_loop_id(&self) -> Option<LoopId> {
-        self.scope.current_loop_id()
-    }
-
     pub(in crate::lowering) fn current_loop_transfer(&self) -> LoopTransfer {
-        self.current_loop_id()
+        self.scope
+            .current_loop_id()
             .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source)
     }
 
-    pub(in crate::lowering) fn return_ctx(&self) -> ReturnContext {
-        self.scope.current_return_ctx()
-    }
-
-    pub(in crate::lowering) fn try_declare(&mut self, go_name: &str) -> bool {
-        self.scope.try_declare_go_name(go_name)
-    }
-
-    pub(in crate::lowering) fn is_declared(&self, go_name: &str) -> bool {
-        self.scope.is_go_name_declared(go_name)
-    }
-
     pub(in crate::lowering) fn shadows_declaration(&self, go_name: &str) -> bool {
-        self.is_declared(go_name) || self.names.is_package_block_name(go_name)
-    }
-
-    pub(in crate::lowering) fn is_condition_established(&self, condition: &GoExpression) -> bool {
-        self.scope.is_condition_established(condition)
-    }
-
-    pub(in crate::lowering) fn declare(&mut self, go_name: &str) {
-        self.scope.declare_go_name(go_name);
+        self.scope.is_go_name_declared(go_name) || self.names.is_package_block_name(go_name)
     }
 
     pub(in crate::lowering) fn claim_declared_binding(
@@ -237,7 +207,7 @@ impl<'a> Planner<'a> {
         preferred: &SourceName,
     ) -> GoIdentifier {
         let go_name = self.claim_declared_go_name(ids, preferred);
-        self.scope.bind_source(lisette_name, ids, go_name)
+        self.scope.bind_new_local(lisette_name, ids, go_name)
     }
 
     pub(in crate::lowering) fn claim_block_binding(
@@ -266,17 +236,17 @@ impl<'a> Planner<'a> {
                     self.scope.is_active_assign_target(&go_name)
                         || self
                             .scope
-                            .binds_go_name_for_other_source_name(&go_name, lisette_name)
+                            .go_name_bound_by_other_lisette_name(&go_name, lisette_name)
                 }
                 OuterBindings::StayVisible => self.scope.has_binding_for_go_name(&go_name),
             };
         let go_name = if hides {
-            self.fresh_source(source)
+            self.fresh_local(source)
         } else {
             go_name
         };
-        self.declare(&go_name);
-        self.scope.bind_source(lisette_name, ids, go_name)
+        self.scope.declare_go_name(&go_name);
+        self.scope.bind_new_local(lisette_name, ids, go_name)
     }
 
     pub(in crate::lowering) fn claim_declared_go_name(
@@ -286,7 +256,7 @@ impl<'a> Planner<'a> {
     ) -> GoIdentifier {
         let go_name = self.scope.new_local_identifier(preferred);
         let go_name = if self.shadows_declaration(&go_name)
-            || self.scope.has_other_binding_for_go_name(&go_name, ids)
+            || self.scope.go_name_bound_outside_ids(&go_name, ids)
         {
             let fresh = self
                 .scope
@@ -295,40 +265,29 @@ impl<'a> Planner<'a> {
         } else {
             go_name
         };
-        self.declare(&go_name);
+        self.scope.declare_go_name(&go_name);
         go_name
     }
 
-    pub(in crate::lowering) fn stable_source(
+    pub(in crate::lowering) fn stable_source<'h>(
         &mut self,
         statements: &mut Vec<Statement>,
-        hint: &'static str,
+        hint: impl Into<NameHint<'h>>,
         value: GoExpression,
     ) -> GoExpression {
         if value.as_identifier().is_some() {
             return value;
         }
-        GoExpression::identifier(self.hoist_tmp_value_statement(statements, hint, value))
+        GoExpression::identifier(self.hoist_temp(statements, hint, value))
     }
 
-    pub(in crate::lowering) fn hoist_tmp_value_statement(
+    pub(in crate::lowering) fn hoist_temp<'h>(
         &mut self,
         setup: &mut Vec<Statement>,
-        hint: &'static str,
+        hint: impl Into<NameHint<'h>>,
         value: GoExpression,
     ) -> GoIdentifier {
-        let tmp = self.fresh_declared(hint);
-        setup.push(define(tmp.clone(), value));
-        tmp
-    }
-
-    pub(in crate::lowering) fn hoist_source_value(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        name: &SourceName,
-        value: GoExpression,
-    ) -> GoIdentifier {
-        let local = self.fresh_declared_source(name);
+        let local = self.fresh_declared(hint);
         setup.push(define(local.clone(), value));
         local
     }
@@ -341,18 +300,10 @@ impl<'a> Planner<'a> {
         (!block.renders_empty()).then_some(block)
     }
 
-    pub(in crate::lowering) fn enter_scope(&mut self) {
-        self.scope.enter_block();
-    }
-
-    pub(in crate::lowering) fn exit_scope(&mut self) {
-        self.scope.exit_block();
-    }
-
     pub(in crate::lowering) fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.enter_scope();
+        self.scope.enter_block();
         let result = f(self);
-        self.exit_scope();
+        self.scope.exit_block();
         result
     }
 
@@ -420,28 +371,56 @@ impl<'a> Planner<'a> {
         result
     }
 
-    pub(in crate::lowering) fn fresh_declared(&mut self, hint: &'static str) -> GoIdentifier {
-        let name = self.fresh_local(Some(hint));
-        self.declare(&name);
+    pub(in crate::lowering) fn fresh_declared<'h>(
+        &mut self,
+        hint: impl Into<NameHint<'h>>,
+    ) -> GoIdentifier {
+        let name = self.fresh_local(hint);
+        self.scope.declare_go_name(&name);
         name
     }
 
-    pub(in crate::lowering) fn fresh_declared_source(&mut self, name: &SourceName) -> GoIdentifier {
-        let local = self.fresh_source(name);
-        self.declare(&local);
-        local
+    pub(in crate::lowering) fn fresh_local<'h>(
+        &mut self,
+        hint: impl Into<NameHint<'h>>,
+    ) -> GoIdentifier {
+        let spelling = hint.into().spelling();
+        self.scope.fresh_go_name(Some(spelling), self.names)
     }
+}
 
-    pub(in crate::lowering) fn fresh_local(&mut self, hint: Option<&'static str>) -> GoIdentifier {
-        self.scope.fresh_go_name(hint, self.names)
+#[derive(Clone, Copy)]
+pub(in crate::lowering) enum NameHint<'h> {
+    Static(&'static str),
+    Source(&'h SourceName),
+    Like(&'h GoIdentifier),
+}
+
+impl<'h> NameHint<'h> {
+    fn spelling(self) -> &'h str {
+        match self {
+            Self::Static(hint) => hint,
+            Self::Source(name) => name.base(),
+            Self::Like(identifier) => identifier.spelling(),
+        }
     }
+}
 
-    pub(in crate::lowering) fn fresh_source(&mut self, name: &SourceName) -> GoIdentifier {
-        self.scope.fresh_go_name(Some(name.base()), self.names)
+impl From<&'static str> for NameHint<'_> {
+    fn from(hint: &'static str) -> Self {
+        Self::Static(hint)
     }
+}
 
-    pub(in crate::lowering) fn fresh_like(&mut self, name: &GoIdentifier) -> GoIdentifier {
-        self.scope.fresh_go_name(Some(name.spelling()), self.names)
+impl<'h> From<&'h SourceName> for NameHint<'h> {
+    fn from(name: &'h SourceName) -> Self {
+        Self::Source(name)
+    }
+}
+
+impl<'h> From<&'h GoIdentifier> for NameHint<'h> {
+    fn from(identifier: &'h GoIdentifier) -> Self {
+        Self::Like(identifier)
     }
 }
 

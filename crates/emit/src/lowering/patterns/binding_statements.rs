@@ -57,7 +57,7 @@ impl Planner<'_> {
                     unreachable!("multi-type root assertions only reach match destructure paths")
                 };
                 let expression = GoExpression::type_assertion(subject.clone(), go_type.clone());
-                let var = self.hoist_tmp_value_statement(statements, "asserted", expression);
+                let var = self.hoist_temp(statements, "asserted", expression);
                 GoExpression::identifier(var)
             }
             _ => subject.clone(),
@@ -97,7 +97,7 @@ impl Planner<'_> {
                 let asserted_lhs = if needs_asserted {
                     self.fresh_declared("asserted")
                 } else {
-                    GoIdentifier::external("_".to_string())
+                    GoIdentifier::blank()
                 };
                 let ok = self.fresh_declared("ok");
                 statements.push(define_many(
@@ -117,7 +117,7 @@ impl Planner<'_> {
                     .map(|t| {
                         let ok = self.fresh_declared("ok");
                         statements.push(define_many(
-                            vec![GoIdentifier::external("_".to_string()), ok.clone()],
+                            vec![GoIdentifier::blank(), ok.clone()],
                             assertion_of(t),
                         ));
                         GoExpression::identifier(ok)

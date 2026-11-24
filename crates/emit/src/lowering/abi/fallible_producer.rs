@@ -241,7 +241,7 @@ impl FallibleProducer<'_> {
             value: bound
                 .payload_identifier()
                 .cloned()
-                .unwrap_or_else(|| GoIdentifier::external("_".to_string())),
+                .unwrap_or_else(GoIdentifier::blank),
             status: bound.status_identifier().clone(),
             payload_type,
             kind,
@@ -387,7 +387,7 @@ impl<'p> Planner<'p> {
                 ..
             } => self
                 .facts
-                .array_length_behind_refs(&receiver.get_type())
+                .receiver_array_length(&receiver.get_type())
                 .is_none_or(|length| *value < length),
             other => !self.is_go_constant_expression(other),
         }

@@ -131,7 +131,7 @@ impl Planner<'_> {
         let layout = CompositeLayout::for_elements(wrapped.len(), widest);
         let value = GoExpression::composite(Some(go_type), wrapped, layout)
             .position_elements(|index, _| self.facts.source_position(&elements[index].get_span()));
-        ValuePlan::built_from(setup, value, stability)
+        ValuePlan::new(setup, value, stability)
     }
 
     fn plan_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {
@@ -190,7 +190,7 @@ impl Planner<'_> {
             let concatenation = pieces.fold(first, |left, right| {
                 GoExpression::binary(left, BinaryOp::Add, right)
             });
-            return ValuePlan::built_from(setup, concatenation, stability);
+            return ValuePlan::new(setup, concatenation, stability);
         }
 
         let (format_string, args) = sprintf_pieces(&self.facts, parts, values, has_interpolation);
@@ -227,7 +227,7 @@ impl Planner<'_> {
             return self.plan_composite_value(operand, ExpressionContext::value());
         }
         let setup = self.lower_discard_value(operand);
-        ValuePlan::built_from(
+        ValuePlan::new(
             setup,
             string_constant(UNIT_DISPLAY.to_string()),
             Stability::Fixed,

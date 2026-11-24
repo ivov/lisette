@@ -27,22 +27,16 @@ pub(in crate::lowering) fn collect_escape_remap(
         })
         .collect();
 
-    let mut remap = FxHashMap::default();
-    let mut taken: FxHashSet<String> = entries
+    let taken: FxHashSet<String> = entries
         .iter()
         .filter(|(name, natural)| *name == natural)
         .map(|(_, natural)| natural.clone())
         .collect();
-
-    for (name, natural) in &entries {
-        if *name == natural {
-            continue;
-        }
-        let fresh = names.fresh_package_name(natural, |candidate| taken.contains(candidate));
-        taken.insert(fresh.clone());
-        remap.insert((*name).to_string(), fresh);
-    }
-    remap
+    let pending = entries
+        .iter()
+        .filter(|(name, natural)| *name != natural)
+        .map(|(name, natural)| (*name, natural.as_str()));
+    assign_fresh_names(names, taken, pending)
 }
 
 pub(in crate::lowering) fn collect_generic_renames(
@@ -53,9 +47,8 @@ pub(in crate::lowering) fn collect_generic_renames(
     for item in files.iter().flat_map(|file| &file.items) {
         collect_item_generic_names(item, &mut generic_names);
     }
-    let mut renames = FxHashMap::default();
     if generic_names.is_empty() {
-        return renames;
+        return FxHashMap::default();
     }
 
     let mut colliding: Vec<&EcoString> = generic_names
@@ -63,13 +56,25 @@ pub(in crate::lowering) fn collect_generic_renames(
         .filter(|name| names.is_package_block_name(go_name::escape_type_name(name).as_ref()))
         .collect();
     if colliding.is_empty() {
-        return renames;
+        return FxHashMap::default();
     }
     colliding.sort();
 
-    let mut taken: FxHashSet<String> = generic_names.iter().map(EcoString::to_string).collect();
-    for name in colliding {
-        let fresh = names.fresh_package_name(name, |candidate| taken.contains(candidate));
+    let taken: FxHashSet<String> = generic_names.iter().map(EcoString::to_string).collect();
+    let pending = colliding
+        .into_iter()
+        .map(|name| (name.as_str(), name.as_str()));
+    assign_fresh_names(names, taken, pending)
+}
+
+fn assign_fresh_names<'n>(
+    names: &PackageNames,
+    mut taken: FxHashSet<String>,
+    pending: impl Iterator<Item = (&'n str, &'n str)>,
+) -> FxHashMap<String, String> {
+    let mut renames = FxHashMap::default();
+    for (name, base) in pending {
+        let fresh = names.fresh_package_name(base, |candidate| taken.contains(candidate));
         taken.insert(fresh.clone());
         renames.insert(name.to_string(), fresh);
     }

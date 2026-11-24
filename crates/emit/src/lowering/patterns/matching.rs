@@ -3,7 +3,7 @@ use crate::lowering::abi::fallible_producer::OptionFusePlan;
 use crate::lowering::abi::go_result_wrapping::{
     nil_condition, non_nil_condition, unexpected_nil_error,
 };
-use crate::lowering::calls::bound_value::{BoundValue, PairCondition};
+use crate::lowering::calls::bound_value::BoundValue;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::target::ir::prelude::{PartialVariant, PreludeVariant, prelude_variant};
 use crate::target::types::return_abi::LoweredReturnAbi;
@@ -18,12 +18,12 @@ use crate::lowering::patterns::decision_tree;
 use crate::lowering::patterns::sites::ResolvedSubject;
 use crate::lowering::patterns::tree_planner::{MatchSubject, TreePlanner};
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::GoUses;
 use crate::target::ir::bodies::{
-    Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, SwitchKind,
-    assign, define, define_many, discard,
+    Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PairCondition,
+    Statement, SwitchKind, assign, define, define_many, discard,
 };
 use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode};
 use crate::target::ir::local::GoIdentifier;
@@ -248,14 +248,12 @@ impl Planner<'_> {
         let else_body = self.lower_block_to_place(none_body, place);
         let else_arm = ElseArm::from_body(else_body, then_body.ends_with_diverge());
         bound.statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: condition.initializer,
-                condition: condition.condition,
+            LoweredStatement::If(IfPlan::pair_if(
+                condition,
                 then_body,
                 else_arm,
-                else_if_line: None,
-                origin: IfOrigin::Match { else_label: None },
-            })
+                IfOrigin::Match { else_label: None },
+            ))
             .into(),
         );
         Some(bound.statements)
@@ -452,17 +450,6 @@ fn leading_subject_read<'n>(
         node = base.as_mut();
     }
     matches!(node, GoExpressionNode::Identifier(name) if name.refers_to_same(var)).then_some(node)
-}
-
-fn pair_if(test: PairCondition, then_body: LoweredBlock, else_arm: ElseArm) -> IfPlan {
-    IfPlan {
-        initializer: test.initializer,
-        condition: test.condition,
-        then_body,
-        else_arm,
-        else_if_line: None,
-        origin: IfOrigin::Match { else_label: None },
-    }
 }
 
 fn is_inert_value(element: &Expression, value: &GoExpression) -> bool {

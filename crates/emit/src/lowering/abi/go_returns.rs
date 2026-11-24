@@ -274,8 +274,8 @@ impl Planner<'_> {
         tuple_ty: &Type,
         adapted: Option<(&Type, &[Adaptation])>,
     ) -> (Vec<Statement>, Vec<GoExpression>) {
-        let slot_tys = self.facts.tuple_element_types(tuple_ty);
-        let source_tys = adapted.map(|(source, _)| self.facts.tuple_element_types(source));
+        let slot_tys = self.facts.tuple_or_type_arguments(tuple_ty);
+        let source_tys = adapted.map(|(source, _)| self.facts.tuple_or_type_arguments(source));
         let slot_layouts = self.lowered_tuple_slot_layouts(tuple_ty);
         let mut statements = Vec::new();
         let fields = slot_tys
@@ -325,7 +325,7 @@ impl Planner<'_> {
         let Expression::Tuple { elements, .. } = tuple else {
             unreachable!("only a tuple literal lowers into return slots")
         };
-        let slot_tys = self.facts.tuple_element_types(tuple_ty);
+        let slot_tys = self.facts.tuple_or_type_arguments(tuple_ty);
         let slot_layouts = self.lowered_tuple_slot_layouts(tuple_ty);
         let adaptations = match &self.facts.checked(tuple).value_use().adaptation {
             Adaptation::Tuple(adaptations) => adaptations.clone(),
@@ -389,7 +389,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> Option<Vec<Statement>> {
-        let return_ctx = self.return_ctx();
+        let return_ctx = self.scope.current_return_ctx();
         let return_ty = return_ctx.ty()?.clone();
         let shape = return_ctx.lowered_shape();
         if matches!(
@@ -444,7 +444,7 @@ impl Planner<'_> {
 
     fn lower_tuple_tail(&mut self, expression: &Expression, arity: usize) -> Vec<Statement> {
         use Expression;
-        let return_ty = self.return_ctx().expect_ty();
+        let return_ty = self.scope.current_return_ctx().expect_ty();
         if let Expression::Tuple { elements, .. } = expression
             && elements.len() == arity
         {
@@ -482,8 +482,7 @@ impl Planner<'_> {
             plan = self.convert_to_recorded_slot(expression, plan);
         }
         let (mut statements, value) = plan.into_parts();
-        let tup =
-            GoExpression::identifier(self.hoist_tmp_value_statement(&mut statements, "tup", value));
+        let tup = GoExpression::identifier(self.hoist_temp(&mut statements, "tup", value));
         let source_ty = expression.get_type();
         let adaptations = self.applied_element_adaptations(expression);
         let adapted = (!adaptations.is_empty()).then_some((&source_ty, adaptations.as_slice()));
@@ -495,7 +494,7 @@ impl Planner<'_> {
 
     fn lower_partial_tail(&mut self, expression: &Expression) -> Vec<Statement> {
         use Expression;
-        let return_ty = self.return_ctx().expect_ty();
+        let return_ty = self.scope.current_return_ctx().expect_ty();
 
         if let Expression::Call {
             expression: callee,

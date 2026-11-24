@@ -14,7 +14,7 @@ use crate::lowering::patterns::decision_tree::{
     AccessPath, ArmLeaf, ChainTail, Decision, GuardedLeaf, PatternBinding, SubjectRoot,
 };
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, direct_first, directed_first,
@@ -222,9 +222,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 
     fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.planner.enter_scope();
+        self.planner.scope.enter_block();
         let result = f(self);
-        self.planner.exit_scope();
+        self.planner.scope.exit_block();
         result
     }
 

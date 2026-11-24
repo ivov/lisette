@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::coercion_plan::LayoutChange;
 use crate::lowering::abi::layout::{ResultProducer, ValueLayout};
+use crate::lowering::abi::layout_change::PayloadLayoutChanges;
 use crate::lowering::calls::go_interop::{LoweredProducer, build_tuple_literal};
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::target::ir::bodies::{
@@ -115,7 +116,7 @@ impl Planner<'_> {
             }
             WrapperTarget::Slot(name) => {
                 statements.push(declare(name.clone(), type_str.clone()));
-                self.declare(name.spelling());
+                self.scope.declare_go_name(name.spelling());
                 let owned = name.clone();
                 (ResolvedSink::Slot(owned.clone()), Some(owned))
             }
@@ -163,11 +164,9 @@ impl Planner<'_> {
         value: GoExpression,
     ) -> WrapperOutcome {
         match target {
-            WrapperTarget::FreshSlot => {
-                Some(self.hoist_tmp_value_statement(statements, name_hint, value))
-            }
+            WrapperTarget::FreshSlot => Some(self.hoist_temp(statements, name_hint, value)),
             WrapperTarget::Slot(name) => {
-                self.declare(name.spelling());
+                self.scope.declare_go_name(name.spelling());
                 statements.push(define(name.clone(), value));
                 Some(name.clone())
             }
@@ -183,10 +182,11 @@ impl Planner<'_> {
         call: GoExpression,
         partial_layout: &ValueLayout,
         layout: PayloadLayout,
-        changes: Option<(&LayoutChange, &LayoutChange)>,
+        changes: Option<&PayloadLayoutChanges>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let (payload_layout_change, error_layout_change) = changes.unzip();
+        let payload_layout_change = changes.map(|changes| &changes.value);
+        let error_layout_change = changes.map(|changes| &changes.error);
         let ValueLayout::Fallible { payload, error, .. } = partial_layout.underlying() else {
             unreachable!("Partial wrapping requires a fallible layout")
         };
@@ -207,49 +207,30 @@ impl Planner<'_> {
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
-        let (mut both_setup, both_value) =
-            self.plan_optional_payload_layout_change(val(), payload_layout_change);
-        let (error_setup, both_error) =
-            self.plan_optional_payload_layout_change(error_value(), error_layout_change);
-        both_setup.extend(error_setup);
-        let both = prelude_call(
+        let both_body = self.changed_leaf_block(
+            &sink,
             partial_variant("Both").constructor,
             type_params.clone(),
-            vec![both_value, both_error],
+            vec![
+                (val(), payload_layout_change),
+                (error_value(), error_layout_change),
+            ],
         );
-        both_setup.push(leaf_statement(&sink, both));
-        let both_body = LoweredBlock {
-            statements: both_setup,
-        };
-
-        let (mut ok_setup, ok_value) =
-            self.plan_optional_payload_layout_change(val(), payload_layout_change);
-        ok_setup.push(leaf_statement(
+        let ok_body = self.changed_leaf_block(
             &sink,
-            prelude_call(
-                partial_variant("Ok").constructor,
-                type_params.clone(),
-                vec![ok_value],
-            ),
-        ));
-        let ok_body = LoweredBlock {
-            statements: ok_setup,
-        };
+            partial_variant("Ok").constructor,
+            type_params.clone(),
+            vec![(val(), payload_layout_change)],
+        );
 
         let then_body = if let Some(check) = nil_check {
-            let (mut error_setup, error) =
-                self.plan_optional_payload_layout_change(error_value(), error_layout_change);
-            error_setup.push(leaf_statement(
+            let error_body = self.changed_leaf_block(
                 &sink,
-                prelude_call(partial_variant("Err").constructor, type_params, vec![error]),
-            ));
-            let inner = IfPlan::plain(
-                check,
-                LoweredBlock {
-                    statements: error_setup,
-                },
-                ElseArm::from_body(both_body, false),
+                partial_variant("Err").constructor,
+                type_params,
+                vec![(error_value(), error_layout_change)],
             );
+            let inner = IfPlan::plain(check, error_body, ElseArm::from_body(both_body, false));
             LoweredBlock {
                 statements: vec![LoweredStatement::If(inner).into()],
             }
@@ -325,7 +306,7 @@ impl Planner<'_> {
         call: GoExpression,
         result_layout: &ValueLayout,
         layout: PayloadLayout,
-        payload_layout_change: Option<&LayoutChange>,
+        payload_changes: Option<&PayloadLayoutChanges>,
         nil_guard: Option<NilGuard>,
     ) -> Result<GoExpression, GoExpression> {
         let Some(fallible) = self
@@ -339,7 +320,7 @@ impl Planner<'_> {
             .err_ty()
             .is_some_and(|err_ty| self.facts.is_prelude_error(err_ty));
         if !err_is_error
-            || payload_layout_change.is_some()
+            || payload_changes.is_some()
             || (layout.is_flattened() && ok_ty.is_tuple())
             || nil_guard.is_some()
         {
@@ -360,7 +341,7 @@ impl Planner<'_> {
         call: GoExpression,
         result_layout: &ValueLayout,
         producer: LoweredProducer<'_>,
-        changes: Option<(&LayoutChange, &LayoutChange)>,
+        changes: Option<&PayloadLayoutChanges>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let Some(shape @ LoweredReturnAbi::Result { payload: layout }) = producer.abi.lowered()
@@ -370,7 +351,6 @@ impl Planner<'_> {
         let layout = *layout;
         let nil_guard =
             self.lowered_payload_nil_guard(shape, producer.producer, result_layout.logical_type());
-        let (payload_layout_change, error_layout_change) = changes.unzip();
         let ValueLayout::Fallible {
             fallible_type,
             payload,
@@ -385,13 +365,7 @@ impl Planner<'_> {
             .expect("Result type expected");
 
         let mut statements = Vec::new();
-        let call = match self.result_from_pair(
-            call,
-            result_layout,
-            layout,
-            payload_layout_change,
-            nil_guard,
-        ) {
+        let call = match self.result_from_pair(call, result_layout, layout, changes, nil_guard) {
             Ok(value) => {
                 let outcome =
                     self.push_simple_wrapper_value(&mut statements, target, "result", value);
@@ -410,26 +384,18 @@ impl Planner<'_> {
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
-        let (mut ok_setup, ok_value) =
-            self.plan_optional_payload_layout_change(ok(), payload_layout_change);
-        let ok_wrapper = prelude_call(
+        let ok_body = self.changed_leaf_block(
+            &sink,
             fallible.ok_constructor(),
             type_params.clone(),
-            vec![ok_value],
+            vec![(ok(), changes.map(|changes| &changes.value))],
         );
-        ok_setup.push(leaf_statement(&sink, ok_wrapper));
-        let ok_body = LoweredBlock {
-            statements: ok_setup,
-        };
-
-        let (mut error_setup, error) =
-            self.plan_optional_payload_layout_change(error_value(), error_layout_change);
-        let err_wrapper =
-            prelude_call(fallible.err_constructor(), type_params.clone(), vec![error]);
-        error_setup.push(leaf_statement(&sink, err_wrapper));
-        let then_body = LoweredBlock {
-            statements: error_setup,
-        };
+        let then_body = self.changed_leaf_block(
+            &sink,
+            fallible.err_constructor(),
+            type_params.clone(),
+            vec![(error_value(), changes.map(|changes| &changes.error))],
+        );
 
         let else_arm = if let Some(nil_guard) = nil_guard {
             let nil_condition = nil_guard.nil_condition(ok());
@@ -458,21 +424,6 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    pub(in crate::lowering) fn lower_bare_error_wrapping(
-        &mut self,
-        call: GoExpression,
-        result_layout: &ValueLayout,
-        error_layout_change: Option<&LayoutChange>,
-        target: WrapperTarget<'_>,
-    ) -> (Vec<Statement>, WrapperOutcome) {
-        let fallible = self
-            .facts
-            .fallible(result_layout.underlying().logical_type())
-            .expect("Result type expected");
-        debug_assert!(fallible.ok_ty().is_unit());
-        self.lower_unit_result_wrapping(call, result_layout, error_layout_change, target)
-    }
-
     fn plan_optional_payload_layout_change(
         &mut self,
         value: GoExpression,
@@ -480,13 +431,34 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, GoExpression) {
         let mut statements = Vec::new();
         let value = match change {
-            Some(change) => self.plan_layout_change(&mut statements, value, change, true),
+            Some(change) => self.plan_layout_change(&mut statements, value, change),
             None => value,
         };
         (statements, value)
     }
 
-    fn lower_unit_result_wrapping(
+    fn changed_leaf_block(
+        &mut self,
+        sink: &ResolvedSink,
+        constructor: &str,
+        type_params: GoType,
+        values: Vec<(GoExpression, Option<&LayoutChange>)>,
+    ) -> LoweredBlock {
+        let mut statements = Vec::new();
+        let mut arguments = Vec::with_capacity(values.len());
+        for (value, change) in values {
+            let (setup, value) = self.plan_optional_payload_layout_change(value, change);
+            statements.extend(setup);
+            arguments.push(value);
+        }
+        statements.push(leaf_statement(
+            sink,
+            prelude_call(constructor, type_params, arguments),
+        ));
+        LoweredBlock { statements }
+    }
+
+    pub(in crate::lowering) fn lower_unit_result_wrapping(
         &mut self,
         call: GoExpression,
         result_layout: &ValueLayout,
@@ -494,7 +466,7 @@ impl Planner<'_> {
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
-        let error_variable = self.hoist_tmp_value_statement(&mut statements, "ret", call);
+        let error_variable = self.hoist_temp(&mut statements, "ret", call);
         let error_value = || GoExpression::identifier(error_variable.clone());
 
         let ValueLayout::Fallible {
@@ -515,14 +487,12 @@ impl Planner<'_> {
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
-        let (mut error_setup, error) =
-            self.plan_optional_payload_layout_change(error_value(), error_layout_change);
-        let err_wrapper =
-            prelude_call(fallible.err_constructor(), type_params.clone(), vec![error]);
-        error_setup.push(leaf_statement(&sink, err_wrapper));
-        let then_body = LoweredBlock {
-            statements: error_setup,
-        };
+        let then_body = self.changed_leaf_block(
+            &sink,
+            fallible.err_constructor(),
+            type_params.clone(),
+            vec![(error_value(), error_layout_change)],
+        );
 
         let ok_wrapper = {
             prelude_call(
@@ -552,7 +522,7 @@ impl Planner<'_> {
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
-        let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call);
+        let raw = self.hoist_temp(&mut statements, "ret", call);
         let raw = || GoExpression::identifier(raw.clone());
         let option_layout = self.value_layout(option_ty, SlotOrigin::Lisette);
         let inner_ty_str = option_layout
@@ -580,13 +550,13 @@ impl Planner<'_> {
         call: GoExpression,
         option_layout: &ValueLayout,
         layout: PayloadLayout,
-        payload_layout_change: Option<&LayoutChange>,
+        payload_changes: Option<&PayloadLayoutChanges>,
     ) -> Result<GoExpression, GoExpression> {
         let option_ty = option_layout.underlying().logical_type();
         let payload = option_layout
             .payload()
             .expect("Option wrapping requires a payload layout");
-        if payload_layout_change.is_some()
+        if payload_changes.is_some()
             || matches!(
                 self.value_layout(option_ty, SlotOrigin::GoReturn),
                 ValueLayout::NullableOption { .. }
@@ -609,19 +579,18 @@ impl Planner<'_> {
         call: GoExpression,
         option_layout: &ValueLayout,
         layout: PayloadLayout,
-        payload_layout_change: Option<&LayoutChange>,
+        payload_changes: Option<&PayloadLayoutChanges>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
-        let call =
-            match self.option_from_comma_ok(call, option_layout, layout, payload_layout_change) {
-                Ok(value) => {
-                    let outcome =
-                        self.push_simple_wrapper_value(&mut statements, target, "option", value);
-                    return (statements, outcome);
-                }
-                Err(call) => call,
-            };
+        let call = match self.option_from_comma_ok(call, option_layout, layout, payload_changes) {
+            Ok(value) => {
+                let outcome =
+                    self.push_simple_wrapper_value(&mut statements, target, "option", value);
+                return (statements, outcome);
+            }
+            Err(call) => call,
+        };
 
         let option_ty = option_layout.underlying().logical_type();
         let payload = option_layout
@@ -659,14 +628,10 @@ impl Planner<'_> {
         } else {
             first_val.clone()
         };
-        let (mut payload_setup, val_expression) = match payload_layout_change {
-            Some(change) => {
-                let mut setup = Vec::new();
-                let value = self.plan_layout_change(&mut setup, val_expression, change, true);
-                (setup, value)
-            }
-            None => (Vec::new(), val_expression),
-        };
+        let (mut payload_setup, val_expression) = self.plan_optional_payload_layout_change(
+            val_expression,
+            payload_changes.map(|changes| &changes.value),
+        );
 
         let option_ty_str = option_layout.underlying().go_type(self);
 
@@ -711,18 +676,26 @@ impl Planner<'_> {
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
-        let inner = layout.payload().expect("Option has a payload layout");
-        let inner_type = inner.go_type(self);
-        let inner_ty_str = inner_type;
-        let is_nil_check =
-            option_nil_guard(&self.facts, layout.logical_type()).nil_condition(raw_value.clone());
-        let value = prelude_call(
-            "OptionFromNilable",
-            GoType::type_argument(&inner_ty_str),
-            vec![raw_value, is_nil_check],
-        );
+        let value = self.option_from_nilable(raw_value, layout);
         let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
         (statements, outcome)
+    }
+
+    pub(in crate::lowering) fn option_from_nilable(
+        &self,
+        value: GoExpression,
+        option_layout: &ValueLayout,
+    ) -> GoExpression {
+        let inner = option_layout
+            .payload()
+            .expect("Option has a payload layout");
+        let nil = option_nil_guard(&self.facts, option_layout.logical_type())
+            .nil_condition(value.clone());
+        prelude_call(
+            "OptionFromNilable",
+            GoType::type_argument(&inner.go_type(self)),
+            vec![value, nil],
+        )
     }
 }
 

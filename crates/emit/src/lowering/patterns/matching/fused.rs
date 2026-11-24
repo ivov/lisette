@@ -1,6 +1,7 @@
 use super::*;
 use crate::lowering::abi::go_result_wrapping::partial_ok_nil_guard;
 use crate::target::ir::bodies::effect_statement;
+use crate::target::names::source_name::SourceName;
 
 impl Planner<'_> {
     pub(in crate::lowering) fn try_lower_fused_result_match_into(
@@ -32,14 +33,21 @@ impl Planner<'_> {
             return None;
         }
 
-        self.declare(go_name.spelling());
+        self.scope.declare_go_name(go_name.spelling());
         let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.clone()));
         let none_condition = bound.failure_condition();
         let fail_body = self.lower_block_as_body(arms.none_body);
         let late_binding = bound.late_binding();
         let mut statements = bound.statements;
-        statements
-            .push(LoweredStatement::If(pair_if(none_condition, fail_body, ElseArm::None)).into());
+        statements.push(
+            LoweredStatement::If(IfPlan::pair_if(
+                none_condition,
+                fail_body,
+                ElseArm::None,
+                IfOrigin::Match { else_label: None },
+            ))
+            .into(),
+        );
         statements.extend(late_binding);
         Some(statements)
     }
@@ -64,7 +72,7 @@ impl Planner<'_> {
         let (mut statements, call) = self
             .plan_call_expression(subject, None, ExpressionContext::value())
             .into_parts();
-        self.declare(go_name.spelling());
+        self.scope.declare_go_name(go_name.spelling());
         let error_hint = arms.error_hint();
         let error = self.pair_status(error_hint.as_ref(), PairStatusKind::Error, false);
         let failure_body = self.lower_partial_failure_arm(arms, &error, &PlacePlan::Statement);
@@ -113,7 +121,7 @@ impl Planner<'_> {
             {
                 return None;
             }
-            self.declare(name);
+            self.scope.declare_go_name(name);
         } else if matches!(place, PlacePlan::Statement)
             && ok_name.is_none()
             && err_name.is_none()
@@ -173,7 +181,13 @@ impl Planner<'_> {
 
         let Some(then_body) = then_body else {
             statements.push(
-                LoweredStatement::If(pair_if(err_condition, else_body, ElseArm::None)).into(),
+                LoweredStatement::If(IfPlan::pair_if(
+                    err_condition,
+                    else_body,
+                    ElseArm::None,
+                    IfOrigin::Match { else_label: None },
+                ))
+                .into(),
             );
             return Some(statements);
         };
@@ -267,7 +281,7 @@ impl Planner<'_> {
 
         let has_nil_guard = fuse.has_nil_guard();
         let (mut bound, wraps) = {
-            let value_name = self.fresh_local(Some("ret"));
+            let value_name = self.fresh_local("ret");
             fuse.bind_wrapped(
                 self,
                 CommaOkValueSlot::Arm(value_name),
@@ -289,7 +303,15 @@ impl Planner<'_> {
         let ok_condition = bound.success_condition();
         let else_arm = ElseArm::from_body(else_body, false);
         let mut statements = bound.statements;
-        statements.push(LoweredStatement::If(pair_if(ok_condition, then_body, else_arm)).into());
+        statements.push(
+            LoweredStatement::If(IfPlan::pair_if(
+                ok_condition,
+                then_body,
+                else_arm,
+                IfOrigin::Match { else_label: None },
+            ))
+            .into(),
+        );
         Some(statements)
     }
 
@@ -325,46 +347,35 @@ impl Planner<'_> {
             .into_parts();
         let val_var = match ok_name.or(both_val) {
             Some(value) => Some(self.arm_value_name(&value.go_name())),
-            None => nilable.then(|| self.fresh_local(Some("ret"))),
+            None => nilable.then(|| self.fresh_local("ret")),
         };
         let err_hint = both_err.or(err_name).map(|err| err.go_name());
-        let mut err_var = self.pair_status(err_hint.as_ref(), PairStatusKind::Error, true);
-        if val_var.as_deref() == Some(err_var.spelling()) {
-            err_var = self.fresh_like(&err_var);
-        }
-        let err = || GoExpression::identifier(err_var.clone());
+        let names = self.partial_pair_names(val_var, err_hint.as_ref());
 
         let (ok_body, ok_uses) = self.lower_fused_arm(
-            &[ArmBinding::alias_at(ok_name, val_var.as_ref())],
+            &[ArmBinding::alias_at(ok_name, names.value.as_ref())],
             &ok_arm.expression,
             place,
         );
         let (both_body, both_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(both_val, val_var.as_ref()),
-                ArmBinding::alias_at(both_err, Some(&err_var)),
+                ArmBinding::alias_at(both_val, names.value.as_ref()),
+                ArmBinding::alias_at(both_err, Some(&names.error)),
             ],
             &both_arm.expression,
             place,
         );
         let val_used = nilable || ok_uses[0] || both_uses[0];
-        let bound_value = match val_var.as_ref().filter(|_| val_used) {
-            Some(v) => v.clone(),
-            None => GoIdentifier::external("_".to_string()),
-        };
-        let initializer = Definition {
-            names: vec![bound_value, err_var.clone()],
-            value: call,
-        };
 
-        let nil_check = val_var
+        let nil_check = names
+            .value
             .as_ref()
             .and_then(|v| self.partial_ok_nil_check(&ok_ty, GoExpression::identifier(v.clone())));
 
         let else_arm = match nil_check {
             Some(check) => {
                 let (err_body, _) = self.lower_fused_arm(
-                    &[ArmBinding::alias_at(err_name, Some(&err_var))],
+                    &[ArmBinding::alias_at(err_name, Some(&names.error))],
                     &err_arm.expression,
                     place,
                 );
@@ -381,18 +392,30 @@ impl Planner<'_> {
             }
         };
 
+        let condition = nil_condition(GoExpression::identifier(names.error.clone()));
+        let test = names.pair_condition(call, names.value.clone().filter(|_| val_used), condition);
         statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: Some(initializer),
-                condition: nil_condition(err()),
-                then_body: ok_body,
+            LoweredStatement::If(IfPlan::pair_if(
+                test,
+                ok_body,
                 else_arm,
-                else_if_line: None,
-                origin: IfOrigin::Match { else_label: None },
-            })
+                IfOrigin::Match { else_label: None },
+            ))
             .into(),
         );
         Some(statements)
+    }
+
+    fn partial_pair_names(
+        &mut self,
+        value: Option<GoIdentifier>,
+        error_hint: Option<&SourceName>,
+    ) -> PartialPairNames {
+        let mut error = self.pair_status(error_hint, PairStatusKind::Error, true);
+        if value.as_deref() == Some(error.spelling()) {
+            error = self.fresh_local(&error);
+        }
+        PartialPairNames { value, error }
     }
 
     fn partial_outcome_arms<'a>(
@@ -436,21 +459,18 @@ impl Planner<'_> {
             .value_binding
             .map(|value| self.arm_value_name(&value.go_name()));
         let error_hint = arms.error_hint();
-        let mut error = self.pair_status(error_hint.as_ref(), PairStatusKind::Error, true);
-        if value.as_deref() == Some(error.spelling()) {
-            error = self.fresh_like(&error);
-        }
+        let names = self.partial_pair_names(value, error_hint.as_ref());
 
-        let ok_binding = ArmBinding::alias_at(arms.value_binding, value.as_ref());
+        let ok_binding = ArmBinding::alias_at(arms.value_binding, names.value.as_ref());
         let (ok_body, [value_used]) =
             self.lower_fused_arm(&[ok_binding], &arms.ok.expression, place);
-        let failure_body = self.lower_partial_failure_arm(arms, &error, place);
+        let failure_body = self.lower_partial_failure_arm(arms, &names.error, place);
         if ok_body.renders_empty() && failure_body.renders_empty() {
             statements.push(effect_statement(call));
             return Some(statements);
         }
 
-        let err = GoExpression::identifier(error.clone());
+        let err = GoExpression::identifier(names.error.clone());
         let failure_first = ok_body.renders_empty()
             || (failure_body.ends_with_diverge() && ok_body.ends_with_diverge());
         let (condition, then_body, else_body) = if failure_first {
@@ -458,21 +478,15 @@ impl Planner<'_> {
         } else {
             (nil_condition(err), ok_body, failure_body)
         };
-        let bound_value = value
-            .filter(|_| value_used)
-            .unwrap_or_else(|| GoIdentifier::external("_".to_string()));
+        let test =
+            names.pair_condition(call, names.value.clone().filter(|_| value_used), condition);
         statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: Some(Definition {
-                    names: vec![bound_value, error],
-                    value: call,
-                }),
-                condition,
+            LoweredStatement::If(IfPlan::pair_if(
+                test,
                 then_body,
-                else_arm: ElseArm::from_body(else_body, false),
-                else_if_line: None,
-                origin: IfOrigin::Match { else_label: None },
-            })
+                ElseArm::from_body(else_body, false),
+                IfOrigin::Match { else_label: None },
+            ))
             .into(),
         );
         Some(statements)
@@ -514,17 +528,14 @@ impl Planner<'_> {
         let condition_needs_value = nil_guard.is_some();
         let value = match value_binding {
             Some(value) => Some(self.arm_value_name(&value.go_name())),
-            None => condition_needs_value.then(|| self.fresh_local(Some("ret"))),
+            None => condition_needs_value.then(|| self.fresh_local("ret")),
         };
         let error_hint = error_binding.map(|error| error.go_name());
-        let mut error = self.pair_status(error_hint.as_ref(), PairStatusKind::Error, true);
-        if value.as_deref() == Some(error.spelling()) {
-            error = self.fresh_like(&error);
-        }
+        let names = self.partial_pair_names(value, error_hint.as_ref());
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(value_binding, value.as_ref()),
-                ArmBinding::alias_at(error_binding, Some(&error)),
+                ArmBinding::alias_at(value_binding, names.value.as_ref()),
+                ArmBinding::alias_at(error_binding, Some(&names.error)),
             ],
             &arms.selected.expression,
             place,
@@ -538,16 +549,10 @@ impl Planner<'_> {
             return Some(statements);
         }
 
-        let value_is_used = binding_uses[0];
-        let value_slot = (condition_needs_value || value_is_used)
-            .then(|| value.as_ref().expect("value use allocates a result slot"));
-        let bound_value = match value_slot {
-            Some(value) => value.clone(),
-            None => GoIdentifier::external("_".to_string()),
-        };
-        let err = || GoExpression::identifier(error.clone());
+        let value_used = condition_needs_value || binding_uses[0];
+        let err = || GoExpression::identifier(names.error.clone());
         let guarded_value =
-            || GoExpression::identifier(value.clone().expect("nil guard captures the value"));
+            || GoExpression::identifier(names.value.clone().expect("nil guard captures the value"));
         let condition = match (arms.selects_both, nil_guard) {
             (true, Some(guard)) => GoExpression::binary(
                 non_nil_condition(err()),
@@ -565,18 +570,20 @@ impl Planner<'_> {
             }
         };
         let selected_diverges = selected.ends_with_diverge();
+        let bound_value = value_used.then(|| {
+            names
+                .value
+                .clone()
+                .expect("value use allocates a result slot")
+        });
+        let test = names.pair_condition(call, bound_value, condition);
         statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: Some(Definition {
-                    names: vec![bound_value, error.clone()],
-                    value: call,
-                }),
-                condition,
-                then_body: selected,
-                else_arm: ElseArm::from_body(fallback, selected_diverges),
-                else_if_line: None,
-                origin: IfOrigin::Match { else_label: None },
-            })
+            LoweredStatement::If(IfPlan::pair_if(
+                test,
+                selected,
+                ElseArm::from_body(fallback, selected_diverges),
+                IfOrigin::Match { else_label: None },
+            ))
             .into(),
         );
         Some(statements)
@@ -624,9 +631,19 @@ impl Planner<'_> {
             bound.success_condition()
         };
         let plan = if invert {
-            pair_if(condition, else_body, ElseArm::None)
+            IfPlan::pair_if(
+                condition,
+                else_body,
+                ElseArm::None,
+                IfOrigin::Match { else_label: None },
+            )
         } else {
-            pair_if(condition, then_body, ElseArm::from_body(else_body, false))
+            IfPlan::pair_if(
+                condition,
+                then_body,
+                ElseArm::from_body(else_body, false),
+                IfOrigin::Match { else_label: None },
+            )
         };
         let mut statements = bound.statements;
         statements.push(LoweredStatement::If(plan).into());
@@ -643,7 +660,7 @@ impl Planner<'_> {
             let bound = bindings.each_ref().map(|binding| {
                 binding.as_ref().map(|binding| match binding {
                     ArmBinding::Alias { name, go_name } => {
-                        this.scope.bind_identifier(
+                        this.scope.bind_existing_identifier(
                             name.name,
                             name.binding.as_slice(),
                             go_name.clone(),
@@ -651,15 +668,16 @@ impl Planner<'_> {
                         (go_name.clone(), None)
                     }
                     ArmBinding::AliasEach { name, ids, go_name } => {
-                        this.scope.bind_identifier(*name, ids, go_name.clone());
+                        this.scope
+                            .bind_existing_identifier(*name, ids, go_name.clone());
                         (go_name.clone(), None)
                     }
                     ArmBinding::Copy { name, value } => {
                         let go_name = this.arm_value_name(&name.go_name());
-                        this.declare(&go_name);
+                        this.scope.declare_go_name(&go_name);
                         let go_name =
                             this.scope
-                                .bind_source(name.name, name.binding.as_slice(), go_name);
+                                .bind_new_local(name.name, name.binding.as_slice(), go_name);
                         (go_name, Some((*value).clone()))
                     }
                 })
@@ -684,6 +702,29 @@ impl Planner<'_> {
             statements.extend(body_block.statements);
             (LoweredBlock { statements }, binding_uses)
         })
+    }
+}
+
+struct PartialPairNames {
+    value: Option<GoIdentifier>,
+    error: GoIdentifier,
+}
+
+impl PartialPairNames {
+    fn pair_condition(
+        &self,
+        call: GoExpression,
+        bound_value: Option<GoIdentifier>,
+        condition: GoExpression,
+    ) -> PairCondition {
+        let value = bound_value.unwrap_or_else(GoIdentifier::blank);
+        PairCondition {
+            initializer: Some(Definition {
+                names: vec![value, self.error.clone()],
+                value: call,
+            }),
+            condition,
+        }
     }
 }
 
@@ -962,18 +1003,25 @@ fn fused_result_if(
     else_body: LoweredBlock,
 ) -> IfPlan {
     if then_body.renders_empty() && !else_body.renders_empty() {
-        pair_if(err_condition, else_body, ElseArm::None)
+        IfPlan::pair_if(
+            err_condition,
+            else_body,
+            ElseArm::None,
+            IfOrigin::Match { else_label: None },
+        )
     } else if else_body.ends_with_diverge() && then_body.ends_with_diverge() {
-        pair_if(
+        IfPlan::pair_if(
             err_condition,
             else_body,
             ElseArm::from_body(then_body, false),
+            IfOrigin::Match { else_label: None },
         )
     } else {
-        pair_if(
+        IfPlan::pair_if(
             ok_condition,
             then_body,
             ElseArm::from_body(else_body, false),
+            IfOrigin::Match { else_label: None },
         )
     }
 }

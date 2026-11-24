@@ -156,7 +156,7 @@ impl Planner<'_> {
         };
         let receiver_type = self
             .facts
-            .type_parameter_behind_refs(expression_ty)
+            .ref_stripped_type_parameter(expression_ty)
             .map(Type::Parameter)
             .expect("a dispatched bound has a type parameter receiver");
         let adapter = self
@@ -345,7 +345,7 @@ impl Planner<'_> {
         if coercion.is_identity() {
             return None;
         }
-        let raw_var = self.hoist_tmp_value_statement(setup, "raw", value);
+        let raw_var = self.hoist_temp(setup, "raw", value);
         let (coercion_setup, coerced) = coercion.lower(self, GoExpression::identifier(raw_var));
         setup.extend(coercion_setup);
         Some(coerced)
@@ -407,7 +407,7 @@ impl Planner<'_> {
             }
             match expression {
                 Expression::Call { .. } => {
-                    GoExpression::identifier(self.hoist_tmp_value_statement(setup, "ref", base))
+                    GoExpression::identifier(self.hoist_temp(setup, "ref", base))
                 }
                 Expression::StructCall { .. } => GoExpression::address_of(base),
                 _ => base,

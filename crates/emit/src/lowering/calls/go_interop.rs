@@ -185,14 +185,11 @@ impl Planner<'_> {
         change: Option<GoResultLayoutChange>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, Option<GoExpression>) {
-        let (payload_layout_change, error_layout_change, change) = match change {
-            Some(GoResultLayoutChange::Payload { value, error }) => {
-                (Some(value), Some(error), None)
-            }
-            change => (None, None, change),
+        let (payload_changes, change) = match change {
+            Some(GoResultLayoutChange::Payload(changes)) => (Some(changes), None),
+            change => (None, change),
         };
-        let payload_layout_change = payload_layout_change.as_ref();
-        let error_layout_change = error_layout_change.as_ref();
+        let payload_changes = payload_changes.as_ref();
         let named = |(statements, outcome): (Vec<Statement>, WrapperOutcome)| {
             (statements, outcome.map(GoExpression::identifier))
         };
@@ -208,10 +205,15 @@ impl Planner<'_> {
             }
             (Some(LoweredReturnAbi::BareError), _) => {
                 let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
-                return named(self.lower_bare_error_wrapping(
+                let fallible = self
+                    .facts
+                    .fallible(layout.underlying().logical_type())
+                    .expect("Result type expected");
+                debug_assert!(fallible.ok_ty().is_unit());
+                return named(self.lower_unit_result_wrapping(
                     call,
                     &layout,
-                    error_layout_change,
+                    payload_changes.map(|changes| &changes.error),
                     target,
                 ));
             }
@@ -221,7 +223,7 @@ impl Planner<'_> {
                     call,
                     &layout,
                     producer,
-                    payload_layout_change.zip(error_layout_change),
+                    payload_changes,
                     target,
                 ));
             }
@@ -231,7 +233,7 @@ impl Planner<'_> {
                     call,
                     &layout,
                     *payload,
-                    payload_layout_change.zip(error_layout_change),
+                    payload_changes,
                     target,
                 ));
             }
@@ -241,13 +243,13 @@ impl Planner<'_> {
                     call,
                     &layout,
                     *payload,
-                    payload_layout_change,
+                    payload_changes,
                     target,
                 ));
             }
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)), _) => {
                 let mut statements = Vec::new();
-                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", call);
+                let raw_var = self.hoist_temp(&mut statements, "raw", call);
                 let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
                 let (wrap, outcome) = self.lower_nil_check_option_wrap(
                     GoExpression::identifier(raw_var),
@@ -286,7 +288,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let temps = self.create_temp_vars("ret", arity);
         statements.push(define_many(temps.clone(), call));
-        let slot_tys = self.facts.tuple_element_types(result_ty);
+        let slot_tys = self.facts.tuple_or_type_arguments(result_ty);
         let slot_layouts = self.lowered_tuple_slot_layouts(result_ty);
         let values: Vec<GoExpression> = temps
             .into_iter()
@@ -294,7 +296,7 @@ impl Planner<'_> {
             .map(|(index, value)| {
                 let value = GoExpression::identifier(value);
                 if let Some(changes) = slot_layout_changes {
-                    return self.plan_layout_change(&mut statements, value, &changes[index], true);
+                    return self.plan_layout_change(&mut statements, value, &changes[index]);
                 }
                 match slot_tys.get(index).filter(|_| {
                     matches!(
@@ -401,7 +403,7 @@ impl Planner<'_> {
         values: Vec<GoExpression>,
     ) -> GoExpression {
         let constructor = build_tuple_literal(values);
-        GoExpression::identifier(self.hoist_tmp_value_statement(statements, "tup", constructor))
+        GoExpression::identifier(self.hoist_temp(statements, "tup", constructor))
     }
 
     pub(in crate::lowering) fn lowered_call<'a>(
@@ -485,10 +487,10 @@ impl LoweredCall<'_> {
             return None;
         }
         let payload_layout_change = match &self.change {
-            Some(GoResultLayoutChange::Payload { value, error }) if error.is_identity() => {
-                (!value.is_identity()).then(|| value.clone())
+            Some(GoResultLayoutChange::Payload(changes)) if changes.error.is_identity() => {
+                (!changes.value.is_identity()).then(|| changes.value.clone())
             }
-            Some(GoResultLayoutChange::Payload { .. }) => return None,
+            Some(GoResultLayoutChange::Payload(_)) => return None,
             _ => None,
         };
         Some(RawPair {

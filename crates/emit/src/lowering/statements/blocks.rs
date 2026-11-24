@@ -5,7 +5,7 @@ use crate::lowering::control_flow::branches::if_let_match_arms;
 use crate::lowering::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::lowering::definitions::toplevel::ConstPlacement;
 use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::place::PlacePlan;
+use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::ElidableTail;
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::statements::testing::is_test_log_call;
@@ -21,9 +21,9 @@ impl Planner<'_> {
         &mut self,
         ty: &Type,
     ) -> (GoIdentifier, Statement) {
-        let result_var = self.fresh_local(None);
+        let result_var = self.fresh_local("tmp");
         let declaration = declare(result_var.clone(), self.go_type(ty));
-        self.declare(&result_var);
+        self.scope.declare_go_name(&result_var);
         (result_var, declaration)
     }
 
@@ -80,7 +80,7 @@ impl Planner<'_> {
             return self.lower_block_as_body(body);
         }
 
-        if let Some(ty) = self.return_ctx().ty()
+        if let Some(ty) = self.scope.current_return_ctx().ty()
             && self.facts.resolves_to_unit(ty)
         {
             let mut block = self.lower_block_as_body(body);
@@ -120,7 +120,7 @@ impl Planner<'_> {
             && !matches!(last, Expression::Return { .. })
             && self.facts.resolves_to_unit(&last.get_type());
         let mut body = LoweredBlock { statements };
-        let return_ctx = self.return_ctx();
+        let return_ctx = self.scope.current_return_ctx();
         if (is_statement_only || is_unit_tail)
             && !body.go_terminates()
             && let Some(return_ty) = return_ctx
@@ -243,10 +243,11 @@ impl Planner<'_> {
             Expression::Break { value: None, .. } => {
                 let transfer = LoweredStatement::Break(self.current_loop_transfer());
                 let wide_result = self
+                    .scope
                     .current_loop()
                     .filter(|loop_context| self.widens_unit(loop_context.result_ty.as_ref()))
-                    .map(|loop_context| {
-                        (loop_context.result.clone(), loop_context.result_ty.clone())
+                    .and_then(|loop_context| {
+                        Some((loop_context.result.clone()?, loop_context.result_ty.clone()))
                     });
                 match wide_result {
                     Some((result, result_ty)) => {
@@ -382,7 +383,7 @@ impl Planner<'_> {
             };
         }
         LoweredBlock {
-            statements: self.lower_block_to_var(expression, local, target_ty, false),
+            statements: self.lower_block_to_var(expression, local, target_ty),
         }
     }
 }

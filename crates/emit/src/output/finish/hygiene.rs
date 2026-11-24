@@ -60,7 +60,7 @@ fn blank_unused_literal_parameters(statements: &mut Vec<Statement>) {
             if let GoExpressionNode::FunctionLiteral { parameters, .. } = node {
                 for parameter in parameters.iter_mut() {
                     if is_unreferenced(&parameter.name, self.0) {
-                        parameter.name = blank();
+                        parameter.name = GoIdentifier::blank();
                     }
                 }
             }
@@ -72,10 +72,6 @@ fn blank_unused_literal_parameters(statements: &mut Vec<Statement>) {
 
 fn is_unreferenced(name: &GoIdentifier, uses: &NameUses) -> bool {
     name.spelling() != "_" && uses.references(name) == 0
-}
-
-fn blank() -> GoIdentifier {
-    GoIdentifier::external("_".to_string())
 }
 
 fn keep_effects(value: GoExpression, line: Option<Position>) -> Option<Statement> {
@@ -220,7 +216,7 @@ fn without_unused(
             if names.len() > 1 && names.iter().any(|name| liveness.removable(name)) =>
         {
             for name in names.iter_mut().filter(|name| liveness.removable(name)) {
-                *name = blank();
+                *name = GoIdentifier::blank();
             }
             let kind = if names.iter().all(|name| name.spelling() == "_") {
                 *changed = true;
@@ -278,7 +274,7 @@ fn blank_unused_header_names(statement: &mut LoweredStatement, liveness: &Livene
                     continue;
                 };
                 for name in receive_vars.iter_mut().filter(|name| removable(name)) {
-                    *name = blank();
+                    *name = GoIdentifier::blank();
                     changed = true;
                 }
                 if receive_vars.iter().all(|name| name.spelling() == "_") {

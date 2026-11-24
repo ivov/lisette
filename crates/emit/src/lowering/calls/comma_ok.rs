@@ -60,7 +60,7 @@ impl Planner<'_> {
     ) -> BoundValue {
         let (statements, value, borrowed) = match slot {
             CommaOkValueSlot::Named(name) if name.spelling() != components.value.spelling() => {
-                self.declare(name.spelling());
+                self.scope.declare_go_name(name.spelling());
                 let copy = define(name.clone(), GoExpression::identifier(components.value));
                 (vec![copy], name, false)
             }
@@ -207,7 +207,7 @@ impl Planner<'_> {
         let mut status = self.pair_status(status_hint, status_kind, opens_if);
         if opens_if && value.name().map(GoIdentifier::spelling) == Some(status.spelling()) {
             self.scope.reserve_go_name(&status);
-            status = self.fresh_like(&status);
+            status = self.fresh_local(&status);
         }
         let mut statements = statements;
         let mut pair = LoweredPair {
@@ -231,7 +231,7 @@ impl Planner<'_> {
             || self.names.is_package_block_name(&candidate)
             || self.scope.declares_type_param(&candidate)
         {
-            self.fresh_source(name)
+            self.fresh_local(name)
         } else {
             self.scope.new_local_identifier(candidate)
         }
@@ -242,12 +242,12 @@ impl Planner<'_> {
         name: &GoIdentifier,
     ) -> GoIdentifier {
         let candidate = name.clone();
-        let name = if self.is_declared(&candidate) {
-            self.fresh_like(&candidate)
+        let name = if self.scope.is_go_name_declared(&candidate) {
+            self.fresh_local(&candidate)
         } else {
             candidate
         };
-        self.declare(&name);
+        self.scope.declare_go_name(&name);
         name
     }
 
@@ -266,12 +266,12 @@ impl Planner<'_> {
             || self.scope.has_binding_for_go_name(&candidate)
             || self.names.is_package_block_name(&candidate);
         let name = match hint {
-            Some(hint) if taken => self.fresh_source(hint),
-            None if taken => self.fresh_local(Some(default)),
+            Some(hint) if taken => self.fresh_local(hint),
+            None if taken => self.fresh_local(default),
             _ => self.scope.new_local_identifier(candidate),
         };
         if !opens_if {
-            self.declare(&name);
+            self.scope.declare_go_name(&name);
         }
         name
     }
