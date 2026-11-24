@@ -8,24 +8,19 @@ use crate::target::ir::go_expression::{
 };
 use crate::target::ir::values::GoExpression;
 use crate::target::types::go_type::{GoType, conversion_prefix};
-use std::fmt::{self, Display, Formatter};
 
 impl GoExpression {
-    pub(crate) fn rendered(&self) -> String {
-        self.node().print()
-    }
-
-    pub(crate) fn write(&self, output: &mut GoWriter) {
+    pub(in crate::output::render) fn write(&self, output: &mut GoWriter) {
         output.push_position(self.source_position());
         self.node().write_into(output);
     }
 
-    pub(crate) fn write_header(&self, output: &mut GoWriter) {
+    pub(in crate::output::render) fn write_header(&self, output: &mut GoWriter) {
         output.push_position(self.source_position());
         self.node().write_header_into(output);
     }
 
-    pub(crate) fn write_list(values: &[GoExpression], output: &mut GoWriter) {
+    pub(in crate::output::render) fn write_list(values: &[GoExpression], output: &mut GoWriter) {
         for (index, value) in values.iter().enumerate() {
             if index > 0 {
                 output.push_str(", ");
@@ -35,24 +30,22 @@ impl GoExpression {
     }
 }
 
-impl Display for GoExpression {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.node().print())
-    }
+pub(crate) fn rendered(expression: &GoExpression) -> String {
+    expression.node().print()
 }
 
 impl GoExpressionNode {
-    pub(crate) fn print(&self) -> String {
+    pub(in crate::output::render) fn print(&self) -> String {
         let mut output = GoWriter::default();
         self.write_into(&mut output);
         output.into_text()
     }
 
-    pub(crate) fn write_into(&self, output: &mut GoWriter) {
+    pub(in crate::output::render) fn write_into(&self, output: &mut GoWriter) {
         self.write(output, Slot::FREE);
     }
 
-    pub(crate) fn write_header_into(&self, output: &mut GoWriter) {
+    pub(in crate::output::render) fn write_header_into(&self, output: &mut GoWriter) {
         self.write(output, Slot::HEADER);
     }
 

@@ -1,8 +1,7 @@
-use crate::EmitFacts;
 use crate::Planner;
-use crate::escape_local;
 use crate::lookup::facts::component_uses::ComponentDemand;
 use crate::lookup::facts::component_uses::ValueDemand;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::bindings::{ComponentKind, TupleBinding};
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::WrapperTarget;
@@ -24,6 +23,7 @@ use crate::target::ir::bodies::{
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::Fallible;
 use crate::target::ir::values::{ConstantKind, GoExpression};
+use crate::target::names::go_name::escape_local;
 use crate::target::names::source_name::SourceName;
 use crate::target::types::return_abi::LoweredReturnAbi;
 use syntax::EcoString;

@@ -1,6 +1,6 @@
 use super::propagation::plain_return;
 use crate::Planner;
-use crate::ReturnContext;
+use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::calls::bound_value::BoundValue;
 use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PairKind};

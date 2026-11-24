@@ -1,3 +1,5 @@
+use crate::Planner;
+use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::fallible_producer::OptionFusePlan;
 use crate::lowering::abi::go_returns;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
@@ -15,7 +17,6 @@ use crate::target::ir::bodies::{
 use crate::target::ir::prelude::{ConstructorKind, Fallible, prelude_call};
 use crate::target::ir::values::GoExpression;
 use crate::target::types::return_abi::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
-use crate::{Planner, ReturnContext};
 use std::slice;
 use syntax::ast::Expression;
 use syntax::types::Type;

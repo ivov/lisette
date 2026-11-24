@@ -16,6 +16,7 @@ use crate::target::names::receiver::ReceiverGenerics;
 use crate::target::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::target::types::display_form::DisplayForm;
 use crate::target::types::go_type::GoType;
+use crate::target::types::go_type::receiver_type;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::go_names::ENUM_STRINGER_METHOD;
 
@@ -199,7 +200,7 @@ impl Planner<'_> {
             .into_iter()
             .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
             .unwrap_or_else(|| GoExpression::literal("true".to_string()));
-        let receiver_type = receiver_generics.receiver_type(name);
+        let receiver_type = receiver_type(&receiver_generics, name);
         GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
             self.facts.equals_method_go_name(),
@@ -358,7 +359,7 @@ fn string_method(
     value: GoExpression,
 ) -> GoDeclaration {
     GoDeclaration::function(
-        Some(GoParameter::new(receiver, generics.receiver_type(name))),
+        Some(GoParameter::new(receiver, receiver_type(generics, name))),
         method.to_string(),
         Vec::new(),
         Vec::new(),

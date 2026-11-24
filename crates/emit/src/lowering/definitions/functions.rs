@@ -1,7 +1,7 @@
 use crate::Planner;
-use crate::ReturnContext;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::reusable_bindings::ReusableBindings;
+use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;

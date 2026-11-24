@@ -1,4 +1,4 @@
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::abi::layout::ValueLayout;
@@ -13,7 +13,9 @@ use crate::target::names::go_name;
 use syntax::program::Adaptation;
 use syntax::program::NativeOperation;
 
+use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
+use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::layout::FunctionLayout;
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
@@ -31,7 +33,6 @@ use crate::target::ir::values::{CaptureBoundary, GoExpression, OperandForm};
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::CallableReturnAbi;
-use crate::{Planner, ReturnContext};
 use syntax::ast::{Expression, IdentifierResolution, Span, UnaryOperator};
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, DotAccessResolution};

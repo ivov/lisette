@@ -1,6 +1,6 @@
-use crate::EmitFacts;
 use crate::Planner;
-use crate::is_order_sensitive;
+use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::expressions::staging::LaterStages;

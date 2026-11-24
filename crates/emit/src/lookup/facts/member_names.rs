@@ -1,4 +1,4 @@
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::names::go_name;
 use syntax::types::Type;
 

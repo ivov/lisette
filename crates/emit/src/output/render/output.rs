@@ -1,8 +1,8 @@
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
-use crate::go_name;
 use crate::lookup::state::imports::OutputImport;
+use crate::target::names::go_name;
 
 #[derive(Clone, Debug)]
 pub struct OutputFile {

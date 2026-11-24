@@ -1,5 +1,5 @@
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::callable::CallableAbi;
 use crate::lowering::plan::calls::{CallableOrigin, FunctionLayoutChange};
 use crate::lowering::plan::context::ExpressionContext;

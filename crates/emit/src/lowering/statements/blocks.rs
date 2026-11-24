@@ -1,4 +1,6 @@
+use crate::Planner;
 use crate::lookup::facts::component_uses::component_demand;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::control_flow::branches::if_let_match_arms;
 use crate::lowering::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::lowering::definitions::toplevel::ConstPlacement;
@@ -10,7 +12,6 @@ use crate::lowering::statements::testing::is_test_log_call;
 use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement, declare};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
-use crate::{EmitFacts, Planner};
 use std::{iter, slice};
 use syntax::ast::{Expression, Pattern};
 use syntax::types::Type;

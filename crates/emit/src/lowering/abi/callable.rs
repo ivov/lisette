@@ -3,7 +3,7 @@ use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, Opti
 use syntax::ast::Expression;
 use syntax::types::Type;
 
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 
 use crate::Planner;
 use crate::target::types::go_type::returns_go_void;

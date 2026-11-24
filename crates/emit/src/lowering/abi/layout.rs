@@ -1,4 +1,4 @@
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::return_abi;
 use syntax::ast::Expression;
 use syntax::program::{DotAccessResolution, FieldSelection};

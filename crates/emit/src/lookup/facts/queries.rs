@@ -1,4 +1,4 @@
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::prelude as fallible;
 use crate::target::ir::prelude::Fallible;
 use crate::target::ir::values::GoExpression;

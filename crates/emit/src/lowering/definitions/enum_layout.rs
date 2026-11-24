@@ -19,6 +19,7 @@ use crate::target::names::receiver::ReceiverGenerics;
 use crate::target::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::target::types::enum_layout::{EnumLayout, JsonPayload, VariantLayout};
 use crate::target::types::go_type::GoType;
+use crate::target::types::go_type::receiver_type;
 
 use syntax::go_names::ENUM_TAG_FIELD;
 
@@ -162,7 +163,7 @@ impl EnumLayout {
         GoDeclaration::function(
             Some(GoParameter::new(
                 receiver,
-                generics.receiver_type(&self.enum_name),
+                receiver_type(generics, &self.enum_name),
             )),
             format.method(),
             Vec::new(),
@@ -219,7 +220,7 @@ impl EnumLayout {
     ) -> Vec<GoDeclaration> {
         let receiver_name = synthesized_receiver_name(&self.enum_name, generics);
         let receiver = planner.scope.new_local_identifier(&receiver_name);
-        let receiver_type = generics.receiver_type(&self.enum_name);
+        let receiver_type = receiver_type(generics, &self.enum_name);
         let marshal = self.json_marshal_declaration(&receiver, &receiver_type);
         let mut fresh = |base: &str| {
             planner.scope.new_local_identifier(synthesized_local_name(

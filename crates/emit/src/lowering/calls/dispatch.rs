@@ -6,12 +6,13 @@ use crate::lowering::expressions::values::with_source_positions;
 use crate::lowering::plan::calls::callable_declaration;
 use crate::output::finish::function_literals::function_literal;
 use crate::output::finish::function_literals::immediate_call;
+use crate::output::render::expressions::rendered;
 use crate::target::types::go_type::ChannelDirection;
 use syntax::types::SimpleKind;
 
 use super::{NativeCallContext, NativeCallForm};
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_returns::multi_value_return;
 use crate::lowering::abi::layout::ValueLayout;
@@ -382,7 +383,7 @@ impl<'a> Planner<'a> {
             let (value_setup, coerced_value) = value_coercion.lower(self, staged_value);
             setup.extend(value_setup);
             widest = widest
-                .max(coerced_key.rendered().len() + coerced_value.rendered().len() + ": ".len());
+                .max(rendered(&coerced_key).len() + rendered(&coerced_value).len() + ": ".len());
             let coerced_value = if is_whole_literal {
                 coerced_value.elide_composite_type(&value_go_ty)
             } else {

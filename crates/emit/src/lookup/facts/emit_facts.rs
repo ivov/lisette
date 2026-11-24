@@ -12,12 +12,12 @@ use syntax::types;
 use syntax::types::{CompoundKind, SimpleKind};
 use syntax::types::{Symbol, Type};
 
-use crate::EnumLayout;
-use crate::SharedEmitContext;
 use crate::lookup::facts::catalog::{GoAbiCatalog, GoSlotDescriptor};
 use crate::lookup::facts::context::LineIndex;
+use crate::lookup::facts::context::SharedEmitContext;
 use crate::target::ir::prelude::is_prelude_container_type;
 use crate::target::names::go_name;
+use crate::target::types::enum_layout::EnumLayout;
 use crate::target::types::go_type::returns_go_void;
 
 #[derive(Clone)]

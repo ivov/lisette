@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::go_name;
+use crate::target::names::go_name;
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use syntax::ast::{ImportAlias, Span};
 use syntax::program::{File, FileImport, ImportKey};

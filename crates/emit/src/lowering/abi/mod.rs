@@ -17,8 +17,8 @@ pub(in crate::lowering) mod layout;
 pub(in crate::lowering) mod layout_change;
 pub(in crate::lowering) mod slot_coercion;
 
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::plan::calls::{CallableDeclaration, CallableOrigin, FunctionLayoutChange};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::prelude::prelude_constructor;

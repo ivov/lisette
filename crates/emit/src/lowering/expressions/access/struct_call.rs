@@ -1,4 +1,4 @@
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::layout::is_go_abi_type;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::prelude::option_variant;
@@ -9,7 +9,6 @@ use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
-use crate::go_name;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::control_flow::propagation::plain_return;
@@ -23,6 +22,7 @@ use crate::target::ir::go_expression::Position;
 use crate::target::ir::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
 use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
+use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
 use syntax::go_names::ENUM_TAG_FIELD;

@@ -1,12 +1,13 @@
+use crate::target::names::go_name::escape_local;
 use std::ptr;
 
 use super::local_names::LocalNames;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::ReturnContext;
 use crate::lookup::facts::reusable_bindings::ReusableBindings;
 use crate::lookup::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
 use crate::lookup::state::enclosing::LoopContext;
+use crate::lookup::state::enclosing::ReturnContext;
 use crate::target::ir::bodies::LoopId;
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
@@ -195,7 +196,7 @@ impl ScopeState {
         go_name: impl Into<GoIdentifier>,
     ) -> GoIdentifier {
         let mut name = go_name.into();
-        *name.spelling_mut() = crate::escape_local(name.spelling()).into_owned();
+        *name.spelling_mut() = escape_local(name.spelling()).into_owned();
         if name.id().is_none() {
             name.identify(self.new_local_id());
         }

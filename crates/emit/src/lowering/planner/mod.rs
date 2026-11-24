@@ -4,16 +4,22 @@ mod generics;
 mod package;
 mod resolution;
 
+use crate::OutputFile;
+use crate::lookup::facts::context::LineIndex;
 use crate::lookup::facts::context::{GlobalEmitData, SharedEmitContext};
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::package_names::PackageNames;
 use crate::lookup::state::adapter_registry::AdapterRegistry;
 use crate::lookup::state::conversion_record::ConversionRecord;
 use crate::lookup::state::enclosing::LoopContext;
+use crate::lookup::state::enclosing::ReturnContext;
 use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
 use crate::lowering::abi::slot_coercion::check_applied_conversions;
+use crate::output::render::Renderer;
+use crate::output::render::output::OutputCollector;
 use crate::target::ir::bodies::{
     LoopId, LoopTransfer, LoweredBlock, LoweredStatement, Statement, define,
 };
@@ -27,7 +33,6 @@ use crate::target::names::source_name::SourceName;
 use crate::target::types::go_type::GoType;
 use crate::target::types::go_type::is_prelude_type;
 use crate::target::types::return_abi::CallableReturnAbi;
-use crate::{EmitFacts, LineIndex, OutputCollector, OutputFile, Renderer, ReturnContext};
 use diagnostics::LisetteDiagnostic;
 use package::{PackagePlan, build_package_plan};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};

@@ -4,7 +4,7 @@ use syntax::program::NativeTypeKind;
 use syntax::types::RangeKind;
 
 use crate::Planner;
-use crate::is_order_sensitive;
+use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::go_expression::BinaryOp;

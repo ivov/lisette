@@ -364,12 +364,10 @@ impl GoType {
     }
 }
 
-impl ReceiverGenerics {
-    pub(crate) fn receiver_type(&self, type_name: &str) -> GoType {
-        GoType::named(
-            &go_name::escape_type_name(type_name),
-            &self.0.iter().map(GoType::new).collect::<Vec<_>>(),
-            None,
-        )
-    }
+pub(crate) fn receiver_type(generics: &ReceiverGenerics, type_name: &str) -> GoType {
+    GoType::named(
+        &go_name::escape_type_name(type_name),
+        &generics.0.iter().map(GoType::new).collect::<Vec<_>>(),
+        None,
+    )
 }

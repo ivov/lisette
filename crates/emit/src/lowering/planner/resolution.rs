@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lookup::state::imports::rendered_qualifier;
+use crate::output::render::expressions::rendered;
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -58,7 +59,7 @@ impl Planner<'_> {
         resolution: &IdentifierResolution,
     ) -> GoIdentifier {
         if let IdentifierResolution::Definition { name, .. } = resolution {
-            return GoIdentifier::external(self.definition_reference(name).to_string());
+            return GoIdentifier::external(rendered(&self.definition_reference(name)));
         }
         match self
             .scope

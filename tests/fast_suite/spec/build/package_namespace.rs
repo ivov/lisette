@@ -161,7 +161,7 @@ fn check_clean_programs_declare_distinct_package_go_names() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
-fn source_files(directory: &str) -> Vec<(String, String)> {
+pub(super) fn source_files(directory: &str) -> Vec<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut pending = vec![root.join(directory)];
     let mut files = Vec::new();

@@ -1,11 +1,13 @@
+use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
+use crate::output::render::expressions::rendered;
 use crate::target::ir::go_expression::{BinaryOp, CompositeLayout};
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::display_form::{DisplayForm, UNIT_DISPLAY};
 use crate::target::types::go_type::GoType;
-use crate::{EmitFacts, Planner};
 use std::fmt::Write;
 use std::iter::Peekable;
 use std::mem::take;
@@ -115,7 +117,7 @@ impl Planner<'_> {
             let is_whole_literal = coercion.is_identity() && value.is_composite_literal();
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            widest = widest.max(coerced.rendered().len());
+            widest = widest.max(rendered(&coerced).len());
             wrapped.push((
                 None,
                 if is_whole_literal {

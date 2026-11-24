@@ -1,5 +1,5 @@
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::abi::go_result_wrapping::NilGuard;

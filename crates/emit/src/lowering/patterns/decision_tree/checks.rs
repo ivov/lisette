@@ -1,5 +1,5 @@
 use super::*;
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::patterns::decision_tree::field_segment;
 use syntax::program::FieldSelection;
 

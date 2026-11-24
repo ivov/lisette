@@ -15,6 +15,7 @@ use crate::target::names::go_name;
 use crate::target::names::receiver::ReceiverGenerics;
 use crate::target::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::target::types::go_type::GoType;
+use crate::target::types::go_type::receiver_type;
 use syntax::ast::{Attribute, Generic};
 use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::program::{Definition, DefinitionBody};
@@ -97,7 +98,7 @@ impl Planner<'_> {
         let other = synthesized_local_name("other", &receiver, receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
-        let receiver_type = receiver_generics.receiver_type(name);
+        let receiver_type = receiver_type(receiver_generics, name);
         let go_method = self.facts.equals_method_go_name();
 
         let mut recipes = self.facts.synthesized_field_equalities(enum_id).iter();

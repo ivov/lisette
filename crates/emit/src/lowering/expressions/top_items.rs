@@ -1,5 +1,5 @@
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
 use crate::output::render::output::doc_lines;

@@ -1,6 +1,8 @@
 use crate::lookup::facts::catalog::GoAbiCatalog;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::go_expression::Position;
-use crate::{EmitFacts, EnumLayout, go_name};
+use crate::target::names::go_name;
+use crate::target::types::enum_layout::EnumLayout;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 use syntax::ast::Span;

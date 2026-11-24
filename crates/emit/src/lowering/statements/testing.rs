@@ -1,5 +1,5 @@
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::expressions::operators::flip_preserves_nan;
 use crate::lowering::expressions::{BinaryOperand, flip_comparison};
 use crate::lowering::plan::context::ExpressionContext;

@@ -1,3 +1,5 @@
+use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::predicates::strip_negations;
 use crate::lowering::control_flow::targets::legalize_source_loop;
 use crate::lowering::expressions::staging::SequenceStage;
@@ -15,7 +17,6 @@ use crate::target::ir::go_expression::{BinaryOp, UnaryOp};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression};
 use crate::target::names::go_name;
-use crate::{EmitFacts, Planner};
 use syntax::ast::{Binding, Expression, Literal, Pattern};
 use syntax::program::{CallOperation, NativeTypeKind};
 use syntax::types::{IterableKind, RangeKind, Type};

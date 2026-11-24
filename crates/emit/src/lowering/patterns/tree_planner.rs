@@ -7,8 +7,8 @@ use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::patterns::binding_decls::is_catchall_pattern;
 use crate::lowering::patterns::decision_tree::{
     AccessPath, ArmLeaf, ChainTail, Decision, GuardedLeaf, PatternBinding, SubjectRoot,

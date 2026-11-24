@@ -1,5 +1,5 @@
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::CalleeSignature;
 use crate::lowering::abi::callable::{CallableAbi, CallableParamAbi};
 use crate::lowering::abi::coercion_plan::LayoutChange;

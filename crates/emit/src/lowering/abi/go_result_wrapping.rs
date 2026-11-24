@@ -1,5 +1,5 @@
-use crate::EmitFacts;
 use crate::Planner;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::coercion_plan::LayoutChange;
 use crate::lowering::abi::layout::{ResultProducer, ValueLayout};
 use crate::lowering::calls::go_interop::{LoweredProducer, build_tuple_literal};

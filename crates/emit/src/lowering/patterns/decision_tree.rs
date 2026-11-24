@@ -1,4 +1,4 @@
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::binding_decls::pattern_has_bindings;
 use crate::output::finish::function_literals::immediate_call;

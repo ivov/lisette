@@ -1,4 +1,4 @@
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::display_form::{DisplayForm, UNIT_DISPLAY};

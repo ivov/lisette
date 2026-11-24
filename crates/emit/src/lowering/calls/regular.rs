@@ -1,5 +1,5 @@
 use super::arguments::CallArgsContext;
-use crate::EmitFacts;
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::dispatch::callee_go_name;
 use crate::lowering::calls::dispatch::callee_is_go_builtin;
 use crate::lowering::calls::dispatch::go_builtin_name;
