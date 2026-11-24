@@ -94,10 +94,21 @@ impl InferCtx<'_> {
             .map(|e| e.get_type().resolve_in(&self.env))
             .collect();
         let generic_params = self.get_generic_param_names(callee_expression);
-        let is_constructor = callee_expression
-            .get_var_name()
-            .map(|name| name.chars().next().is_some_and(|c| c.is_uppercase()))
-            .unwrap_or(false);
+        let names_a_method = matches!(
+            callee_expression.unwrap_parens(),
+            Expression::DotAccess {
+                resolution: DotAccessResolution::InstanceMethod { .. }
+                    | DotAccessResolution::InstanceMethodValue { .. }
+                    | DotAccessResolution::StaticMethod { .. },
+                ..
+            }
+        );
+        let is_constructor = !names_a_method
+            && callee_expression.get_var_name().is_some_and(|name| {
+                name.rsplit('.')
+                    .next()
+                    .is_some_and(|last| last.starts_with(char::is_uppercase))
+            });
         let variant_hint = callee_expression
             .get_var_name()
             .filter(|_| is_constructor)
@@ -357,12 +368,6 @@ impl InferCtx<'_> {
         );
 
         let resolved_return = self.peel_resolved(&return_ty);
-        if call_kind == CallKind::TupleStructConstructor
-            && let Type::Nominal { id, .. } = &resolved_return
-        {
-            let written_name = callee_path.as_deref().unwrap_or(id.as_str());
-            self.register_construction_obligations(written_name, &resolved_return, span);
-        }
         if let Some((CompoundKind::Map, arguments)) = resolved_return.as_compound()
             && let Some(key) = arguments.first()
         {
@@ -491,8 +496,9 @@ impl InferCtx<'_> {
         } = qualified;
         let (receiver, rest) = args.split_first()?;
         let path = callee.unwrap_parens().as_dotted_path()?;
-        let (owner, member) = path.split_once('.')?;
-        if member.contains('.') || self.scopes.lookup_binding_id(owner).is_some() {
+        let (owner, member) = path.rsplit_once('.')?;
+        let root = owner.split('.').next().unwrap_or(owner);
+        if self.scopes.lookup_binding_id(root).is_some() {
             return None;
         }
         let owner_id =
@@ -526,8 +532,7 @@ impl InferCtx<'_> {
     fn method_owner(&self, owner_id: &str, member: &str) -> Option<String> {
         let definition = self.store.get_definition(owner_id)?;
         if self.store.get_method(owner_id, member).is_some() {
-            return (!matches!(definition.body, DefinitionBody::Interface { .. }))
-                .then(|| owner_id.to_string());
+            return Some(owner_id.to_string());
         }
         let DefinitionBody::TypeAlias {
             alias: AliasKind::Transparent { target, .. },
@@ -1195,10 +1200,14 @@ impl InferCtx<'_> {
                 (params, variadic, return_type)
             }
             None if callee_ty.is_variable() => {
-                let parameters = (0..arg_count)
+                let parameters: Vec<_> = (0..arg_count)
                     .map(|_| FunctionParameter::new(self.new_type_var()))
                     .collect();
-                (parameters, None, self.new_type_var())
+                let return_type = self.new_type_var();
+                let function_ty =
+                    Type::function(parameters.clone(), vec![], Box::new(return_type.clone()));
+                self.unify(&callee_ty, &function_ty, &callee_expression.get_span());
+                (parameters, None, return_type)
             }
             None if callee_ty.resolve_in(&self.env).is_error() => {
                 let parameters = (0..arg_count)
@@ -1313,9 +1322,10 @@ impl InferCtx<'_> {
             span,
         } = call;
         if let Some(operation) = self.select_call_operation(&callee_expression, CallKind::Regular) {
-            let callee_type_arguments = resolved_instantiation(&callee_expression)
-                .cloned()
-                .unwrap_or_default();
+            let callee_type_arguments =
+                resolved_instantiation(callee_expression.unwrap_value_wrappers())
+                    .cloned()
+                    .unwrap_or_default();
             self.record_callee(&callee_expression, operation, callee_type_arguments);
         }
         if spread.is_some() || args.len() != 1 {

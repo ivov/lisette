@@ -423,6 +423,14 @@ impl Planner<'_> {
     }
 
     pub(crate) fn go_type(&self, ty: &Type) -> GoType {
+        assert!(
+            !self.facts.is_never(ty),
+            "internal error: a `Never` value has no Go type, emit writes it as a statement"
+        );
+        self.component_go_type(ty)
+    }
+
+    pub(crate) fn component_go_type(&self, ty: &Type) -> GoType {
         self.value_layout(ty, SlotOrigin::Lisette).go_type(self)
     }
 
@@ -433,13 +441,8 @@ impl Planner<'_> {
                 params: parameters,
                 ..
             } => self.constructor_go_type(id, parameters, ty),
-            Type::Simple(kind) => {
-                if matches!(kind, SimpleKind::Unit) {
-                    GoType::new("struct{}")
-                } else {
-                    GoType::new(kind.leaf_name().to_string())
-                }
-            }
+            Type::Simple(SimpleKind::Unit) | Type::Never => GoType::new("struct{}"),
+            Type::Simple(kind) => GoType::new(kind.leaf_name().to_string()),
             Type::Compound {
                 kind,
                 args: arguments,
@@ -448,7 +451,6 @@ impl Planner<'_> {
             Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
-            Type::Never => GoType::new("struct{}"),
             Type::Error => self.reject_untyped_position("an error type"),
             Type::ImportNamespace(_) => self.reject_untyped_position("a package name"),
             Type::ReceiverPlaceholder => GoType::new("any"),
@@ -462,8 +464,8 @@ impl Planner<'_> {
         match kind {
             CompoundKind::Ref => unreachable!("the value layout renders a reference"),
             CompoundKind::VarArgs => {
-                let element =
-                    self.go_type(arguments.first().expect("varargs have an element type"));
+                let element = self
+                    .component_go_type(arguments.first().expect("varargs have an element type"));
                 GoType::variadic(&element)
             }
             _ => {
@@ -484,7 +486,7 @@ impl Planner<'_> {
     ) -> GoType {
         let arguments: Vec<GoType> = parameters
             .into_iter()
-            .map(|param| self.go_type(param))
+            .map(|param| self.component_go_type(param))
             .collect();
         GoType::type_arguments(&arguments)
     }
@@ -507,7 +509,7 @@ impl Planner<'_> {
         mapping: &SubstitutionMap,
     ) -> Option<GoType> {
         Some(match entry {
-            GoTypeRecipe::Parameter(name) => self.go_type(mapping.get(name)?),
+            GoTypeRecipe::Parameter(name) => self.component_go_type(mapping.get(name)?),
             GoTypeRecipe::Slice(element) => {
                 GoType::slice_of(&self.render_recipe_entry(element, mapping)?)
             }
@@ -538,7 +540,7 @@ impl Planner<'_> {
         let kind = physical_type_kind(ty, |id| self.facts.definition(id));
         let param_types: Vec<GoType> = parameters
             .iter()
-            .map(|parameter| self.go_type(parameter))
+            .map(|parameter| self.component_go_type(parameter))
             .collect();
         if let Some(package) = package {
             let member = name.rsplit('.').next().unwrap_or(&name);
@@ -556,7 +558,7 @@ impl Planner<'_> {
         let argument = |index| {
             let stripped = ty.strip_refs();
             let arguments = stripped.get_type_params().expect("native type arguments");
-            self.go_type(&arguments[index])
+            self.component_go_type(&arguments[index])
         };
         match kind {
             NativeTypeKind::String => GoType::new("string"),
@@ -628,8 +630,8 @@ impl Planner<'_> {
         let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
         let arguments: Vec<GoType> = receiver_params
             .iter()
-            .map(|ty| self.go_type(ty))
-            .chain(type_args.map(|ty| self.go_type(ty)))
+            .map(|ty| self.component_go_type(ty))
+            .chain(type_args.map(|ty| self.component_go_type(ty)))
             .collect();
         GoType::type_arguments(&arguments)
     }
@@ -678,7 +680,7 @@ impl Planner<'_> {
                 SimpleKind::Float32 | SimpleKind::Float64 => constant("0.0", ConstantKind::Float),
                 SimpleKind::Bool => constant("false", ConstantKind::Bool),
                 SimpleKind::String => constant("\"\"", ConstantKind::String),
-                SimpleKind::Unit => GoExpression::unit(),
+                SimpleKind::Unit => self.unit_value(None, None),
                 SimpleKind::Complex64 | SimpleKind::Complex128 => GoExpression::new_zero(go_ty),
             },
             ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty),
@@ -730,7 +732,7 @@ impl Planner<'_> {
                 .map(|field| {
                     (
                         self.facts.declared_field_go_name(id, field),
-                        self.go_type(&field.ty),
+                        self.component_go_type(&field.ty),
                     )
                 })
                 .collect(),

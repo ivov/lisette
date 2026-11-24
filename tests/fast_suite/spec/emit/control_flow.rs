@@ -5235,3 +5235,221 @@ fn test() -> Wrapper {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn never_value_compared_with_an_operand_runs_as_a_statement() {
+    let input = r#"
+fn f() {
+  let g = || { panic("stop") }
+  if g() != 1 { panic("no") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_let_initializer_declares_no_local() {
+    let input = r#"
+fn f() -> int {
+  let x = { panic("stop") }
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_value_as_index_runs_before_the_store() {
+    let input = r#"
+fn f() {
+  let next = || { panic("stop") }
+  let mut a = Array.new<int, 4>()
+  a[next()] = 7
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_let_initializer_before_compound_assignment() {
+    let input = r#"
+fn f() {
+  let mut n = { panic("stop") }
+  n += 1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_closure_result_in_map_err() {
+    let input = r#"
+import "go:strconv"
+
+fn parse(s: string) -> Result<int, error> {
+  let n = strconv.Atoi(s).map_err(|e| { panic("bad") })?
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_closure_passed_to_slice_map() {
+    let input = r#"
+fn f(s: Slice<int>) -> Slice<int> {
+  s.map(|x| { panic("stop") })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_break_value_in_loop_into_unknown() {
+    let input = r#"
+fn f() -> Unknown {
+  let x: Unknown = loop {
+    break ({ panic("stop") })
+  }
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_try_block_branch_takes_the_other_branch_type() {
+    let input = r#"
+fn die() -> Never { panic("dead") }
+
+fn f(flag: bool) -> Result<int, string> {
+  let x = if flag {
+    try {
+      let _ = Ok(1)?
+      die()
+    }
+  } else { Ok(42) }
+  x
+}
+
+fn test() {
+  if f(false) != Ok(42) { panic("wrong value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_with_diverging_initializer() {
+    let input = r#"
+struct P { x: Option<int> }
+
+fn f(p: P) -> int {
+  let P { x: Some(a) } = { return 0 } else { return 1 }
+  a
+}
+
+fn test() {
+  if f(P { x: None }) != 0 { panic("wrong value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unit_into_unknown_keeps_the_unit_value() {
+    let input = r#"
+fn tail() -> Unknown {
+  {}
+}
+
+fn early(b: bool) -> Unknown {
+  if b {
+    return {}
+  }
+  1
+}
+
+fn test() {
+  let direct: Unknown = ({})
+  if assert_type<()>(direct).is_none() { panic("direct") }
+  if assert_type<()>(tail()).is_none() { panic("tail") }
+  if assert_type<()>(early(true)).is_none() { panic("early") }
+  let lambda: fn() -> Unknown = || ()
+  if assert_type<()>(lambda()).is_none() { panic("lambda") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unit_lambda_into_go_function_type_returns_the_unit_value() {
+    let input = r#"
+import "go:expvar"
+
+fn test() {
+  let f = expvar.Func(|| ())
+  if f.String() != "{}" { panic(f.String()) }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_with_unit_call_initializer() {
+    let input = r#"
+fn g() {}
+
+fn test() {
+  let _ = g() else { panic("x") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_with_unit_block_initializer() {
+    let input = r#"
+fn f() -> int { 1 }
+
+fn test() {
+  let _ = { let _ = f(); } else { panic("x") }
+  let _ | _ = { let _ = f(); } else { panic("x") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unread_unit_local_reassigned() {
+    let input = r#"
+fn unit() {}
+
+fn id<T>(v: T) -> T { v }
+
+fn test() {
+  let mut a = unit()
+  a = ()
+  let mut b: Unknown = id(())
+  b = 1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn discarded_if_let_without_else() {
+    let input = r#"
+import "go:fmt"
+
+fn g() -> Option<int> { None }
+
+fn test() {
+  let _ = if let None = g() {
+    let _ = fmt.Print("")
+  }
+  let _ = if let Some(_) = g() { }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

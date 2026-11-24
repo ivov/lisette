@@ -1,9 +1,9 @@
 mod package_namespace;
 
 use crate::_harness::build::{
-    compile_check, compile_check_script, compile_check_with_locator, compile_project_files,
-    compile_project_files_with_tests, compile_script_entry, locator_with_go_dep,
-    try_compile_project_files, try_compile_project_files_with_tests,
+    compile_check, compile_check_project, compile_check_script, compile_check_with_locator,
+    compile_project_files, compile_project_files_with_tests, compile_script_entry,
+    locator_with_go_dep, try_compile_project_files, try_compile_project_files_with_tests,
 };
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::{has_code, infer};
@@ -2312,12 +2312,13 @@ import "go:go/ast"
 import "go:fmt"
 
 fn main() {
+  let none: Option<int> = None
   let mut obj = ast.Object {
     Kind: ast.Bad,
     Name: "x",
-    Decl: None,
-    Data: None,
-    Type: None,
+    Decl: none,
+    Data: none,
+    Type: none,
   }
   let mut objects = Map.new<string, Option<mut Ref<ast.Object>>>()
   objects["present"] = Some(&obj)
@@ -10877,4 +10878,69 @@ fn main() {
         "expected a function `const` to be rejected: {:?}",
         result.errors()
     );
+}
+
+fn entry_codes(analysis: &passes::Analysis) -> Vec<String> {
+    analysis
+        .errors()
+        .iter()
+        .filter_map(|d| d.code_str().map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn script_without_main_rejected() {
+    for source in [
+        "fn take(t: (int, float64)) -> float64 { t.1 }\n",
+        "struct S {}\n\nimpl S {\n  fn main() {}\n}\n",
+    ] {
+        let mut fs = MockFileSystem::new();
+        fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+        let codes = entry_codes(&compile_check_script(fs));
+        assert_eq!(codes, vec!["infer.missing_main_function"], "{source}");
+    }
+}
+
+#[test]
+fn project_without_main_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "fn helper() -> int { 1 }\n");
+    let codes = entry_codes(&compile_check_project(fs));
+    assert_eq!(codes, vec!["infer.missing_main_function"]);
+}
+
+#[test]
+fn project_main_in_sibling_file_accepted() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "fn helper() {}\n");
+    fs.add_file(ENTRY_PACKAGE_ID, "app.lis", "fn main() { helper() }\n");
+    let codes = entry_codes(&compile_check_project(fs));
+    assert!(codes.is_empty(), "{codes:?}");
+}
+
+#[test]
+fn main_signature_follows_go_rules() {
+    for source in [
+        "pub fn main() {}\n",
+        "fn main<T>() {}\n",
+        "fn main(x: int) {}\n",
+        "fn main() -> int { 1 }\n",
+    ] {
+        let mut fs = MockFileSystem::new();
+        fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+        let codes = entry_codes(&compile_check_script(fs));
+        assert_eq!(codes, vec!["infer.invalid_main_signature"], "{source}");
+    }
+}
+
+#[test]
+fn method_named_main_is_not_entry_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "struct S {}\n\nimpl S {\n  fn main(self, x: int) -> int { x }\n}\n\nfn main() {\n  let _ = S {}.main(1)\n}\n",
+    );
+    let codes = entry_codes(&compile_check_script(fs));
+    assert!(codes.is_empty(), "{codes:?}");
 }

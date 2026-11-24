@@ -18,6 +18,4 @@ func test() int {
 	{
 		return 1
 	}
-	_ = S{}.a
-	return 2
 }

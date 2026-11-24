@@ -12,6 +12,11 @@ pub struct GoMethodPolicy {
 }
 
 impl GoMethodPolicy {
+    pub fn exports_method(&self, method_name: &str) -> bool {
+        self.exported_method_names.contains(method_name)
+            || matches!(method_name, "string" | "goString" | "error")
+    }
+
     pub fn for_definitions<'a>(
         &self,
         definitions: impl Iterator<Item = (&'a Symbol, &'a Definition)>,

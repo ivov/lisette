@@ -10,9 +10,9 @@ package main
 
 func test(s []int) []int {
 	var result []int
-	for _, v := range s {
+	for _, _x := range s {
 		if true {
-			result = append(result, v)
+			result = append(result, _x)
 		}
 	}
 	return result

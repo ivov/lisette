@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test() {
+    let c: uint64 = 1 << 63
+    let d: uint64 = 1 + 18446744073709551614
+  }
+---
+package main
+
+func test() {}

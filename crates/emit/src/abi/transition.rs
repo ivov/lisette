@@ -471,9 +471,14 @@ impl Planner<'_> {
             return statements;
         }
 
-        let (mut statements, value) = self
-            .plan_value(expression, ExpressionContext::value())
-            .into_parts();
+        let mut plan = self.plan_value(expression, ExpressionContext::value());
+        if matches!(
+            self.facts.checked(expression).value_use().adaptation,
+            Adaptation::Newtype
+        ) {
+            plan = self.convert_to_recorded_slot(expression, plan);
+        }
+        let (mut statements, value) = plan.into_parts();
         let tup =
             GoExpression::identifier(self.hoist_tmp_value_statement(&mut statements, "tup", value));
         let source_ty = expression.get_type();

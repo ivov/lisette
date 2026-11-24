@@ -2976,6 +2976,45 @@ fn main() { let _t = (foo_f, 1) }
 }
 
 #[test]
+fn bounded_function_reference_into_unknown_rejected() {
+    infer(
+        r#"
+fn id<T: Ordered>(x: T) -> T { x }
+fn take(_x: Unknown) {}
+fn main() { take(id) }
+"#,
+    )
+    .assert_infer_code("cannot_infer_bounded_function_reference");
+}
+
+#[test]
+fn bounded_method_value_into_unknown_rejected() {
+    infer(
+        r#"
+struct S {}
+impl S {
+  pub fn id<T: Ordered>(self, x: T) -> T { x }
+}
+fn take(_x: Unknown) {}
+fn main() { take(S.id) }
+"#,
+    )
+    .assert_infer_code("cannot_infer_bounded_function_reference");
+}
+
+#[test]
+fn unbounded_function_reference_into_unknown_succeeds() {
+    infer(
+        r#"
+fn id<T>(x: T) -> T { x }
+fn take(_x: Unknown) {}
+fn main() { take(id) }
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn bounded_function_reference_pinned_by_later_call_succeeds() {
     infer(
         r#"

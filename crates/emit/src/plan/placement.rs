@@ -7,7 +7,7 @@ use crate::expressions::staging::{LaterStages, SpreadSequenceOptions};
 use crate::ir::bodies::with_setup;
 use crate::ir::bodies::{
     AssignForm, Definition, ElseArm, LoopHeader, LoweredBlock, LoweredStatement, PlacePlan,
-    Statement, assign, directed_first, discard, effect_statement, expression_statement,
+    Statement, assign, directed_first, discard, effect_statement,
 };
 use crate::ir::evaluation::Effects;
 use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
@@ -187,8 +187,9 @@ fn infers_declared_type(
             | BinaryOp::Ge
             | BinaryOp::And
             | BinaryOp::Or => go_type.is_named("bool"),
-            BinaryOp::Shl | BinaryOp::Shr => go_type.is_named("int"),
-            BinaryOp::Add
+            BinaryOp::Shl
+            | BinaryOp::Shr
+            | BinaryOp::Add
             | BinaryOp::Sub
             | BinaryOp::Mul
             | BinaryOp::Div
@@ -342,7 +343,10 @@ impl<'p> Planner<'p> {
         }
 
         let value_ty = value.get_type();
-        if self.facts.has_no_go_value(&value_ty) || value_ty.is_never() {
+        if self.facts.is_never(&value_ty) {
+            return vec![self.lower_never_value(value)];
+        }
+        if self.facts.has_no_go_value(&value_ty) {
             let staged = self.plan_operand(value, ExpressionContext::value());
             let (mut statements, staged_value) = staged.into_parts();
             let effects = staged_value.effects();
@@ -350,13 +354,7 @@ impl<'p> Planner<'p> {
             if !staged_value.is_empty() && reads_or_acts {
                 if matches!(value, Expression::Call { .. }) && staged_value.stands_as_a_statement()
                 {
-                    statements.push(
-                        LoweredStatement::ExpressionStatement {
-                            expression: staged_value,
-                            diverges: value_ty.is_never(),
-                        }
-                        .into(),
-                    );
+                    statements.push(effect_statement(staged_value));
                 } else {
                     statements.push(discard(staged_value));
                 }
@@ -367,18 +365,22 @@ impl<'p> Planner<'p> {
         if let Expression::Call { .. } = value {
             let mut statements: Vec<Statement> = Vec::new();
             if let Some(call) = self.try_plan_go_call_discarded(&mut statements, value) {
-                statements.push(expression_statement(call));
+                statements.push(effect_statement(call));
                 return statements;
             }
         }
 
         let staged = self.plan_operand(value, ExpressionContext::value());
         let (mut statements, staged_value) = staged.into_parts();
+        if statements.is_empty() && staged_value.constant_kind().is_some() {
+            self.package.record_dropped_code(value.get_span());
+            return statements;
+        }
         if calls_a_function(self.facts.call_operation(value))
             && matches!(value, Expression::Call { .. })
             && staged_value.stands_as_a_statement()
         {
-            statements.push(expression_statement(staged_value));
+            statements.push(effect_statement(staged_value));
         } else {
             let staged_value =
                 match self.constant_needs_go_type(staged_value.constant_kind(), &value_ty) {
@@ -394,6 +396,7 @@ impl<'p> Planner<'p> {
         &mut self,
         value: &Expression,
         target: &GoExpression,
+        target_ty: Option<&Type>,
     ) -> Vec<Statement> {
         let (mut statements, call) = self
             .plan_value(value, ExpressionContext::value())
@@ -404,7 +407,7 @@ impl<'p> Planner<'p> {
         statements.push(
             simple_assign(
                 target,
-                ValuePlan::computed(Vec::new(), GoExpression::unit()),
+                ValuePlan::computed(Vec::new(), self.unit_value(Some(value), target_ty)),
             )
             .into(),
         );
@@ -553,7 +556,7 @@ impl<'p> Planner<'p> {
         self.with_block_scope(is_block, has_go_braces, |this| {
             let Some((last, rest)) = items.split_last() else {
                 if this.widens_unit(target_ty) {
-                    return this.lower_unit_into(None, target);
+                    return this.lower_unit_into(expression, None, target, target_ty);
                 }
                 return Vec::new();
             };
@@ -592,8 +595,10 @@ impl<'p> Planner<'p> {
 
     pub(crate) fn lower_unit_into(
         &mut self,
+        source: &Expression,
         effect: Option<&Expression>,
         target: &GoExpression,
+        target_ty: Option<&Type>,
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         if let Some(effect) = effect.map(|effect| self.lower_statement(effect))
@@ -601,7 +606,10 @@ impl<'p> Planner<'p> {
         {
             statements.push(effect);
         }
-        statements.push(assign(target.clone(), GoExpression::unit()));
+        statements.push(assign(
+            target.clone(),
+            self.unit_value(Some(source), target_ty),
+        ));
         statements
     }
 
@@ -624,17 +632,23 @@ impl<'p> Planner<'p> {
         ) {
             return vec![self.lower_statement(last)];
         }
-        if last.get_type().is_never() {
-            return vec![self.lower_statement(last)];
+        if self.facts.is_never(&last.get_type()) {
+            return vec![self.lower_never_value(last)];
+        }
+        if let Expression::Unit { .. } = last {
+            return vec![assign(
+                target.clone(),
+                self.unit_value(Some(last), target_ty),
+            )];
         }
         if self.facts.resolves_to_unit(&last.get_type()) && self.widens_unit(target_ty) {
-            return self.lower_unit_into(Some(last), target);
+            return self.lower_unit_into(last, Some(last), target, target_ty);
         }
         if matches!(last, Expression::Block { .. }) {
             return self.lower_assign(last, target, target_ty);
         }
         if self.is_unit_call(last) {
-            return self.lower_unit_call_into_var(last, target);
+            return self.lower_unit_call_into_var(last, target, target_ty);
         }
         if let Some(statements) = self.try_lower_slice_growth_to_var(target, last) {
             return statements;
@@ -776,7 +790,8 @@ impl<'p> Planner<'p> {
             last,
             Expression::For { .. } | Expression::While { .. } | Expression::WhileLet { .. }
         ) {
-            ValuePlan::computed(vec![self.lower_statement(last)], GoExpression::unit())
+            let statements = vec![self.lower_statement(last)];
+            ValuePlan::computed(statements, self.unit_value(Some(last), None))
         } else {
             self.plan_value(last, ExpressionContext::value())
         };
@@ -785,8 +800,7 @@ impl<'p> Planner<'p> {
 
     pub(crate) fn plan_to_operand_temp(&mut self, expression: &Expression, ty: &Type) -> ValuePlan {
         if let Expression::Block { items, .. } = expression {
-            if ty.is_never() || self.facts.has_no_go_value(ty) || matches!(ty, Type::Forall { .. })
-            {
+            if self.facts.has_no_go_value(ty) || matches!(ty, Type::Forall { .. }) {
                 return ValuePlan::computed(
                     self.lower_block_as_body(expression).statements,
                     GoExpression::empty(),
@@ -804,12 +818,6 @@ impl<'p> Planner<'p> {
                 statements.extend(body);
             }
             return ValuePlan::captured(statements, result_var);
-        }
-        if ty.is_never() {
-            return ValuePlan::computed(
-                vec![self.lower_statement(expression)],
-                GoExpression::empty(),
-            );
         }
         if let Expression::Loop { .. } = expression {
             return self.plan_loop_as_operand_temp(expression, ty);
@@ -844,7 +852,8 @@ impl<'p> Planner<'p> {
                 if !value.is_empty() {
                     statements.push(effect_statement(value));
                 }
-                statements.push(assign(target, GoExpression::unit()));
+                let unit = self.unit_value(Some(val), loop_context.result_ty.as_ref());
+                statements.push(assign(target, unit));
             } else if !value.is_empty() {
                 let value = self.apply_type_coercion(
                     &mut statements,

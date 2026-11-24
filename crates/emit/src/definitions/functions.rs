@@ -6,6 +6,7 @@ use crate::analyze::facts::EmitFacts;
 use crate::analyze::reusable_bindings::ReusableBindings;
 use crate::control_flow::propagation::plain_return;
 use crate::ir::bodies::AsyncKind;
+use crate::ir::bodies::async_statement;
 use crate::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, inherit_line_directives, rename_generated_locals,
 };
@@ -20,7 +21,8 @@ use crate::names::generics::generic_bounds;
 use crate::names::go_name;
 use crate::names::receiver::fresh_receiver_name;
 use crate::names::source_name::SourceName;
-use crate::passes::cleanup::{clean_up, declare_zero_values};
+use crate::passes::cleanup::{clean_up, declare_zero_values, drop_unreachable_statements};
+use crate::passes::hygiene::{apply_go_hygiene, blank_unused_parameters, drop_unused_locals};
 use crate::passes::verify::verify_final_function_body;
 use crate::passes::verify::verify_local_scopes;
 use crate::patterns::sites::PatternSubject;
@@ -88,12 +90,12 @@ impl Planner<'_> {
         if sourcemap {
             inherit_line_directives(&mut body.statements, None);
         }
+        drop_unreachable_statements(&mut body.statements);
         let shadowing = identify_body_locals(&mut body.statements, parameters, &mut self.scope);
+        drop_unused_locals(&mut body.statements);
         clean_up(&mut body.statements, &shadowing, parameters, &self.scope);
-        if has_result {
-            body.ensure_go_termination();
-        }
         declare_zero_values(&mut body.statements, &mut self.scope, self.package);
+        apply_go_hygiene(&mut body, has_result);
         if sourcemap {
             inherit_line_directives(&mut body.statements, None);
         }
@@ -127,6 +129,7 @@ impl Planner<'_> {
         struct Names {
             present: HashMap<LocalId, String>,
             pinned: HashSet<String>,
+            qualifiers: HashSet<String>,
         }
 
         impl VisitorMut for Names {
@@ -137,6 +140,8 @@ impl Planner<'_> {
                     } else {
                         self.pinned.insert(name.to_string());
                     }
+                } else if let GoExpressionNode::Qualified { package, .. } = node {
+                    self.qualifiers.insert(package.qualifier().to_string());
                 } else if let GoExpressionNode::Verbatim(source) = node {
                     self.pinned
                         .extend(verbatim_identifiers(source).map(str::to_string));
@@ -168,6 +173,12 @@ impl Planner<'_> {
                 .settle_generated_names(&names.present, &names.pinned, self.package);
         self.scope
             .restore_builtin_names(&names.present, &names.pinned, &mut by_id, self.package);
+        self.scope.avoid_qualifier_capture(
+            &names.present,
+            &names.pinned,
+            &names.qualifiers,
+            &mut by_id,
+        );
         if by_id.is_empty() {
             return;
         }
@@ -210,15 +221,15 @@ impl Planner<'_> {
                 this.scope.set_test_handle(handle.clone());
                 this.require_testkit();
                 let span = body.get_span();
-                LoweredStatement::Async {
-                    kind: AsyncKind::Defer,
-                    call: test_context_call(
+                async_statement(
+                    AsyncKind::Defer,
+                    test_context_call(
                         GoExpression::identifier(handle),
                         "Recover",
                         span,
                         Vec::new(),
                     ),
-                }
+                )
             });
 
             let mut statements = this.lower_lambda_body_with_deferred(
@@ -227,7 +238,7 @@ impl Planner<'_> {
                 return_info.should_return(),
             );
             if let Some(recover) = recover {
-                statements.insert(0, recover.into());
+                statements.insert(0, recover);
             }
             let mut body = LoweredBlock { statements };
             let unit_result = return_info.should_return()
@@ -235,7 +246,8 @@ impl Planner<'_> {
                     .get_function_ret()
                     .is_some_and(|ret| this.facts.resolves_to_unit(ret));
             if unit_result && !body.go_terminates() {
-                body.statements.push(plain_return(GoExpression::unit()));
+                let unit = this.unit_value(None, ty.get_function_ret());
+                body.statements.push(plain_return(unit));
             }
 
             GoExpression::function_literal(
@@ -356,12 +368,14 @@ impl Planner<'_> {
             parameters.push(receiver.clone());
         }
 
-        let body = self.lower_function_body_with_deferred_patterns(
+        let mut body = self.lower_function_body_with_deferred_patterns(
             function_definition,
             &deferred_patterns,
             &mut parameters,
         );
         self.scope.exit_isolated_function();
+        let receiver_name = receiver.as_ref().map(|receiver| &receiver.name);
+        blank_unused_parameters(&mut body, &mut parameters, receiver_name);
 
         let declared_parameter_name = |name: &GoIdentifier| {
             parameters

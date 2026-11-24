@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn main() {
+    task Channel.new<int>()
+  }
+---
+package main
+
+func main() {
+	go func() {
+		_ = make(chan int)
+	}()
+}

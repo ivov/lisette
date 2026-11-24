@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct P((int, int))
+  
+  fn un(p: P) -> (int, int) { p }
+  
+  fn main() {
+    let p = P((1, 2))
+    let mut ts: Slice<(int, int)> = []
+    ts = ts.append(p)
+    let t: (int, int) = p
+    fmt.Println(ts, t, un(p))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type P lisette.Tuple2[int, int]
+
+func un(p P) (int, int) {
+	tup := (lisette.Tuple2[int, int])(p)
+	return tup.First, tup.Second
+}
+
+func main() {
+	p := P(lisette.MakeTuple2[int, int](1, 2))
+	ts := []lisette.Tuple2[int, int]{}
+	ts = append(ts, (lisette.Tuple2[int, int])(p))
+	t := (lisette.Tuple2[int, int])(p)
+	arg := ts
+	ret, ret2 := un(p)
+	tup := lisette.MakeTuple2(ret, ret2)
+	fmt.Println(arg, t, tup)
+}

@@ -285,21 +285,27 @@ impl TaskState {
             return None;
         }
 
-        if !self.is_d_lis(&*store)
-            && let Some(package) = store.get_package(&package_id)
-            && matches!(
-                package
-                    .definitions
-                    .get(&receiver_qualified_name)
-                    .map(|d| &d.body),
-                Some(DefinitionBody::TypeAlias { .. })
-            )
+        match store
+            .get_definition(&receiver_qualified_name)
+            .map(|definition| &definition.body)
         {
-            self.sink.push(diagnostics::infer::impl_on_type_alias(
-                type_name,
-                annotation.get_span(),
-            ));
-            return None;
+            Some(DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }) => {}
+            Some(DefinitionBody::TypeAlias { .. }) | None if is_d_lis => {}
+            Some(DefinitionBody::TypeAlias { .. }) => {
+                self.sink.push(diagnostics::infer::impl_on_type_alias(
+                    type_name,
+                    annotation.get_span(),
+                ));
+                return None;
+            }
+            Some(DefinitionBody::Interface { .. }) => {
+                self.sink.push(diagnostics::infer::impl_on_interface(
+                    type_name,
+                    annotation.get_span(),
+                ));
+                return None;
+            }
+            Some(DefinitionBody::Value { .. }) | None => return None,
         }
 
         if self.impl_has_simple_type_params(&receiver_ty, generics) {
@@ -344,11 +350,18 @@ impl TaskState {
             params: fn_params,
             return_annotation,
             span: fn_span,
+            body: fn_body,
             ..
         } = function
         else {
             unreachable!("impl item must be a function")
         };
+        if fn_body.definition().is_none() && self.is_lis(&*store) {
+            self.sink.push(diagnostics::infer::bodyless_impl_method(
+                fn_name,
+                *fn_name_span,
+            ));
+        }
         let fn_doc = fn_doc.clone();
         let fn_visibility = if *visibility == SyntacticVisibility::Public || is_d_lis {
             Visibility::Public

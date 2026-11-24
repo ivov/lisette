@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn f() -> Unknown {
+    let x: Unknown = loop {
+      break ({ panic("stop") })
+    }
+    x
+  }
+  
+  fn main() {}
+---
+package main
+
+func f() any {
+	for {
+		panic("stop")
+	}
+}
+
+func main() {}

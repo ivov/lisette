@@ -16,6 +16,5 @@ func test() {
 		{
 			continue
 		}
-		break
 	}
 }

@@ -1,6 +1,7 @@
 mod attributes;
 mod builtins;
 mod convert;
+pub(crate) use convert::VarArgsPosition;
 mod declarations;
 pub(crate) mod derived_attributes;
 mod display;
@@ -164,6 +165,7 @@ impl TaskState {
     /// Completes work that must wait until every package has been registered.
     pub fn finalize_registration(&mut self, store: &mut Store) {
         self.finalize_equality(store);
+        store.compute_go_method_policy();
         self.check_pending_generic_bounds(store);
         self.check_pending_array_size_checks(store);
         self.check_pending_interface_conflicts(store);

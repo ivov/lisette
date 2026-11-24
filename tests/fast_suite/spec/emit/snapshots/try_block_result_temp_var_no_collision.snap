@@ -3,7 +3,7 @@ source: tests/fast_suite/spec/emit/result_option_patterns.rs
 description: |
   
   fn foo() -> Result<int, string> {
-    let result = try {
+    let result: Result<int, string> = try {
       Ok(1)?
     }
     let tryResult_1 = 7
@@ -20,14 +20,13 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func foo() lisette.Result[int, string] {
-	tryResult := func() lisette.Result[int, any] {
-		check := lisette.MakeResultOk[int, any](1)
+	func() lisette.Result[int, string] {
+		check := lisette.MakeResultOk[int, string](1)
 		if check.Tag != lisette.ResultOk {
 			return check
 		}
-		return lisette.MakeResultOk[int, any](check.OkVal)
+		return lisette.MakeResultOk[int, string](check.OkVal)
 	}()
-	_ = tryResult
 	return lisette.MakeResultOk[int, string](0)
 }
 

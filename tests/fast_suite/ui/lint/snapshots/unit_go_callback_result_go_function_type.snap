@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/lint/mod.rs
+---
+  ▲ Unit returned to a Go callback
+   ╭─[test.lis:5:23]
+ 4 │ fn main() {
+ 5 │   let _ = expvar.Func(|| ())
+   ·                       ──┬──
+   ·                         ╰── returns `()` where Go expects `Unknown`
+ 6 │ }
+   ╰────
+  help: Go gets the unit value `struct{}{}` from this callback, not `nil`. For no command or no value, write `None` in place of the callback where the slot takes an `Option` · code: [lint.unit_go_callback_result]

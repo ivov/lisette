@@ -1068,3 +1068,20 @@ fn sizes() -> int {
         &[("go:example.com/pb", UNDERSCORE_METHOD_TYPEDEF)]
     );
 }
+
+#[test]
+fn import_alias_is_reserved_before_loop_names() {
+    let input = r#"
+import "go:fmt"
+import i "go:strings"
+
+fn f(s: string) {
+  for b in s.bytes() {
+    fmt.Println(i.ToUpper("x"), b)
+  }
+}
+
+fn main() { }
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn g() -> Option<int> { None }
+  
+  fn test() {
+    let _ = if let None = g() {
+      let _ = fmt.Print("")
+    }
+    let _ = if let Some(_) = g() { }
+  }
+---
+package main
+
+import "fmt"
+
+func g() (int, bool) {
+	return 0, false
+}
+
+func test() {
+	var tmp struct{}
+	if _, ok := g(); !ok {
+		fmt.Print("")
+	}
+	_ = tmp
+	var tmp2 struct{}
+	if _, ok := g(); ok {
+	}
+	_ = tmp2
+}

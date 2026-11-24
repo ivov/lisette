@@ -2,11 +2,10 @@ use crate::checker::{EnvResolve, resolved_generic_bounds};
 use syntax::ast::{Annotation, Binding, BindingKind, Expression, Pattern, Span};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
-use crate::analysis::ProjectKind;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::context::{Expectation, ExpectationRole, UseContext};
+use crate::checker::registration::VarArgsPosition;
 use crate::checker::registration::test_functions::normalize_test_params;
-use crate::store::ENTRY_PACKAGE_ID;
 
 impl InferCtx<'_> {
     fn ty_is_test_context(&self, ty: &Type) -> bool {
@@ -55,15 +54,6 @@ impl InferCtx<'_> {
         if self.scopes.lookup_fn_return_type().is_some() {
             self.sink
                 .push(diagnostics::infer::nested_function(name_span));
-        }
-
-        if name == "main"
-            && self.project_kind == ProjectKind::Binary
-            && self.cursor.package_id() == ENTRY_PACKAGE_ID
-            && (!params.is_empty() || return_annotation != Annotation::Unknown)
-        {
-            self.sink
-                .push(diagnostics::infer::invalid_main_signature(name_span));
         }
 
         let (generics, new_params, return_ty, base_fn_ty, new_body) = self.with_scope(|this| {
@@ -300,19 +290,7 @@ impl InferCtx<'_> {
     ) -> Vec<Binding> {
         let store = self.store;
 
-        // `VarArgs<T>` must be the last function parameter
-        if let Some((_last, leading)) = params.split_last() {
-            for binding in leading {
-                if let Some(annotation @ Annotation::Constructor { name, .. }) = &binding.annotation
-                    && name == "VarArgs"
-                {
-                    self.sink.push(diagnostics::infer::variadic_param_not_last(
-                        annotation.get_span(),
-                    ));
-                }
-            }
-        }
-
+        let parameter_count = params.len();
         params
             .into_iter()
             .enumerate()
@@ -341,7 +319,14 @@ impl InferCtx<'_> {
                     binding
                         .annotation
                         .as_ref()
-                        .map(|a| self.convert_variadic_to_type(store, a, pattern_span))
+                        .map(|a| {
+                            self.convert_parameter_to_type(
+                                store,
+                                a,
+                                pattern_span,
+                                VarArgsPosition::of_parameter(index, parameter_count),
+                            )
+                        })
                         .unwrap_or_else(|| self.new_type_var())
                 });
 

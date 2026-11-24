@@ -1,6 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::ast::{BindingId as AstBindingId, Pattern, RestPattern, Span};
+use crate::ast::{BindingId as AstBindingId, Span};
 use crate::types::Symbol;
 
 use super::{Definition, EqualityRecipe, File, FileImport};
@@ -36,30 +36,14 @@ impl UnusedImports {
 
 #[derive(Debug, Clone, Default)]
 pub struct EmitBindings {
-    unused: HashSet<AstBindingId>,
     mutations: HashMap<AstBindingId, BindingMutation>,
 }
 
 impl EmitBindings {
-    pub fn record(&mut self, id: AstBindingId, unused: bool, mutation: Option<BindingMutation>) {
-        if unused {
-            self.unused.insert(id);
-        }
+    pub fn record(&mut self, id: AstBindingId, mutation: Option<BindingMutation>) {
         if let Some(mutation) = mutation {
             self.mutations.insert(id, mutation);
         }
-    }
-
-    fn is_unused(&self, id: Option<AstBindingId>) -> bool {
-        id.is_some_and(|id| self.unused.contains(&id))
-    }
-
-    pub fn is_unused_binding(&self, pattern: &Pattern) -> bool {
-        self.is_unused(pattern.binding_id())
-    }
-
-    pub fn is_unused_rest_binding(&self, rest: &RestPattern) -> bool {
-        self.is_unused(rest.binding_id())
     }
 
     pub fn is_mutated(&self, id: AstBindingId) -> bool {
@@ -296,27 +280,5 @@ mod tests {
         assert!(a.is_unused_import(import(1).key()));
         assert!(a.is_unused_import(import(3).key()));
         assert!(!a.is_unused_import(import(2).key()));
-    }
-
-    #[test]
-    fn unused_lookup_reads_the_binder_id() {
-        let pattern = Pattern::AsBinding {
-            pattern: Box::new(Pattern::WildCard { span: span(5) }),
-            name: "rest".into(),
-            span: Span::new(0, 5, 9),
-            name_span: Span::new(0, 10, 4),
-            binding: Some(AstBindingId::new(1)),
-        };
-        let unstamped = Pattern::Identifier {
-            identifier: "rest".into(),
-            span: Span::new(0, 10, 4),
-            binding: None,
-        };
-        let mut bindings = EmitBindings::default();
-        bindings.record(AstBindingId::new(1), true, None);
-        bindings.record(AstBindingId::new(2), false, None);
-
-        assert!(bindings.is_unused_binding(&pattern));
-        assert!(!bindings.is_unused_binding(&unstamped));
     }
 }

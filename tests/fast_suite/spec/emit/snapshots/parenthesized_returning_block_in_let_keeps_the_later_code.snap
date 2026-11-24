@@ -16,11 +16,9 @@ description: |
 package main
 
 func f() int {
-	var x int
 	{
 		return 1
 	}
-	return x
 }
 
 func test() int {

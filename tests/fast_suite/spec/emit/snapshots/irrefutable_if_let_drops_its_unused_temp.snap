@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  fn f(x: int) -> int {
+    if let y = if x > 0 { 1 } else { 0 } { 1 } else { 0 }
+  }
+  
+  fn main() { let _ = f(1) }
+---
+package main
+
+func f(x int) int {
+	if x > 0 {
+	}
+	return 1
+}
+
+func main() {
+	f(1)
+}

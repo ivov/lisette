@@ -164,6 +164,22 @@ impl CoercionPlan {
                 },
                 _ => Self::internal(planner, from, to),
             },
+            Adaptation::DivergingFunction => {
+                let source = planner.value_layout(from, SlotOrigin::Lisette);
+                let target = slot
+                    .cloned()
+                    .unwrap_or_else(|| planner.value_layout(to, SlotOrigin::Lisette));
+                match (source.underlying(), target.underlying()) {
+                    (
+                        ValueLayout::Function { layout: source, .. },
+                        ValueLayout::Function { layout: target, .. },
+                    ) => Self::Layout(LayoutBridge::Function {
+                        source: Box::new(source.clone()),
+                        target: Box::new(target.clone()),
+                    }),
+                    _ => Self::internal(planner, from, to),
+                }
+            }
             _ => Self::internal(planner, from, to),
         }
     }
@@ -239,7 +255,8 @@ impl CoercionPlan {
             } => {
                 let (payload_setup, payload) = payload.lower(planner, value);
                 statements.extend(payload_setup);
-                let type_arguments = GoType::type_argument(&planner.go_type(&payload_type));
+                let type_arguments =
+                    GoType::type_argument(&planner.component_go_type(&payload_type));
                 prelude_call(
                     option_variant("Some").constructor,
                     type_arguments,

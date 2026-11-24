@@ -16,7 +16,6 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         empty_collections,
         empty_literals,
         slice_makes,
-        statement_tails,
     } = checks;
     let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
     let mut collected = Vec::new();
@@ -110,18 +109,6 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
                 no_zero.hidden_go_state(),
                 matches!(*no_zero.leaf_ty, Type::Parameter(_)),
                 check.span,
-            ));
-        }
-    }
-    for check in statement_tails {
-        if !check.expected_ty.is_unit()
-            && !check.expected_ty.is_variable()
-            && !check.expected_ty.is_ignored()
-            && !check.expected_ty.is_error()
-        {
-            sink.push(diagnostics::infer::statement_as_tail(
-                check.span,
-                &check.expected_ty,
             ));
         }
     }

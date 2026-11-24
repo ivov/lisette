@@ -18,8 +18,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 type Printable interface {
 	toString() string
 }
@@ -32,6 +30,4 @@ func (t Text) toString() string {
 	return t.content
 }
 
-func test() {
-	lisette.MakeOptionSome[Printable](Text{content: "hello"})
-}
+func test() {}

@@ -5,7 +5,8 @@ description: |
   import "go:example.com/dyn"
   
   fn main() {
-    let _ = dyn.Store("k", None)
+    let none: Option<int> = None
+    let _ = dyn.Store("k", none)
     let _ = dyn.Store("k", Some(1))
   }
 ---
@@ -17,6 +18,7 @@ import (
 )
 
 func main() {
-	dyn.Store("k", lisette.MakeOptionNone[any]())
+	none := lisette.MakeOptionNone[int]()
+	dyn.Store("k", none)
 	dyn.Store("k", lisette.MakeOptionSome(1))
 }

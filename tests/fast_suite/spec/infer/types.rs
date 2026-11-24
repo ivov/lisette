@@ -12172,6 +12172,318 @@ fn area(s: IntShape) -> int {
 }
 
 #[test]
+fn ref_of_underlying_type_does_not_fit_ref_of_newtype() {
+    infer(
+        r#"
+struct Wrap(Slice<int>)
+
+fn get(s: Slice<int>) -> Ref<Wrap> {
+  let mut w = s
+  &w
+}
+
+fn main() { let _ = get([1]) }
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn slice_of_underlying_type_does_not_fit_slice_of_newtype() {
+    infer(
+        r#"
+struct Wrap(Slice<int>)
+fn get(s: Slice<Slice<int>>) -> Slice<Wrap> { s }
+fn main() { let _ = get([[1]]) }
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn option_of_underlying_type_does_not_fit_option_of_newtype() {
+    infer(
+        r#"
+struct Wrap(Slice<int>)
+fn get(s: Option<Slice<int>>) -> Option<Wrap> { s }
+fn main() { let _ = get(None) }
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn map_of_underlying_type_does_not_fit_map_of_newtype() {
+    infer(
+        r#"
+struct Wrap(Slice<int>)
+fn get(s: Map<string, Slice<int>>) -> Map<string, Wrap> { s }
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn function_of_underlying_parameter_does_not_fit_function_of_newtype() {
+    infer(
+        r#"
+struct Wrap(Slice<int>)
+fn apply(f: fn(Wrap) -> int) -> int { f(Wrap([1])) }
+fn main() { let _ = apply(|s: Slice<int>| s.length()) }
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn ref_of_concrete_type_does_not_fit_ref_of_unknown() {
+    infer(
+        r#"
+fn f(r: Ref<Unknown>) { let _ = r }
+fn main() {
+  let x = 1
+  f(&x)
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn slice_of_never_returning_functions_does_not_fit_slice_of_returning_functions() {
+    infer(
+        r#"
+fn die() -> Never { panic("x") }
+fn make() -> Slice<fn() -> int> {
+  let fs = [die]
+  fs
+}
+"#,
+    )
+    .assert_infer_code_once("type_mismatch");
+}
+
+#[test]
+fn closure_with_untyped_parameters_is_not_inferred() {
+    infer(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let g = |x, y| x * y
+  fmt.Println(g)
+}
+"#,
+    )
+    .assert_error_count(1)
+    .assert_infer_code_once("type_not_inferred");
+}
+
+#[test]
+fn discarded_closure_with_untyped_parameter_is_not_inferred() {
+    infer(
+        r#"
+fn main() {
+  let _ = |x| x
+}
+"#,
+    )
+    .assert_error_count(1)
+    .assert_infer_code_once("type_not_inferred");
+}
+
+fn infer_two_packages(library: &str, main: &str) -> InferResult {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("p", "lib.lis", library);
+    fs.add_file("main", "main.lis", main);
+    infer_package("main", fs)
+}
+
+const PRIVATE_GET_LIBRARY: &str = r#"
+pub struct X { pub v: int }
+impl X {
+  fn get(self) -> int { self.v }
+}
+"#;
+
+#[test]
+fn private_method_from_other_package_does_not_satisfy_interface() {
+    let result = infer_two_packages(
+        PRIVATE_GET_LIBRARY,
+        r#"
+import "p"
+interface G { fn get() -> int }
+fn use_it(g: G) -> int { g.get() }
+fn main() { let _ = use_it(p.X { v: 1 }) }
+"#,
+    );
+    let errors = format!("{:?}", result.errors);
+    assert!(
+        errors.contains("`get` is private to package `p`. Add `pub` to it to satisfy this"),
+        "expected the private method hint, got: {errors}"
+    );
+    result.assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn private_method_from_other_package_ignores_unrelated_public_interface() {
+    infer_two_packages(
+        PRIVATE_GET_LIBRARY,
+        r#"
+import "p"
+interface G { fn get() -> int }
+fn use_it(g: G) -> int { g.get() }
+fn main() { let _ = use_it(p.X { v: 1 }) }
+pub interface Unrelated { fn get() -> int }
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn private_method_from_other_package_does_not_satisfy_public_interface() {
+    infer_two_packages(
+        PRIVATE_GET_LIBRARY,
+        r#"
+import "p"
+pub interface G { fn get() -> int }
+fn use_it(g: G) -> int { g.get() }
+fn main() { let _ = use_it(p.X { v: 1 }) }
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn private_method_from_other_package_does_not_satisfy_bound() {
+    infer_two_packages(
+        PRIVATE_GET_LIBRARY,
+        r#"
+import "p"
+interface G { fn get() -> int }
+fn use_it<T: G>(g: T) -> int { g.get() }
+fn main() { let _ = use_it(p.X { v: 1 }) }
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn promoted_private_method_from_other_package_does_not_satisfy_interface() {
+    infer_two_packages(
+        PRIVATE_GET_LIBRARY,
+        r#"
+import "p"
+interface G { fn get() -> int }
+struct Outer { embed p.X }
+fn use_it(g: G) -> int { g.get() }
+fn main() { let _ = use_it(Outer { X: p.X { v: 1 } }) }
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn private_method_satisfies_interface_of_its_own_package() {
+    infer_two_packages(
+        r#"
+pub interface G { fn get() -> int }
+pub struct X { pub v: int }
+impl X {
+  fn get(self) -> int { self.v }
+}
+"#,
+        r#"
+import "p"
+fn main() {
+  let g: p.G = p.X { v: 1 }
+  let _ = g.get()
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+const PRIVATE_INTERFACE_LIBRARY: &str = r#"
+interface G { fn get() -> int }
+pub fn use_it(g: G) -> int { g.get() }
+"#;
+
+#[test]
+fn unexported_go_method_does_not_satisfy_interface_of_other_package() {
+    infer_two_packages(
+        PRIVATE_INTERFACE_LIBRARY,
+        r#"
+import "p"
+struct T { v: int }
+impl T {
+  fn get(self) -> int { self.v }
+}
+fn main() { let _ = p.use_it(T { v: 1 }) }
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn exported_go_method_satisfies_interface_of_other_package() {
+    infer_two_packages(
+        PRIVATE_INTERFACE_LIBRARY,
+        r#"
+import "p"
+struct T { v: int }
+impl T {
+  fn get(self) -> int { self.v }
+}
+fn main() { let _ = p.use_it(T { v: 1 }) }
+pub interface Unrelated { fn get() -> int }
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_ref_receiver_method_does_not_satisfy_interface_for_value() {
+    infer(
+        r#"
+interface Getter { fn get() -> int }
+struct Bar<S> { x: S }
+impl<S> Bar<S> { fn get(self: Ref<Bar<S>>) -> int { 1 } }
+fn read(g: Getter) -> int { g.get() }
+fn main() {
+  let b = Bar { x: 1 }
+  let _ = read(b)
+}
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn ref_alias_satisfies_interface_through_promoted_method() {
+    infer(
+        r#"
+interface Show { fn show() -> string }
+struct Item { n: int }
+impl Item {
+  fn show(self) -> string { "item" }
+}
+struct Outer { embed Item }
+type RO = Ref<Outer>
+fn q(s: Show) -> string { s.show() }
+fn main() {
+  let mut o = Outer { Item: Item { n: 4 } }
+  let a: Ref<Outer> = &o
+  let _ = q(a)
+  let r: RO = &o
+  let _ = q(r)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn go_union_constraint_rejects_a_type_outside_the_union() {
     for argument in ["2.5", "true", "\"x\"", "5 as float32", "Name(\"x\")"] {
         let source = format!(
@@ -13111,4 +13423,26 @@ fn main() {}
 "#,
     )
     .assert_infer_code_once("instantiation_cycle");
+}
+
+#[test]
+fn option_of_never_into_option_of_int_is_rejected() {
+    infer(
+        r#"
+fn wrap<T>(c: bool, f: fn() -> T) -> Option<T> {
+  if c { Some(f()) } else { None }
+}
+
+fn pick(c: bool) -> Option<int> {
+  let o = wrap(c, || { panic("boom") })
+  if c { return o }
+  Some(1)
+}
+
+fn main() {
+  let _ = pick(false)
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
 }

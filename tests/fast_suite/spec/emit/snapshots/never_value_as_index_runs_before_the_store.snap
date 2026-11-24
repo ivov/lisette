@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn f() {
+    let next = || { panic("stop") }
+    let mut a = Array.new<int, 4>()
+    a[next()] = 7
+  }
+---
+package main
+
+func f() {
+	next := func() struct{} {
+		panic("stop")
+	}
+	next()
+}

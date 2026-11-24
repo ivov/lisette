@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn g() -> Option<int> { None }
+  
+  fn main() {
+    let _ = if let None = g() {
+      let _ = fmt.Print("x")
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func g() (int, bool) {
+	return 0, false
+}
+
+func main() {
+	var tmp struct{}
+	if _, ok := g(); !ok {
+		fmt.Print("x")
+	}
+	_ = tmp
+}

@@ -702,6 +702,15 @@ pub fn loop_runs_once(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn unit_lambda_into_go_interface_result(span: &Span, result: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Unit returned to a Go callback")
+        .with_lint_code("unit_go_callback_result")
+        .with_span_label(span, format!("returns `()` where Go expects `{result}`"))
+        .with_help(
+            "Go gets the unit value `struct{}{}` from this callback, not `nil`. For no command or no value, write `None` in place of the callback where the slot takes an `Option`.",
+        )
+}
+
 pub fn needless_continue(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Needless `continue`")
         .with_lint_code("needless_continue")

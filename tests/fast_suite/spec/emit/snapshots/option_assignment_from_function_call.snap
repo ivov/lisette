@@ -13,13 +13,10 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func getValue() (int, bool) {
 	return 42, true
 }
 
 func test() {
-	_ = lisette.MakeOptionNone[int]()
 	getValue()
 }

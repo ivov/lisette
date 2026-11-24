@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:6:12]
+ 5 │   m["a"] = match k {
+ 6 │     "a" => m[k] = 2,
+   ·            ────┬───
+   ·                ╰── expected `int`, found `()`
+ 7 │     _ => m[k] = 3,
+   ╰────
+  help: Every `match` arm must produce the same type · code: [infer.type_mismatch]
+
+  ✕ Type mismatch
+   ╭─[test.lis:7:10]
+ 6 │     "a" => m[k] = 2,
+ 7 │     _ => m[k] = 3,
+   ·          ────┬───
+   ·              ╰── expected `int`, found `()`
+ 8 │   }
+   ╰────
+  help: Every `match` arm must produce the same type · code: [infer.type_mismatch]

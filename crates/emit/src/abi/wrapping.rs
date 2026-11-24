@@ -520,7 +520,7 @@ impl Planner<'_> {
             prelude_call(
                 fallible.ok_constructor(),
                 type_params,
-                vec![GoExpression::unit()],
+                vec![self.unit_value(None, None)],
             )
         };
         let else_arm = ElseArm::from_body(leaf_block(&sink, ok_wrapper), false);
@@ -587,9 +587,11 @@ impl Planner<'_> {
         {
             return Err(call);
         }
-        Ok(prelude_call(
-            "OptionFromCommaOk",
-            GoType::type_argument(&payload.go_type(self)),
+        Ok(GoExpression::pure_call(
+            GoExpression::instantiation(
+                GoExpression::generated(GeneratedPackage::Prelude, "OptionFromCommaOk"),
+                GoType::type_argument(&payload.go_type(self)),
+            ),
             vec![call],
         ))
     }

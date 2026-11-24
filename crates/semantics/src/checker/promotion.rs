@@ -52,7 +52,7 @@ fn has_embed<'d, F>(ty: &Type, lookup: F) -> bool
 where
     F: Copy + Fn(&str) -> Option<&'d Definition>,
 {
-    let Type::Nominal { id, .. } = types::peel_alias(&ty.strip_refs(), lookup) else {
+    let Type::Nominal { id, .. } = selector_receiver(ty, lookup) else {
         return false;
     };
     lookup(id.as_str())

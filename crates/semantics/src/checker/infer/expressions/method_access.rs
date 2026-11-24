@@ -6,7 +6,9 @@ use syntax::program::{
     CallOperation, Definition, DefinitionBody, DotAccessResolution, InterfaceRequirement,
     ReceiverCoercion, interface_requirements,
 };
-use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
+use syntax::types::{
+    FunctionParameter, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
+};
 
 use super::super::addressability::check_is_non_addressable;
 use super::super::context::{Expectation, ExpectationRole};
@@ -75,13 +77,6 @@ impl InferCtx<'_> {
             &instantiation,
         ) {
             return Some(expression);
-        }
-
-        if self.is_callee_context() && self.is_type_level_receiver(arguments.expression) {
-            self.sink.push(diagnostics::infer::type_used_as_value(
-                &arguments.expression.as_dotted_path().unwrap_or_default(),
-                arguments.expression.get_span(),
-            ));
         }
 
         let Type::Function(ref mut f) = method_ty else {
@@ -344,18 +339,23 @@ impl InferCtx<'_> {
         resolved_definition: Option<Symbol>,
         instantiation: &SubstitutionMap,
     ) -> Option<Expression> {
-        let Type::Function(f) = &*method_ty else {
+        if !self.is_type_level_receiver(args.expression) {
+            return None;
+        }
+        let Type::Function(f) = method_ty else {
             return None;
         };
-        let params = &f.params;
 
-        if !self.is_type_level_receiver(args.expression) || self.is_callee_context() {
-            return None;
+        if f.params
+            .first()
+            .is_some_and(|receiver| receiver.ty.is_receiver_placeholder())
+        {
+            Arc::make_mut(f).params[0] = FunctionParameter::new(args.deref_ty.clone());
         }
 
         // Don't remove self: the value type should include the receiver.
         // Still unify the receiver type with the expression type for generic resolution.
-        let receiver_ty = params[0].ty.resolve_in(&self.env);
+        let receiver_ty = f.params[0].ty.resolve_in(&self.env);
         // The type named by the expression carries no write permission of its own.
         let receiver_stripped = receiver_ty.strip_refs().shallow_demoted();
         let expression_stripped = args.expression_ty.resolve_in(&self.env).strip_refs();

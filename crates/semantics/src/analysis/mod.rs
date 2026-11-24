@@ -1,6 +1,7 @@
 //! Coordinates entry parsing, package discovery, caching, registration, and inference.
 
 mod entry;
+mod entry_function;
 mod packages;
 
 use rustc_hash::FxHashSet as HashSet;
@@ -466,6 +467,12 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             recover_target: &input.recover_target,
         },
     );
+
+    if input.project_kind == ProjectKind::Binary {
+        let requires_main = input.compile_phase != CompilePhase::Test
+            && !matches!(input.scope, AnalysisScope::Directory);
+        entry_function::check_entry_function(&store, requires_main, &package_output.sink);
+    }
 
     let entry_parse_errors = entry.into_errors();
     let dependencies_complete =

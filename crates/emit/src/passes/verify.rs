@@ -11,6 +11,7 @@ use std::fmt::{self, Display, Formatter};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BodyErrorKind {
     EmptyIfCondition,
+    InvalidExpressionStatement,
     MissingGoTermination,
     UnresolvedLoopTarget,
     ConflictingLocalSpelling,
@@ -42,6 +43,14 @@ fn verify_control_structure(statements: &mut Vec<Statement>) -> Result<(), BodyE
             let kind = match &statement.kind {
                 LoweredStatement::If(plan) if plan.condition.is_empty() => {
                     Some(BodyErrorKind::EmptyIfCondition)
+                }
+                LoweredStatement::ExpressionStatement { expression, .. }
+                    if !expression.is_empty() && !expression.stands_as_a_statement() =>
+                {
+                    Some(BodyErrorKind::InvalidExpressionStatement)
+                }
+                LoweredStatement::Async { call, .. } if !call.stands_as_a_statement() => {
+                    Some(BodyErrorKind::InvalidExpressionStatement)
                 }
                 LoweredStatement::Break(LoopTransfer::Source(_))
                 | LoweredStatement::Continue(LoopTransfer::Source(_)) => {

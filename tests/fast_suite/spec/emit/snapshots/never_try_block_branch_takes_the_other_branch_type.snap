@@ -1,0 +1,51 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn die() -> Never { panic("dead") }
+  
+  fn f(flag: bool) -> Result<int, string> {
+    let x = if flag {
+      try {
+        let _ = Ok(1)?
+        die()
+      }
+    } else { Ok(42) }
+    x
+  }
+  
+  fn test() {
+    if f(false) != Ok(42) { panic("wrong value") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func die() {
+	panic("dead")
+}
+
+func f(flag bool) lisette.Result[int, string] {
+	var x lisette.Result[int, string]
+	if flag {
+		tryResult := func() lisette.Result[int, string] {
+			check := lisette.MakeResultOk[int, string](1)
+			if check.Tag != lisette.ResultOk {
+				return lisette.MakeResultErr[int, string](check.ErrVal)
+			}
+			die()
+			panic("unreachable")
+		}()
+		x = tryResult
+	} else {
+		x = lisette.MakeResultOk[int, string](42)
+	}
+	return x
+}
+
+func test() {
+	if f(false) != lisette.MakeResultOk[int, string](42) {
+		panic("wrong value")
+	}
+}

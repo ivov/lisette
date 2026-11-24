@@ -525,6 +525,18 @@ pub fn static_method_called_on_instance(
         ))
 }
 
+pub fn variant_through_value(enum_name: &str, variant_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Enum variant reached through a value")
+        .with_infer_code("variant_through_value")
+        .with_span_label(
+            &span,
+            format!("`{variant_name}` is a variant of `{enum_name}`"),
+        )
+        .with_help(format!(
+            "Name the variant through its enum: `{enum_name}.{variant_name}`"
+        ))
+}
+
 pub fn function_or_value_not_found_in_package(
     name: &str,
     package: &str,
@@ -2750,6 +2762,13 @@ pub fn type_must_be_known(span: Span) -> LisetteDiagnostic {
         .with_help("Add a type annotation to help the compiler infer the type")
 }
 
+pub fn closure_not_inferred(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Uninferrable type")
+        .with_infer_code("type_not_inferred")
+        .with_span_label(&span, "cannot be inferred")
+        .with_help("Nothing gives the types of this closure. Add a type to each parameter, for example `|x: int, y: int| x * y`, or call the closure")
+}
+
 pub fn uninferred_binding(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Uninferrable type")
         .with_infer_code("type_not_inferred")
@@ -2981,6 +3000,7 @@ pub struct MissingMethod {
     pub signature: Type,
     /// A private method that would satisfy this requirement if it were `pub`.
     pub private_candidate: Option<String>,
+    pub private_to_package: Option<String>,
 }
 
 pub fn sealed_interface_not_satisfiable(
@@ -3260,7 +3280,7 @@ pub fn interface_not_implemented(
             match method {
                 InterfaceMethodViolation::Missing(method) => missing.push((
                     declaration(&method.name, &method.signature, receiver),
-                    method.private_candidate.clone(),
+                    private_method_hint(method),
                     attributed.clone(),
                 )),
                 InterfaceMethodViolation::Incompatible {
@@ -3297,11 +3317,8 @@ pub fn interface_not_implemented(
         help.push("Missing:".to_string());
         for (row, private_candidate, attributed) in &missing {
             help.push(pad(row, attributed));
-            if let Some(private) = private_candidate {
-                help.push(format!(
-                    "    (add `pub` to the private method `{}` to satisfy this)",
-                    private
-                ));
+            if let Some(hint) = private_candidate {
+                help.push(format!("    ({})", hint));
             }
         }
     }
@@ -3313,6 +3330,20 @@ pub fn interface_not_implemented(
     }
 
     diagnostic.with_help(help.join("\n"))
+}
+
+fn private_method_hint(method: &MissingMethod) -> Option<String> {
+    let private = method.private_candidate.as_ref()?;
+    Some(match &method.private_to_package {
+        Some(package) => format!(
+            "`{}` is private to package `{}`. Add `pub` to it to satisfy this",
+            private, package
+        ),
+        None => format!(
+            "add `pub` to the private method `{}` to satisfy this",
+            private
+        ),
+    })
 }
 
 pub fn cannot_propagate_error(declared: &str, operand: &str, span: Span) -> LisetteDiagnostic {
@@ -3529,6 +3560,15 @@ pub fn bodyless_function_outside_typedef(span: Span) -> LisetteDiagnostic {
         .with_infer_code("bodyless_function_outside_typedef")
         .with_span_label(&span, "needs a body")
         .with_help("Add a body: `fn greet() { ... }`. Bodyless declarations are only allowed in `.d.lis` files")
+}
+
+pub fn bodyless_impl_method(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing method body")
+        .with_infer_code("bodyless_impl_method")
+        .with_span_label(&span, "needs a body")
+        .with_help(format!(
+            "Add a body to `{name}`. A method in an `impl` block needs a body, except in a `.d.lis` file"
+        ))
 }
 
 pub fn valueless_const_outside_typedef(span: Span) -> LisetteDiagnostic {
@@ -4689,6 +4729,15 @@ pub fn impl_on_type_alias(_type_name: &str, span: Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn impl_on_interface(type_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot implement methods on an interface")
+        .with_infer_code("impl_on_interface")
+        .with_span_label(&span, "an interface cannot have methods with bodies")
+        .with_help(format!(
+            "Write a function that takes the interface instead: `fn my_function(value: {type_name}) {{ ... }}`"
+        ))
+}
+
 pub fn test_impl_on_production_type(type_name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot implement methods on a production type from a test file")
         .with_infer_code("test_impl_on_production_type")
@@ -4827,6 +4876,23 @@ pub fn native_constructor_value(name: &str, span: Span) -> LisetteDiagnostic {
         .with_help(format!("Use a closure instead: `|args| {name}(args)`"))
 }
 
+pub fn go_builtin_value(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Cannot use `{name}` as a value"))
+        .with_infer_code("go_builtin_value")
+        .with_span_label(&span, format!("`{name}` must be called directly"))
+        .with_help(format!("Use a closure instead: `|a, b| {name}(a, b)`"))
+}
+
+pub fn spread_into_go_builtin(name: &str, span: Span) -> LisetteDiagnostic {
+    let go_function = if name == "min" { "Min" } else { "Max" };
+    LisetteDiagnostic::error(format!("Cannot spread a slice into `{name}`"))
+        .with_infer_code("spread_into_go_builtin")
+        .with_span_label(&span, format!("`{name}` takes a fixed list of arguments"))
+        .with_help(format!(
+            "Use `slices.{go_function}` from `import \"go:slices\"`, or a loop"
+        ))
+}
+
 pub fn enum_variant_constructor_value(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot use enum variant as value")
         .with_infer_code("enum_variant_constructor_value")
@@ -4950,10 +5016,23 @@ pub fn never_call_in_expression(span: Span) -> LisetteDiagnostic {
 pub fn invalid_main_signature(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid main signature")
         .with_infer_code("invalid_main_signature")
-        .with_span_label(&span, "`main` must have no parameters and no return type")
+        .with_span_label(
+            &span,
+            "`main` must have no parameters, no return type and no type parameters, and must not be `pub`",
+        )
         .with_help(
             "Use `fn main() { ... }`. To handle errors, use `match` or `if let` \
              inside main instead of returning `Result`.",
+        )
+}
+
+pub fn missing_main_function(display_path: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{display_path}` has no `main` function"))
+        .with_infer_code("missing_main_function")
+        .with_file_location(display_path)
+        .with_help(
+            "Add `fn main() { ... }` at the top level of the file. A program starts at `main`, \
+             and a method named `main` does not count",
         )
 }
 
@@ -5382,6 +5461,13 @@ pub fn reference_aliases_sibling(
              operand to a variable first",
             reference_name, read_name
         ))
+}
+
+pub fn no_go_conversion(expected: &str, found: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Type mismatch")
+        .with_infer_code("type_mismatch")
+        .with_expected_found_label(&span, expected, found)
+        .with_help("Go cannot convert the value to the expected type here. Change the value or the expected type so that both are the same type")
 }
 
 pub fn unchecked_value_use(reason: &str, span: Span) -> LisetteDiagnostic {

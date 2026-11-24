@@ -101,9 +101,26 @@ struct ReadOnlyWrapper {
     name_span: Span,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VarArgsPosition {
+    FinalParameter,
+    OtherParameter,
+    Elsewhere,
+}
+
+impl VarArgsPosition {
+    pub(crate) fn of_parameter(index: usize, count: usize) -> Self {
+        if index + 1 == count {
+            Self::FinalParameter
+        } else {
+            Self::OtherParameter
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct ConvertMode {
-    variadic_allowed: bool,
+    var_args: VarArgsPosition,
     type_argument_checks: TypeArgumentChecks,
     position: TypePosition,
     read_only_wrapper: Option<ReadOnlyWrapper>,
@@ -113,7 +130,7 @@ struct ConvertMode {
 impl ConvertMode {
     fn nested(self) -> Self {
         ConvertMode {
-            variadic_allowed: false,
+            var_args: VarArgsPosition::Elsewhere,
             type_argument_checks: self.type_argument_checks.nested(),
             position: TypePosition::Value,
             read_only_wrapper: self.read_only_wrapper,
@@ -146,7 +163,7 @@ impl TaskState {
             annotation,
             span,
             ConvertMode {
-                variadic_allowed: false,
+                var_args: VarArgsPosition::Elsewhere,
                 type_argument_checks: TypeArgumentChecks::Deferred,
                 position: TypePosition::Bound,
                 read_only_wrapper: None,
@@ -166,7 +183,7 @@ impl TaskState {
             annotation,
             span,
             ConvertMode {
-                variadic_allowed: false,
+                var_args: VarArgsPosition::Elsewhere,
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
                 read_only_wrapper: None,
@@ -187,7 +204,7 @@ impl TaskState {
             annotation,
             span,
             ConvertMode {
-                variadic_allowed: false,
+                var_args: VarArgsPosition::Elsewhere,
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::AliasTarget,
                 read_only_wrapper: None,
@@ -197,18 +214,19 @@ impl TaskState {
         store.normalized_annotation_type(&ty)
     }
 
-    pub(crate) fn convert_variadic_to_type(
+    pub(crate) fn convert_parameter_to_type(
         &mut self,
         store: &Store,
         annotation: &Annotation,
         span: &Span,
+        var_args: VarArgsPosition,
     ) -> Type {
         let ty = self.convert_to_type_mode(
             store,
             annotation,
             span,
             ConvertMode {
-                variadic_allowed: true,
+                var_args,
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
                 read_only_wrapper: None,
@@ -229,7 +247,7 @@ impl TaskState {
             annotation,
             span,
             ConvertMode {
-                variadic_allowed: false,
+                var_args: VarArgsPosition::Elsewhere,
                 type_argument_checks: TypeArgumentChecks::Descendants,
                 position: TypePosition::Value,
                 read_only_wrapper: None,
@@ -254,7 +272,6 @@ impl TaskState {
                 return_type,
                 ..
             } => {
-                let last_param = params.len().wrapping_sub(1);
                 let new_params: Vec<Type> = params
                     .iter()
                     .enumerate()
@@ -264,7 +281,7 @@ impl TaskState {
                             param,
                             span,
                             ConvertMode {
-                                variadic_allowed: index == last_param,
+                                var_args: VarArgsPosition::of_parameter(index, params.len()),
                                 read_only_wrapper: None,
                                 ..mode.nested()
                             },
@@ -334,19 +351,29 @@ impl TaskState {
         let contents_span =
             mut_span.map_or(annotation_span, |mut_span| mut_span.merge(annotation_span));
         let ConvertMode {
-            variadic_allowed,
+            var_args,
             type_argument_checks,
             position,
             read_only_wrapper,
             is_impl_target,
         } = mode;
 
-        if type_name == "VarArgs" && !variadic_allowed {
-            self.sink
-                .push(diagnostics::infer::variadic_type_not_allowed(
-                    annotation_span,
-                ));
-            return Type::Error;
+        if type_name == "VarArgs" {
+            match var_args {
+                VarArgsPosition::FinalParameter => {}
+                VarArgsPosition::OtherParameter => {
+                    self.sink
+                        .push(diagnostics::infer::variadic_param_not_last(annotation_span));
+                    return Type::Error;
+                }
+                VarArgsPosition::Elsewhere => {
+                    self.sink
+                        .push(diagnostics::infer::variadic_type_not_allowed(
+                            annotation_span,
+                        ));
+                    return Type::Error;
+                }
+            }
         }
 
         if type_name == SELF_TYPE_NAME {

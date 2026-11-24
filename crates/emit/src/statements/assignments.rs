@@ -65,9 +65,9 @@ impl Planner<'_> {
     ) -> LoweredStatement {
         let raw_body = |statements: Vec<Statement>| LoweredBlock { statements };
 
-        if value.get_type().is_never() {
+        if self.facts.is_never(&value.get_type()) {
             let mut statements = self.lower_target_operands(target);
-            statements.push(self.lower_statement(value));
+            statements.push(self.lower_never_value(value));
             return LoweredStatement::Body(raw_body(statements));
         }
 

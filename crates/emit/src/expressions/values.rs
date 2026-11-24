@@ -13,9 +13,7 @@ use crate::abi::bridge::GoResultBridge;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::FunctionLayout;
-use crate::ir::bodies::{
-    LoweredBlock, LoweredStatement, Statement, discard, effect_statement, expression_statement,
-};
+use crate::ir::bodies::{LoweredBlock, Statement, async_statement, discard, effect_statement};
 use crate::ir::go_expression::FunctionLiteralLayout;
 use crate::ir::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
 use crate::names::go_name::GeneratedPackage;
@@ -104,23 +102,7 @@ impl Planner<'_> {
                     if !call.is_empty() {
                         setup.push(effect_statement(call));
                     }
-                    GoExpression::unit()
-                });
-        }
-        let ty = expression.get_type();
-        let filtered_out = match expression {
-            Expression::Function { .. } => true,
-            Expression::Lambda { .. } => context
-                .generic_result_slot()
-                .and_then(Type::get_function_ret)
-                .is_none_or(|return_type| self.facts.returns_go_void(return_type)),
-            _ => false,
-        };
-        if !filtered_out && let Some((source, target)) = self.never_result_bridge(&ty, context) {
-            return self
-                .plan_value(expression, context)
-                .map_expression(|statements, value| {
-                    self.plan_function_layout_bridge(statements, value, &source, &target, true)
+                    self.unit_value(Some(expression), context.expected_slot_type())
                 });
         }
         self.plan_value(expression, context)
@@ -167,7 +149,7 @@ impl Planner<'_> {
         Some((source, target))
     }
 
-    fn plan_call_value(
+    pub(crate) fn plan_call_value(
         &mut self,
         expression: &Expression,
         result_type: &Type,
@@ -252,7 +234,9 @@ impl Planner<'_> {
             }
             Expression::Call { ty, .. } => self.plan_call_value(expression, ty, ctx),
             Expression::RawGo { text, .. } => ValuePlan::verbatim(text.clone()),
-            Expression::Unit { .. } => ValuePlan::computed(Vec::new(), GoExpression::unit()),
+            Expression::Unit { .. } => {
+                ValuePlan::computed(Vec::new(), self.unit_value(Some(expression), None))
+            }
             Expression::Lambda {
                 params, body, ty, ..
             } => ValuePlan::computed(Vec::new(), self.plan_lambda(params, body, ty, ctx)),
@@ -286,11 +270,11 @@ impl Planner<'_> {
                     self.build_assignment_plan(target, value, compound_operator.as_ref())
                         .into(),
                 ];
-                ValuePlan::computed(setup, GoExpression::unit())
+                ValuePlan::computed(setup, self.unit_value(Some(expression), None))
             }
             Expression::Assert { .. } => ValuePlan::computed(
                 vec![self.lower_assert_statement(expression).into()],
-                GoExpression::unit(),
+                self.unit_value(Some(expression), None),
             ),
             _ => unreachable!(
                 "unexpected leaf expression in plan_operand: {:?}",
@@ -364,8 +348,7 @@ impl Planner<'_> {
         if slot_types.len() != arity {
             return callee;
         }
-        let slots: Vec<GoType> = slot_types.iter().map(|slot| self.go_type(slot)).collect();
-        GoExpression::instantiation(callee, GoType::type_arguments(&slots))
+        GoExpression::instantiation(callee, self.format_type_args(slot_types))
     }
 
     pub(crate) fn tail_tuple_return_slots(&self, tuple: &Expression) -> Option<Vec<Type>> {
@@ -485,7 +468,8 @@ impl Planner<'_> {
                 if !staged_value.is_empty() {
                     setup.push(effect_statement(staged_value));
                 }
-                let tmp = self.hoist_tmp_value_statement(setup, "ref", GoExpression::unit());
+                let unit = self.unit_value(Some(inner), None);
+                let tmp = self.hoist_tmp_value_statement(setup, "ref", unit);
                 GoExpression::address_of(GoExpression::identifier(tmp))
             });
         }
@@ -536,7 +520,7 @@ impl Planner<'_> {
         }
 
         if stages.is_empty() {
-            return ValuePlan::computed(Vec::new(), GoExpression::unit());
+            return ValuePlan::computed(Vec::new(), self.unit_value(None, None));
         }
 
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "range");
@@ -571,7 +555,6 @@ impl Planner<'_> {
         kind: AsyncKind,
         expression: &Expression,
     ) -> ValuePlan {
-        let async_statement = |call: GoExpression| LoweredStatement::Async { kind, call };
         let statement_plan =
             |setup: Vec<Statement>| ValuePlan::computed(setup, GoExpression::empty());
         let immediate_call = |body: LoweredBlock| {
@@ -582,12 +565,12 @@ impl Planner<'_> {
             let body = self.with_isolated_function(ReturnContext::Void(Type::unit()), |planner| {
                 planner.lower_block_as_body(expression)
             });
-            return statement_plan(vec![async_statement(immediate_call(body)).into()]);
+            return statement_plan(vec![async_statement(kind, immediate_call(body))]);
         }
 
         let mut setup: Vec<Statement> = Vec::new();
         if let Some(call) = self.try_plan_go_call_discarded(&mut setup, expression) {
-            setup.push(async_statement(call).into());
+            setup.push(async_statement(kind, call));
             return statement_plan(setup);
         }
 
@@ -596,11 +579,13 @@ impl Planner<'_> {
             expression,
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
-        if needs_iife_for_async(
-            expression,
-            self.facts.call_operation(expression),
-            plan.expression(),
-        ) {
+        if !plan.expression().stands_as_a_statement()
+            || needs_iife_for_async(
+                expression,
+                self.facts.call_operation(expression),
+                plan.expression(),
+            )
+        {
             self.restore_planning(checkpoint);
             let (mut setup, inner) = self
                 .plan_value(
@@ -611,7 +596,7 @@ impl Planner<'_> {
             let mut body_statements = Vec::new();
             if !inner.is_empty() {
                 body_statements.push(if self.facts.resolves_to_unit(&expression.get_type()) {
-                    expression_statement(inner)
+                    effect_statement(inner)
                 } else {
                     discard(inner)
                 });
@@ -619,11 +604,11 @@ impl Planner<'_> {
             let body = LoweredBlock {
                 statements: body_statements,
             };
-            setup.push(async_statement(immediate_call(body)).into());
+            setup.push(async_statement(kind, immediate_call(body)));
             return statement_plan(setup);
         }
         let (mut setup, inner) = plan.into_parts();
-        setup.push(async_statement(inner).into());
+        setup.push(async_statement(kind, inner));
         statement_plan(setup)
     }
 

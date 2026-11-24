@@ -25,8 +25,8 @@ import (
 
 func test(name string) {
 	var label string
-	f, err := os.Open(name)
-	if err != nil || f == nil {
+	f, e := os.Open(name)
+	if e != nil || f == nil {
 		fmt.Println("cannot open")
 		return
 	}

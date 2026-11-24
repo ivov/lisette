@@ -10,8 +10,8 @@ use crate::Planner;
 use crate::abi::is_closure_literal;
 use crate::control_flow::fallible::{option_variant, prelude_call};
 use crate::ir::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, assign, declare, define, directed_first,
+    ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, PlacePlan, Statement, assign, declare, define, directed_first,
 };
 use crate::ir::go_expression::UnaryOp;
 use crate::ir::values::{GoExpression, OperandForm, Stability, ValuePlan};
@@ -682,7 +682,11 @@ fn slice_loop_statement(
 ) -> Statement {
     let header = LoopHeader::Range {
         key: match (planned, element_name.spelling()) {
-            (PlannedLoop::Map { index, .. }, _) => Some(index.clone()),
+            (PlannedLoop::Map { index, .. }, _)
+                if GoUses::of(&body_statements).contains_identifier(index) =>
+            {
+                Some(index.clone())
+            }
             (_, "_") => None,
             _ => Some(GoIdentifier::external("_".to_string())),
         },

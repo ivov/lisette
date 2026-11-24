@@ -39,13 +39,13 @@ type E struct {
 }
 
 func test(e E) int {
-	var x int
+	var x2 int
 	if e.Tag == EA {
-		x = e.A
+		x2 = e.A
 	} else if e.Tag == EB {
-		x = e.B
+		x2 = e.B
 	} else {
 		return 0
 	}
-	return x
+	return x2
 }

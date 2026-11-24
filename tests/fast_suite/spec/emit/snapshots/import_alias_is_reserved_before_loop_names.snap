@@ -1,0 +1,30 @@
+---
+source: tests/fast_suite/spec/emit/imports.rs
+description: |
+  
+  import "go:fmt"
+  import i "go:strings"
+  
+  fn f(s: string) {
+    for b in s.bytes() {
+      fmt.Println(i.ToUpper("x"), b)
+    }
+  }
+  
+  fn main() { }
+---
+package main
+
+import (
+	"fmt"
+	i "strings"
+)
+
+func f(s string) {
+	for i2 := 0; i2 < len(s); i2++ {
+		b := s[i2]
+		fmt.Println(i.ToUpper("x"), b)
+	}
+}
+
+func main() {}

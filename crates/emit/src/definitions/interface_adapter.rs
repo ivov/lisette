@@ -5,9 +5,9 @@ use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::functions::BodyOrigin;
+use crate::ir::bodies::effect_statement;
 use crate::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, directed_first,
-    expression_statement,
 };
 use crate::ir::declarations::{
     DeclarationKind, FieldDeclaration, FunctionSignature, GoDeclaration,
@@ -720,10 +720,10 @@ impl Planner<'_> {
         let return_type = method.source.result_layout.logical_type();
         let go_result = method.target.result_go_type(self).unwrap_or_default();
         if method.target.return_abi == CallableReturnAbi::Void {
-            statements.push(expression_statement(inner_call));
+            statements.push(effect_statement(inner_call));
         } else if method.source.return_abi == CallableReturnAbi::Void {
             let zero = self.go_zero(return_type);
-            statements.push(expression_statement(inner_call));
+            statements.push(effect_statement(inner_call));
             statements.push(plain_return(zero));
         } else if method.source.same_result_representation(&method.target) {
             statements.push(plain_return(inner_call));

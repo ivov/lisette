@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn main() {
+    defer Channel.new<int>()
+  }
+---
+package main
+
+func main() {
+	defer func() {
+		_ = make(chan int)
+	}()
+}

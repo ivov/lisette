@@ -1,0 +1,46 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn identity(value: int) -> int {
+    value
+  }
+  
+  fn describe(value: Unknown) -> string {
+    match assert_type<string>(value) {
+      Some(text) => text,
+      None => "",
+    }
+  }
+  
+  fn shadow() {
+    let value = {
+      panic("shadowing Unknown binding was declared at the concrete type")
+    }
+    let mut value: Unknown = identity(value)
+    value = "two"
+    if describe(value) != "two" {
+      panic("shadowing Unknown binding was declared at the concrete type")
+    }
+  }
+  
+  fn main() { }
+---
+package main
+
+func identity(value int) int {
+	return value
+}
+
+func describe(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
+func shadow() {
+	panic("shadowing Unknown binding was declared at the concrete type")
+}
+
+func main() {}

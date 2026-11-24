@@ -17,6 +17,7 @@ use crate::ir::bodies::{
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{ConstantKind, GoExpression};
 use crate::names::source_name::SourceName;
+use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, rebind_trailing_temp, rebind_updated_temp,
@@ -345,7 +346,9 @@ impl Planner<'_> {
             .plan_value(value, ExpressionContext::value())
             .into_parts();
         statements.push(effect_statement(value_expression));
+        let unit = self.unit_value(Some(value), Some(binding_ty));
         let Some(raw_go_name) = raw_go_name else {
+            self.scope.bind_source(identifier, ids, "_");
             return statements;
         };
         let escaped = escape_local(raw_go_name);
@@ -358,7 +361,6 @@ impl Planner<'_> {
             self.try_declare(&go_identifier);
             go_identifier
         };
-        let unit = GoExpression::unit();
         if self
             .facts
             .needs_explicit_type_declaration(value, binding_ty)
@@ -569,29 +571,10 @@ struct LetPlanner<'a, 'e> {
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
     fn build(mut self) -> LoweredBlock {
-        if self.value.get_type().is_never() {
-            let mut statements = Vec::new();
-            if let Pattern::Identifier {
-                identifier,
-                binding,
-                ..
-            } = &self.binding.pattern
-                && let Some(raw_go_name) = self
-                    .planner
-                    .facts
-                    .go_name_for_binding(&self.binding.pattern)
-            {
-                let go_identifier = self.planner.claim_block_binding(
-                    identifier,
-                    binding.as_slice(),
-                    &raw_go_name,
-                    OuterBindings::MayShadow,
-                );
-                let var_ty = self.planner.go_type(&self.binding.ty);
-                statements.push(declare(go_identifier, var_ty));
-            }
-            statements.push(self.planner.lower_statement(self.value));
-            return LoweredBlock { statements };
+        if self.planner.facts.is_never(&self.value.get_type()) {
+            return LoweredBlock {
+                statements: vec![self.planner.lower_never_value(self.value)],
+            };
         }
 
         let pattern = &self.binding.pattern;
@@ -605,6 +588,14 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                         self.binding.pattern.get_span(),
                     ),
                 };
+            }
+            LetMode::Else { block, .. }
+                if self.planner.facts.resolves_to_unit(&self.value.get_type()) =>
+            {
+                self.planner.package.record_dropped_code(block.get_span());
+                if !pattern_has_bindings(pattern) {
+                    return self.lower_discard();
+                }
             }
             LetMode::Else { block, .. } => {
                 return LoweredBlock {
@@ -626,11 +617,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             Pattern::WildCard { .. } => return self.lower_discard(),
             _ if let Some(block) = self.try_lower_converted_destructuring() => return block,
             Pattern::Tuple { elements, .. } => {
-                let all_unused = elements.iter().all(|element| match element {
-                    Pattern::WildCard { .. } => true,
-                    Pattern::Identifier { .. } => self.planner.facts.is_unused_binding(element),
-                    _ => false,
-                });
+                let all_unused = elements
+                    .iter()
+                    .all(|element| matches!(element, Pattern::WildCard { .. }));
                 if all_unused {
                     return self.lower_discard();
                 }
@@ -800,9 +789,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             binding_ty: &self.binding.ty,
             mutable: self.binding.is_mutable(),
         };
-        if !self.planner.facts.is_unused_binding(&self.binding.pattern)
-            && let Some(target) = self.planner.reassignable_shadow(let_spec)
-        {
+        if let Some(target) = self.planner.reassignable_shadow(let_spec) {
             return LoweredBlock {
                 statements: self.planner.lower_let_reassign(let_spec, target),
             };

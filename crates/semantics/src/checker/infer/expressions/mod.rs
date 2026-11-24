@@ -11,6 +11,7 @@ pub mod dot_access;
 pub mod functions;
 pub mod impl_blocks;
 pub mod indexed_access;
+mod instantiation_bounds;
 pub mod literals;
 mod loops;
 mod method_access;
@@ -178,7 +179,11 @@ impl InferCtx<'_> {
                 compound_operator,
                 span,
                 ..
-            } => self.infer_assignment(target, value, compound_operator, span),
+            } => {
+                let assignment = self.infer_assignment(target, value, compound_operator, span);
+                self.unify(expected_ty, &Type::unit(), &span);
+                assignment
+            }
 
             Expression::Return {
                 expression, span, ..

@@ -6,6 +6,7 @@ use semantics::{AnalysisScope, AnalyzeInput, EntryFile};
 
 use super::filesystem::MockFileSystem;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 fn compile_with(
     fs: MockFileSystem,
@@ -86,6 +87,14 @@ pub fn compile_check_script(fs: MockFileSystem) -> Analysis {
         AnalysisScope::Script {
             inside_project: false,
         },
+        deps::TypedefLocator::default(),
+    )
+}
+
+pub fn compile_check_project(fs: MockFileSystem) -> Analysis {
+    compile_with(
+        fs,
+        AnalysisScope::Project(PathBuf::new()),
         deps::TypedefLocator::default(),
     )
 }

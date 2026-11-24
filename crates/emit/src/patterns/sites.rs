@@ -1,4 +1,5 @@
 use crate::abi::fallible_producer::ResultFusePlan;
+use crate::ir::bodies::effect_statement;
 use std::borrow::Cow;
 use std::slice;
 
@@ -14,7 +15,7 @@ use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, PlacePlan, Statement,
-    declare, define, discard, expression_statement,
+    declare, define, discard,
 };
 use crate::ir::go_expression::CompositeLayout;
 use crate::ir::local::GoIdentifier;
@@ -442,9 +443,7 @@ impl Planner<'_> {
         &mut self,
         field: &'p Pattern,
     ) -> Option<(FusedName<'p>, GoIdentifier)> {
-        let name = field_binding(field)
-            .flatten()
-            .filter(|_| !self.facts.is_unused_binding(field))?;
+        let name = field_binding(field).flatten()?;
         let source = name.go_name();
         let preferred = source.preferred();
         let go_name = if self.shadows_declaration(&preferred)
@@ -619,7 +618,7 @@ impl Planner<'_> {
                     ],
                 );
                 LoweredBlock {
-                    statements: vec![expression_statement(call)],
+                    statements: vec![effect_statement(call)],
                 }
             }
         }

@@ -1829,3 +1829,8 @@ fn compound_division_by_constant_zero_is_rejected() {
 fn float_variable_divided_by_named_zero_is_accepted() {
     infer("const F0 = 0.0\nfn test(x: float64) -> float64 { x / F0 }").assert_no_errors();
 }
+
+#[test]
+fn ordered_type_parameter_supports_addition() {
+    infer("fn f<T: Ordered>(a: T, b: T) -> T { a + b }").assert_no_errors();
+}

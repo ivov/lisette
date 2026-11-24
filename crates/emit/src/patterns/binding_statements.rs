@@ -178,7 +178,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn bind_inline_unit(&mut self, binding: &PatternBinding) {
-        let unit = GoExpression::unit();
+        let unit = self.unit_value(None, None);
         self.scope.bind_inline_expr(
             &binding.lisette_name,
             &binding.binding_ids,

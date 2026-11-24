@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let make = || 1
+    let len = |x: int| x
+    let _ = make()
+    let _ = len(2)
+  }
+---
+package main
+
+func main() {
+	make := func() int {
+		return 1
+	}
+	len := func(x int) int {
+		return x
+	}
+	make()
+	len(2)
+}

@@ -25,12 +25,8 @@ func run[T any](f func() T) int {
 }
 
 func test() int {
-	cb := func() struct{} {
+	return run(func() struct{} {
 		die()
 		panic("unreachable")
-	}
-	return run(func() struct{} {
-		cb()
-		return struct{}{}
 	})
 }

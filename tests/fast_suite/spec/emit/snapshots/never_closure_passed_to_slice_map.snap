@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn f(s: Slice<int>) -> Slice<int> {
+    s.map(|x| { panic("stop") })
+  }
+---
+package main
+
+func f(s []int) []int {
+	result := make([]int, len(s))
+	for range s {
+		panic("stop")
+	}
+	return result
+}

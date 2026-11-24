@@ -1,0 +1,18 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn f() -> Unknown {
+    let x: Unknown = loop {
+      break ({ panic("stop") })
+    }
+    x
+  }
+---
+package main
+
+func f() any {
+	for {
+		panic("stop")
+	}
+}

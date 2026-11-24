@@ -1,12 +1,12 @@
 ---
 source: tests/fast_suite/ui/errors/mod.rs
 ---
-  ✕ Cannot use a type as a value
+  ✕ Wrong argument count
    ╭─[test.lis:5:11]
  4 │ fn main() {
  5 │   let n = Rows.length()
-   ·           ──┬─
-   ·             ╰── type names are not runtime values
+   ·           ──────┬──────
+   ·                 ╰── expected `(Slice<Slice<int>>)`, found `()`
  6 │   let _ = n
    ╰────
-  help: `Rows` refers to a type, not a value · code: [infer.type_used_as_value]
+  help: This function expects 1 argument but received 0 arguments · code: [infer.arg_count_mismatch]

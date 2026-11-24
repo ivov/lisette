@@ -175,10 +175,13 @@ impl Planner<'_> {
         let lowered = forwarded.map_or(rest, |(_, rest, _)| rest);
         for (index, item) in lowered.iter().enumerate() {
             let region = rest[index + 1..].iter().chain(iter::once(last));
-            let statement = self.lower_block_item(item, region);
+            let statement = self.lower_block_item(item, region.clone());
             let diverged = statement.kind.blocks_fallthrough();
             statements.push(statement);
             if diverged {
+                for dropped in region {
+                    self.package.record_dropped_code(dropped.get_span());
+                }
                 return (statements, true);
             }
         }
@@ -217,7 +220,9 @@ impl Planner<'_> {
         {
             let mut block = self.lower_block_as_body(body);
             if !block.go_terminates() {
-                block.statements.push(plain_return(self.go_zero(ty)));
+                block
+                    .statements
+                    .push(plain_return(self.unit_value(None, Some(ty))));
             }
             return block;
         }
@@ -259,8 +264,8 @@ impl Planner<'_> {
                 .filter(|ty| !self.facts.resolves_to_unit(ty))
         {
             let return_ty = return_ty.clone();
-            let zero = self.go_zero(&return_ty);
-            body.statements.push(plain_return(zero));
+            let unit = self.unit_value(Some(last), Some(&return_ty));
+            body.statements.push(plain_return(unit));
         }
 
         body
@@ -310,6 +315,12 @@ impl Planner<'_> {
 
     fn lower_focused_statement(&mut self, expression: &Expression) -> Statement {
         match expression {
+            Expression::Block { items, .. } if items.is_empty() => {
+                LoweredStatement::Body(LoweredBlock {
+                    statements: Vec::new(),
+                })
+                .into()
+            }
             Expression::Block { .. } => LoweredStatement::Block(
                 self.with_scope(|this| this.lower_block_as_body(expression)),
             )
@@ -370,10 +381,13 @@ impl Planner<'_> {
                 let wide_result = self
                     .current_loop()
                     .filter(|loop_context| self.widens_unit(loop_context.result_ty.as_ref()))
-                    .map(|loop_context| loop_context.result.clone());
+                    .map(|loop_context| {
+                        (loop_context.result.clone(), loop_context.result_ty.clone())
+                    });
                 match wide_result {
-                    Some(result) => {
-                        let mut statements = self.lower_unit_into(None, &result);
+                    Some((result, result_ty)) => {
+                        let mut statements =
+                            self.lower_unit_into(expression, None, &result, result_ty.as_ref());
                         statements.push(transfer.into());
                         LoweredStatement::Body(LoweredBlock { statements })
                     }
@@ -621,11 +635,18 @@ impl Planner<'_> {
         } else {
             slice::from_ref(expression)
         };
-        let statements = items
-            .iter()
-            .enumerate()
-            .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
-            .collect();
+        let mut statements = Vec::with_capacity(items.len());
+        for (index, item) in items.iter().enumerate() {
+            let statement = self.lower_block_item(item, &items[index + 1..]);
+            let diverged = statement.kind.blocks_fallthrough();
+            statements.push(statement);
+            if diverged {
+                for dropped in &items[index + 1..] {
+                    self.package.record_dropped_code(dropped.get_span());
+                }
+                break;
+            }
+        }
         LoweredBlock { statements }
     }
 
@@ -658,6 +679,10 @@ impl Planner<'_> {
                 let implicit_unit = self.facts.checked(expression).implicit_unit();
                 let arms =
                     if_let_match_arms(pattern, consequence, alternative, *span, implicit_unit);
+                let place = match alternative {
+                    IfLetAlternative::Absent => &PlacePlan::Statement,
+                    IfLetAlternative::Present { .. } => place,
+                };
                 self.lower_match_to_block(scrutinee, &arms, place)
             }
             Expression::Match { subject, arms, .. } => {
@@ -737,8 +762,9 @@ impl Planner<'_> {
             return statements;
         }
 
-        if last.get_type().is_never() {
-            return self.lower_never_return_tail(last, &return_span);
+        if self.facts.is_never(&last.get_type()) {
+            let line = self.facts.source_position(&return_span);
+            return directed_first(line, vec![self.lower_never_value(last)]);
         }
 
         let line = self.facts.source_position(&return_span);
@@ -773,11 +799,6 @@ impl Planner<'_> {
         }
 
         statements
-    }
-
-    fn lower_never_return_tail(&mut self, last: &Expression, return_span: &Span) -> Vec<Statement> {
-        let line = self.facts.source_position(return_span);
-        directed_first(line, vec![self.lower_statement(last)])
     }
 
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
@@ -941,7 +962,7 @@ impl Planner<'_> {
 }
 
 impl EmitFacts<'_> {
-    fn directed_at(&self, expression: &Expression, kind: LoweredStatement) -> Statement {
+    pub(crate) fn directed_at(&self, expression: &Expression, kind: LoweredStatement) -> Statement {
         Statement {
             line: self.source_position(&expression.get_span()),
             kind,

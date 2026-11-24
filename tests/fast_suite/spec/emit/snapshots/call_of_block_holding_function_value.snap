@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Bar { n: int }
+  
+  impl Bar {
+    fn get(self: Ref<Bar>) -> int { self.n }
+  }
+  
+  fn id<T>(x: T) -> T { x }
+  
+  fn test() -> int {
+    let mut b = Bar { n: 1 }
+    let g = |y: int| y
+    let wrapped = { Some }(2)
+    { id }(3) + { b.get }() + { g }(4) + wrapped.unwrap_or(0)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Bar struct {
+	n int
+}
+
+func (b *Bar) get() int {
+	return b.n
+}
+
+func id[T any](x T) T {
+	return x
+}
+
+func test() int {
+	b := Bar{n: 1}
+	g := func(y int) int {
+		return y
+	}
+	wrapped := lisette.MakeOptionSome(2)
+	return id(3) + b.get() + g(4) + wrapped.UnwrapOr(0)
+}

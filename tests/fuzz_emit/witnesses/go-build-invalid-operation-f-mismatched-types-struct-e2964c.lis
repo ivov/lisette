@@ -1,6 +1,0 @@
-
-fn main() {
-  let mut x = 10
-  let f = || { panic("loop capture") }
-  if f() != 11 || x != 11 { panic("outer capture") }
-}

@@ -16,7 +16,4 @@ type A int
 
 type B A
 
-func main() {
-	_ = B(A(1))
-	_ = B(A(2))
-}
+func main() {}

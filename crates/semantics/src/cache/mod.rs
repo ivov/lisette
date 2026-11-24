@@ -134,6 +134,8 @@ pub struct PackageInterface {
     /// `Some(h)` when the on-disk Go files came from a successful Emit for
     /// artifact hash `h`.
     pub(crate) emit_stamp: Option<u64>,
+
+    pub(crate) go_method_context: u64,
 }
 
 impl PackageInterface {
@@ -185,6 +187,7 @@ pub struct CompiledPackage {
     pub package_id: String,
     pub artifact_hash: u64,
     pub(crate) key: CacheKey,
+    pub(crate) go_method_context: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -208,6 +211,12 @@ pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str, context
 pub(crate) fn global_emit_context(policy: &GoMethodPolicy) -> u64 {
     let mut hasher = FnvHasher::new();
     policy.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub(crate) fn go_method_check_context(policy: &GoMethodPolicy) -> u64 {
+    let mut hasher = FnvHasher::new();
+    policy.exported_method_names.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -397,6 +406,7 @@ pub fn save_package_cache(
             .collect(),
         definitions: extract_cached_definitions(store, &compiled.package_id, &file_id_to_index),
         emit_stamp: None,
+        go_method_context: compiled.go_method_context,
     };
 
     let path = cache_path(project_root, &compiled.package_id, target);
@@ -585,6 +595,7 @@ mod tests {
                     diagnostic_mode: DiagnosticMode::default(),
                 }),
                 artifact_hash: artifact_hash.unwrap_or_default(),
+                go_method_context: 0,
             },
             root,
             target,
@@ -793,6 +804,7 @@ mod tests {
             files: vec![],
             definitions: HashMap::default(),
             emit_stamp: None,
+            go_method_context: 0,
         };
         interface.key.diagnostic_mode =
             DiagnosticMode::new(CompilePhase::Check, ProjectKind::Library);
@@ -875,6 +887,7 @@ mod tests {
             files: vec![],
             definitions,
             emit_stamp: None,
+            go_method_context: 0,
         };
 
         let built = build_cached_package(
@@ -1130,6 +1143,7 @@ mod tests {
             files: vec![],
             definitions: HashMap::default(),
             emit_stamp: None,
+            go_method_context: 0,
         };
         let path = cache_path(root, "greet", target);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1190,6 +1204,7 @@ mod tests {
                 files: vec![],
                 definitions: HashMap::default(),
                 emit_stamp: Some(7),
+                go_method_context: 0,
             };
             let path = cache_path(root, "greet", target);
             disk::write(&path, &interface).unwrap();
@@ -1228,6 +1243,7 @@ mod tests {
             }],
             definitions: HashMap::default(),
             emit_stamp: None,
+            go_method_context: 0,
         };
         let path = cache_path(root, "greet", target);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1269,6 +1285,7 @@ mod tests {
             }],
             definitions: HashMap::default(),
             emit_stamp: Some(artifact_hash),
+            go_method_context: 0,
         };
         let path = cache_path(root, "greet", target);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1329,6 +1346,7 @@ mod tests {
             package_id: "example".into(),
             artifact_hash: 1,
             key: test_key(2, HashMap::default()),
+            go_method_context: 0,
         };
         save_package_cache(
             &compiled,
@@ -1374,6 +1392,7 @@ mod tests {
             package_id: "example".into(),
             artifact_hash: 1,
             key: test_key(2, HashMap::default()),
+            go_method_context: 0,
         };
         let foreign = diagnostics::lint::unused_mut(&Span::new(37, 0, 1))
             .with_span_label(&Span::new(90, 0, 1), "outside package");

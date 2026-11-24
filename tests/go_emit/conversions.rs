@@ -258,6 +258,44 @@ const POSITIONS: &[Position] = &[
     },
 ];
 
+const ASSERT_TYPE_ARGUMENTS: &[(&str, &str)] = &[
+    (
+        "assert_type__interface",
+        r#"import "go:io"
+import "go:strings"
+
+fn is_closer(r: io.Reader) -> bool {
+  let Some(_c) = assert_type<io.Closer>(r) else {
+    return false
+  }
+  true
+}
+
+fn main() {
+  if is_closer(strings.NewReader("x")) { panic("a strings.Reader is not an io.Closer") }
+}
+"#,
+    ),
+    (
+        "assert_type__type_parameter",
+        r#"fn as_int<T>(value: T) -> Option<int> {
+  assert_type<int>(value)
+}
+
+fn main() {
+  match as_int(1) { Some(1) => {}, _ => panic("lost the value") }
+}
+"#,
+    ),
+    (
+        "assert_type__builtin_function",
+        r#"fn main() {
+  let _ = assert_type<()>(max)
+}
+"#,
+    ),
+];
+
 struct Shape {
     name: String,
     source: String,
@@ -351,6 +389,12 @@ fn shapes() -> Vec<Shape> {
                 });
             }
         }
+    }
+    for (name, source) in ASSERT_TYPE_ARGUMENTS {
+        shapes.push(Shape {
+            name: name.to_string(),
+            source: source.to_string(),
+        });
     }
     shapes
 }

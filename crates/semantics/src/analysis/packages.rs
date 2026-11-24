@@ -4,6 +4,7 @@ use super::*;
 use crate::cache::all_go_outputs_exist;
 use crate::cache::{
     CacheKey, CacheKeyInputs, DiagnosticMode, compute_emit_artifact_hash, global_emit_context,
+    go_method_check_context,
 };
 use crate::checker::InferredFile;
 use crate::checker::infer::constant_values;
@@ -13,7 +14,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ParseError;
 use syntax::ast::Span;
-use syntax::program::{GoMethodPolicy, UninferredExports};
+use syntax::program::UninferredExports;
 
 struct CacheCandidate {
     pending: CompiledPendingPackage,
@@ -248,6 +249,7 @@ pub(super) fn infer_all_packages(
             package_id: package_id.clone(),
 
             artifact_hash: production_hash,
+            go_method_context: 0,
             key: CacheKey::new(CacheKeyInputs {
                 target: key_context.target,
                 sources: full_hash,
@@ -326,13 +328,7 @@ pub(super) fn infer_all_packages(
     let mut registered = register_packages(&mut checker, store, predeclared, dependencies);
 
     checker.finalize_registration(store);
-    let policy = GoMethodPolicy::compute(
-        store
-            .packages()
-            .values()
-            .flat_map(|package| package.definitions.iter()),
-        |id| store.get_definition(id),
-    );
+    let policy = store.go_method_policy();
     let emit_contexts: HashMap<_, _> = store
         .packages()
         .keys()
@@ -351,15 +347,18 @@ pub(super) fn infer_all_packages(
                     .filter(|(id, _)| reachable.contains(*id))
                     .flat_map(|(_, package)| package.definitions.iter()),
             );
-            (package_id.clone(), global_emit_context(&relevant))
+            let contexts = (
+                global_emit_context(&relevant),
+                go_method_check_context(&relevant),
+            );
+            (package_id.clone(), contexts)
         })
         .collect();
     let finalize_hash = |package: &mut CompiledPackage| {
-        package.artifact_hash = compute_emit_artifact_hash(
-            package.artifact_hash,
-            key_context.go_module,
-            emit_contexts[&package.package_id],
-        );
+        let (emit_context, check_context) = emit_contexts[&package.package_id];
+        package.artifact_hash =
+            compute_emit_artifact_hash(package.artifact_hash, key_context.go_module, emit_context);
+        package.go_method_context = check_context;
     };
     for package in &mut compiled_packages {
         finalize_hash(package);
@@ -368,9 +367,12 @@ pub(super) fn infer_all_packages(
     let mut rebuilt_artifacts = false;
     for mut artifact in cache_load.artifacts {
         finalize_hash(&mut artifact.pending.package);
-        if !input.compile_phase.emits()
-            || (artifact.outputs_exist
-                && artifact.stamp == Some(artifact.pending.package.artifact_hash))
+        let check_is_current =
+            artifact.go_method_context == artifact.pending.package.go_method_context;
+        if check_is_current
+            && (!input.compile_phase.emits()
+                || (artifact.outputs_exist
+                    && artifact.stamp == Some(artifact.pending.package.artifact_hash)))
         {
             checker.collect_cached_package_tests(store, &artifact.pending.package.package_id);
             continue;
@@ -583,6 +585,7 @@ fn register_go_package(
 struct CachedArtifact {
     pending: CompiledPendingPackage,
     stamp: Option<u64>,
+    go_method_context: u64,
     outputs_exist: bool,
     rewrite_root_import: bool,
 }
@@ -630,6 +633,7 @@ fn load_cache_candidates(
         let package_id = candidate.pending.package.package_id.clone();
         result.artifacts.push(CachedArtifact {
             stamp: interface.emit_stamp,
+            go_method_context: interface.go_method_context,
             outputs_exist: all_go_outputs_exist(
                 &candidate.pending.package.package_id,
                 &interface.files,

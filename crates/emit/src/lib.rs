@@ -72,7 +72,7 @@ pub fn root_package_name(go_module: &str) -> String {
 #[derive(Default)]
 pub(crate) struct GlobalEmitData {
     go_abi_catalog: GoAbiCatalog,
-    exported_method_names: HashSet<String>,
+    method_policy: GoMethodPolicy,
     tagged_method_names: HashSet<String>,
     enum_layouts: HashMap<Symbol, EnumLayout>,
 }
@@ -82,8 +82,8 @@ impl GlobalEmitData {
         let policy = GoMethodPolicy::compute(definitions.iter(), |id| definitions.get(id));
         let mut globals = GlobalEmitData {
             go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
-            exported_method_names: policy.exported_method_names.into_iter().collect(),
-            tagged_method_names: policy.tagged_method_names.into_iter().collect(),
+            tagged_method_names: policy.tagged_method_names.iter().cloned().collect(),
+            method_policy: policy,
             enum_layouts: HashMap::default(),
         };
 

@@ -9,7 +9,9 @@ use crate::ir::go_expression::{
 use crate::ir::local::GoIdentifier;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
+use crate::passes::cleanup::drop_unreachable_statements;
 use crate::passes::verify::verify_final_function_body;
+use crate::plan::never::runs_as_never_statement;
 use crate::render::writer::GoWriter;
 use crate::state::expression::ExpressionContext;
 use crate::types::go_type::GoType;
@@ -308,6 +310,7 @@ impl GoExpression {
         layout: FunctionLiteralLayout,
     ) -> Self {
         let result = result.into();
+        drop_unreachable_statements(&mut body.statements);
         if !result.is_empty() {
             body.ensure_go_termination();
         }
@@ -341,6 +344,10 @@ impl GoExpression {
 
     pub(crate) fn pure_call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
         Self::call_node(callee, arguments, CallPurity::Constructor)
+    }
+
+    pub(crate) fn type_name_call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
+        Self::call_node(callee, arguments, CallPurity::Conversion)
     }
 
     pub(crate) fn read_only_call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
@@ -401,6 +408,7 @@ impl GoExpression {
         let node = GoExpressionNode::Index {
             base: base.into_operand(),
             index: index.into_operand(),
+            in_bounds: false,
         };
         Self::new(node)
     }
@@ -434,8 +442,18 @@ impl GoExpression {
             low: bound(start),
             high: bound(end),
             max: bound(capacity),
+            in_bounds: false,
         };
         Self::new(node)
+    }
+
+    pub(crate) fn proven_in_bounds(mut self) -> Self {
+        if let GoExpressionNode::Index { in_bounds, .. }
+        | GoExpressionNode::Slice { in_bounds, .. } = &mut self.node
+        {
+            *in_bounds = true;
+        }
+        self
     }
 
     pub(crate) fn node(&self) -> &GoExpressionNode {
@@ -545,12 +563,12 @@ impl GoExpression {
     }
 
     pub(crate) fn stands_as_a_statement(&self) -> bool {
-        let GoExpressionNode::Call { callee, .. } = &self.node else {
-            return false;
-        };
-        match &**callee {
-            GoExpressionNode::Identifier(name) => !is_value_only_builtin(name),
-            _ => true,
+        match &self.node {
+            GoExpressionNode::Verbatim(_) => true,
+            GoExpressionNode::Call { callee, purity, .. } => {
+                *purity != CallPurity::Conversion && !is_value_only_callee(callee)
+            }
+            _ => false,
         }
     }
 
@@ -852,6 +870,9 @@ impl Planner<'_> {
             let (setup, call) = self.plan_test_log_call(expression);
             return ValuePlan::plain_call(setup, call);
         }
+        if runs_as_never_statement(expression) && self.facts.is_never(&expression.get_type()) {
+            return self.plan_never_value(expression);
+        }
         match expression {
             Expression::Paren { .. } => {
                 unreachable!("internal error: emit received a parenthesized expression")
@@ -891,8 +912,14 @@ impl Planner<'_> {
             Expression::Defer {
                 expression: inner, ..
             } => self.plan_async_wrapper(AsyncKind::Defer, inner),
-            Expression::TryBlock { items, ty, .. } => self.plan_try_block(items, ty),
-            Expression::RecoverBlock { items, ty, .. } => self.plan_recover_block(items, ty),
+            Expression::TryBlock { items, ty, .. } => {
+                let ty = self.fallible_block_type(expression, ty);
+                self.plan_try_block(items, &ty)
+            }
+            Expression::RecoverBlock { items, ty, .. } => {
+                let ty = self.fallible_block_type(expression, ty);
+                self.plan_recover_block(items, &ty)
+            }
             Expression::Propagate { expression, .. } => {
                 let (setup, value) = self.plan_propagate(expression);
                 let stability = self.path_read_stability(&value);
@@ -902,13 +929,18 @@ impl Planner<'_> {
             Expression::If { ty, .. }
             | Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
-            | Expression::Select { ty, .. }
-                if !ty.is_never() =>
-            {
-                self.plan_branching_as_operand_temp(expression, ty)
-            }
+            | Expression::Select { ty, .. } => self.plan_branching_as_operand_temp(expression, ty),
             _ => self.plan_operand_leaf(expression, ctx),
         }
+    }
+}
+
+fn is_value_only_callee(callee: &GoExpressionNode) -> bool {
+    match callee {
+        GoExpressionNode::Identifier(name) => name.id().is_none() && is_value_only_builtin(name),
+        GoExpressionNode::Type(_) => true,
+        GoExpressionNode::Instantiation { base, .. } => matches!(**base, GoExpressionNode::Type(_)),
+        _ => false,
     }
 }
 

@@ -24,8 +24,8 @@ import (
 )
 
 func test(name string) {
-	file, err := os.Open(name)
-	if err != nil || file == nil {
+	file, e := os.Open(name)
+	if e != nil || file == nil {
 		fmt.Println("cannot open")
 		return
 	}

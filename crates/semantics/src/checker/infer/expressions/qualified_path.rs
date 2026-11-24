@@ -124,6 +124,9 @@ impl InferCtx<'_> {
             return None;
         }
         let qualified_root = self.lookup_qualified_name(store, root)?;
+        if store.get_interface(&qualified_root).is_some() {
+            return None;
+        }
         let base = expression.as_dotted_path()?;
 
         let direct = format!("{}.{}", base, member);

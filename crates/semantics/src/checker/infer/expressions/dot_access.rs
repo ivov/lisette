@@ -18,6 +18,12 @@ use crate::checker::promotion::{self, MemberKind, Resolution};
 use crate::loader;
 use crate::store::Store;
 
+enum DotAccessBase {
+    Module,
+    Type,
+    Value,
+}
+
 pub(super) struct DotAccessResolutionArgs<'a> {
     pub(super) id: ExpressionId,
     pub(super) expression: &'a Expression,
@@ -123,18 +129,40 @@ impl InferCtx<'_> {
             return args.build_dot_access(Type::Error, DotAccessResolution::Unresolved);
         }
 
-        let calls_method_that_shadows_field =
-            self.is_callee_context() && self.method_shadows_struct_field(&args);
-        let resolved = calls_method_that_shadows_field
-            .then(|| self.as_instance_method(&args))
-            .flatten()
-            .or_else(|| self.as_struct_field(&args))
-            .or_else(|| self.as_promoted_field(&args))
-            .or_else(|| self.as_tuple_element(&args))
-            .or_else(|| self.as_package_member(&args))
-            .or_else(|| self.as_enum_variant(&args))
-            .or_else(|| self.as_instance_method(&args))
-            .or_else(|| self.as_static_method(&args));
+        let resolved = match self.dot_access_base(&args) {
+            DotAccessBase::Module => self.as_package_member(&args),
+            DotAccessBase::Type => self
+                .as_struct_field(&args)
+                .or_else(|| self.as_promoted_field(&args))
+                .or_else(|| self.as_tuple_element(&args))
+                .or_else(|| self.as_enum_variant(&args))
+                .or_else(|| self.as_instance_method(&args))
+                .or_else(|| self.as_static_method(&args)),
+            DotAccessBase::Value => {
+                if self.enum_has_variant(&args) {
+                    let enum_name = args
+                        .deref_ty
+                        .display_name()
+                        .map(|name| name.to_string())
+                        .unwrap_or_default();
+                    self.sink.push(diagnostics::infer::variant_through_value(
+                        &enum_name, &member, span,
+                    ));
+                    self.unify(expected_ty, &Type::Error, &span);
+                    return args.build_dot_access(Type::Error, DotAccessResolution::Unresolved);
+                }
+                let calls_method_that_shadows_field =
+                    self.is_callee_context() && self.method_shadows_struct_field(&args);
+                calls_method_that_shadows_field
+                    .then(|| self.as_instance_method(&args))
+                    .flatten()
+                    .or_else(|| self.as_struct_field(&args))
+                    .or_else(|| self.as_promoted_field(&args))
+                    .or_else(|| self.as_tuple_element(&args))
+                    .or_else(|| self.as_instance_method(&args))
+                    .or_else(|| self.as_static_method(&args))
+            }
+        };
 
         if let Some(expression) = resolved {
             if matches!(&expression, Expression::DotAccess { resolution, .. } if resolution.is_field_read())
@@ -237,6 +265,25 @@ impl InferCtx<'_> {
         args.build_dot_access(Type::Error, DotAccessResolution::Unresolved)
     }
 
+    fn dot_access_base(&self, args: &DotAccessResolutionArgs) -> DotAccessBase {
+        if args.deref_ty.as_import_namespace().is_some() {
+            DotAccessBase::Module
+        } else if self.is_type_level_receiver(args.expression) {
+            DotAccessBase::Type
+        } else {
+            DotAccessBase::Value
+        }
+    }
+
+    fn enum_has_variant(&self, args: &DotAccessResolutionArgs) -> bool {
+        let Type::Nominal { id, .. } = self.store.peel_alias(&args.deref_ty) else {
+            return false;
+        };
+        self.store
+            .variants_of(id.as_str())
+            .is_some_and(|variants| variants.iter().any(|v| v.name == args.member_name))
+    }
+
     fn normalize_receiver(&self, expression: Expression) -> Expression {
         let Expression::DotAccess {
             id,
@@ -305,13 +352,15 @@ impl InferCtx<'_> {
 
     pub(super) fn is_type_level_receiver(&self, expression: &Expression) -> bool {
         let store = self.store;
+        let names_a_type = |definition: &Definition| {
+            definition.is_type_definition()
+                || matches!(definition.body, DefinitionBody::Interface { .. })
+        };
         match expression {
             Expression::Identifier {
                 resolution: IdentifierResolution::Definition { name: qname, .. },
                 ..
-            } => store
-                .get_definition(qname)
-                .is_some_and(Definition::is_type_definition),
+            } => store.get_definition(qname).is_some_and(names_a_type),
             Expression::DotAccess {
                 expression: inner,
                 member,
@@ -322,9 +371,7 @@ impl InferCtx<'_> {
                     return false;
                 };
                 let qualified = Symbol::from_parts(package_id, member.as_str());
-                store
-                    .get_definition(&qualified)
-                    .is_some_and(Definition::is_type_definition)
+                store.get_definition(&qualified).is_some_and(names_a_type)
             }
             _ => false,
         }
@@ -672,17 +719,16 @@ impl InferCtx<'_> {
         let (package_ty, _) = self.instantiate(&package_ty);
         let (member_ty, instantiation) = self.instantiate(&member_type);
 
-        let coerced_to_unconstrained_value = !self.is_callee_context()
+        let expected = args.expected_ty.resolve_in(&self.env);
+        if !self.is_callee_context()
             && !self.is_dot_access_base()
-            && args.expected_ty.resolve_in(&self.env).is_variable();
+            && (expected.is_variable() || expected.is_unknown())
+        {
+            self.function_values_without_context.insert(*args.span);
+        }
 
         self.unify(&args.deref_ty, &package_ty, args.span);
         self.unify(args.expected_ty, &member_ty, args.span);
-
-        if coerced_to_unconstrained_value {
-            let display_name = format!("{}.{}", display_package, args.member_name);
-            self.register_function_value_obligations(&display_name, &member_ty, *args.span);
-        }
 
         Some(args.build_dot_access(
             member_ty,

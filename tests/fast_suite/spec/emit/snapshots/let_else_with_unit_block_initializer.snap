@@ -1,0 +1,21 @@
+---
+source: tests/fast_suite/spec/emit/control_flow.rs
+description: |
+  
+  fn f() -> int { 1 }
+  
+  fn test() {
+    let _ = { let _ = f(); } else { panic("x") }
+    let _ | _ = { let _ = f(); } else { panic("x") }
+  }
+---
+package main
+
+func f() int {
+	return 1
+}
+
+func test() {
+	f()
+	f()
+}

@@ -121,6 +121,7 @@ impl InferCtx<'_> {
                     folder.freeze_facts(&mut state.facts);
                     FreezeFolder::new(&state.env, store).freeze_items(inferred_items)
                 };
+                context.check_instantiation_bounds(&frozen_items);
                 context.finalize_value_uses(&frozen_items, file_id);
 
                 InferredFile {

@@ -29863,3 +29863,28 @@ fn main() {
             .all(|lint| lint.code_str() != Some("lint.unused_function"))
     );
 }
+
+#[test]
+fn unit_go_callback_result_go_function_type() {
+    assert_lint_snapshot!(
+        r#"
+import "go:expvar"
+
+fn main() {
+  let _ = expvar.Func(|| ())
+}
+"#
+    );
+}
+
+#[test]
+fn unit_go_callback_result_not_for_lisette_function_type() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: fn() -> Unknown = || ()
+  let _ = f()
+}
+"#
+    );
+}

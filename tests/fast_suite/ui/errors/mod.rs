@@ -13844,16 +13844,9 @@ fn main() {
 }
 "#;
     let result = infer(input);
-    assert_eq!(
-        result
-            .errors
-            .iter()
-            .filter(|d| d
-                .code_str()
-                .is_some_and(|c| c.contains("type_used_as_value")))
-            .count(),
-        1,
-        "clone on a type alias must raise exactly one type-in-value error, got: {:?}",
+    assert!(
+        has_code(&result, "arg_count_mismatch") && !has_code(&result, "type_used_as_value"),
+        "clone on a type alias takes the receiver as its argument, got: {:?}",
         result.errors
     );
 }
@@ -13870,7 +13863,7 @@ fn main() {
 "#;
     let result = infer(input);
     assert!(
-        has_code(&result, "type_used_as_value"),
+        has_code(&result, "arg_count_mismatch"),
         "is_empty on a type alias must be rejected, got: {:?}",
         result.errors
     );
@@ -13972,7 +13965,7 @@ fn main() {
     fs.add_file("main", "main.lis", source);
     let result = infer_package("main", fs);
     assert!(
-        has_code(&result, "type_used_as_value"),
+        has_code(&result, "arg_count_mismatch"),
         "an instance method called on a cross-package type name must be rejected, got: {:?}",
         result.errors
     );
@@ -17535,6 +17528,294 @@ interface Stream<T> {
   fn a_second() -> Stream<Slice<T>>
 }
 fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_impl_on_interface_rejected() {
+    let input = r#"
+interface Box<T> {
+  fn get() -> T
+}
+
+impl<T> Box<T> {
+  fn other(self) -> bool { true }
+}
+
+fn main() {}
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "impl_on_interface"),
+        "an `impl` block on an interface must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_impl_on_generic_interface_does_not_crash() {
+    let input = r#"
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl<T: Comparable> Box<T> {
+  fn equals(self, other: Box<T>) -> bool { self.value == other.value }
+}
+
+fn use_box(b: Box<int>) {}
+
+fn main() { use_box(Bar {}) }
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "impl_on_interface"),
+        "an `impl` block on a generic interface must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_impl_on_interface_does_not_join_method_set() {
+    let input = r#"
+interface Box { fn get() -> int }
+struct Bar {}
+impl Box {
+  fn twice(self) -> int { self.get() * 2 }
+}
+fn use_box(b: Box) {}
+fn main() { use_box(Bar {}) }
+"#;
+    let result = infer(input);
+    let mentions_twice = result
+        .errors
+        .iter()
+        .any(|d| format!("{d:?}").contains("twice"));
+    assert!(
+        has_code(&result, "impl_on_interface") && !mentions_twice,
+        "methods of an `impl` on an interface must not join the interface, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_bodyless_impl_method_rejected() {
+    let input = r#"
+struct Box { x: int }
+
+impl Box {
+  fn add(self, y: int) -> int
+}
+
+fn main() {
+  let _ = Box { x: 1 }.add(1)
+}
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "bodyless_impl_method"),
+        "a method without a body in an `impl` block must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_variadic_position_is_final_parameter_only() {
+    let input = r#"
+interface I { fn m(a: VarArgs<int>, b: int) }
+fn f(a: VarArgs<int>, b: int) {}
+fn g(h: fn(VarArgs<int>, int)) {}
+fn last(a: int, b: VarArgs<int>) -> int { a + b.length() }
+fn main() {
+  let _ = |a: VarArgs<int>, b: int| a
+  let _ = last(1, 2, 3)
+}
+"#;
+    let result = infer(input);
+    let not_last = result
+        .errors
+        .iter()
+        .filter(|d| d.code_str() == Some("infer.variadic_param_not_last"))
+        .count();
+    assert_eq!(
+        (not_last, result.errors.len()),
+        (4, 4),
+        "a `VarArgs` parameter that is not the final one must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_variant_through_value_rejected() {
+    for access in ["l.Leaf(2)", "l.Empty"] {
+        let input = format!(
+            r#"
+enum Tree {{ Leaf(int), Empty }}
+
+fn main() {{
+  let l = Tree.Empty
+  let _ = {access}
+}}
+"#
+        );
+        let result = infer(&input);
+        assert!(
+            has_code(&result, "variant_through_value"),
+            "`{access}` reaches a variant through a value, got: {:?}",
+            result.errors
+        );
+    }
+}
+
+#[test]
+fn infer_interface_method_value_takes_receiver() {
+    let input = r#"
+interface Shape {
+  fn area() -> int
+}
+
+fn main() {
+  let f = Shape.area
+  let _ = f()
+}
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "arg_count_mismatch"),
+        "an interface method value takes the interface as its first argument, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_interface_method_called_through_type_allowed() {
+    let input = r#"
+interface Shape {
+  fn area() -> int
+}
+
+struct Sq { s: int }
+impl Sq { fn area(self) -> int { self.s * self.s } }
+
+fn main() {
+  let s: Shape = Sq { s: 3 }
+  let f = Shape.area
+  let _ = f(s) + Shape.area(s)
+}
+"#;
+    let result = infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "`Shape.area(s)` passes the receiver, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_cross_package_method_called_through_type_allowed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub struct Rect { pub w: int, pub h: int }
+
+impl Rect {
+  pub fn new(w: int, h: int) -> Rect { Rect { w, h } }
+  pub fn area(self) -> int { self.w * self.h }
+}
+"#,
+    );
+    let source = r#"
+import "shapes"
+
+fn main() {
+  let r = shapes.Rect.new(2, 3)
+  let _ = shapes.Rect.area(r)
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_package("main", fs);
+    assert!(
+        result.errors.is_empty(),
+        "`shapes.Rect.area(r)` must be accepted, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_min_max_as_value_rejected() {
+    let input = r#"
+fn apply(f: fn(int, VarArgs<int>) -> int) -> int { f(1, 2) }
+fn main() {
+  let _ = apply(max)
+  let _ = apply(min)
+}
+"#;
+    let result = infer(input);
+    let count = result
+        .errors
+        .iter()
+        .filter(|d| d.code_str() == Some("infer.go_builtin_value"))
+        .count();
+    assert_eq!(count, 2, "{:?}", result.errors);
+}
+
+#[test]
+fn infer_spread_into_min_max_rejected() {
+    let input = r#"
+fn f(xs: Slice<int>) -> int { max(0, xs...) + min(0, xs...) }
+
+fn main() { let _ = f([1]) }
+"#;
+    let result = infer(input);
+    let count = result
+        .errors
+        .iter()
+        .filter(|d| d.code_str() == Some("infer.spread_into_go_builtin"))
+        .count();
+    assert_eq!(count, 2, "{:?}", result.errors);
+}
+
+#[test]
+fn infer_assignment_as_match_arm_value() {
+    let input = r#"
+fn test() {
+  let mut n = 0
+  let s: string = match n { _ => n = 2 }
+  let _ = s
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_assignment_as_map_entry_value() {
+    let input = r#"
+fn test(k: string) {
+  let mut m = Map.new()
+  m[k] = 1
+  m["a"] = match k {
+    "a" => m[k] = 2,
+    _ => m[k] = 3,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_call_of_block_ending_in_assignment() {
+    let input = r#"
+fn test() {
+  let mut n = 0
+  let bump = { n = 1 }
+  bump()
+  let _ = n
+}
 "#;
     assert_infer_error_snapshot!(input);
 }

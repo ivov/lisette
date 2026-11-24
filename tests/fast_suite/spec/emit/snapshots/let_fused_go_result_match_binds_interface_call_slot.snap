@@ -26,8 +26,8 @@ import (
 )
 
 func test(addr string) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil || lisette.IsNilInterface(conn) {
+	conn, e := net.Dial("tcp", addr)
+	if e != nil || lisette.IsNilInterface(conn) {
 		fmt.Println("cannot dial")
 		return
 	}

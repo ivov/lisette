@@ -5,9 +5,10 @@ description: |
   import "go:example.com/dyn"
   
   fn main() {
+    let none: Option<string> = None
     let _ = dyn.Bag {
       Decl: Some("decl"),
-      Data: None,
+      Data: none,
     }
   }
 ---
@@ -19,8 +20,9 @@ import (
 )
 
 func main() {
+	none := lisette.MakeOptionNone[string]()
 	_ = dyn.Bag{
 		Decl: lisette.MakeOptionSome("decl"),
-		Data: lisette.MakeOptionNone[any](),
+		Data: none,
 	}
 }

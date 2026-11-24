@@ -9,8 +9,8 @@ use syntax::EcoString;
 use syntax::ast::{EnumVariant, StructFieldDefinition};
 use syntax::ast::{Expression, StructKind};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
-    TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
+    Definition, DefinitionBody, EqualityIndex, File, GoMethodPolicy, Interface, Method, Methods,
+    Package, TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
 };
 use syntax::types;
 use syntax::types::{AliasPeeled, CompoundKind, SimpleKind, Symbol, Type};
@@ -38,6 +38,7 @@ pub struct Store {
     next_file_id: u32,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
+    go_method_policy: GoMethodPolicy,
 }
 
 impl Default for Store {
@@ -65,6 +66,7 @@ impl Store {
             next_file_id: 2, // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
             test_index: Default::default(),
+            go_method_policy: GoMethodPolicy::default(),
         }
     }
 
@@ -228,7 +230,22 @@ impl Store {
             next_file_id: self.next_file_id,
             equality_index: EqualityIndex::default(),
             test_index: TestIndex::default(),
+            go_method_policy: self.go_method_policy.clone(),
         }
+    }
+
+    pub fn go_method_policy(&self) -> &GoMethodPolicy {
+        &self.go_method_policy
+    }
+
+    pub(crate) fn compute_go_method_policy(&mut self) {
+        let policy = GoMethodPolicy::compute(
+            self.packages
+                .values()
+                .flat_map(|package| package.definitions.iter()),
+            |id| self.get_definition(id),
+        );
+        self.go_method_policy = policy;
     }
 
     pub fn get_definition(&self, qualified_name: &str) -> Option<&Definition> {

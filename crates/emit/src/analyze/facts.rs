@@ -4,7 +4,7 @@ use syntax::program::{
 };
 
 use ecow::EcoString;
-use syntax::ast::{BindingId, Expression, Pattern, RestPattern, Span};
+use syntax::ast::{BindingId, Expression, Span};
 use syntax::program::{
     AliasKind, Definition, DefinitionBody, EmitInput, ImportKey, Method, PackageId,
 };
@@ -245,6 +245,23 @@ impl<'a> EmitFacts<'a> {
         self.peel_alias(ty).is_result()
     }
 
+    pub(crate) fn peeled_option_or_result(&self, ty: &Type) -> Option<Type> {
+        let peeled = self.peel_alias(ty);
+        (peeled.is_option() || peeled.is_result()).then_some(peeled)
+    }
+
+    pub(crate) fn is_parameter_or_open(&self, ty: &Type) -> bool {
+        matches!(
+            self.peel_alias(ty).unwrap_forall(),
+            Type::Parameter(_)
+                | Type::Var { .. }
+                | Type::Uninferred
+                | Type::Ignored
+                | Type::Error
+                | Type::ReceiverPlaceholder
+        )
+    }
+
     pub(crate) fn simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
         types::simple_kind(ty, |id| self.definition(id))
     }
@@ -483,14 +500,6 @@ impl<'a> EmitFacts<'a> {
         Some(target)
     }
 
-    pub(crate) fn is_unused_binding(&self, pattern: &Pattern) -> bool {
-        self.input.bindings.is_unused_binding(pattern)
-    }
-
-    pub(crate) fn is_unused_rest_binding(&self, rest: &RestPattern) -> bool {
-        self.input.bindings.is_unused_rest_binding(rest)
-    }
-
     pub(crate) fn is_unused_import(&self, key: ImportKey) -> bool {
         self.input.unused_imports.is_unused_import(key)
     }
@@ -567,8 +576,8 @@ impl<'a> EmitFacts<'a> {
         &self.input.go_package_names
     }
 
-    pub(crate) fn has_global_exported_method_name(&self, method: &str) -> bool {
-        self.shared.globals.exported_method_names.contains(method)
+    pub(crate) fn method_needs_export(&self, method: &str) -> bool {
+        self.shared.globals.method_policy.exports_method(method)
     }
 
     pub(crate) fn method_uses_tagged_return(&self, method: &str) -> bool {

@@ -20,6 +20,5 @@ func getValue() lisette.Result[int, string] {
 }
 
 func test() {
-	lisette.MakeResultErr[int, string]("initial")
 	getValue()
 }

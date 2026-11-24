@@ -1,7 +1,6 @@
 # Failure signatures of the emit fuzz test, one `<witness> <signature>` per line.
 # The witness program is fuzz_emit/witnesses/<witness>.lis. Each run replays every witness and fails
 # when one passes or fails with another signature, so remove the line and the file when a fix closes it.
-check-panic-crates-semantics-src-checker-registration-values-97434d check_panic: crates/semantics/src/checker/registration/values.rs:: tuple struct definition must have a constructor type
 go-build-assignment-mismatch-variable-but-bufio-scanwords-e01b8f go_build: assignment mismatch:  variable but bufio.ScanWords returns  values
 go-build-assignment-mismatch-variable-but-cb-returns-01ca89 go_build: assignment mismatch:  variable but cb returns  values
 go-build-assignment-mismatch-variable-but-fmt-print-acdab4 go_build: assignment mismatch:  variable but fmt.Print returns  values
@@ -9,16 +8,3 @@ go-build-assignment-mismatch-variable-but-fmt-println-46a57a go_build: assignmen
 go-build-assignment-mismatch-variable-but-os-stat-aef306 go_build: assignment mismatch:  variable but os.Stat returns  values
 go-build-undefined-none-6ee401 go_build: undefined: None
 go-build-assignment-mismatch-variable-but-strconv-atoi-6c19fe go_build: assignment mismatch:  variable but strconv.Atoi returns  values
-emit-panic-crates-emit-src-ir-visit-rs-fa6545 emit_panic: crates/emit/src/ir/visit.rs:: identified read of `_` has no visible declaration
-emit-panic-crates-emit-src-statements-assignments-rs-4787b5 emit_panic: crates/emit/src/statements/assignments.rs:: assignment target has no local identity: a
-go-build-strings-imported-as-i-and-not-774385 go_build: "strings" imported as i and not used
-go-build-byte-s-value-of-type-byte-af5a0e go_build: []byte(s) (value of type []byte) is not used
-go-build-cannot-use-untyped-int-constant-as-70c49b go_build: cannot use  <<  (untyped int constant ) as int value in assignment to _ identifier (overflows)
-go-build-declared-and-not-used-opt-870cee go_build: declared and not used: opt
-go-build-declared-and-not-used-r-123670 go_build: declared and not used: r
-go-build-declared-and-not-used-result-babc8b go_build: declared and not used: result
-go-build-declared-and-not-used-x-ec4dcc go_build: declared and not used: x
-go-build-invalid-operation-f-mismatched-types-struct-e2964c go_build: invalid operation: f() !=  (mismatched types struct{} and untyped int)
-go-build-l-string-undefined-type-logger-has-5387f5 go_build: l.String undefined (type Logger has no field or method String)
-go-build-invalid-operation-value-mismatched-types-struct-e8d84c go_build: invalid operation: value !=  (mismatched types struct{} and untyped int)
-go-build-panic-wrong-no-value-used-as-24c110 go_build: panic("wrong") (no value) used as value

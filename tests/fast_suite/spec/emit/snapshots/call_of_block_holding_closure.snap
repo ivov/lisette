@@ -1,0 +1,23 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn compose(f: fn(int) -> int, g: fn(int) -> int) -> fn(int) -> int {
+    |x: int| f({
+    |x: int| g(f(g(x)))
+  }(g(x)))
+  }
+  
+  fn main() { }
+---
+package main
+
+func compose(f, g func(int) int) func(int) int {
+	return func(x int) int {
+		return f(func(x2 int) int {
+			return g(f(g(x2)))
+		}(g(x)))
+	}
+}
+
+func main() {}

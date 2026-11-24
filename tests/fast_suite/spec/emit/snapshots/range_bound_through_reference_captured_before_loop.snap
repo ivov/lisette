@@ -16,7 +16,7 @@ package main
 func count(xs *[]int) int {
 	iterations := 0
 	bound := len(*xs)
-	for i := 1; i < bound; i++ {
+	for _i := 1; _i < bound; _i++ {
 		iterations++
 		*xs = []int{}
 	}

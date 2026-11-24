@@ -353,10 +353,12 @@ impl TaskState {
         };
 
         let qualified_name = self.qualify_name(name);
-        let constructor_ty = store
+        let Some(constructor_ty) = store
             .get_definition(&qualified_name)
             .and_then(Definition::constructor_type)
-            .expect("tuple struct definition must have a constructor type");
+        else {
+            return;
+        };
 
         let scope = self.scopes.current_mut();
         scope.insert_value(qualified_name.to_string(), constructor_ty.clone());
@@ -380,8 +382,14 @@ impl TaskState {
             let (param_types, return_ty) = this.without_diagnostics(|this| {
                 let param_types: Vec<Type> = params
                     .iter()
-                    .map(|binding| match &binding.annotation {
-                        Some(a) => this.convert_variadic_to_type(store, a, span),
+                    .enumerate()
+                    .map(|(index, binding)| match &binding.annotation {
+                        Some(a) => this.convert_parameter_to_type(
+                            store,
+                            a,
+                            span,
+                            VarArgsPosition::of_parameter(index, params.len()),
+                        ),
                         None if !binding.ty.is_uninferred() => binding.ty.clone(),
                         None => this.new_type_var(),
                     })
