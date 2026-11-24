@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795542731170,
+  "lastUpdate": 1795545411134,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -59800,6 +59800,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/e44d47be80621982c275efb8b13493a5f1eba231"
         },
         "date": 1795542729356,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 166392,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43566,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 33553,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20322,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 19613,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14494,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9543,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7697,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2970,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1930,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11461,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b379c93b50405fd9af40a0537514a4e6c85480d1",
+          "message": "ci: speed up Go rejection tests (#1729)",
+          "timestamp": "2026-11-24T19:36:25+01:00",
+          "tree_id": "f62df7e16c80e6591e648867def666fc748fa83e",
+          "url": "https://github.com/ivov/lisette/commit/b379c93b50405fd9af40a0537514a4e6c85480d1"
+        },
+        "date": 1795545409154,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
