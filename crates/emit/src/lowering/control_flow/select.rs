@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::lowering::expressions::staging::SequenceStage;
-use crate::lowering::patterns::sites::{PatternSubject, TypedSubject};
+use crate::lowering::patterns::sites::TypedSubject;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::place::PlacePlan;
 use crate::lowering::plan::values::ValuePlan;
@@ -433,45 +433,16 @@ impl Planner<'_> {
         effective_pattern: &Pattern,
         ctx: &SelectReceiveContext,
     ) -> SelectArmKind {
-        self.with_binding_frame(|this| {
-            let mut body_statements: Vec<Statement> = Vec::new();
-            let receive_vars = if let Pattern::Identifier {
-                identifier,
-                binding,
-                ..
-            } = effective_pattern
-                && let Some(go_name) = this.facts.go_name_for_binding(effective_pattern)
-            {
-                vec![this.claim_block_binding(
-                    identifier,
-                    binding.as_slice(),
-                    &go_name,
-                    OuterBindings::MayShadow,
-                )]
-            } else if matches!(
-                effective_pattern,
-                Pattern::Identifier { .. } | Pattern::WildCard { .. }
-            ) {
-                Vec::new()
-            } else {
-                let receiver_var = this.fresh_local(Some("recv"));
-                body_statements.extend(this.lower_irrefutable_pattern_site(
-                    PatternSubject::for_identifier(receiver_var.clone()),
-                    effective_pattern,
-                    &ctx.element_ty,
-                ));
-                vec![receiver_var.clone()]
-            };
-            let block = this.lower_block_to_place(ctx.body, ctx.place);
-            body_statements.extend(block.statements);
-            SelectArmKind::Receive {
-                receive_vars,
-                channel: ctx.channel.clone(),
-                body: LoweredBlock {
-                    statements: body_statements,
-                },
-            }
-        })
+        debug_assert!(
+            matches!(effective_pattern, Pattern::WildCard { .. }),
+            "internal error: the checker allows only `_` or `Some(..)` in a select receive"
+        );
+        let body = self.with_binding_frame(|this| this.lower_block_to_place(ctx.body, ctx.place));
+        SelectArmKind::Receive {
+            receive_vars: Vec::new(),
+            channel: ctx.channel.clone(),
+            body,
+        }
     }
 
     fn lower_send_arm(

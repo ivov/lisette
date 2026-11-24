@@ -16,7 +16,7 @@ use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, declare,
-    discard,
+    define, discard,
 };
 use crate::target::ir::go_expression::Position;
 use crate::target::ir::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
@@ -510,29 +510,52 @@ impl Planner<'_> {
         if len == 0 || self.facts.go_zero_is_lisette_zero(elem) {
             return GoExpression::empty_composite(array_type);
         }
-        let zero = self.lisette_zero(elem);
-        let array_name = self.scope.helper_local("arr", self.names);
+        self.zero_filled(array_type, elem, None)
+    }
+
+    pub(in crate::lowering) fn zero_filled(
+        &mut self,
+        container_type: GoType,
+        element: &Type,
+        make_length: Option<GoExpression>,
+    ) -> GoExpression {
+        let zero = self.lisette_zero(element);
+        let hint = if make_length.is_some() { "s" } else { "arr" };
+        let container_name = self.scope.helper_local(hint, self.names);
         let index_name = self.scope.helper_local("i", self.names);
-        let arr = || GoExpression::identifier(array_name.clone());
+        let container = || GoExpression::identifier(container_name.clone());
         let index = || GoExpression::identifier(index_name.clone());
+        let initial = match make_length {
+            Some(length) => define(
+                container_name.clone(),
+                GoExpression::call(
+                    GoExpression::external_name("make".to_string()),
+                    vec![GoExpression::type_name(container_type.clone()), length],
+                ),
+            ),
+            None => declare(container_name.clone(), container_type.clone()),
+        };
         immediate_call(
-            array_type.clone(),
+            container_type,
             LoweredBlock {
                 statements: vec![
-                    declare(array_name.clone(), array_type),
+                    initial,
                     LoweredStatement::Loop(LoopPlan {
                         kind: LoopKind::Generated { label: None },
                         header: LoopHeader::Range {
                             key: Some(index_name.clone()),
                             value: None,
-                            iterable: arr(),
+                            iterable: container(),
                         },
                         body: LoweredBlock {
-                            statements: vec![assign(GoExpression::index(arr(), index()), zero)],
+                            statements: vec![assign(
+                                GoExpression::index(container(), index()),
+                                zero,
+                            )],
                         },
                     })
                     .into(),
-                    plain_return(arr()),
+                    plain_return(container()),
                 ],
             },
             FunctionLiteralLayout::MultiLine,

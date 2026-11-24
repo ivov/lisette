@@ -5,7 +5,6 @@ use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::lowering::expressions::staging::is_unmutated_identifier;
 use crate::lowering::expressions::values::with_source_positions;
 use crate::output::finish::function_literals::function_literal;
-use crate::output::finish::function_literals::immediate_call;
 use crate::output::render::expressions::rendered;
 use crate::target::types::go_type::ChannelDirection;
 use syntax::types::SimpleKind;
@@ -17,15 +16,11 @@ use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_returns::multi_value_return;
 use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin, ResolvedCallee};
-use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::planner::written_span;
 use crate::target::ir::bodies::discard;
-use crate::target::ir::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement,
-    assign, define,
-};
+use crate::target::ir::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
 use crate::target::ir::go_expression::{
     BinaryOp, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
@@ -204,43 +199,7 @@ impl<'a> Planner<'a> {
                 vec![GoExpression::type_name(GoType::slice_of(&element)), length],
             )
         } else {
-            let zero = self.lisette_zero(&element_ty);
-            let slice_type = GoType::slice_of(&element);
-            let slice_name = self.scope.helper_local("s", self.names);
-            let index_name = self.scope.helper_local("i", self.names);
-            let slice = || GoExpression::identifier(slice_name.clone());
-            let index = || GoExpression::identifier(index_name.clone());
-            immediate_call(
-                slice_type.clone(),
-                LoweredBlock {
-                    statements: vec![
-                        define(
-                            slice_name.clone(),
-                            GoExpression::call(
-                                GoExpression::external_name("make".to_string()),
-                                vec![GoExpression::type_name(slice_type), length],
-                            ),
-                        ),
-                        LoweredStatement::Loop(LoopPlan {
-                            kind: LoopKind::Generated { label: None },
-                            header: LoopHeader::Range {
-                                key: Some(index_name.clone()),
-                                value: None,
-                                iterable: slice(),
-                            },
-                            body: LoweredBlock {
-                                statements: vec![assign(
-                                    GoExpression::index(slice(), index()),
-                                    zero,
-                                )],
-                            },
-                        })
-                        .into(),
-                        plain_return(slice()),
-                    ],
-                },
-                FunctionLiteralLayout::MultiLine,
-            )
+            self.zero_filled(GoType::slice_of(&element), &element_ty, Some(length))
         };
         ValuePlan::computed(setup, value)
     }
