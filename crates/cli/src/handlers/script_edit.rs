@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use syntax::program::strip_go_prefix;
 
 use super::script_table::ScriptTable;
 use crate::cli_error;
@@ -80,7 +81,7 @@ pub(super) fn third_party_imports(source: &str) -> Vec<String> {
     imports::scan_imports(source, 0)
         .into_iter()
         .filter_map(|import| {
-            let package = import.name.strip_prefix("go:")?;
+            let package = strip_go_prefix(&import.name)?;
             (deps::is_third_party(package) && deps::is_valid_package_path(package))
                 .then(|| package.to_string())
         })

@@ -25,12 +25,12 @@ use crate::lowering::calls::call_plan::{
 };
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::prelude::prelude_constructor;
-use crate::target::names::go_name;
 use coercion_plan::CoercionPlan;
 use layout::{FunctionLayout, ValueLayout};
 use syntax::ast::Expression;
 use syntax::program::{
     CallOperation, CheckedCallee, Definition, GoHint, Method, NativeTypeKind, SlotOrigin,
+    is_go_import,
 };
 use syntax::types::Type;
 
@@ -126,7 +126,7 @@ impl Planner<'_> {
             let abi = requirement_go_return_abi(&self.facts, &requirement, declared_return);
             return abi.is_lowered().then_some(abi);
         }
-        let id = signature.id.filter(|id| go_name::is_go_import(id))?;
+        let id = signature.id.filter(|id| is_go_import(id))?;
         if signature
             .declaration
             .is_some_and(CallableDeclaration::is_type_definition)

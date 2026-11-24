@@ -11,7 +11,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use rayon::prelude::*;
 use syntax::ast::{Annotation, Expression, LetMode, Span, UnaryOperator};
-use syntax::program::{DotAccessResolution, ReceiverCoercion};
+use syntax::program::{DotAccessResolution, ReceiverCoercion, strip_go_prefix};
 use syntax::types::Type;
 
 use _harness::go::{
@@ -355,7 +355,7 @@ fn call_rewrite(callee: &Expression, arguments: &[&str], source: &str) -> Option
             {
                 return None;
             }
-            let owner = match owner_id.strip_prefix("go:") {
+            let owner = match strip_go_prefix(owner_id) {
                 Some(path) => path.rsplit('/').next()?.to_string(),
                 None => owner_id.rsplit('.').next()?.to_string(),
             };

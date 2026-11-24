@@ -8,7 +8,7 @@ use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
 use crate::target::names::packages::PackageUse;
 use syntax::ast::IdentifierResolution;
-use syntax::program::{self, Definition};
+use syntax::program::{self, Definition, PRELUDE_PACKAGE_ID, is_prelude_symbol};
 use syntax::types::{Type, unqualified_name};
 
 impl Planner<'_> {
@@ -33,7 +33,7 @@ impl Planner<'_> {
             }
             return expression;
         }
-        if package == go_name::PRELUDE_PACKAGE {
+        if package == PRELUDE_PACKAGE_ID {
             return GoExpression::external_name(name.to_string());
         }
         let definition = self.facts.definition(symbol);
@@ -115,7 +115,7 @@ impl Planner<'_> {
         package: &str,
         go_name: String,
     ) -> GoExpression {
-        if package == go_name::PRELUDE_PACKAGE {
+        if package == PRELUDE_PACKAGE_ID {
             return GoExpression::qualified(
                 PackageUse::generated(go_name::GeneratedPackage::Prelude),
                 go_name,
@@ -141,8 +141,8 @@ impl Planner<'_> {
     ) -> GoExpression {
         let type_name = unqualified_name(type_id);
         match self.facts.package_for_qualified_name(type_id) {
-            Some(go_name::PRELUDE_PACKAGE) => self.package_member_reference(
-                go_name::PRELUDE_PACKAGE,
+            Some(PRELUDE_PACKAGE_ID) => self.package_member_reference(
+                PRELUDE_PACKAGE_ID,
                 format!("{}{}", type_name, go_name::snake_to_camel(method)),
             ),
             Some(package) if self.facts.is_foreign_package(package) => self
@@ -164,8 +164,8 @@ impl Planner<'_> {
         let enum_name = unqualified_name(enum_id);
         let variant_name = unqualified_name(identifier);
         let tag_constant = go_name::enum_tag_constant(enum_name, variant_name);
-        let enum_package = if go_name::is_prelude_id(enum_id) {
-            go_name::PRELUDE_PACKAGE
+        let enum_package = if is_prelude_symbol(enum_id) {
+            PRELUDE_PACKAGE_ID
         } else {
             self.facts
                 .package_for_qualified_name(enum_id)

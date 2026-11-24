@@ -18,18 +18,17 @@ use crate::target::ir::go_expression::Position;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
-use crate::target::names::go_name::GO_IMPORT_PREFIX;
 use crate::target::names::receiver::fresh_receiver_name;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
 use ecow::EcoString;
 use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, FunctionDefinitionView};
-use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, CheckedMethod, ConformanceWitness, InterfaceConversion};
 use syntax::program::{
     CheckedCallee, DotAccessResolution, InterfaceRequirement, interface_requirements,
 };
+use syntax::program::{SlotOrigin, is_go_import, is_prelude_symbol, strip_go_prefix};
 use syntax::types::{Type, unqualified_name};
 #[derive(Debug, Clone)]
 pub(in crate::lowering) struct AdapterPlan {
@@ -146,7 +145,7 @@ impl Planner<'_> {
     ) -> Option<InterfaceRequirement> {
         self.bound_requirement(expression)
             .map(|(_, requirement)| requirement)
-            .filter(|requirement| go_name::is_go_import(&requirement.declaring_interface))
+            .filter(|requirement| is_go_import(&requirement.declaring_interface))
     }
 
     pub(in crate::lowering) fn bound_dispatch_layout(
@@ -171,7 +170,7 @@ impl Planner<'_> {
         go: bool,
     ) -> Option<FunctionLayout> {
         let function = requirement.ty.as_function_type()?;
-        let declared = if go && !go_name::is_go_import(&requirement.declaring_interface) {
+        let declared = if go && !is_go_import(&requirement.declaring_interface) {
             function
         } else {
             requirement.method.ty.as_function_type()?
@@ -240,7 +239,7 @@ impl Planner<'_> {
             let target = match witness {
                 Some(_) => self.requirement_layout(
                     &requirement,
-                    go_name::is_go_import(&requirement.declaring_interface),
+                    is_go_import(&requirement.declaring_interface),
                 )?,
                 None => self.requirement_value_layout(&selected)?,
             };
@@ -459,8 +458,8 @@ impl Planner<'_> {
                     .map(|(owner, _)| owner)
             })
             .or_else(|| concrete_ty.get_qualified_id())?;
-        let source_go_method = go_name::is_go_import(source_owner)
-            .then(|| format!("{source_owner}.{implementation_name}"));
+        let source_go_method =
+            is_go_import(source_owner).then(|| format!("{source_owner}.{implementation_name}"));
         let source_return = source_requirement
             .and_then(|source| source.method.ty.get_function_ret())
             .unwrap_or(&function.return_type);
@@ -498,7 +497,7 @@ impl Planner<'_> {
         };
 
         let interface_return = &requirement.method.ty.as_function_type()?.return_type;
-        let go_method = go_name::is_go_import(&requirement.declaring_interface).then(|| {
+        let go_method = is_go_import(&requirement.declaring_interface).then(|| {
             requirement
                 .declaring_interface
                 .with_segment(&requirement.method.source_name)
@@ -777,7 +776,7 @@ pub(in crate::lowering) fn bound_needs_dispatch(facts: &EmitFacts<'_>, bound: &T
     interface_requirements(bound, |id| facts.definition(id))
         .iter()
         .any(|requirement| {
-            !go_name::is_go_import(&requirement.declaring_interface)
+            !is_go_import(&requirement.declaring_interface)
                 && matches!(
                     requirement_return_abi(facts, requirement),
                     CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
@@ -819,7 +818,7 @@ fn requirement_return_abi(
 }
 
 fn requirement_uses_tagged_twin(facts: &EmitFacts<'_>, requirement: &InterfaceRequirement) -> bool {
-    !go_name::is_go_import(&requirement.declaring_interface)
+    !is_go_import(&requirement.declaring_interface)
         && facts.method_uses_tagged_return(&requirement.name)
 }
 
@@ -828,8 +827,8 @@ pub(in crate::lowering) fn has_tagged_twin(
     owner: &str,
     member: &str,
 ) -> bool {
-    !go_name::is_go_import(owner)
-        && !go_name::is_prelude_id(owner)
+    !is_go_import(owner)
+        && !is_prelude_symbol(owner)
         && facts.method_uses_tagged_return(member)
         && facts.emits_go_method(owner, member)
 }
@@ -866,7 +865,7 @@ fn adapter_source_go_name(
             source_owner,
             &checked.selected_name,
             checked.is_exported,
-            !source_owner.is_some_and(go_name::is_go_import)
+            !source_owner.is_some_and(is_go_import)
                 && requirement_uses_tagged_twin(facts, requirement),
         ),
     }
@@ -905,10 +904,7 @@ impl AdapterPlan {
             .rsplit('.')
             .next()
             .unwrap_or(self.concrete_id.as_str());
-        let go_path = self
-            .interface_id
-            .strip_prefix(GO_IMPORT_PREFIX)
-            .unwrap_or(self.interface_id.as_str());
+        let go_path = strip_go_prefix(&self.interface_id).unwrap_or(self.interface_id.as_str());
         let iface_name = unqualified_name(go_path);
         format!(
             "{}{}_{}_{}",

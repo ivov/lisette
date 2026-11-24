@@ -12,9 +12,8 @@ use crate::target::ir::bodies::{
 };
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
-use crate::target::names::go_name;
 use syntax::ast::{BinaryOperator, Expression, Literal};
-use syntax::program::SlotOrigin;
+use syntax::program::{SlotOrigin, strip_prelude_prefix};
 use syntax::types::{SimpleKind, Type};
 
 struct DefaultedCall<'a> {
@@ -135,9 +134,7 @@ impl<'p> Planner<'p> {
             .function_value()?
             .definition
             .as_deref()?;
-        let selected = definition
-            .strip_prefix(go_name::PRELUDE_PREFIX)?
-            .split_once('.')?;
+        let selected = strip_prelude_prefix(definition)?.split_once('.')?;
         (selected == (owner, method)).then_some((receiver, args.as_slice()))
     }
 

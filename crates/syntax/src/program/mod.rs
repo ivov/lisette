@@ -20,7 +20,10 @@ pub use file::{
     File, FileImport, SourceFileKind, go_filename, go_import_default_name, is_test_file,
     unaliased_binding_name,
 };
-pub use package::{Package, PackageId, UninferredExports, is_internal_package_id};
+pub use package::{
+    GO_IMPORT_PREFIX, PRELUDE_PACKAGE_ID, PRELUDE_PREFIX, Package, PackageId, UninferredExports,
+    is_go_import, is_internal_package_id, is_prelude_symbol, strip_go_prefix, strip_prelude_prefix,
+};
 pub use resolution::{
     ChannelOperation, DotAccessResolution, NativeTypeKind, ReceiverCoercion, channel_operation,
     prelude_constructor, resolved_definition, resolved_instantiation,

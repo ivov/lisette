@@ -8,7 +8,7 @@ use passes::Analysis;
 use semantics::facts::{BindingFact, UsageIndex};
 use syntax::FileParseStatus::Failed;
 use syntax::ast::BindingId;
-use syntax::program::{Definition, File};
+use syntax::program::{Definition, File, PRELUDE_PACKAGE_ID, is_go_import};
 use syntax::types::Symbol;
 
 use crate::analysis::offset_in_span;
@@ -99,7 +99,7 @@ impl AnalysisSnapshot {
                     Ok(uri) => uri,
                     Err(_) => continue,
                 }
-            } else if file.package_id.starts_with("go:") || file.package_id == "prelude" {
+            } else if is_go_import(&file.package_id) || file.package_id == PRELUDE_PACKAGE_ID {
                 // Embedded typedef with no recorded on-disk path; nothing to navigate to.
                 continue;
             } else {

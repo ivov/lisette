@@ -3,12 +3,12 @@ use crate::checker::EnvResolve;
 use rustc_hash::FxHashSet;
 use syntax::ast::{CallTypeArguments, Expression, IdentifierResolution, StructFields};
 use syntax::program::{
-    CallOperation, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ValueKind,
+    CallOperation, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, PRELUDE_PREFIX,
+    ValueKind, is_go_import,
 };
 use syntax::program::{resolved_definition, resolved_instantiation};
 use syntax::types::{
-    FunctionParameter, GO_IMPORT_PREFIX, RangeKind, SubstitutionMap, Symbol, Type,
-    peel_to_range_type,
+    FunctionParameter, RangeKind, SubstitutionMap, Symbol, Type, peel_to_range_type,
 };
 
 use crate::checker::infer::InferCtx;
@@ -182,8 +182,7 @@ impl InferCtx<'_> {
                 ..
             }
         );
-        let declared_by_go = resolved_definition(callee)
-            .is_some_and(|definition| definition.starts_with(GO_IMPORT_PREFIX));
+        let declared_by_go = resolved_definition(callee).is_some_and(is_go_import);
         let selected_by_access =
             || (!is_instance_method_access(callee)).then_some(CallOperation::Function);
         let operation = match call_kind {
@@ -257,9 +256,11 @@ impl InferCtx<'_> {
                             AliasKind::Opaque(_) => return None,
                         };
                         let underlying_key: Option<String> = match underlying {
-                            Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
+                            Type::Simple(kind) => {
+                                Some(format!("{PRELUDE_PREFIX}{}", kind.leaf_name()))
+                            }
                             Type::Compound { kind, .. } => {
-                                Some(format!("prelude.{}", kind.leaf_name()))
+                                Some(format!("{PRELUDE_PREFIX}{}", kind.leaf_name()))
                             }
                             _ => None,
                         };

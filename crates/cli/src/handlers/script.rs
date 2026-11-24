@@ -7,7 +7,6 @@ use crate::cli_error;
 use crate::go_cli;
 use crate::output;
 use diagnostics::render::{self, Filter};
-use emit::PRELUDE_IMPORT_PATH;
 use lisette::fs::relative_to_cwd;
 use lisette::pipeline::{
     CompileConfig, CompileEntry, CompileInput, CompileMode, CompileResult, CompileScope, compile,
@@ -15,6 +14,7 @@ use lisette::pipeline::{
 use semantics::loader::MemoryLoader;
 use std::env;
 use std::path;
+use stdlib::PRELUDE_GO_MODULE;
 
 pub(super) const GO_MODULE: &str = "lis-script";
 
@@ -138,7 +138,7 @@ pub(super) fn emit(
     }
 
     let go_source = go_file.to_go();
-    let needs_module = !locator.deps().is_empty() || go_source.contains(PRELUDE_IMPORT_PATH);
+    let needs_module = !locator.deps().is_empty() || go_source.contains(PRELUDE_GO_MODULE);
 
     if let Err(e) = fs::write(&destination, go_source) {
         cli_error!(

@@ -7,7 +7,9 @@ use std::sync::Arc;
 use ecow::EcoString;
 
 use crate::ast::{Generic, VariantFields};
-use crate::program::{Definition, DefinitionBody};
+use crate::program::{
+    Definition, DefinitionBody, PRELUDE_PACKAGE_ID, is_go_import, strip_go_prefix,
+};
 use fmt::Formatter;
 use std::fmt;
 use std::fmt::Display;
@@ -151,8 +153,6 @@ pub fn unqualified_name(id: &str) -> &str {
     id.rsplit('.').next().unwrap_or(id)
 }
 
-pub const GO_IMPORT_PREFIX: &str = "go:";
-
 pub const SELF_TYPE_NAME: &str = "Self";
 
 /// Resolve the package of a qualified ID. For `go:` IDs containing `/`,
@@ -164,7 +164,7 @@ pub fn package_for_qualified_name(
     id: &str,
     mut contains_package: impl FnMut(&str) -> bool,
 ) -> Option<&str> {
-    if !id.starts_with(GO_IMPORT_PREFIX) || !id.contains('/') {
+    if !is_go_import(id) || !id.contains('/') {
         return id.split_once('.').map(|(m, _)| m);
     }
 
@@ -1571,7 +1571,7 @@ impl Type {
 
     pub fn option_of(inner: Type) -> Type {
         Type::Nominal {
-            id: Symbol::from_parts("prelude", "Option"),
+            id: Symbol::from_parts(PRELUDE_PACKAGE_ID, "Option"),
             params: vec![inner],
             writable: false,
         }
@@ -1840,7 +1840,7 @@ impl Type {
         let Type::ImportNamespace(package_id) = self else {
             return None;
         };
-        let path = package_id.strip_prefix("go:").unwrap_or(package_id);
+        let path = strip_go_prefix(package_id).unwrap_or(package_id);
         path.rsplit('/').next()
     }
 
@@ -1899,8 +1899,10 @@ impl Type {
         }
         match current {
             Type::Nominal { id, .. } => Some(id.clone()),
-            Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-            Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
+            Type::Simple(kind) => Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name())),
+            Type::Compound { kind, .. } => {
+                Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()))
+            }
             _ => None,
         }
     }
@@ -2171,7 +2173,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     matches!(peel_alias(ty, &lookup), Type::Nominal { id, .. }
-    if !id.starts_with(GO_IMPORT_PREFIX)
+    if !is_go_import(&id)
         && matches!(
             lookup(id.as_str()).map(|definition| &definition.body),
             Some(DefinitionBody::Enum { .. })
@@ -2754,7 +2756,7 @@ mod tests {
     #[test]
     fn error_type_equals_itself() {
         let nominal_over_error = || Type::Nominal {
-            id: Symbol::from_parts("prelude", "Option"),
+            id: Symbol::from_parts(PRELUDE_PACKAGE_ID, "Option"),
             params: vec![Type::Error],
             writable: false,
         };

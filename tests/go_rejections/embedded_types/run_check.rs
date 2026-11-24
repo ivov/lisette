@@ -8,6 +8,7 @@ use passes::analyze;
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_PACKAGE_ID;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
+use stdlib::PRELUDE_GO_MODULE;
 
 use super::PrintedQuestion;
 use super::go_answerer::{GoAnswer, GoAnswers};
@@ -17,8 +18,6 @@ use super::render_lis::render_lis_run;
 use super::scenario::{
     EdgeKind, MemberType, NodeId, NodeKind, Question, Receiver, Scenario, Visibility,
 };
-
-const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
 #[derive(Debug)]
 pub enum RunOutcome {
@@ -264,7 +263,7 @@ fn write_go_mod(dir: &Path, module: &str, with_prelude: bool) -> Result<(), Stri
             .canonicalize()
             .map_err(|e| format!("canonicalize prelude: {e}"))?;
         content.push_str(&format!(
-            "\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
+            "\nrequire {PRELUDE_GO_MODULE} v0.0.0\n\nreplace {PRELUDE_GO_MODULE} => {}\n",
             prelude.display()
         ));
     }

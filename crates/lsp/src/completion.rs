@@ -3,7 +3,7 @@ use semantics::checker::promotion::{self, MemberKind};
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::attributes::{AttributeInfo, AttributeTarget, attributes_for};
 use syntax::lex::{Lexer, Token, TokenKind as Tk};
-use syntax::program::DefinitionBody;
+use syntax::program::{DefinitionBody, PRELUDE_PACKAGE_ID, PRELUDE_PREFIX};
 use syntax::types::Type;
 
 use crate::definition::get_root_expression;
@@ -141,7 +141,7 @@ pub(crate) fn detect_dot_context(
     }
 
     if let Expression::Identifier { value, .. } = expression.as_ref() {
-        for prefix in [file.package_id.as_str(), "prelude"] {
+        for prefix in [file.package_id.as_str(), PRELUDE_PACKAGE_ID] {
             let qualified = format!("{prefix}.{value}");
             if let Some(definition) = snapshot.definitions().get(qualified.as_str())
                 && definition.is_type_definition()
@@ -446,8 +446,8 @@ fn alias_target(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<String> {
     let target = types::peel_alias(&def.ty, |id| snapshot.definitions().get(id));
     let target = match target {
         Type::Nominal { id, .. } => id.to_string(),
-        Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()),
-        Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()),
+        Type::Simple(kind) => format!("{PRELUDE_PREFIX}{}", kind.leaf_name()),
+        Type::Compound { kind, .. } => format!("{PRELUDE_PREFIX}{}", kind.leaf_name()),
         _ => return None,
     };
     (target != type_id).then_some(target)

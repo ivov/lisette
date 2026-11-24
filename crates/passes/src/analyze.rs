@@ -6,7 +6,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use diagnostics::LisetteDiagnostic;
 use syntax::FileParseStatus;
 use syntax::ast::BindingId;
-use syntax::program::{EmitInput, UnusedImports, is_internal_package_id};
+use syntax::program::{EmitInput, UnusedImports, is_go_import, is_internal_package_id};
 
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, save_package_cache};
@@ -18,7 +18,6 @@ use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 use crate::passes;
 use semantics::cache::CompiledPackage;
 use std::mem;
-use syntax::types;
 
 pub struct Analysis {
     pub emit_input: EmitInput,
@@ -231,7 +230,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     let go_package_ids: FxHashSet<String> = store
         .packages()
         .keys()
-        .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
+        .filter(|id| is_go_import(id))
         .cloned()
         .collect();
 

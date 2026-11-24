@@ -6,8 +6,8 @@ use syntax::ast::{
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
 use syntax::program::{
-    BindingMutation, Definition, DefinitionBody, EqualityIndex, File, NativeTypeKind, Package,
-    TestFunction, ValueKind, Visibility,
+    BindingMutation, Definition, DefinitionBody, EqualityIndex, File, NativeTypeKind,
+    PRELUDE_PACKAGE_ID, Package, TestFunction, ValueKind, Visibility,
 };
 use syntax::types::{
     CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, TypeVarId, substitute,
@@ -306,7 +306,7 @@ fn native_type_classification_uses_the_canonical_type_variant() {
         writable: false,
     };
     let noncanonical_prelude_name = Type::Nominal {
-        id: Symbol::from_parts("prelude", "Slice"),
+        id: Symbol::from_parts(PRELUDE_PACKAGE_ID, "Slice"),
         params: vec![Type::int()],
         writable: false,
     };

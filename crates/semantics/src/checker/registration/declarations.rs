@@ -1,5 +1,5 @@
 use super::*;
-use syntax::program::ValueKind;
+use syntax::program::{PRELUDE_PACKAGE_ID, ValueKind};
 use syntax::types::CompoundKind;
 use syntax::types::SELF_TYPE_NAME;
 use syntax::types::SimpleKind;
@@ -131,7 +131,7 @@ impl TaskState {
             // Canonical form for prelude-registered native types uses the
             // dedicated Simple/Compound variants; everything else remains a
             // nominal Constructor.
-            let canonical_ty = if package_id == "prelude" {
+            let canonical_ty = if package_id == PRELUDE_PACKAGE_ID {
                 if let Some(simple) = SimpleKind::from_name(name) {
                     debug_assert!(args.is_empty(), "simple kinds have no generics");
                     Type::Simple(simple)

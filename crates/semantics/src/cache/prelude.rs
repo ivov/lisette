@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 use super::disk;
 use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_BUILD_HASH, PRELUDE_HASH};
-use crate::prelude::{PRELUDE_FILE_ID, PRELUDE_PACKAGE_ID};
+use crate::prelude::PRELUDE_FILE_ID;
 use crate::store::Store;
 use std::fs;
+use syntax::program::PRELUDE_PACKAGE_ID;
 
 #[derive(Serialize, Deserialize)]
 pub struct PreludeCache {

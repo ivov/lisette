@@ -1,10 +1,11 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::names::go_name;
+use syntax::program::is_go_import;
 use syntax::types::Type;
 
 impl EmitFacts<'_> {
     pub(crate) fn package_member_go_name(&self, package: &str, member: &str) -> String {
-        if go_name::is_go_import(package) {
+        if is_go_import(package) {
             member.to_string()
         } else if self.is_const(&format!("{package}.{member}")) {
             go_name::screaming_snake_to_camel(member)

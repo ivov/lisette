@@ -1,5 +1,6 @@
 use crate::collections::SharedMap;
 use crate::constant;
+use crate::program::PRELUDE_PACKAGE_ID;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use ecow::EcoString;
@@ -1045,9 +1046,11 @@ where
 fn method_lookup_key(ty: &Type) -> Option<Symbol> {
     match ty {
         Type::Nominal { id, .. } => Some(id.clone()),
-        Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-        Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-        Type::Array { .. } => Some(Symbol::from_parts("prelude", "Array")),
+        Type::Compound { kind, .. } => {
+            Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()))
+        }
+        Type::Simple(kind) => Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name())),
+        Type::Array { .. } => Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, "Array")),
         _ => None,
     }
 }

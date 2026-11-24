@@ -9,7 +9,7 @@ use crate::target::names::go_name::GeneratedPackage;
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, IdentifierResolution};
-use syntax::program::CallOperation;
+use syntax::program::{CallOperation, strip_prelude_prefix};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -147,7 +147,7 @@ impl Planner<'_> {
 }
 
 fn resolve(name: &str) -> GoExpression {
-    if let Some(rest) = name.strip_prefix(go_name::PRELUDE_PREFIX) {
+    if let Some(rest) = strip_prelude_prefix(name) {
         let go_name: String = rest.split('.').map(go_name::snake_to_camel).collect();
         GoExpression::qualified(PackageUse::generated(GeneratedPackage::Prelude), go_name)
     } else {

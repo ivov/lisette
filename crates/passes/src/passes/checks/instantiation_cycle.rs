@@ -18,8 +18,8 @@ use ecow::EcoString;
 use rustc_hash::{FxHashMap, FxHashSet};
 use semantics::store::Store;
 use syntax::ast::{Binding, EnumVariant, Expression, Generic, Pattern, Span};
-use syntax::program::{AliasKind, DefinitionBody};
-use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
+use syntax::program::{AliasKind, DefinitionBody, is_go_import};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 pub(crate) fn run(store: &Store, sink: &LocalSink) {
     let mut graph = Graph::new(store);
@@ -97,14 +97,13 @@ impl<'a> Graph<'a> {
 
     fn type_vertex(&mut self, id: &Symbol, position: usize) -> Option<usize> {
         let generics = self.store.get_definition(id)?.body.generics()?;
-        (!id.as_str().starts_with(GO_IMPORT_PREFIX) && position < generics.len())
-            .then(|| self.vertex(id.as_eco(), position))
+        (!is_go_import(id) && position < generics.len()).then(|| self.vertex(id.as_eco(), position))
     }
 
     fn add_type_definitions(&mut self) {
         let store = self.store;
         let packages = store.packages().values();
-        for package in packages.filter(|package| !package.id.starts_with(GO_IMPORT_PREFIX)) {
+        for package in packages.filter(|package| !is_go_import(&package.id)) {
             for (id, definition) in &package.definitions {
                 let generics = definition.body.generics().unwrap_or_default();
                 if generics.is_empty() || embeds_itself(store, id) {

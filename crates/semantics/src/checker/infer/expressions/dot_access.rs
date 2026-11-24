@@ -6,8 +6,8 @@ use syntax::ast::{
 };
 use syntax::go_names;
 use syntax::program::{
-    Definition, DefinitionBody, DotAccessResolution, FieldKey, NativeTypeKind,
-    go_import_default_name,
+    Definition, DefinitionBody, DotAccessResolution, FieldKey, NativeTypeKind, PRELUDE_PACKAGE_ID,
+    go_import_default_name, is_go_import,
 };
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
@@ -340,8 +340,8 @@ impl InferCtx<'_> {
         let store = self.store;
         let type_package = store.package_for_qualified_name(type_id).unwrap_or(type_id);
         type_package != self.cursor.package_id()
-            && type_package != "prelude"
-            && !type_package.starts_with("go:")
+            && type_package != PRELUDE_PACKAGE_ID
+            && !is_go_import(type_package)
     }
 
     /// As the base of a member access, a type names itself, not its constructor.

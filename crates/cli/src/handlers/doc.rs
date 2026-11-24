@@ -12,7 +12,7 @@ use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructField
 use syntax::attributes::unsupported_go_symbol;
 use syntax::display::annotation_to_string;
 use syntax::doc::{dedent, drop_callout_lines, split_example};
-use syntax::program::DefinitionBody;
+use syntax::program::{DefinitionBody, GO_IMPORT_PREFIX, is_go_import, strip_go_prefix};
 
 #[derive(Debug, Clone, Copy)]
 enum TypeKind {
@@ -1403,7 +1403,7 @@ fn print_go_packages_list() {
 }
 
 fn doc_go_package(query: &str) -> i32 {
-    let without_prefix = query.strip_prefix("go:").unwrap_or(query);
+    let without_prefix = strip_go_prefix(query).unwrap_or(query);
 
     if without_prefix.is_empty() {
         print_go_packages_list();
@@ -1677,7 +1677,7 @@ fn collect_go_matches(target: Target, query_lower: &str) -> Vec<SearchMatch> {
 
     for package in get_go_stdlib_packages(target) {
         if let Some(ref cache) = go_cache {
-            let package_id = format!("go:{}", package);
+            let package_id = format!("{GO_IMPORT_PREFIX}{package}");
             if let Some(package_cache) = cache.decode(&package_id)
                 && !has_go_package_matches(&package_cache, query_lower)
             {
@@ -1831,7 +1831,7 @@ pub fn doc(query: Option<String>) -> i32 {
             print_all(&index);
             0
         }
-        Some(q) if q.starts_with("go:") => doc_go_package(&q),
+        Some(q) if is_go_import(&q) => doc_go_package(&q),
         Some(q) if q.eq_ignore_ascii_case("prelude") => {
             let index = build_prelude_index();
             print_prelude(&index);

@@ -6,7 +6,7 @@ use crate::target::names::generics::generic_bounds;
 use crate::target::names::go_name;
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, Generic, ParentInterface};
-use syntax::program::Definition;
+use syntax::program::{Definition, PRELUDE_PACKAGE_ID};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -19,7 +19,7 @@ impl Planner<'_> {
         is_public: bool,
     ) -> GoDeclaration {
         let name_go = go_name::escape_type_name(name).into_owned();
-        if self.facts.is_current_package(go_name::PRELUDE_PACKAGE) {
+        if self.facts.is_current_package(PRELUDE_PACKAGE_ID) {
             return GoDeclaration::new(DeclarationKind::Struct {
                 name: name_go,
                 parameters: Vec::new(),

@@ -3,6 +3,7 @@ use crate::pattern;
 use std::fmt::Display;
 use std::mem;
 use syntax::ast::{Annotation, BinaryOperator, BindingKind, Span};
+use syntax::program::strip_go_prefix;
 use syntax::types::{FunctionParameter, SELF_TYPE_NAME, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,7 +110,7 @@ pub fn name_shadows_import(name: &str, import_path: &str, name_span: Span) -> Li
 }
 
 fn suggested_import_alias(import_path: &str, name: &str) -> String {
-    let path = import_path.strip_prefix("go:").unwrap_or(import_path);
+    let path = strip_go_prefix(import_path).unwrap_or(import_path);
     let mut alias = match path.rsplit_once('/') {
         Some((head, last)) => {
             let parent = head.rsplit_once('/').map_or(head, |(_, parent)| parent);

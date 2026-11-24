@@ -12,8 +12,8 @@ use crate::target::ir::values::{ConstantKind, GoExpression};
 use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
-use syntax::program::SlotOrigin;
 use syntax::program::{AliasKind, DefinitionBody, FieldSelection};
+use syntax::program::{SlotOrigin, is_go_import};
 use syntax::types::{CompoundKind, SimpleKind, Type};
 
 impl Planner<'_> {
@@ -38,7 +38,7 @@ impl Planner<'_> {
         let Type::Nominal { id, .. } = ty else {
             return None;
         };
-        if !go_name::is_go_import(id.as_str()) {
+        if !is_go_import(id.as_str()) {
             return None;
         }
         let underlying = self.facts.newtype_underlying(ty)?;
@@ -58,7 +58,7 @@ impl Planner<'_> {
                 Some(GoExpression::conversion(go_ty, inner))
             }
             ValueLayout::Plain(nominal @ Type::Nominal { id, .. })
-                if go_name::is_go_import(id.as_str())
+                if is_go_import(id.as_str())
                     && self
                         .facts
                         .definition(id.as_str())
@@ -205,7 +205,7 @@ impl Planner<'_> {
             );
             return Some(zero);
         }
-        let go_import = go_name::is_go_import(id);
+        let go_import = is_go_import(id);
         if go_import
             && (self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some())
         {

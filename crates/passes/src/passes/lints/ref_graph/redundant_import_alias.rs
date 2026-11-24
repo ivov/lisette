@@ -4,7 +4,7 @@ use diagnostics::{Edit, Fix, LisetteDiagnostic};
 use semantics::store::Store;
 use syntax::ENTRY_PACKAGE_ID;
 use syntax::ast::{Expression, ImportAlias, Span};
-use syntax::program::{File, Package, unaliased_binding_name};
+use syntax::program::{File, Package, is_go_import, unaliased_binding_name};
 
 pub(super) fn check_redundant_aliases(
     files: &FxHashMap<u32, File>,
@@ -34,8 +34,7 @@ pub(super) fn check_redundant_aliases(
             }
 
             // Without typedefs, the package clause that names the binding is unknown.
-            if name.starts_with("go:") && store.get_package(name).is_none_or(Package::is_empty_stub)
-            {
+            if is_go_import(name) && store.get_package(name).is_none_or(Package::is_empty_stub) {
                 continue;
             }
 

@@ -1,7 +1,7 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
-use syntax::program::{ValueUseKey, resolved_definition};
-use syntax::types::{GO_IMPORT_PREFIX, Type};
+use syntax::program::{ValueUseKey, is_go_import, resolved_definition};
+use syntax::types::Type;
 
 pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
     match expression {
@@ -12,7 +12,7 @@ pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
             expression: callee,
             args,
             ..
-        } if resolved_definition(callee).is_some_and(|id| id.starts_with(GO_IMPORT_PREFIX)) => {
+        } if resolved_definition(callee).is_some_and(is_go_import) => {
             for argument in args {
                 let argument = argument.unwrap_parens();
                 if !slot_is_go_function_type(argument, ctx) {
@@ -32,7 +32,7 @@ fn slot_is_go_function_type(expression: &Expression, ctx: &NodeCtx) -> bool {
     else {
         return false;
     };
-    matches!(&value_use.slot, Type::Nominal { id, .. } if id.starts_with(GO_IMPORT_PREFIX))
+    matches!(&value_use.slot, Type::Nominal { id, .. } if is_go_import(id))
         && ctx
             .store
             .resolve_to_function_type(&value_use.slot)

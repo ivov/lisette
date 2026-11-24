@@ -10,7 +10,8 @@ use syntax::ast::{EnumVariant, StructFieldDefinition};
 use syntax::ast::{Expression, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, GoMethodPolicy, Interface, Method, Methods,
-    Package, TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
+    PRELUDE_PACKAGE_ID, Package, TestIndex, UninferredExports, is_go_import, method_for_type,
+    methods_for_type, type_has_any_method,
 };
 use syntax::types;
 use syntax::types::{AliasPeeled, CompoundKind, SimpleKind, Symbol, Type};
@@ -49,7 +50,7 @@ impl Default for Store {
 
 impl Store {
     pub fn new() -> Self {
-        let prelude_package = Package::new("prelude");
+        let prelude_package = Package::new(PRELUDE_PACKAGE_ID);
         let nominal_package = Package::nominal();
 
         let packages = vec![
@@ -676,7 +677,7 @@ impl Store {
 
     fn is_foreign_definition(&self, definition: &Definition, qualified_name: &str) -> bool {
         if let Some(package) = self.package_for_qualified_name(qualified_name)
-            && (package == "prelude" || package.starts_with("go:"))
+            && (package == PRELUDE_PACKAGE_ID || is_go_import(package))
         {
             return true;
         }
@@ -861,8 +862,8 @@ mod clone_tests {
         );
         assert_eq!(cloned.get_file(42).unwrap().name, "before.lis");
         assert!(Arc::ptr_eq(
-            &store.packages["prelude"],
-            &cloned.packages["prelude"]
+            &store.packages[PRELUDE_PACKAGE_ID],
+            &cloned.packages[PRELUDE_PACKAGE_ID]
         ));
     }
 

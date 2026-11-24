@@ -7,7 +7,7 @@ use rustc_hash::FxHashSet;
 use deps::{ImportablePackage, TypedefLocator};
 use syntax::ast::Expression;
 use syntax::attributes::unsupported_go_symbol;
-use syntax::program::{File, FileImport, go_import_default_name};
+use syntax::program::{File, FileImport, go_import_default_name, is_go_import, strip_go_prefix};
 
 use crate::clock::Instant;
 use crate::position::LineIndex;
@@ -135,7 +135,7 @@ pub(crate) fn not_yet_imported<'a>(
         .collect();
     let imported: FxHashSet<&str> = imports
         .iter()
-        .filter_map(|import| import.name.as_str().strip_prefix("go:"))
+        .filter_map(|import| strip_go_prefix(&import.name))
         .collect();
 
     packages
@@ -268,7 +268,7 @@ impl<'a> ImportSite<'a> {
         let mut go_imports = self
             .imports
             .iter()
-            .filter(|import| import.name.starts_with("go:"))
+            .filter(|import| is_go_import(&import.name))
             .peekable();
 
         if go_imports.peek().is_some() {

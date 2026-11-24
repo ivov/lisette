@@ -3,8 +3,8 @@ use syntax::ast::{
     BindingId, Expression, IdentifierResolution, Literal, Span, StructFieldDefinition,
     UnaryOperator, tuple_field_name,
 };
-use syntax::program::SlotOrigin;
 use syntax::program::go_boundary_converts_container;
+use syntax::program::{SlotOrigin, is_go_import};
 use syntax::types::{CompoundKind, Type};
 
 use crate::checker::EnvResolve;
@@ -157,7 +157,7 @@ impl InferCtx<'_> {
         owner_ty: &Type,
     ) -> Type {
         let granted = self.granted_component_type(declared, owner_ty);
-        if declaring.starts_with("go:") {
+        if is_go_import(declaring) {
             self.demote_converted_containers(&granted)
         } else {
             granted
@@ -209,7 +209,7 @@ impl InferCtx<'_> {
                     Some(declaring) => declaring.to_string(),
                     None => self.owner_type(owner)?.get_qualified_id()?.to_string(),
                 };
-                if !declaring.starts_with("go:") {
+                if !is_go_import(&declaring) {
                     return None;
                 }
                 let field = self

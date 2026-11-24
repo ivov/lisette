@@ -1,16 +1,15 @@
 use crate::loader;
-use crate::prelude;
 use ecow::EcoString;
 use syntax::ast::{
     Annotation, Expression, Generic, Pattern, Span, Visibility as SyntacticVisibility,
 };
 use syntax::display::annotation_to_string;
-use syntax::program::GoHint;
 use syntax::program::MethodOrigin;
 use syntax::program::ValueKind;
 use syntax::program::{
     Definition, DefinitionBody, Interface, Method, Visibility, interface_requirements,
 };
+use syntax::program::{GoHint, PRELUDE_PACKAGE_ID};
 use syntax::types::{Bound, Symbol, Type, type_args_match_params, unqualified_name};
 
 use super::{
@@ -252,7 +251,7 @@ impl TaskState {
         let Some(receiver_qualified_name) = receiver_ty.get_qualified_name() else {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
                 type_name,
-                prelude::PRELUDE_PACKAGE_ID,
+                PRELUDE_PACKAGE_ID,
                 *span,
             ));
             return None;

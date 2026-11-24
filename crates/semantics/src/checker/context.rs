@@ -3,6 +3,7 @@ use super::state::Cursor;
 use super::*;
 use crate::prelude;
 use std::mem;
+use syntax::program::PRELUDE_PACKAGE_ID;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FileContext<'a> {
@@ -35,7 +36,7 @@ impl<'a> FileContext<'a> {
                 file_id,
                 imports,
             } => (package_id, file_id, imports),
-            Self::Prelude => (prelude::PRELUDE_PACKAGE_ID, prelude::PRELUDE_FILE_ID, &[]),
+            Self::Prelude => (PRELUDE_PACKAGE_ID, prelude::PRELUDE_FILE_ID, &[]),
             Self::TestPrelude { file_id } => (prelude::TEST_PRELUDE_PACKAGE_ID, file_id, &[]),
         }
     }

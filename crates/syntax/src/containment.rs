@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet;
 
-use crate::program::AliasKind;
+use crate::program::{AliasKind, strip_prelude_prefix};
 use crate::program::{Definition, DefinitionBody};
 use crate::types::{CompoundKind, Type, peel_alias};
 
@@ -258,5 +258,5 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
 }
 
 fn is_indirection_type(id: &str) -> bool {
-    CompoundKind::from_name(id.strip_prefix("prelude.").unwrap_or(id)).is_some()
+    CompoundKind::from_name(strip_prelude_prefix(id).unwrap_or(id)).is_some()
 }

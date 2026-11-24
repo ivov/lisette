@@ -14,7 +14,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use syntax::ParseError;
 use syntax::ast::Span;
-use syntax::program::UninferredExports;
+use syntax::program::{PRELUDE_PACKAGE_ID, UninferredExports, is_go_import, strip_go_prefix};
 
 struct CacheCandidate {
     pending: CompiledPendingPackage,
@@ -207,7 +207,7 @@ pub(super) fn infer_all_packages(
     }
 
     for (topo_rank, package_id) in order.into_iter().enumerate() {
-        if package_id.starts_with("go:") {
+        if is_go_import(&package_id) {
             if dependencies.is_link_only_package(&package_id) {
                 continue;
             }
@@ -335,7 +335,7 @@ pub(super) fn infer_all_packages(
         .keys()
         .map(|package_id| {
             let mut reachable = FxHashSet::default();
-            let mut pending = vec![package_id.clone(), "prelude".to_string()];
+            let mut pending = vec![package_id.clone(), PRELUDE_PACKAGE_ID.to_string()];
             while let Some(id) = pending.pop() {
                 if reachable.insert(id.clone()) {
                     pending.extend(dependencies.dependencies(&id).map(ToString::to_string));
@@ -427,7 +427,7 @@ pub(super) fn infer_all_packages(
         let all_go_packages: Vec<String> = store
             .packages()
             .keys()
-            .filter(|id| id.strip_prefix("go:").is_some_and(deps::is_stdlib))
+            .filter(|id| strip_go_prefix(id).is_some_and(deps::is_stdlib))
             .cloned()
             .collect();
         // A non-empty list implies the lazy cache load was attempted.
@@ -547,7 +547,7 @@ fn register_go_package(
     script: Option<ScriptUnit>,
     sources: &mut GoPackageSources,
 ) {
-    let go_pkg = package_id.strip_prefix("go:").unwrap_or(package_id);
+    let go_pkg = strip_go_prefix(package_id).unwrap_or(package_id);
     if sources.load_cached(store, package_id) {
         return;
     }

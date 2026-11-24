@@ -1,7 +1,7 @@
 use diagnostics::{Edit, Fix};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
-use syntax::program::{DefinitionBody, DotAccessResolution};
+use syntax::program::{DefinitionBody, DotAccessResolution, is_go_import};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::helpers::replacement_drops_comment;
@@ -118,7 +118,7 @@ fn is_go_imported(ty: &Type) -> bool {
     let Type::Nominal { id, .. } = ty.strip_refs() else {
         return false;
     };
-    id.as_str().starts_with("go:")
+    is_go_import(&id)
 }
 
 fn struct_package(ty: &Type) -> Option<String> {

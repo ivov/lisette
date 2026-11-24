@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use syntax::program::is_go_import;
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::checker::TaskState;
@@ -112,7 +113,7 @@ impl TaskState {
 
         params.iter().any(|p| {
             if let Type::Nominal { id, .. } = p.resolve_in(&self.env) {
-                store.get_interface(&id).is_some() || id.starts_with("go:")
+                store.get_interface(&id).is_some() || is_go_import(&id)
             } else {
                 false
             }

@@ -19,10 +19,10 @@ use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
 use syntax::ast::Expression;
-use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, FieldSelection};
+use syntax::program::{NativeOperation, strip_prelude_prefix};
 use syntax::types::Type;
 
 struct TupleStructTarget<'a> {
@@ -444,7 +444,7 @@ pub(super) fn go_builtin_name<'a>(facts: &EmitFacts<'a>, callee: &Expression) ->
         .definition
         .as_deref()
         .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
-        .and_then(|qualified| qualified.strip_prefix("prelude."))
+        .and_then(strip_prelude_prefix)
 }
 
 fn is_constant_go_len(value: &GoExpression) -> bool {

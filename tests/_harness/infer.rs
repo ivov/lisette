@@ -13,7 +13,7 @@ use std::mem;
 use std::path::PathBuf;
 use std::thread;
 use stdlib::{Target, get_go_stdlib_typedef};
-use syntax::program::File;
+use syntax::program::{File, strip_go_prefix};
 use syntax::types;
 use syntax::types::CompoundKind;
 use syntax::{
@@ -110,7 +110,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         let order = mem::take(&mut graph_result.order);
         let mut to_infer = Vec::new();
         for package_id in order {
-            if let Some(go_pkg) = package_id.strip_prefix("go:") {
+            if let Some(go_pkg) = strip_go_prefix(&package_id) {
                 if let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host()) {
                     checker.parse_and_register_go_package(
                         &mut store,

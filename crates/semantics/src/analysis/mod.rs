@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use syntax::FileParseStatus;
-use syntax::program::{File, Package};
+use syntax::program::{File, Package, strip_go_prefix};
 
 use deps::TypedefLocator;
 
@@ -237,7 +237,7 @@ impl<'a> GoPackageSources<'a> {
     }
 
     pub(crate) fn load_cached(&mut self, store: &mut Store, package_id: &str) -> bool {
-        let go_pkg = package_id.strip_prefix("go:").unwrap_or(package_id);
+        let go_pkg = strip_go_prefix(package_id).unwrap_or(package_id);
         if !deps::is_stdlib(go_pkg) {
             return false;
         }

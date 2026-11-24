@@ -9,7 +9,7 @@ use crate::checker::scopes::Scopes;
 use crate::store::Store;
 use syntax::ast::Generic;
 use syntax::ast::{Annotation, Expression, Span, StructFields};
-use syntax::program::{AliasKind, ElementEquality, EqualityRecipe};
+use syntax::program::{AliasKind, ElementEquality, EqualityRecipe, is_go_import};
 use syntax::program::{DefinitionBody, Visibility, interface_instances, interface_requirements};
 use syntax::types::{CompoundKind, Type, substitute};
 
@@ -365,7 +365,7 @@ fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
     let Some(id) = ty.get_qualified_id() else {
         return false;
     };
-    if !id.starts_with("go:") {
+    if !is_go_import(id) {
         return false;
     }
     let Some(definition) = store.get_definition(id) else {
@@ -710,7 +710,7 @@ impl InferCtx<'_> {
         let Some(name) = resolved.get_qualified_id() else {
             return false;
         };
-        if name.starts_with("go:") {
+        if is_go_import(name) {
             return false;
         }
         let Some(definition) = self.store.get_definition(name) else {

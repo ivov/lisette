@@ -8,9 +8,9 @@ use crate::target::types::enum_layout::VariantLayout;
 use std::borrow::Cow;
 use syntax::ast::{Expression, Literal, Pattern, RestPattern, StructFieldDefinition, StructFields};
 use syntax::go_names;
-use syntax::program::NativeTypeKind;
 use syntax::program::{Definition, DefinitionBody, DotAccessResolution, constructor_fields};
 use syntax::program::{FieldSelection, GoHint, ReceiverCoercion};
+use syntax::program::{NativeTypeKind, PRELUDE_PACKAGE_ID, is_go_import, is_prelude_symbol};
 use syntax::types::{CompoundKind, build_substitution_map};
 use syntax::types::{Symbol, Type};
 
@@ -233,7 +233,7 @@ impl<'a> EmitFacts<'a> {
         let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
         receiver_ty
             .get_qualified_id()
-            .filter(|owner| go_name::is_go_import(owner))
+            .filter(|owner| is_go_import(owner))
             .and_then(|owner| self.method(owner, method))
             .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
     }
@@ -315,7 +315,7 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id, .. } = ty.strip_refs() else {
             return false;
         };
-        go_name::is_prelude_id(&id) || go_name::is_go_import(&id)
+        is_prelude_symbol(&id) || is_go_import(&id)
     }
 
     pub(crate) fn resolve_is_exported(
@@ -355,7 +355,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn type_member_go_name<'n>(&self, package: &str, name: &'n str) -> Cow<'n, str> {
-        if package == go_name::PRELUDE_PACKAGE || self.is_foreign_package(package) {
+        if package == PRELUDE_PACKAGE_ID || self.is_foreign_package(package) {
             go_name::escape_keyword(name)
         } else {
             go_name::escape_type_name(name)

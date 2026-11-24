@@ -7,9 +7,8 @@ use syntax::ast::{
 use syntax::containment::{EnumPayloads, definition_contains_by_value};
 use syntax::go_names;
 use syntax::go_names::EnumFieldShape;
-use syntax::program::ValueKind;
 use syntax::program::{AliasKind, Definition, DefinitionBody, Methods, Visibility};
-use syntax::types;
+use syntax::program::{PRELUDE_PACKAGE_ID, ValueKind, is_go_import};
 use syntax::types::CompoundKind;
 use syntax::types::SimpleKind;
 use syntax::types::Type;
@@ -118,7 +117,7 @@ impl TaskState {
             let Some(enum_ty) = store.get_type(&qualified_name).cloned() else {
                 continue;
             };
-            let is_prelude = self.cursor.package_id() == "prelude";
+            let is_prelude = self.cursor.package_id() == PRELUDE_PACKAGE_ID;
 
             let enum_grants_write = variants.iter().any(|variant| match &variant.fields {
                 VariantFields::Unit => false,
@@ -194,7 +193,7 @@ impl TaskState {
 
     /// Emit's layout dedupes by Go name, so a survivor would take the first type.
     fn check_enum_field_slot_collisions(&mut self, name: &str, variants: &[EnumVariant]) {
-        if self.cursor.package_id() == "prelude" {
+        if self.cursor.package_id() == PRELUDE_PACKAGE_ID {
             return;
         }
 
@@ -540,7 +539,7 @@ impl TaskState {
     }
 
     pub(super) fn check_package_recursive_types(&mut self, store: &Store, package_id: &str) {
-        if package_id.starts_with("go:") {
+        if is_go_import(package_id) {
             return;
         }
         let Some(package) = store.get_package(package_id) else {
@@ -623,7 +622,7 @@ impl TaskState {
                     .map(|g| Type::Parameter(g.name.clone()))
                     .collect();
 
-                let canonical_ty = if self.cursor.package_id() == "prelude" {
+                let canonical_ty = if self.cursor.package_id() == PRELUDE_PACKAGE_ID {
                     if let Some(simple) = SimpleKind::from_name(name) {
                         Type::Simple(simple)
                     } else if let Some(compound) = CompoundKind::from_name(name) {
@@ -786,7 +785,7 @@ fn is_embeddable_nominal(ty: &Type) -> bool {
 }
 
 fn is_imported_nominal(ty: &Type) -> bool {
-    matches!(ty, Type::Nominal { id, .. } if id.as_str().starts_with(types::GO_IMPORT_PREFIX))
+    matches!(ty, Type::Nominal { id, .. } if is_go_import(id))
 }
 
 fn is_faithful_imported_embed_target(store: &Store, ty: &Type) -> bool {
@@ -798,7 +797,7 @@ fn is_faithful_imported_graph(store: &Store, ty: &Type, seen: &mut FxHashSet<Str
     let Type::Nominal { id, .. } = &target else {
         return false;
     };
-    if !id.as_str().starts_with(types::GO_IMPORT_PREFIX) {
+    if !is_go_import(id) {
         return false;
     }
     if !seen.insert(id.to_string()) {
@@ -844,7 +843,7 @@ fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
         return false;
     };
     let id = id.as_str();
-    if id.starts_with(types::GO_IMPORT_PREFIX) {
+    if is_go_import(id) {
         return false;
     }
     match store.get_definition(id).map(|definition| &definition.body) {

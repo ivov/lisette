@@ -6,11 +6,11 @@ use std::collections::BTreeMap;
 use syntax::ast::{Generic, StructFieldDefinition, Visibility};
 use syntax::go_names;
 use syntax::program::{
-    Definition, DefinitionBody, Method, Methods, method_for_type, methods_for_type,
+    Definition, DefinitionBody, Method, Methods, is_go_import, method_for_type, methods_for_type,
 };
 use syntax::types::{
-    self, CompoundKind, GO_IMPORT_PREFIX, SubstitutionMap, Symbol, Type,
-    build_named_substitution_map, build_substitution_map, substitute,
+    self, CompoundKind, SubstitutionMap, Symbol, Type, build_named_substitution_map,
+    build_substitution_map, substitute,
 };
 
 use crate::checker::resolution::MethodSelection;
@@ -340,7 +340,7 @@ where
     let Some(definition) = lookup(id) else {
         return false;
     };
-    let go_import = id.starts_with(GO_IMPORT_PREFIX);
+    let go_import = is_go_import(id);
     let claims = |key: &EcoString, method: &Method| {
         key != seal_key && method_go_name(key, method, go_import) == selector
     };

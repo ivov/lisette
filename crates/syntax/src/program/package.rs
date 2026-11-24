@@ -68,8 +68,30 @@ impl PartialEq<&str> for PackageId {
     }
 }
 
+pub const GO_IMPORT_PREFIX: &str = "go:";
+
+pub const PRELUDE_PACKAGE_ID: &str = "prelude";
+
+pub const PRELUDE_PREFIX: &str = "prelude.";
+
+pub fn is_go_import(id: &str) -> bool {
+    id.starts_with(GO_IMPORT_PREFIX)
+}
+
+pub fn strip_go_prefix(id: &str) -> Option<&str> {
+    id.strip_prefix(GO_IMPORT_PREFIX)
+}
+
+pub fn is_prelude_symbol(id: &str) -> bool {
+    id.starts_with(PRELUDE_PREFIX)
+}
+
+pub fn strip_prelude_prefix(id: &str) -> Option<&str> {
+    id.strip_prefix(PRELUDE_PREFIX)
+}
+
 pub fn is_internal_package_id(id: &str) -> bool {
-    id == "prelude" || id == "**test_prelude" || id == "**nominal" || id.starts_with("go:")
+    id == PRELUDE_PACKAGE_ID || id == "**test_prelude" || id == "**nominal" || is_go_import(id)
 }
 
 #[derive(Debug, Clone)]

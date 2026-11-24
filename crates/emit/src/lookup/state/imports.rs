@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use crate::target::names::go_name;
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use syntax::ast::{ImportAlias, Span};
-use syntax::program::{File, FileImport, ImportKey};
+use syntax::program::{File, FileImport, ImportKey, strip_go_prefix};
 
 use crate::target::names::packages::PackageRequirements;
 
@@ -157,10 +157,7 @@ fn source_import_qualifier(
         return None;
     }
     let alias = import.effective_alias(go_package_names)?;
-    let path = import
-        .name
-        .strip_prefix(go_name::GO_IMPORT_PREFIX)
-        .unwrap_or(&import.name);
+    let path = strip_go_prefix(&import.name).unwrap_or(&import.name);
     Some(rendered_qualifier(path, alias))
 }
 

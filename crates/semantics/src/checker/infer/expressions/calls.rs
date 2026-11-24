@@ -7,7 +7,7 @@ use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::{
-    AliasKind, CallOperation, DefinitionBody, DotAccessResolution, NativeTypeKind,
+    AliasKind, CallOperation, DefinitionBody, DotAccessResolution, NativeTypeKind, PRELUDE_PREFIX,
     ReceiverCoercion, resolved_instantiation,
 };
 use syntax::types::{
@@ -180,7 +180,7 @@ impl InferCtx<'_> {
                     && (!matches!(prefix, "Array" | "Map" | "Channel")
                         || (self.scopes.lookup_binding_id(prefix).is_none()
                             && self.lookup_qualified_name(self.store, prefix).as_deref()
-                                == Some(format!("prelude.{prefix}").as_str())))
+                                == Some(format!("{PRELUDE_PREFIX}{prefix}").as_str())))
             })
         });
 
@@ -544,8 +544,8 @@ impl InferCtx<'_> {
         };
         let target_id = match target {
             Type::Nominal { id, .. } => id.to_string(),
-            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()),
-            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()),
+            Type::Simple(kind) => format!("{PRELUDE_PREFIX}{}", kind.leaf_name()),
+            Type::Compound { kind, .. } => format!("{PRELUDE_PREFIX}{}", kind.leaf_name()),
             _ => return None,
         };
         if !generics.is_empty() || target_id == owner_id {

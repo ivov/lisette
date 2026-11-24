@@ -4,7 +4,7 @@ use crate::checker::EnvResolve;
 use syntax::ast::{BindingId, Expression, Span};
 use syntax::program::{
     CallOperation, Definition, DefinitionBody, DotAccessResolution, InterfaceRequirement,
-    ReceiverCoercion, interface_requirements,
+    PRELUDE_PACKAGE_ID, ReceiverCoercion, interface_requirements, is_go_import,
 };
 use syntax::types::{
     FunctionParameter, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
@@ -271,7 +271,7 @@ impl InferCtx<'_> {
 
         let is_go_method = resolved_definition
             .as_ref()
-            .is_some_and(|definition| definition.starts_with("go:"));
+            .is_some_and(|definition| is_go_import(definition));
         if !self.is_callee_context()
             && !is_go_method
             && (matches!(deref_ty, Type::Nominal { id, .. }
@@ -316,9 +316,9 @@ impl InferCtx<'_> {
         let resolved = store.peel_alias(receiver_type);
         let owner = match resolved.strip_refs() {
             Type::Nominal { id, .. } => id,
-            Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
-            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
-            Type::Array { .. } => Symbol::from_parts("prelude", "Array"),
+            Type::Simple(kind) => Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()),
+            Type::Compound { kind, .. } => Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()),
+            Type::Array { .. } => Symbol::from_parts(PRELUDE_PACKAGE_ID, "Array"),
             _ => return None,
         };
         let resolved_definition = owner.with_segment(method_name);
@@ -503,7 +503,7 @@ impl InferCtx<'_> {
         let store = self.store;
         let lookup_id: Symbol = match store.peel_alias(receiver_ty) {
             Type::Nominal { id, .. } => id,
-            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
+            Type::Compound { kind, .. } => Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()),
             _ => return 0,
         };
 
@@ -531,8 +531,8 @@ impl InferCtx<'_> {
                 }
                 id.clone()
             }
-            Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
-            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
+            Type::Simple(kind) => Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()),
+            Type::Compound { kind, .. } => Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()),
             _ => return None,
         };
 

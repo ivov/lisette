@@ -9,16 +9,16 @@ use passes::analyze;
 use rustc_hash::FxHashMap;
 use semantics::loader::Loader;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget};
+use stdlib::PRELUDE_GO_MODULE;
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::ast::Expression;
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
-use syntax::program::{EmitInput, File};
+use syntax::program::{EmitInput, File, strip_go_prefix};
 
 use crate::_harness::pipeline::TestPipeline;
 use std::io;
 
-const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 pub const GO_MODULE: &str = "lisette/go_tests";
 
 /// Whether a working `go` command is on the path.
@@ -172,7 +172,7 @@ fn parse_import_line(s: &str) -> Option<String> {
 
 pub fn skip_reason_for_imports(input: &str, go_code: &str) -> Option<String> {
     for path in extract_imports(go_code) {
-        if path == PRELUDE_IMPORT_PATH {
+        if path == PRELUDE_GO_MODULE {
             continue;
         }
         let first = path.split('/').next().unwrap_or("");
@@ -186,7 +186,7 @@ pub fn skip_reason_for_imports(input: &str, go_code: &str) -> Option<String> {
         let Expression::PackageImport { name, .. } = item else {
             return None;
         };
-        let path = name.strip_prefix("go:")?;
+        let path = strip_go_prefix(name)?;
         get_go_stdlib_typedef(path, Target::host())
             .is_none()
             .then(|| format!("non-stdlib import: {path}"))
@@ -325,7 +325,7 @@ pub fn write_subpackage(
 pub fn write_go_mod(target_dir: &Path, prelude_path: &Path, go_toolchain: &str) -> io::Result<()> {
     let abs = prelude_path.canonicalize()?;
     let content = format!(
-        "module {GO_MODULE}\n\ngo {go_toolchain}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
+        "module {GO_MODULE}\n\ngo {go_toolchain}\n\nrequire {PRELUDE_GO_MODULE} v0.0.0\n\nreplace {PRELUDE_GO_MODULE} => {}\n",
         abs.display()
     );
     fs::write(target_dir.join("go.mod"), content)

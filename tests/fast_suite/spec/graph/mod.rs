@@ -15,9 +15,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use syntax::ast::Span;
 use syntax::ast::StructFields;
-use syntax::program::Definition;
 use syntax::program::DefinitionBody;
 use syntax::program::Visibility;
+use syntax::program::{Definition, strip_go_prefix};
 use syntax::types::Type;
 
 const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(PathBuf::new());
@@ -931,7 +931,7 @@ fn stdlib_cache_excludes_third_party_packages() {
     let third_party = "go:github.com/gorilla/mux";
     let stdlib = "go:net/http";
 
-    let is_stdlib_go = |id: &str| id.strip_prefix("go:").is_some_and(deps::is_stdlib);
+    let is_stdlib_go = |id: &str| strip_go_prefix(id).is_some_and(deps::is_stdlib);
 
     assert!(!is_stdlib_go(third_party));
     assert!(is_stdlib_go(stdlib));

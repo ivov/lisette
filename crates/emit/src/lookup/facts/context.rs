@@ -1,12 +1,11 @@
 use crate::lookup::facts::catalog::GoAbiCatalog;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::go_expression::Position;
-use crate::target::names::go_name;
 use crate::target::types::enum_layout::EnumLayout;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use syntax::ast::Span;
-use syntax::program::{Definition, DefinitionBody, GoMethodPolicy};
+use syntax::program::{Definition, DefinitionBody, GoMethodPolicy, is_prelude_symbol};
 use syntax::types::Symbol;
 
 #[derive(Default)]
@@ -49,7 +48,7 @@ impl GlobalEmitData {
         else {
             return;
         };
-        if go_name::is_prelude_id(key) {
+        if is_prelude_symbol(key) {
             return;
         }
         let layout = EnumLayout::new(key, generics, variants, *default_variant, |id| {

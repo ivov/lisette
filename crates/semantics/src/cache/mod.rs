@@ -13,7 +13,7 @@ use std::io;
 use std::mem;
 use std::path::{Path, PathBuf};
 use syntax::ast::Span;
-use syntax::program::{GoMethodPolicy, go_filename};
+use syntax::program::{GoMethodPolicy, PRELUDE_PACKAGE_ID, go_filename, is_go_import};
 
 use serde::{Deserialize, Serialize};
 use stdlib::Target;
@@ -278,7 +278,7 @@ pub(crate) fn get_dependency_package_hashes<'a, T: AsRef<str> + ?Sized + 'a>(
         .into_iter()
         .map(|dep_id| {
             let dep_id = dep_id.as_ref();
-            let hash = if dep_id.starts_with("go:") || dep_id == "prelude" {
+            let hash = if is_go_import(dep_id) || dep_id == PRELUDE_PACKAGE_ID {
                 STDLIB_HASH
             } else {
                 *package_hashes.get(dep_id).unwrap_or(&0)

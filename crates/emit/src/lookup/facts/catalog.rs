@@ -1,9 +1,8 @@
 use rustc_hash::FxHashMap;
-use syntax::program::GoHint;
 use syntax::program::{Definition, DefinitionBody, ValueKind};
+use syntax::program::{GoHint, is_go_import};
 use syntax::types::{Symbol, Type};
 
-use crate::target::names::go_name;
 use crate::target::types::return_abi::LoweredReturnAbi;
 use crate::target::types::return_abi::go_return_abi;
 use syntax::program::SlotOrigin;
@@ -32,7 +31,7 @@ impl GoAbiCatalog {
     pub(crate) fn from_definitions(definitions: &FxHashMap<Symbol, Definition>) -> Self {
         let mut catalog = Self::default();
         for (qualified_name, definition) in definitions {
-            if !go_name::is_go_import(qualified_name) {
+            if !is_go_import(qualified_name) {
                 continue;
             }
             catalog.register_callable(

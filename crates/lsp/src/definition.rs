@@ -3,8 +3,8 @@ use syntax::ast::{
     ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern,
     RecordPatternResolution, Span,
 };
-use syntax::program::DefinitionBody;
 use syntax::program::File;
+use syntax::program::{DefinitionBody, PRELUDE_PACKAGE_ID, PRELUDE_PREFIX, is_go_import};
 use syntax::types::unqualified_name;
 
 use crate::analysis::find_package_by_alias;
@@ -78,7 +78,7 @@ pub(crate) fn resolve_dot_access_definition(
                 })
             })
             .or_else(|| {
-                let in_prelude = format!("prelude.{name}");
+                let in_prelude = format!("{PRELUDE_PREFIX}{name}");
                 snapshot
                     .definitions()
                     .get(in_prelude.as_str())
@@ -160,7 +160,7 @@ pub(crate) fn is_generated_typedef_span(snapshot: &AnalysisSnapshot, span: &Span
     snapshot
         .files()
         .get(&span.file_id)
-        .is_some_and(|f| f.package_id.starts_with("go:") || f.package_id == "prelude")
+        .is_some_and(|f| is_go_import(&f.package_id) || f.package_id == PRELUDE_PACKAGE_ID)
 }
 
 /// Resolve an import alias to the import statement's span.
@@ -197,7 +197,7 @@ pub(crate) fn lookup_definition_span(
     }
 
     for import in file.imports() {
-        if import.name.starts_with("go:") {
+        if is_go_import(&import.name) {
             continue;
         }
         let imported = format!("{}.{}", import.name, name);
@@ -208,7 +208,7 @@ pub(crate) fn lookup_definition_span(
         }
     }
 
-    let in_prelude = format!("prelude.{name}");
+    let in_prelude = format!("{PRELUDE_PREFIX}{name}");
     if let Some(definition) = snapshot.definitions().get(in_prelude.as_str())
         && let Some(span) = definition.name_span
     {

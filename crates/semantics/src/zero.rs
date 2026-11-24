@@ -5,10 +5,9 @@ use ecow::EcoString;
 use syntax::ast::StructFieldDefinition;
 use syntax::ast::StructFields;
 use syntax::display::type_display_name;
-use syntax::program::AliasKind;
 use syntax::program::Definition;
 use syntax::program::DefinitionBody;
-use syntax::types;
+use syntax::program::{AliasKind, is_go_import};
 use syntax::types::{
     CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, build_named_substitution_map,
     substitute,
@@ -286,7 +285,7 @@ impl ZeroWalk<'_> {
 
         match &def.body {
             DefinitionBody::Struct { fields, .. } => {
-                let is_go_struct = id.as_str().starts_with("go:");
+                let is_go_struct = is_go_import(id);
                 if is_go_struct && go_struct_denies_zero(def, fields) {
                     return Err(NoZero {
                         chain: vec![],
@@ -339,7 +338,7 @@ impl ZeroWalk<'_> {
                     if def.is_zero_safe() {
                         return Ok(());
                     }
-                    let reason = if id.as_str().starts_with(types::GO_IMPORT_PREFIX) {
+                    let reason = if is_go_import(id) {
                         NoZeroReason::HiddenGoState {
                             go_type: type_display_name(id).into(),
                         }

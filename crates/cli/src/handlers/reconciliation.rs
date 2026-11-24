@@ -1495,17 +1495,17 @@ mod tests {
         graph.expand(
             "example.com/optapi".to_string(),
             "v0.0.0".to_string(),
-            vec![deps::PRELUDE_GO_MODULE.to_string()],
+            vec![stdlib::PRELUDE_GO_MODULE.to_string()],
         );
-        graph.discover(deps::PRELUDE_GO_MODULE.to_string(), "v0.13.1".to_string());
+        graph.discover(stdlib::PRELUDE_GO_MODULE.to_string(), "v0.13.1".to_string());
         graph.record_dependency(
             "example.com/optapi".into(),
             "v0.0.0".into(),
-            deps::PRELUDE_GO_MODULE.into(),
+            stdlib::PRELUDE_GO_MODULE.into(),
         );
 
         assert!(graph.transitive_map("example.com/optapi").is_empty());
-        assert_eq!(graph.version(deps::PRELUDE_GO_MODULE), None);
+        assert_eq!(graph.version(stdlib::PRELUDE_GO_MODULE), None);
     }
 
     #[test]

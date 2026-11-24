@@ -6,7 +6,7 @@ use ecow::EcoString;
 use syntax::ast::{
     Expression, ExpressionId, Span, StructFieldAssignment, StructFields, StructSpread,
 };
-use syntax::program::{CheckedStructLiteral, Definition, DefinitionBody, FieldKey};
+use syntax::program::{CheckedStructLiteral, Definition, DefinitionBody, FieldKey, is_go_import};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::permission::{ConstructionGrant, MissingSupply};
@@ -385,7 +385,7 @@ impl InferCtx<'_> {
             || struct_name
                 .split_once('.')
                 .is_some_and(|(prefix, _)| self.imports.namespace(prefix).is_some());
-        let is_go_imported = qualified_name.starts_with("go:");
+        let is_go_imported = is_go_import(&qualified_name);
 
         let denies_zero = is_go_imported
             && !matches!(new_spread, StructSpread::From(_))

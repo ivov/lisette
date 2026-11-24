@@ -1,5 +1,6 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::{DeadCodeCause, Span};
+use syntax::program::strip_go_prefix;
 use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1421,7 +1422,7 @@ pub fn trim_charset_misuse(span: &Span, function: &str) -> LisetteDiagnostic {
 }
 
 pub fn duplicate_arguments(span: &Span, package: &str, function: &str) -> LisetteDiagnostic {
-    let display_package = package.strip_prefix("go:").unwrap_or(package);
+    let display_package = strip_go_prefix(package).unwrap_or(package);
     LisetteDiagnostic::warn("Duplicate arguments")
         .with_lint_code("duplicate_arguments")
         .with_span_label(span, "identical arguments")
@@ -1551,7 +1552,7 @@ pub fn printf_verb_type_mismatch(
     accepted: &[PrintfClass],
     argument: SimpleKind,
 ) -> LisetteDiagnostic {
-    let display_package = package.strip_prefix("go:").unwrap_or(package);
+    let display_package = strip_go_prefix(package).unwrap_or(package);
     let type_name = argument.leaf_name();
     let needs = printf_classes_phrase(accepted);
     let suggestion = PrintfClass::of(argument).map_or('v', PrintfClass::suggested_verb);
@@ -1571,7 +1572,7 @@ pub fn printf_star_type_mismatch(
     precision: bool,
     argument: SimpleKind,
 ) -> LisetteDiagnostic {
-    let display_package = package.strip_prefix("go:").unwrap_or(package);
+    let display_package = strip_go_prefix(package).unwrap_or(package);
     let type_name = argument.leaf_name();
     let part = if precision { "precision" } else { "width" };
 
@@ -1590,7 +1591,7 @@ pub fn printf_verb_mismatch(
     operands: &[PrintfOperand],
     supplied: usize,
 ) -> LisetteDiagnostic {
-    let display_package = package.strip_prefix("go:").unwrap_or(package);
+    let display_package = strip_go_prefix(package).unwrap_or(package);
     let only_verbs = operands
         .iter()
         .all(|operand| matches!(operand, PrintfOperand::Verb(_)));

@@ -1,6 +1,5 @@
-use crate::types::GO_IMPORT_PREFIX;
-
 use super::{Definition, DefinitionBody, interface_requirements};
+use super::{is_go_import, is_prelude_symbol};
 use crate::go_names::snake_to_camel;
 use crate::types::{Symbol, Type, peel_alias, unqualified_name};
 use std::collections::BTreeSet;
@@ -88,10 +87,7 @@ impl GoMethodPolicy {
             .map(|bound| &bound.ty);
         for bound in function_bounds.chain(type_bounds).chain(method_bounds) {
             for requirement in interface_requirements(bound, |id| lookup(id)) {
-                if requirement
-                    .declaring_interface
-                    .starts_with(GO_IMPORT_PREFIX)
-                {
+                if is_go_import(&requirement.declaring_interface) {
                     continue;
                 }
                 let Some(return_ty) = requirement.method.ty.unwrap_forall().get_function_ret()
@@ -107,7 +103,7 @@ impl GoMethodPolicy {
     }
 
     fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition) {
-        let is_user_definition = !key.starts_with(GO_IMPORT_PREFIX) && !key.starts_with("prelude.");
+        let is_user_definition = !is_go_import(key) && !is_prelude_symbol(key);
         match &definition.body {
             DefinitionBody::Interface {
                 definition: interface_definition,

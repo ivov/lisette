@@ -13,8 +13,8 @@ use crate::target::names::go_name;
 use crate::target::types::return_abi::CallableReturnAbi;
 use syntax::ast::Expression;
 use syntax::constant;
-use syntax::program::SlotOrigin;
 use syntax::program::{DefinitionBody, DotAccessResolution, ReceiverCoercion};
+use syntax::program::{SlotOrigin, is_go_import};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -502,7 +502,7 @@ fn dot_member_stability(
 }
 
 fn go_constant_exceeds_int(facts: &EmitFacts<'_>, package: &str, member: &str, ty: &Type) -> bool {
-    if !go_name::is_go_import(package) {
+    if !is_go_import(package) {
         return false;
     }
     let qualified_name = format!("{}.{}", package, member);

@@ -4,7 +4,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use deps::TypedefLocator;
 use syntax::ast::{ImportAlias, Span};
-use syntax::program::File;
+use syntax::program::{File, PRELUDE_PACKAGE_ID, is_go_import, strip_go_prefix};
 
 use crate::analysis::{AnalysisScope, PARALLEL_THRESHOLD, ProjectKind};
 use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
@@ -371,7 +371,7 @@ impl<'a> GraphBuilder<'a> {
                 let has_production_file = package_files.iter().any(|file| !file.is_test());
                 let package_exists = has_production_file
                     || self.store.has(package_id)
-                    || package_id.starts_with("go:")
+                    || is_go_import(package_id)
                     || (self.scope.has_project_root()
                         && semantics_loader::is_external_test_package(package_id));
 
@@ -613,7 +613,7 @@ fn check_import_paths<'a>(
 
     for classified in file_imports {
         let file_import = &classified.import;
-        let Some(go_pkg) = file_import.name.strip_prefix("go:") else {
+        let Some(go_pkg) = strip_go_prefix(&file_import.name) else {
             continue;
         };
 
@@ -717,7 +717,7 @@ fn process_file_imports(
     let mut pending_go_imports: FxHashMap<&str, Dependency> = FxHashMap::default();
     for classified in &file_imports {
         let file_import = &classified.import;
-        if !file_import.name.starts_with("go:") {
+        if !is_go_import(&file_import.name) {
             continue;
         }
         let usage = if matches!(file_import.alias, Some(ImportAlias::Blank(_))) {
@@ -738,7 +738,7 @@ fn process_file_imports(
 
     for classified in &file_imports {
         let file_import = &classified.import;
-        if file_import.name == "prelude" {
+        if file_import.name == PRELUDE_PACKAGE_ID {
             sink.push(diagnostics::package_graph::cannot_import_prelude(
                 file_import.span,
             ));
@@ -805,7 +805,7 @@ fn process_file_imports(
             continue;
         }
 
-        if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
+        if let Some(go_pkg) = strip_go_prefix(&file_import.name) {
             let Some(pending) = pending_go_imports.remove(file_import.name.as_str()) else {
                 continue;
             };

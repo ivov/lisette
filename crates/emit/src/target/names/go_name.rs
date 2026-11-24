@@ -3,18 +3,10 @@ use std::borrow::Cow;
 use syntax::ast::StructFieldDefinition;
 use syntax::go_names::{ENUM_TAG_FIELD, struct_field_go_name};
 use syntax::parse::TUPLE_FIELDS;
-use syntax::program::go_import_default_name;
+use syntax::program::{
+    go_import_default_name, is_go_import, strip_go_prefix, strip_prelude_prefix,
+};
 use syntax::types::Type;
-
-pub(crate) const GO_IMPORT_PREFIX: &str = "go:";
-
-pub(crate) fn is_go_import(id: &str) -> bool {
-    id.starts_with(GO_IMPORT_PREFIX)
-}
-
-pub(crate) const PRELUDE_PACKAGE: &str = "prelude";
-
-pub(crate) const PRELUDE_PREFIX: &str = "prelude.";
 
 pub(crate) const RANGE_START_FIELD: &str = "Start";
 
@@ -26,10 +18,6 @@ pub(crate) fn tuple_struct_field(index: usize) -> String {
 
 pub(crate) fn enum_tag_type(enum_name: &str) -> String {
     format!("{enum_name}Tag")
-}
-
-pub(crate) fn is_prelude_id(id: &str) -> bool {
-    id.starts_with(PRELUDE_PREFIX)
 }
 
 const GO_STDLIB_PKG: &str = "lisette";
@@ -49,10 +37,10 @@ pub(crate) fn reserved_prefix_of(go: &str) -> Option<&'static str> {
         .copied()
 }
 
-pub const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
-
 pub(crate) const TEST_PRELUDE_PACKAGE: &str = "**test_prelude";
 pub(crate) const TEST_LOG_METHOD: &str = "**test_prelude.TestContext.log";
+const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
+
 pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
 const TESTKIT_PKG: &str = "testkit";
 
@@ -137,7 +125,7 @@ fn lowercase_first_word(type_name: &str) -> String {
 }
 
 pub(crate) fn package_go_path(go_module: &str, package: &str) -> String {
-    match package.strip_prefix(GO_IMPORT_PREFIX) {
+    match strip_go_prefix(package) {
         Some(path) => path.to_string(),
         None => format!("{go_module}/{package}"),
     }
@@ -233,9 +221,7 @@ pub(crate) fn make_tuple_constructor(arity: usize) -> String {
 const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
 
 pub(crate) fn is_prelude_go_builtin(qualified_name: &str) -> bool {
-    qualified_name
-        .strip_prefix("prelude.")
-        .is_some_and(|name| PRELUDE_BUILTIN_NAMES.contains(&name))
+    strip_prelude_prefix(qualified_name).is_some_and(|name| PRELUDE_BUILTIN_NAMES.contains(&name))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

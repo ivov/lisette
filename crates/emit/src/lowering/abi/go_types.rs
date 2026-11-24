@@ -4,9 +4,9 @@ use crate::target::names::go_name;
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::{ChannelDirection, GoType, GoTypeKind, is_prelude_type};
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use syntax::program::NativeTypeKind;
 use syntax::program::SlotOrigin;
 use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{GO_IMPORT_PREFIX, NativeTypeKind, strip_go_prefix, strip_prelude_prefix};
 use syntax::types::{CompoundKind, SimpleKind, Type, peel_underlying, unqualified_name};
 
 impl Planner<'_> {
@@ -100,7 +100,7 @@ impl Planner<'_> {
             let member = name.rsplit('.').next().unwrap_or(&name);
             return GoType::named(member, &param_types, Some(package)).with_physical_kind(kind);
         }
-        if let Some(name) = qualified_name.strip_prefix(go_name::PRELUDE_PREFIX)
+        if let Some(name) = strip_prelude_prefix(qualified_name)
             && is_prelude_type(name)
         {
             return GoType::prelude(name, &param_types);
@@ -140,12 +140,11 @@ impl Planner<'_> {
         if id == "Unknown" {
             return ("any".to_string(), None);
         }
-        let (package, unqualified) = if let Some(rest) = id.strip_prefix(go_name::GO_IMPORT_PREFIX)
-        {
+        let (package, unqualified) = if let Some(rest) = strip_go_prefix(id) {
             let Some((path, ty)) = rest.rsplit_once('.') else {
                 return (go_name::escape_keyword(id).into_owned(), None);
             };
-            (&id[..go_name::GO_IMPORT_PREFIX.len() + path.len()], ty)
+            (&id[..GO_IMPORT_PREFIX.len() + path.len()], ty)
         } else {
             let Some(split) = id.split_once('.') else {
                 return (go_name::escape_type_name(id).into_owned(), None);
@@ -162,7 +161,7 @@ impl Planner<'_> {
         if self.facts.is_foreign_package(package) {
             if !escaped.starts_with(char::is_uppercase) {
                 self.namespace.rejections().reject(id, |span| {
-                    let go_type = id.strip_prefix(go_name::GO_IMPORT_PREFIX).unwrap_or(id);
+                    let go_type = strip_go_prefix(id).unwrap_or(id);
                     diagnostics::emit::unnamable_go_type(go_type, span)
                 });
             }

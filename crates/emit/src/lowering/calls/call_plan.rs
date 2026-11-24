@@ -4,13 +4,12 @@ use crate::lowering::abi::CalleeSignature;
 use crate::lowering::abi::callable::{CallableAbi, CallableParamAbi};
 use crate::lowering::abi::coercion_plan::LayoutChange;
 use crate::lowering::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
-use crate::target::names::go_name;
 use syntax::ast::Expression;
-use syntax::program::GoTypeRecipe;
 use syntax::program::SlotOrigin;
 use syntax::program::{
     CallOperation, CheckedCallee, Definition, Method, Visibility, resolved_definition,
 };
+use syntax::program::{GoTypeRecipe, is_go_import, is_prelude_symbol};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
@@ -302,7 +301,7 @@ impl<'a> Planner<'a> {
         if self.bound_dispatch_requirement(expression).is_some() {
             return false;
         }
-        resolved_definition(expression).is_some_and(go_name::is_go_import)
+        resolved_definition(expression).is_some_and(is_go_import)
             || self.go_bound_requirement(expression).is_some()
             || self
                 .function_type_origin(&expression.get_type(), SlotOrigin::Lisette)
@@ -432,7 +431,7 @@ pub(in crate::lowering) fn is_prelude_dispatch(
     id: Option<&str>,
     origin: &CallableOrigin<'_>,
 ) -> bool {
-    id.is_some_and(go_name::is_prelude_id)
+    id.is_some_and(is_prelude_symbol)
         || matches!(
             origin,
             CallableOrigin::Source(

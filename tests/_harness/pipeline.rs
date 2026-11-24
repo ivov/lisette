@@ -1,5 +1,5 @@
 use rustc_hash::{FxHashMap, FxHashSet};
-use syntax::program::CheckedBodies;
+use syntax::program::{CheckedBodies, is_go_import, strip_go_prefix};
 
 use diagnostics::LisetteDiagnostic;
 use semantics::checker::TaskState;
@@ -7,7 +7,6 @@ use semantics::store::Store;
 use semantics::{GoPackageSources, GoTypedef};
 use std::mem;
 use stdlib::{Target, get_go_stdlib_typedef};
-use syntax::types;
 use syntax::{
     ast::{Expression, FunctionBody},
     lex::Lexer,
@@ -55,7 +54,7 @@ pub(super) fn infer_test_file(
 
     for item in &ast {
         if let Expression::PackageImport { name, .. } = item
-            && let Some(go_pkg) = name.strip_prefix("go:")
+            && let Some(go_pkg) = strip_go_prefix(name)
             && let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host())
         {
             checker.parse_and_register_go_package(
@@ -229,7 +228,7 @@ impl CompiledTest {
             let go_package_ids: FxHashSet<String> = store
                 .packages()
                 .keys()
-                .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
+                .filter(|id| is_go_import(id))
                 .cloned()
                 .collect();
 

@@ -1,6 +1,7 @@
 use ecow::EcoString;
 use syntax::ast::Literal;
 use syntax::lex::rune_codepoint;
+use syntax::program::strip_go_prefix;
 use syntax::types::{SimpleKind, Type};
 
 use crate::store::Store;
@@ -144,7 +145,7 @@ fn domain_display_name(qualified: &str) -> String {
     let Some((package, name)) = qualified.rsplit_once('.') else {
         return qualified.to_string();
     };
-    match package.strip_prefix("go:") {
+    match strip_go_prefix(package) {
         Some(go_module) => {
             let package = go_module.rsplit('/').next().unwrap_or(go_module);
             format!("{package}.{name}")

@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::program::{
-    CallOperation, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection, ValueUseKey,
+    CallOperation, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection,
+    PRELUDE_PACKAGE_ID, ValueUseKey, is_go_import, is_prelude_symbol, strip_prelude_prefix,
 };
 
 use ecow::EcoString;
@@ -181,7 +182,7 @@ impl<'a> EmitFacts<'a> {
             Type::Nominal { id, .. } => {
                 if self.is_option(&ty)
                     || self.is_lisette_enum(&ty)
-                    || go_name::is_go_import(id.as_str())
+                    || is_go_import(id.as_str())
                         && (self.is_interface(&ty) || self.resolve_to_function_type(&ty).is_some())
                 {
                     return true;
@@ -318,7 +319,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     fn declares_go_function_type(&self, ty: &Type) -> bool {
-        matches!(ty, Type::Nominal { id, .. } if go_name::is_go_import(id))
+        matches!(ty, Type::Nominal { id, .. } if is_go_import(id))
             && self.resolve_to_function_type(ty).is_some()
     }
 
@@ -429,7 +430,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_prelude_nominal(&self, ty: &Type) -> bool {
-        matches!(self.receiver_shape(ty), Type::Nominal { id, .. } if go_name::is_prelude_id(&id))
+        matches!(self.receiver_shape(ty), Type::Nominal { id, .. } if is_prelude_symbol(&id))
     }
 
     pub(crate) fn receiver_shape(&self, ty: &Type) -> Type {
@@ -547,7 +548,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_foreign_package(&self, package: &str) -> bool {
-        !self.is_current_package(package) && package != go_name::PRELUDE_PACKAGE
+        !self.is_current_package(package) && package != PRELUDE_PACKAGE_ID
     }
 
     pub(crate) fn is_entry_package(&self, package: &str) -> bool {
@@ -625,7 +626,7 @@ impl<'a> EmitFacts<'a> {
         {
             return Some(make_function);
         }
-        let variant = symbol.strip_prefix(go_name::PRELUDE_PREFIX)?;
+        let variant = strip_prelude_prefix(symbol)?;
         if variant.contains('.') {
             return None;
         }

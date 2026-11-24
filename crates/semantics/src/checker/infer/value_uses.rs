@@ -6,7 +6,8 @@ use syntax::program::{
     Adaptation, CallOperation, CheckedBodiesBuilder, CheckedCallee, CheckedValueUse,
     ConformanceWitness, Definition, DefinitionBody, DotAccessResolution, FieldKey, FieldSelection,
     InterfaceConversion, InterfaceRequirement, NativeOperation, ReceiverCoercion, ValueUseKey,
-    constructor_fields, interface_requirements, resolved_definition, resolved_instantiation,
+    constructor_fields, interface_requirements, is_go_import, resolved_definition,
+    resolved_instantiation,
 };
 use syntax::types::{
     CompoundKind, FunctionType, SubstitutionMap, Symbol, Type, TypeVarId, build_substitution_map,
@@ -1153,7 +1154,7 @@ impl Finalizer<'_> {
     }
 
     fn is_go_package_interface(&self, ty: &Type) -> bool {
-        matches!(ty, Type::Nominal { id, .. } if id.starts_with("go:") && self.store.is_interface(ty))
+        matches!(ty, Type::Nominal { id, .. } if is_go_import(id) && self.store.is_interface(ty))
     }
 
     /// A named source or a type parameter satisfies a method-bearing interface through the methods that the checker selected.

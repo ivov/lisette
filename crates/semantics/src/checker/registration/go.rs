@@ -8,6 +8,7 @@ use std::mem;
 use syntax::ast::ImportAlias;
 use syntax::ast::Span;
 use syntax::attributes::unsupported_go_symbol;
+use syntax::program::{GO_IMPORT_PREFIX, strip_go_prefix};
 
 impl TaskState {
     /// Register a Go package (stdlib or third-party). Unlike regular packages,
@@ -46,7 +47,7 @@ impl TaskState {
             });
             self.sink
                 .push(diagnostics::package_graph::corrupt_go_typedef(
-                    package_id.strip_prefix("go:").unwrap_or(package_id),
+                    strip_go_prefix(package_id).unwrap_or(package_id),
                     discarded,
                     self.script.is_some(),
                 ));
@@ -64,23 +65,22 @@ impl TaskState {
 
         let imports = file.imports();
 
-        let replace_importer = package_id.strip_prefix("go:").and_then(|pkg| {
-            match locator.validate_declaration(pkg) {
+        let replace_importer =
+            strip_go_prefix(package_id).and_then(|pkg| match locator.validate_declaration(pkg) {
                 deps::DeclarationStatus::DeclaredReplacement { .. } => {
                     Some(ReplaceImporter::Module(pkg))
                 }
                 deps::DeclarationStatus::DeclaredLocal { .. } => Some(ReplaceImporter::Local(pkg)),
                 _ => None,
-            }
-        });
+            });
 
         for import in &imports {
-            if let Some(go_pkg) = import.name.strip_prefix("go:") {
+            if let Some(go_pkg) = strip_go_prefix(&import.name) {
                 if matches!(import.alias, Some(ImportAlias::Blank(_))) {
                     continue;
                 }
 
-                let import_package_id = format!("go:{}", go_pkg);
+                let import_package_id = format!("{GO_IMPORT_PREFIX}{go_pkg}");
 
                 if store.has(&import_package_id) || sources.load_cached(store, &import_package_id) {
                     continue;
@@ -109,7 +109,7 @@ impl TaskState {
                                 target: locator.target(),
                                 script: self.script,
                                 replace_importer,
-                                transitive_importer: package_id.strip_prefix("go:"),
+                                transitive_importer: strip_go_prefix(package_id),
                             },
                             &typedef_sink,
                         );

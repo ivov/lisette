@@ -7,7 +7,7 @@ use num_traits::{One, Signed, ToPrimitive, Zero};
 
 use crate::ast::{BinaryOperator, BindingId, Expression, Literal, Span, UnaryOperator};
 use crate::lex::{rune_codepoint, string_bytes};
-use crate::program::{Definition, DotAccessResolution};
+use crate::program::{Definition, DotAccessResolution, is_go_import, strip_prelude_prefix};
 use crate::types::{self, SimpleKind, Type};
 
 pub const MAX_CONSTANT_SHIFT: u32 = 1074;
@@ -207,7 +207,7 @@ fn typed_as(kind: SimpleKind) -> impl Fn(Value) -> Constant {
 
 fn named(name: &str, ty: &Type, source: &dyn ConstantSource) -> Option<Constant> {
     let value = source.named_constant(name)?;
-    let typed = if name.starts_with("go:") {
+    let typed = if is_go_import(name) {
         matches!(ty.unwrap_forall(), Type::Nominal { .. }) || converts_go_constant(&value, ty)
     } else {
         true
@@ -287,7 +287,7 @@ fn evaluate_call(expression: &Expression, source: &dyn ConstantSource) -> Evalua
         };
         return convert_to(argument, ty, *span, source);
     }
-    let ordering = match callee.strip_prefix("prelude.") {
+    let ordering = match strip_prelude_prefix(callee) {
         Some("min") => Ordering::Less,
         Some("max") => Ordering::Greater,
         Some("zero") => return Ok(zero_value(ty, source)),

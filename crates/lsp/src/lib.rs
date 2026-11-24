@@ -49,8 +49,8 @@ use std::sync::Arc;
 use syntax::ast::Expression;
 use syntax::ast::Span;
 use syntax::doc::to_markdown;
-use syntax::program::File;
 use syntax::program::is_test_file;
+use syntax::program::{File, PRELUDE_PACKAGE_ID};
 use syntax::types::SELF_TYPE_NAME;
 
 pub use crate::state::{Backend, SharedState};
@@ -824,7 +824,7 @@ fn package_prefix_completions(
         return Vec::new();
     }
 
-    for package in [file.package_id.as_str(), "prelude"] {
+    for package in [file.package_id.as_str(), PRELUDE_PACKAGE_ID] {
         let qualified = format!("{package}.{prefix}");
         if let Some(definition) = snapshot.definitions().get(qualified.as_str())
             && definition.is_type_definition()

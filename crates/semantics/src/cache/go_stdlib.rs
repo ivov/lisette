@@ -10,7 +10,7 @@ use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_BUILD_HASH, GO_STDLIB_HASH};
 use crate::store::Store;
 use std::fs;
-use syntax::program::File;
+use syntax::program::{File, GO_IMPORT_PREFIX, strip_go_prefix};
 
 #[derive(Serialize, Deserialize)]
 struct GoStdlibHeader {
@@ -213,7 +213,7 @@ fn register_cached_go_package(
     cached: &GoPackageCache,
     target: Target,
 ) {
-    let go_pkg = package_id.strip_prefix("go:");
+    let go_pkg = strip_go_prefix(package_id);
     let source = go_pkg.and_then(|go_pkg| get_go_stdlib_typedef(go_pkg, target));
 
     if let Some(source) = source
@@ -256,7 +256,7 @@ fn register_cached_go_package(
 
 /// Extract Go imports from a package's `.d.lis` source without parsing.
 fn get_go_imports_from_source(package_id: &str, target: Target) -> Vec<String> {
-    let Some(go_pkg) = package_id.strip_prefix("go:") else {
+    let Some(go_pkg) = strip_go_prefix(package_id) else {
         return vec![];
     };
     let Some(source) = get_go_stdlib_typedef(go_pkg, target) else {
@@ -268,7 +268,7 @@ fn get_go_imports_from_source(package_id: &str, target: Target) -> Vec<String> {
             let line = line.trim();
             let rest = line.strip_prefix("import \"go:")?;
             let pkg = rest.strip_suffix('"')?;
-            Some(format!("go:{pkg}"))
+            Some(format!("{GO_IMPORT_PREFIX}{pkg}"))
         })
         .collect()
 }

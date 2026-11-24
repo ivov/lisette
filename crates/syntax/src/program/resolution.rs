@@ -1,3 +1,4 @@
+use super::PRELUDE_PACKAGE_ID;
 use crate::ast::Expression;
 use crate::types::Symbol;
 use crate::types::{CompoundKind, SimpleKind, SubstitutionMap, Type};
@@ -14,8 +15,8 @@ pub fn resolved_definition(expression: &Expression) -> Option<&str> {
 pub fn prelude_constructor(expression: &Expression) -> Option<(&str, &str)> {
     let (owner, member) = resolved_definition(expression)?.rsplit_once('.')?;
     let owner = match (owner, member) {
-        ("prelude", "Some" | "None") => "prelude.Option",
-        ("prelude", "Ok" | "Err") => "prelude.Result",
+        (PRELUDE_PACKAGE_ID, "Some" | "None") => "prelude.Option",
+        (PRELUDE_PACKAGE_ID, "Ok" | "Err") => "prelude.Result",
         _ => owner,
     };
     Some((owner, member))
