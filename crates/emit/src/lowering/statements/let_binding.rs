@@ -59,12 +59,9 @@ impl Planner<'_> {
         identifier: &EcoString,
         ids: &[BindingId],
         raw_go_name: &GoIdentifier,
-        force_fresh: bool,
     ) -> GoIdentifier {
         let escaped = escape_local(raw_go_name);
-        if force_fresh
-            || self.shadows_declaration(&escaped)
-            || self.scope.go_name_bound_outside_ids(&escaped, ids)
+        if self.shadows_declaration(&escaped) || self.scope.go_name_bound_outside_ids(&escaped, ids)
         {
             self.fresh_local(&SourceName::new(identifier))
         } else {
@@ -319,7 +316,7 @@ impl Planner<'_> {
             self.scope.bind_new_local(identifier, ids, "_");
             return self.lower_propagate_statement(inner);
         };
-        let go_identifier = self.choose_let_go_name(identifier, ids, raw_go_name, false);
+        let go_identifier = self.choose_let_go_name(identifier, ids, raw_go_name);
         let local = go_identifier.clone();
         let mut statements = Vec::new();
         if widens_to_interface(&self.facts, value, binding_ty) {
@@ -704,12 +701,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 };
                 let raw_go_name =
                     GoIdentifier::from(self.planner.facts.go_name_for_binding(pattern)?);
-                let go_name = self.planner.choose_let_go_name(
-                    identifier,
-                    binding.as_slice(),
-                    &raw_go_name,
-                    self.planner.scope.has_binding_for_go_name(&raw_go_name),
-                );
+                let go_name = if self.planner.scope.has_binding_for_go_name(&raw_go_name) {
+                    self.planner.fresh_local(&SourceName::new(identifier))
+                } else {
+                    self.planner
+                        .choose_let_go_name(identifier, binding.as_slice(), &raw_go_name)
+                };
                 self.planner.scope.declare_go_name(&go_name);
                 Some((
                     identifier,

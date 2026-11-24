@@ -2,9 +2,9 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::expressions::top_items::item_doc_text;
 use crate::target::ir::declarations::GoDeclaration;
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport};
 use syntax::EcoString;
-use syntax::ast::{Expression, FunctionDefinitionView, Generic, Visibility};
+use syntax::ast::{Expression, FunctionDefinitionView, Generic};
 use syntax::types::{Type, type_args_match_params};
 
 type ReceiverGenerics<'a> = &'a [(EcoString, Vec<Type>)];
@@ -56,19 +56,16 @@ impl Planner<'_> {
         };
         let function = method.function_definition_view();
 
-        let is_public = matches!(visibility, Visibility::Public);
+        let export = GoExport::from_visibility(*visibility);
 
         let is_free_function = !self
             .facts
             .emits_go_method(&context.qualified_type, function.name);
 
         let (go_name, mut declarations) = if is_free_function {
-            let free_name = go_name::associated_function_go_name(
-                context.receiver_name,
-                function.name,
-                is_public,
-            )
-            .into();
+            let free_name =
+                go_name::associated_function_go_name(context.receiver_name, function.name, export)
+                    .into();
             let (generics, owner) =
                 free_function_type_parameters(&self.facts, context, function.generics);
             let free_function = FunctionDefinitionView {
@@ -79,7 +76,7 @@ impl Planner<'_> {
             let declarations = self.emit_function(free_function, None, &free_name, owner);
             (free_name.to_string(), declarations)
         } else {
-            let go_name = self.pick_go_function_name(function, true, is_public);
+            let go_name = self.facts.method_go_name(function.name, export);
             let declarations = self.emit_function(
                 function,
                 Some(context.ty),

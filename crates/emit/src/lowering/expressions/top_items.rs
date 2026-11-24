@@ -12,12 +12,12 @@ use crate::target::ir::declarations::GoDeclaration;
 use crate::target::ir::go_expression::{BinaryOp, GoParameter};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
-use crate::target::names::go_name::GeneratedPackage;
 use crate::target::names::go_name::{self, testing_qualifier, testkit_qualifier};
+use crate::target::names::go_name::{GeneratedPackage, GoExport};
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
-use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Visibility};
+use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -32,7 +32,7 @@ impl Planner<'_> {
                 visibility,
                 name,
                 ..
-            } => self.emit_function_item(item, doc, name, matches!(visibility, Visibility::Public)),
+            } => self.emit_function_item(item, doc, name, GoExport::from_visibility(*visibility)),
             Expression::Struct {
                 doc,
                 attributes,
@@ -93,9 +93,9 @@ impl Planner<'_> {
                 ..
             } => {
                 let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
-                let is_public = matches!(visibility, Visibility::Public);
+                let export = GoExport::from_visibility(*visibility);
                 let mut declaration =
-                    self.emit_interface(name, method_signatures, parents, generics, is_public);
+                    self.emit_interface(name, method_signatures, parents, generics, export);
                 declaration.documentation = doc_comment.into();
                 vec![declaration]
             }
@@ -130,13 +130,13 @@ impl Planner<'_> {
         item: &Expression,
         doc: &Option<String>,
         name: &str,
-        is_public: bool,
+        export: GoExport,
     ) -> Vec<GoDeclaration> {
         let function = item.function_definition_view();
-        let go_name = self.pick_go_function_name(function, false, is_public);
+        let go_name = self.free_function_go_name(function.name, export);
         let doc_comment = item_doc_text(doc, name, &go_name);
         if self.facts.is_test(&self.facts.qualified_current(name)) {
-            return self.emit_test_function(name, function, is_public, &doc_comment);
+            return self.emit_test_function(name, function, export, &doc_comment);
         }
         let mut declarations = self.emit_function(function, None, &go_name, None);
         if let Some(first) = declarations.first_mut() {
@@ -149,7 +149,7 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         function: FunctionDefinitionView<'_>,
-        is_public: bool,
+        export: GoExport,
         doc_comment: &str,
     ) -> Vec<GoDeclaration> {
         let injected = synthesized_test_handle_params(&self.facts, function);
@@ -157,7 +157,7 @@ impl Planner<'_> {
             Some(params) => FunctionDefinitionView { params, ..function },
             None => function,
         };
-        let callee = self.pick_go_function_name(function, false, is_public);
+        let callee = self.free_function_go_name(function.name, export);
         let handle = go_name::fresh_suffixed("t", |name| {
             name == callee || name == testkit_qualifier() || name == testing_qualifier()
         });

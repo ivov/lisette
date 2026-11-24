@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::lookup::facts::synthesized_methods::StringFormat;
 use crate::lowering::abi::go_returns::multi_value_return;
+use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::structs::format_value;
 use crate::target::ir::bodies::{
@@ -392,7 +393,7 @@ impl EnumLayout {
                     "invalid {} JSON: expected string",
                     self.enum_name
                 ))]),
-                false,
+                Polarity::Negated,
             ));
             body.push(choice);
         } else {
@@ -400,7 +401,7 @@ impl EnumLayout {
                 GoExpression::identifier(names.data.clone()),
                 GoExpression::identifier(names.name.clone()),
                 Some(vec![choice]),
-                true,
+                Polarity::Positive,
             ));
         }
     }
@@ -420,7 +421,7 @@ impl EnumLayout {
             GoExpression::identifier(names.data.clone()),
             GoExpression::identifier(names.obj.clone()),
             Some(vec![json_error(format!("invalid {} JSON", self.enum_name))]),
-            false,
+            Polarity::Negated,
         ));
         let cases = payload
             .iter()
@@ -467,7 +468,7 @@ impl EnumLayout {
                 GoExpression::identifier(names.val.clone()),
                 GoExpression::identifier(names.inner.clone()),
                 None,
-                false,
+                Polarity::Negated,
             ));
             for field in &variant.fields {
                 let ok = planner.scope.new_local_identifier("ok");
@@ -478,7 +479,7 @@ impl EnumLayout {
                             GoExpression::identifier(names.v.clone()),
                             member(&names.receiver, &field.go_name),
                             None,
-                            false,
+                            Polarity::Negated,
                         )],
                     },
                     ElseArm::None,
@@ -507,7 +508,7 @@ impl EnumLayout {
                 GoExpression::identifier(names.val.clone()),
                 GoExpression::identifier(names.arr.clone()),
                 None,
-                false,
+                Polarity::Negated,
             ));
             let len = GoExpression::call(
                 GoExpression::external_name("len".to_string()),
@@ -636,14 +637,17 @@ impl Planner<'_> {
         value: GoExpression,
         target: GoExpression,
         body: Option<Vec<Statement>>,
-        success: bool,
+        polarity: Polarity,
     ) -> Statement {
         let error = self.scope.new_local_identifier("err");
         let body =
             body.unwrap_or_else(|| vec![plain_return(GoExpression::identifier(error.clone()))]);
         let condition = GoExpression::binary(
             GoExpression::identifier(error.clone()),
-            if success { BinaryOp::Eq } else { BinaryOp::Ne },
+            match polarity {
+                Polarity::Positive => BinaryOp::Eq,
+                Polarity::Negated => BinaryOp::Ne,
+            },
             GoExpression::nil(),
         );
         let mut plan = IfPlan::plain(condition, LoweredBlock { statements: body }, ElseArm::None);
@@ -673,7 +677,7 @@ impl Planner<'_> {
                 if index + 1 == variant.fields.len() {
                     plain_return(unmarshal(value, target))
                 } else {
-                    self.json_guard(value, target, None, false)
+                    self.json_guard(value, target, None, Polarity::Negated)
                 }
             })
             .collect()

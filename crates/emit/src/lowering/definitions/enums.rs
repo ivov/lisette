@@ -11,7 +11,7 @@ use crate::target::ir::go_expression::{CompositeLayout, GoParameter};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::generics::generic_bounds;
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport};
 use crate::target::names::receiver::ReceiverGenerics;
 use crate::target::names::receiver::{synthesized_local_name, synthesized_receiver_name};
 use crate::target::types::go_type::GoType;
@@ -60,11 +60,13 @@ impl Planner<'_> {
             }
         }
         if has_iterate {
-            let is_public = self
+            let export = self
                 .facts
                 .definition(enum_id.as_str())
-                .is_some_and(|definition| definition.visibility.is_public());
-            let fn_name = go_name::associated_function_go_name(name, "variants", is_public);
+                .map_or(GoExport::Unexported, |definition| {
+                    GoExport::from_visibility(definition.visibility)
+                });
+            let fn_name = go_name::associated_function_go_name(name, "variants", export);
             result.push(layout.variants_declaration(&fn_name));
         }
 

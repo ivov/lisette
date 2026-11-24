@@ -4,16 +4,17 @@ use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate
 use crate::lookup::state::bindings::InlineExpr;
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
-use crate::lowering::abi::fallible_producer::GuardedPayload;
+use crate::lowering::abi::fallible_producer::{ErrorNilGuard, GuardedPayload};
 use crate::lowering::abi::fallible_producer::{OptionFusePlan, ResultFusePlan};
 use crate::lowering::abi::go_result_wrapping::{
     nil_condition, non_nil_condition, unexpected_nil_error,
 };
 use crate::lowering::abi::go_returns;
 use crate::lowering::abi::layout::ValueLayout;
-use crate::lowering::calls::comma_ok::CommaOkValueSlot;
+use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PairPlacement};
 use crate::lowering::calls::go_interop::{LoweredCall, RawPair};
 use crate::lowering::calls::unwrap_or::{MapLambda, map_lambda};
+use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::patterns::matching::FusedName;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::bodies::PairCondition;
@@ -87,6 +88,12 @@ impl<'a> PropagateTarget<'a> {
             PropagateTarget::Value | PropagateTarget::Discard => None,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SpentErrorReuse {
+    Allowed,
+    Forbidden,
 }
 
 impl Planner<'_> {
@@ -282,20 +289,23 @@ impl Planner<'_> {
     fn propagate_error_status(
         &mut self,
         fallible: &Fallible,
-        opens_if: bool,
-        can_reuse_spent_error: bool,
+        placement: PairPlacement,
+        reuse: SpentErrorReuse,
     ) -> GoIdentifier {
         match fallible.err_ty() {
-            Some(error_ty) if !opens_if => {
+            Some(error_ty) if placement == PairPlacement::Statement => {
                 let error_ty = &self.facts.without_go_aliases(error_ty);
-                let name = can_reuse_spent_error
-                    .then(|| self.scope.spent_error(error_ty))
-                    .flatten()
-                    .unwrap_or_else(|| self.pair_status(None, PairStatusKind::Error, false));
+                let spent = match reuse {
+                    SpentErrorReuse::Allowed => self.scope.spent_error(error_ty),
+                    SpentErrorReuse::Forbidden => None,
+                };
+                let name = spent.unwrap_or_else(|| {
+                    self.pair_status(None, PairStatusKind::Error, PairPlacement::Statement)
+                });
                 self.scope.declare_spent_error(&name, error_ty);
                 name
             }
-            _ => self.pair_status(None, PairStatusKind::Error, opens_if),
+            _ => self.pair_status(None, PairStatusKind::Error, placement),
         }
     }
 
@@ -333,9 +343,18 @@ impl Planner<'_> {
         };
         let value_var = (has_value_slot && (want_value || nil_guard.is_some()))
             .then(|| named.cloned().unwrap_or_else(|| self.fresh_declared("ret")));
-        let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
-        let opens_if = value_var.is_none() && message_setup.is_empty();
-        let outcome_var = self.propagate_error_status(fallible, opens_if, message_setup.is_empty());
+        let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, ErrorUse::Read);
+        let placement = if value_var.is_none() && message_setup.is_empty() {
+            PairPlacement::IfInitializer
+        } else {
+            PairPlacement::Statement
+        };
+        let reuse = if message_setup.is_empty() {
+            SpentErrorReuse::Allowed
+        } else {
+            SpentErrorReuse::Forbidden
+        };
+        let outcome_var = self.propagate_error_status(fallible, placement, reuse);
         let outcome = || GoExpression::identifier(outcome_var.clone());
         let binding = Definition {
             names: match &value_var {
@@ -345,11 +364,12 @@ impl Planner<'_> {
             },
             value: call,
         };
-        let initializer = if opens_if {
-            Some(binding)
-        } else {
-            statements.push(LoweredStatement::Define(binding).into());
-            None
+        let initializer = match placement {
+            PairPlacement::IfInitializer => Some(binding),
+            PairPlacement::Statement => {
+                statements.push(LoweredStatement::Define(binding).into());
+                None
+            }
         };
         statements.extend(message_setup);
         let guarded_value = || {
@@ -484,12 +504,12 @@ impl Planner<'_> {
     fn bind_mapped_failure(&mut self, mapped: Mapped<'_>, slot: CommaOkValueSlot) -> MappedFailure {
         match mapped {
             Mapped::MapErr(fuse, mappers) => {
-                let has_nil_guard = fuse.has_nil_guard();
+                let nil_guard = fuse.error_nil_guard();
                 let pair = fuse.bind(self, slot, None);
                 let failure = pair.failure_condition();
                 let status = pair.status_identifier().clone();
                 let mut failure_setup = Vec::new();
-                if has_nil_guard && mappers[0].reads_error() {
+                if nil_guard == ErrorNilGuard::Guarded && mappers[0].reads_error() {
                     failure_setup.push(
                         LoweredStatement::If(IfPlan::plain(
                             nil_condition(GoExpression::identifier(status.clone())),

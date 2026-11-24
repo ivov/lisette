@@ -2,6 +2,7 @@ use super::NativeCallContext;
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
+use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::patterns::matching::{FusedName, OptionArms, field_binding};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::PlacePlan;
@@ -312,7 +313,7 @@ impl<'p> Planner<'p> {
         statements.push(
             LoweredStatement::If(IfPlan {
                 initializer: None,
-                condition: index.condition(true),
+                condition: index.condition(Polarity::Positive),
                 then_body: LoweredBlock {
                     statements: vec![assign(
                         GoExpression::identifier(value.clone()),

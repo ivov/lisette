@@ -10,7 +10,7 @@ use syntax::program::File;
 
 use crate::Planner;
 use crate::lookup::facts::synthesized_methods::StructShape;
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport};
 use syntax::go_names::ENUM_TAG_FIELD;
 
 #[derive(Default)]
@@ -176,9 +176,9 @@ impl Planner<'_> {
             return;
         };
         let name_span = *name_span;
-        let is_public = matches!(visibility, Visibility::Public);
-        if is_public || private_functions == PrivateFunctions::Include {
-            let go = self.free_function_go_name(name, is_public);
+        let export = GoExport::from_visibility(*visibility);
+        if export == GoExport::Exported || private_functions == PrivateFunctions::Include {
+            let go = self.free_function_go_name(name, export);
             check_reserved_prefix(name, &name_span, &mut collected.diagnostics);
             check_reserved_prefix(&go, &name_span, &mut collected.diagnostics);
             collected.package_block.claim(go, name_span);
@@ -422,9 +422,9 @@ fn collect_impl_block(
         else {
             continue;
         };
-        let is_public = matches!(visibility, Visibility::Public);
+        let export = GoExport::from_visibility(*visibility);
         let go = if facts.emits_go_method(&qualified_type, name) {
-            let method_go = facts.method_go_name(name, is_public);
+            let method_go = facts.method_go_name(name, export);
             check_reserved_prefix(name, name_span, &mut collected.diagnostics);
             check_reserved_prefix(&method_go, name_span, &mut collected.diagnostics);
             collected
@@ -434,7 +434,7 @@ fn collect_impl_block(
                 .claim(method_go, *name_span);
             continue;
         } else {
-            go_name::associated_function_go_name(receiver_name, name, is_public)
+            go_name::associated_function_go_name(receiver_name, name, export)
         };
         check_reserved_prefix(name, name_span, &mut collected.diagnostics);
         check_reserved_prefix(&go, name_span, &mut collected.diagnostics);
@@ -455,7 +455,7 @@ fn collect_interface(
     check_reserved_qualifier(&type_go, &name_span, &mut collected.diagnostics);
     collected.package_block.claim(type_go.clone(), name_span);
 
-    let is_public = matches!(visibility, Visibility::Public);
+    let export = GoExport::from_visibility(*visibility);
     let methods = collected.interfaces.entry(type_go).or_default();
     for signature in method_signatures {
         if let Expression::Function {
@@ -464,7 +464,7 @@ fn collect_interface(
             ..
         } = signature
         {
-            let method_go = facts.interface_method_go_name(method_name, is_public);
+            let method_go = facts.interface_method_go_name(method_name, export);
             methods.claim(method_go, *method_span);
         }
     }
@@ -495,7 +495,7 @@ fn collect_enum(facts: &EmitFacts<'_>, item: &Expression, collected: &mut Collec
         let variants_fn = go_name::associated_function_go_name(
             name,
             "variants",
-            matches!(visibility, Visibility::Public),
+            GoExport::from_visibility(*visibility),
         );
         package_block.claim(variants_fn, name_span);
     }

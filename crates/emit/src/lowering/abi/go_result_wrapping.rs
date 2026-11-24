@@ -230,7 +230,7 @@ impl Planner<'_> {
                 type_params,
                 vec![(error_value(), error_layout_change)],
             );
-            let inner = IfPlan::plain(check, error_body, ElseArm::from_body(both_body, false));
+            let inner = IfPlan::plain(check, error_body, ElseArm::block(both_body));
             LoweredBlock {
                 statements: vec![LoweredStatement::If(inner).into()],
             }
@@ -238,7 +238,7 @@ impl Planner<'_> {
             both_body
         };
 
-        let else_arm = ElseArm::from_body(ok_body, false);
+        let else_arm = ElseArm::block(ok_body);
 
         statements.push(
             LoweredStatement::If(IfPlan::plain(
@@ -407,10 +407,10 @@ impl Planner<'_> {
             ElseArm::ElseIf(Box::new(IfPlan::plain(
                 nil_condition,
                 leaf_block(&sink, nil_err),
-                ElseArm::from_body(ok_body, false),
+                ElseArm::block(ok_body),
             )))
         } else {
-            ElseArm::from_body(ok_body, false)
+            ElseArm::block(ok_body)
         };
 
         statements.push(
@@ -501,7 +501,7 @@ impl Planner<'_> {
                 vec![self.unit_value(None, None)],
             )
         };
-        let else_arm = ElseArm::from_body(leaf_block(&sink, ok_wrapper), false);
+        let else_arm = ElseArm::block(leaf_block(&sink, ok_wrapper));
 
         statements.push(
             LoweredStatement::If(IfPlan::plain(
@@ -662,7 +662,7 @@ impl Planner<'_> {
                 LoweredBlock {
                     statements: payload_setup,
                 },
-                ElseArm::from_body(leaf_block(&sink, none_wrapper), false),
+                ElseArm::block(leaf_block(&sink, none_wrapper)),
             ))
             .into(),
         );

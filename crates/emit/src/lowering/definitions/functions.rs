@@ -15,8 +15,8 @@ use crate::output::finish::hygiene::{
     apply_go_hygiene, blank_unused_parameters, drop_unused_locals,
 };
 use crate::output::finish::locals::identify_body_locals;
-use crate::output::finish::verify::verify_final_function_body;
 use crate::output::finish::verify::verify_local_scopes;
+use crate::output::finish::verify::{BodyResult, verify_final_function_body};
 use crate::target::ir::bodies::AsyncKind;
 use crate::target::ir::bodies::async_statement;
 use crate::target::ir::bodies::{
@@ -61,8 +61,11 @@ pub(in crate::lowering) struct LambdaReturnInfo {
 }
 
 impl LambdaReturnInfo {
-    fn should_return(&self) -> bool {
-        self.signature.is_some()
+    fn body_result(&self) -> BodyResult {
+        match self.signature {
+            Some(_) => BodyResult::Value,
+            None => BodyResult::Void,
+        }
     }
 
     pub(in crate::lowering) fn signature(&self) -> GoType {
@@ -74,22 +77,22 @@ impl Planner<'_> {
     fn lower_function_body_inner(
         &mut self,
         body: &Expression,
-        should_return: bool,
+        result: BodyResult,
         mut prefix: Vec<Statement>,
         parameters: &mut [GoIdentifier],
     ) -> LoweredBlock {
-        let mut lowered = self.lower_function_body(body, should_return);
+        let mut lowered = self.lower_function_body(body, result);
         prefix.append(&mut lowered.statements);
         lowered.statements = prefix;
 
-        self.finish_function_body(lowered, parameters, should_return, BodyOrigin::Source)
+        self.finish_function_body(lowered, parameters, result, BodyOrigin::Source)
     }
 
     pub(super) fn finish_function_body(
         &mut self,
         mut body: LoweredBlock,
         parameters: &mut [GoIdentifier],
-        has_result: bool,
+        result: BodyResult,
         origin: BodyOrigin,
     ) -> LoweredBlock {
         let sourcemap = self.facts.sourcemap();
@@ -101,7 +104,7 @@ impl Planner<'_> {
         drop_unused_locals(&mut body.statements);
         clean_up(&mut body.statements, &shadowing, parameters, &self.scope);
         declare_zero_values(&mut body.statements, &mut self.scope, self.names);
-        apply_go_hygiene(&mut body, has_result);
+        apply_go_hygiene(&mut body, result);
         if sourcemap {
             inherit_line_directives(&mut body.statements, None);
         }
@@ -109,8 +112,7 @@ impl Planner<'_> {
             self.settle_generated_names(&mut body.statements, parameters);
         }
         if cfg!(debug_assertions) {
-            verify_final_function_body(&mut body, has_result)
-                .unwrap_or_else(|error| panic!("{error}"));
+            verify_final_function_body(&mut body, result).unwrap_or_else(|error| panic!("{error}"));
         }
         verify_local_scopes(&mut body.statements, parameters)
             .unwrap_or_else(|error| panic!("{error}"));
@@ -241,13 +243,13 @@ impl Planner<'_> {
             let mut statements = this.lower_lambda_body_with_deferred(
                 body,
                 &destructures,
-                return_info.should_return(),
+                return_info.body_result(),
             );
             if let Some(recover) = recover {
                 statements.insert(0, recover);
             }
             let mut body = LoweredBlock { statements };
-            let unit_result = return_info.should_return()
+            let unit_result = return_info.body_result() == BodyResult::Value
                 && ty
                     .get_function_ret()
                     .is_some_and(|ret| this.facts.resolves_to_unit(ret));
@@ -299,10 +301,10 @@ impl Planner<'_> {
         &mut self,
         body: &Expression,
         destructures: &[ParamDestructure<'_>],
-        should_return: bool,
+        result: BodyResult,
     ) -> Vec<Statement> {
         let mut statements = self.lower_param_destructures(destructures);
-        let body = self.lower_function_body(body, should_return);
+        let body = self.lower_function_body(body, result);
         statements.extend(body.statements);
         statements
     }
@@ -417,20 +419,6 @@ impl Planner<'_> {
         declarations
     }
 
-    pub(in crate::lowering) fn pick_go_function_name(
-        &self,
-        function_definition: FunctionDefinitionView<'_>,
-        has_receiver: bool,
-        is_public: bool,
-    ) -> String {
-        if has_receiver {
-            self.facts
-                .method_go_name(function_definition.name, is_public)
-        } else {
-            self.free_function_go_name(function_definition.name, is_public)
-        }
-    }
-
     fn lower_signature_params<'a>(
         &mut self,
         params_to_process: &'a [Binding],
@@ -465,13 +453,16 @@ impl Planner<'_> {
         deferred_patterns: &[ParamDestructure<'_>],
         parameters: &mut [GoIdentifier],
     ) -> LoweredBlock {
-        let should_return = !matches!(self.scope.current_return_ctx(), ReturnContext::Void(_));
+        let result = match self.scope.current_return_ctx() {
+            ReturnContext::Void(_) => BodyResult::Void,
+            _ => BodyResult::Value,
+        };
         let prefix = self.lower_param_destructures(deferred_patterns);
         self.lower_function_body_inner(
             function_definition
                 .body
                 .expect("declarations return before function body emission"),
-            should_return,
+            result,
             prefix,
             parameters,
         )

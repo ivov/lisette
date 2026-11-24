@@ -6,7 +6,7 @@ use crate::lowering::calls::NativeCallContext;
 use crate::lowering::calls::bound_value::BoundValue;
 use crate::lowering::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
 use crate::lowering::calls::slice_loop::FoundSink;
-use crate::lowering::calls::wrap_err::WrapMessage;
+use crate::lowering::calls::wrap_err::{ErrorUse, WrapMessage};
 use crate::lowering::control_flow::try_recover_blocks::TryBlockPairPlan;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::bodies::{Statement, define};
@@ -113,6 +113,12 @@ impl OptionFusePlan<'_> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum ErrorNilGuard {
+    Guarded,
+    Unguarded,
+}
+
 impl ResultFusePlan<'_> {
     pub(in crate::lowering) fn wraps_error(&self) -> bool {
         !self.wraps.is_empty()
@@ -122,8 +128,11 @@ impl ResultFusePlan<'_> {
         self.bound.is_some()
     }
 
-    pub(in crate::lowering) fn has_nil_guard(&self) -> bool {
-        self.nil_guard.is_some()
+    pub(in crate::lowering) fn error_nil_guard(&self) -> ErrorNilGuard {
+        match self.nil_guard {
+            Some(_) => ErrorNilGuard::Guarded,
+            None => ErrorNilGuard::Unguarded,
+        }
     }
 
     pub(in crate::lowering) fn shape(&self) -> &LoweredReturnAbi {
@@ -140,7 +149,8 @@ impl ResultFusePlan<'_> {
         slot: CommaOkValueSlot,
         error_name: Option<&SourceName>,
     ) -> BoundValue {
-        self.bind_wrapped(planner, slot, error_name, false).0
+        self.bind_wrapped(planner, slot, error_name, ErrorUse::Unread)
+            .0
     }
 
     pub(in crate::lowering) fn bind_wrapped(
@@ -148,7 +158,7 @@ impl ResultFusePlan<'_> {
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
         error_name: Option<&SourceName>,
-        read_error: bool,
+        error_use: ErrorUse,
     ) -> (BoundValue, Vec<WrapMessage>) {
         if let Some(components) = self.bound {
             return (planner.bind_component_pair(components, slot), Vec::new());
@@ -158,7 +168,7 @@ impl ResultFusePlan<'_> {
         let (setup, call) = planner
             .plan_call_expression(self.subject, None, ExpressionContext::value())
             .into_parts();
-        let (message_setup, messages) = planner.prepare_wrap_messages(&self.wraps, read_error);
+        let (message_setup, messages) = planner.prepare_wrap_messages(&self.wraps, error_use);
 
         let slot = if message_setup.is_empty() {
             slot
@@ -282,7 +292,9 @@ impl FallibleProducer<'_> {
     fn supports_components(&self) -> bool {
         match self {
             Self::Result(producer) => {
-                !producer.has_nil_guard() && !producer.wraps_error() && producer.carries_payload()
+                producer.error_nil_guard() == ErrorNilGuard::Unguarded
+                    && !producer.wraps_error()
+                    && producer.carries_payload()
             }
             Self::Option(OptionFusePlan::CommaOk { source, .. }) => !source.has_nil_guard(),
             Self::TryBlock(_) => true,

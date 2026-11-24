@@ -38,6 +38,18 @@ use syntax::program::SlotOrigin;
 use syntax::program::{CallOperation, DotAccessResolution};
 use syntax::types::Type;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum TuplePosition {
+    Value,
+    Tail,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum ElementTarget {
+    Value,
+    LoweredReturn,
+}
+
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_value(
         &mut self,
@@ -54,7 +66,6 @@ impl Planner<'_> {
                         value,
                         &change.source,
                         &change.target,
-                        false,
                     )
                 });
         }
@@ -303,7 +314,7 @@ impl Planner<'_> {
         tuple: &Expression,
         values: Vec<GoExpression>,
         slot_types: &[Type],
-        lowered_return: bool,
+        target: ElementTarget,
     ) -> Vec<GoExpression> {
         let Expression::Tuple { elements, ty, .. } = tuple else {
             unreachable!("only a tuple literal has elements to coerce")
@@ -325,10 +336,11 @@ impl Planner<'_> {
         if placed.is_some() {
             self.record_converted_value(tuple);
         }
-        let slot_layouts = if lowered_return {
-            self.lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec()))
-        } else {
-            Vec::new()
+        let slot_layouts = match target {
+            ElementTarget::LoweredReturn => {
+                self.lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec()))
+            }
+            ElementTarget::Value => Vec::new(),
         };
         let mut coerced_elements = Vec::with_capacity(values.len());
         for (index, (element, value)) in elements.iter().zip(values).enumerate() {
@@ -392,7 +404,7 @@ impl Planner<'_> {
     pub(in crate::lowering) fn plan_tuple_value(
         &mut self,
         tuple: &Expression,
-        in_tail: bool,
+        position: TuplePosition,
     ) -> ValuePlan {
         let Expression::Tuple { elements, ty, .. } = tuple else {
             unreachable!("plan_tuple_value lowers a tuple literal")
@@ -401,10 +413,11 @@ impl Planner<'_> {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
-        let slot_types = match in_tail.then(|| self.tail_tuple_return_slots(tuple)) {
-            Some(Some(return_slots)) => return_slots,
-            _ => inferred_slot_types,
+        let tail_slots = match position {
+            TuplePosition::Tail => self.tail_tuple_return_slots(tuple),
+            TuplePosition::Value => None,
         };
+        let slot_types = tail_slots.unwrap_or(inferred_slot_types);
 
         let stages: Vec<ValuePlan> = elements
             .iter()
@@ -423,8 +436,13 @@ impl Planner<'_> {
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let mut setup = sequenced.setup;
 
-        let element_expressions =
-            self.coerce_elements_to_slots(&mut setup, tuple, sequenced.values, &slot_types, false);
+        let element_expressions = self.coerce_elements_to_slots(
+            &mut setup,
+            tuple,
+            sequenced.values,
+            &slot_types,
+            ElementTarget::Value,
+        );
         let callee = self.make_tuple_callee(&slot_types, element_expressions.len());
         ValuePlan::computed(setup, GoExpression::pure_call(callee, element_expressions))
     }
@@ -762,7 +780,7 @@ impl Planner<'_> {
                 expression,
                 ..
             } => self.plan_unary(operator, expression, ctx),
-            Expression::Tuple { .. } => self.plan_tuple_value(expression, false),
+            Expression::Tuple { .. } => self.plan_tuple_value(expression, TuplePosition::Value),
             Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
             Expression::StructCall { .. } => self.plan_struct_call(expression),
             Expression::Reference {

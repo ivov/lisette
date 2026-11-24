@@ -12,6 +12,7 @@ use crate::target::ir::bodies::{
 };
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::values::GoExpression;
+use crate::target::names::go_name::MemberSpelling;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::NativeTypeKind;
@@ -53,7 +54,7 @@ impl<'a> PlaceOrdering<'a> {
     }
 
     fn pins(self, plan: &ValuePlan) -> bool {
-        self.later().prepend(plan, false) || (self.read_twice && !plan.effects().can_duplicate())
+        self.later().prepend(plan) || (self.read_twice && !plan.effects().can_duplicate())
     }
 }
 
@@ -277,8 +278,13 @@ impl Planner<'_> {
             } => {
                 let expression_ty = base.get_type();
                 if let Some(package) = expression_ty.as_import_namespace() {
-                    let field =
-                        self.dot_member_go_name(base, &expression_ty, member, resolution, false);
+                    let field = self.dot_member_go_name(
+                        base,
+                        &expression_ty,
+                        member,
+                        resolution,
+                        MemberSpelling::Plain,
+                    );
                     return GoExpression::qualified(self.package_use_for_package(package), field);
                 }
                 let elided_deref = base
@@ -298,8 +304,13 @@ impl Planner<'_> {
                 {
                     return access;
                 }
-                let field =
-                    self.dot_member_go_name(base, &expression_ty, member, resolution, false);
+                let field = self.dot_member_go_name(
+                    base,
+                    &expression_ty,
+                    member,
+                    resolution,
+                    MemberSpelling::Plain,
+                );
                 self.facts.field_access(base_value, &expression_ty, field)
             }
             Expression::IndexedAccess {
@@ -342,9 +353,9 @@ impl Planner<'_> {
         let base_plan = ValuePlan::computed(Vec::new(), base_expression)
             .with_stability(self.place_read_stability(base));
         let mut later = ordering.later();
-        later.prepend(&index_plan, false);
+        later.prepend(&index_plan);
         let pin_base = ordering.pins(&base_plan)
-            || later.prepend(&base_plan, false)
+            || later.prepend(&base_plan)
             || (is_order_sensitive(base)
                 && (base_plan.expression().effects().runs_code()
                     || index_plan.effects().runs_code()));

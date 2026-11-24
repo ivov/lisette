@@ -9,6 +9,7 @@ use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::ElidableTail;
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::statements::testing::is_test_log_call;
+use crate::output::finish::verify::BodyResult;
 use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement, declare};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -74,9 +75,9 @@ impl Planner<'_> {
     pub(in crate::lowering) fn lower_function_body(
         &mut self,
         body: &Expression,
-        should_return: bool,
+        result: BodyResult,
     ) -> LoweredBlock {
-        if !should_return {
+        if result == BodyResult::Void {
             return self.lower_block_as_body(body);
         }
 

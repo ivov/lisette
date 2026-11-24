@@ -1,5 +1,5 @@
 use crate::output::finish::cleanup::drop_unreachable_statements;
-use crate::output::finish::verify::verify_final_function_body;
+use crate::output::finish::verify::{BodyResult, verify_final_function_body};
 use crate::target::ir::bodies::LoweredBlock;
 use crate::target::ir::go_expression::{FunctionLiteralLayout, GoParameter};
 use crate::target::ir::values::GoExpression;
@@ -17,7 +17,12 @@ pub(crate) fn function_literal(
         body.ensure_go_termination();
     }
     if cfg!(debug_assertions) {
-        verify_final_function_body(&mut body, !result.is_empty())
+        let body_result = if result.is_empty() {
+            BodyResult::Void
+        } else {
+            BodyResult::Value
+        };
+        verify_final_function_body(&mut body, body_result)
             .unwrap_or_else(|error| panic!("{error}"));
     }
     GoExpression::unchecked_function_literal(parameters, result, body, layout)

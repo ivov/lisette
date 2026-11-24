@@ -5,6 +5,7 @@ use crate::lowering::abi::go_returns;
 use crate::lowering::calls::call_plan::CallPlan;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::go_interop::LoweredProducer;
+use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::is_go_never;
 use crate::lowering::plan::context::ExpressionContext;
@@ -224,7 +225,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let error = args.first().map(|arg| {
             let error = self.plan_composite_value(arg, ExpressionContext::value());
-            let (message_setup, wraps) = self.prepare_wrap_messages(wraps, true);
+            let (message_setup, wraps) = self.prepare_wrap_messages(wraps, ErrorUse::Read);
             let error = if message_setup.is_empty() {
                 error
             } else {

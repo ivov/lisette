@@ -3,7 +3,7 @@ use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
 use crate::target::names::generics::generic_bounds;
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport};
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, Generic, ParentInterface};
 use syntax::program::{Definition, PRELUDE_PACKAGE_ID};
@@ -16,7 +16,7 @@ impl Planner<'_> {
         items: &[Expression],
         parents: &[ParentInterface],
         generics: &[Generic],
-        is_public: bool,
+        export: GoExport,
     ) -> GoDeclaration {
         let name_go = go_name::escape_type_name(name).into_owned();
         if self.facts.is_current_package(PRELUDE_PACKAGE_ID) {
@@ -48,7 +48,7 @@ impl Planner<'_> {
                 .collect(),
             methods: items
                 .iter()
-                .map(|item| self.emit_interface_method(name, item, is_public))
+                .map(|item| self.emit_interface_method(name, item, export))
                 .collect(),
         })
     }
@@ -57,7 +57,7 @@ impl Planner<'_> {
         &mut self,
         interface_name: &str,
         item: &Expression,
-        is_public: bool,
+        export: GoExport,
     ) -> InterfaceMethod {
         let func = item.function_definition_view();
         let ty = item.get_type();
@@ -93,7 +93,7 @@ impl Planner<'_> {
             },
         );
 
-        let method_name = self.facts.interface_method_go_name(func.name, is_public);
+        let method_name = self.facts.interface_method_go_name(func.name, export);
 
         InterfaceMethod {
             name: method_name,

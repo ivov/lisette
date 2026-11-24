@@ -12,6 +12,12 @@ pub(in crate::lowering) struct WrapMessage {
     args: Vec<GoExpression>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum ErrorUse {
+    Read,
+    Unread,
+}
+
 impl Planner<'_> {
     pub(in crate::lowering) fn peel_wrap_err<'a>(
         &self,
@@ -40,12 +46,12 @@ impl Planner<'_> {
     pub(in crate::lowering) fn prepare_wrap_messages(
         &mut self,
         messages: &[&Expression],
-        read_error: bool,
+        error_use: ErrorUse,
     ) -> (Vec<Statement>, Vec<WrapMessage>) {
         let mut setup = Vec::new();
         let mut prepared = Vec::new();
         for message in messages {
-            if !read_error {
+            if error_use == ErrorUse::Unread {
                 setup.extend(self.lower_discard_value(message));
                 continue;
             }

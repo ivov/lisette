@@ -8,23 +8,38 @@ use crate::target::ir::bodies::Statement;
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::CallOperation;
 
-struct FusedPredicate<'a> {
-    producer: FallibleProducer<'a>,
-    succeeds: bool,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum Polarity {
+    Positive,
+    Negated,
 }
 
-pub(in crate::lowering) fn strip_negations(mut expression: &Expression) -> (&Expression, bool) {
-    let mut negated = false;
+impl Polarity {
+    pub(in crate::lowering) fn flip(self) -> Self {
+        match self {
+            Self::Positive => Self::Negated,
+            Self::Negated => Self::Positive,
+        }
+    }
+}
+
+struct FusedPredicate<'a> {
+    producer: FallibleProducer<'a>,
+    polarity: Polarity,
+}
+
+pub(in crate::lowering) fn strip_negations(mut expression: &Expression) -> (&Expression, Polarity) {
+    let mut polarity = Polarity::Positive;
     while let Expression::Unary {
         operator: UnaryOperator::Not,
         expression: inner,
         ..
     } = expression
     {
-        negated = !negated;
+        polarity = polarity.flip();
         expression = inner;
     }
-    (expression, negated)
+    (expression, polarity)
 }
 
 impl<'p> Planner<'p> {
@@ -58,26 +73,26 @@ impl<'p> Planner<'p> {
             return None;
         };
         let definition = self.facts.checked(callee).callee().definition.as_deref()?;
-        let succeeds = match definition {
-            "prelude.Result.is_ok" | "prelude.Option.is_some" => true,
-            "prelude.Result.is_err" | "prelude.Option.is_none" => false,
+        let polarity = match definition {
+            "prelude.Result.is_ok" | "prelude.Option.is_some" => Polarity::Positive,
+            "prelude.Result.is_err" | "prelude.Option.is_none" => Polarity::Negated,
             _ => return None,
         };
         Some(FusedPredicate {
             producer: self.fallible_producer(receiver)?,
-            succeeds,
+            polarity,
         })
     }
 
     fn bind_fused_predicate(
         &mut self,
         predicate: FusedPredicate<'_>,
-        negated: bool,
+        polarity: Polarity,
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, PairCondition) {
-        let succeeds = predicate.succeeds;
+        let predicate_polarity = predicate.polarity;
         let bound = predicate.producer.bind_slot(self, slot);
-        let condition = if succeeds != negated {
+        let condition = if predicate_polarity == polarity {
             bound.success_condition()
         } else {
             bound.failure_condition()
@@ -89,19 +104,19 @@ impl<'p> Planner<'p> {
         &mut self,
         condition: &Expression,
     ) -> Option<(Vec<Statement>, PairCondition)> {
-        let (target, negated) = strip_negations(condition);
+        let (target, polarity) = strip_negations(condition);
         let predicate = self.fused_predicate(target)?;
-        Some(self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Unused))
+        Some(self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Unused))
     }
 
     pub(in crate::lowering) fn try_plan_fused_predicate_value(
         &mut self,
         expression: &Expression,
-        negated: bool,
+        polarity: Polarity,
     ) -> Option<ValuePlan> {
         let predicate = self.fused_predicate(expression)?;
         let (setup, condition) =
-            self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Discarded);
+            self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Discarded);
         debug_assert!(condition.initializer.is_none());
         Some(ValuePlan::plain_call(setup, condition.condition))
     }

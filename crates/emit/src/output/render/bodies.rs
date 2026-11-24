@@ -1,9 +1,9 @@
 use crate::output::render::Renderer;
 use crate::output::render::writer::GoWriter;
 use crate::target::ir::bodies::{
-    AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan,
-    LoopTransfer, LoweredBlock, LoweredStatement, SelectArmKind, SelectStatementPlan, Statement,
-    SwitchKind, SwitchStatementPlan,
+    AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, ElseLayout, IfPlan, LoopHeader,
+    LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement, SelectArmKind, SelectStatementPlan,
+    Statement, SwitchKind, SwitchStatementPlan,
 };
 use crate::target::ir::go_expression::Position;
 use crate::target::ir::go_expression::{
@@ -319,15 +319,18 @@ impl Renderer {
                 self.render_lowered_block(output, &plan.then_body);
                 self.render_else_arm(output, &plan.else_arm);
             }
-            ElseArm::Else { body, inline } => {
+            ElseArm::Else { body, layout } => {
                 debug_assert!(!body.renders_empty(), "else body must render output");
-                if *inline {
-                    output.push_str("}\n");
-                    self.render_lowered_block(output, body);
-                } else {
-                    output.push_str("} else {\n");
-                    self.render_lowered_block(output, body);
-                    output.push_str("}\n");
+                match layout {
+                    ElseLayout::Inline => {
+                        output.push_str("}\n");
+                        self.render_lowered_block(output, body);
+                    }
+                    ElseLayout::Block => {
+                        output.push_str("} else {\n");
+                        self.render_lowered_block(output, body);
+                        output.push_str("}\n");
+                    }
                 }
             }
         }

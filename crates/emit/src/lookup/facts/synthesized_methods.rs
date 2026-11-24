@@ -1,6 +1,6 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::values::GoExpression;
-use crate::target::names::go_name::GeneratedPackage;
+use crate::target::names::go_name::{GeneratedPackage, GoExport};
 use crate::target::types::display_form::{DisplayForm, UNIT_DISPLAY};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, StructFieldDefinition};
@@ -184,11 +184,11 @@ impl EmitFacts<'_> {
     }
 
     pub(crate) fn to_string_method_go_name(&self) -> String {
-        self.method_go_name("to_string", false)
+        self.method_go_name("to_string", GoExport::Unexported)
     }
 
     pub(crate) fn equals_method_go_name(&self) -> String {
-        self.method_go_name("equals", false)
+        self.method_go_name("equals", GoExport::Unexported)
     }
 
     fn stringer_method_name(&self, name: &str, attributes: &[Attribute]) -> Option<&'static str> {

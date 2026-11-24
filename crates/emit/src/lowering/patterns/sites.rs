@@ -863,7 +863,7 @@ fn assemble_if_else_chain(
     mut pieces: Vec<(GoExpression, LoweredBlock)>,
     terminal: LoweredBlock,
 ) -> LoweredStatement {
-    let mut else_arm = ElseArm::from_body(terminal, false);
+    let mut else_arm = ElseArm::block(terminal);
     while pieces.len() > 1 {
         let (condition, then_body) = pieces.pop().expect("len > 1");
         else_arm = ElseArm::ElseIf(Box::new(IfPlan::plain(condition, then_body, else_arm)));

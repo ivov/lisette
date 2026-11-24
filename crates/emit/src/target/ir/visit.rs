@@ -1,6 +1,7 @@
 use super::bodies::{
-    AssignForm, CompoundKind, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan, LoweredStatement,
-    SelectArmKind, SelectStatementPlan, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
+    AssignForm, CompoundKind, Definition, ElseArm, ElseLayout, IfPlan, LoopHeader, LoopPlan,
+    LoweredStatement, SelectArmKind, SelectStatementPlan, Statement, SwitchCasePlan, SwitchKind,
+    SwitchStatementPlan,
 };
 use super::go_expression::GoExpressionNode;
 use super::local::GoIdentifier;
@@ -68,13 +69,16 @@ fn visit_if_link(plan: &mut IfPlan, visitor: &mut impl VisitorMut, open: usize) 
         ElseArm::ElseIf(plan) => return visit_if_link(plan, visitor, open + 1),
         ElseArm::Else {
             body,
-            inline: false,
+            layout: ElseLayout::Block,
         } => {
             visitor.enter_scope();
             visit_statements_mut(&mut body.statements, visitor);
             visitor.exit_scope();
         }
-        ElseArm::Else { body, inline: true } => {
+        ElseArm::Else {
+            body,
+            layout: ElseLayout::Inline,
+        } => {
             for _ in 0..open {
                 visitor.exit_scope();
             }

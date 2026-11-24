@@ -9,7 +9,7 @@ use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{GoExpression, Stability};
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport, MemberSpelling};
 use crate::target::types::return_abi::CallableReturnAbi;
 use syntax::ast::Expression;
 use syntax::constant;
@@ -50,9 +50,9 @@ impl Planner<'_> {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
         let receiver_coercion = self.facts.dot_receiver_coercion(expression, member);
-        let tagged_twin = self.selects_tagged_twin(dot_access);
+        let spelling = self.member_spelling(dot_access);
 
-        if let Some(expression) = self.try_plan_pre_receiver_dot(dot_access, tagged_twin, ctx) {
+        if let Some(expression) = self.try_plan_pre_receiver_dot(dot_access, spelling, ctx) {
             let plan = ValuePlan::computed(Vec::new(), expression);
             if matches!(resolution, DotAccessResolution::EnumVariant { .. }) {
                 return plan.with_stability(Stability::Fixed);
@@ -111,7 +111,7 @@ impl Planner<'_> {
         }
 
         let field =
-            self.dot_member_go_name(expression, &expression_ty, member, resolution, tagged_twin);
+            self.dot_member_go_name(expression, &expression_ty, member, resolution, spelling);
 
         let selector = match package {
             Some(package) => GoExpression::qualified(package, field),
@@ -137,7 +137,7 @@ impl Planner<'_> {
         };
         let expression =
             if let Some((source, target)) = self.prelude_receiver_method_layouts(dot_access) {
-                self.plan_function_layout_change(&mut setup, expression, &source, &target, false)
+                self.plan_function_layout_change(&mut setup, expression, &source, &target)
             } else {
                 expression
             };
@@ -170,7 +170,7 @@ impl Planner<'_> {
     fn try_plan_pre_receiver_dot(
         &mut self,
         dot_access: &Expression,
-        tagged_twin: bool,
+        spelling: MemberSpelling,
         ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
         let Expression::DotAccess {
@@ -189,8 +189,14 @@ impl Planner<'_> {
             DotAccessResolution::StaticMethod { definition, .. } => {
                 Some(self.plan_static_method_dot(dot_access, definition, ctx))
             }
-            DotAccessResolution::InstanceMethodValue { is_exported, .. } => self
-                .try_plan_instance_method_value_dot(member, result_ty, *is_exported, tagged_twin),
+            DotAccessResolution::InstanceMethodValue { is_exported, .. } => {
+                let export = if *is_exported {
+                    GoExport::Exported
+                } else {
+                    GoExport::Unexported
+                };
+                self.try_plan_instance_method_value_dot(member, result_ty, export, spelling)
+            }
             _ => None,
         }
     }
@@ -218,30 +224,42 @@ impl Planner<'_> {
         expression_ty: &Type,
         member: &str,
         resolution: &DotAccessResolution,
-        tagged_twin: bool,
+        spelling: MemberSpelling,
     ) -> String {
         if let Some(package) = expression_ty.as_import_namespace() {
             return self.facts.package_member_go_name(package, member);
         }
         let canonical_ty = self.facts.member_owner_type(expression_ty);
-        if let DotAccessResolution::StructField { is_exported, .. } = resolution {
-            return self
-                .facts
-                .struct_field_go_name(&canonical_ty, member, *is_exported);
+        match resolution {
+            DotAccessResolution::StructField { is_exported, .. } => {
+                let export = if *is_exported {
+                    GoExport::Exported
+                } else {
+                    GoExport::Unexported
+                };
+                return self
+                    .facts
+                    .struct_field_go_name(&canonical_ty, member, export);
+            }
+            DotAccessResolution::InstanceMethod { is_exported, .. } => {
+                let export = if *is_exported {
+                    GoExport::Exported
+                } else {
+                    GoExport::Unexported
+                };
+                return self.facts.method_selector_go_name(
+                    canonical_ty.get_qualified_id(),
+                    member,
+                    export,
+                    spelling,
+                );
+            }
+            _ => {}
         }
-        if let DotAccessResolution::InstanceMethod { is_exported, .. } = resolution {
-            return self.facts.method_selector_go_name(
-                canonical_ty.get_qualified_id(),
-                member,
-                *is_exported,
-                tagged_twin,
-            );
-        }
-        let is_exported = self
+        let export = self
             .facts
-            .resolve_is_exported(expression, &canonical_ty, member);
-        self.facts
-            .member_go_name(&canonical_ty, member, is_exported)
+            .resolve_go_export(expression, &canonical_ty, member);
+        self.facts.member_go_name(&canonical_ty, member, export)
     }
 
     pub(in crate::lowering) fn try_plan_tuple_member_dot(
@@ -464,13 +482,13 @@ impl Planner<'_> {
         &mut self,
         member: &str,
         result_ty: &Type,
-        is_exported: bool,
-        tagged_twin: bool,
+        export: GoExport,
+        spelling: MemberSpelling,
     ) -> Option<GoExpression> {
         let receiver_param = &result_ty.as_function_type()?.params.first()?.ty;
         let go_method =
             self.facts
-                .receiver_method_go_name(receiver_param, member, is_exported, tagged_twin);
+                .receiver_method_go_name(receiver_param, member, export, spelling);
         Some(self.method_expression(receiver_param, go_method))
     }
 }

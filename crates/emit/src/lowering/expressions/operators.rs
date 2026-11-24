@@ -244,8 +244,10 @@ impl Planner<'_> {
             let conversion = self.facts.checked(expression).operand_conversion();
             return self.plan_binary(&flipped, left, right, conversion, ctx);
         }
-        let (innermost, inner_negated) = strip_negations(expression);
-        if let Some(predicate) = self.try_plan_fused_predicate_value(innermost, !inner_negated) {
+        let (innermost, inner_polarity) = strip_negations(expression);
+        if let Some(predicate) =
+            self.try_plan_fused_predicate_value(innermost, inner_polarity.flip())
+        {
             return predicate;
         }
         if matches!(expression, Expression::Call { .. }) {

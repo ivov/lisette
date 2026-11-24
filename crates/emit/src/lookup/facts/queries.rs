@@ -2,7 +2,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::prelude as fallible;
 use crate::target::ir::prelude::Fallible;
 use crate::target::ir::values::GoExpression;
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport};
 use crate::target::names::source_name::SourceName;
 use crate::target::types::enum_layout::VariantLayout;
 use std::borrow::Cow;
@@ -318,15 +318,20 @@ impl<'a> EmitFacts<'a> {
         is_prelude_symbol(&id) || is_go_import(&id)
     }
 
-    pub(crate) fn resolve_is_exported(
+    pub(crate) fn resolve_go_export(
         &self,
         expression: &Expression,
         expression_ty: &Type,
         member: &str,
-    ) -> bool {
-        self.compute_is_exported_context(expression, expression_ty)
+    ) -> GoExport {
+        if self.compute_is_exported_context(expression, expression_ty)
             || self.field_is_public(expression_ty, member)
             || self.method_needs_export(member)
+        {
+            GoExport::Exported
+        } else {
+            GoExport::Unexported
+        }
     }
 
     fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
@@ -345,13 +350,16 @@ impl<'a> EmitFacts<'a> {
         &self,
         ty: &Type,
         field: &str,
-        semantic_exported: bool,
+        semantic_export: GoExport,
     ) -> String {
-        self.member_go_name(
-            ty,
-            field,
-            semantic_exported || self.struct_field_is_exported(ty, field),
-        )
+        let export = if semantic_export == GoExport::Unexported
+            && self.struct_field_is_exported(ty, field)
+        {
+            GoExport::Exported
+        } else {
+            semantic_export
+        };
+        self.member_go_name(ty, field, export)
     }
 
     pub(crate) fn type_member_go_name<'n>(&self, package: &str, name: &'n str) -> Cow<'n, str> {

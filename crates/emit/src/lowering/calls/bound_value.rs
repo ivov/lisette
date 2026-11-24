@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::lowering::abi::go_result_wrapping::{NilGuard, nil_condition, non_nil_condition};
 use crate::lowering::calls::bounds::BoundsCheckedIndex;
+use crate::lowering::calls::predicates::Polarity;
 
 use crate::lookup::state::scope::PairStatusKind;
 use crate::target::ir::bodies::{Definition, PairCondition, Statement, define, discard};
@@ -74,13 +75,13 @@ impl LoweredPair {
         })
     }
 
-    fn condition(&self, success: bool) -> PairCondition {
+    fn condition(&self, polarity: Polarity) -> PairCondition {
         let status = GoExpression::identifier(self.status.clone());
-        let status = match (self.status_kind, success) {
-            (PairStatusKind::Ok, true) => status,
-            (PairStatusKind::Ok, false) => GoExpression::unary(UnaryOp::Not, status),
-            (PairStatusKind::Error, true) => nil_condition(status),
-            (PairStatusKind::Error, false) => non_nil_condition(status),
+        let status = match (self.status_kind, polarity) {
+            (PairStatusKind::Ok, Polarity::Positive) => status,
+            (PairStatusKind::Ok, Polarity::Negated) => GoExpression::unary(UnaryOp::Not, status),
+            (PairStatusKind::Error, Polarity::Positive) => nil_condition(status),
+            (PairStatusKind::Error, Polarity::Negated) => non_nil_condition(status),
         };
         let condition = match &self.value {
             PairValue::Named {
@@ -88,12 +89,10 @@ impl LoweredPair {
                 nil_guard: Some(guard),
             } => {
                 let value = GoExpression::identifier(name.clone());
-                let nil_condition = if success {
-                    guard.non_nil_condition(value)
-                } else {
-                    guard.nil_condition(value)
+                let (nil_condition, operator) = match polarity {
+                    Polarity::Positive => (guard.non_nil_condition(value), BinaryOp::And),
+                    Polarity::Negated => (guard.nil_condition(value), BinaryOp::Or),
                 };
-                let operator = if success { BinaryOp::And } else { BinaryOp::Or };
                 GoExpression::binary(status, operator, nil_condition)
             }
             _ => status,
@@ -239,30 +238,29 @@ impl BoundValue {
     }
 
     pub(in crate::lowering) fn success_condition(&self) -> PairCondition {
-        self.condition(true)
+        self.condition(Polarity::Positive)
     }
 
     pub(in crate::lowering) fn failure_condition(&self) -> PairCondition {
-        self.condition(false)
+        self.condition(Polarity::Negated)
     }
 
-    fn condition(&self, success: bool) -> PairCondition {
+    fn condition(&self, polarity: Polarity) -> PairCondition {
         let plain = |condition: GoExpression| PairCondition {
             initializer: None,
             condition,
         };
         match &self.source {
-            BoundSource::Pair(pair) => pair.condition(success),
+            BoundSource::Pair(pair) => pair.condition(polarity),
             BoundSource::Nullable {
                 value,
                 nil_guard,
                 initializer_call,
             } => {
                 let tested = GoExpression::identifier(value.clone());
-                let test = if success {
-                    nil_guard.non_nil_condition(tested)
-                } else {
-                    nil_guard.nil_condition(tested)
+                let test = match polarity {
+                    Polarity::Positive => nil_guard.non_nil_condition(tested),
+                    Polarity::Negated => nil_guard.nil_condition(tested),
                 };
                 PairCondition {
                     initializer: initializer_call.as_ref().map(|call| Definition {
@@ -272,8 +270,8 @@ impl BoundValue {
                     condition: test,
                 }
             }
-            BoundSource::Index { index, .. } => plain(index.condition(success)),
-            BoundSource::Found { flag, .. } if success => {
+            BoundSource::Index { index, .. } => plain(index.condition(polarity)),
+            BoundSource::Found { flag, .. } if polarity == Polarity::Positive => {
                 plain(GoExpression::identifier(flag.clone()))
             }
             BoundSource::Found { flag, .. } => plain(GoExpression::unary(

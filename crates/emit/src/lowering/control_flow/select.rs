@@ -311,7 +311,7 @@ impl Planner<'_> {
                 ElseArm::None,
             )
         } else {
-            let else_arm = ElseArm::from_body(else_block, false);
+            let else_arm = ElseArm::block(else_block);
             IfPlan::plain(ok, body_block, else_arm)
         };
         vec![LoweredStatement::If(plan).into()]
@@ -352,7 +352,7 @@ impl Planner<'_> {
             (receiver_var, ok_var, body_statements)
         });
 
-        let else_arm = ElseArm::from_body(retry_closed_channel(ctx.channel), false);
+        let else_arm = ElseArm::block(retry_closed_channel(ctx.channel));
         let receive_vars = vec![receiver_var, ok_var.clone()];
         let if_plan = IfPlan::plain(
             GoExpression::identifier(ok_var),
@@ -618,7 +618,7 @@ impl Planner<'_> {
             },
         );
         let else_arm = match failure(self) {
-            Some(body) => ElseArm::from_body(body, false),
+            Some(body) => ElseArm::block(body),
             None => ElseArm::None,
         };
         statements.push(
@@ -706,9 +706,7 @@ fn build_receive_arms_plan(
 ) -> Option<IfPlan> {
     let ok = || GoExpression::identifier(ok_var.clone());
     match (some, none) {
-        (Some(some), Some(none)) => {
-            Some(IfPlan::plain(ok(), some, ElseArm::from_body(none, false)))
-        }
+        (Some(some), Some(none)) => Some(IfPlan::plain(ok(), some, ElseArm::block(none))),
         (Some(some), None) => Some(IfPlan::plain(ok(), some, ElseArm::None)),
         (None, Some(none)) => Some(IfPlan::plain(
             GoExpression::unary(UnaryOp::Not, ok()),

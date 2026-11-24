@@ -2,7 +2,7 @@ use std::mem;
 
 use crate::lookup::state::scope::ScopeState;
 use crate::target::ir::bodies::{
-    AssignForm, ElseArm, IfPlan, LoopHeader, LoopPlan, LoweredBlock, LoweredStatement,
+    AssignForm, ElseArm, ElseLayout, IfPlan, LoopHeader, LoopPlan, LoweredBlock, LoweredStatement,
     SelectArmKind, Statement, SwitchKind,
 };
 use crate::target::ir::go_expression::{GoExpressionNode, TreeVisitor, verbatim_identifiers};
@@ -94,9 +94,12 @@ fn reuse_in_if(plan: &mut IfPlan, declared: &[GoIdentifier], scope: &ScopeState)
         ElseArm::ElseIf(plan) => reuse_in_if(plan, &declared, scope),
         ElseArm::Else {
             body,
-            inline: false,
+            layout: ElseLayout::Block,
         } => reuse_in_list(&mut body.statements, &declared, scope),
-        ElseArm::Else { body, inline: true } => {
+        ElseArm::Else {
+            body,
+            layout: ElseLayout::Inline,
+        } => {
             for statement in &mut body.statements {
                 reuse_in_statement(&mut statement.kind, scope);
             }
@@ -133,21 +136,33 @@ fn has_copy_candidate(list: &[Statement]) -> bool {
 fn inline_else(plan: &IfPlan) -> Option<&LoweredBlock> {
     match &plan.else_arm {
         ElseArm::ElseIf(inner) => inline_else(inner),
-        ElseArm::Else { body, inline: true } => Some(body),
-        ElseArm::Else { inline: false, .. } | ElseArm::None => None,
+        ElseArm::Else {
+            body,
+            layout: ElseLayout::Inline,
+        } => Some(body),
+        ElseArm::Else {
+            layout: ElseLayout::Block,
+            ..
+        }
+        | ElseArm::None => None,
     }
 }
 
 fn take_inline_else(plan: &mut IfPlan) -> Option<LoweredBlock> {
     match &mut plan.else_arm {
         ElseArm::ElseIf(inner) => take_inline_else(inner),
-        ElseArm::Else { inline: true, .. } => {
-            match mem::replace(&mut plan.else_arm, ElseArm::None) {
-                ElseArm::Else { body, .. } => Some(body),
-                _ => unreachable!("the arm was just matched as an inline else"),
-            }
+        ElseArm::Else {
+            layout: ElseLayout::Inline,
+            ..
+        } => match mem::replace(&mut plan.else_arm, ElseArm::None) {
+            ElseArm::Else { body, .. } => Some(body),
+            _ => unreachable!("the arm was just matched as an inline else"),
+        },
+        ElseArm::Else {
+            layout: ElseLayout::Block,
+            ..
         }
-        ElseArm::Else { inline: false, .. } | ElseArm::None => None,
+        | ElseArm::None => None,
     }
 }
 

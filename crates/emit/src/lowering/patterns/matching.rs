@@ -246,7 +246,11 @@ impl Planner<'_> {
         );
         let then_body = finish_nested_pair_arm(&mut bound, then_body);
         let else_body = self.lower_block_to_place(none_body, place);
-        let else_arm = ElseArm::from_body(else_body, then_body.ends_with_diverge());
+        let else_arm = if then_body.ends_with_diverge() {
+            ElseArm::inline(else_body)
+        } else {
+            ElseArm::block(else_body)
+        };
         bound.statements.push(
             LoweredStatement::If(IfPlan::pair_if(
                 condition,

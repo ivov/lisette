@@ -13,7 +13,7 @@ use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::go_expression::Position;
 use crate::target::ir::prelude::prelude_constructor;
 use crate::target::ir::values::{CaptureBoundary, GoExpression, Stability};
-use crate::target::names::go_name::GeneratedPackage;
+use crate::target::names::go_name::{GeneratedPackage, MemberSpelling};
 use crate::target::types::go_type::GoType;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::SlotOrigin;
@@ -61,16 +61,22 @@ impl LaterStages {
             && effects.without_go_order().can_move_across(self.inline)
     }
 
-    pub(in crate::lowering) fn prepend(&mut self, stage: &ValuePlan, capture: bool) -> bool {
+    pub(in crate::lowering) fn prepend(&mut self, stage: &ValuePlan) -> bool {
         let effects = stage.effects();
-        let pinned = capture || !self.can_follow(effects);
-        self.before = self.before.union(setup_effects(stage.setup()));
-        if pinned {
-            self.before = self.before.union(effects);
-        } else {
-            self.inline = self.inline.union(effects);
+        if !self.can_follow(effects) {
+            self.prepend_pinned(stage);
+            return true;
         }
-        pinned
+        self.before = self.before.union(setup_effects(stage.setup()));
+        self.inline = self.inline.union(effects);
+        false
+    }
+
+    pub(in crate::lowering) fn prepend_pinned(&mut self, stage: &ValuePlan) {
+        self.before = self
+            .before
+            .union(setup_effects(stage.setup()))
+            .union(stage.effects());
     }
 }
 
@@ -103,8 +109,13 @@ fn prelude_arg_context<'a>(
     param_ty: Option<&'a Type>,
 ) -> (bool, ExpressionContext<'a>) {
     let suppress = takes_prelude_callback(declared_param);
+    let spelling = if suppress {
+        MemberSpelling::TaggedTwin
+    } else {
+        MemberSpelling::Plain
+    };
     let arg_ctx = ExpressionContext::value()
-        .with_forced_tagged_go_function(suppress)
+        .with_go_function_spelling(spelling)
         .with_generic_result_slot(declared_param, param_ty);
     (suppress, arg_ctx)
 }
@@ -240,13 +251,7 @@ impl Planner<'_> {
 
         if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
             return staged.map_expression(|setup, value| {
-                self.plan_function_layout_change(
-                    setup,
-                    value,
-                    &adapter.source,
-                    &adapter.target,
-                    false,
-                )
+                self.plan_function_layout_change(setup, value, &adapter.source, &adapter.target)
             });
         }
 
@@ -380,10 +385,12 @@ impl Planner<'_> {
             .into_iter()
             .rev()
             .map(|stage| {
-                let pin = later.prepend(
-                    &stage.plan,
-                    stage.capture || (eager && !stage.plan.can_delay()),
-                );
+                let pin = if stage.capture || (eager && !stage.plan.can_delay()) {
+                    later.prepend_pinned(&stage.plan);
+                    true
+                } else {
+                    later.prepend(&stage.plan)
+                };
                 (stage, pin)
             })
             .collect();

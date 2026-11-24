@@ -19,6 +19,7 @@ use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::{SequencedValues, ValuePlan};
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::generics::extract_type_mapping;
+use crate::target::names::go_name::MemberSpelling;
 use crate::target::types::return_abi::CallableReturnAbi;
 use syntax::ast::Expression;
 use syntax::program::{Adaptation, SlotOrigin};
@@ -199,8 +200,12 @@ impl Planner<'_> {
         param: Option<&CallableParamAbi>,
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {
-        let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
-        let mut arg_ctx = self.direct_arg_emit_ctx(param, suppress);
+        let spelling = if would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty) {
+            MemberSpelling::TaggedTwin
+        } else {
+            MemberSpelling::Plain
+        };
+        let mut arg_ctx = self.direct_arg_emit_ctx(param, spelling);
         if let Some(retired) = ctx.retired_receiver {
             arg_ctx = arg_ctx.with_retired_receiver(retired);
         }
@@ -229,14 +234,14 @@ impl Planner<'_> {
     fn direct_arg_emit_ctx<'b>(
         &self,
         param: Option<&'b CallableParamAbi>,
-        suppress: bool,
+        spelling: MemberSpelling,
     ) -> ExpressionContext<'b> {
         let origin = param.map_or(SlotOrigin::Lisette, |param| {
             self.function_type_origin(&param.instantiated, param.origin)
         });
         ExpressionContext::value()
             .with_function_slot_origin(origin)
-            .with_forced_tagged_go_function(suppress)
+            .with_go_function_spelling(spelling)
             .with_generic_result_slot(
                 param.and_then(|param| param.declared.as_ref()),
                 param.map(|param| &param.instantiated),
@@ -314,7 +319,10 @@ impl Planner<'_> {
         let physical_source = self.go_physical_expression_layout(argument);
         if physical_source.is_none()
             && self
-                .emitted_value_layout(argument, self.direct_arg_emit_ctx(Some(parameter), false))
+                .emitted_value_layout(
+                    argument,
+                    self.direct_arg_emit_ctx(Some(parameter), MemberSpelling::Plain),
+                )
                 .same_representation(&parameter.layout)
         {
             return None;
@@ -357,7 +365,7 @@ impl Planner<'_> {
             }
             ArgumentValueSource::Callable => self.plan_operand(
                 argument,
-                ExpressionContext::value().with_forced_tagged_go_function(true),
+                ExpressionContext::value().with_go_function_spelling(MemberSpelling::TaggedTwin),
             ),
             ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
             ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),

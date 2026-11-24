@@ -2,6 +2,7 @@ use syntax::ast::Expression;
 use syntax::types::Type;
 
 use crate::target::ir::values::CaptureBoundary;
+use crate::target::names::go_name::MemberSpelling;
 use syntax::program::SlotOrigin;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -55,14 +56,13 @@ impl<'a> ExpressionContext<'a> {
         self
     }
 
-    pub(in crate::lowering) fn with_forced_tagged_go_function(self, force: bool) -> Self {
-        if force {
-            Self {
+    pub(in crate::lowering) fn with_go_function_spelling(self, spelling: MemberSpelling) -> Self {
+        match spelling {
+            MemberSpelling::TaggedTwin => Self {
                 function_value_abi_target: FunctionValueAbiTarget::Tagged,
                 ..self
-            }
-        } else {
-            self
+            },
+            MemberSpelling::Plain => self,
         }
     }
 

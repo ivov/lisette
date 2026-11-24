@@ -9,6 +9,7 @@ use syntax::types::Type;
 
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lowering::control_flow::branches::Divergence;
 use crate::lowering::patterns::binding_decls::is_catchall_pattern;
 use crate::lowering::patterns::decision_tree::{
     AccessPath, ArmLeaf, ChainTail, Decision, GuardedLeaf, PatternBinding, SubjectRoot,
@@ -348,8 +349,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let subject = AccessPath::root().render(self.subject.root());
                 let switch =
                     self.lower_type_switch(subject, branches, fallback.as_deref(), ctx.arm_place);
-                let body_diverges = capture_diverge(switch, statements);
-                apply_leaf_terminator(statements, ctx, body_diverges);
+                let divergence = capture_diverge(switch, statements);
+                apply_leaf_terminator(statements, ctx, divergence);
             }
             Decision::Chain { tests, tail } => {
                 if ctx.is_grouped_retry() {
@@ -395,8 +396,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_arm_leaf(&mut self, statements: &mut Vec<Statement>, arm_index: usize, ctx: &WalkCtx) {
         let mut body_statements: Vec<Statement> = Vec::new();
         self.lower_arm_body(&mut body_statements, arm_index, ctx.arm_place);
-        let body_diverges = capture_diverge(body_statements, statements);
-        apply_leaf_terminator(statements, ctx, body_diverges);
+        let divergence = capture_diverge(body_statements, statements);
+        apply_leaf_terminator(statements, ctx, divergence);
     }
 
     fn walk_condition_branch(
@@ -419,8 +420,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let then_body = LoweredBlock {
             statements: then_statements,
         };
-        let then_diverges = then_body.ends_with_diverge();
-        let else_arm = self.lower_else_or_flat(else_branch, &inner, then_diverges);
+        let then_divergence = Divergence::of(&then_body);
+        let else_arm = self.lower_else_or_flat(else_branch, &inner, then_divergence);
         let plan = IfPlan {
             initializer: None,
             condition: test.condition,
@@ -431,8 +432,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 else_label: test.else_label,
             },
         };
-        let body_diverges = capture_diverge(vec![LoweredStatement::If(plan).into()], statements);
-        apply_leaf_terminator(statements, ctx, body_diverges);
+        let divergence = capture_diverge(vec![LoweredStatement::If(plan).into()], statements);
+        apply_leaf_terminator(statements, ctx, divergence);
     }
 
     fn walk_guard(&mut self, statements: &mut Vec<Statement>, guard: &GuardedLeaf, ctx: &WalkCtx) {
@@ -472,9 +473,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 },
             );
             if let Some((condition_setup, condition, then_body)) = guarded {
-                let success_diverges = then_body.ends_with_diverge();
+                let success_divergence = Divergence::of(&then_body);
                 let else_arm = if ctx.role == WalkRole::SwitchCase {
-                    this.lower_else_or_flat(failure, ctx, success_diverges)
+                    this.lower_else_or_flat(failure, ctx, success_divergence)
                 } else {
                     ElseArm::None
                 };
@@ -505,11 +506,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         decision: &Decision,
         ctx: &WalkCtx,
-        preceding_diverges: bool,
+        preceding: Divergence,
     ) -> ElseArm {
         match decision {
-            Decision::Success(leaf) => self.lower_leaf_else_or_flat(leaf, ctx, preceding_diverges),
-            _ => self.lower_else_body(preceding_diverges, decision.first_arm(), |this, body| {
+            Decision::Success(leaf) => self.lower_leaf_else_or_flat(leaf, ctx, preceding),
+            _ => self.lower_else_body(preceding, decision.first_arm(), |this, body| {
                 this.walk(body, decision, ctx)
             }),
         }
@@ -519,29 +520,29 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         leaf: &ArmLeaf,
         ctx: &WalkCtx,
-        preceding_diverges: bool,
+        preceding: Divergence,
     ) -> ElseArm {
         if leaf.bindings.is_empty() && body_is_unit_or_empty(&self.arms[leaf.arm_index].expression)
         {
             return ElseArm::None;
         }
-        self.lower_else_body(preceding_diverges, Some(leaf.arm_index), |this, body| {
+        self.lower_else_body(preceding, Some(leaf.arm_index), |this, body| {
             this.walk_leaf(body, leaf, ctx)
         })
     }
 
     fn lower_else_body(
         &mut self,
-        preceding_diverges: bool,
+        preceding: Divergence,
         arm_index: Option<usize>,
         lower: impl FnOnce(&mut Self, &mut Vec<Statement>),
     ) -> ElseArm {
         let line = arm_index.and_then(|arm_index| self.arm_line(arm_index));
-        if preceding_diverges {
+        if preceding == Divergence::Diverges {
             let mut body: Vec<Statement> = Vec::new();
             lower(self, &mut body);
             let statements = directed_first(line, body);
-            return ElseArm::from_body(LoweredBlock { statements }, true);
+            return ElseArm::inline(LoweredBlock { statements });
         }
         let body = self.with_scope(|this| {
             let mut body: Vec<Statement> = Vec::new();
@@ -549,7 +550,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             body
         });
         let statements = directed_first(line, body);
-        ElseArm::from_body(LoweredBlock { statements }, false)
+        ElseArm::block(LoweredBlock { statements })
     }
 
     fn with_bindings<R>(
@@ -622,21 +623,21 @@ fn merge_binding_ids(bindings: &mut [PatternBinding], alternatives: &[PatternBin
     }
 }
 
-fn capture_diverge(body_statements: Vec<Statement>, statements: &mut Vec<Statement>) -> bool {
+fn capture_diverge(body_statements: Vec<Statement>, statements: &mut Vec<Statement>) -> Divergence {
     let block = LoweredBlock {
         statements: body_statements,
     };
-    let diverges = block.ends_with_diverge();
+    let divergence = Divergence::of(&block);
     statements.extend(block.statements);
-    diverges
+    divergence
 }
 
-fn apply_leaf_terminator(statements: &mut Vec<Statement>, ctx: &WalkCtx, body_diverges: bool) {
+fn apply_leaf_terminator(statements: &mut Vec<Statement>, ctx: &WalkCtx, divergence: Divergence) {
     if let WalkRole::RetryLoop {
         break_label: Some(label),
         ..
     } = ctx.role
-        && !body_diverges
+        && divergence == Divergence::FallsThrough
     {
         statements.push(LoweredStatement::Break(LoopTransfer::Labeled(label.to_string())).into());
     }

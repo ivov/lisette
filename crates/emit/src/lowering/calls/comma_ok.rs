@@ -46,6 +46,12 @@ pub(in crate::lowering) enum CommaOkValueSlot {
     Discarded,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum PairPlacement {
+    IfInitializer,
+    Statement,
+}
+
 pub(in crate::lowering) enum PairKind {
     CommaOk { nil_guard: Option<NilGuard> },
     Result { nil_guard: Option<NilGuard> },
@@ -186,7 +192,11 @@ impl Planner<'_> {
             PairKind::CommaOk { .. } => PairStatusKind::Ok,
             PairKind::Result { .. } | PairKind::BareError => PairStatusKind::Error,
         };
-        let opens_if = matches!(slot, CommaOkValueSlot::Arm(_) | CommaOkValueSlot::Unused);
+        let placement = if matches!(slot, CommaOkValueSlot::Arm(_) | CommaOkValueSlot::Unused) {
+            PairPlacement::IfInitializer
+        } else {
+            PairPlacement::Statement
+        };
         let value = match kind {
             PairKind::BareError => PairValue::Absent,
             PairKind::CommaOk { nil_guard } | PairKind::Result { nil_guard } => {
@@ -204,8 +214,10 @@ impl Planner<'_> {
                 }
             }
         };
-        let mut status = self.pair_status(status_hint, status_kind, opens_if);
-        if opens_if && value.name().map(GoIdentifier::spelling) == Some(status.spelling()) {
+        let mut status = self.pair_status(status_hint, status_kind, placement);
+        if placement == PairPlacement::IfInitializer
+            && value.name().map(GoIdentifier::spelling) == Some(status.spelling())
+        {
             self.scope.reserve_go_name(&status);
             status = self.fresh_local(&status);
         }
@@ -217,10 +229,9 @@ impl Planner<'_> {
             initializer_call: None,
             borrowed: false,
         };
-        if opens_if {
-            pair.initializer_call = Some(expression);
-        } else {
-            statements.push(define_many(pair.binding(), expression));
+        match placement {
+            PairPlacement::IfInitializer => pair.initializer_call = Some(expression),
+            PairPlacement::Statement => statements.push(define_many(pair.binding(), expression)),
         }
         BoundValue::pair(statements, pair)
     }
@@ -255,14 +266,15 @@ impl Planner<'_> {
         &mut self,
         hint: Option<&SourceName>,
         kind: PairStatusKind,
-        opens_if: bool,
+        placement: PairPlacement,
     ) -> GoIdentifier {
         let default = match kind {
             PairStatusKind::Error => "err",
             PairStatusKind::Ok => "ok",
         };
         let candidate = hint.map_or_else(|| default.to_string(), SourceName::preferred);
-        let taken = (!opens_if && self.scope.current_block_declares(&candidate))
+        let taken = (placement == PairPlacement::Statement
+            && self.scope.current_block_declares(&candidate))
             || self.scope.has_binding_for_go_name(&candidate)
             || self.names.is_package_block_name(&candidate);
         let name = match hint {
@@ -270,7 +282,7 @@ impl Planner<'_> {
             None if taken => self.fresh_local(default),
             _ => self.scope.new_local_identifier(candidate),
         };
-        if !opens_if {
+        if placement == PairPlacement::Statement {
             self.scope.declare_go_name(&name);
         }
         name

@@ -1,6 +1,7 @@
 use crate::lowering::abi::layout::is_nullable_option;
 use crate::lowering::calls::call_plan::is_prelude_dispatch;
 use crate::lowering::definitions::interface_adapter::requirement_go_return_abi;
+use crate::target::names::go_name::MemberSpelling;
 use crate::target::types::return_abi::{
     CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout, go_payload_layout,
     go_return_abi,
@@ -186,7 +187,7 @@ impl Planner<'_> {
                 },
             ));
         }
-        if self.selects_tagged_twin(callee) {
+        if self.member_spelling(callee) == MemberSpelling::TaggedTwin {
             return Some(CallableReturnAbi::Value);
         }
         let return_ty = signature

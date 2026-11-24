@@ -3,6 +3,7 @@ use crate::target::ir::go_expression::Position;
 
 use syntax::ast::Expression;
 
+use crate::lowering::control_flow::branches::Divergence;
 use crate::lowering::patterns::binding_decls::is_unconditional_catchall;
 use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, ChainTail, ChainTest, render_condition,
@@ -73,17 +74,24 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             });
         }
 
+        let all_divergence = if all_diverge {
+            Divergence::Diverges
+        } else {
+            Divergence::FallsThrough
+        };
         let trailing = match tail {
             ChainTail::LastTest => match &tests[regular_len].arm {
-                ChainArm::Leaf(leaf) => self.lower_leaf_else_or_flat(leaf, &chain_ctx, all_diverge),
-                ChainArm::Guard(guard) => {
-                    self.lower_else_body(all_diverge, Some(guard.leaf.arm_index), |this, body| {
-                        this.walk_guard(body, guard, &chain_ctx)
-                    })
+                ChainArm::Leaf(leaf) => {
+                    self.lower_leaf_else_or_flat(leaf, &chain_ctx, all_divergence)
                 }
+                ChainArm::Guard(guard) => self.lower_else_body(
+                    all_divergence,
+                    Some(guard.leaf.arm_index),
+                    |this, body| this.walk_guard(body, guard, &chain_ctx),
+                ),
             },
             ChainTail::Catchall(catchall) => {
-                self.lower_leaf_else_or_flat(catchall, &chain_ctx, all_diverge)
+                self.lower_leaf_else_or_flat(catchall, &chain_ctx, all_divergence)
             }
             ChainTail::Open => ElseArm::None,
         };

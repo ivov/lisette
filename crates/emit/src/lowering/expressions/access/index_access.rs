@@ -10,6 +10,18 @@ use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::go_expression::BinaryOp;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RangeEnd {
+    Exclusive,
+    Inclusive,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CapacityClip {
+    Clip,
+    Keep,
+}
+
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_index_access(
         &mut self,
@@ -23,12 +35,17 @@ impl Planner<'_> {
             ..
         } = index
         {
+            let range_end = if *inclusive {
+                RangeEnd::Inclusive
+            } else {
+                RangeEnd::Exclusive
+            };
             return self.plan_range_slice(
                 expression,
                 start.as_deref(),
                 end.as_deref(),
-                *inclusive,
-                true,
+                range_end,
+                CapacityClip::Clip,
             );
         }
 
@@ -97,12 +114,17 @@ impl Planner<'_> {
                 ..
             } = index.as_ref()
         {
+            let range_end = if *inclusive {
+                RangeEnd::Inclusive
+            } else {
+                RangeEnd::Exclusive
+            };
             return self.plan_range_slice(
                 expression,
                 start.as_deref(),
                 end.as_deref(),
-                *inclusive,
-                false,
+                range_end,
+                CapacityClip::Keep,
             );
         }
         self.plan_operand(spread, ExpressionContext::value())
@@ -124,10 +146,10 @@ impl Planner<'_> {
         expression: &Expression,
         start: Option<&Expression>,
         end: Option<&Expression>,
-        inclusive: bool,
-        cap: bool,
+        range_end: RangeEnd,
+        capacity: CapacityClip,
     ) -> ValuePlan {
-        let needs_cap = cap
+        let needs_cap = capacity == CapacityClip::Clip
             && self
                 .facts
                 .is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
@@ -149,7 +171,9 @@ impl Planner<'_> {
         let mut base = values.next().expect("slice access has a base");
         let mut start_value = start.map(|_| values.next().expect("slice access has a start"));
         let mut end_value = end.map(|_| values.next().expect("slice access has an end"));
-        if inclusive && let Some(end_expression) = end_value.take() {
+        if range_end == RangeEnd::Inclusive
+            && let Some(end_expression) = end_value.take()
+        {
             end_value = Some(GoExpression::binary(
                 end_expression,
                 BinaryOp::Add,

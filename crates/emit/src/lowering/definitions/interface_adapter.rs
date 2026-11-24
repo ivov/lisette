@@ -6,6 +6,7 @@ use crate::lowering::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::BodyOrigin;
+use crate::output::finish::verify::BodyResult;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, directed_first,
@@ -18,6 +19,7 @@ use crate::target::ir::go_expression::Position;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
+use crate::target::names::go_name::{GoExport, MemberSpelling};
 use crate::target::names::receiver::fresh_receiver_name;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
@@ -58,9 +60,15 @@ impl AdapterMethod {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RequirementAbi {
+    Lisette,
+    Go,
+}
+
 impl Planner<'_> {
-    pub(in crate::lowering) fn selects_tagged_twin(&self, expression: &Expression) -> bool {
-        matches!(
+    pub(in crate::lowering) fn member_spelling(&self, expression: &Expression) -> MemberSpelling {
+        let selects_twin = matches!(
             expression,
             Expression::DotAccess {
                 resolution: DotAccessResolution::InstanceMethodValue { .. }
@@ -71,7 +79,12 @@ impl Planner<'_> {
             .facts
             .checked(expression)
             .function_value()
-            .is_some_and(|callee| callee_selects_tagged_twin(&self.facts, callee))
+            .is_some_and(|callee| callee_selects_tagged_twin(&self.facts, callee));
+        if selects_twin {
+            MemberSpelling::TaggedTwin
+        } else {
+            MemberSpelling::Plain
+        }
     }
 
     pub(in crate::lowering) fn emit_tagged_twin(
@@ -160,54 +173,58 @@ impl Planner<'_> {
         &self,
         requirement: &InterfaceRequirement,
     ) -> Option<FunctionLayout> {
-        let layout = self.requirement_layout(requirement, false)?;
+        let layout = self.requirement_layout(requirement, RequirementAbi::Lisette)?;
         Some(layout.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette))
     }
 
     fn requirement_layout(
         &self,
         requirement: &InterfaceRequirement,
-        go: bool,
+        abi: RequirementAbi,
     ) -> Option<FunctionLayout> {
         let function = requirement.ty.as_function_type()?;
-        let declared = if go && !is_go_import(&requirement.declaring_interface) {
-            function
-        } else {
-            requirement.method.ty.as_function_type()?
-        };
+        let declared =
+            if abi == RequirementAbi::Go && !is_go_import(&requirement.declaring_interface) {
+                function
+            } else {
+                requirement.method.ty.as_function_type()?
+            };
         let parameters = function
             .params
             .iter()
             .zip(&declared.params)
             .map(|(parameter, declared)| {
-                let origin = if go {
-                    SlotOrigin::of_go_declaration(SlotOrigin::GoParameter, &declared.ty, |id| {
-                        self.facts.definition(id)
-                    })
-                } else {
-                    SlotOrigin::Lisette
+                let origin = match abi {
+                    RequirementAbi::Go => {
+                        SlotOrigin::of_go_declaration(SlotOrigin::GoParameter, &declared.ty, |id| {
+                            self.facts.definition(id)
+                        })
+                    }
+                    RequirementAbi::Lisette => SlotOrigin::Lisette,
                 };
                 self.value_layout_with_declaration(&parameter.ty, origin, &declared.ty)
             })
             .collect();
-        let origin = if go {
-            SlotOrigin::of_go_declaration(SlotOrigin::GoReturn, &declared.return_type, |id| {
-                self.facts.definition(id)
-            })
-        } else {
-            SlotOrigin::Lisette
+        let origin = match abi {
+            RequirementAbi::Go => {
+                SlotOrigin::of_go_declaration(SlotOrigin::GoReturn, &declared.return_type, |id| {
+                    self.facts.definition(id)
+                })
+            }
+            RequirementAbi::Lisette => SlotOrigin::Lisette,
         };
         let result = self.target_layout_with_declaration(
             &function.return_type,
             origin,
             &declared.return_type,
         );
-        let abi = if go {
-            requirement_go_return_abi(&self.facts, requirement, &declared.return_type)
-        } else {
-            requirement_return_abi(&self.facts, requirement)
+        let return_abi = match abi {
+            RequirementAbi::Go => {
+                requirement_go_return_abi(&self.facts, requirement, &declared.return_type)
+            }
+            RequirementAbi::Lisette => requirement_return_abi(&self.facts, requirement),
         };
-        Some(self.function_layout(parameters, &result, abi, Some(&declared.return_type)))
+        Some(self.function_layout(parameters, &result, return_abi, Some(&declared.return_type)))
     }
 
     pub(in crate::lowering) fn dynamic_interface_adapter(
@@ -223,7 +240,10 @@ impl Planner<'_> {
         let mut methods = Vec::new();
         let mut seen = FxHashSet::default();
         for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
-            if !seen.insert(self.facts.method_go_name(&requirement.name, false)) {
+            if !seen.insert(
+                self.facts
+                    .method_go_name(&requirement.name, GoExport::Unexported),
+            ) {
                 continue;
             }
             let selected = match witness {
@@ -234,13 +254,17 @@ impl Planner<'_> {
                     .expect("internal error: a checked conformance selects a method of a bound"),
                 None => requirement.clone(),
             };
-            let local = self.requirement_layout(&selected, false)?;
-            let foreign = self.requirement_layout(&selected, true)?;
+            let local = self.requirement_layout(&selected, RequirementAbi::Lisette)?;
+            let foreign = self.requirement_layout(&selected, RequirementAbi::Go)?;
             let target = match witness {
-                Some(_) => self.requirement_layout(
-                    &requirement,
-                    is_go_import(&requirement.declaring_interface),
-                )?,
+                Some(_) => {
+                    let abi = if is_go_import(&requirement.declaring_interface) {
+                        RequirementAbi::Go
+                    } else {
+                        RequirementAbi::Lisette
+                    };
+                    self.requirement_layout(&requirement, abi)?
+                }
                 None => self.requirement_value_layout(&selected)?,
             };
             methods.push(AdapterMethod {
@@ -330,7 +354,9 @@ impl Planner<'_> {
                 .into(),
             );
         }
-        let foreign_name = self.facts.method_go_name(&method.source_name, false);
+        let foreign_name = self
+            .facts
+            .method_go_name(&method.source_name, GoExport::Unexported);
         let foreign_type = self.dynamic_method_interface(&foreign_name, alternate);
         let foreign = GoExpression::type_assertion(inner, foreign_type);
         let arguments = self.plan_layout_changed_arguments(
@@ -399,7 +425,9 @@ impl Planner<'_> {
         let mut any_adapted = false;
         let mut seen = FxHashSet::default();
         for requirement in requirements {
-            let selector = self.facts.method_go_name(&requirement.name, false);
+            let selector = self
+                .facts
+                .method_go_name(&requirement.name, GoExport::Unexported);
             if !seen.insert(selector) {
                 continue;
             }
@@ -680,10 +708,15 @@ impl Planner<'_> {
     ) -> (GoType, LoweredBlock) {
         let (go_result, statements) = self.plan_adapter_body(method, wraps_inner, parameters);
         let statements = directed_first(line.cloned(), statements);
+        let body_result = if go_result.is_empty() {
+            BodyResult::Void
+        } else {
+            BodyResult::Value
+        };
         let body = self.finish_function_body(
             LoweredBlock { statements },
             &mut parameters.to_vec(),
-            !go_result.is_empty(),
+            body_result,
             BodyOrigin::Adapter,
         );
         (go_result, body)
@@ -861,22 +894,35 @@ fn adapter_source_go_name(
 ) -> String {
     match source_requirement {
         Some(source) => requirement_go_name(facts, source),
-        None => facts.method_selector_go_name(
-            source_owner,
-            &checked.selected_name,
-            checked.is_exported,
-            !source_owner.is_some_and(is_go_import)
-                && requirement_uses_tagged_twin(facts, requirement),
-        ),
+        None => {
+            let export = if checked.is_exported {
+                GoExport::Exported
+            } else {
+                GoExport::Unexported
+            };
+            let spelling = if !source_owner.is_some_and(is_go_import)
+                && requirement_uses_tagged_twin(facts, requirement)
+            {
+                MemberSpelling::TaggedTwin
+            } else {
+                MemberSpelling::Plain
+            };
+            facts.method_selector_go_name(source_owner, &checked.selected_name, export, spelling)
+        }
     }
 }
 
 fn requirement_go_name(facts: &EmitFacts<'_>, requirement: &InterfaceRequirement) -> String {
+    let spelling = if requirement_uses_tagged_twin(facts, requirement) {
+        MemberSpelling::TaggedTwin
+    } else {
+        MemberSpelling::Plain
+    };
     facts.method_selector_go_name(
         Some(&requirement.declaring_interface),
         &requirement.name,
-        false,
-        requirement_uses_tagged_twin(facts, requirement),
+        GoExport::Unexported,
+        spelling,
     )
 }
 

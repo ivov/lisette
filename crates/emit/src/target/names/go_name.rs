@@ -1,12 +1,33 @@
 use std::borrow::Cow;
 
-use syntax::ast::StructFieldDefinition;
+use syntax::ast::{StructFieldDefinition, Visibility};
 use syntax::go_names::{ENUM_TAG_FIELD, struct_field_go_name};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::{
     go_import_default_name, is_go_import, strip_go_prefix, strip_prelude_prefix,
 };
 use syntax::types::Type;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GoExport {
+    Exported,
+    Unexported,
+}
+
+impl GoExport {
+    pub(crate) fn from_visibility(visibility: Visibility) -> Self {
+        match visibility {
+            Visibility::Public => Self::Exported,
+            Visibility::Private | Visibility::Local => Self::Unexported,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MemberSpelling {
+    Plain,
+    TaggedTwin,
+}
 
 pub(crate) const RANGE_START_FIELD: &str = "Start";
 
@@ -68,15 +89,13 @@ fn exported_member(owner: &Type, member: &str) -> String {
 pub(crate) fn member_go_name(
     owner: &Type,
     member: &str,
-    is_exported: bool,
+    export: GoExport,
     embedded: Option<&StructFieldDefinition>,
 ) -> String {
-    if let Some(field) = embedded {
-        struct_field_go_name(field, false).into_owned()
-    } else if is_exported {
-        exported_member(owner, member)
-    } else {
-        unexported_method_go_name(member)
+    match (embedded, export) {
+        (Some(field), _) => struct_field_go_name(field, false).into_owned(),
+        (None, GoExport::Exported) => exported_member(owner, member),
+        (None, GoExport::Unexported) => unexported_method_go_name(member),
     }
 }
 
@@ -91,15 +110,15 @@ pub fn go_test_function_name(fn_name: &str) -> String {
 pub(crate) fn associated_function_go_name(
     type_name: &str,
     function: &str,
-    exported: bool,
+    export: GoExport,
 ) -> String {
     let camel = snake_to_camel(function);
     let suffix = if camel.is_empty() { function } else { &camel };
-    match (function == "new", exported) {
-        (true, true) => format!("New{type_name}"),
-        (true, false) => format!("new{type_name}"),
-        (false, true) => format!("{type_name}{suffix}"),
-        (false, false) => format!("{}{suffix}", lowercase_first_word(type_name)),
+    match (function == "new", export) {
+        (true, GoExport::Exported) => format!("New{type_name}"),
+        (true, GoExport::Unexported) => format!("new{type_name}"),
+        (false, GoExport::Exported) => format!("{type_name}{suffix}"),
+        (false, GoExport::Unexported) => format!("{}{suffix}", lowercase_first_word(type_name)),
     }
 }
 

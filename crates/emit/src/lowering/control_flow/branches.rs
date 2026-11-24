@@ -5,8 +5,8 @@ use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::placement::collapse_declared_temp;
 use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, directed_first,
-    with_setup,
+    ElseArm, ElseLayout, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
+    directed_first, with_setup,
 };
 use crate::target::ir::go_expression::BinaryOp;
 use crate::target::ir::values::GoExpression;
@@ -100,6 +100,22 @@ pub(in crate::lowering) fn is_conjunction(condition: &Expression) -> bool {
             ..
         }
     )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum Divergence {
+    Diverges,
+    FallsThrough,
+}
+
+impl Divergence {
+    pub(in crate::lowering) fn of(block: &LoweredBlock) -> Self {
+        if block.ends_with_diverge() {
+            Self::Diverges
+        } else {
+            Self::FallsThrough
+        }
+    }
 }
 
 impl Planner<'_> {
@@ -264,8 +280,8 @@ impl Planner<'_> {
         };
         let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, then_place));
 
-        let preceding_diverges = then_body.ends_with_diverge();
-        let else_arm = self.lower_else_chain(alternative, preceding_diverges, place);
+        let preceding = Divergence::of(&then_body);
+        let else_arm = self.lower_else_chain(alternative, preceding, place);
 
         with_setup(
             condition_setup,
@@ -281,7 +297,7 @@ impl Planner<'_> {
     fn lower_else_chain(
         &mut self,
         alternative: Option<&Expression>,
-        preceding_diverges: bool,
+        preceding: Divergence,
         place: &PlacePlan,
     ) -> ElseArm {
         let Some(alternative) = alternative else {
@@ -313,7 +329,7 @@ impl Planner<'_> {
                                     vec![guard.into_statement().into()],
                                 ),
                             },
-                            inline: false,
+                            layout: ElseLayout::Block,
                         }
                     }
                 });
@@ -326,7 +342,7 @@ impl Planner<'_> {
                         this.with_scope(|this| this.lower_block_to_place(consequence, place));
                     let inner = this.lower_else_chain(
                         next_alternative.as_deref(),
-                        then_body.ends_with_diverge(),
+                        Divergence::of(&then_body),
                         place,
                     );
                     let mut statements = condition_setup;
@@ -345,27 +361,33 @@ impl Planner<'_> {
                 });
                 ElseArm::Else {
                     body,
-                    inline: false,
+                    layout: ElseLayout::Block,
                 }
             } else {
                 let then_body =
                     self.with_scope(|this| this.lower_block_to_place(consequence, place));
-                let inner = self.lower_else_chain(
-                    next_alternative.as_deref(),
-                    preceding_diverges && then_body.ends_with_diverge(),
-                    place,
-                );
+                let chained = match preceding {
+                    Divergence::Diverges => Divergence::of(&then_body),
+                    Divergence::FallsThrough => Divergence::FallsThrough,
+                };
+                let inner = self.lower_else_chain(next_alternative.as_deref(), chained, place);
                 let mut plan = IfPlan::pair_if(condition, then_body, inner, IfOrigin::User);
                 plan.else_if_line = line;
                 ElseArm::ElseIf(Box::new(plan))
             }
-        } else if preceding_diverges {
-            let body =
-                self.with_binding_frame(|this| this.lower_block_to_place(alternative, place));
-            ElseArm::from_body(body, true)
         } else {
-            let body = self.with_scope(|this| this.lower_block_to_place(alternative, place));
-            ElseArm::from_body(body, false)
+            match preceding {
+                Divergence::Diverges => {
+                    let body = self
+                        .with_binding_frame(|this| this.lower_block_to_place(alternative, place));
+                    ElseArm::inline(body)
+                }
+                Divergence::FallsThrough => {
+                    let body =
+                        self.with_scope(|this| this.lower_block_to_place(alternative, place));
+                    ElseArm::block(body)
+                }
+            }
         }
     }
 }

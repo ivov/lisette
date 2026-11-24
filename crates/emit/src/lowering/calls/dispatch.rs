@@ -1,3 +1,4 @@
+use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::lowering::expressions::staging::is_unmutated_identifier;
 use crate::lowering::expressions::values::with_source_positions;
@@ -16,7 +17,7 @@ use crate::target::ir::bodies::discard;
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
 use crate::target::names::go_name;
-use crate::target::names::go_name::GeneratedPackage;
+use crate::target::names::go_name::{GeneratedPackage, GoExport};
 use crate::target::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::program::NativeTypeKind;
@@ -117,7 +118,9 @@ impl<'a> Planner<'a> {
         let spread = spread.as_deref();
         let written_type_arguments = type_arguments.annotations().len();
 
-        if let Some(predicate) = self.try_plan_fused_predicate_value(call_expression, false) {
+        if let Some(predicate) =
+            self.try_plan_fused_predicate_value(call_expression, Polarity::Positive)
+        {
             return predicate;
         }
         if let Some(defaulted) = self.try_plan_defaulted_call_value(call_expression) {
@@ -179,19 +182,12 @@ impl<'a> Planner<'a> {
                 return self.plan_native_call(&native_ctx);
             }
             CallableOrigin::Source(CallOperation::ReceiverMethod { is_public }) => {
-                let method = extract_receiver_ufcs_method(callee);
-                let receiver = plan
-                    .resolved
-                    .instantiated
-                    .as_function_type()
-                    .and_then(|f| f.params.first())
-                    .map_or(&Type::Never, |receiver| &receiver.ty);
-                let go_method = self.facts.receiver_method_go_name(
-                    receiver,
-                    &method,
-                    *is_public,
-                    self.selects_tagged_twin(callee),
-                );
+                let export = if *is_public {
+                    GoExport::Exported
+                } else {
+                    GoExport::Unexported
+                };
+                let go_method = self.receiver_method_ufcs_go_name(callee, &plan, export);
                 return self.plan_receiver_method_ufcs(args, go_method, spread, &plan);
             }
             CallableOrigin::GoInterop
@@ -206,6 +202,23 @@ impl<'a> Planner<'a> {
         }
 
         self.plan_regular_call(call_expression, &plan, call_ty, ctx)
+    }
+
+    fn receiver_method_ufcs_go_name(
+        &self,
+        callee: &Expression,
+        plan: &CallPlan<'_>,
+        export: GoExport,
+    ) -> String {
+        let method = extract_receiver_ufcs_method(callee);
+        let receiver = plan
+            .resolved
+            .instantiated
+            .as_function_type()
+            .and_then(|f| f.params.first())
+            .map_or(&Type::Never, |receiver| &receiver.ty);
+        self.facts
+            .receiver_method_go_name(receiver, &method, export, self.member_spelling(callee))
     }
 
     pub(super) fn plan_native_call(&mut self, context: &NativeCallContext) -> ValuePlan {

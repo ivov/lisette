@@ -552,8 +552,8 @@ impl Planner<'_> {
         body: &Expression,
     ) -> LoopPlan {
         self.with_loop(None, None, |this| {
-            let (target, negated) = strip_negations(condition);
-            if let Some(exit) = this.try_plan_fused_predicate_value(target, !negated) {
+            let (target, polarity) = strip_negations(condition);
+            if let Some(exit) = this.try_plan_fused_predicate_value(target, polarity.flip()) {
                 let (setup, failure) = exit.into_parts();
                 return this.lower_loop_with_exit_test(setup, failure, body);
             }

@@ -5,7 +5,7 @@ use crate::output::render::expressions::rendered;
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport};
 use crate::target::names::packages::PackageUse;
 use syntax::ast::IdentifierResolution;
 use syntax::program::{self, Definition, PRELUDE_PACKAGE_ID, is_prelude_symbol};
@@ -20,14 +20,16 @@ impl Planner<'_> {
         let name = &symbol[package.len() + 1..];
         if let Some((owner, method)) = name.rsplit_once('.') {
             let owner_id = format!("{package}.{owner}");
-            let is_public = match self.facts.method(&owner_id, method) {
-                Some(method) => method.visibility.is_public(),
+            let export = match self.facts.method(&owner_id, method) {
+                Some(method) => GoExport::from_visibility(method.visibility),
                 None => self
                     .facts
                     .definition(&format!("{owner_id}.{method}"))
-                    .is_some_and(|definition| definition.visibility.is_public()),
+                    .map_or(GoExport::Unexported, |definition| {
+                        GoExport::from_visibility(definition.visibility)
+                    }),
             };
-            let mut expression = self.qualify_method_call(&owner_id, method, is_public);
+            let mut expression = self.qualify_method_call(&owner_id, method, export);
             if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
                 *identifier = GoIdentifier::external(identifier.spelling().to_string());
             }
@@ -42,11 +44,15 @@ impl Planner<'_> {
             let go_name = if is_const {
                 go_name::screaming_snake_to_camel(name)
             } else {
-                let is_public = definition.is_some_and(|definition| {
-                    definition.visibility.is_public()
-                        && matches!(definition.ty.unwrap_forall(), Type::Function(_))
-                });
-                self.free_function_go_name(name, is_public)
+                let export = match definition {
+                    Some(definition)
+                        if matches!(definition.ty.unwrap_forall(), Type::Function(_)) =>
+                    {
+                        GoExport::from_visibility(definition.visibility)
+                    }
+                    _ => GoExport::Unexported,
+                };
+                self.free_function_go_name(name, export)
             };
             return self.package_member_reference(package, go_name);
         }
@@ -137,7 +143,7 @@ impl Planner<'_> {
         &self,
         type_id: &str,
         method: &str,
-        is_public: bool,
+        export: GoExport,
     ) -> GoExpression {
         let type_name = unqualified_name(type_id);
         match self.facts.package_for_qualified_name(type_id) {
@@ -148,10 +154,10 @@ impl Planner<'_> {
             Some(package) if self.facts.is_foreign_package(package) => self
                 .package_member_reference(
                     package,
-                    go_name::associated_function_go_name(type_name, method, true),
+                    go_name::associated_function_go_name(type_name, method, GoExport::Exported),
                 ),
             _ => GoExpression::external_name(go_name::associated_function_go_name(
-                type_name, method, is_public,
+                type_name, method, export,
             )),
         }
     }
@@ -174,14 +180,18 @@ impl Planner<'_> {
         self.package_member_reference(enum_package, tag_constant)
     }
 
-    pub(in crate::lowering) fn free_function_go_name(&self, name: &str, is_public: bool) -> String {
-        if is_public {
-            go_name::snake_to_camel(name)
-        } else {
-            self.names
+    pub(in crate::lowering) fn free_function_go_name(
+        &self,
+        name: &str,
+        export: GoExport,
+    ) -> String {
+        match export {
+            GoExport::Exported => go_name::snake_to_camel(name),
+            GoExport::Unexported => self
+                .names
                 .escape_remap(name)
                 .map(str::to_string)
-                .unwrap_or_else(|| go_name::escape_reserved(name).into_owned())
+                .unwrap_or_else(|| go_name::escape_reserved(name).into_owned()),
         }
     }
 }

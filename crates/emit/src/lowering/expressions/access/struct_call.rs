@@ -1,5 +1,7 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::layout::is_go_abi_type;
+use crate::lowering::expressions::zero_values::ZeroSpelling;
+use crate::target::names::go_name::GoExport;
 use rustc_hash::FxHashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
@@ -17,7 +19,7 @@ use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
 use crate::target::ir::values::{CaptureBoundary, GoExpression, Stability};
 use crate::target::types::go_type::GoType;
 use syntax::go_names::ENUM_TAG_FIELD;
-use syntax::program::CheckedExpression;
+use syntax::program::{CheckedExpression, CheckedStructLiteral};
 
 struct SpreadInput<'a> {
     base: &'a Expression,
@@ -259,7 +261,8 @@ impl Planner<'_> {
                     None => continue,
                 }
             } else {
-                let Some(zero) = self.lisette_zero_expression(field_ty, true) else {
+                let Some(zero) = self.lisette_zero_expression(field_ty, ZeroSpelling::OmitGoZero)
+                else {
                     continue;
                 };
                 zero
@@ -293,12 +296,14 @@ impl Planner<'_> {
         ty: &'t Type,
         checked: CheckedExpression<'t, 't>,
     ) -> StructCallContext<'t> {
-        let via_alias = checked.struct_literal().via_alias;
-        let is_prelude = self.facts.is_prelude_nominal(ty);
         let enum_id = self.facts.as_enum(ty);
 
-        let go_type =
-            self.compute_struct_call_go_type(name, ty, via_alias, is_prelude, enum_id.is_some());
+        let go_type = self.compute_struct_call_go_type(
+            name,
+            ty,
+            checked.struct_literal(),
+            enum_id.as_deref(),
+        );
 
         let enum_ctx = enum_id.map(|id| self.compute_enum_call_context(name, &id));
 
@@ -314,9 +319,8 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         ty: &Type,
-        via_alias: bool,
-        is_prelude: bool,
-        is_enum: bool,
+        literal: &CheckedStructLiteral,
+        enum_id: Option<&str>,
     ) -> GoType {
         if let Type::Nominal { id, .. } = ty
             && self
@@ -327,10 +331,10 @@ impl Planner<'_> {
             return self.go_type(ty);
         }
 
-        if !is_prelude {
+        if !self.facts.is_prelude_nominal(ty) {
             let parts: Vec<&str> = name.split('.').collect();
-            let qualified = match (is_enum, parts.as_slice()) {
-                (true, [package, type_name, _]) | (false, [package, type_name]) => {
+            let qualified = match (enum_id, parts.as_slice()) {
+                (Some(_), [package, type_name, _]) | (None, [package, type_name]) => {
                     Some((*package, *type_name))
                 }
                 _ => None,
@@ -338,7 +342,7 @@ impl Planner<'_> {
             if let Some((package, type_name)) = qualified
                 && !self.facts.is_current_package(package)
             {
-                let type_args = if via_alias {
+                let type_args = if literal.via_alias {
                     GoType::default()
                 } else if let Type::Nominal { params, .. } = ty {
                     self.format_type_args(params)
@@ -391,9 +395,13 @@ impl Planner<'_> {
         if let Some(ref enum_ctx) = ctx.enum_ctx {
             self.facts
                 .enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
-                .unwrap_or_else(|| self.facts.struct_field_go_name(ctx.ty, field_name, true))
+                .unwrap_or_else(|| {
+                    self.facts
+                        .struct_field_go_name(ctx.ty, field_name, GoExport::Exported)
+                })
         } else {
-            self.facts.struct_field_go_name(ctx.ty, field_name, false)
+            self.facts
+                .struct_field_go_name(ctx.ty, field_name, GoExport::Unexported)
         }
     }
 

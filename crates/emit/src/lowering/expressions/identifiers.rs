@@ -5,7 +5,7 @@ use crate::lowering::definitions::interface_adapter::definition_selects_tagged_t
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
-use crate::target::names::go_name::GeneratedPackage;
+use crate::target::names::go_name::{GeneratedPackage, GoExport, MemberSpelling};
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, IdentifierResolution};
@@ -122,12 +122,19 @@ impl Planner<'_> {
         let symbol = recorded.definition.as_deref()?;
         let (_, method) = symbol.rsplit_once('.')?;
         let first = id_ty.as_function_type()?.params.first()?;
-        let go_method = self.facts.receiver_method_go_name(
-            &first.ty,
-            method,
-            is_public,
-            definition_selects_tagged_twin(&self.facts, symbol),
-        );
+        let export = if is_public {
+            GoExport::Exported
+        } else {
+            GoExport::Unexported
+        };
+        let spelling = if definition_selects_tagged_twin(&self.facts, symbol) {
+            MemberSpelling::TaggedTwin
+        } else {
+            MemberSpelling::Plain
+        };
+        let go_method = self
+            .facts
+            .receiver_method_go_name(&first.ty, method, export, spelling);
         Some(self.method_expression(&first.ty, go_method))
     }
 

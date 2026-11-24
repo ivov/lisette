@@ -22,6 +22,12 @@ pub(crate) enum BodyErrorKind {
     MissingValue,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BodyResult {
+    Value,
+    Void,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct BodyError {
     pub(crate) kind: BodyErrorKind,
@@ -81,11 +87,11 @@ pub(crate) fn verify_operand_order(values: &[GoExpression]) -> Result<(), BodyEr
 
 pub(crate) fn verify_final_function_body(
     body: &mut LoweredBlock,
-    has_result: bool,
+    result: BodyResult,
 ) -> Result<(), BodyError> {
     verify_control_structure(&mut body.statements)?;
     verify_values(&mut body.statements)?;
-    if has_result && !body.go_terminates() {
+    if result == BodyResult::Value && !body.go_terminates() {
         return Err(BodyError {
             kind: BodyErrorKind::MissingGoTermination,
         });

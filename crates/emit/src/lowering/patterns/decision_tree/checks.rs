@@ -1,6 +1,7 @@
 use super::*;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::patterns::decision_tree::field_segment;
+use crate::target::names::go_name::GoExport;
 use syntax::program::FieldSelection;
 
 struct EnumVariantData<'a> {
@@ -308,7 +309,8 @@ impl Planner<'_> {
                     )
                 })
         } else {
-            self.facts.struct_field_go_name(ty, &field.name, false)
+            self.facts
+                .struct_field_go_name(ty, &field.name, GoExport::Unexported)
         };
 
         if let Some((_, variant_name)) = enum_info

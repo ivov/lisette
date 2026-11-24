@@ -344,8 +344,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     let inner = WalkCtx::switch_case(ctx.arm_place);
                     let mut branch_statements: Vec<Statement> = Vec::new();
                     self.walk(&mut branch_statements, &branch.decision, &inner);
-                    let body_diverges = capture_diverge(branch_statements, statements);
-                    apply_leaf_terminator(statements, ctx, body_diverges);
+                    let divergence = capture_diverge(branch_statements, statements);
+                    apply_leaf_terminator(statements, ctx, divergence);
                     return;
                 };
                 let condition = GoExpression::binary(
@@ -367,8 +367,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             SwitchShape::Multi => {
                 let expr = render_switch_expression(rendered_path, kind);
                 let switch = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
-                let body_diverges = capture_diverge(switch, statements);
-                apply_leaf_terminator(statements, ctx, body_diverges);
+                let divergence = capture_diverge(switch, statements);
+                apply_leaf_terminator(statements, ctx, divergence);
             }
         }
     }

@@ -1,6 +1,7 @@
 use crate::lowering::calls::arguments::CallArgsContext;
 use crate::lowering::calls::regular::receiver_type_binding;
 use crate::lowering::calls::type_arguments::{CallArgShape, CallTypeArgsRequest};
+use crate::target::names::go_name::GoExport;
 
 use crate::Planner;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
@@ -157,12 +158,12 @@ impl Planner<'_> {
             .facts
             .receiver_nominal_id(receiver_ty)
             .unwrap_or_else(|| unreachable!("UFCS receiver must be a constructor type"));
-        let is_public = callee
+        let export = callee
             .declaration
-            .map(|declaration| declaration.visibility().is_public())
-            .unwrap_or(false);
+            .map(|declaration| GoExport::from_visibility(*declaration.visibility()))
+            .unwrap_or(GoExport::Unexported);
 
-        let qualified_method_name = self.qualify_method_call(&qualified_name, member, is_public);
+        let qualified_method_name = self.qualify_method_call(&qualified_name, member, export);
         GoExpression::instantiation(qualified_method_name, type_args_string)
     }
 

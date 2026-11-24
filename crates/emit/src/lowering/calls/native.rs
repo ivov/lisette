@@ -2,6 +2,7 @@ use super::{NativeCallContext, NativeCallForm, split_native_receiver};
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::arguments::converts_for_inference;
+use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::calls::slice_loop::SliceLoopTarget;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::index_access::range_var_bounds;
@@ -48,8 +49,14 @@ pub(in crate::lowering) fn slice_growth_call(
     receiver: GoExpression,
     arguments: &[GoExpression],
 ) -> GoExpression {
-    try_inline_native_method(&NativeTypeKind::Slice, method, &receiver, arguments, false)
-        .expect("slice growth has an inline rule")
+    try_inline_native_method(
+        &NativeTypeKind::Slice,
+        method,
+        &receiver,
+        arguments,
+        Polarity::Positive,
+    )
+    .expect("slice growth has an inline rule")
 }
 
 fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
@@ -109,7 +116,7 @@ fn build_inline(
     package: NativeInlinePackage,
     receiver: &GoExpression,
     arguments: &[GoExpression],
-    negated: bool,
+    polarity: Polarity,
 ) -> GoExpression {
     match form {
         NativeInlineForm::Call(callee) => {
@@ -130,7 +137,10 @@ fn build_inline(
             GoExpression::call(callee, all)
         }
         NativeInlineForm::IsEmpty => {
-            let operator = if negated { BinaryOp::Ne } else { BinaryOp::Eq };
+            let operator = match polarity {
+                Polarity::Negated => BinaryOp::Ne,
+                Polarity::Positive => BinaryOp::Eq,
+            };
             if matches!(native_type, NativeTypeKind::String) {
                 return GoExpression::binary(
                     receiver.clone(),
@@ -168,10 +178,10 @@ pub(super) fn try_inline_native_method(
     method: &str,
     receiver: &GoExpression,
     arguments: &[GoExpression],
-    negated: bool,
+    polarity: Polarity,
 ) -> Option<GoExpression> {
     let rule = NativeOperation::new(*native_type, method).inline_rule(arguments.len())?;
-    if negated && !matches!(rule.form, NativeInlineForm::IsEmpty) {
+    if polarity == Polarity::Negated && !matches!(rule.form, NativeInlineForm::IsEmpty) {
         return None;
     }
     Some(build_inline(
@@ -180,7 +190,7 @@ pub(super) fn try_inline_native_method(
         rule.package,
         receiver,
         arguments,
-        negated,
+        polarity,
     ))
 }
 
@@ -387,7 +397,7 @@ impl Planner<'_> {
             context.method,
             &staged.receiver,
             &staged.arguments,
-            false,
+            Polarity::Positive,
         ) {
             return staged.finish(inlined);
         }
@@ -584,7 +594,7 @@ impl Planner<'_> {
             ctx.method,
             &staged.receiver,
             &staged.arguments,
-            true,
+            Polarity::Negated,
         )?;
         setup.extend(staged.setup);
         Some(inlined)

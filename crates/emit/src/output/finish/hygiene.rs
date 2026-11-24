@@ -5,6 +5,7 @@ use rustc_hash::FxHashSet;
 
 use crate::output::finish::cleanup::name_uses::NameUses;
 use crate::output::finish::cleanup::terminal_else::{drop_empty_else, flip_branches};
+use crate::output::finish::verify::BodyResult;
 use crate::target::ir::bodies::{
     AssignForm, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan, LoweredBlock, LoweredStatement,
     SelectArmKind, Statement, SwitchKind, SwitchStatementPlan, direct_first, effect_statement,
@@ -15,12 +16,12 @@ use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
 use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
 
-pub(crate) fn apply_go_hygiene(body: &mut LoweredBlock, has_result: bool) {
+pub(crate) fn apply_go_hygiene(body: &mut LoweredBlock, result: BodyResult) {
     drop_unused_locals(&mut body.statements);
     blank_unused_literal_parameters(&mut body.statements);
     drop_empty_else_arms(&mut body.statements);
     terminate_function_literals(&mut body.statements);
-    if has_result {
+    if result == BodyResult::Value {
         body.ensure_go_termination();
     }
 }

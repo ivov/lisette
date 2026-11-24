@@ -1,5 +1,6 @@
 use super::NativeCallContext;
 use crate::Planner;
+use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::BinaryOp;
@@ -15,7 +16,7 @@ impl BoundsCheckedIndex {
         GoExpression::index(self.receiver.clone(), self.index.clone())
     }
 
-    pub(in crate::lowering) fn condition(&self, in_bounds: bool) -> GoExpression {
+    pub(in crate::lowering) fn condition(&self, polarity: Polarity) -> GoExpression {
         let length = GoExpression::call(
             GoExpression::external_name("len".to_string()),
             vec![self.receiver.clone()],
@@ -25,19 +26,16 @@ impl BoundsCheckedIndex {
             .as_literal()
             .filter(|value| value.parse::<u64>().is_ok())
         {
-            let operator = if in_bounds {
-                BinaryOp::Gt
-            } else if literal == "0" {
-                BinaryOp::Eq
-            } else {
-                BinaryOp::Le
+            let operator = match polarity {
+                Polarity::Positive => BinaryOp::Gt,
+                Polarity::Negated if literal == "0" => BinaryOp::Eq,
+                Polarity::Negated => BinaryOp::Le,
             };
             return GoExpression::binary(length, operator, self.index.clone());
         }
-        let (lower, join, upper) = if in_bounds {
-            (BinaryOp::Ge, BinaryOp::And, BinaryOp::Lt)
-        } else {
-            (BinaryOp::Lt, BinaryOp::Or, BinaryOp::Ge)
+        let (lower, join, upper) = match polarity {
+            Polarity::Positive => (BinaryOp::Ge, BinaryOp::And, BinaryOp::Lt),
+            Polarity::Negated => (BinaryOp::Lt, BinaryOp::Or, BinaryOp::Ge),
         };
         GoExpression::binary(
             GoExpression::binary(

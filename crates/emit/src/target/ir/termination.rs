@@ -1,6 +1,6 @@
 use crate::target::ir::bodies::{
-    ElseArm, FlowSummary, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement,
-    Statement, SwitchStatementPlan,
+    ElseArm, ElseLayout, FlowSummary, IfPlan, LoopHeader, LoopTransfer, LoweredBlock,
+    LoweredStatement, Statement, SwitchStatementPlan,
 };
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::values::GoExpression;
@@ -37,7 +37,10 @@ fn last_rendered(statements: &[Statement]) -> Option<Last<'_>> {
 
 fn inline_else(plan: &IfPlan) -> Option<&LoweredBlock> {
     match &plan.else_arm {
-        ElseArm::Else { body, inline: true } => Some(body),
+        ElseArm::Else {
+            body,
+            layout: ElseLayout::Inline,
+        } => Some(body),
         ElseArm::ElseIf(next) => inline_else(next),
         _ => None,
     }
@@ -71,7 +74,11 @@ fn statement_terminates(statement: &LoweredStatement) -> bool {
 fn if_terminates(plan: &IfPlan) -> bool {
     list_terminates(&plan.then_body.statements)
         && match &plan.else_arm {
-            ElseArm::None | ElseArm::Else { inline: true, .. } => false,
+            ElseArm::None
+            | ElseArm::Else {
+                layout: ElseLayout::Inline,
+                ..
+            } => false,
             ElseArm::ElseIf(next) => if_terminates(next),
             ElseArm::Else { body, .. } => list_terminates(&body.statements),
         }

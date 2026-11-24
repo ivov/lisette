@@ -11,10 +11,17 @@ use crate::target::ir::prelude::option_variant;
 use crate::target::ir::values::{ConstantKind, GoExpression};
 use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
+use crate::target::names::go_name::GoExport;
 use crate::target::types::go_type::GoType;
 use syntax::program::{AliasKind, DefinitionBody, FieldSelection};
 use syntax::program::{SlotOrigin, is_go_import};
 use syntax::types::{CompoundKind, SimpleKind, Type};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum ZeroSpelling {
+    Explicit,
+    OmitGoZero,
+}
 
 impl Planner<'_> {
     pub(in crate::lowering) fn go_field_map_zero(
@@ -97,7 +104,11 @@ impl Planner<'_> {
                 let Some(zero) = self.go_field_map_zero(ty, &selection, &name, &field_ty) else {
                     continue;
                 };
-                pairs.push((self.facts.struct_field_go_name(ty, &name, false), zero));
+                pairs.push((
+                    self.facts
+                        .struct_field_go_name(ty, &name, GoExport::Unexported),
+                    zero,
+                ));
             }
             return plan_struct_literal(&go_ty, pairs);
         }
@@ -105,16 +116,16 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn lisette_zero(&mut self, ty: &Type) -> GoExpression {
-        self.lisette_zero_expression(ty, false)
+        self.lisette_zero_expression(ty, ZeroSpelling::Explicit)
             .expect("required zero expression")
     }
 
     pub(in crate::lowering) fn lisette_zero_expression(
         &mut self,
         ty: &Type,
-        omit_go_zero: bool,
+        spelling: ZeroSpelling,
     ) -> Option<GoExpression> {
-        if omit_go_zero && self.facts.go_zero_is_lisette_zero(ty) {
+        if spelling == ZeroSpelling::OmitGoZero && self.facts.go_zero_is_lisette_zero(ty) {
             return None;
         }
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
@@ -156,7 +167,7 @@ impl Planner<'_> {
             }
             (Type::Compound { .. }, _) => GoExpression::empty_composite(self.go_type(ty)),
             (Type::Nominal { id, params, .. }, _) => {
-                return self.lisette_zero_nominal(ty, id.as_str(), params, omit_go_zero);
+                return self.lisette_zero_nominal(ty, id.as_str(), params, spelling);
             }
             (Type::Tuple(slots), ValueLayout::Tuple { elements, .. }) => {
                 let parts: Vec<GoExpression> = elements
@@ -186,7 +197,7 @@ impl Planner<'_> {
         ty: &Type,
         id: &str,
         params: &[Type],
-        omit_go_zero: bool,
+        spelling: ZeroSpelling,
     ) -> Option<GoExpression> {
         if id == "prelude.Option" {
             let inner = params
@@ -227,16 +238,22 @@ impl Planner<'_> {
         }
         if let Some(fields) = self.facts.struct_fields(ty) {
             let is_tuple = self.facts.is_tuple_struct_type(ty);
+            let field_spelling = if is_tuple {
+                ZeroSpelling::Explicit
+            } else {
+                ZeroSpelling::OmitGoZero
+            };
             let pairs: Vec<(String, GoExpression)> = fields
                 .into_iter()
                 .enumerate()
                 .map(|(index, (name, selection))| (index, name, selection.field_ty()))
                 .filter_map(|(index, name, field_ty)| {
-                    let zero = self.lisette_zero_expression(&field_ty, !is_tuple)?;
+                    let zero = self.lisette_zero_expression(&field_ty, field_spelling)?;
                     let go_name = if is_tuple {
                         go_name::tuple_struct_field(index)
                     } else {
-                        self.facts.struct_field_go_name(ty, &name, false)
+                        self.facts
+                            .struct_field_go_name(ty, &name, GoExport::Unexported)
                     };
                     Some((go_name, zero))
                 })
@@ -244,7 +261,7 @@ impl Planner<'_> {
             return Some(plan_struct_literal(&self.go_type(ty), pairs));
         }
         if let Some(underlying) = self.facts.immediate_underlying(ty) {
-            return self.lisette_zero_expression(&underlying, omit_go_zero);
+            return self.lisette_zero_expression(&underlying, spelling);
         }
         Some(GoExpression::empty_composite(self.go_type(ty)))
     }

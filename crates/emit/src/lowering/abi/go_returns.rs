@@ -7,8 +7,10 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::abi::go_result_wrapping::WrapperTarget;
+use crate::lowering::abi::layout_change::OptionSlot;
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
+use crate::lowering::expressions::values::ElementTarget;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::{
@@ -307,7 +309,7 @@ impl Planner<'_> {
                         raw,
                         &inner,
                         &LayoutChange::Identity,
-                        false,
+                        OptionSlot::Value,
                     )
                 } else {
                     raw
@@ -362,7 +364,7 @@ impl Planner<'_> {
             tuple,
             sequenced.values,
             &slot_tys,
-            true,
+            ElementTarget::LoweredReturn,
         );
         (statements, parts)
     }
@@ -582,7 +584,13 @@ impl Planner<'_> {
         let value = self.plan_value(expression, ExpressionContext::value());
         let inner = self.go_type(&slot_ty.ok_type());
         value.map_expression(|setup, value| {
-            self.plan_option_payload_wrap(setup, value, &inner, &LayoutChange::Identity, false)
+            self.plan_option_payload_wrap(
+                setup,
+                value,
+                &inner,
+                &LayoutChange::Identity,
+                OptionSlot::Value,
+            )
         })
     }
 }

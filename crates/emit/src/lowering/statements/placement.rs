@@ -3,6 +3,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::inline_uses::region_blocks_inline;
 use crate::lowering::calls::native::{is_clip_safe_path, slice_growth_call};
 use crate::lowering::expressions::staging::{LaterStages, SpreadSequenceOptions};
+use crate::lowering::expressions::values::TuplePosition;
 use crate::lowering::expressions::values::contains_newtype_access;
 use crate::lowering::patterns::binding_decls::pattern_binds_name;
 use crate::lowering::plan::context::ExpressionContext;
@@ -726,7 +727,7 @@ impl<'p> Planner<'p> {
             );
             let receiver = if target_differs
                 && !arguments.is_empty()
-                && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read, false))
+                && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read))
             {
                 GoExpression::identifier(self.hoist_temp(&mut capture, "recv", receiver_lv))
             } else {
@@ -793,7 +794,7 @@ impl<'p> Planner<'p> {
         last: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
         let plan = if let Expression::Tuple { .. } = last {
-            self.plan_tuple_value(last, true)
+            self.plan_tuple_value(last, TuplePosition::Tail)
         } else if matches!(
             last,
             Expression::For { .. } | Expression::While { .. } | Expression::WhileLet { .. }

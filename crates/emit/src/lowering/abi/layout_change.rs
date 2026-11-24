@@ -40,6 +40,12 @@ fn some_payload(option: GoExpression) -> GoExpression {
     GoExpression::selector(option, tags::option_variant("Some").fields[0].to_string())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::lowering) enum OptionSlot {
+    Value,
+    Pointer,
+}
+
 impl Planner<'_> {
     pub(in crate::lowering) fn try_plan_option_literal_into_layout(
         &mut self,
@@ -143,16 +149,19 @@ impl Planner<'_> {
         option_value: GoExpression,
         slot_ty: &GoType,
         payload_layout_change: &LayoutChange,
-        address: bool,
+        option_slot: OptionSlot,
     ) -> GoExpression {
         let option = self.stable_source(statements, "opt", option_value);
-        let slot = self.fresh_declared(if address { "ptr" } else { "unwrap" });
+        let slot = self.fresh_declared(match option_slot {
+            OptionSlot::Pointer => "ptr",
+            OptionSlot::Value => "unwrap",
+        });
         statements.push(declare(slot.clone(), slot_ty.clone()));
         let body = self.project_some_into(
             GoExpression::identifier(slot.clone()),
             option.clone(),
             payload_layout_change,
-            address,
+            option_slot,
         );
         statements.push(
             LoweredStatement::If(IfPlan::plain(some_condition(&option), body, ElseArm::None))
@@ -166,15 +175,14 @@ impl Planner<'_> {
         slot: GoExpression,
         option: GoExpression,
         payload_layout_change: &LayoutChange,
-        address: bool,
+        option_slot: OptionSlot,
     ) -> LoweredBlock {
         let mut statements = Vec::new();
         let payload =
             self.plan_layout_change(&mut statements, some_payload(option), payload_layout_change);
-        let payload = if address {
-            GoExpression::address_of(payload)
-        } else {
-            payload
+        let payload = match option_slot {
+            OptionSlot::Pointer => GoExpression::address_of(payload),
+            OptionSlot::Value => payload,
         };
         statements.push(assign(slot, payload));
         LoweredBlock { statements }
@@ -186,17 +194,16 @@ impl Planner<'_> {
         raw: GoExpression,
         target: &ValueLayout,
         payload_layout_change: &LayoutChange,
-        pointer: bool,
+        option_slot: OptionSlot,
     ) -> LoweredStatement {
         let payload_type = target
             .payload()
             .expect("Option has a payload layout")
             .go_type(self);
         let type_args = GoType::type_argument(&payload_type);
-        let raw_payload = if pointer {
-            GoExpression::dereference(raw.clone())
-        } else {
-            raw.clone()
+        let raw_payload = match option_slot {
+            OptionSlot::Pointer => GoExpression::dereference(raw.clone()),
+            OptionSlot::Value => raw.clone(),
         };
         let mut then_statements = Vec::new();
         let payload =
@@ -212,22 +219,20 @@ impl Planner<'_> {
             type_args,
             Vec::new(),
         );
-        let condition = if pointer {
-            non_nil_condition(raw)
-        } else {
-            option_nil_guard(&self.facts, target.logical_type()).non_nil_condition(raw)
+        let condition = match option_slot {
+            OptionSlot::Pointer => non_nil_condition(raw),
+            OptionSlot::Value => {
+                option_nil_guard(&self.facts, target.logical_type()).non_nil_condition(raw)
+            }
         };
         LoweredStatement::If(IfPlan::plain(
             condition,
             LoweredBlock {
                 statements: then_statements,
             },
-            ElseArm::from_body(
-                LoweredBlock {
-                    statements: vec![assign(slot, none)],
-                },
-                false,
-            ),
+            ElseArm::block(LoweredBlock {
+                statements: vec![assign(slot, none)],
+            }),
         ))
     }
 
@@ -249,7 +254,13 @@ impl Planner<'_> {
                 ..
             } => {
                 let slot_type = target_payload.go_type(self);
-                self.plan_option_payload_wrap(statements, value, &slot_type, payload, false)
+                self.plan_option_payload_wrap(
+                    statements,
+                    value,
+                    &slot_type,
+                    payload,
+                    OptionSlot::Value,
+                )
             }
             LayoutChange::UnwrapPointerOption {
                 target_payload,
@@ -258,7 +269,13 @@ impl Planner<'_> {
             } => {
                 let slot_type = target_payload.go_type(self);
                 let slot_type = GoType::pointer_to(&slot_type);
-                self.plan_option_payload_wrap(statements, value, &slot_type, payload, true)
+                self.plan_option_payload_wrap(
+                    statements,
+                    value,
+                    &slot_type,
+                    payload,
+                    OptionSlot::Pointer,
+                )
             }
             LayoutChange::WrapNullableOption {
                 target, payload, ..
@@ -268,7 +285,11 @@ impl Planner<'_> {
                     GoExpression::identifier(self.hoist_temp(statements, "option", value))
                 } else {
                     self.plan_option_wrap_with_layout_change(
-                        statements, value, target, payload, false,
+                        statements,
+                        value,
+                        target,
+                        payload,
+                        OptionSlot::Value,
                     )
                 }
             }
@@ -288,7 +309,11 @@ impl Planner<'_> {
                     GoExpression::identifier(self.hoist_temp(statements, "option", value))
                 } else {
                     self.plan_option_wrap_with_layout_change(
-                        statements, value, target, payload, true,
+                        statements,
+                        value,
+                        target,
+                        payload,
+                        OptionSlot::Pointer,
                     )
                 }
             }
@@ -303,7 +328,7 @@ impl Planner<'_> {
                 ))
             }
             LayoutChange::Function { source, target, .. } => {
-                self.plan_function_layout_change(statements, value, source, target, false)
+                self.plan_function_layout_change(statements, value, source, target)
             }
             LayoutChange::NilablePayload { target, payload } => {
                 self.plan_nilable_payload_layout_change(statements, value, target, payload)
@@ -422,7 +447,7 @@ impl Planner<'_> {
         raw_value: GoExpression,
         target: &ValueLayout,
         payload_layout_change: &LayoutChange,
-        pointer: bool,
+        option_slot: OptionSlot,
     ) -> GoExpression {
         let source = self.stable_source(statements, "raw", raw_value);
         let option_type = target.go_type(self);
@@ -434,7 +459,7 @@ impl Planner<'_> {
                 source,
                 target,
                 payload_layout_change,
-                pointer,
+                option_slot,
             )
             .into(),
         );
@@ -533,17 +558,19 @@ impl Planner<'_> {
         match change {
             LayoutChange::UnwrapNullableOption { payload, .. }
             | LayoutChange::UnwrapPointerOption { payload, .. } => {
-                let pointer = matches!(change, LayoutChange::UnwrapPointerOption { .. });
+                let option_slot = if matches!(change, LayoutChange::UnwrapPointerOption { .. }) {
+                    OptionSlot::Pointer
+                } else {
+                    OptionSlot::Value
+                };
                 let then_block =
-                    self.project_some_into(slot.clone(), element.clone(), payload, pointer);
-                let needs_nil_else = matches!(source_layout, ValueLayout::Map { .. }) || pointer;
+                    self.project_some_into(slot.clone(), element.clone(), payload, option_slot);
+                let needs_nil_else = matches!(source_layout, ValueLayout::Map { .. })
+                    || option_slot == OptionSlot::Pointer;
                 let else_arm = if needs_nil_else {
-                    ElseArm::from_body(
-                        LoweredBlock {
-                            statements: vec![assign(slot, GoExpression::nil())],
-                        },
-                        false,
-                    )
+                    ElseArm::block(LoweredBlock {
+                        statements: vec![assign(slot, GoExpression::nil())],
+                    })
                 } else {
                     ElseArm::None
                 };
@@ -564,10 +591,14 @@ impl Planner<'_> {
             | LayoutChange::WrapPointerOption {
                 target, payload, ..
             } => {
-                let pointer = matches!(change, LayoutChange::WrapPointerOption { .. });
+                let option_slot = if matches!(change, LayoutChange::WrapPointerOption { .. }) {
+                    OptionSlot::Pointer
+                } else {
+                    OptionSlot::Value
+                };
                 LoweredBlock {
                     statements: vec![
-                        self.wrap_nilable_into(slot, element, target, payload, pointer)
+                        self.wrap_nilable_into(slot, element, target, payload, option_slot)
                             .into(),
                     ],
                 }
@@ -597,7 +628,6 @@ impl Planner<'_> {
         value: GoExpression,
         source: &FunctionLayout,
         target: &FunctionLayout,
-        capture_callee: bool,
     ) -> GoExpression {
         let is_declaration = |node: &GoExpressionNode| match node {
             GoExpressionNode::Identifier(name) => name.is_external(),
@@ -618,10 +648,9 @@ impl Planner<'_> {
             GoExpressionNode::Instantiation { base, .. } => is_declaration(base),
             node => is_declaration(node),
         };
-        let never_nil = capture_callee
-            || names_package_function
+        let never_nil = names_package_function
             || matches!(value.node(), GoExpressionNode::FunctionLiteral { .. });
-        let callee = if names_package_function && !capture_callee {
+        let callee = if names_package_function {
             value
         } else {
             GoExpression::identifier(self.hoist_temp(statements, "cb", value))

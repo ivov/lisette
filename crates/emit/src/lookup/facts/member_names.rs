@@ -1,5 +1,5 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::target::names::go_name;
+use crate::target::names::go_name::{self, GoExport, MemberSpelling};
 use syntax::program::is_go_import;
 use syntax::types::Type;
 
@@ -14,59 +14,53 @@ impl EmitFacts<'_> {
         }
     }
 
-    pub(crate) fn method_go_name(&self, method: &str, is_public: bool) -> String {
-        if is_public || self.method_needs_export(method) {
+    pub(crate) fn method_go_name(&self, method: &str, export: GoExport) -> String {
+        if export == GoExport::Exported || self.method_needs_export(method) {
             go_name::snake_to_camel(method)
         } else {
             go_name::unexported_method_go_name(method)
         }
     }
 
-    pub(crate) fn member_go_name(&self, owner: &Type, member: &str, is_exported: bool) -> String {
-        go_name::member_go_name(
-            owner,
-            member,
-            is_exported,
-            self.embedded_field(owner, member),
-        )
+    pub(crate) fn member_go_name(&self, owner: &Type, member: &str, export: GoExport) -> String {
+        go_name::member_go_name(owner, member, export, self.embedded_field(owner, member))
     }
 
     pub(crate) fn receiver_method_go_name(
         &self,
         receiver: &Type,
         method: &str,
-        is_public: bool,
-        tagged: bool,
+        export: GoExport,
+        spelling: MemberSpelling,
     ) -> String {
         let owner = self.strip_refs(receiver);
-        self.method_selector_go_name(owner.get_qualified_id(), method, is_public, tagged)
+        self.method_selector_go_name(owner.get_qualified_id(), method, export, spelling)
     }
 
     pub(crate) fn method_selector_go_name(
         &self,
         owner_id: Option<&str>,
         method: &str,
-        is_public: bool,
-        tagged: bool,
+        export: GoExport,
+        spelling: MemberSpelling,
     ) -> String {
         let name = if go_name::keeps_go_spelling(owner_id, method) {
             method.to_string()
         } else {
-            self.method_go_name(method, is_public)
+            self.method_go_name(method, export)
         };
-        if tagged {
-            go_name::tagged_twin(&name)
-        } else {
-            name
+        match spelling {
+            MemberSpelling::TaggedTwin => go_name::tagged_twin(&name),
+            MemberSpelling::Plain => name,
         }
     }
 
-    pub(crate) fn interface_method_go_name(&self, method: &str, is_public: bool) -> String {
-        self.method_selector_go_name(
-            None,
-            method,
-            is_public,
-            self.method_uses_tagged_return(method),
-        )
+    pub(crate) fn interface_method_go_name(&self, method: &str, export: GoExport) -> String {
+        let spelling = if self.method_uses_tagged_return(method) {
+            MemberSpelling::TaggedTwin
+        } else {
+            MemberSpelling::Plain
+        };
+        self.method_selector_go_name(None, method, export, spelling)
     }
 }

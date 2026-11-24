@@ -4,7 +4,8 @@ use rustc_hash::FxHashMap;
 
 use crate::lookup::state::scope::{ScopeState, TypeParam};
 use crate::target::ir::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, for_each_statements_mut,
+    ElseArm, ElseLayout, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
+    for_each_statements_mut,
 };
 use crate::target::ir::go_expression::{
     BinaryOp, GoExpressionNode, Operand, UnaryOp, verbatim_identifiers,
@@ -32,9 +33,9 @@ fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
         keeps_scope &= plan.initializer.is_none();
         match &mut plan.else_arm {
             ElseArm::ElseIf(inner) => plan = inner,
-            ElseArm::Else { body, inline } => {
+            ElseArm::Else { body, layout } => {
                 if then_diverges && keeps_scope && declares_no_names(body) {
-                    *inline = true;
+                    *layout = ElseLayout::Inline;
                 }
                 return;
             }
@@ -177,9 +178,13 @@ fn has_scoped_terminal_else(plan: &IfPlan) -> bool {
             ElseArm::ElseIf(inner) => plan = inner,
             ElseArm::Else {
                 body,
-                inline: false,
+                layout: ElseLayout::Block,
             } => return outer_initializer || !declares_no_names(body),
-            ElseArm::Else { inline: true, .. } | ElseArm::None => return false,
+            ElseArm::Else {
+                layout: ElseLayout::Inline,
+                ..
+            }
+            | ElseArm::None => return false,
         }
     }
 }
@@ -187,7 +192,7 @@ fn has_scoped_terminal_else(plan: &IfPlan) -> bool {
 fn flips_to_early_exit(plan: &IfPlan) -> bool {
     let ElseArm::Else {
         body,
-        inline: false,
+        layout: ElseLayout::Block,
     } = &plan.else_arm
     else {
         return false;
@@ -283,8 +288,8 @@ fn inline_terminal_else(plan: &mut IfPlan) {
     loop {
         match arm {
             ElseArm::ElseIf(inner) => arm = &mut inner.else_arm,
-            ElseArm::Else { inline, .. } => {
-                *inline = true;
+            ElseArm::Else { layout, .. } => {
+                *layout = ElseLayout::Inline;
                 return;
             }
             ElseArm::None => unreachable!("scoped terminal else ends in an else"),

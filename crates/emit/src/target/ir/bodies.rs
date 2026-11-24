@@ -686,15 +686,37 @@ pub(crate) fn with_setup(setup: Vec<Statement>, statement: LoweredStatement) -> 
 pub(crate) enum ElseArm {
     None,
     ElseIf(Box<IfPlan>),
-    Else { body: LoweredBlock, inline: bool },
+    Else {
+        body: LoweredBlock,
+        layout: ElseLayout,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ElseLayout {
+    Block,
+    Inline,
 }
 
 impl ElseArm {
-    pub(crate) fn from_body(body: LoweredBlock, inline: bool) -> Self {
+    pub(crate) fn block(body: LoweredBlock) -> Self {
         if body.renders_empty() {
             return ElseArm::None;
         }
-        ElseArm::Else { body, inline }
+        ElseArm::Else {
+            body,
+            layout: ElseLayout::Block,
+        }
+    }
+
+    pub(crate) fn inline(body: LoweredBlock) -> Self {
+        if body.renders_empty() {
+            return ElseArm::None;
+        }
+        ElseArm::Else {
+            body,
+            layout: ElseLayout::Inline,
+        }
     }
 }
 
