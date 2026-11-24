@@ -154,7 +154,7 @@ impl<'source> Parser<'source> {
         let literal = match self.current_token().kind {
             Integer => {
                 let text = self.current_token().text;
-                let literal = self.parse_integer_text(text);
+                let literal = self.parse_expression_integer_text(text);
                 self.next();
                 literal
             }

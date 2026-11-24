@@ -1,10 +1,10 @@
 pub(crate) mod addressability;
+pub(crate) mod constant_values;
 mod context;
 mod equality;
 pub(crate) mod expressions;
 mod generic_obligations;
 pub(crate) mod interface;
-pub(crate) mod runtime_constants;
 mod unify;
 mod validation;
 mod value_uses;
@@ -41,7 +41,7 @@ impl TaskState {
         let package_id = package.id.clone();
         let inferred_files = self.infer_registered_package(store, package);
         Self::install_inferred_files(store, inferred_files);
-        runtime_constants::mark_runtime_constants(store, &package_id);
+        constant_values::evaluate_package_constants(store, &package_id);
     }
 
     pub(crate) fn infer_registered_package(

@@ -1,4 +1,5 @@
 use crate::collections::SharedMap;
+use crate::constant;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use ecow::EcoString;
@@ -99,7 +100,6 @@ pub enum ValueKind {
     Variable,
     ConstantDeclaration,
     Constant(ConstantValue),
-    RuntimeConstant,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -110,11 +110,19 @@ pub enum ConstantValue {
     Boolean(bool),
     String(String),
     Char(String),
+    Evaluated(constant::Value),
 }
 
 impl ConstantValue {
-    pub fn to_literal(&self) -> Literal {
+    pub fn value(&self) -> Option<constant::Value> {
         match self {
+            Self::Evaluated(value) => Some(value.clone()),
+            literal => constant::literal_value(&literal.to_literal()?),
+        }
+    }
+
+    pub fn to_literal(&self) -> Option<Literal> {
+        Some(match self {
             Self::Integer { value, text } => Literal::Integer {
                 value: *value,
                 text: text.clone(),
@@ -129,7 +137,8 @@ impl ConstantValue {
                 raw: false,
             },
             Self::Char(value) => Literal::Char(value.clone()),
-        }
+            Self::Evaluated(_) => return None,
+        })
     }
 }
 
@@ -399,17 +408,6 @@ impl Definition {
     }
 
     pub fn is_const(&self) -> bool {
-        self.is_compile_time_const()
-            || matches!(
-                self.body,
-                DefinitionBody::Value {
-                    kind: ValueKind::RuntimeConstant,
-                    ..
-                }
-            )
-    }
-
-    pub fn is_compile_time_const(&self) -> bool {
         matches!(
             self.body,
             DefinitionBody::Value {

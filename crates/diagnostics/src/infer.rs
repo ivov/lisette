@@ -377,6 +377,15 @@ pub fn circular_type_alias(type_name: &str, span: Span) -> LisetteDiagnostic {
         .with_help("Type aliases cannot be recursive")
 }
 
+pub fn const_reads_runtime_value(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`const` reads a value that is not a constant")
+        .with_infer_code("const_requires_simple_expression")
+        .with_span_label(&span, format!("`{name}` is not a constant"))
+        .with_help(format!(
+            "A `const` initializer can use only literals and other constants. Use `let` to bind a value computed from `{name}`"
+        ))
+}
+
 pub fn const_disallows_composite(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Composite value in `const`")
         .with_infer_code("const_disallows_composite")
@@ -3538,6 +3547,15 @@ pub fn valueless_const_missing_annotation(span: Span) -> LisetteDiagnostic {
         .with_help("Valueless const declarations require a type annotation: `const MAX_SIZE: int`")
 }
 
+pub fn typedef_const_not_literal(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Unsupported const value in typedef")
+        .with_infer_code("typedef_const_not_literal")
+        .with_span_label(&span, "expected a literal")
+        .with_help(
+            "A const in a typedef needs a literal value, such as `const MAX_SIZE: int = 100`. Write the value that Go computes",
+        )
+}
+
 pub fn variable_declaration_outside_typedef(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid variable declaration")
         .with_infer_code("variable_declaration_outside_typedef")
@@ -4041,7 +4059,7 @@ pub fn oversized_shift(
     span: &Span,
     type_name: &str,
     bit_width: u32,
-    shift_amount: i128,
+    shift_amount: &str,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Shift amount exceeds integer width")
         .with_infer_code("oversized_shift")
@@ -4051,14 +4069,37 @@ pub fn oversized_shift(
         ))
 }
 
-pub fn negative_shift(span: &Span, shift_amount: i128) -> LisetteDiagnostic {
+pub fn constant_too_large(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Constant too large")
+        .with_infer_code("constant_too_large")
+        .with_span_label(&span, "this constant does not fit in 512 bits")
+        .with_help("Go limits integer constants to 512 bits. Use a smaller value")
+}
+
+pub fn constant_shift_too_large(span: &Span, shift_amount: &str, limit: u32) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Shift amount too large")
+        .with_infer_code("shift_amount_too_large")
+        .with_span_label(span, format!("shifts a constant by {shift_amount}"))
+        .with_help(format!(
+            "A shift of a constant can be at most {limit}. Shift a variable for a larger count"
+        ))
+}
+
+pub fn slice_bounds_swapped(span: &Span, low: &str, high: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Slice bounds out of order")
+        .with_infer_code("slice_bounds_swapped")
+        .with_span_label(span, format!("starts at {low} and ends at {high}"))
+        .with_help("The start of a slice range must not be past its end")
+}
+
+pub fn negative_shift(span: &Span, shift_amount: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Negative shift amount")
         .with_infer_code("negative_shift")
         .with_span_label(span, format!("shifts by {shift_amount}"))
         .with_help("Shift the other way. A shift amount must be zero or greater")
 }
 
-pub fn shift_amount_too_large(span: &Span, shift_amount: i128) -> LisetteDiagnostic {
+pub fn shift_amount_too_large(span: &Span, shift_amount: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Shift amount too large")
         .with_infer_code("shift_amount_too_large")
         .with_span_label(span, format!("shifts by {shift_amount}"))
@@ -4257,7 +4298,7 @@ pub fn integer_literal_overflow(
 pub fn constant_cast_overflow(
     span: &Span,
     target_ty: &str,
-    value: i128,
+    value: &str,
     min: i128,
     max: i128,
 ) -> LisetteDiagnostic {
@@ -4272,7 +4313,7 @@ pub fn constant_cast_overflow(
 pub fn constant_overflow(
     span: &Span,
     ty: &str,
-    value: i128,
+    value: &str,
     min: i128,
     max: i128,
 ) -> LisetteDiagnostic {

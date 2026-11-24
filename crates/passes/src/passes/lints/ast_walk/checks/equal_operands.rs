@@ -1,6 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
-use syntax::types::{SimpleKind, Type};
+use syntax::types::SimpleKind;
 
 use super::helpers::{expressions_equivalent, is_side_effect_free, signed_integer_literal};
 
@@ -24,11 +24,6 @@ pub fn check_equal_operands(expression: &Expression, ctx: &NodeCtx) {
         Remainder => "is always `0`, unless the operand is `0`, which panics",
         _ => return,
     };
-    let bitwise = matches!(
-        operator,
-        BitwiseAnd | BitwiseOr | BitwiseXor | BitwiseAndNot
-    );
-
     let left = left.unwrap_parens();
     let right = right.unwrap_parens();
     if !expressions_equivalent(left, right) {
@@ -38,21 +33,13 @@ pub fn check_equal_operands(expression: &Expression, ctx: &NodeCtx) {
     if signed_integer_literal(left).is_some() || !is_side_effect_free(left) {
         return;
     }
-    if !is_integer_operand(&left.get_type(), bitwise, ctx) {
+    let is_integer = ctx
+        .store
+        .underlying_simple_kind(&left.get_type())
+        .is_some_and(|kind| kind.is_integer() || kind == SimpleKind::Uintptr);
+    if !is_integer {
         return;
     }
 
     ctx.sink.push(diagnostics::lint::equal_operands(span, note));
-}
-
-/// Bitwise ops also accept `uintptr`, and any type based on it.
-fn is_integer_operand(ty: &Type, bitwise: bool, ctx: &NodeCtx<'_>) -> bool {
-    if ctx
-        .store
-        .underlying_simple_kind(ty)
-        .is_some_and(|kind| kind.is_integer())
-    {
-        return true;
-    }
-    bitwise && ctx.store.underlying_simple_kind(ty) == Some(SimpleKind::Uintptr)
 }

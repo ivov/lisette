@@ -1,7 +1,8 @@
 use diagnostics::LocalSink;
-use rustc_hash::FxHashSet as HashSet;
-use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
-use syntax::program::{File, Package};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use syntax::ast::{BindingId, Expression, MatchArm, Pattern, SelectArm, Span};
+use syntax::constant::{self, Constant, ConstantSource};
+use syntax::program::{Definition, File, Package};
 
 use semantics::facts::Facts;
 use semantics::store::Store;
@@ -13,6 +14,7 @@ pub(crate) struct NodeCtx<'a> {
     file: &'a File,
     pub sink: &'a LocalSink,
     claimed_spans: HashSet<(ClaimKind, Span)>,
+    local_constants: HashMap<BindingId, Constant>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,7 +44,26 @@ impl<'a> NodeCtx<'a> {
             file,
             sink,
             claimed_spans: HashSet::default(),
+            local_constants: HashMap::default(),
         }
+    }
+
+    pub fn record_local_constant(&mut self, expression: &Expression) {
+        if let Expression::Const {
+            binding: Some(binding),
+            expression,
+            ty,
+            ..
+        } = expression
+            && let Some(initializer) = expression.value()
+            && let Some(constant) = constant::local_constant(initializer, ty, self)
+        {
+            self.local_constants.insert(*binding, constant);
+        }
+    }
+
+    pub fn evaluate(&self, expression: &Expression) -> constant::Evaluation {
+        constant::evaluate(expression, self)
     }
 
     pub fn package_id(&self) -> &str {
@@ -67,6 +88,16 @@ impl<'a> NodeCtx<'a> {
 
     pub fn claim(&mut self, kind: ClaimKind, span: Span) {
         self.claimed_spans.insert((kind, span));
+    }
+}
+
+impl ConstantSource for NodeCtx<'_> {
+    fn definition(&self, qualified_name: &str) -> Option<&Definition> {
+        self.store.get_definition(qualified_name)
+    }
+
+    fn local_constant(&self, binding: BindingId) -> Option<Constant> {
+        self.local_constants.get(&binding).cloned()
     }
 }
 

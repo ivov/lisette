@@ -82,7 +82,10 @@ impl InferCtx<'_> {
                 match inferred_literal {
                     Expression::Literal {
                         literal, ty, span, ..
-                    } => Pattern::Literal { literal, ty, span },
+                    } => {
+                        self.check_pattern_literal_range(&literal, &ty, span);
+                        Pattern::Literal { literal, ty, span }
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -800,7 +803,10 @@ impl InferCtx<'_> {
             self.facts.add_usage(span, definition_span);
         }
 
-        let resolution = match definition.const_value().map(|value| value.to_literal()) {
+        let resolution = match definition
+            .const_value()
+            .and_then(|value| value.to_literal())
+        {
             Some(value) => ConstructorPatternResolution::ConstValue {
                 qualified_name: qualified,
                 value,

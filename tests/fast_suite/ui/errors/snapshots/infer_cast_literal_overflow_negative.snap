@@ -1,12 +1,12 @@
 ---
 source: tests/fast_suite/ui/errors/mod.rs
 ---
-  ✕ Integer literal overflow
+  ✕ Constant conversion overflow
    ╭─[test.lis:3:11]
  2 │ fn test() {
  3 │   let x = (-129) as int8;
    ·           ───────┬──────
-   ·                  ╰── overflows `int8`
+   ·                  ╰── constant `-129` overflows `int8`
  4 │ }
    ╰────
-  help: `int8` must be in range `-128` to `127` · code: [infer.integer_literal_overflow]
+  help: This expression always evaluates to `-129`, and `int8` must be in range `-128` to `127` · code: [infer.constant_conversion_overflow]

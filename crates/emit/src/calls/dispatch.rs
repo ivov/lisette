@@ -10,6 +10,7 @@ use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::ValueLayout;
 use crate::abi::transition::multi_value_return;
 use crate::control_flow::propagation::plain_return;
+use crate::ir::bodies::discard;
 use crate::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement,
     assign, define,
@@ -17,7 +18,7 @@ use crate::ir::bodies::{
 use crate::ir::go_expression::{
     BinaryOp, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
-use crate::ir::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
+use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability, ValuePlan};
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
@@ -568,11 +569,22 @@ impl<'a> Planner<'a> {
         if let Some(result) = self.try_plan_native_constructor(context) {
             return result;
         }
-        let result = self.lower_native_method(context);
+        let mut result = self.lower_native_method(context);
         let is_constructor = matches!(context.form, NativeCallForm::Constructor);
         let split = context.receiver_and_arguments();
-        let reads_fixed_length = matches!(context.method, "length" | "capacity")
-            && !is_constructor
+        let reads_length = !is_constructor && matches!(context.method, "length" | "capacity");
+        if reads_length
+            && let Some((receiver, _)) = split
+            && let Some(length) = self.facts.array_length_behind_refs(&receiver.get_type())
+            && !is_constant_go_len(&result.value)
+        {
+            result.setup.push(discard(result.value));
+            result.value = GoExpression::conversion(
+                self.go_type(&Type::int()),
+                GoExpression::constant(length.to_string(), ConstantKind::Int),
+            );
+        }
+        let reads_fixed_length = reads_length
             && !matches!(
                 context.native_type,
                 NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver
@@ -996,4 +1008,12 @@ fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
     matches!(body.as_ref(), Type::Function(_))
         && callee.instantiated.as_function_type().is_some()
         && callee.receiver_offset > 0
+}
+
+fn is_constant_go_len(value: &GoExpression) -> bool {
+    matches!(
+        value.node(),
+        GoExpressionNode::Call { arguments, .. }
+            if matches!(arguments.as_slice(), [argument] if !argument.has_call())
+    )
 }

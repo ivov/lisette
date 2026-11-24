@@ -1,3 +1,4 @@
+use crate::_harness::infer::infer;
 use crate::{assert_emit_snapshot, assert_emit_snapshot_with_go_typedefs};
 
 #[test]
@@ -990,7 +991,7 @@ fn main() {
 }
 
 #[test]
-fn const_of_runtime_value_is_a_var() {
+fn const_of_runtime_value_is_rejected() {
     let input = r#"
 import "go:fmt"
 
@@ -1006,7 +1007,7 @@ fn main() {
   fmt.Println(N, EMPTY, HANDLER(NEXT))
 }
 "#;
-    assert_emit_snapshot!(input);
+    infer(input).assert_infer_code_count("const_requires_simple_expression", 3);
 }
 
 #[test]
@@ -1037,23 +1038,8 @@ fn main() {
 }
 
 #[test]
-fn const_imported_nonliteral_constant_stays_const() {
-    let typedef = "pub const SHIFT: int = 60 + 8\n";
-    let input = r#"
-import "go:example.com/consts"
-
-const DELAY = consts.SHIFT / 12
-
-fn main() {
-  let _ = DELAY
-}
-"#;
-    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/consts", typedef)]);
-}
-
-#[test]
-fn shift_by_imported_nonliteral_constant_not_pinned() {
-    let typedef = "pub const SHIFT: int = 60 + 8\n";
+fn shift_by_imported_constant_not_pinned() {
+    let typedef = "pub const SHIFT: int = 68\n";
     let input = r#"
 import "go:example.com/consts"
 
@@ -1083,7 +1069,7 @@ fn main() {
   fmt.Println(Y)
 }
 "#;
-    assert_emit_snapshot!(input);
+    infer(input).assert_infer_code("const_requires_simple_expression");
 }
 
 #[test]
@@ -1107,7 +1093,7 @@ fn main() {
   fmt.Println(Y)
 }
 "#;
-    assert_emit_snapshot!(input);
+    infer(input).assert_infer_code("const_requires_simple_expression");
 }
 
 #[test]
@@ -6955,4 +6941,33 @@ fn main() {
 }
 "#
     );
+}
+
+#[test]
+fn shift_of_untyped_constant_by_variable_takes_count_type() {
+    let input = r#"
+fn test(n: uint) -> uint {
+  let v = 1 << n
+  let w: uint = v
+  w
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shift_of_untyped_constant_into_newtype_keeps_type() {
+    let input = r#"
+struct Tiny(int8)
+
+fn take(t: Tiny) -> Tiny { t }
+
+fn f(n: Tiny) -> Tiny {
+  let mut x: Tiny = 1 << n
+  x = 2 << n
+  let y = take(1 << n)
+  x + y
+}
+"#;
+    assert_emit_snapshot!(input);
 }

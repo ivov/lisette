@@ -6484,7 +6484,7 @@ fn main() {
 }
 
 #[test]
-fn impossible_comparison_uintptr_operand_no_diagnostic() {
+fn impossible_comparison_uintptr_operand_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -6500,25 +6500,25 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result
-            .errors()
-            .iter()
-            .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the orderability type error to still be reported: {:?}",
-        result.errors()
-    );
-    assert!(
         !result
             .errors()
             .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "`uintptr` is an unsigned integer type: {:?}",
+        result.errors()
+    );
+    assert!(
+        result
+            .errors()
+            .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
-        "must not flag a comparison on a non-orderable `uintptr`: {:?}",
+        "expected `Impossible comparison` on a `uintptr` operand: {:?}",
         result.errors()
     );
 }
 
 #[test]
-fn redundant_comparison_uintptr_operand_no_diagnostic() {
+fn redundant_comparison_uintptr_operand_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -6534,25 +6534,22 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result
-            .errors()
-            .iter()
-            .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the orderability type error to still be reported: {:?}",
+        result.errors().is_empty(),
+        "`uintptr` is an unsigned integer type: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Redundant comparison"),
-        "must not flag a comparison on a non-orderable `uintptr`: {:?}",
+        "expected `Redundant comparison` on a `uintptr` operand: {:?}",
         result.lints()
     );
 }
 
 #[test]
-fn double_comparison_uintptr_operand_no_diagnostic() {
+fn double_comparison_uintptr_operand_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -6568,19 +6565,16 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result
-            .errors()
-            .iter()
-            .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the orderability type error to still be reported: {:?}",
+        result.errors().is_empty(),
+        "`uintptr` is an unsigned integer type: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
-        "must not flag a comparison on a non-orderable `uintptr`: {:?}",
+        "expected `Comparisons can be combined` on a `uintptr` operand: {:?}",
         result.lints()
     );
 }
@@ -6913,33 +6907,30 @@ fn main() {
 }
 
 #[test]
-fn bad_bit_mask_uintptr_operand_no_diagnostic() {
+fn bad_bit_mask_uintptr_operand_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
-  let p: uintptr = 5 as uintptr
+  let p: uintptr = 5
   let _ = p & 7 > 100
 }
 "#,
     );
     let result = compile_check(fs);
     assert!(
-        result
-            .errors()
-            .iter()
-            .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the uintptr bitwise/orderability type error to still be reported: {:?}",
+        result.errors().is_empty(),
+        "`uintptr` is an unsigned integer type: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Incompatible bit mask"),
-        "must not flag a masked comparison on a non-orderable `uintptr`: {:?}",
+        "expected `Incompatible bit mask` on a `uintptr` operand: {:?}",
         result.lints()
     );
 }
@@ -7035,7 +7026,7 @@ fn equal_operands_uintptr_bitand() {
     assert_lint_snapshot!(
         r#"
 fn main() {
-  let p: uintptr = 5 as uintptr
+  let p: uintptr = 5
   let _ = p & p
 }
 "#
@@ -7047,7 +7038,7 @@ fn equal_operands_uintptr_xor() {
     assert_lint_snapshot!(
         r#"
 fn main() {
-  let p: uintptr = 5 as uintptr
+  let p: uintptr = 5
   let _ = p ^ p
 }
 "#
@@ -7055,33 +7046,30 @@ fn main() {
 }
 
 #[test]
-fn equal_operands_uintptr_arithmetic_no_diagnostic() {
+fn equal_operands_uintptr_arithmetic_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
-  let p: uintptr = 5 as uintptr
+  let p: uintptr = 5
   let _ = p - p
 }
 "#,
     );
     let result = compile_check(fs);
     assert!(
-        result
-            .errors()
-            .iter()
-            .any(|d| d.plain_message().contains("Type mismatch")),
-        "expected the uintptr arithmetic type error to still be reported: {:?}",
+        result.errors().is_empty(),
+        "`uintptr` is an unsigned integer type: {:?}",
         result.errors()
     );
     assert!(
-        !result
+        result
             .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
-        "must not flag arithmetic equal operands on a non-arithmetic `uintptr`: {:?}",
+        "expected `Equal operands` on a `uintptr` operand: {:?}",
         result.lints()
     );
 }
@@ -16191,35 +16179,38 @@ fn main() {
 }
 
 #[test]
-fn constant_cast_overflow_float_operand_no_warning() {
-    assert_no_lint_warnings!(
+fn constant_cast_overflow_float_operand_reported_once() {
+    assert_diagnostic_count!(
         r#"
 fn main() {
   let _ = (1.5 * 200.0) as int8
 }
-"#
+"#,
+        1
     );
 }
 
 #[test]
-fn constant_cast_overflow_bare_literal_no_warning() {
-    assert_no_lint_warnings!(
+fn constant_cast_overflow_bare_literal_reported_once() {
+    assert_diagnostic_count!(
         r#"
 fn main() {
   let _ = 300 as int8
 }
-"#
+"#,
+        1
     );
 }
 
 #[test]
-fn constant_cast_overflow_negated_literal_no_warning() {
-    assert_no_lint_warnings!(
+fn constant_cast_overflow_negated_literal_reported_once() {
+    assert_diagnostic_count!(
         r#"
 fn main() {
   let _ = (-129) as int8
 }
-"#
+"#,
+        1
     );
 }
 

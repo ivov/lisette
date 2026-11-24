@@ -6,7 +6,7 @@ use crate::_harness::build::{
     try_compile_project_files, try_compile_project_files_with_tests,
 };
 use crate::_harness::filesystem::MockFileSystem;
-use crate::_harness::infer::infer;
+use crate::_harness::infer::{has_code, infer};
 use crate::assert_build_snapshot;
 use semantics::CompilePhase;
 use semantics::store::ENTRY_PACKAGE_ID;
@@ -4273,7 +4273,7 @@ fn main() {
 }
 
 #[test]
-fn unused_const_naming_an_unused_function_is_emitted() {
+fn const_naming_a_function_is_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,
@@ -4288,7 +4288,12 @@ const F = helper
 fn main() {}
 "#,
     );
-    assert_build_snapshot!(fs, "github.com/user/myproject");
+    let result = compile_check(fs);
+    assert!(
+        has_code(result.errors(), "infer.const_requires_simple_expression"),
+        "expected a function `const` to be rejected: {:?}",
+        result.errors()
+    );
 }
 
 #[test]
@@ -9689,10 +9694,12 @@ fn assert_relation_reads_local_and_literal_operands_directly() {
 
 #[test]
 fn assert_relation_binds_a_call_operand_with_short_declaration() {
-    let go = compile_test_source("#[test]\nfn smallest() {\n  assert min(3, 1, 2) == 1\n}");
+    let go = compile_test_source(
+        "#[test]\nfn smallest() {\n  let one = 1\n  assert min(3, one, 2) == 1\n}",
+    );
 
     assert!(
-        go.contains("assertLeft := min(3, 1, 2)"),
+        go.contains("assertLeft := min(3, one, 2)"),
         "a called operand must bind through `:=`, got:\n{go}"
     );
     assert!(
@@ -10839,7 +10846,7 @@ fn main() {
 }
 
 #[test]
-fn cross_package_function_const_reads_go_variable() {
+fn cross_package_function_const_is_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "lib",
@@ -10864,5 +10871,10 @@ fn main() {
 }
 "#,
     );
-    assert_build_snapshot!(fs, "github.com/user/myproject");
+    let result = compile_check(fs);
+    assert!(
+        has_code(result.errors(), "infer.const_requires_simple_expression"),
+        "expected a function `const` to be rejected: {:?}",
+        result.errors()
+    );
 }

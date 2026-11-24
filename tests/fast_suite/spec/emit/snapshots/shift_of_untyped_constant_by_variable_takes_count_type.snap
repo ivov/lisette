@@ -1,0 +1,17 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  fn test(n: uint) -> uint {
+    let v = 1 << n
+    let w: uint = v
+    w
+  }
+---
+package main
+
+func test(n uint) uint {
+	v := uint(1) << n
+	w := v
+	return w
+}

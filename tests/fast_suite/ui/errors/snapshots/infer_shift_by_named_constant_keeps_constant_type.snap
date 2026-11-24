@@ -1,12 +1,12 @@
 ---
 source: tests/fast_suite/ui/errors/mod.rs
 ---
-  ✕ Type mismatch
+  ✕ Constant overflow
    ╭─[test.lis:5:17]
  4 │ fn test() {
  5 │   let x: int8 = 1 << SHIFT;
    ·                 ─────┬────
-   ·                      ╰── expected `int8`, found `int`
+   ·                      ╰── constant `256` overflows `int8`
  6 │ }
    ╰────
-  help: Cast with `as`, e.g. `value as int8` · code: [infer.type_mismatch]
+  help: This expression always evaluates to `256`, and `int8` must be in range `-128` to `127` · code: [infer.constant_overflow]

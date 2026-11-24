@@ -505,8 +505,8 @@ fn third_party_typedefs_give_the_same_dependency_warnings_warm_and_cold() {
 fn importer_dependent_method_warnings_are_not_hidden_by_the_diagnostic_cache() {
     let root = tempfile::tempdir().unwrap();
     let mut loader = MemoryLoader::new();
-    loader.add_file("dependency", "item.lis", "pub struct Item { pub value: int }\nimpl Item {\n  fn equals(self, other: Item) -> bool { self.value == other.value }\n}\npub fn value(input: int) -> int { input + 0 }\n");
-    let use_method = "import \"dependency\"\ninterface Eq { fn equals(other: dependency.Item) -> bool }\nfn accept(_item: Eq) {}\nfn main() { accept(dependency.Item { value: 1 }); let _ = dependency.value(1) }\n";
+    loader.add_file("dependency", "item.lis", "pub struct Item { pub value: int }\nimpl Item {\n  fn equals(self, other: Item) -> bool { self.value == other.value }\n}\npub interface Eq { fn equals(other: Item) -> bool }\npub fn value(input: int) -> int { input + 0 }\n");
+    let use_method = "import \"dependency\"\nfn accept(_item: dependency.Eq) {}\nfn main() { accept(dependency.Item { value: 1 }); let _ = dependency.value(1) }\n";
     let first = analyze_project(
         root.path(),
         &loader,

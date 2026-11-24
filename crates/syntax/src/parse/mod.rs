@@ -1,5 +1,6 @@
 use crate::ast::{self, Span};
 use crate::attributes::has_test_attribute;
+use crate::constant;
 use crate::lex;
 use crate::lex::TokenKind::*;
 use crate::lex::{Token, TokenKind};
@@ -1344,6 +1345,18 @@ impl<'source> Parser<'source> {
 
     fn parse_integer_text(&mut self, text: &str) -> ast::Literal {
         self.parse_integer_text_with(text, false)
+    }
+
+    fn parse_expression_integer_text(&mut self, text: &str) -> ast::Literal {
+        let leading_zero =
+            text.len() > 1 && text.starts_with('0') && text.as_bytes()[1].is_ascii_digit();
+        if constant::exceeds_u64(text) && !leading_zero {
+            return ast::Literal::Integer {
+                value: u64::MAX,
+                text: Some(text.to_string()),
+            };
+        }
+        self.parse_integer_text(text)
     }
 
     fn parse_integer_text_with(&mut self, text: &str, preserve_decimal_text: bool) -> ast::Literal {

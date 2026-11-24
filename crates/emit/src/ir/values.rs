@@ -62,7 +62,11 @@ fn binary_constant(
     operator: BinaryOp,
     right: Option<ConstantKind>,
 ) -> Option<ConstantKind> {
-    let (left, right) = (left?, right?);
+    let left = left?;
+    if matches!(operator, BinaryOp::Shl | BinaryOp::Shr) {
+        return left.is_numeric().then_some(left);
+    }
+    let right = right?;
     match operator {
         BinaryOp::Eq
         | BinaryOp::Ne
@@ -72,7 +76,6 @@ fn binary_constant(
         | BinaryOp::Ge
         | BinaryOp::And
         | BinaryOp::Or => Some(ConstantKind::Bool),
-        BinaryOp::Shl | BinaryOp::Shr => left.is_numeric().then_some(left),
         BinaryOp::Add if left == ConstantKind::String && right == ConstantKind::String => {
             Some(ConstantKind::String)
         }
@@ -85,6 +88,7 @@ fn binary_constant(
         | BinaryOp::BitOr
         | BinaryOp::BitXor
         | BinaryOp::BitAndNot => left.join(right),
+        BinaryOp::Shl | BinaryOp::Shr => unreachable!("shifts return above"),
     }
 }
 

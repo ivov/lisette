@@ -3,7 +3,7 @@ mod names;
 use std::ptr;
 
 use names::LocalNames;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::ReturnContext;
 use crate::analyze::reusable_bindings::ReusableBindings;
@@ -14,6 +14,7 @@ use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBi
 use crate::state::lowering::LoopContext;
 use syntax::EcoString;
 use syntax::ast::{BindingId, Expression, IdentifierResolution};
+use syntax::constant::Constant;
 use syntax::types::Type;
 
 #[derive(Clone)]
@@ -24,6 +25,7 @@ pub(crate) struct ScopeState {
     frames: Vec<ScopeFrame>,
     type_params: Vec<TypeParam>,
     reusable_bindings: ReusableBindings,
+    local_constants: HashMap<BindingId, Constant>,
 }
 
 #[derive(Clone)]
@@ -124,6 +126,7 @@ impl ScopeState {
             ))],
             type_params: Vec::new(),
             reusable_bindings: ReusableBindings::default(),
+            local_constants: HashMap::default(),
         }
     }
 
@@ -153,6 +156,14 @@ impl ScopeState {
             go_name.into(),
             BindingValue::GoName,
         )
+    }
+
+    pub(crate) fn record_local_constant(&mut self, binding: BindingId, constant: Constant) {
+        self.local_constants.insert(binding, constant);
+    }
+
+    pub(crate) fn local_constant(&self, binding: BindingId) -> Option<Constant> {
+        self.local_constants.get(&binding).cloned()
     }
 
     pub(crate) fn bind_go_const(

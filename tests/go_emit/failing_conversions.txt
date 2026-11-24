@@ -1,2 +1,0 @@
-# Shapes pending a compiler fix. One shape name per line, with an inline
-# `#` reason that names the bug file. Remove a line when its fix lands.

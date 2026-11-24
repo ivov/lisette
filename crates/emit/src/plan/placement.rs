@@ -380,6 +380,11 @@ impl<'p> Planner<'p> {
         {
             statements.push(expression_statement(staged_value));
         } else {
+            let staged_value =
+                match self.constant_needs_go_type(staged_value.constant_kind(), &value_ty) {
+                    Some(go_type) => GoExpression::conversion(go_type, staged_value),
+                    None => staged_value,
+                };
             statements.push(discard(staged_value));
         }
         statements
