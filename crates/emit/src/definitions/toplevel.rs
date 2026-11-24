@@ -10,6 +10,7 @@ use crate::state::expression::ExpressionContext;
 use syntax::EcoString;
 use syntax::ast::BindingId;
 use syntax::ast::{Expression, Generic};
+use syntax::constant;
 use syntax::types::{SimpleKind, Type};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -61,39 +62,27 @@ impl Planner<'_> {
         } else {
             self.fresh_declared_source(&name)
         };
-        let is_const = match placement {
-            ConstPlacement::Package => self
-                .facts
-                .const_emits_go_const(&self.facts.qualified_current(identifier)),
-            ConstPlacement::Local => self.is_go_constant_expression(expression),
-        };
-        let go_type = (!is_const
-            || !matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
-        .then(|| self.go_type(ty));
+        let go_type = (!matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
+            .then(|| self.go_type(ty));
 
+        if let Some(binding) = binding
+            && let Some(constant) = constant::local_constant(expression, ty, self)
+        {
+            self.scope.record_local_constant(binding, constant);
+        }
         let raw_value = self.plan_value(expression, ExpressionContext::value());
         let value = if raw_value.is_empty() {
             GoExpression::unit()
         } else {
             raw_value.into_parts().1
         };
-        if is_const {
-            LoweredStatement::Const(ConstPlan {
-                name: self
-                    .scope
-                    .bind_go_const(identifier, binding.as_slice(), go_name),
-                go_type,
-                value,
-            })
-        } else {
-            LoweredStatement::VarDecl {
-                name: self
-                    .scope
-                    .bind_source(identifier, binding.as_slice(), go_name),
-                go_type: go_type.expect("a non-constant `var` names its type"),
-                value: Some(value),
-            }
-        }
+        LoweredStatement::Const(ConstPlan {
+            name: self
+                .scope
+                .bind_go_const(identifier, binding.as_slice(), go_name),
+            go_type,
+            value,
+        })
     }
 
     pub(crate) fn emit_const(

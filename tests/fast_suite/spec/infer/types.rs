@@ -1167,7 +1167,7 @@ fn nested_generic_pattern_match() {
 fn nested_generic_pattern_match_different_types() {
     infer(
         r#"{
-    let nested = Some(Ok(42));
+    let nested: Option<Result<int, string>> = Some(Ok(42));
     match nested {
       Some(Ok(x)) => x,
       Some(Err(_)) => 0,
@@ -3345,7 +3345,7 @@ fn name(n: int) -> string {
 }
 
 #[test]
-fn bare_const_holding_a_variant_matches_by_value_off_its_enum() {
+fn const_holding_a_variant_is_rejected() {
     let mut fs = MockFileSystem::new();
     let source = r#"
 interface Shape {}
@@ -3372,7 +3372,7 @@ fn shade(c: Color) -> int {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_infer_code("const_requires_simple_expression");
 }
 
 #[test]
@@ -5425,7 +5425,7 @@ fn constant_negative_to_unsigned_cast_rejected() {
     }
         "#,
     )
-    .assert_infer_code("integer_literal_overflow");
+    .assert_infer_code("constant_conversion_overflow");
 }
 
 #[test]
@@ -8029,7 +8029,7 @@ fn test() {
 }
 
 #[test]
-fn uintptr_backed_named_primitive_arithmetic_rejected() {
+fn uintptr_backed_named_primitive_arithmetic_accepted() {
     infer_with_go_typedefs(
         r#"
 import "go:example.com/sys"
@@ -8043,11 +8043,11 @@ fn test() -> sys.Errno {
             "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
         )],
     )
-    .assert_infer_code("type_mismatch");
+    .assert_no_errors();
 }
 
 #[test]
-fn uintptr_backed_named_primitive_ordering_rejected() {
+fn uintptr_backed_named_primitive_ordering_accepted() {
     infer_with_go_typedefs(
         r#"
 import "go:example.com/sys"
@@ -8061,35 +8061,35 @@ fn test() -> bool {
             "pub struct Errno(uintptr)\npub const EPERM: Errno = 1\n",
         )],
     )
-    .assert_infer_code("type_mismatch");
+    .assert_no_errors();
 }
 
 #[test]
-fn bare_uintptr_arithmetic_rejected() {
+fn bare_uintptr_arithmetic_accepted() {
     infer(
         r#"
 fn test() {
-  let a = 5 as uintptr
-  let b = 3 as uintptr
+  let a: uintptr = 5
+  let b: uintptr = 3
   let _ = a + b
 }
 "#,
     )
-    .assert_infer_code("type_mismatch");
+    .assert_no_errors();
 }
 
 #[test]
-fn bare_uintptr_ordering_rejected() {
+fn bare_uintptr_ordering_accepted() {
     infer(
         r#"
 fn test() {
-  let a = 5 as uintptr
-  let b = 3 as uintptr
+  let a: uintptr = 5
+  let b: uintptr = 3
   let _ = a < b
 }
 "#,
     )
-    .assert_infer_code("type_mismatch");
+    .assert_no_errors();
 }
 
 fn code_typedef() -> &'static str {

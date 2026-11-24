@@ -767,6 +767,16 @@ fn test() {
 }
 
 #[test]
+fn parse_leading_zero_on_literal_past_u64() {
+    let input = r#"
+fn test() {
+  let x = 018446744073709551616
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_embed_bare_function_target() {
     let input = r#"
 struct S {
@@ -6284,6 +6294,30 @@ fn infer_valueless_const_missing_annotation_in_typedef() {
     .assert_infer_code("valueless_const_missing_annotation");
 }
 
+#[test]
+fn infer_typedef_const_not_literal() {
+    infer_with_go_typedefs(
+        "fn main() {}",
+        &[(
+            "go:example.com/p",
+            "pub const A: int = 63\npub const B: int = A + 1",
+        )],
+    )
+    .assert_infer_code("typedef_const_not_literal");
+}
+
+#[test]
+fn typedef_const_literal_forms_accepted() {
+    infer_with_go_typedefs(
+        "fn main() {}",
+        &[(
+            "go:example.com/p",
+            "pub const A: int = -63\npub const B: string = \"b\"\npub const C: complex128 = -2i",
+        )],
+    )
+    .assert_no_errors();
+}
+
 fn assert_go_hint_error_snapshot(name: &str, input: &str, package: &str, typedef: &str) {
     let errors = checker_errors(input, &[(package, typedef)]);
     let error = errors
@@ -10548,7 +10582,7 @@ fn test() {
 #[test]
 fn infer_shift_by_named_constant_keeps_constant_type() {
     let input = r#"
-const SHIFT = 1 + 1
+const SHIFT = 7 + 1
 
 fn test() {
   let x: int8 = 1 << SHIFT;

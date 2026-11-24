@@ -11,10 +11,9 @@ use crate::names::go_name;
 use crate::state::bindings::BindingValue;
 use crate::state::expression::ExpressionContext;
 use syntax::ast::Expression;
+use syntax::constant;
 use syntax::program::SlotOrigin;
-use syntax::program::{
-    ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
-};
+use syntax::program::{DefinitionBody, DotAccessResolution, ReceiverCoercion};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -503,20 +502,13 @@ impl EmitFacts<'_> {
     }
 
     fn go_constant_exceeds_int(&self, package: &str, member: &str, ty: &Type) -> bool {
-        if !ty.is_unsigned_int() || !go_name::is_go_import(package) {
+        if !go_name::is_go_import(package) {
             return false;
         }
         let qualified_name = format!("{}.{}", package, member);
         self.definition(qualified_name.as_str())
-            .is_some_and(|definition| {
-                matches!(
-                    &definition.body,
-                    DefinitionBody::Value {
-                        kind: ValueKind::Constant(ConstantValue::Integer { value, .. }),
-                        ..
-                    } if *value > i64::MAX as u64
-                )
-            })
+            .and_then(|definition| definition.const_value()?.value())
+            .is_some_and(|value| constant::converts_go_constant(&value, ty))
     }
 
     fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {

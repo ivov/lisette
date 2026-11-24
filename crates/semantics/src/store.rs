@@ -1,11 +1,12 @@
 use std::mem::take;
 use std::sync::Arc;
 use syntax::collections::DenseMap;
+use syntax::constant::ConstantSource;
 
 use rustc_hash::FxHashMap as HashMap;
 
 use syntax::EcoString;
-use syntax::ast::{EnumVariant, Literal, StructFieldDefinition};
+use syntax::ast::{EnumVariant, StructFieldDefinition};
 use syntax::ast::{Expression, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
@@ -317,7 +318,7 @@ impl Store {
         )
     }
 
-    pub(crate) fn is_interface(&self, ty: &Type) -> bool {
+    pub fn is_interface(&self, ty: &Type) -> bool {
         matches!(ty, Type::Nominal { id, .. } if self.get_interface(id.as_str()).is_some())
     }
 
@@ -388,14 +389,6 @@ impl Store {
 
     pub fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
         types::underlying_simple_kind(ty, |id| self.get_definition(id))
-    }
-
-    pub fn constant_literal(&self, qualified_name: &str) -> Option<Literal> {
-        Some(
-            self.get_definition(qualified_name)?
-                .const_value()?
-                .to_literal(),
-        )
     }
 
     pub fn underlying_numeric_type(&self, ty: &Type) -> Option<Type> {
@@ -708,6 +701,12 @@ impl Store {
 
     pub(crate) fn type_has_any_method(&self, ty: &Type) -> bool {
         type_has_any_method(ty, |id| self.get_definition(id))
+    }
+}
+
+impl ConstantSource for Store {
+    fn definition(&self, qualified_name: &str) -> Option<&Definition> {
+        self.get_definition(qualified_name)
     }
 }
 

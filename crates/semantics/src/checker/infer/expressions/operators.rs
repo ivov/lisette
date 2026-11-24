@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
-use syntax::ast::{BinaryOperator, Constant, Expression, Literal, Span, UnaryOperator};
-use syntax::lex::rune_codepoint;
+use syntax::ast::{BinaryOperator, Expression, Literal, Span, UnaryOperator};
+use syntax::constant::{self, Literals, Value};
 use syntax::program::{OperandConversion, ValueUseKey};
 use syntax::types::{self, NumericFamily, ScaledImaginary, SimpleKind, Type};
 
@@ -11,6 +11,7 @@ use UnaryOperator::*;
 use super::primitives::{ReferenceKind, into_reference_operand};
 use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::unify::BuiltinBound;
 use syntax::ast::Annotation;
 
 pub(super) struct InferredOperand {
@@ -139,12 +140,6 @@ impl InferCtx<'_> {
                 return value;
             }
             self.finish_reference_recorded(checked, reference_span, &operand_expected_ty)
-        } else if operator == Negative && is_numeric_literal(&operand) {
-            self.in_negation(|this| {
-                this.with_value_context(|this| {
-                    this.infer_expression(*operand, &operand_expected_ty)
-                })
-            })
         } else {
             self.with_value_context(|this| this.infer_expression(*operand, &operand_expected_ty))
         };
@@ -344,35 +339,22 @@ impl InferCtx<'_> {
             stack.push((op, right, s));
             current = *left;
         }
-        let (expression, reported) = self.tracking_diagnostics(|this| {
-            let first = this.with_value_context(|s| s.infer_expression(current, target_ty));
-            let mut left = InferredOperand::new(first, target_ty.clone());
-            while let Some((op, right, s)) = stack.pop() {
-                let result_ty = if stack.is_empty() {
-                    expected_ty
-                } else {
-                    target_ty
-                };
-                let right = this.with_value_context(|s| s.infer_expression(*right, target_ty));
-                let right = InferredOperand::new(right, target_ty.clone());
-                left = this.finish_binary(op, left, right, result_ty, s);
-                if !stack.is_empty() {
-                    this.record_value_use(&left.expression, result_ty, Vec::new());
-                }
+        let first = self.with_value_context(|s| s.infer_expression(current, target_ty));
+        let mut left = InferredOperand::new(first, target_ty.clone());
+        while let Some((op, right, s)) = stack.pop() {
+            let result_ty = if stack.is_empty() {
+                expected_ty
+            } else {
+                target_ty
+            };
+            let right = self.with_value_context(|s| s.infer_expression(*right, target_ty));
+            let right = InferredOperand::new(right, target_ty.clone());
+            left = self.finish_binary(op, left, right, result_ty, s);
+            if !stack.is_empty() {
+                self.record_value_use(&left.expression, result_ty, Vec::new());
             }
-            left.expression
-        });
-        if !reported
-            && let Some(numeric) = self.store.literal_adaptation_target(target_ty)
-            && let Some(folded) = fold_literal_arithmetic(&expression)
-        {
-            self.check_float_literal_overflow(
-                folded.largest_part(),
-                &numeric,
-                expression.get_span(),
-            );
         }
-        expression
+        left.expression
     }
 
     /// Infer a binary expression where the left operand is already inferred.
@@ -414,6 +396,22 @@ impl InferCtx<'_> {
     ) -> Expression {
         let left_operand_ty = self.new_type_var();
         let right_operand_ty = self.new_type_var();
+
+        if matches!(operator, ShiftLeft | ShiftRight)
+            && is_integer_literal_operand(&left_operand)
+            && is_integer_adaptation_target(&expected_ty.resolve_in(&self.env), self.store)
+        {
+            let (left, right) = self.with_value_context(|s| {
+                let left = s.infer_expression(*left_operand, expected_ty);
+                let right = s.infer_expression(*right_operand, &right_operand_ty);
+                (left, right)
+            });
+            let left = InferredOperand::new(left, expected_ty.clone());
+            let right = InferredOperand::new(right, right_operand_ty);
+            return self
+                .finish_binary(operator, left, right, expected_ty, span)
+                .expression;
+        }
 
         // Check for numeric literals before inference so we can propagate
         // type information from the non-literal operand to the literal.
@@ -465,11 +463,6 @@ impl InferCtx<'_> {
         expected_ty: &Type,
         span: Span,
     ) -> InferredOperand {
-        if matches!(operator, Division | Remainder)
-            && is_zero_constant(&right.expression, self.store)
-        {
-            self.report_zero_divisor(operator, &right.ty, span);
-        }
         if matches!(operator, And | Or)
             && let Some(span) = Self::find_propagate(&right.expression)
         {
@@ -885,7 +878,7 @@ impl InferCtx<'_> {
         }
 
         if let Type::Parameter(name) = &resolved_ty {
-            if !self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Ordered) {
+            if !self.parameter_satisfies_bound(name, BuiltinBound::Ordered) {
                 self.sink
                     .push(diagnostics::infer::param_needs_ordered_bound(name, *span));
             }
@@ -1103,7 +1096,13 @@ impl InferCtx<'_> {
         let store = self.store;
         let target_ty = self.convert_to_type(store, &target_type, &span);
 
-        let source_ty_var = self.new_type_var();
+        let shift_takes_target = shifts_integer_literal(&expression)
+            && is_integer_adaptation_target(&target_ty.resolve_in(&self.env), self.store);
+        let source_ty_var = if shift_takes_target {
+            target_ty.clone()
+        } else {
+            self.new_type_var()
+        };
         let new_expression =
             self.with_value_context(|s| s.infer_expression(*expression, &source_ty_var));
         let source_ty = source_ty_var.resolve_in(&self.env);
@@ -1112,11 +1111,9 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::chained_cast(span));
         }
 
-        if !self.check_redundant_cast(&source_ty, &target_ty, span) {
+        if !shift_takes_target && !self.check_redundant_cast(&source_ty, &target_ty, span) {
             self.check_redundant_literal_cast(&new_expression, &target_ty, expected_ty, span);
         }
-
-        self.check_cast_literal_overflow(&new_expression, &target_ty, span);
 
         let id = self.fresh_expression_id();
         let ((), witnesses) =
@@ -1128,16 +1125,9 @@ impl InferCtx<'_> {
             witnesses,
         );
 
-        if is_integer_type(&target_ty, &self.env, self.store) {
-            if is_float_literal(&new_expression) {
-                self.sink
-                    .push(diagnostics::infer::float_literal_int_cast(span));
-            } else if let Some(value) = float_constant_value(&new_expression, store)
-                && value.fract() != 0.0
-            {
-                self.sink
-                    .push(diagnostics::infer::fractional_float_constant_int_cast(span));
-            }
+        if is_integer_type(&target_ty, &self.env, self.store) && is_float_literal(&new_expression) {
+            self.sink
+                .push(diagnostics::infer::float_literal_int_cast(span));
         }
 
         let result_ty = if source_ty.contains_error() || target_ty.contains_error() {
@@ -1156,30 +1146,6 @@ impl InferCtx<'_> {
             span,
         }
     }
-
-    fn report_zero_divisor(&mut self, operator: BinaryOperator, divisor_ty: &Type, span: Span) {
-        let resolved = divisor_ty.resolve_in(&self.env);
-        let ieee = resolved.is_float() || resolved.is_complex();
-        if ieee && matches!(operator, Remainder) {
-            return;
-        }
-        self.sink
-            .push(diagnostics::infer::division_by_zero(span, ieee));
-    }
-}
-
-fn is_zero_constant(expression: &Expression, store: &Store) -> bool {
-    if let Expression::Literal {
-        literal: Literal::Float { value, .. } | Literal::Imaginary(value),
-        ..
-    } = expression.unwrap_parens()
-    {
-        return *value == 0.0;
-    }
-    matches!(
-        expression.fold_constant(&|name| store.constant_literal(name)),
-        Some(Constant::Integer(0))
-    )
 }
 
 fn is_float_literal(expression: &Expression) -> bool {
@@ -1194,23 +1160,6 @@ fn is_float_literal(expression: &Expression) -> bool {
             ..
         } => is_float_literal(expression),
         _ => false,
-    }
-}
-
-fn float_constant_value(expression: &Expression, store: &Store) -> Option<f64> {
-    let definition = match expression.unwrap_parens() {
-        Expression::Unary {
-            operator: Negative,
-            expression,
-            ..
-        } => return float_constant_value(expression, store).map(|value| -value),
-        Expression::Identifier { resolution, .. } => resolution.definition()?,
-        Expression::DotAccess { resolution, .. } => resolution.definition()?,
-        _ => return None,
-    };
-    match store.constant_literal(definition)? {
-        Literal::Float { value, .. } => Some(value),
-        _ => None,
     }
 }
 
@@ -1240,9 +1189,24 @@ fn is_numeric_literal(expression: &Expression) -> bool {
 }
 
 fn folds_to_integer(expression: &Expression) -> bool {
-    expression
-        .fold_constant(&|_| None)
-        .is_some_and(|constant| constant != Constant::Unknown)
+    is_literal_operation(expression)
+        && matches!(
+            constant::value_of(expression, &Literals),
+            Some(Value::Integer(_) | Value::Rune(_))
+        )
+}
+
+fn is_literal_operation(expression: &Expression) -> bool {
+    match expression {
+        Expression::Literal { .. } => true,
+        Expression::Paren { expression, .. } | Expression::Unary { expression, .. } => {
+            is_literal_operation(expression)
+        }
+        Expression::Binary { left, right, .. } => {
+            is_literal_operation(left) && is_literal_operation(right)
+        }
+        _ => false,
+    }
 }
 
 fn is_integer_adaptation_target(ty: &Type, store: &Store) -> bool {
@@ -1334,98 +1298,6 @@ fn literal_arithmetic_kind(expression: &Expression) -> Option<LiteralArithmeticK
     }
 }
 
-#[derive(Clone, Copy)]
-struct FoldedLiteral {
-    real: f64,
-    imaginary: f64,
-    is_integer: bool,
-}
-
-impl FoldedLiteral {
-    fn real(real: f64, is_integer: bool) -> Self {
-        Self {
-            real,
-            imaginary: 0.0,
-            is_integer,
-        }
-    }
-
-    fn largest_part(self) -> f64 {
-        if self.real.abs() >= self.imaginary.abs() {
-            self.real
-        } else {
-            self.imaginary
-        }
-    }
-}
-
-fn fold_literal_arithmetic(expression: &Expression) -> Option<FoldedLiteral> {
-    match expression {
-        Expression::Literal { literal, .. } => match literal {
-            Literal::Integer { value, text } => {
-                let is_pre_negated = text.as_deref().is_some_and(|t| t.starts_with('-'));
-                let value = if is_pre_negated {
-                    -(value.wrapping_neg() as f64)
-                } else {
-                    *value as f64
-                };
-                Some(FoldedLiteral::real(value, true))
-            }
-            Literal::Float { value, .. } => Some(FoldedLiteral::real(*value, false)),
-            Literal::Imaginary(coefficient) => Some(FoldedLiteral {
-                real: 0.0,
-                imaginary: *coefficient,
-                is_integer: false,
-            }),
-            Literal::Char(text) => {
-                rune_codepoint(text).map(|codepoint| FoldedLiteral::real(codepoint as f64, true))
-            }
-            _ => None,
-        },
-        Expression::Paren { expression, .. } => fold_literal_arithmetic(expression),
-        Expression::Unary {
-            operator: Negative,
-            expression,
-            ..
-        } => fold_literal_arithmetic(expression).map(|folded| FoldedLiteral {
-            real: -folded.real,
-            imaginary: -folded.imaginary,
-            ..folded
-        }),
-        Expression::Binary {
-            operator,
-            left,
-            right,
-            ..
-        } => {
-            let left = fold_literal_arithmetic(left)?;
-            let right = fold_literal_arithmetic(right)?;
-            let is_integer = left.is_integer && right.is_integer;
-            let (a, b, c, d) = (left.real, left.imaginary, right.real, right.imaginary);
-            let (real, imaginary) = match operator {
-                Addition => (a + c, b + d),
-                Subtraction => (a - c, b - d),
-                Multiplication => (a * c - b * d, a * d + b * c),
-                Division if is_integer => ((a / c).trunc(), 0.0),
-                Division => {
-                    let denominator = c * c + d * d;
-                    if denominator == 0.0 {
-                        return None;
-                    }
-                    ((a * c + b * d) / denominator, (b * c - a * d) / denominator)
-                }
-                _ => return None,
-            };
-            Some(FoldedLiteral {
-                real,
-                imaginary,
-                is_integer,
-            })
-        }
-        _ => None,
-    }
-}
-
 fn is_literal_operand(expression: &Expression) -> bool {
     folds_to_integer(expression)
         || literal_arithmetic_kind(expression)
@@ -1504,4 +1376,19 @@ fn plain_primitive_of_backing(defined_ty: &Type, other: &Type, store: &Store) ->
         Some(SimpleKind::Bool) => other.is_boolean(),
         _ => is_plain_numeric_primitive(other, store),
     }
+}
+
+fn is_integer_literal_operand(expression: &Expression) -> bool {
+    matches!(
+        literal_kind(expression),
+        LiteralKind::Integer | LiteralKind::IntegerExpression
+    )
+}
+
+fn shifts_integer_literal(expression: &Expression) -> bool {
+    matches!(
+        expression.unwrap_parens(),
+        Expression::Binary { operator: ShiftLeft | ShiftRight, left, .. }
+            if is_integer_literal_operand(left)
+    )
 }

@@ -4662,7 +4662,7 @@ fn main() {
 }
 
 #[test]
-fn const_of_runtime_const_from_another_package_is_a_var() {
+fn const_from_another_package_folds_in_each_package() {
     if !go_available() {
         return;
     }
@@ -4678,9 +4678,8 @@ fn const_of_runtime_const_from_another_package_is_a_var() {
     fs::write(
         project.join("src/a/a.lis"),
         r#"
-pub const N: Option<int> = None
 pub const K: int = 4
-pub const B: bool = N == None
+pub const B: bool = K == 4
 pub const J: int = K * 2 + 1
 "#,
     )
@@ -4690,7 +4689,6 @@ pub const J: int = K * 2 + 1
         r#"
 import "a"
 
-pub const M = a.N
 pub const C = a.B
 pub const Q = a.J << 1
 "#,
@@ -4702,7 +4700,7 @@ pub const Q = a.J << 1
 import "go:fmt"
 import "b"
 fn main() {
-  fmt.Println(b.M, b.C, b.Q)
+  fmt.Println(b.C, b.Q)
 }
 "#,
     )
@@ -4714,5 +4712,68 @@ fn main() {
         output.status.success(),
         "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
     );
-    assert_eq!(stdout.trim(), "None true 18", "stderr: {stderr}");
+    assert_eq!(stdout.trim(), "true 18", "stderr: {stderr}");
+}
+
+#[test]
+fn shift_of_untyped_constant_by_variable_prints_count_type_value() {
+    if !go_available() {
+        return;
+    }
+    let stdout = run_script(
+        "shift.lis",
+        r#"
+import "go:fmt"
+
+struct Tiny(int8)
+
+fn grow(n: Tiny) -> Tiny {
+  let x: Tiny = 1 << n
+  x
+}
+
+fn main() {
+  let n: uint = 63
+  let v = 1 << n
+  let w: uint = v
+  let c: uint64 = 1 << 63
+  fmt.Println(w, w / 2, c, grow(Tiny(3)))
+}
+"#,
+    );
+    assert_eq!(
+        stdout.trim(),
+        "9223372036854775808 4611686018427387904 9223372036854775808 8"
+    );
+}
+
+#[test]
+fn shift_of_constant_min_call_in_float_cast_builds() {
+    if !go_available() {
+        return;
+    }
+    let stdout = run_script(
+        "shift.lis",
+        r#"
+import "go:fmt"
+
+struct N(uint)
+
+const B: N = 64
+
+fn main() {
+  let _ = (1 << (64 as uint)) - 1
+  let wide: uint = (1 << B.0) - 1
+  fmt.Println(wide, (1 << (('a' as string).length() + 62)) - 1)
+  let n: uint = 3
+  fmt.Println((min(1, 2) << n) as float64, ((1) << n) as float64)
+  let max: uint = (1 << (64 as uint)) - 1
+  fmt.Println((1 << ("".length() + 63)) - 1, max)
+}
+"#,
+    );
+    assert_eq!(
+        stdout.trim(),
+        "18446744073709551615 9223372036854775807\n8 8\n9223372036854775807 18446744073709551615"
+    );
 }

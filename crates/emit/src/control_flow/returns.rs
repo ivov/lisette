@@ -247,7 +247,7 @@ impl Planner<'_> {
             let error = if message_setup.is_empty() {
                 error
             } else {
-                self.eager_operand(arg, error, "err")
+                self.eager_operand(error, "err")
             };
             let (setup, error) = error.into_parts();
             statements.extend(setup);

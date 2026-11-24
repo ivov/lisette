@@ -1,6 +1,5 @@
 use ecow::EcoString;
 
-use crate::lex::rune_codepoint;
 use crate::program::DotAccessResolution;
 use crate::types;
 use crate::types::Type;
@@ -2893,52 +2892,6 @@ impl Expression {
         }
     }
 
-    /// Folds literals, and the named constants whose value `value_of` gives.
-    pub fn fold_constant(&self, value_of: &dyn Fn(&str) -> Option<Literal>) -> Option<Constant> {
-        self.fold_reading_names(value_of)
-            .map(|(constant, _)| constant)
-    }
-
-    fn fold_reading_names(
-        &self,
-        value_of: &dyn Fn(&str) -> Option<Literal>,
-    ) -> Option<(Constant, bool)> {
-        match self.unwrap_parens() {
-            Expression::Literal { literal, .. } => Some((fold_literal(literal)?, false)),
-            Expression::Identifier { resolution, .. } => {
-                Some((fold_literal(&value_of(resolution.definition()?)?)?, true))
-            }
-            Expression::DotAccess { resolution, .. } => {
-                Some((fold_literal(&value_of(resolution.definition()?)?)?, true))
-            }
-            Expression::Unary {
-                operator,
-                expression,
-                ..
-            } => {
-                let (operand, reads_name) = expression.fold_reading_names(value_of)?;
-                if reads_name && matches!(operator, UnaryOperator::BitwiseNot) {
-                    return Some((Constant::Unknown, true));
-                }
-                Some((fold_unary(operator, operand)?, reads_name))
-            }
-            Expression::Binary {
-                operator,
-                left,
-                right,
-                ..
-            } => {
-                let (left, left_reads_name) = left.fold_reading_names(value_of)?;
-                let (right, right_reads_name) = right.fold_reading_names(value_of)?;
-                Some((
-                    fold_binary(*operator, left, right)?,
-                    left_reads_name || right_reads_name,
-                ))
-            }
-            _ => None,
-        }
-    }
-
     /// Inner expression of an explicit `x.*` deref, or `None` for anything else.
     #[inline]
     pub fn deref_inner(&self) -> Option<&Expression> {
@@ -3217,93 +3170,4 @@ impl Visibility {
 pub enum ImportAlias {
     Named(EcoString, Span),
     Blank(Span),
-}
-
-/// What a constant expression is worth, as far as `i128` folding determines it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Constant {
-    Integer(i128),
-    /// Constant, and past what `i128` holds, or divided by zero.
-    Unknown,
-}
-
-fn fold_literal(literal: &Literal) -> Option<Constant> {
-    match literal {
-        Literal::Integer { value, text }
-            if text.as_deref().is_some_and(|text| text.starts_with('-')) =>
-        {
-            Some(Constant::Integer(-(value.wrapping_neg() as i128)))
-        }
-        Literal::Integer { value, .. } => Some(Constant::Integer(*value as i128)),
-        Literal::Char(text) => {
-            rune_codepoint(text).map(|value| Constant::Integer(i128::from(value)))
-        }
-        _ => None,
-    }
-}
-
-fn fold_unary(operator: &UnaryOperator, operand: Constant) -> Option<Constant> {
-    let Constant::Integer(value) = operand else {
-        return Some(Constant::Unknown);
-    };
-    match operator {
-        UnaryOperator::Negative => Some(or_unknown(value.checked_neg())),
-        UnaryOperator::BitwiseNot => Some(Constant::Integer(!value)),
-        _ => None,
-    }
-}
-
-fn fold_binary(operator: BinaryOperator, left: Constant, right: Constant) -> Option<Constant> {
-    // An operand with no value keeps the expression constant all the same.
-    let (Constant::Integer(left), Constant::Integer(right)) = (left, right) else {
-        return Some(Constant::Unknown);
-    };
-    let folded = match operator {
-        BinaryOperator::Addition => or_unknown(left.checked_add(right)),
-        BinaryOperator::Subtraction => or_unknown(left.checked_sub(right)),
-        BinaryOperator::Multiplication => or_unknown(left.checked_mul(right)),
-        BinaryOperator::Division => or_unknown(left.checked_div(right)),
-        BinaryOperator::Remainder => or_unknown(left.checked_rem(right)),
-        BinaryOperator::BitwiseAnd => Constant::Integer(left & right),
-        BinaryOperator::BitwiseOr => Constant::Integer(left | right),
-        BinaryOperator::BitwiseXor => Constant::Integer(left ^ right),
-        BinaryOperator::BitwiseAndNot => Constant::Integer(left & !right),
-        BinaryOperator::ShiftLeft => shift_left(left, right)?,
-        BinaryOperator::ShiftRight => shift_right(left, right)?,
-        // Go compares constants at full width, so neither side is range checked.
-        _ => Constant::Unknown,
-    };
-    Some(folded)
-}
-
-fn or_unknown(value: Option<i128>) -> Constant {
-    value.map_or(Constant::Unknown, Constant::Integer)
-}
-
-fn shift_left(left: i128, right: i128) -> Option<Constant> {
-    let Some(amount) = shift_amount(right) else {
-        return unusable_shift_count(right);
-    };
-    let shifted = left << amount;
-    Some(if shifted >> amount == left {
-        Constant::Integer(shifted)
-    } else {
-        Constant::Unknown
-    })
-}
-
-fn shift_right(left: i128, right: i128) -> Option<Constant> {
-    let Some(amount) = shift_amount(right) else {
-        return unusable_shift_count(right);
-    };
-    Some(Constant::Integer(left >> amount))
-}
-
-/// A negative shift is not a constant expression, and shift_count names it.
-fn unusable_shift_count(amount: i128) -> Option<Constant> {
-    (amount >= 0).then_some(Constant::Unknown)
-}
-
-fn shift_amount(amount: i128) -> Option<u32> {
-    (0..128).contains(&amount).then_some(amount as u32)
 }

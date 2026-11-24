@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
-use syntax::lex::{interpolation_holes, rune_codepoint};
+use syntax::lex::interpolation_holes;
 use syntax::types::{CompoundKind, SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -33,16 +33,12 @@ impl InferCtx<'_> {
                 let resolved = expected_ty.resolve_in(&self.env);
                 let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved) {
                     let is_pre_negated = text.as_deref().is_some_and(|t| t.starts_with('-'));
-                    if !self.is_inside_constant_expression() {
-                        if is_pre_negated {
-                            self.check_negative_magnitude_overflow(
-                                value.wrapping_neg(),
-                                &numeric,
-                                span,
-                            );
-                        } else if !self.is_inside_negation() {
-                            self.check_integer_literal_overflow(value, &numeric, span);
-                        }
+                    if is_pre_negated && !self.is_inside_constant_expression() {
+                        self.check_negative_magnitude_overflow(
+                            value.wrapping_neg(),
+                            &numeric,
+                            span,
+                        );
                     }
                     resolved.clone()
                 } else {
@@ -59,7 +55,6 @@ impl InferCtx<'_> {
                 let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved)
                     && (numeric.is_float() || numeric.is_complex())
                 {
-                    self.check_float_literal_overflow(value, &numeric, span);
                     resolved.clone()
                 } else {
                     let float_ty = Type::Simple(SimpleKind::Float64);
@@ -75,7 +70,6 @@ impl InferCtx<'_> {
                 let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved)
                     && numeric.is_complex()
                 {
-                    self.check_float_literal_overflow(coef, &numeric, span);
                     resolved.clone()
                 } else {
                     let complex_ty = Type::Simple(SimpleKind::Complex128);
@@ -110,12 +104,7 @@ impl InferCtx<'_> {
 
             Literal::Char(char) => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved) {
-                    if !self.is_inside_constant_expression()
-                        && let Some(codepoint) = rune_codepoint(&char)
-                    {
-                        self.check_integer_literal_overflow(codepoint as u64, &numeric, span);
-                    }
+                let ty = if store.literal_adaptation_target(&resolved).is_some() {
                     resolved.clone()
                 } else {
                     let char_ty = Type::Simple(SimpleKind::Rune);

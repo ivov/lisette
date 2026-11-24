@@ -93,11 +93,6 @@ impl<'a> EmitFacts<'a> {
         self.definition(owner)?.methods()?.get(name)
     }
 
-    pub(crate) fn const_emits_go_const(&self, symbol: &str) -> bool {
-        self.definition(symbol)
-            .is_some_and(Definition::is_compile_time_const)
-    }
-
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
         self.definition(qualified_name)
             .is_some_and(Definition::is_const)

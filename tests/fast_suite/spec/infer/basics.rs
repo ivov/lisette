@@ -490,8 +490,8 @@ fn constant_expression_beside_shift_count_keeps_int() {
 
 #[test]
 fn shift_by_constant_count_keeps_constant_checks() {
-    infer("{ let x: int8 = 1 << 128; x }").assert_type_mismatch();
-    infer("{ let x: int8 = 1 << (8 as uint8); x }").assert_type_mismatch();
+    infer("{ let x: int8 = 1 << 128; x }").assert_infer_code("constant_overflow");
+    infer("{ let x: int8 = 1 << (8 as uint8); x }").assert_infer_code("constant_overflow");
 }
 
 #[test]
@@ -592,7 +592,8 @@ fn enum_pattern_match_mixed_qualified_unqualified() {
 fn nested_enum_variants() {
     infer(
         r#"{
-    Some(Ok(42))
+    let value: Option<Result<int, string>> = Some(Ok(42));
+    value
     }"#,
     )
     .assert_no_errors();
@@ -629,7 +630,7 @@ fn enum_variant_constructor_type_inference() {
 fn enum_multiple_variants_same_name_different_enums() {
     infer(
         r#"{
-    let r = Ok(42);
+    let r: Result<int, string> = Ok(42);
     let o = Some(true);
     (r, o)
     }"#,
@@ -641,7 +642,7 @@ fn enum_multiple_variants_same_name_different_enums() {
 fn enum_pattern_destructuring() {
     infer(
         r#"{
-    let result = Ok(42);
+    let result: Result<int, string> = Ok(42);
     match result {
       Ok(value) => value,
       Err(msg) => 0,
@@ -693,7 +694,7 @@ fn enum_generic_inference() {
 fn enum_nested_pattern_match() {
     infer(
         r#"{
-    let nested = Some(Ok(42));
+    let nested: Option<Result<int, string>> = Some(Ok(42));
     match nested {
       Some(Ok(x)) => x,
       Some(Err(_)) => 0,
@@ -709,11 +710,12 @@ fn enum_in_if_expression() {
     infer(
         r#"{
     let opt = Some(42);
-    if true {
+    let chosen = if true {
       Some(1)
     } else {
       None
-    }
+    };
+    chosen
     }"#,
     )
     .assert_no_errors();
@@ -781,7 +783,7 @@ fn enum_pattern_undefined_variant() {
 fn enum_qualified_and_unqualified_in_pattern_arms() {
     infer(
         r#"{
-    let r = Ok(42);
+    let r: Result<int, string> = Ok(42);
     match r {
       Result.Ok(x) => x,
       Err(_) => 0,
@@ -1741,4 +1743,89 @@ fn local_constants_have_resolved_binding_identities() {
         }
     });
     assert!(found);
+}
+
+#[test]
+fn integer_literal_past_int64_without_destination_is_rejected() {
+    infer("fn test() { let x = 9223372036854775808; let _ = x }")
+        .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn integer_literal_past_uint64_fits_a_float_destination() {
+    infer("fn test() { let _v: float64 = 18446744073709551616 }").assert_no_errors();
+    infer("fn test() { let _x: uint64 = 99999999999999999999 }")
+        .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn float_constant_conversion_out_of_range_is_rejected() {
+    infer("const C = 1e39\nfn test() { let _ = C as int }")
+        .assert_infer_code("constant_conversion_overflow");
+    infer("const C = 1e39\nfn test() { let _ = C as float32 }")
+        .assert_infer_code("float_literal_overflow");
+}
+
+#[test]
+fn constant_past_int_is_rejected_but_its_folded_value_is_not() {
+    infer("const C = 1 << 200").assert_infer_code("constant_overflow");
+    infer("const C = 1 << 600 >> 598").assert_infer_code("constant_too_large");
+    infer("const C = 1 << 200 >> 198").assert_no_errors();
+}
+
+#[test]
+fn constant_zero_divisors_are_rejected() {
+    infer("const F0 = 0.0\nfn test() -> float64 { 7.0 / F0 }")
+        .assert_infer_code("division_by_zero");
+    infer("fn test(x: int) -> int { x / \"\".length() }").assert_infer_code("division_by_zero");
+    infer("fn test(x: int) -> int { x / min(0, 1) }").assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn constant_string_index_past_its_length_is_rejected() {
+    infer("const S3 = \"abc\"\nfn test() { let _ = S3.byte_at(3) }")
+        .assert_infer_code("index_out_of_bounds");
+}
+
+#[test]
+fn constant_slice_bounds_out_of_order_are_rejected() {
+    infer("fn test() {\n  let s = [1, 2, 3]\n  let _ = s[1 + 2..1]\n}")
+        .assert_infer_code("slice_bounds_swapped");
+}
+
+#[test]
+fn shift_of_literal_takes_its_destination_type() {
+    infer("fn test(n: uint) -> int {\n  let v: int = 1 << n\n  v\n}").assert_no_errors();
+    infer("const SHIFT = 1 + 1\nfn test() -> int8 {\n  let x: int8 = 1 << SHIFT\n  x\n}")
+        .assert_no_errors();
+    infer("fn test(n: uint) -> int8 { (255 << n) as int8 }")
+        .assert_error_contains("overflows `int8`");
+}
+
+#[test]
+fn complement_of_go_constant_of_named_type_stays_in_range() {
+    infer_with_go_typedefs(
+        "import \"go:example.com/fs\"\nfn test(m: fs.FileMode) -> fs.FileMode { m & ^fs.ModePerm }",
+        &[(
+            "go:example.com/fs",
+            "pub struct FileMode(uint32)\npub const ModePerm: FileMode = 511\n",
+        )],
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn negated_rune_into_unsigned_slot_is_rejected() {
+    infer("fn test() { let _v: uint8 = -('a') }").assert_infer_code("constant_overflow");
+}
+
+#[test]
+fn compound_division_by_constant_zero_is_rejected() {
+    infer("fn test(x: int) -> int {\n  let mut y = x\n  y %= 1 - 1\n  y\n}")
+        .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn float_variable_divided_by_named_zero_is_accepted() {
+    infer("const F0 = 0.0\nfn test(x: float64) -> float64 { x / F0 }").assert_no_errors();
 }

@@ -1342,7 +1342,7 @@ impl SimpleKind {
     pub fn is_arithmetic(self) -> bool {
         !matches!(
             self,
-            SimpleKind::Bool | SimpleKind::String | SimpleKind::Unit | SimpleKind::Uintptr
+            SimpleKind::Bool | SimpleKind::String | SimpleKind::Unit
         )
     }
 
@@ -1394,6 +1394,19 @@ impl SimpleKind {
         )
     }
 
+    pub fn is_unsigned(self) -> bool {
+        self.is_unsigned_int() || self == SimpleKind::Uintptr
+    }
+
+    pub fn sized_name(self) -> &'static str {
+        match self {
+            SimpleKind::Int | SimpleKind::Int64 => "int64",
+            SimpleKind::Uint | SimpleKind::Uint64 | SimpleKind::Uintptr => "uint64",
+            SimpleKind::Byte | SimpleKind::Uint8 => "uint8",
+            kind => kind.leaf_name(),
+        }
+    }
+
     pub fn is_signed_int(self) -> bool {
         matches!(
             self,
@@ -1417,7 +1430,7 @@ impl SimpleKind {
     fn numeric_family(self) -> Option<NumericFamily> {
         if self.is_signed_int() {
             Some(NumericFamily::SignedInt)
-        } else if self.is_unsigned_int() {
+        } else if self.is_unsigned() {
             Some(NumericFamily::UnsignedInt)
         } else if self.is_float() {
             Some(NumericFamily::Float)

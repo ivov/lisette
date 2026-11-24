@@ -41,6 +41,7 @@ fn emits_line_directive_for_closure() {
     let input = r#"
 fn main() {
   let f = || 42
+  let _ = f()
 }
 "#;
     let result = emit_with_sourcemap(input);

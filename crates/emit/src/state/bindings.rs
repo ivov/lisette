@@ -125,8 +125,4 @@ impl BindingValue {
             Self::InlineExpr(_) | Self::TupleComponents(_) => false,
         }
     }
-
-    pub(crate) fn is_go_const(&self) -> bool {
-        matches!(self, BindingValue::GoConst(_))
-    }
 }

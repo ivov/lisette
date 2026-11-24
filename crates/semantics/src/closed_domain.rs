@@ -119,7 +119,7 @@ impl Store {
                 if id != type_id {
                     return None;
                 }
-                let literal = value.to_literal();
+                let literal = value.to_literal()?;
                 DomainValue::from_literal(&literal, base)?;
                 Some(ClosedMember {
                     display_name: domain_display_name(qualified_name.as_str()).into(),

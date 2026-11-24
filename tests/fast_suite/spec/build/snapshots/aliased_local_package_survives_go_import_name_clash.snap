@@ -25,7 +25,7 @@ func main() {
 	made := foo.NewFoo()
 	built := foo.Foo{}
 	n := 1
-	pinned := float64(int(http.StatusOK << n))
+	pinned := float64(int(http.StatusOK) << n)
 	fmt.Println(made)
 	fmt.Println(built)
 	fmt.Println(http.MethodGet)
