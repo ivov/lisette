@@ -453,10 +453,6 @@ impl Planner<'_> {
                 .conversion(go_type);
         }
 
-        if let Some(source_go_type) = self.shift_pin_go_type(expression, ty) {
-            return inner.conversion(source_go_type).conversion(go_type);
-        }
-
         if self.is_identity_conversion(expression, &inner, ty) {
             return inner;
         }
@@ -480,21 +476,6 @@ impl Planner<'_> {
             return false;
         }
         self.target_go_type(&source_ty) == self.target_go_type(ty)
-    }
-
-    fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<GoType> {
-        let target_is_float = self
-            .facts
-            .underlying_simple_kind(target_ty)
-            .is_some_and(|kind| kind.is_float());
-        if !target_is_float || !self.contains_untyped_constant_shift(expression) {
-            return None;
-        }
-        let source_ty = expression.get_type();
-        self.facts
-            .underlying_simple_kind(&source_ty)
-            .is_some_and(|kind| kind.integer_range().is_some())
-            .then(|| self.go_type(&source_ty))
     }
 
     pub(crate) fn plan_reference(&mut self, inner: &Expression) -> ValuePlan {

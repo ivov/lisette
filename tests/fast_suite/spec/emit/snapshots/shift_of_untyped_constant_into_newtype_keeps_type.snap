@@ -1,0 +1,29 @@
+---
+source: tests/fast_suite/spec/emit/expressions.rs
+description: |
+  
+  struct Tiny(int8)
+  
+  fn take(t: Tiny) -> Tiny { t }
+  
+  fn f(n: Tiny) -> Tiny {
+    let mut x: Tiny = 1 << n
+    x = 2 << n
+    let y = take(1 << n)
+    x + y
+  }
+---
+package main
+
+type Tiny int8
+
+func take(t Tiny) Tiny {
+	return t
+}
+
+func f(n Tiny) Tiny {
+	x := Tiny(1) << n
+	x = Tiny(2) << n
+	y := take(Tiny(1) << n)
+	return x + y
+}

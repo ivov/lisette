@@ -1,6 +1,7 @@
 use crate::checker::EnvResolve;
+use syntax::EcoString;
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, Expression, Literal};
+use syntax::ast::{Binding, Expression, IdentifierResolution, Literal, Span};
 use syntax::program::DefinitionBody;
 use syntax::types::{Symbol, Type};
 
@@ -12,6 +13,7 @@ use crate::loader;
 enum ConstInitReject {
     NotSimple,
     Composite,
+    RuntimeValue(EcoString, Span),
 }
 
 impl InferCtx<'_> {
@@ -22,7 +24,19 @@ impl InferCtx<'_> {
                 Literal::FormatString(_) => Some(ConstInitReject::NotSimple),
                 _ => None,
             },
-            Expression::Identifier { .. } => None,
+            Expression::Identifier {
+                value,
+                resolution,
+                span,
+                ..
+            } => {
+                let is_constant = match resolution {
+                    IdentifierResolution::Binding(_) => self.scopes.lookup_const(value),
+                    IdentifierResolution::Definition { name, .. } => self.store.is_const(name),
+                    IdentifierResolution::Unresolved => true,
+                };
+                (!is_constant).then(|| ConstInitReject::RuntimeValue(value.clone(), *span))
+            }
             Expression::Binary { left, right, .. } => self
                 .classify_const_init(left)
                 .or_else(|| self.classify_const_init(right)),
@@ -98,6 +112,10 @@ impl InferCtx<'_> {
                         .push(diagnostics::infer::const_disallows_composite(
                             expression.get_span(),
                         ));
+                }
+                Some(ConstInitReject::RuntimeValue(name, span)) => {
+                    self.sink
+                        .push(diagnostics::infer::const_reads_runtime_value(&name, span));
                 }
             }
             expression

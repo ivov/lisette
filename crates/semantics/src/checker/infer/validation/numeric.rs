@@ -1,39 +1,10 @@
-use crate::checker::EnvResolve;
-use syntax::ast::{Expression, Span};
+use syntax::ast::{Expression, Literal, Span};
+use syntax::constant::{self, ConstantError, Value};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
-use syntax::ast::Literal;
-use syntax::ast::UnaryOperator;
 
 impl InferCtx<'_> {
-    /// Validates that an integer literal fits within the target numeric type.
-    /// Note: value is u64 from the parser, so negative literals are handled via unary minus.
-    pub(crate) fn check_integer_literal_overflow(
-        &mut self,
-        value: u64,
-        target_ty: &Type,
-        span: Span,
-    ) {
-        let Some(bounds) = self.underlying_integer_bounds(target_ty) else {
-            return;
-        };
-
-        // For positive literals (u64 from parser), only check against max.
-        // Negative literals route through check_negative_magnitude_overflow:
-        // either via the unary-minus path (operators.rs) or via the
-        // pre-negated text detection in literals.rs.
-        if value as i128 > bounds.max {
-            self.sink.push(diagnostics::infer::integer_literal_overflow(
-                bounds.name,
-                bounds.min,
-                bounds.max,
-                span,
-            ));
-        }
-    }
-
-    /// Validates that a float literal fits within the target type.
     pub(crate) fn check_float_literal_overflow(
         &mut self,
         value: f64,
@@ -45,12 +16,40 @@ impl InferCtx<'_> {
         else {
             return;
         };
-        if value.is_finite() && (value as f32).is_infinite() {
+        let Some(value) = Value::from_f64(value) else {
+            return;
+        };
+        if constant::represent(value, SimpleKind::Float32, span).is_err() {
             self.sink.push(diagnostics::infer::float_literal_overflow(
                 kind.leaf_name(),
                 span,
             ));
         }
+    }
+
+    pub(crate) fn check_pattern_literal_range(&mut self, literal: &Literal, ty: &Type, span: Span) {
+        if matches!(literal, Literal::Integer { text: Some(text), .. } if text.starts_with('-')) {
+            return;
+        }
+        let Some(kind) = self.store.underlying_simple_kind(ty) else {
+            return;
+        };
+        let Some(value) = constant::literal_value(literal) else {
+            return;
+        };
+        if !matches!(
+            constant::represent(value, kind, span),
+            Err(ConstantError::Overflow { .. })
+        ) {
+            return;
+        }
+        let diagnostic = match kind.integer_range() {
+            Some((min, max)) => {
+                diagnostics::infer::integer_literal_overflow(kind.sized_name(), min, max, span)
+            }
+            None => diagnostics::infer::float_literal_overflow(kind.leaf_name(), span),
+        };
+        self.sink.push(diagnostic);
     }
 
     pub(crate) fn check_negative_literal_overflow(
@@ -77,7 +76,7 @@ impl InferCtx<'_> {
         };
 
         // Allow `-0` on unsigned types; any nonzero negation is an error.
-        if is_unsigned(kind) {
+        if kind.is_unsigned() {
             if magnitude != 0 {
                 let type_name = target_ty
                     .display_name()
@@ -88,105 +87,17 @@ impl InferCtx<'_> {
             return;
         }
 
-        let Some(bounds) = integer_bounds(kind) else {
+        let Some((min, max)) = kind.integer_range() else {
             return;
         };
-
-        if magnitude as i128 > -bounds.min {
+        let value = Value::from_i128(-i128::from(magnitude));
+        if constant::represent(value, kind, span).is_err() {
             self.sink.push(diagnostics::infer::integer_literal_overflow(
-                bounds.name,
-                bounds.min,
-                bounds.max,
+                kind.sized_name(),
+                min,
+                max,
                 span,
             ));
         }
     }
-
-    pub(crate) fn check_cast_literal_overflow(
-        &mut self,
-        expression: &Expression,
-        target_ty: &Type,
-        span: Span,
-    ) {
-        let resolved = target_ty.resolve_in(&self.env);
-        if !resolved.is_numeric() {
-            return;
-        }
-
-        let (value, is_negative) = match expression.unwrap_parens() {
-            Expression::Literal {
-                literal: Literal::Integer { value, .. },
-                ..
-            } => (*value, false),
-            Expression::Unary {
-                operator: UnaryOperator::Negative,
-                expression: inner,
-                ..
-            } => {
-                if let Expression::Literal {
-                    literal: Literal::Integer { value, .. },
-                    ..
-                } = inner.unwrap_parens()
-                {
-                    (*value, true)
-                } else {
-                    return;
-                }
-            }
-            _ => return,
-        };
-
-        // Only a primitive target: `constant_cast_overflow` checks alias and newtype targets.
-        let Some(bounds) = resolved.as_simple().and_then(integer_bounds) else {
-            return;
-        };
-
-        let signed_value: i128 = if is_negative {
-            -(value as i128)
-        } else {
-            value as i128
-        };
-
-        if signed_value < bounds.min || signed_value > bounds.max {
-            self.sink.push(diagnostics::infer::integer_literal_overflow(
-                bounds.name,
-                bounds.min,
-                bounds.max,
-                span,
-            ));
-        }
-    }
-}
-
-struct IntegerBounds {
-    name: &'static str,
-    min: i128,
-    max: i128,
-}
-
-impl InferCtx<'_> {
-    fn underlying_integer_bounds(&self, ty: &Type) -> Option<IntegerBounds> {
-        integer_bounds(self.store.underlying_simple_kind(ty)?)
-    }
-}
-
-fn integer_bounds(kind: SimpleKind) -> Option<IntegerBounds> {
-    let (min, max) = kind.integer_range()?;
-    let name = match kind {
-        SimpleKind::Int | SimpleKind::Int64 => "int64",
-        SimpleKind::Int8 => "int8",
-        SimpleKind::Int16 => "int16",
-        SimpleKind::Int32 => "int32",
-        SimpleKind::Rune => "rune",
-        SimpleKind::Byte | SimpleKind::Uint8 => "uint8",
-        SimpleKind::Uint16 => "uint16",
-        SimpleKind::Uint32 => "uint32",
-        SimpleKind::Uint | SimpleKind::Uint64 | SimpleKind::Uintptr => "uint64",
-        _ => return None,
-    };
-    Some(IntegerBounds { name, min, max })
-}
-
-fn is_unsigned(kind: SimpleKind) -> bool {
-    kind.is_unsigned_int() || kind == SimpleKind::Uintptr
 }

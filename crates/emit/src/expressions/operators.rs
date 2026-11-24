@@ -8,8 +8,9 @@ use crate::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::ir::local::GoIdentifier;
 use crate::ir::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use crate::state::expression::ExpressionContext;
-use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
-use syntax::program::{DotAccessResolution, OperandConversion};
+use syntax::ast::{BinaryOperator, BindingId, Expression, Literal, UnaryOperator};
+use syntax::constant::{self, Constant, ConstantSource};
+use syntax::program::{self, OperandConversion};
 use syntax::types::{self, ScaledImaginary, Type};
 
 struct NumericBinaryEmitInfo {
@@ -60,11 +61,17 @@ impl Planner<'_> {
 
         let left = BinaryOperand::of(left_expression);
         let right = BinaryOperand::of(right_expression);
+        let typed_left = (matches!(
+            operator,
+            BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
+        ) && self.is_go_constant_expression(left_expression)
+            && !self.is_go_constant_expression(right_expression))
+        .then_some(&left.ty);
 
         if let Some(casts) = conversion.map(|conversion| operand_casts(conversion, &left, &right)) {
             let left_plan = self.plan_operand(left_expression, ctx);
             let right_plan = self.plan_operand(right_expression, ctx);
-            return self.combine_binary(operator, left_plan, right_plan, Some(casts));
+            return self.combine_binary(operator, (typed_left, left_plan), right_plan, Some(casts));
         }
 
         let left_ty = &left.ty;
@@ -97,7 +104,7 @@ impl Planner<'_> {
 
         let left_plan = self.plan_composite_value(left_expression, ctx);
         let right_plan = self.plan_composite_value(right_expression, ctx);
-        self.combine_binary(operator, left_plan, right_plan, None)
+        self.combine_binary(operator, (typed_left, left_plan), right_plan, None)
     }
 
     pub(crate) fn plan_lowered_binary(
@@ -108,13 +115,13 @@ impl Planner<'_> {
         conversion: Option<OperandConversion>,
     ) -> ValuePlan {
         let casts = conversion.map(|conversion| operand_casts(conversion, left.0, right.0));
-        self.combine_binary(operator, left.1, right.1, casts)
+        self.combine_binary(operator, (None, left.1), right.1, casts)
     }
 
     fn combine_binary(
         &mut self,
         operator: &BinaryOperator,
-        left: ValuePlan,
+        (typed_left, left): (Option<&Type>, ValuePlan),
         right: ValuePlan,
         casts: Option<NumericBinaryEmitInfo>,
     ) -> ValuePlan {
@@ -127,6 +134,9 @@ impl Planner<'_> {
         let mut right = values
             .next()
             .expect("binary expression has a right operand");
+        if let Some(left_ty) = typed_left {
+            left = GoExpression::conversion(self.go_type(left_ty), left);
+        }
         let Some(casts) = casts else {
             return ValuePlan::built_from(
                 setup,
@@ -249,70 +259,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn is_go_constant_expression(&self, expression: &Expression) -> bool {
-        match expression {
-            Expression::Literal { literal, .. } => {
-                !matches!(literal, Literal::FormatString(_) | Literal::Slice(_))
-            }
-            Expression::Identifier {
-                value, resolution, ..
-            } => self.identifier_is_const(value, resolution),
-            Expression::DotAccess { resolution, .. } => {
-                self.facts.imported_member_is_const(resolution)
-            }
-            Expression::Unary {
-                operator: UnaryOperator::Negative | UnaryOperator::Not | UnaryOperator::BitwiseNot,
-                expression,
-                ..
-            } => self.is_go_constant_expression(expression),
-            Expression::Binary {
-                operator,
-                left,
-                right,
-                ..
-            } => {
-                !matches!(operator, BinaryOperator::Pipeline)
-                    && self.is_go_constant_expression(left)
-                    && self.is_go_constant_expression(right)
-            }
-            _ => false,
-        }
-    }
-
-    fn identifier_is_const(&self, value: &str, resolution: &IdentifierResolution) -> bool {
-        match self
-            .scope
-            .resolve_identifier_with_resolution(value, resolution)
-        {
-            Some(binding) => binding.is_go_const(),
-            None => resolution
-                .definition()
-                .is_some_and(|symbol| self.facts.const_emits_go_const(symbol)),
-        }
-    }
-
-    pub(crate) fn contains_untyped_constant_shift(&self, expression: &Expression) -> bool {
-        match expression {
-            Expression::Unary { expression, .. } => {
-                self.contains_untyped_constant_shift(expression)
-            }
-            Expression::Binary {
-                operator,
-                left,
-                right,
-                ..
-            } => {
-                let is_untyped_shift = matches!(
-                    operator,
-                    BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
-                ) && self.is_go_constant_expression(left)
-                    && !self.is_go_constant_expression(right);
-                is_untyped_shift
-                    || [left, right]
-                        .into_iter()
-                        .any(|operand| self.contains_untyped_constant_shift(operand))
-            }
-            _ => false,
-        }
+        !matches!(constant::evaluate(expression, self), Ok(None))
     }
 }
 
@@ -410,18 +357,6 @@ fn fold_read(
 }
 
 impl EmitFacts<'_> {
-    fn imported_member_is_const(&self, resolution: &DotAccessResolution) -> bool {
-        let (DotAccessResolution::PackageMember {
-            definition: Some(definition),
-            ..
-        }
-        | DotAccessResolution::StaticMethod { definition, .. }) = resolution
-        else {
-            return false;
-        };
-        self.const_emits_go_const(definition)
-    }
-
     pub(crate) fn flip_preserves_nan(
         &self,
         operator: &BinaryOperator,
@@ -435,5 +370,15 @@ impl EmitFacts<'_> {
     fn is_non_float(&self, expression: &Expression) -> bool {
         self.underlying_simple_kind(&expression.get_type())
             .is_some_and(|kind| !kind.is_float())
+    }
+}
+
+impl ConstantSource for Planner<'_> {
+    fn definition(&self, qualified_name: &str) -> Option<&program::Definition> {
+        self.facts.definition(qualified_name)
+    }
+
+    fn local_constant(&self, binding: BindingId) -> Option<Constant> {
+        self.scope.local_constant(binding)
     }
 }

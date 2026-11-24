@@ -3,7 +3,7 @@ source: tests/fast_suite/ui/lint/mod.rs
 ---
   ▲ Equal operands
    ╭─[test.lis:4:11]
- 3 │   let p: uintptr = 5 as uintptr
+ 3 │   let p: uintptr = 5
  4 │   let _ = p & p
    ·           ──┬──
    ·             ╰── identical operands

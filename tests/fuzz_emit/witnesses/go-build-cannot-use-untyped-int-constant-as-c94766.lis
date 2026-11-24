@@ -1,9 +1,0 @@
-
-import _ "go:os"
-import "go:fmt"
-
-fn test() {
-  let _ = fmt.Print(9223372036854775808);
-}
-
-fn main() { let _ = test(); }

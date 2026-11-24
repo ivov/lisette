@@ -6,7 +6,7 @@ use crate::cache::{
     CacheKey, CacheKeyInputs, DiagnosticMode, compute_emit_artifact_hash, global_emit_context,
 };
 use crate::checker::InferredFile;
-use crate::checker::infer::runtime_constants;
+use crate::checker::infer::constant_values;
 use crate::loader;
 use crate::path::DisplayPathBase;
 use rayon::prelude::*;
@@ -418,7 +418,7 @@ pub(super) fn infer_all_packages(
         .map(|package| package.id.clone())
         .collect();
     infer_packages(&mut checker, store, registered);
-    mark_runtime_constants_in_dependency_order(store, &inferred_package_ids, dependencies);
+    evaluate_constants_in_dependency_order(store, &inferred_package_ids, dependencies);
 
     if !input.cache.is_disabled() {
         let all_go_packages: Vec<String> = store
@@ -758,7 +758,7 @@ fn register_packages(
     all_registered
 }
 
-fn mark_runtime_constants_in_dependency_order(
+fn evaluate_constants_in_dependency_order(
     store: &mut Store,
     package_ids: &[String],
     dependencies: &DependencyGraph,
@@ -768,9 +768,9 @@ fn mark_runtime_constants_in_dependency_order(
         package_id: &str,
         batch: &HashSet<&str>,
         dependencies: &DependencyGraph,
-        marked: &mut HashSet<String>,
+        evaluated: &mut HashSet<String>,
     ) {
-        if !marked.insert(package_id.to_string()) {
+        if !evaluated.insert(package_id.to_string()) {
             return;
         }
         let pending: Vec<String> = dependencies
@@ -779,15 +779,15 @@ fn mark_runtime_constants_in_dependency_order(
             .map(ToString::to_string)
             .collect();
         for dependency in pending {
-            visit(store, &dependency, batch, dependencies, marked);
+            visit(store, &dependency, batch, dependencies, evaluated);
         }
-        runtime_constants::mark_runtime_constants(store, package_id);
+        constant_values::evaluate_package_constants(store, package_id);
     }
 
     let batch: HashSet<&str> = package_ids.iter().map(String::as_str).collect();
-    let mut marked = HashSet::default();
+    let mut evaluated = HashSet::default();
     for package_id in package_ids {
-        visit(store, package_id, &batch, dependencies, &mut marked);
+        visit(store, package_id, &batch, dependencies, &mut evaluated);
     }
 }
 

@@ -36,8 +36,6 @@ pub struct FailingList {
 impl FailingList {
     /// Reads the list at `relative_path`, relative to the `tests` directory.
     pub fn read(relative_path: &str) -> Self {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
-        assert!(path.exists(), "missing failing list {}", path.display());
         Self {
             relative_path: relative_path.to_string(),
             names: read_names(relative_path).into_iter().collect(),

@@ -442,6 +442,19 @@ impl GoExpressionNode {
         found
     }
 
+    pub(crate) fn has_call(&self) -> bool {
+        let mut found = false;
+        self.visit(&mut |inner| {
+            if matches!(
+                inner,
+                Self::Call { .. } | Self::FunctionLiteral { .. } | Self::Verbatim(_)
+            ) {
+                found = true;
+            }
+        });
+        found
+    }
+
     pub(crate) fn mentions(&self, name: &str) -> bool {
         let mut found = false;
         self.visit(&mut |inner| {

@@ -524,7 +524,7 @@ impl Planner<'_> {
                 let payload = bound.payload();
                 let mut statements = bound.statements;
                 let value = self.plan_composite_value(error, ExpressionContext::value());
-                let (error_setup, error) = self.eager_operand(error, value, "failure").into_parts();
+                let (error_setup, error) = self.eager_operand(value, "failure").into_parts();
                 statements.extend(error_setup);
                 MappedFailure {
                     statements,

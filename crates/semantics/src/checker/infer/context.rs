@@ -109,7 +109,6 @@ impl LoopFrames {
 #[derive(Debug, Clone, Default)]
 struct TraversalContext {
     loops: LoopFrames,
-    in_negation: bool,
     in_rejected_go_builtin_args: bool,
     in_constant_expression: bool,
     in_invariant_position: bool,
@@ -473,10 +472,6 @@ impl<'a> InferCtx<'a> {
         self.traversal.in_rejected_go_builtin_args
     }
 
-    pub(super) fn is_inside_negation(&self) -> bool {
-        self.traversal.in_negation
-    }
-
     pub(super) fn is_inside_constant_expression(&self) -> bool {
         self.traversal.in_constant_expression
     }
@@ -765,13 +760,6 @@ impl<'a> InferCtx<'a> {
         let previous = mem::replace(&mut self.traversal.in_rejected_go_builtin_args, true);
         let result = f(self);
         self.traversal.in_rejected_go_builtin_args = previous;
-        result
-    }
-
-    pub(crate) fn in_negation<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let previous = mem::replace(&mut self.traversal.in_negation, true);
-        let result = f(self);
-        self.traversal.in_negation = previous;
         result
     }
 

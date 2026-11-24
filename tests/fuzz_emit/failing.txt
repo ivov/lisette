@@ -13,9 +13,7 @@ emit-panic-crates-emit-src-ir-visit-rs-fa6545 emit_panic: crates/emit/src/ir/vis
 emit-panic-crates-emit-src-statements-assignments-rs-4787b5 emit_panic: crates/emit/src/statements/assignments.rs:: assignment target has no local identity: a
 go-build-strings-imported-as-i-and-not-774385 go_build: "strings" imported as i and not used
 go-build-byte-s-value-of-type-byte-af5a0e go_build: []byte(s) (value of type []byte) is not used
-go-build-cannot-use-untyped-int-constant-as-c94766 go_build: cannot use  (untyped int constant) as int value in argument to fmt.Print (overflows)
 go-build-cannot-use-untyped-int-constant-as-70c49b go_build: cannot use  <<  (untyped int constant ) as int value in assignment to _ identifier (overflows)
-go-build-declared-and-not-used-y-9f35f1 go_build: declared and not used: Y
 go-build-declared-and-not-used-opt-870cee go_build: declared and not used: opt
 go-build-declared-and-not-used-r-123670 go_build: declared and not used: r
 go-build-declared-and-not-used-result-babc8b go_build: declared and not used: result

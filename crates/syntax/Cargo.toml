@@ -13,10 +13,13 @@ doctest = false
 test = false
 
 [features]
-serde = ["dep:serde", "ecow/serde"]
+serde = ["dep:serde", "ecow/serde", "num-bigint/serde", "num-rational/serde"]
 
 [dependencies]
 ecow.workspace = true
+num-bigint = "0.4"
+num-rational = { version = "0.4", default-features = false, features = ["num-bigint", "std"] }
+num-traits = "0.2"
 rustc-hash.workspace = true
 serde = { version = "1", features = ["derive", "rc"], optional = true }
 

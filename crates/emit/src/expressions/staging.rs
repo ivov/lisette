@@ -133,7 +133,6 @@ impl Planner<'_> {
 
     pub(crate) fn eager_operand(
         &mut self,
-        source: &Expression,
         mut value: ValuePlan,
         prefix: &'static str,
     ) -> ValuePlan {
@@ -141,9 +140,6 @@ impl Planner<'_> {
             && value.expression().constant_kind().is_none()
             && !self.plan_rests_in_stable_name(&value)
         {
-            if self.contains_untyped_constant_shift(source) {
-                value = value.conversion(self.go_type(&source.get_type()));
-            }
             self.pin_staged(&mut value, prefix);
         }
         value

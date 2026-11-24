@@ -71,7 +71,7 @@ impl Planner<'_> {
                         if let FormatStringPart::Expression(expression) = part {
                             let value = self.plan_format_operand(expression);
                             let (part_setup, value) =
-                                self.eager_operand(expression, value, "fmtarg").into_parts();
+                                self.eager_operand(value, "fmtarg").into_parts();
                             setup.extend(part_setup);
                             values.push(value);
                         }
@@ -80,8 +80,7 @@ impl Planner<'_> {
                 }
                 _ => {
                     let value = self.plan_composite_value(message, ExpressionContext::value());
-                    let (message_setup, value) =
-                        self.eager_operand(message, value, "msg").into_parts();
+                    let (message_setup, value) = self.eager_operand(value, "msg").into_parts();
                     setup.extend(message_setup);
                     ("%s".to_string(), vec![value])
                 }

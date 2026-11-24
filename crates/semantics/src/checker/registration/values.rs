@@ -1,21 +1,30 @@
 use super::*;
+use syntax::ast::{Literal, UnaryOperator};
 use syntax::attributes;
+use syntax::constant;
 use syntax::program::{ConstantValue, ValueKind};
 
 fn canonical_const_value(expression: &Expression) -> Option<ConstantValue> {
-    use syntax::ast::{Literal, UnaryOperator};
+    literal_const_value(expression).or_else(|| {
+        is_literal_value(expression)
+            .then(|| constant::value_of(expression, &constant::Literals))?
+            .map(ConstantValue::Evaluated)
+    })
+}
+
+fn literal_const_value(expression: &Expression) -> Option<ConstantValue> {
     match expression.unwrap_parens() {
         Expression::Literal { literal, .. } => match literal {
-            Literal::Integer { value, .. } => Some(ConstantValue::Integer {
+            Literal::Integer { value, text } => Some(ConstantValue::Integer {
                 value: *value,
-                text: None,
+                text: text.clone(),
             }),
-            Literal::Float { value, .. } => Some(ConstantValue::Float {
+            Literal::Float { value, text } => Some(ConstantValue::Float {
                 value: *value,
-                text: None,
+                text: text.clone(),
             }),
             Literal::Boolean(value) => Some(ConstantValue::Boolean(*value)),
-            Literal::String { value, .. } => Some(ConstantValue::String(value.clone())),
+            Literal::String { value, raw: false } => Some(ConstantValue::String(value.clone())),
             Literal::Char(value) => Some(ConstantValue::Char(value.clone())),
             _ => None,
         },
@@ -23,17 +32,21 @@ fn canonical_const_value(expression: &Expression) -> Option<ConstantValue> {
             operator: UnaryOperator::Negative,
             expression,
             ..
-        } => match canonical_const_value(expression)? {
+        } => match literal_const_value(expression)? {
             ConstantValue::Integer { value, text } => Some(ConstantValue::Integer {
                 value: value.wrapping_neg(),
                 text: match text {
-                    Some(negative) if negative.starts_with('-') => None,
-                    _ => Some(format!("-{value}")),
+                    Some(negative) if negative.starts_with('-') => Some(negative[1..].to_string()),
+                    Some(text) => Some(format!("-{text}")),
+                    None => Some(format!("-{value}")),
                 },
             }),
-            ConstantValue::Float { value, .. } => Some(ConstantValue::Float {
+            ConstantValue::Float { value, text } => Some(ConstantValue::Float {
                 value: -value,
-                text: None,
+                text: text.map(|text| match text.strip_prefix('-') {
+                    Some(positive) => positive.to_string(),
+                    None => format!("-{text}"),
+                }),
             }),
             _ => None,
         },
@@ -202,6 +215,16 @@ impl TaskState {
         if !has_value && self.is_lis(&*store) {
             self.sink
                 .push(diagnostics::infer::valueless_const_outside_typedef(*span));
+        }
+
+        if let Some(value) = expression.value()
+            && !is_literal_value(value)
+            && self.is_d_lis(&*store)
+        {
+            self.sink
+                .push(diagnostics::infer::typedef_const_not_literal(
+                    value.get_span(),
+                ));
         }
 
         if !has_value && maybe_annotation.is_none() && self.is_d_lis(&*store) {
@@ -389,5 +412,25 @@ impl TaskState {
                 body: Box::new(base_fn_ty),
             }
         }
+    }
+}
+
+fn is_literal_value(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::Literal { literal, .. } => {
+            !matches!(literal, Literal::FormatString(_) | Literal::Slice(_))
+        }
+        Expression::Unary {
+            operator: UnaryOperator::Negative,
+            expression,
+            ..
+        } => matches!(
+            expression.unwrap_parens(),
+            Expression::Literal {
+                literal: Literal::Integer { .. } | Literal::Float { .. } | Literal::Imaginary(_),
+                ..
+            }
+        ),
+        _ => false,
     }
 }

@@ -248,7 +248,7 @@ impl<'p> Planner<'p> {
         let value_plan = if literal_default {
             value_plan
         } else {
-            self.eager_operand(default, value_plan, "default")
+            self.eager_operand(value_plan, "default")
         };
         let (default_setup, default_value) = value_plan.into_parts();
         statements.extend(default_setup);

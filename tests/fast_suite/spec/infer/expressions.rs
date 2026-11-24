@@ -2226,6 +2226,225 @@ fn constant_float_zero_division_by_zero_rejected() {
 }
 
 #[test]
+fn user_method_named_length_is_not_constant() {
+    infer(
+        r#"
+    struct S(string)
+    impl S { fn length(self) -> int { 7 } }
+    const S0: S = ""
+    fn main() {
+      let _ = 1 / S0.length();
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn raw_string_constant_keeps_backslash() {
+    infer(
+        r#"
+    const S = r"\n"
+    fn main() {
+      let _ = S.byte_at(1);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn nul_escape_is_one_byte() {
+    infer(
+        r#"
+    fn main() {
+      let _ = "\0".byte_at(1);
+    }
+        "#,
+    )
+    .assert_infer_code("index_out_of_bounds");
+}
+
+#[test]
+fn local_float32_constant_rounds_to_its_type() {
+    infer(
+        r#"
+    fn main() {
+      const A: float32 = 16777217.0
+      let _ = 1 / ((A as int) - 16777216);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn package_float32_constant_rounds_to_its_type() {
+    infer(
+        r#"
+    const A: float32 = 16777217.0
+    fn main() {
+      let _ = 1 / ((A as int) - 16777216);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn package_float_constant_past_u64_keeps_its_value() {
+    infer(
+        r#"
+    const A: float64 = 36893488147419103232
+    fn main() {
+      let _ = A as uint64;
+    }
+        "#,
+    )
+    .assert_infer_code("constant_conversion_overflow");
+}
+
+#[test]
+fn pattern_literal_past_its_type_rejected() {
+    infer(
+        r#"
+    fn f(x: uint8) -> bool {
+      match x {
+        256 => true,
+        _ => false,
+      }
+    }
+    fn main() {
+      let _ = f(1);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn constant_index_into_string_alias_rejected() {
+    infer(
+        r#"
+    type S = string
+    const A: S = ""
+    fn main() {
+      let _ = A.byte_at(0);
+    }
+        "#,
+    )
+    .assert_infer_code("index_out_of_bounds");
+}
+
+#[test]
+fn double_negated_constant_past_u64_keeps_its_value() {
+    infer(
+        r#"
+    const A: float64 = -(-36893488147419103232)
+    fn main() {
+      let _ = 1.0 / (A - 36893488147419103232);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn newtype_field_of_constant_is_constant() {
+    infer(
+        r#"
+    struct N(int)
+    const Z: N = 0
+    fn main() {
+      let _ = 1 / Z.0;
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn length_of_array_behind_reference_is_constant() {
+    infer(
+        r#"
+    fn f(a: Ref<Array<int, 0>>) -> int {
+      1 / a.length()
+    }
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn length_of_array_with_constant_call_is_constant() {
+    infer(
+        r#"
+    struct S { a: Array<int, 1> }
+    fn main() {
+      let _ = 1 / (S { a: [min(1, 2)] }.a.length() - 1);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn element_overflow_inside_constant_length_rejected() {
+    infer(
+        r#"
+    struct S { a: Array<uint8, 1> }
+    fn main() {
+      let _ = S { a: [256] }.a.length();
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn integer_literal_past_512_bits_rejected() {
+    infer(
+        r#"
+    fn f() -> int { 0x100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 }
+    fn main() {
+      let _ = f();
+    }
+        "#,
+    )
+    .assert_infer_code("constant_too_large");
+}
+
+#[test]
+fn inclusive_slice_bound_at_i128_max_does_not_crash() {
+    infer(
+        r#"
+    fn f(xs: Slice<int>) -> Slice<int> {
+      xs[0..=170141183460469231731687303715884105727]
+    }
+    fn main() {
+      let _ = f([1]);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn compound_shift_by_negative_count_rejected() {
+    infer(
+        r#"
+    fn main() {
+      let mut n = 1;
+      n <<= -1;
+      let _ = n;
+    }
+        "#,
+    )
+    .assert_infer_code("negative_shift");
+}
+
+#[test]
 fn try_block_two_question_marks_different_t_custom_error() {
     infer(
         r#"
@@ -3460,4 +3679,90 @@ fn consume(a: int, f: fn(int) -> int) { let _ = f(a) }
 fn main() { let mut x = 1; consume(write(&x), |x: int| x) }"#;
     let errors = checker_errors(source, &[]);
     assert!(errors.is_empty(), "{source}\n{errors:?}");
+}
+
+#[test]
+fn newtype_constructor_of_constant_is_constant() {
+    infer(
+        r#"
+    struct N(int)
+    fn main() {
+      let _ = 1 / N(0).0;
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn float_constant_is_exact() {
+    infer(
+        r#"
+    fn main() {
+      let _ = 1.0 / (0.1 + 0.2 - 0.3);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn integer_past_128_bits_inside_expression_checked() {
+    infer(
+        r#"
+    fn main() {
+      let _ = ((1 << 127) * 1) as int8;
+    }
+        "#,
+    )
+    .assert_infer_code("constant_conversion_overflow");
+}
+
+#[test]
+fn zero_of_int_is_constant() {
+    infer(
+        r#"
+    fn main() {
+      let _ = 1 / zero<int>();
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn real_of_constant_is_constant() {
+    infer(
+        r#"
+    fn main() {
+      let _ = 1.0 / real(1i);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn typed_max_keeps_its_type() {
+    infer(
+        r#"
+    fn f() -> uint8 { max<uint8>(255, 1) + 1 - 1 }
+    fn main() {
+      let _ = f();
+    }
+        "#,
+    )
+    .assert_infer_code("constant_overflow");
+}
+
+#[test]
+fn large_intermediate_within_512_bits_accepted() {
+    infer("{ let x: int = (1 << 511) >> 509; x }").assert_no_errors();
+}
+
+#[test]
+fn float32_constant_just_below_overflow_accepted() {
+    infer("{ let x: float32 = 3.4028235677973366e38; x }").assert_no_errors();
+    infer("{ let x: float32 = 3.4028235677973367e38; x }")
+        .assert_infer_code("float_literal_overflow");
 }
