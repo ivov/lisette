@@ -71,7 +71,25 @@ pub(crate) enum LoweredReturnAbi {
     Tuple { arity: usize },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum LoweredFailure {
+    Error { payload: Option<PayloadLayout> },
+    Absent(OptionReturnAbi),
+    Unfailing,
+}
+
 impl LoweredReturnAbi {
+    pub(crate) fn failure(&self) -> LoweredFailure {
+        match self {
+            Self::BareError => LoweredFailure::Error { payload: None },
+            Self::Result { payload } | Self::Partial { payload } => LoweredFailure::Error {
+                payload: Some(*payload),
+            },
+            Self::Option(option) => LoweredFailure::Absent(*option),
+            Self::Tuple { .. } => LoweredFailure::Unfailing,
+        }
+    }
+
     pub(crate) fn payload(&self) -> Option<PayloadLayout> {
         match self {
             Self::Result { payload }

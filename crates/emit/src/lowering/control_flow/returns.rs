@@ -22,7 +22,9 @@ use crate::target::ir::bodies::{
 };
 use crate::target::ir::prelude::{ConstructorKind, Fallible, prelude_call};
 use crate::target::ir::values::GoExpression;
-use crate::target::types::return_abi::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::target::types::return_abi::{
+    LoweredFailure, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
+};
 use std::slice;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -386,13 +388,17 @@ impl Planner<'_> {
         error: Option<GoExpression>,
     ) -> Vec<GoExpression> {
         let return_ctx = self.scope.current_return_ctx();
-        if let Some(shape) = return_ctx.lowered_shape() {
-            let return_ty = return_ctx.expect_ty();
-            return match error {
-                Some(error) if fallible.is_result() => {
-                    self.lowered_err_values(&shape, &return_ty, error)
+        if let Some((return_ty, shape)) = return_ctx.lowered() {
+            return match (shape.failure(), error) {
+                (LoweredFailure::Error { payload }, Some(error)) => {
+                    self.lowered_err_values(payload, return_ty, error)
                 }
-                _ => self.lowered_none_values(&shape, &return_ty),
+                (LoweredFailure::Absent(option), None) => {
+                    self.lowered_none_values(option, return_ty)
+                }
+                (failure, error) => unreachable!(
+                    "the failure {failure:?} of the enclosing return does not fit the error {error:?}"
+                ),
             };
         }
         vec![self.queries().contextual_failure(fallible, error)]

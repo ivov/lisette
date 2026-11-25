@@ -7,7 +7,7 @@ use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, Opti
 use syntax::program::DefinitionBody;
 use syntax::program::SlotOrigin;
 use syntax::program::{GO_IMPORT_PREFIX, NativeTypeKind, strip_go_prefix, strip_prelude_prefix};
-use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
+use syntax::types::{CompoundKind, SimpleKind, Type};
 
 impl ValueLayout {
     pub(in crate::lowering) fn go_type(&self, planner: &PlannerQueries<'_, '_>) -> GoType {
@@ -44,18 +44,14 @@ impl ValueLayout {
                 GoType::prelude("Option", &[payload.go_type(planner)])
             }
             Self::Fallible {
-                fallible_type,
+                kind,
                 payload,
                 error,
-            } => {
-                let Type::Nominal { id, .. } = fallible_type else {
-                    unreachable!("a fallible layout holds a prelude container")
-                };
-                GoType::prelude(
-                    unqualified_name(id),
-                    &[payload.go_type(planner), error.go_type(planner)],
-                )
-            }
+                ..
+            } => GoType::prelude(
+                kind.prelude_name(),
+                &[payload.go_type(planner), error.go_type(planner)],
+            ),
             Self::Tuple { elements, .. } => {
                 let types: Vec<_> = elements
                     .iter()

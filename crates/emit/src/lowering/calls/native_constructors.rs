@@ -138,14 +138,14 @@ impl Planner<'_> {
         let argument = ctx.args.first()?;
         let abi = return_abi(&self.facts, returned, ReturnSlot::Function);
         let CallableReturnAbi::Lowered(
-            shape @ LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }),
+            shape @ LoweredReturnAbi::Option(option @ OptionReturnAbi::CommaOk { .. }),
         ) = &abi
         else {
             return None;
         };
 
         let result_list = self.queries().return_go_type(&abi, returned);
-        let none_values = self.lowered_none_values(shape, returned);
+        let none_values = self.lowered_none_values(*option, returned);
 
         let element_go = self.queries().go_type(&element);
         let array_go = GoType::array_of(length, &element_go);

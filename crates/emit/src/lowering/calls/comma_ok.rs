@@ -315,7 +315,7 @@ impl PlannerQueries<'_, '_> {
                     return None;
                 }
                 Some(CommaOkSource::LoweredCall {
-                    nil_guard: pair.nil_guard,
+                    nil_guard: pair.value.and_then(|slot| slot.nil_guard),
                 })
             }
         }

@@ -102,44 +102,33 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn lowered_err_values(
         &self,
-        shape: &LoweredReturnAbi,
+        payload: Option<PayloadLayout>,
         return_ty: &Type,
         err_expression: GoExpression,
     ) -> Vec<GoExpression> {
-        match shape {
-            LoweredReturnAbi::BareError => vec![err_expression],
-            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
-                let ok_ty = self.facts.ok_payload(return_ty);
-                let mut values = self.lowered_payload_zeros(shape, &ok_ty);
-                values.push(err_expression);
-                values
-            }
-            LoweredReturnAbi::Tuple { .. } => {
-                unreachable!("a tuple return has no failure path")
-            }
-            LoweredReturnAbi::Option(_) => {
-                unreachable!("Option's failure constructor `None` carries no payload")
-            }
-        }
+        let Some(payload) = payload else {
+            return vec![err_expression];
+        };
+        let ok_ty = self.facts.ok_payload(return_ty);
+        let mut values = self.lowered_payload_zeros(payload, &ok_ty);
+        values.push(err_expression);
+        values
     }
 
     pub(in crate::lowering) fn lowered_none_values(
         &self,
-        shape: &LoweredReturnAbi,
+        option: OptionReturnAbi,
         return_ty: &Type,
     ) -> Vec<GoExpression> {
-        match shape {
-            LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+        match option {
+            OptionReturnAbi::CommaOk { payload } => {
                 let inner = self.facts.ok_payload(return_ty);
-                let mut values = self.lowered_payload_zeros(shape, &inner);
+                let mut values = self.lowered_payload_zeros(payload, &inner);
                 values.push(GoExpression::boolean(false));
                 values
             }
-            LoweredReturnAbi::Option(OptionReturnAbi::Nullable) => vec![GoExpression::nil()],
-            LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
-                vec![GoExpression::integer(i128::from(*value))]
-            }
-            _ => unreachable!("only Option's `None` lacks a payload"),
+            OptionReturnAbi::Nullable => vec![GoExpression::nil()],
+            OptionReturnAbi::Sentinel(value) => vec![GoExpression::integer(i128::from(value))],
         }
     }
 
@@ -162,10 +151,10 @@ impl Planner<'_> {
 
     fn lowered_payload_zeros(
         &self,
-        shape: &LoweredReturnAbi,
+        payload: PayloadLayout,
         payload_ty: &Type,
     ) -> Vec<GoExpression> {
-        if shape.has_flattened_payload() {
+        if payload.is_flattened() {
             self.facts
                 .lowered_tuple_slot_layouts(payload_ty)
                 .iter()
@@ -201,14 +190,14 @@ impl Planner<'_> {
                     )
                     .into(),
                     multi_value_return(self.lowered_err_values(
-                        shape,
+                        shape.payload(),
                         return_ty,
                         field(p, tags::result_variant("Err").fields[0]),
                     )),
                 ]
             }
             LoweredReturnAbi::Partial { .. } => self.partial_return_arms(p, return_ty, shape),
-            LoweredReturnAbi::Option(_) => {
+            LoweredReturnAbi::Option(option) => {
                 let (some_setup, some_payload) = self.lowered_payload_values(
                     shape,
                     &ok_ty(),
@@ -221,7 +210,7 @@ impl Planner<'_> {
                         shape.ok_values(some_payload),
                     )
                     .into(),
-                    multi_value_return(self.lowered_none_values(shape, return_ty)),
+                    multi_value_return(self.lowered_none_values(*option, return_ty)),
                 ]
             }
             LoweredReturnAbi::Tuple { .. } => self.lower_tuple_return(p, return_ty),
@@ -260,7 +249,7 @@ impl Planner<'_> {
                 tag_condition(partial, tags::partial_variant("Err").tag),
                 Vec::new(),
                 self.lowered_err_values(
-                    shape,
+                    shape.payload(),
                     return_ty,
                     field(partial, tags::partial_variant("Err").fields[0]),
                 ),

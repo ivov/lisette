@@ -4,7 +4,7 @@ use crate::lowering::calls::wrap_err::wrap_error;
 use crate::lowering::planner::queries::PlannerQueries;
 
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
-use crate::lookup::facts::value_layout::ValueLayout;
+use crate::lookup::facts::value_layout::{FallibleLayout, ValueLayout};
 use crate::lookup::state::bindings::InlineExpression;
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
@@ -131,10 +131,18 @@ impl Planner<'_> {
         expression: &Expression,
         target: PropagateTarget<'_>,
     ) -> (Vec<Statement>, Option<GoExpression>) {
-        let fallible = self
+        let source = self
             .facts
-            .fallible(&expression.get_type())
-            .expect("plan_propagate called on non-Result/Option type");
+            .value_layout(&expression.get_type(), SlotOrigin::Lisette);
+        let (fallible, payload_layout) = match source.fallible_layout() {
+            Some(
+                FallibleLayout::Result {
+                    fallible, payload, ..
+                }
+                | FallibleLayout::Option { fallible, payload },
+            ) => (fallible, payload),
+            _ => unreachable!("plan_propagate called on non-Result/Option type"),
+        };
 
         let mut statements = Vec::new();
 
@@ -168,12 +176,6 @@ impl Planner<'_> {
                 .into(),
         );
 
-        let source = self
-            .facts
-            .value_layout(&expression.get_type(), SlotOrigin::Lisette);
-        let payload_layout = source
-            .payload()
-            .expect("propagation requires a payload layout");
         let ok_access =
             self.propagated_ok_access(&mut statements, check, &fallible, payload_layout);
         let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
@@ -257,14 +259,13 @@ impl Planner<'_> {
             (Vec::new(), vec![check.clone()])
         } else {
             let mut setup = Vec::new();
-            let err_expression = if fallible.is_result() {
+            let err_expression = if let Some(FallibleLayout::Result { error: source, .. }) =
+                source_layout.fallible_layout()
+            {
                 let error = GoExpression::value_field(
                     check.clone(),
                     tags::result_variant("Err").fields[0].to_string(),
                 );
-                let ValueLayout::Fallible { error: source, .. } = source_layout.underlying() else {
-                    unreachable!("Result propagation requires an error layout")
-                };
                 let target = self
                     .facts
                     .value_layout(source.logical_type(), SlotOrigin::Lisette);
@@ -331,8 +332,7 @@ impl Planner<'_> {
         let (
             LoweredCall { site, wraps, .. },
             RawPair {
-                has_value_slot,
-                nil_guard,
+                value,
                 payload_layout_change,
             },
         ) = self.queries().fused_propagate_call(expression)?;
@@ -341,28 +341,30 @@ impl Planner<'_> {
             .plan_call_expression(site, None, ExpressionContext::value())
             .into_parts();
         let want_value = !matches!(target, PropagateTarget::Discard);
-        let named = if has_value_slot && payload_layout_change.is_none() {
+        let named = if value.is_some() && payload_layout_change.is_none() {
             self.declare_propagate_target(target)
         } else {
             None
         };
-        let value_var = (has_value_slot && (want_value || nil_guard.is_some()))
-            .then(|| named.cloned().unwrap_or_else(|| self.fresh_declared("ret")));
+        let bound = value
+            .filter(|slot| want_value || slot.nil_guard.is_some())
+            .map(|slot| {
+                let name = named.cloned().unwrap_or_else(|| self.fresh_declared("ret"));
+                (name, slot.nil_guard)
+            });
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, ErrorUse::Read);
-        let value_slot = match (&value_var, has_value_slot) {
-            (Some(value), _) => FusedValueSlot::Bound(value.clone()),
-            (None, true) => FusedValueSlot::Ignored,
-            (None, false) => FusedValueSlot::Absent,
+        let value_slot = match (&bound, value) {
+            (Some((name, _)), _) => FusedValueSlot::Bound(name.clone()),
+            (None, Some(_)) => FusedValueSlot::Ignored,
+            (None, None) => FusedValueSlot::Absent,
         };
         let (check, outcome_var) =
             self.bind_fused_pair(&mut statements, fallible, call, value_slot, message_setup);
 
         let error = wrap_error(&wraps, GoExpression::identifier(outcome_var));
         statements.push(self.propagate_failure_check(expression, fallible, check, error));
-        if let Some(guard) = nil_guard {
-            let guarded_value = GoExpression::identifier(
-                value_var.clone().expect("nil guard requires the value var"),
-            );
+        if let Some((name, Some(guard))) = &bound {
+            let guarded_value = GoExpression::identifier(name.clone());
             let error = wrap_error(&wraps, unexpected_nil_error());
             let check = PairCondition {
                 initializer: None,
@@ -371,7 +373,7 @@ impl Planner<'_> {
             statements.push(self.propagate_failure_check(expression, fallible, check, error));
         }
 
-        let ok_value = match (value_var, &payload_layout_change) {
+        let ok_value = match (bound.map(|(name, _)| name), &payload_layout_change) {
             (Some(ok_name), Some(change)) if want_value => {
                 self.plan_layout_change(&mut statements, GoExpression::identifier(ok_name), change)
             }

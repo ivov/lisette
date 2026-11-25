@@ -1,4 +1,5 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::target::ir::prelude::Fallible;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
@@ -57,11 +58,43 @@ impl FunctionLayout {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FallibleKind {
+    Result,
+    Partial,
+}
+
+impl FallibleKind {
+    pub(crate) fn prelude_name(self) -> &'static str {
+        match self {
+            Self::Result => "Result",
+            Self::Partial => "Partial",
+        }
+    }
+}
+
+pub(crate) enum FallibleLayout<'l> {
+    Result {
+        fallible: Fallible,
+        payload: &'l ValueLayout,
+        error: &'l ValueLayout,
+    },
+    Partial {
+        payload: &'l ValueLayout,
+        error: &'l ValueLayout,
+    },
+    Option {
+        fallible: Fallible,
+        payload: &'l ValueLayout,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum ValueLayout {
     Plain(Type),
     Fallible {
         fallible_type: Type,
+        kind: FallibleKind,
         payload: Box<ValueLayout>,
         error: Box<ValueLayout>,
     },
@@ -115,6 +148,48 @@ impl ValueLayout {
         match self {
             Self::Named { underlying, .. } => underlying.underlying(),
             _ => self,
+        }
+    }
+
+    pub(crate) fn fallible_layout(&self) -> Option<FallibleLayout<'_>> {
+        match self.underlying() {
+            Self::Fallible {
+                fallible_type,
+                kind: FallibleKind::Result,
+                payload,
+                error,
+            } => Some(FallibleLayout::Result {
+                fallible: Fallible::Result {
+                    ok_ty: fallible_type.ok_type(),
+                    err_ty: fallible_type.err_type(),
+                },
+                payload,
+                error,
+            }),
+            Self::Fallible {
+                kind: FallibleKind::Partial,
+                payload,
+                error,
+                ..
+            } => Some(FallibleLayout::Partial { payload, error }),
+            Self::TaggedOption {
+                option_type,
+                payload,
+            }
+            | Self::NullableOption {
+                option_type,
+                payload,
+            }
+            | Self::PointerOption {
+                option_type,
+                payload,
+            } => Some(FallibleLayout::Option {
+                fallible: Fallible::Option {
+                    ok_ty: option_type.ok_type(),
+                },
+                payload,
+            }),
+            _ => None,
         }
     }
 

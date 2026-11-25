@@ -1,6 +1,8 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::return_abi_rules::slot_return_abi;
-use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
+use crate::lookup::facts::value_layout::{
+    FallibleKind, FunctionLayout, ResultProducer, ValueLayout,
+};
 use crate::target::ir::prelude::is_prelude_container_type;
 use crate::target::types::go_type::GoTypeKind;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
@@ -311,6 +313,7 @@ impl EmitFacts<'_> {
                 fallible_type: ty,
                 payload,
                 error,
+                ..
             } if is_prelude_container_type(declaration) => {
                 **payload = self.value_layout_with_declaration(
                     &ty.ok_type(),
@@ -688,8 +691,14 @@ impl EmitFacts<'_> {
                 origin.nested(),
                 declared_error.as_ref(),
             ));
+            let kind = if ty.is_partial() {
+                FallibleKind::Partial
+            } else {
+                FallibleKind::Result
+            };
             return ValueLayout::Fallible {
                 fallible_type: ty,
+                kind,
                 payload,
                 error,
             };

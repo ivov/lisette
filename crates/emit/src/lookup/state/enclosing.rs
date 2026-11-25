@@ -25,6 +25,13 @@ impl ReturnContext {
         }
     }
 
+    pub(crate) fn lowered(&self) -> Option<(&Type, &LoweredReturnAbi)> {
+        match self {
+            ReturnContext::Lowered { return_ty, shape } => Some((return_ty, shape)),
+            _ => None,
+        }
+    }
+
     pub(crate) fn lowered_shape(&self) -> Option<LoweredReturnAbi> {
         match self {
             ReturnContext::Lowered { shape, .. } => Some(shape.clone()),

@@ -465,6 +465,7 @@ impl PlannerQueries<'_, '_> {
                     fallible_type,
                     payload: target_payload,
                     error: target_error,
+                    ..
                 },
             ) => self.immutable_layout_change(
                 target,
