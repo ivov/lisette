@@ -1,11 +1,15 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::inline_uses::region_blocks_inline;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::native_methods::{is_clip_safe_path, slice_growth_call};
+use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::expressions::operand_order::{LaterOperands, SpreadSequenceOptions};
+use crate::lowering::expressions::tuple_literal::TupleLiteral;
 use crate::lowering::expressions::values::TuplePosition;
 use crate::lowering::expressions::values::contains_newtype_access;
 use crate::lowering::patterns::binding_declarations::pattern_binds_name;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::assignments::PlaceOrdering;
 use crate::lowering::statements::assignments::is_lvalue_chain;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -245,14 +249,14 @@ fn join_boolean_branches(
         GoExpression::binary(left, GoBinaryOperator::Or, right)
     };
     let not = |operand: &GoExpression| GoExpression::unary(GoUnaryOperator::Not, operand.clone());
-    Some(match (then_value.as_literal(), else_value.as_literal()) {
-        (Some("true"), Some("false")) => condition.clone(),
-        (Some("false"), Some("true")) => not(condition),
-        (Some("true"), Some("true")) | (Some("false"), Some("false")) => return None,
-        (_, Some("false")) => and(condition.clone(), then_value.clone()),
-        (Some("true"), _) => or(condition.clone(), else_value.clone()),
-        (Some("false"), _) => and(not(condition), else_value.clone()),
-        (_, Some("true")) => or(not(condition), then_value.clone()),
+    Some(match (then_value.as_boolean(), else_value.as_boolean()) {
+        (Some(true), Some(false)) => condition.clone(),
+        (Some(false), Some(true)) => not(condition),
+        (Some(true), Some(true)) | (Some(false), Some(false)) => return None,
+        (_, Some(false)) => and(condition.clone(), then_value.clone()),
+        (Some(true), _) => or(condition.clone(), else_value.clone()),
+        (Some(false), _) => and(not(condition), else_value.clone()),
+        (_, Some(true)) => or(not(condition), then_value.clone()),
         _ => return None,
     })
 }
@@ -337,14 +341,6 @@ pub(in crate::lowering) fn expression_contains_binding(
 }
 
 impl<'p> Planner<'p> {
-    pub(in crate::lowering) fn is_unit_call(&self, expression: &Expression) -> bool {
-        self.facts.resolves_to_unit(&expression.get_type())
-            && self
-                .facts
-                .call_operation(expression)
-                .is_some_and(|operation| *operation != CallOperation::Zero)
-    }
-
     pub(in crate::lowering) fn lower_discard_value(
         &mut self,
         value: &Expression,
@@ -400,11 +396,13 @@ impl<'p> Planner<'p> {
         {
             statements.push(effect_statement(value_operand));
         } else {
-            let value_operand =
-                match self.constant_needs_go_type(value_operand.constant_kind(), &value_ty) {
-                    Some(go_type) => GoExpression::conversion(go_type, value_operand),
-                    None => value_operand,
-                };
+            let value_operand = match self
+                .queries()
+                .constant_needs_go_type(value_operand.constant_kind(), &value_ty)
+            {
+                Some(go_type) => GoExpression::conversion(go_type, value_operand),
+                None => value_operand,
+            };
             statements.push(discard(value_operand));
         }
         statements
@@ -528,11 +526,15 @@ impl<'p> Planner<'p> {
                         argument,
                     );
 
-                    let call = self.fallible_call(&fallible, constructor_name, vec![argument]);
+                    let call =
+                        self.queries()
+                            .fallible_call(&fallible, constructor_name, vec![argument]);
                     let value = ValuePlan::plain_call(arg_setup, call);
                     vec![simple_assign(target, value).into()]
                 } else {
-                    let call = self.fallible_call(&fallible, constructor_name, Vec::new());
+                    let call =
+                        self.queries()
+                            .fallible_call(&fallible, constructor_name, Vec::new());
                     vec![simple_assign(target, ValuePlan::computed(Vec::new(), call)).into()]
                 }
             }
@@ -540,8 +542,11 @@ impl<'p> Planner<'p> {
                 if fallible.classify_constructor(actual_expression)
                     == Some(ConstructorKind::Failure)
                 {
-                    let call =
-                        self.fallible_call(&fallible, fallible.err_constructor(), Vec::new());
+                    let call = self.queries().fallible_call(
+                        &fallible,
+                        fallible.err_constructor(),
+                        Vec::new(),
+                    );
                     vec![simple_assign(target, ValuePlan::computed(Vec::new(), call)).into()]
                 } else {
                     self.lower_plain_assign(target, target_ty, expression)
@@ -592,7 +597,7 @@ impl<'p> Planner<'p> {
             slice::from_ref(expression)
         };
         let Some((last, rest)) = items.split_last() else {
-            if self.widens_unit(target_ty) {
+            if self.queries().widens_unit(target_ty) {
                 return self.lower_unit_into(expression, None, target, target_ty);
             }
             return Vec::new();
@@ -608,10 +613,6 @@ impl<'p> Planner<'p> {
             statements.extend(directed_first(line, tail));
             statements
         })
-    }
-
-    pub(in crate::lowering) fn widens_unit(&self, target_ty: Option<&Type>) -> bool {
-        target_ty.is_some_and(|ty| !self.facts.resolves_to_unit(ty))
     }
 
     pub(in crate::lowering) fn lower_unit_into(
@@ -662,30 +663,24 @@ impl<'p> Planner<'p> {
                 self.unit_value(Some(last), target_ty),
             )];
         }
-        if self.facts.resolves_to_unit(&last.get_type()) && self.widens_unit(target_ty) {
+        if self.facts.resolves_to_unit(&last.get_type()) && self.queries().widens_unit(target_ty) {
             return self.lower_unit_into(last, Some(last), target, target_ty);
         }
         if matches!(last, Expression::Block { .. }) {
             return self.lower_assign(last, target, target_ty);
         }
-        if self.is_unit_call(last) {
+        if self.queries().is_unit_call(last) {
             return self.lower_unit_call_into_var(last, target, target_ty);
         }
         if let Some(statements) = self.try_lower_slice_growth_to_var(target, last) {
             return statements;
         }
-        if matches!(
-            last,
-            Expression::If { .. }
-                | Expression::IfLet { .. }
-                | Expression::Match { .. }
-                | Expression::Select { .. }
-        ) {
+        if let Some(branching) = Branching::of(last) {
             let place = PlacePlan::Assign {
                 local: target,
                 target_ty,
             };
-            return self.lower_branching_to_block(last, &place).statements;
+            return self.lower_branching_to_block(branching, &place).statements;
         }
         let origin = target_ty.map_or(SlotOrigin::Lisette, |ty| {
             self.facts.function_type_origin(ty, SlotOrigin::Lisette)
@@ -727,7 +722,7 @@ impl<'p> Planner<'p> {
                 self.plan_place(&mut capture, receiver, PlaceOrdering::before(&ordering));
             let target_differs = receiver_place.node() != target.node();
             let receiver_read = ValuePlan::computed(Vec::new(), receiver_place.clone())
-                .with_stability(self.path_read_stability(&receiver_place));
+                .with_stability(self.queries().path_read_stability(&receiver_place));
             let arguments_effects = arguments
                 .iter()
                 .fold(Effects::default(), |effects, argument| {
@@ -786,7 +781,9 @@ impl<'p> Planner<'p> {
             .collect();
 
         let spread_operand = spread.map(|spread| self.plan_copied_spread(spread));
-        let plan = spread.and_then(|_| self.plan_call(call));
+        let plan = spread
+            .and_then(|_| CallSite::of(call))
+            .map(|site| self.queries().plan_call(site));
         let wrap_to_any = plan
             .as_ref()
             .is_some_and(|plan| plan.resolved.abi.spread_wraps_to_any(&self.facts, spread));
@@ -809,8 +806,8 @@ impl<'p> Planner<'p> {
         &mut self,
         last: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
-        let plan = if let Expression::Tuple { .. } = last {
-            self.plan_tuple_value(last, TuplePosition::Tail)
+        let plan = if let Some(literal) = TupleLiteral::of(last) {
+            self.plan_tuple_value(literal, TuplePosition::Tail)
         } else if matches!(
             last,
             Expression::For { .. } | Expression::While { .. } | Expression::WhileLet { .. }
@@ -843,8 +840,8 @@ impl<'p> Planner<'p> {
             statements.extend(self.lower_braced_block_to_var(expression, &target, Some(slot)));
             return ValuePlan::captured(statements, result_var);
         }
-        if let Expression::Loop { .. } = expression {
-            return self.plan_loop_as_operand_temp(expression, ty);
+        if let Expression::Loop { body, .. } = expression {
+            return self.plan_loop_as_operand_temp(body, ty);
         }
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let mut statements = vec![declaration];
@@ -863,7 +860,7 @@ impl<'p> Planner<'p> {
         });
         if let Some((target, result_ty)) = loop_target {
             let mut statements = self.lower_assign(break_value, &target, Some(&result_ty));
-            statements.push(LoweredStatement::Break(self.current_loop_transfer()).into());
+            statements.push(LoweredStatement::Break(self.queries().current_loop_transfer()).into());
             return LoweredBlock { statements };
         }
         let (mut statements, value) = self
@@ -876,7 +873,7 @@ impl<'p> Planner<'p> {
         if let Some(loop_context) = self.scope.current_loop().cloned()
             && let Some(target) = loop_context.result
         {
-            if self.is_unit_call(break_value) {
+            if self.queries().is_unit_call(break_value) {
                 if !value.is_empty() {
                     statements.push(effect_statement(value));
                 }
@@ -895,7 +892,7 @@ impl<'p> Planner<'p> {
         } else if !value.is_empty() {
             statements.push(discard(value));
         }
-        statements.push(LoweredStatement::Break(self.current_loop_transfer()).into());
+        statements.push(LoweredStatement::Break(self.queries().current_loop_transfer()).into());
         LoweredBlock { statements }
     }
 }
@@ -992,5 +989,19 @@ fn renders_nothing(statement: &Statement) -> bool {
         }
         LoweredStatement::ExpressionStatement { expression, .. } => expression.is_empty(),
         _ => false,
+    }
+}
+
+impl<'p> PlannerQueries<'_, 'p> {
+    pub(in crate::lowering) fn is_unit_call(&self, expression: &Expression) -> bool {
+        self.facts.resolves_to_unit(&expression.get_type())
+            && self
+                .facts
+                .call_operation(expression)
+                .is_some_and(|operation| *operation != CallOperation::Zero)
+    }
+
+    pub(in crate::lowering) fn widens_unit(&self, target_ty: Option<&Type>) -> bool {
+        target_ty.is_some_and(|ty| !self.facts.resolves_to_unit(ty))
     }
 }

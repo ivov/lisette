@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lookup::state::imports::rendered_qualifier;
-use crate::output::render::expressions::rendered;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -12,6 +12,15 @@ use syntax::program::{self, Definition, PRELUDE_PACKAGE_ID, is_prelude_symbol};
 use syntax::types::{Type, unqualified_name};
 
 impl Planner<'_> {
+    pub(in crate::lowering) fn canonical_package(&self, package: &str) -> String {
+        self.namespace
+            .package_for_alias(package)
+            .unwrap_or(package)
+            .to_string()
+    }
+}
+
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn definition_reference(&self, symbol: &str) -> GoExpression {
         let package = self
             .facts
@@ -54,7 +63,7 @@ impl Planner<'_> {
                     _ => GoExport::Unexported,
                 };
 
-                self.free_function_go_name(name, export)
+                self.names.free_function_go_name(name, export)
             };
 
             return self.package_member_reference(package, go_name);
@@ -62,15 +71,15 @@ impl Planner<'_> {
         self.package_member_reference(package, self.facts.package_member_go_name(package, name))
     }
 
-    pub(in crate::lowering) fn reference_go_identifier(
+    pub(in crate::lowering) fn reference_expression(
         &self,
         lisette_name: &str,
         resolution: &IdentifierResolution,
-    ) -> GoIdentifier {
+    ) -> GoExpression {
         if let IdentifierResolution::Definition { name, .. } = resolution {
-            return GoIdentifier::external(rendered(&self.definition_reference(name)));
+            return self.definition_reference(name);
         }
-        match self
+        let identifier = match self
             .scope
             .resolve_identifier_with_resolution(lisette_name, resolution)
         {
@@ -82,14 +91,8 @@ impl Planner<'_> {
                 );
                 GoIdentifier::external(go_name::escape_reserved(lisette_name).into_owned())
             }
-        }
-    }
-
-    pub(in crate::lowering) fn canonical_package(&self, package: &str) -> String {
-        self.namespace
-            .package_for_alias(package)
-            .unwrap_or(package)
-            .to_string()
+        };
+        GoExpression::identifier(identifier)
     }
 
     pub(in crate::lowering) fn package_use_for_package(&self, package: &str) -> PackageUse {
@@ -184,20 +187,5 @@ impl Planner<'_> {
         };
 
         self.package_member_reference(enum_package, tag_constant)
-    }
-
-    pub(in crate::lowering) fn free_function_go_name(
-        &self,
-        name: &str,
-        export: GoExport,
-    ) -> String {
-        match export {
-            GoExport::Exported => go_name::snake_to_camel(name),
-            GoExport::Unexported => self
-                .names
-                .escape_remap(name)
-                .map(str::to_string)
-                .unwrap_or_else(|| go_name::escape_reserved(name).into_owned()),
-        }
     }
 }

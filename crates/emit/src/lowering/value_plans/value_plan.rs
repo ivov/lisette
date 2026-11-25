@@ -1,5 +1,6 @@
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::evaluation::Effects;
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{ConstantKind, GoExpression, OperandForm, Stability};
@@ -61,20 +62,16 @@ impl ValuePlan {
         }
     }
 
-    pub(in crate::lowering) fn constant(rendered: String, kind: ConstantKind) -> Self {
+    pub(in crate::lowering) fn constant(literal: GoLiteral, kind: ConstantKind) -> Self {
         Self::new(
             Vec::new(),
-            GoExpression::constant(rendered, kind),
+            GoExpression::constant(literal, kind),
             Stability::Fixed,
         )
     }
 
-    pub(in crate::lowering) fn literal(rendered: String) -> Self {
-        Self::new(
-            Vec::new(),
-            GoExpression::literal(rendered),
-            Stability::Fixed,
-        )
+    pub(in crate::lowering) fn nil() -> Self {
+        Self::new(Vec::new(), GoExpression::nil(), Stability::Fixed)
     }
 
     pub(in crate::lowering) fn captured(setup: Vec<Statement>, name: GoIdentifier) -> Self {

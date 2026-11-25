@@ -1,5 +1,7 @@
 use crate::Planner;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::expressions::values::with_source_positions;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::planner::written_span;
 use crate::lowering::statements::blocks::directed_at;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -34,7 +36,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn lower_never_value(&mut self, expression: &Expression) -> Statement {
-        let Expression::Call { ty, .. } = expression else {
+        let Some(site) = CallSite::of(expression) else {
             if runs_as_never_statement(expression) {
                 return self.lower_statement(expression);
             }
@@ -44,7 +46,7 @@ impl Planner<'_> {
             return LoweredStatement::Body(LoweredBlock { statements }).into();
         };
 
-        let plan = self.plan_call_value(expression, ty, ExpressionContext::value());
+        let plan = self.plan_call_value(site, site.ty, ExpressionContext::value());
         let (mut statements, call) =
             with_source_positions(&self.facts, &written_span(expression), plan).into_parts();
         if !call.is_empty() {
@@ -56,7 +58,9 @@ impl Planner<'_> {
             LoweredStatement::Body(LoweredBlock { statements }),
         )
     }
+}
 
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn fallible_block_type(
         &self,
         expression: &Expression,

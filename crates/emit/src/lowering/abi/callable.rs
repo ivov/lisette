@@ -37,7 +37,7 @@ impl LoweredReturnAbi {
                 payload
             }
             LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                payload.push(GoExpression::literal("true".to_string()));
+                payload.push(GoExpression::boolean(true));
                 payload
             }
             LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {

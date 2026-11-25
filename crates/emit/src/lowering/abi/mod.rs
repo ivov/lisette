@@ -1,5 +1,6 @@
 use crate::lowering::calls::call_plan::is_prelude_dispatch;
 use crate::lowering::definitions::interface_adapter::requirement_go_return_abi;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::names::go_name::MemberSpelling;
 use crate::target::types::return_abi::{CallableReturnAbi, go_return_abi};
 pub(in crate::lowering) mod callable;
@@ -71,7 +72,65 @@ impl Planner<'_> {
             CallableReturnAbi::Value => ReturnContext::Tagged(return_ty),
         }
     }
+}
 
+pub(in crate::lowering) fn is_closure_literal(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Lambda { .. } | Expression::Function { .. }
+    )
+}
+
+pub(in crate::lowering) fn go_callable_return_abi(
+    facts: &EmitFacts<'_>,
+    qualified_name: &str,
+    declared_return: &Type,
+    hints: &[GoHint],
+) -> CallableReturnAbi {
+    if facts.go_callable_return_slot(qualified_name).is_none() {
+        return return_abi(facts, declared_return, ReturnSlot::Go { hints });
+    }
+    facts
+        .go_abi_catalog()
+        .callable_return_abi(qualified_name)
+        .cloned()
+        .map_or_else(
+            || CallableReturnAbi::unlowered(declared_return),
+            CallableReturnAbi::Lowered,
+        )
+}
+
+pub(in crate::lowering) fn return_abi(
+    facts: &EmitFacts<'_>,
+    return_ty: &Type,
+    slot: ReturnSlot<'_>,
+) -> CallableReturnAbi {
+    match slot {
+        ReturnSlot::Function => function_return_abi(facts, return_ty),
+        ReturnSlot::Method => method_return_abi(facts, return_ty),
+        ReturnSlot::InterfaceMethod { name, method } => {
+            interface_method_return_abi(facts, return_ty, name, method)
+        }
+        ReturnSlot::FunctionValue(origin) => slot_return_abi(facts, return_ty, origin),
+        ReturnSlot::FunctionExpression(ctx) => {
+            if ctx.forces_tagged_go_function()
+                || ctx.result_fills_type_parameter()
+                || ctx.function_slot_origin() == SlotOrigin::GoAny
+            {
+                CallableReturnAbi::Value
+            } else {
+                slot_return_abi(facts, return_ty, ctx.function_slot_origin())
+            }
+        }
+        ReturnSlot::Go { hints } => go_return_abi(return_ty, hints, |id| facts.definition(id))
+            .map_or_else(
+                || CallableReturnAbi::unlowered(return_ty),
+                CallableReturnAbi::Lowered,
+            ),
+    }
+}
+
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn callee_return_abi(
         &self,
         signature: CalleeSignature<'_, '_>,
@@ -101,7 +160,7 @@ impl Planner<'_> {
                 ..
             })
         ) {
-            return return_abi(&self.facts, signature.return_type, ReturnSlot::Function);
+            return return_abi(self.facts, signature.return_type, ReturnSlot::Function);
         }
         self.lisette_callee_return_abi(signature)
             .unwrap_or_else(|| {
@@ -120,7 +179,7 @@ impl Planner<'_> {
         }
         if let Some(requirement) = self.go_bound_requirement(signature.callee) {
             let declared_return = requirement.method.ty.get_function_ret()?;
-            let abi = requirement_go_return_abi(&self.facts, &requirement, declared_return);
+            let abi = requirement_go_return_abi(self.facts, &requirement, declared_return);
             return abi.is_lowered().then_some(abi);
         }
         let id = signature.id.filter(|id| is_go_import(id))?;
@@ -143,7 +202,7 @@ impl Planner<'_> {
             .unwrap_or_default();
 
         Some(go_callable_return_abi(
-            &self.facts,
+            self.facts,
             id,
             signature.declared_return.unwrap_or(signature.return_type),
             hints,
@@ -176,7 +235,7 @@ impl Planner<'_> {
         {
             let method = &requirement.method;
             return Some(return_abi(
-                &self.facts,
+                self.facts,
                 method.ty.get_function_ret().unwrap_or(&Type::Never),
                 ReturnSlot::InterfaceMethod {
                     name: &method.source_name,
@@ -206,7 +265,7 @@ impl Planner<'_> {
             ),
         };
 
-        Some(return_abi(&self.facts, return_ty, slot))
+        Some(return_abi(self.facts, return_ty, slot))
     }
 
     pub(in crate::lowering) fn emitted_value_layout(
@@ -244,14 +303,10 @@ impl Planner<'_> {
         };
 
         let result_type = layout.result_layout.logical_type();
-        let return_abi = return_abi(
-            &self.facts,
-            result_type,
-            ReturnSlot::FunctionExpression(ctx),
-        );
+        let return_abi = return_abi(self.facts, result_type, ReturnSlot::FunctionExpression(ctx));
         ValueLayout::Function {
             function_type,
-            layout: layout.with_return_abi(&self.facts, return_abi, SlotOrigin::Lisette),
+            layout: layout.with_return_abi(self.facts, return_abi, SlotOrigin::Lisette),
         }
     }
 
@@ -273,7 +328,7 @@ impl Planner<'_> {
         if callee.is_prelude_dispatch || matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
         }
-        Some(callee.function_layout(&self.facts))
+        Some(callee.function_layout(self.facts))
     }
 
     pub(in crate::lowering) fn peel_go_slot_alias_cast<'e>(
@@ -317,7 +372,7 @@ impl Planner<'_> {
         };
         let target = match return_abi {
             Some(return_abi) if layout.return_abi != return_abi => {
-                layout.with_return_abi(&self.facts, return_abi, SlotOrigin::Lisette)
+                layout.with_return_abi(self.facts, return_abi, SlotOrigin::Lisette)
             }
             _ => layout.clone(),
         };
@@ -374,61 +429,5 @@ impl Planner<'_> {
             && self.facts.resolve_to_function_type(value_ty).is_some()
             && self.facts.resolve_to_function_type(target_ty).is_some())
         .then_some(slot_origin)
-    }
-}
-
-pub(in crate::lowering) fn is_closure_literal(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::Lambda { .. } | Expression::Function { .. }
-    )
-}
-
-pub(in crate::lowering) fn go_callable_return_abi(
-    facts: &EmitFacts<'_>,
-    qualified_name: &str,
-    declared_return: &Type,
-    hints: &[GoHint],
-) -> CallableReturnAbi {
-    if facts.go_callable_return_slot(qualified_name).is_none() {
-        return return_abi(facts, declared_return, ReturnSlot::Go { hints });
-    }
-    facts
-        .go_abi_catalog()
-        .callable_return_abi(qualified_name)
-        .cloned()
-        .map_or_else(
-            || CallableReturnAbi::unlowered(declared_return),
-            CallableReturnAbi::Lowered,
-        )
-}
-
-pub(in crate::lowering) fn return_abi(
-    facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    slot: ReturnSlot<'_>,
-) -> CallableReturnAbi {
-    match slot {
-        ReturnSlot::Function => function_return_abi(facts, return_ty),
-        ReturnSlot::Method => method_return_abi(facts, return_ty),
-        ReturnSlot::InterfaceMethod { name, method } => {
-            interface_method_return_abi(facts, return_ty, name, method)
-        }
-        ReturnSlot::FunctionValue(origin) => slot_return_abi(facts, return_ty, origin),
-        ReturnSlot::FunctionExpression(ctx) => {
-            if ctx.forces_tagged_go_function()
-                || ctx.result_fills_type_parameter()
-                || ctx.function_slot_origin() == SlotOrigin::GoAny
-            {
-                CallableReturnAbi::Value
-            } else {
-                slot_return_abi(facts, return_ty, ctx.function_slot_origin())
-            }
-        }
-        ReturnSlot::Go { hints } => go_return_abi(return_ty, hints, |id| facts.definition(id))
-            .map_or_else(
-                || CallableReturnAbi::unlowered(return_ty),
-                CallableReturnAbi::Lowered,
-            ),
     }
 }

@@ -24,19 +24,6 @@ pub(crate) fn returns_go_void(return_ty: &Type) -> bool {
     return_ty.is_unit() || return_ty.is_never()
 }
 
-fn is_plain_type_name(code: &str) -> bool {
-    code.chars()
-        .all(|character| character.is_alphanumeric() || character == '_' || character == '.')
-}
-
-pub(crate) fn conversion_prefix(go_type: &str) -> String {
-    if is_plain_type_name(go_type) {
-        format!("{}(", go_type)
-    } else {
-        format!("({})(", go_type)
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChannelDirection {
     Bidirectional,
@@ -68,7 +55,6 @@ pub(crate) enum GoTypeShape {
     Struct(Vec<(String, GoType)>),
     Interface(Vec<(String, GoType)>),
     EmptyInterface,
-    Raw(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,13 +65,12 @@ pub(crate) enum GoTypeKind {
     Array,
     PointerToArray,
     Channel,
-    Unclassified,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GoType {
-    pub(crate) code: String,
     pub(crate) shape: Box<GoTypeShape>,
+    pub(crate) alias: Option<Box<GoType>>,
     requirements: PackageRequirements,
     physical_kind: Option<GoTypeKind>,
 }
@@ -100,43 +85,37 @@ impl Eq for GoType {}
 
 impl Default for GoType {
     fn default() -> Self {
-        Self::new("")
+        Self::of_shape(GoTypeShape::Empty)
     }
 }
 
 impl GoType {
-    pub(crate) fn new(code: impl Into<String>) -> Self {
-        let code = code.into();
-        let shape = match code.as_str() {
-            "" => GoTypeShape::Empty,
-            "struct{}" => GoTypeShape::Struct(Vec::new()),
-            "any" | "interface{}" => GoTypeShape::EmptyInterface,
-            name if is_plain_type_name(name) => match name.rsplit_once('.') {
-                Some((package, member)) => GoTypeShape::Qualified {
-                    package: package.to_string(),
-                    member: member.to_string(),
-                },
-                None => GoTypeShape::Name(name.to_string()),
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
+        Self::of_shape(match name.rsplit_once('.') {
+            Some((package, member)) => GoTypeShape::Qualified {
+                package: package.to_string(),
+                member: member.to_string(),
             },
-            _ => GoTypeShape::Raw(code.clone()),
-        };
+            None => GoTypeShape::Name(name),
+        })
+    }
 
-        Self {
-            code,
-            shape: Box::new(shape),
-            requirements: PackageRequirements::default(),
-            physical_kind: None,
-        }
+    pub(crate) fn any() -> Self {
+        Self::of_shape(GoTypeShape::EmptyInterface)
+    }
+
+    fn of_shape(shape: GoTypeShape) -> Self {
+        Self::structured(shape, [])
     }
 
     fn structured<'argument>(
-        code: String,
         shape: GoTypeShape,
         dependencies: impl IntoIterator<Item = &'argument GoType>,
     ) -> Self {
         let mut value = Self {
-            code,
             shape: Box::new(shape),
+            alias: None,
             requirements: PackageRequirements::default(),
             physical_kind: None,
         };
@@ -147,9 +126,7 @@ impl GoType {
 
     pub(crate) fn named(member: &str, arguments: &[GoType], package: Option<PackageUse>) -> Self {
         let mut base = if let Some(package) = package {
-            let code = format!("{}.{member}", package.qualifier());
             let mut base = Self::structured(
-                code,
                 GoTypeShape::Qualified {
                     package: package.qualifier().to_string(),
                     member: member.to_string(),
@@ -164,12 +141,11 @@ impl GoType {
         };
 
         if !arguments.is_empty() {
-            let code = format!("{}{}", base.code, Self::type_arguments(arguments).code);
             let shape = GoTypeShape::Instantiated {
                 base: Box::new(base.clone()),
                 arguments: arguments.to_vec(),
             };
-            base = Self::structured(code, shape, once(&base).chain(arguments));
+            base = Self::structured(shape, once(&base).chain(arguments));
         }
         base
     }
@@ -192,9 +168,34 @@ impl GoType {
         matches!(self.shape.as_ref(), GoTypeShape::Empty)
     }
 
-    pub(crate) fn compared_as(mut self, target: GoType) -> Self {
-        self.shape = target.shape;
-        self
+    pub(crate) fn compared_as(self, target: GoType) -> Self {
+        let mut compared = self.clone();
+        compared.shape = target.shape;
+        compared.alias = Some(Box::new(self));
+        compared
+    }
+
+    pub(crate) fn leading_name(&self) -> &str {
+        if let Some(alias) = &self.alias {
+            return alias.leading_name();
+        }
+        match self.shape.as_ref() {
+            GoTypeShape::Name(name) => name,
+            GoTypeShape::Qualified { package, .. } => package,
+            GoTypeShape::Instantiated { base, .. } => base.leading_name(),
+            GoTypeShape::Pointer(inner) | GoTypeShape::Variadic(inner) => inner.leading_name(),
+            GoTypeShape::Results(results) => results.first().map_or("", GoType::leading_name),
+            GoTypeShape::Map(..) => "map",
+            GoTypeShape::Function(..) => "func",
+            GoTypeShape::Channel(..) => "chan",
+            GoTypeShape::Struct(_) => "struct",
+            GoTypeShape::Interface(_) => "interface",
+            GoTypeShape::EmptyInterface => "any",
+            GoTypeShape::Empty
+            | GoTypeShape::Arguments(_)
+            | GoTypeShape::Slice(_)
+            | GoTypeShape::Array(..) => "",
+        }
     }
 
     pub(crate) fn is_named(&self, name: &str) -> bool {
@@ -215,7 +216,6 @@ impl GoType {
                     GoTypeKind::PointerToArray
                 }
                 GoTypeShape::Channel(..) => GoTypeKind::Channel,
-                GoTypeShape::Raw(_) => GoTypeKind::Unclassified,
                 _ => GoTypeKind::Value,
             })
     }
@@ -236,16 +236,7 @@ impl GoType {
         if arguments.is_empty() {
             return Self::default();
         }
-        let code = format!(
-            "[{}]",
-            arguments
-                .iter()
-                .map(|argument| argument.code.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
-        Self::structured(code, GoTypeShape::Arguments(arguments.to_vec()), arguments)
+        Self::structured(GoTypeShape::Arguments(arguments.to_vec()), arguments)
     }
 
     pub(crate) fn type_argument(argument: &GoType) -> Self {
@@ -253,110 +244,51 @@ impl GoType {
     }
 
     pub(crate) fn result_list(results: &[GoType]) -> Self {
-        let code = format!(
-            "({})",
-            results
-                .iter()
-                .map(|result| result.code.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
-        Self::structured(code, GoTypeShape::Results(results.to_vec()), results)
+        Self::structured(GoTypeShape::Results(results.to_vec()), results)
     }
 
     pub(crate) fn function(parameters: &[GoType], result: Option<&GoType>) -> Self {
-        let parameter_text = parameters
-            .iter()
-            .map(|parameter| parameter.code.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let code = match result {
-            Some(result) => format!("func({parameter_text}) {}", result.code),
-            None => format!("func({parameter_text})"),
-        };
         Self::structured(
-            code,
             GoTypeShape::Function(parameters.to_vec(), result.cloned().map(Box::new)),
             parameters.iter().chain(result),
         )
     }
 
     pub(crate) fn slice_of(element: &GoType) -> Self {
-        Self::structured(
-            format!("[]{}", element.code),
-            GoTypeShape::Slice(Box::new(element.clone())),
-            [element],
-        )
+        Self::structured(GoTypeShape::Slice(Box::new(element.clone())), [element])
     }
 
     pub(crate) fn map_of(key: &GoType, value: &GoType) -> Self {
         Self::structured(
-            format!("map[{}]{}", key.code, value.code),
             GoTypeShape::Map(Box::new(key.clone()), Box::new(value.clone())),
             [key, value],
         )
     }
 
-    pub(crate) fn parenthesized(&self) -> Self {
-        let mut result = self.clone();
-        result.code = format!("({})", self.code);
-        result
-    }
-
     pub(crate) fn pointer_to(pointee: &GoType) -> Self {
-        Self::structured(
-            format!("*{}", pointee.code),
-            GoTypeShape::Pointer(Box::new(pointee.clone())),
-            [pointee],
-        )
+        Self::structured(GoTypeShape::Pointer(Box::new(pointee.clone())), [pointee])
     }
 
     pub(crate) fn array_of(length: impl Display, element: &GoType) -> Self {
         Self::structured(
-            format!("[{length}]{}", element.code),
             GoTypeShape::Array(length.to_string(), Box::new(element.clone())),
             [element],
         )
     }
 
     pub(crate) fn channel(direction: ChannelDirection, element: &GoType) -> Self {
-        let prefix = match direction {
-            ChannelDirection::Send => "chan<-",
-            ChannelDirection::Receive => "<-chan",
-            ChannelDirection::Bidirectional => "chan",
-        };
         Self::structured(
-            format!("{prefix} {}", element.code),
             GoTypeShape::Channel(direction, Box::new(element.clone())),
             [element],
         )
     }
 
     pub(crate) fn variadic(element: &GoType) -> Self {
-        Self::structured(
-            format!("...{}", element.code),
-            GoTypeShape::Variadic(Box::new(element.clone())),
-            [element],
-        )
+        Self::structured(GoTypeShape::Variadic(Box::new(element.clone())), [element])
     }
 
     pub(crate) fn structure(fields: Vec<(String, GoType)>) -> Self {
-        let code = if fields.is_empty() {
-            "struct{}".to_string()
-        } else {
-            format!(
-                "struct {{ {} }}",
-                fields
-                    .iter()
-                    .map(|(name, ty)| format!("{name} {}", ty.code))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            )
-        };
-
         Self::structured(
-            code,
             GoTypeShape::Struct(fields.clone()),
             fields.iter().map(|(_, ty)| ty),
         )
@@ -364,18 +296,7 @@ impl GoType {
 
     pub(crate) fn method_interface(name: &str, parameters: &[GoType], result: &GoType) -> Self {
         let signature = Self::function(parameters, (!result.is_empty()).then_some(result));
-        let code = format!(
-            "interface {{ {name}({}) {} }}",
-            parameters
-                .iter()
-                .map(|parameter| parameter.code.as_str())
-                .collect::<Vec<_>>()
-                .join(", "),
-            result.code
-        );
-
         Self::structured(
-            code,
             GoTypeShape::Interface(vec![(name.to_string(), signature.clone())]),
             [&signature],
         )

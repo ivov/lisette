@@ -1,6 +1,6 @@
-use crate::Planner;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
 use crate::target::names::generics::generic_bounds;
 use crate::target::names::go_name::{self, GoExport};
@@ -9,7 +9,7 @@ use syntax::ast::{Expression, Generic, ParentInterface};
 use syntax::program::{Definition, PRELUDE_PACKAGE_ID};
 use syntax::types::Type;
 
-impl Planner<'_> {
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn emit_interface(
         &self,
         name: &str,
@@ -86,7 +86,7 @@ impl Planner<'_> {
             .expect("interface method must be registered");
 
         let return_abi = return_abi(
-            &self.facts,
+            self.facts,
             method.ty.get_function_ret().unwrap_or(&Type::Never),
             ReturnSlot::InterfaceMethod {
                 name: function.name,

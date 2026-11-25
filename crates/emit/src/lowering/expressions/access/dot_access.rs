@@ -5,6 +5,8 @@ use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
+use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::Statement;
@@ -18,43 +20,47 @@ use syntax::program::{DefinitionBody, DotAccessResolution, ReceiverCoercion};
 use syntax::program::{SlotOrigin, is_go_import};
 use syntax::types::Type;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NullableField {
+    WrapInOption,
+    Raw,
+}
+
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_dot_access(
         &mut self,
-        dot_access: &Expression,
+        dot_access: DotAccessSite<'_>,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        self.plan_dot_access_with(dot_access, ctx, true)
+        self.plan_dot_access_with(dot_access, ctx, NullableField::WrapInOption)
     }
 
     pub(in crate::lowering) fn plan_raw_nullable_field(
         &mut self,
-        dot_access: &Expression,
+        dot_access: DotAccessSite<'_>,
     ) -> ValuePlan {
-        self.plan_dot_access_with(dot_access, ExpressionContext::value(), false)
+        self.plan_dot_access_with(dot_access, ExpressionContext::value(), NullableField::Raw)
     }
 
     fn plan_dot_access_with(
         &mut self,
-        dot_access: &Expression,
+        site: DotAccessSite<'_>,
         ctx: ExpressionContext<'_>,
-        wrap_nullable: bool,
+        nullable: NullableField,
     ) -> ValuePlan {
-        let Expression::DotAccess {
-            expression,
-            member,
-            ty: result_ty,
-            resolution,
-            ..
-        } = dot_access
-        else {
-            unreachable!("plan_dot_access requires a DotAccess expression");
-        };
+        let dot_access = site.expression;
+        let expression = site.receiver;
+        let member = site.member;
+        let result_ty = site.ty;
+        let resolution = site.resolution;
 
         let receiver_coercion = self.facts.dot_receiver_coercion(expression, member);
-        let spelling = self.member_spelling(dot_access);
+        let spelling = self.queries().member_spelling(dot_access);
 
-        if let Some(expression) = self.try_plan_pre_receiver_dot(dot_access, spelling, ctx) {
+        if let Some(expression) = self
+            .queries()
+            .try_plan_pre_receiver_dot(dot_access, spelling, ctx)
+        {
             let plan = ValuePlan::computed(Vec::new(), expression);
             if matches!(resolution, DotAccessResolution::EnumVariant { .. }) {
                 return plan.with_stability(Stability::Fixed);
@@ -63,12 +69,12 @@ impl Planner<'_> {
         }
 
         let expression_ty = expression.get_type();
-        if let Some(component) = self.tuple_component_read(expression, member) {
+        if let Some(component) = self.queries().tuple_component_read(expression, member) {
             let mut setup = Vec::new();
-            if wrap_nullable
+            if nullable == NullableField::WrapInOption
                 && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
-                    dot_access,
+                    site,
                     GoExpression::identifier(component.clone()),
                     ctx,
                 )
@@ -80,7 +86,7 @@ impl Planner<'_> {
 
         let package = expression_ty
             .as_import_namespace()
-            .map(|package| self.package_use_for_package(package));
+            .map(|package| self.queries().package_use_for_package(package));
         let base_plan = match &package {
             Some(package) => ValuePlan::captured(
                 Vec::new(),
@@ -89,22 +95,19 @@ impl Planner<'_> {
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
 
-        let stability = dot_member_stability(
-            &self.facts,
-            dot_access,
-            &expression_ty,
-            base_plan.stability(),
-        );
+        let stability =
+            dot_member_stability(&self.facts, site, &expression_ty, base_plan.stability());
 
         let (mut setup, base) = base_plan.into_parts();
         let base = self.plan_bound_dispatch_receiver(&mut setup, dot_access, base, &expression_ty);
         if let Some(member_access) =
-            self.try_plan_tuple_member_dot(&base, &expression_ty, member, resolution)
+            self.queries()
+                .try_plan_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
-            if wrap_nullable
+            if nullable == NullableField::WrapInOption
                 && let Some(wrapped) = self.try_plan_nullable_field_access(
                     &mut setup,
-                    dot_access,
+                    site,
                     member_access.clone(),
                     ctx,
                 )
@@ -126,32 +129,178 @@ impl Planner<'_> {
             None => GoExpression::selector(base, field),
         };
 
-        if wrap_nullable
+        if nullable == NullableField::WrapInOption
             && let Some(wrapped) =
-                self.try_plan_nullable_field_access(&mut setup, dot_access, selector.clone(), ctx)
+                self.try_plan_nullable_field_access(&mut setup, site, selector.clone(), ctx)
         {
             return ValuePlan::computed(setup, wrapped);
         }
-        let expression =
-            self.append_cross_package_type_args(selector, dot_access, &expression_ty, ctx);
+        let expression = self.queries().append_cross_package_type_args(
+            selector,
+            dot_access,
+            &expression_ty,
+            ctx,
+        );
         let expression = if let Some(package) = expression_ty.as_import_namespace()
             && go_constant_exceeds_int(&self.facts, package, member, result_ty)
         {
-            GoExpression::conversion(self.go_type(result_ty), expression)
+            GoExpression::conversion(self.queries().go_type(result_ty), expression)
         } else {
             expression
         };
 
-        let expression =
-            if let Some((source, target)) = self.prelude_receiver_method_layouts(dot_access) {
-                self.plan_function_layout_change(&mut setup, expression, &source, &target)
-            } else {
-                expression
-            };
+        let expression = if let Some((source, target)) =
+            self.queries().prelude_receiver_method_layouts(dot_access)
+        {
+            self.plan_function_layout_change(&mut setup, expression, &source, &target)
+        } else {
+            expression
+        };
 
         ValuePlan::computed(setup, expression).with_stability(stability)
     }
 
+    fn plan_bound_dispatch_receiver(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        dot_access: &Expression,
+        base: GoExpression,
+        expression_ty: &Type,
+    ) -> GoExpression {
+        let Some((bound, _)) = self.queries().bound_dispatch_requirement(dot_access) else {
+            return base;
+        };
+        let receiver_type = ref_stripped_type_parameter(expression_ty)
+            .map(Type::Parameter)
+            .expect("a dispatched bound has a type parameter receiver");
+        let adapter = self
+            .queries()
+            .dynamic_interface_adapter(&receiver_type, &bound, None)
+            .expect("a dispatched bound has an adapter");
+        let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
+        setup.extend(adapter_setup);
+        adapted
+    }
+
+    fn try_plan_nullable_field_access(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        site: DotAccessSite<'_>,
+        value: GoExpression,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<GoExpression> {
+        let dot_access = site.expression;
+        let expression = site.receiver;
+        let member = site.member;
+        let result_ty = site.ty;
+
+        let expression_ty = &expression.get_type();
+        let callee = ctx.is_callee();
+        let source_layout = self.facts.field_slot_layout(
+            expression_ty,
+            self.facts.checked(dot_access).field_selection(),
+            member,
+            result_ty,
+        )?;
+
+        let target_layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
+        if callee
+            && let (
+                ValueLayout::Function { layout: source, .. },
+                ValueLayout::Function { layout: target, .. },
+            ) = (&source_layout, &target_layout)
+            && source.return_abi == CallableReturnAbi::Value
+            && target.return_abi == CallableReturnAbi::Void
+            && source.same_parameter_representation(target)
+        {
+            return None;
+        }
+        let coercion = CoercionPlan::change(&self.queries(), &source_layout, &target_layout);
+        if coercion.is_identity() {
+            return None;
+        }
+        let raw_var = self.hoist_temp(setup, "raw", value);
+        let (coercion_setup, coerced) = coercion.lower(self, GoExpression::identifier(raw_var));
+        setup.extend(coercion_setup);
+        Some(coerced)
+    }
+
+    fn plan_coerced_expression(
+        &mut self,
+        expression: &Expression,
+        coercion: Option<ReceiverCoercion>,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        let elided_deref = expression
+            .deref_inner()
+            .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
+        let (operand, had_explicit_deref) = if let Some(inner) = elided_deref {
+            (self.plan_operand(inner, ctx), true)
+        } else {
+            (self.plan_operand(expression, ctx), false)
+        };
+        let receiver = elided_deref.unwrap_or(expression);
+        let needs_deref = self.facts.is_ref_to_type_parameter(&receiver.get_type());
+        operand.map_expression(|setup, base| {
+            if needs_deref {
+                return GoExpression::dereference(base);
+            }
+            if coercion != Some(ReceiverCoercion::AutoAddress) || had_explicit_deref {
+                return base;
+            }
+            match expression {
+                Expression::Call { .. } => {
+                    GoExpression::identifier(self.hoist_temp(setup, "ref", base))
+                }
+                Expression::StructCall { .. } => GoExpression::address_of(base),
+                _ => base,
+            }
+        })
+    }
+}
+
+fn dot_member_stability(
+    facts: &EmitFacts<'_>,
+    site: DotAccessSite<'_>,
+    expression_ty: &Type,
+    base_stability: Stability,
+) -> Stability {
+    let expression = site.receiver;
+    let member = site.member;
+    let resolution = site.resolution;
+
+    if let Some(package) = expression_ty.as_import_namespace()
+        && package_member_is_fixed(facts, package, member)
+    {
+        Stability::Fixed
+    } else if facts.reads_value_member(resolution, expression, expression_ty) {
+        base_stability
+    } else {
+        Stability::Observable
+    }
+}
+
+fn go_constant_exceeds_int(facts: &EmitFacts<'_>, package: &str, member: &str, ty: &Type) -> bool {
+    if !is_go_import(package) {
+        return false;
+    }
+    let qualified_name = format!("{}.{}", package, member);
+    facts
+        .definition(qualified_name.as_str())
+        .and_then(|definition| definition.const_value()?.value())
+        .is_some_and(|value| constant::converts_go_constant(&value, ty))
+}
+
+fn package_member_is_fixed(facts: &EmitFacts<'_>, package: &str, member: &str) -> bool {
+    let qualified_name = format!("{}.{}", package, member);
+    facts
+        .definition(qualified_name.as_str())
+        .is_some_and(|definition| {
+            matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
+        })
+}
+
+impl PlannerQueries<'_, '_> {
     fn prelude_receiver_method_layouts(
         &self,
         expression: &Expression,
@@ -173,64 +322,8 @@ impl Planner<'_> {
             &receiver.get_type(),
             callee.declared_type()?.as_function_type()?,
             callee.instantiated.as_function_type()?,
-            callee.function_layout(&self.facts),
+            callee.function_layout(self.facts),
         )
-    }
-
-    fn plan_bound_dispatch_receiver(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        dot_access: &Expression,
-        base: GoExpression,
-        expression_ty: &Type,
-    ) -> GoExpression {
-        let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) else {
-            return base;
-        };
-        let receiver_type = ref_stripped_type_parameter(expression_ty)
-            .map(Type::Parameter)
-            .expect("a dispatched bound has a type parameter receiver");
-        let adapter = self
-            .dynamic_interface_adapter(&receiver_type, &bound, None)
-            .expect("a dispatched bound has an adapter");
-        let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
-        setup.extend(adapter_setup);
-        adapted
-    }
-
-    fn try_plan_pre_receiver_dot(
-        &self,
-        dot_access: &Expression,
-        spelling: MemberSpelling,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<GoExpression> {
-        let Expression::DotAccess {
-            member,
-            ty: result_ty,
-            resolution,
-            ..
-        } = dot_access
-        else {
-            return None;
-        };
-
-        match resolution {
-            DotAccessResolution::EnumVariant { definition, .. } => {
-                self.try_plan_enum_variant_dot(definition, result_ty, ctx)
-            }
-            DotAccessResolution::StaticMethod { definition, .. } => {
-                Some(self.plan_static_method_dot(dot_access, definition, ctx))
-            }
-            DotAccessResolution::InstanceMethodValue { is_exported, .. } => {
-                let export = if *is_exported {
-                    GoExport::Exported
-                } else {
-                    GoExport::Unexported
-                };
-                self.try_plan_instance_method_value_dot(member, result_ty, export, spelling)
-            }
-            _ => None,
-        }
     }
 
     fn tuple_component_read(&self, expression: &Expression, member: &str) -> Option<GoIdentifier> {
@@ -283,17 +376,12 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn nullable_field_guard(
         &self,
-        subject: &Expression,
+        site: DotAccessSite<'_>,
     ) -> Option<NilGuard> {
-        let Expression::DotAccess {
-            expression,
-            member,
-            ty: result_ty,
-            ..
-        } = subject
-        else {
-            return None;
-        };
+        let subject = site.expression;
+        let expression = site.receiver;
+        let member = site.member;
+        let result_ty = site.ty;
 
         let expression_ty = expression.get_type();
         let source_layout = self.facts.field_slot_layout(
@@ -313,54 +401,6 @@ impl Planner<'_> {
             return None;
         }
         self.layout_nil_guard(&source_layout)
-    }
-
-    fn try_plan_nullable_field_access(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        dot_access: &Expression,
-        value: GoExpression,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<GoExpression> {
-        let Expression::DotAccess {
-            expression,
-            member,
-            ty: result_ty,
-            ..
-        } = dot_access
-        else {
-            unreachable!("a nullable field access reads a DotAccess expression");
-        };
-
-        let expression_ty = &expression.get_type();
-        let callee = ctx.is_callee();
-        let source_layout = self.facts.field_slot_layout(
-            expression_ty,
-            self.facts.checked(dot_access).field_selection(),
-            member,
-            result_ty,
-        )?;
-
-        let target_layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-        if callee
-            && let (
-                ValueLayout::Function { layout: source, .. },
-                ValueLayout::Function { layout: target, .. },
-            ) = (&source_layout, &target_layout)
-            && source.return_abi == CallableReturnAbi::Value
-            && target.return_abi == CallableReturnAbi::Void
-            && source.same_parameter_representation(target)
-        {
-            return None;
-        }
-        let coercion = CoercionPlan::change(self, &source_layout, &target_layout);
-        if coercion.is_identity() {
-            return None;
-        }
-        let raw_var = self.hoist_temp(setup, "raw", value);
-        let (coercion_setup, coerced) = coercion.lower(self, GoExpression::identifier(raw_var));
-        setup.extend(coercion_setup);
-        Some(coerced)
     }
 
     fn append_cross_package_type_args(
@@ -394,37 +434,53 @@ impl Planner<'_> {
         Some(GoExpression::conversion(go_type, operand))
     }
 
-    fn plan_coerced_expression(
-        &mut self,
-        expression: &Expression,
-        coercion: Option<ReceiverCoercion>,
+    fn try_plan_instance_method_value_dot(
+        &self,
+        member: &str,
+        result_ty: &Type,
+        export: GoExport,
+        spelling: MemberSpelling,
+    ) -> Option<GoExpression> {
+        let receiver_param = &result_ty.as_function_type()?.params.first()?.ty;
+        let go_method =
+            self.facts
+                .receiver_method_go_name(receiver_param, member, export, spelling);
+        Some(self.method_expression(receiver_param, go_method))
+    }
+
+    fn try_plan_pre_receiver_dot(
+        &self,
+        dot_access: &Expression,
+        spelling: MemberSpelling,
         ctx: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        let elided_deref = expression
-            .deref_inner()
-            .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
-        let (operand, had_explicit_deref) = if let Some(inner) = elided_deref {
-            (self.plan_operand(inner, ctx), true)
-        } else {
-            (self.plan_operand(expression, ctx), false)
+    ) -> Option<GoExpression> {
+        let Expression::DotAccess {
+            member,
+            ty: result_ty,
+            resolution,
+            ..
+        } = dot_access
+        else {
+            return None;
         };
-        let receiver = elided_deref.unwrap_or(expression);
-        let needs_deref = self.facts.is_ref_to_type_parameter(&receiver.get_type());
-        operand.map_expression(|setup, base| {
-            if needs_deref {
-                return GoExpression::dereference(base);
+
+        match resolution {
+            DotAccessResolution::EnumVariant { definition, .. } => {
+                self.try_plan_enum_variant_dot(definition, result_ty, ctx)
             }
-            if coercion != Some(ReceiverCoercion::AutoAddress) || had_explicit_deref {
-                return base;
+            DotAccessResolution::StaticMethod { definition, .. } => {
+                Some(self.plan_static_method_dot(dot_access, definition, ctx))
             }
-            match expression {
-                Expression::Call { .. } => {
-                    GoExpression::identifier(self.hoist_temp(setup, "ref", base))
-                }
-                Expression::StructCall { .. } => GoExpression::address_of(base),
-                _ => base,
+            DotAccessResolution::InstanceMethodValue { is_exported, .. } => {
+                let export = if *is_exported {
+                    GoExport::Exported
+                } else {
+                    GoExport::Unexported
+                };
+                self.try_plan_instance_method_value_dot(member, result_ty, export, spelling)
             }
-        })
+            _ => None,
+        }
     }
 
     fn try_plan_enum_variant_dot(
@@ -476,65 +532,4 @@ impl Planner<'_> {
         let type_args = self.format_value_type_args(dot_access);
         GoExpression::instantiation(function, type_args.unwrap_or_default())
     }
-
-    fn try_plan_instance_method_value_dot(
-        &self,
-        member: &str,
-        result_ty: &Type,
-        export: GoExport,
-        spelling: MemberSpelling,
-    ) -> Option<GoExpression> {
-        let receiver_param = &result_ty.as_function_type()?.params.first()?.ty;
-        let go_method =
-            self.facts
-                .receiver_method_go_name(receiver_param, member, export, spelling);
-        Some(self.method_expression(receiver_param, go_method))
-    }
-}
-
-fn dot_member_stability(
-    facts: &EmitFacts<'_>,
-    dot_access: &Expression,
-    expression_ty: &Type,
-    base_stability: Stability,
-) -> Stability {
-    let Expression::DotAccess {
-        expression,
-        member,
-        resolution,
-        ..
-    } = dot_access
-    else {
-        unreachable!("a member stability reads a DotAccess expression");
-    };
-
-    if let Some(package) = expression_ty.as_import_namespace()
-        && package_member_is_fixed(facts, package, member)
-    {
-        Stability::Fixed
-    } else if facts.reads_value_member(resolution, expression, expression_ty) {
-        base_stability
-    } else {
-        Stability::Observable
-    }
-}
-
-fn go_constant_exceeds_int(facts: &EmitFacts<'_>, package: &str, member: &str, ty: &Type) -> bool {
-    if !is_go_import(package) {
-        return false;
-    }
-    let qualified_name = format!("{}.{}", package, member);
-    facts
-        .definition(qualified_name.as_str())
-        .and_then(|definition| definition.const_value()?.value())
-        .is_some_and(|value| constant::converts_go_constant(&value, ty))
-}
-
-fn package_member_is_fixed(facts: &EmitFacts<'_>, package: &str, member: &str) -> bool {
-    let qualified_name = format!("{}.{}", package, member);
-    facts
-        .definition(qualified_name.as_str())
-        .is_some_and(|definition| {
-            matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
-        })
 }

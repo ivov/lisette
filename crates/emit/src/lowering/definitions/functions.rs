@@ -8,6 +8,7 @@ use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::interface_adapter::has_tagged_counterpart;
 use crate::lowering::patterns::sites::PatternSubject;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::asserts::test_context_call;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::output::finish::cleanup::{clean_up, declare_zero_values, drop_unreachable_statements};
@@ -110,7 +111,8 @@ impl Planner<'_> {
             inherit_line_directives(&mut body.statements, None);
         }
         if matches!(origin, BodyOrigin::Source) {
-            self.settle_generated_names(&mut body.statements, parameters);
+            self.queries()
+                .settle_generated_names(&mut body.statements, parameters);
         }
         if cfg!(debug_assertions) {
             verify_final_function_body(&mut body, result).unwrap_or_else(|error| panic!("{error}"));
@@ -129,76 +131,6 @@ impl Planner<'_> {
         }
     }
 
-    fn settle_generated_names(
-        &self,
-        statements: &mut Vec<Statement>,
-        parameters: &mut [GoIdentifier],
-    ) {
-        #[derive(Default)]
-        struct Names {
-            present: FxHashMap<LocalId, String>,
-            pinned: FxHashSet<String>,
-            qualifiers: FxHashSet<String>,
-        }
-
-        impl VisitorMut for Names {
-            fn expression(&mut self, node: &mut GoExpressionNode) {
-                if let GoExpressionNode::Identifier(name) = node {
-                    if let Some(id) = name.id() {
-                        self.present.insert(id, name.to_string());
-                    } else {
-                        self.pinned.insert(name.to_string());
-                    }
-                } else if let GoExpressionNode::Qualified { package, .. } = node {
-                    self.qualifiers.insert(package.qualifier().to_string());
-                } else if let GoExpressionNode::Verbatim(source) = node {
-                    self.pinned
-                        .extend(verbatim_identifiers(source).map(str::to_string));
-                }
-            }
-
-            fn local_binding(&mut self, name: &mut GoIdentifier) {
-                if let Some(id) = name.id() {
-                    self.present.insert(id, name.to_string());
-                } else {
-                    self.pinned.insert(name.to_string());
-                }
-            }
-
-            fn statements(&mut self, statements: &mut Vec<Statement>) {
-                if statements
-                    .iter()
-                    .any(|statement| matches!(statement.kind, LoweredStatement::UnreachablePanic))
-                {
-                    self.pinned.insert("panic".to_string());
-                }
-            }
-        }
-
-        let mut names = Names::default();
-        visit_statements_mut(statements, &mut names);
-        let mut by_id =
-            self.scope
-                .settle_generated_names(&names.present, &names.pinned, self.names);
-        self.scope
-            .restore_builtin_names(&names.present, &names.pinned, &mut by_id, self.names);
-        self.scope.avoid_qualifier_capture(
-            &names.present,
-            &names.pinned,
-            &names.qualifiers,
-            &mut by_id,
-        );
-        if by_id.is_empty() {
-            return;
-        }
-        rename_generated_locals(statements, &by_id);
-        for parameter in parameters {
-            if let Some(name) = parameter.id().and_then(|id| by_id.get(&id)) {
-                parameter.spelling_mut().clone_from(name);
-            }
-        }
-    }
-
     pub(in crate::lowering) fn plan_lambda(
         &mut self,
         params: &[Binding],
@@ -206,7 +138,7 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        let return_info = self.lambda_return_info(ty, ctx);
+        let return_info = self.queries().lambda_return_info(ty, ctx);
         self.with_isolated_function(return_info.ctx.clone(), |this| {
             let LoweredParams {
                 pairs: mut param_pairs,
@@ -269,33 +201,6 @@ impl Planner<'_> {
                 FunctionLiteralLayout::MultiLine,
             )
         })
-    }
-
-    fn lambda_return_info(&self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
-        let Type::Function(function) = ty else {
-            return LambdaReturnInfo {
-                signature: None,
-                ctx: ReturnContext::None,
-            };
-        };
-
-        let return_ty = function.return_type.as_ref();
-        let abi = return_abi(&self.facts, return_ty, ReturnSlot::FunctionExpression(ctx));
-        let signature =
-            (abi != CallableReturnAbi::Void).then(|| self.return_go_type(&abi, return_ty));
-        let return_ctx = match abi {
-            CallableReturnAbi::Void => ReturnContext::Void(return_ty.clone()),
-            CallableReturnAbi::Value => ReturnContext::Tagged(return_ty.clone()),
-            CallableReturnAbi::Lowered(shape) => ReturnContext::Lowered {
-                return_ty: return_ty.clone(),
-                shape,
-            },
-        };
-
-        LambdaReturnInfo {
-            signature,
-            ctx: return_ctx,
-        }
     }
 
     fn lower_lambda_body_with_deferred(
@@ -361,10 +266,12 @@ impl Planner<'_> {
 
         let receiver =
             self_param.map(|parameter| self.receiver_parameter(params_to_process, parameter));
-        let generics = self.plan_generics(&signature_generics);
+        let generics = self.queries().plan_generics(&signature_generics);
         let (signature_parameters, deferred_patterns) =
             self.lower_signature_params(params_to_process);
-        let return_ty = self.render_return_ty(function_definition, return_shape.as_ref());
+        let return_ty = self
+            .queries()
+            .render_return_ty(function_definition, return_shape.as_ref());
         let mut parameters: Vec<GoIdentifier> = signature_parameters
             .iter()
             .map(|(name, _)| name.clone())
@@ -439,19 +346,6 @@ impl Planner<'_> {
         (pairs, destructures)
     }
 
-    fn render_return_ty(
-        &self,
-        function_definition: FunctionDefinitionView<'_>,
-        return_shape: Option<&LoweredReturnAbi>,
-    ) -> GoType {
-        let abi = match (self.scope.current_return_ctx(), return_shape) {
-            (ReturnContext::Void(_), _) => CallableReturnAbi::Void,
-            (_, Some(shape)) => CallableReturnAbi::Lowered(shape.clone()),
-            (_, None) => CallableReturnAbi::Value,
-        };
-        self.return_go_type(&abi, function_definition.return_type)
-    }
-
     fn lower_function_body_with_deferred_patterns(
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
@@ -489,9 +383,10 @@ impl Planner<'_> {
             })
             .collect();
 
-        let go_type = self.go_type(&self_param.ty);
-        let receiver_var = fresh_receiver_name(&go_type.code, |name| {
-            param_names.iter().any(|param| param == name) || self.shadows_declaration(name)
+        let go_type = self.queries().go_type(&self_param.ty);
+        let receiver_var = fresh_receiver_name(go_type.leading_name(), |name| {
+            param_names.iter().any(|param| param == name)
+                || self.queries().shadows_declaration(name)
         });
 
         let self_id = self_param.pattern.binding_id();
@@ -550,7 +445,9 @@ impl Planner<'_> {
                 }
             };
 
-            lowered.pairs.push((name, self.go_type(&param.ty)));
+            lowered
+                .pairs
+                .push((name, self.queries().go_type(&param.ty)));
         }
         lowered
     }
@@ -624,5 +521,117 @@ pub(in crate::lowering) fn is_go_never(facts: &EmitFacts<'_>, expression: &Expre
             facts.checked(expression).callee().definition.as_deref() == Some("prelude.panic")
         }
         _ => false,
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    fn settle_generated_names(
+        &self,
+        statements: &mut Vec<Statement>,
+        parameters: &mut [GoIdentifier],
+    ) {
+        #[derive(Default)]
+        struct Names {
+            present: FxHashMap<LocalId, String>,
+            pinned: FxHashSet<String>,
+            qualifiers: FxHashSet<String>,
+        }
+
+        impl VisitorMut for Names {
+            fn expression(&mut self, node: &mut GoExpressionNode) {
+                if let GoExpressionNode::Identifier(name) = node {
+                    if let Some(id) = name.id() {
+                        self.present.insert(id, name.to_string());
+                    } else {
+                        self.pinned.insert(name.to_string());
+                    }
+                } else if let GoExpressionNode::Qualified { package, .. } = node {
+                    self.qualifiers.insert(package.qualifier().to_string());
+                } else if let GoExpressionNode::Verbatim(source) = node {
+                    self.pinned
+                        .extend(verbatim_identifiers(source).map(str::to_string));
+                }
+            }
+
+            fn local_binding(&mut self, name: &mut GoIdentifier) {
+                if let Some(id) = name.id() {
+                    self.present.insert(id, name.to_string());
+                } else {
+                    self.pinned.insert(name.to_string());
+                }
+            }
+
+            fn statements(&mut self, statements: &mut Vec<Statement>) {
+                if statements
+                    .iter()
+                    .any(|statement| matches!(statement.kind, LoweredStatement::UnreachablePanic))
+                {
+                    self.pinned.insert("panic".to_string());
+                }
+            }
+        }
+
+        let mut names = Names::default();
+        visit_statements_mut(statements, &mut names);
+        let mut by_id =
+            self.scope
+                .settle_generated_names(&names.present, &names.pinned, self.names);
+        self.scope
+            .restore_builtin_names(&names.present, &names.pinned, &mut by_id, self.names);
+        self.scope.avoid_qualifier_capture(
+            &names.present,
+            &names.pinned,
+            &names.qualifiers,
+            &mut by_id,
+        );
+        if by_id.is_empty() {
+            return;
+        }
+        rename_generated_locals(statements, &by_id);
+        for parameter in parameters {
+            if let Some(name) = parameter.id().and_then(|id| by_id.get(&id)) {
+                parameter.spelling_mut().clone_from(name);
+            }
+        }
+    }
+
+    fn lambda_return_info(&self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
+        let Type::Function(function) = ty else {
+            return LambdaReturnInfo {
+                signature: None,
+                ctx: ReturnContext::None,
+            };
+        };
+
+        let return_ty = function.return_type.as_ref();
+        let abi = return_abi(self.facts, return_ty, ReturnSlot::FunctionExpression(ctx));
+        let signature =
+            (abi != CallableReturnAbi::Void).then(|| self.return_go_type(&abi, return_ty));
+        let return_ctx = match abi {
+            CallableReturnAbi::Void => ReturnContext::Void(return_ty.clone()),
+            CallableReturnAbi::Value => ReturnContext::Tagged(return_ty.clone()),
+            CallableReturnAbi::Lowered(shape) => ReturnContext::Lowered {
+                return_ty: return_ty.clone(),
+                shape,
+            },
+        };
+
+        LambdaReturnInfo {
+            signature,
+            ctx: return_ctx,
+        }
+    }
+
+    fn render_return_ty(
+        &self,
+        function_definition: FunctionDefinitionView<'_>,
+        return_shape: Option<&LoweredReturnAbi>,
+    ) -> GoType {
+        let abi = match (self.scope.current_return_ctx(), return_shape) {
+            (ReturnContext::Void(_), _) => CallableReturnAbi::Void,
+            (_, Some(shape)) => CallableReturnAbi::Lowered(shape.clone()),
+            (_, None) => CallableReturnAbi::Value,
+        };
+        self.return_go_type(&abi, function_definition.return_type)
     }
 }

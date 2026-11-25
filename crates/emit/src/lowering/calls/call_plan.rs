@@ -1,9 +1,10 @@
-use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::CalleeSignature;
 use crate::lowering::abi::callable::{CallableAbi, CallableParamAbi};
 use crate::lowering::abi::coercion_plan::LayoutChange;
+use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::planner::queries::PlannerQueries;
 use syntax::ast::Expression;
 use syntax::program::SlotOrigin;
 use syntax::program::{
@@ -13,12 +14,13 @@ use syntax::program::{GoTypeRecipe, is_go_import, is_prelude_symbol};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
-pub(in crate::lowering) struct CallPlan<'a> {
+pub(in crate::lowering) struct CallPlan<'a, 'e> {
+    pub(in crate::lowering) site: CallSite<'e>,
     pub(in crate::lowering) resolved: ResolvedCallee<'a>,
     pub(in crate::lowering) arguments: Vec<ArgumentPlan>,
 }
 
-impl CallPlan<'_> {
+impl CallPlan<'_, '_> {
     pub(in crate::lowering) fn wraps_result(&self) -> bool {
         self.resolved.abi.result.is_lowered()
     }
@@ -141,16 +143,59 @@ pub(in crate::lowering) struct ArgumentSlotLayoutChange {
     pub(in crate::lowering) source: ArgumentValueSource,
 }
 
-impl<'a> Planner<'a> {
-    pub(in crate::lowering) fn plan_call(&self, expression: &Expression) -> Option<CallPlan<'a>> {
-        let Expression::Call {
-            expression: callee,
-            args,
-            ..
-        } = expression
-        else {
-            return None;
-        };
+fn callee_return_slot<'r>(
+    facts: &'r EmitFacts<'_>,
+    origin: &CallableOrigin<'_>,
+    id: Option<&str>,
+    declared_return: Option<&'r Type>,
+    return_type: &Type,
+) -> (SlotOrigin, Option<&'r Type>) {
+    if !matches!(origin, CallableOrigin::GoInterop) {
+        return (SlotOrigin::Lisette, declared_return);
+    }
+    match id.and_then(|id| facts.go_callable_return_slot(id)) {
+        Some(slot) => (slot.origin, Some(&slot.declared_type)),
+        None => (
+            SlotOrigin::of_go_declaration(
+                SlotOrigin::GoReturn,
+                declared_return.unwrap_or(return_type),
+                |id| facts.definition(id),
+            ),
+            declared_return,
+        ),
+    }
+}
+
+pub(in crate::lowering) fn is_prelude_dispatch(
+    id: Option<&str>,
+    origin: &CallableOrigin<'_>,
+) -> bool {
+    id.is_some_and(is_prelude_symbol)
+        || matches!(
+            origin,
+            CallableOrigin::Source(
+                CallOperation::NativeConstructor { .. } | CallOperation::Native { .. }
+            )
+        )
+}
+
+pub(in crate::lowering) fn callable_declaration<'a>(
+    facts: &EmitFacts<'a>,
+    id: &str,
+) -> Option<CallableDeclaration<'a>> {
+    facts
+        .definition(id)
+        .map(CallableDeclaration::Definition)
+        .or_else(|| {
+            let (owner, name) = id.rsplit_once('.')?;
+            facts.method(owner, name).map(CallableDeclaration::Method)
+        })
+}
+
+impl<'a> PlannerQueries<'_, 'a> {
+    pub(in crate::lowering) fn plan_call<'e>(&self, site: CallSite<'e>) -> CallPlan<'a, 'e> {
+        let callee = site.callee;
+        let args = site.args;
 
         let checked = self.facts.checked(callee).callee();
         let origin = if self.is_go_callable(callee) {
@@ -170,10 +215,11 @@ impl<'a> Planner<'a> {
             })
             .collect();
 
-        Some(CallPlan {
+        CallPlan {
+            site,
             resolved,
             arguments,
-        })
+        }
     }
 
     fn resolve_callee(
@@ -185,7 +231,7 @@ impl<'a> Planner<'a> {
     ) -> ResolvedCallee<'a> {
         let declaration = id
             .as_deref()
-            .and_then(|id| callable_declaration(&self.facts, id));
+            .and_then(|id| callable_declaration(self.facts, id));
         let alias_declaration = self.facts.function_alias_declaration(&function.get_type());
         let declared_type = declaration
             .map(CallableDeclaration::ty)
@@ -233,7 +279,7 @@ impl<'a> Planner<'a> {
         });
 
         let (return_origin, return_declaration) = callee_return_slot(
-            &self.facts,
+            self.facts,
             &origin,
             id.as_deref(),
             declared_return,
@@ -302,7 +348,7 @@ impl<'a> Planner<'a> {
 
         let declaration = id
             .as_deref()
-            .and_then(|id| callable_declaration(&self.facts, id));
+            .and_then(|id| callable_declaration(self.facts, id));
         (id, declaration)
     }
 
@@ -424,53 +470,4 @@ impl<'a> Planner<'a> {
             })
             .collect()
     }
-}
-
-fn callee_return_slot<'r>(
-    facts: &'r EmitFacts<'_>,
-    origin: &CallableOrigin<'_>,
-    id: Option<&str>,
-    declared_return: Option<&'r Type>,
-    return_type: &Type,
-) -> (SlotOrigin, Option<&'r Type>) {
-    if !matches!(origin, CallableOrigin::GoInterop) {
-        return (SlotOrigin::Lisette, declared_return);
-    }
-    match id.and_then(|id| facts.go_callable_return_slot(id)) {
-        Some(slot) => (slot.origin, Some(&slot.declared_type)),
-        None => (
-            SlotOrigin::of_go_declaration(
-                SlotOrigin::GoReturn,
-                declared_return.unwrap_or(return_type),
-                |id| facts.definition(id),
-            ),
-            declared_return,
-        ),
-    }
-}
-
-pub(in crate::lowering) fn is_prelude_dispatch(
-    id: Option<&str>,
-    origin: &CallableOrigin<'_>,
-) -> bool {
-    id.is_some_and(is_prelude_symbol)
-        || matches!(
-            origin,
-            CallableOrigin::Source(
-                CallOperation::NativeConstructor { .. } | CallOperation::Native { .. }
-            )
-        )
-}
-
-pub(in crate::lowering) fn callable_declaration<'a>(
-    facts: &EmitFacts<'a>,
-    id: &str,
-) -> Option<CallableDeclaration<'a>> {
-    facts
-        .definition(id)
-        .map(CallableDeclaration::Definition)
-        .or_else(|| {
-            let (owner, name) = id.rsplit_once('.')?;
-            facts.method(owner, name).map(CallableDeclaration::Method)
-        })
 }

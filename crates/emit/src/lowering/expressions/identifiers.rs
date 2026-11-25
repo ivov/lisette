@@ -1,7 +1,7 @@
-use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::calls::go_interop::build_tuple_literal;
 use crate::lowering::definitions::interface_adapter::definition_selects_tagged_counterpart;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
@@ -12,7 +12,68 @@ use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::{CallOperation, strip_prelude_prefix};
 use syntax::types::Type;
 
-impl Planner<'_> {
+fn resolve(name: &str) -> GoExpression {
+    if let Some(rest) = strip_prelude_prefix(name) {
+        let go_name: String = rest.split('.').map(go_name::snake_to_camel).collect();
+        GoExpression::qualified(PackageUse::generated(GeneratedPackage::Prelude), go_name)
+    } else {
+        GoExpression::external_name(go_name::escape_reserved(&name.replace('.', "_")).into_owned())
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(super) fn variant_value_type_args(
+        &self,
+        params: &[Type],
+        ctx: ExpressionContext<'_>,
+    ) -> GoType {
+        ctx.expected_slot_type()
+            .and_then(|t| self.prelude_container_type_args(t))
+            .unwrap_or_else(|| self.format_type_args(params))
+    }
+
+    fn try_plan_method_expression(
+        &self,
+        identifier: &Expression,
+        id_ty: &Type,
+    ) -> Option<GoExpression> {
+        let recorded = self.facts.checked(identifier).function_value()?;
+        let CallOperation::ReceiverMethod { is_public } = recorded.operation else {
+            return None;
+        };
+        let symbol = recorded.definition.as_deref()?;
+        let (_, method) = symbol.rsplit_once('.')?;
+        let first = id_ty.as_function_type()?.params.first()?;
+        let export = if is_public {
+            GoExport::Exported
+        } else {
+            GoExport::Unexported
+        };
+        let spelling = if definition_selects_tagged_counterpart(self.facts, symbol) {
+            MemberSpelling::TaggedCounterpart
+        } else {
+            MemberSpelling::Plain
+        };
+        let go_method = self
+            .facts
+            .receiver_method_go_name(&first.ty, method, export, spelling);
+        Some(self.method_expression(&first.ty, go_method))
+    }
+
+    pub(in crate::lowering) fn method_expression(
+        &self,
+        receiver_param: &Type,
+        go_method: String,
+    ) -> GoExpression {
+        let receiver_type = self.layout_go_type(&self.facts.dereferenced_layout(receiver_param));
+        let receiver = if self.facts.is_reference(receiver_param) {
+            GoType::pointer_to(&receiver_type)
+        } else {
+            receiver_type
+        };
+        GoExpression::selector(GoExpression::type_name(receiver), go_method)
+    }
+
     pub(in crate::lowering) fn plan_identifier(
         &self,
         identifier: &Expression,
@@ -104,66 +165,5 @@ impl Planner<'_> {
             Some(type_args) => GoExpression::instantiation(function, type_args),
             None => function,
         }
-    }
-
-    pub(super) fn variant_value_type_args(
-        &self,
-        params: &[Type],
-        ctx: ExpressionContext<'_>,
-    ) -> GoType {
-        ctx.expected_slot_type()
-            .and_then(|t| self.prelude_container_type_args(t))
-            .unwrap_or_else(|| self.format_type_args(params))
-    }
-
-    fn try_plan_method_expression(
-        &self,
-        identifier: &Expression,
-        id_ty: &Type,
-    ) -> Option<GoExpression> {
-        let recorded = self.facts.checked(identifier).function_value()?;
-        let CallOperation::ReceiverMethod { is_public } = recorded.operation else {
-            return None;
-        };
-        let symbol = recorded.definition.as_deref()?;
-        let (_, method) = symbol.rsplit_once('.')?;
-        let first = id_ty.as_function_type()?.params.first()?;
-        let export = if is_public {
-            GoExport::Exported
-        } else {
-            GoExport::Unexported
-        };
-        let spelling = if definition_selects_tagged_counterpart(&self.facts, symbol) {
-            MemberSpelling::TaggedCounterpart
-        } else {
-            MemberSpelling::Plain
-        };
-        let go_method = self
-            .facts
-            .receiver_method_go_name(&first.ty, method, export, spelling);
-        Some(self.method_expression(&first.ty, go_method))
-    }
-
-    pub(in crate::lowering) fn method_expression(
-        &self,
-        receiver_param: &Type,
-        go_method: String,
-    ) -> GoExpression {
-        let receiver_type = self.layout_go_type(&self.facts.dereferenced_layout(receiver_param));
-        let receiver = if self.facts.is_reference(receiver_param) {
-            GoType::pointer_to(&receiver_type).parenthesized()
-        } else {
-            receiver_type
-        };
-        GoExpression::selector(GoExpression::type_name(receiver), go_method)
-    }
-}
-
-fn resolve(name: &str) -> GoExpression {
-    if let Some(rest) = strip_prelude_prefix(name) {
-        let go_name: String = rest.split('.').map(go_name::snake_to_camel).collect();
-        GoExpression::qualified(PackageUse::generated(GeneratedPackage::Prelude), go_name)
-    } else {
-        GoExpression::external_name(go_name::escape_reserved(&name.replace('.', "_")).into_owned())
     }
 }

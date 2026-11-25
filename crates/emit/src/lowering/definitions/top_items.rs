@@ -2,12 +2,12 @@ use crate::Planner;
 use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
-use crate::output::render::output_file::doc_lines;
 use crate::target::ir::bodies::async_statement;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{
     AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement,
 };
+use crate::target::ir::declarations::Documentation;
 use crate::target::ir::declarations::GoDeclaration;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoParameter};
 use crate::target::ir::local::GoIdentifier;
@@ -42,10 +42,9 @@ impl Planner<'_> {
                 fields,
                 ..
             } => {
-                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declarations =
                     self.emit_struct_definition(name, generics, fields, attributes);
-                declarations[0].documentation = doc_comment.into();
+                declarations[0].documentation = type_documentation(doc, name);
                 for declaration in &mut declarations {
                     declaration.position = self.facts.source_position(name_span);
                 }
@@ -59,9 +58,8 @@ impl Planner<'_> {
                 generics,
                 ..
             } => {
-                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let mut declarations = self
-                    .try_emit_enum(name, generics, attributes, &doc_comment)
+                    .try_emit_enum(name, generics, attributes, type_documentation(doc, name))
                     .unwrap_or_default();
                 for declaration in &mut declarations {
                     declaration.position = self.facts.source_position(name_span);
@@ -78,9 +76,8 @@ impl Planner<'_> {
                 if self.facts.alias_emits_nothing(name) {
                     return Vec::new();
                 }
-                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
-                let mut declaration = self.emit_type_alias(name, generics, ty);
-                declaration.documentation = doc_comment.into();
+                let mut declaration = self.queries().emit_type_alias(name, generics, ty);
+                declaration.documentation = type_documentation(doc, name);
                 vec![declaration]
             }
             Expression::Interface {
@@ -92,11 +89,15 @@ impl Planner<'_> {
                 visibility,
                 ..
             } => {
-                let doc_comment = item_doc_text(doc, name, &go_name::escape_type_name(name));
                 let export = GoExport::from_visibility(*visibility);
-                let mut declaration =
-                    self.emit_interface(name, method_signatures, parents, generics, export);
-                declaration.documentation = doc_comment.into();
+                let mut declaration = self.queries().emit_interface(
+                    name,
+                    method_signatures,
+                    parents,
+                    generics,
+                    export,
+                );
+                declaration.documentation = type_documentation(doc, name);
                 vec![declaration]
             }
             Expression::ImplBlock {
@@ -133,14 +134,14 @@ impl Planner<'_> {
         export: GoExport,
     ) -> Vec<GoDeclaration> {
         let function = item.function_definition_view();
-        let go_name = self.free_function_go_name(function.name, export);
-        let doc_comment = item_doc_text(doc, name, &go_name);
+        let go_name = self.names.free_function_go_name(function.name, export);
+        let documentation = item_documentation(doc, name, &go_name);
         if self.facts.is_test(&self.facts.qualified_current(name)) {
-            return self.emit_test_function(name, function, export, &doc_comment);
+            return self.emit_test_function(name, function, export, documentation);
         }
         let mut declarations = self.emit_function(function, None, &go_name, None);
         if let Some(first) = declarations.first_mut() {
-            first.documentation = doc_comment.into();
+            first.documentation = documentation;
         }
         declarations
     }
@@ -150,20 +151,20 @@ impl Planner<'_> {
         name: &str,
         function: FunctionDefinitionView<'_>,
         export: GoExport,
-        doc_comment: &str,
+        documentation: Documentation,
     ) -> Vec<GoDeclaration> {
         let injected = synthesized_test_handle_params(function);
         let function = match &injected {
             Some(params) => FunctionDefinitionView { params, ..function },
             None => function,
         };
-        let callee = self.free_function_go_name(function.name, export);
+        let callee = self.names.free_function_go_name(function.name, export);
         let handle = go_name::fresh_suffixed("t", |name| {
             name == callee || name == testkit_qualifier() || name == testing_qualifier()
         });
         let mut declarations = self.emit_function(function, None, &callee, None);
         if let Some(first) = declarations.first_mut() {
-            first.documentation = doc_comment.to_string().into();
+            first.documentation = documentation;
         }
         let handle = self.scope.new_local_identifier(handle);
         declarations.push(self.emit_test_wrapper(name, function, callee, handle));
@@ -185,7 +186,7 @@ impl Planner<'_> {
                 span.byte_offset,
                 span.byte_offset + span.byte_length,
             ]
-            .map(|value| GoExpression::literal(value.to_string()))
+            .map(|value| GoExpression::integer(i128::from(value)))
         };
 
         let testkit = |name, arguments| {
@@ -214,8 +215,8 @@ impl Planner<'_> {
             let mut arguments = vec![handle_value];
             arguments.extend(location());
             arguments.extend([
-                GoExpression::literal("\"result_err\"".to_string()),
-                GoExpression::literal("\"test returned Err\"".to_string()),
+                GoExpression::token("\"result_err\"".to_string()),
+                GoExpression::token("\"test returned Err\"".to_string()),
                 testkit("ErrOperand", vec![error.clone()]),
             ]);
             let mut check = IfPlan::plain(
@@ -252,22 +253,26 @@ impl Planner<'_> {
     }
 }
 
-pub(in crate::lowering) fn item_doc_text(
+fn type_documentation(doc: &Option<String>, name: &str) -> Documentation {
+    item_documentation(doc, name, &go_name::escape_type_name(name))
+}
+
+pub(in crate::lowering) fn item_documentation(
     doc: &Option<String>,
     lisette_name: &str,
     go_name: &str,
-) -> String {
+) -> Documentation {
     let Some(text) = doc else {
-        return String::new();
+        return Documentation::default();
     };
     let first_word = text
         .split(|c: char| !(c.is_alphanumeric() || c == '_'))
         .next()
         .unwrap_or_default();
     if first_word == lisette_name && lisette_name != go_name {
-        doc_lines(&format!("{go_name}{}", &text[first_word.len()..]))
+        Documentation::of_text(&format!("{go_name}{}", &text[first_word.len()..]))
     } else {
-        doc_lines(text)
+        Documentation::of_text(text)
     }
 }
 

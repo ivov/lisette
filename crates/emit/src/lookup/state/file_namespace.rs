@@ -5,7 +5,7 @@ use crate::target::names::packages::{PackageRequirements, PackageUse};
 use diagnostics::LisetteDiagnostic;
 use std::mem;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct FileNamespace {
     imports: ImportPlan,
     requirements: PackageRequirements,

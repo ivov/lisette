@@ -1,3 +1,4 @@
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::output::finish::function_literals::function_literal;
 use crate::target::names::go_name;
 use syntax::types::{CompoundKind, Type};
@@ -41,10 +42,10 @@ impl Planner<'_> {
     }
 
     fn element_clone(&mut self, ty: &Type) -> Option<GoExpression> {
-        if !self.needs_clone(ty) {
+        if !self.queries().needs_clone(ty) {
             return None;
         }
-        let go_ty = self.go_type(ty);
+        let go_ty = self.queries().go_type(ty);
         let var = self.fresh_local("e");
         let parameters = vec![GoParameter::new(var.clone(), go_ty.clone())];
         let element = GoExpression::identifier(var);
@@ -86,14 +87,16 @@ impl Planner<'_> {
                 let clone = self.clone_expression(field_place.clone(), element);
                 statements.push(assign(field_place, clone));
             } else if let Some(inner) = self.facts.tuple_elements(element)
-                && self.needs_clone(element)
+                && self.queries().needs_clone(element)
             {
                 statements.extend(self.tuple_clone_statements(&field_place, &inner))
             }
         }
         statements
     }
+}
 
+impl PlannerQueries<'_, '_> {
     fn needs_clone(&self, ty: &Type) -> bool {
         match self.facts.tuple_elements(ty) {
             Some(elements) => elements.iter().any(|e| self.needs_clone(e)),

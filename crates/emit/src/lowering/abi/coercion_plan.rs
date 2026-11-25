@@ -1,3 +1,4 @@
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::names::go_name;
 use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
@@ -79,12 +80,15 @@ pub(in crate::lowering) enum LayoutChange {
         target: Box<ValueLayout>,
         elements: Vec<LayoutChange>,
     },
-    Aggregate {
-        source: Box<ValueLayout>,
-        target: Box<ValueLayout>,
-        key: Option<Box<LayoutChange>>,
-        element: Box<LayoutChange>,
-    },
+    Aggregate(AggregateLayoutChange),
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::lowering) struct AggregateLayoutChange {
+    pub(in crate::lowering) source: Box<ValueLayout>,
+    pub(in crate::lowering) target: Box<ValueLayout>,
+    pub(in crate::lowering) key: Option<Box<LayoutChange>>,
+    pub(in crate::lowering) element: Box<LayoutChange>,
 }
 
 impl LayoutChange {
@@ -108,7 +112,7 @@ impl LayoutChange {
             Self::NilablePayload { payload, .. } => payload.direction(),
             Self::Identity | Self::Conversion { .. } | Self::Function { .. } => None,
             Self::Immutable { elements, .. } => elements.iter().find_map(LayoutChange::direction),
-            Self::Aggregate { key, element, .. } => key
+            Self::Aggregate(AggregateLayoutChange { key, element, .. }) => key
                 .as_deref()
                 .and_then(LayoutChange::direction)
                 .or_else(|| element.direction()),
@@ -118,7 +122,7 @@ impl LayoutChange {
 
 impl CoercionPlan {
     pub(in crate::lowering) fn adapted(
-        planner: &Planner<'_>,
+        planner: &PlannerQueries<'_, '_>,
         adaptation: &Adaptation,
         from: &Type,
         to: &Type,
@@ -192,7 +196,7 @@ impl CoercionPlan {
     }
 
     fn adapted_element(
-        planner: &Planner<'_>,
+        planner: &PlannerQueries<'_, '_>,
         adaptation: &Adaptation,
         from: &Type,
         to: &Type,
@@ -205,7 +209,11 @@ impl CoercionPlan {
         }
     }
 
-    pub(in crate::lowering) fn internal(planner: &Planner<'_>, from: &Type, to: &Type) -> Self {
+    pub(in crate::lowering) fn internal(
+        planner: &PlannerQueries<'_, '_>,
+        from: &Type,
+        to: &Type,
+    ) -> Self {
         if from == to {
             Self::Identity
         } else if planner.facts.is_interface_or_unknown(to)
@@ -220,7 +228,7 @@ impl CoercionPlan {
     }
 
     pub(in crate::lowering) fn change(
-        planner: &Planner<'_>,
+        planner: &PlannerQueries<'_, '_>,
         source: &ValueLayout,
         target: &ValueLayout,
     ) -> Self {
@@ -249,15 +257,15 @@ impl CoercionPlan {
         let value = match self {
             Self::Identity => value,
             Self::WrapAsInterface(plan) => {
-                let adapter_name = planner.ensure_adapter_type(plan);
+                let adapter_type = planner.ensure_adapter_type(plan);
                 GoExpression::struct_literal(
-                    GoType::new(adapter_name),
+                    adapter_type,
                     vec![("inner".to_string(), value)],
                     CompositeLayout::Inline { padded: false },
                 )
             }
             Self::WrapNewtype { ty } => {
-                let type_name = planner.go_type(&ty);
+                let type_name = planner.queries().go_type(&ty);
                 GoExpression::conversion(type_name, value)
             }
             Self::WrapSome {
@@ -267,7 +275,7 @@ impl CoercionPlan {
                 let (payload_setup, payload) = payload.lower(planner, value);
                 statements.extend(payload_setup);
                 let type_arguments =
-                    GoType::type_argument(&planner.component_go_type(&payload_type));
+                    GoType::type_argument(&planner.queries().component_go_type(&payload_type));
                 prelude_call(
                     option_variant("Some").constructor,
                     type_arguments,
@@ -298,7 +306,7 @@ impl Planner<'_> {
         element: CoercionPlan,
     ) -> GoExpression {
         let source = self.stable_source(statements, "src", value);
-        let go_type = self.go_type(array_type);
+        let go_type = self.queries().go_type(array_type);
         let output = self.fresh_declared("boxed");
         statements.push(declare(output.clone(), go_type));
 
@@ -346,11 +354,14 @@ impl Planner<'_> {
             arguments.push(coerced);
         }
         GoExpression::pure_call(
-            self.make_tuple_callee(slot_types, slot_types.len()),
+            self.queries()
+                .make_tuple_callee(slot_types, slot_types.len()),
             arguments,
         )
     }
+}
 
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn resolve_layout_change(
         &self,
         source: &ValueLayout,
@@ -360,10 +371,7 @@ impl Planner<'_> {
             return LayoutChange::Identity;
         }
 
-        use ValueLayout::{
-            Array, Fallible, Function, Map, Named, NullableOption, PointerOption, Reference, Slice,
-            TaggedOption, Tuple,
-        };
+        use ValueLayout::{Function, Named, NullableOption, PointerOption, TaggedOption};
 
         if let (
             Function {
@@ -390,19 +398,6 @@ impl Planner<'_> {
                 TaggedOption { .. } | NullableOption { .. } | PointerOption { .. },
                 TaggedOption { .. } | NullableOption { .. } | PointerOption { .. },
             ) => self.option_layout_change(source, target),
-            (Fallible { .. }, Fallible { .. }) | (Tuple { .. }, Tuple { .. }) => {
-                self.immutable_layout_change(source, target)
-            }
-            (Function { layout: source, .. }, Function { layout: target, .. }) => {
-                LayoutChange::Function {
-                    source: Box::new(source.clone()),
-                    target: Box::new(target.clone()),
-                }
-            }
-            (Reference { .. }, Reference { .. }) => self.reference_layout_change(source, target),
-            (Slice { .. }, Slice { .. })
-            | (Array { .. }, Array { .. })
-            | (Map { .. }, Map { .. }) => self.aggregate_layout_change(source, target),
             (
                 Named {
                     underlying: source_underlying,
@@ -417,6 +412,106 @@ impl Planner<'_> {
                     ..
                 },
             ) => self.resolve_layout_change(source, target_underlying),
+            _ => self.container_layout_change(source, target),
+        }
+    }
+
+    fn container_layout_change(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutChange {
+        use ValueLayout::{Array, Fallible, Function, Map, Reference, Slice, Tuple};
+        match (source, target) {
+            (
+                Fallible {
+                    payload: source_payload,
+                    error: source_error,
+                    ..
+                },
+                Fallible {
+                    payload: target_payload,
+                    error: target_error,
+                    ..
+                },
+            ) => self.immutable_layout_change(
+                target,
+                [source_payload, source_error]
+                    .into_iter()
+                    .zip([target_payload, target_error])
+                    .map(|(source, target)| (source.as_ref(), target.as_ref())),
+            ),
+            (
+                Tuple {
+                    elements: source_elements,
+                    ..
+                },
+                Tuple {
+                    elements: target_elements,
+                    ..
+                },
+            ) => {
+                assert_eq!(
+                    source_elements.len(),
+                    target_elements.len(),
+                    "tuple layout change preserves arity"
+                );
+                self.immutable_layout_change(target, source_elements.iter().zip(target_elements))
+            }
+            (Function { layout: source, .. }, Function { layout: target, .. }) => {
+                LayoutChange::Function {
+                    source: Box::new(source.clone()),
+                    target: Box::new(target.clone()),
+                }
+            }
+            (
+                Reference {
+                    pointee: source_pointee,
+                    ..
+                },
+                Reference {
+                    pointee: target_pointee,
+                    ..
+                },
+            ) => self.reference_layout_change(source_pointee, target_pointee, target),
+            (
+                Slice {
+                    element: source_element,
+                    ..
+                },
+                Slice {
+                    element: target_element,
+                    ..
+                },
+            )
+            | (
+                Array {
+                    element: source_element,
+                    ..
+                },
+                Array {
+                    element: target_element,
+                    ..
+                },
+            ) => self.aggregate_layout_change(
+                source,
+                target,
+                None,
+                (source_element.as_ref(), target_element.as_ref()),
+            ),
+            (
+                Map {
+                    key: source_key,
+                    value: source_value,
+                    ..
+                },
+                Map {
+                    key: target_key,
+                    value: target_value,
+                    ..
+                },
+            ) => self.aggregate_layout_change(
+                source,
+                target,
+                Some((source_key.as_ref(), target_key.as_ref())),
+                (source_value.as_ref(), target_value.as_ref()),
+            ),
             _ => LayoutChange::Identity,
         }
     }
@@ -516,70 +611,26 @@ impl Planner<'_> {
         }
     }
 
-    fn immutable_layout_change(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutChange {
-        use ValueLayout::{Fallible, Tuple};
-        match (source, target) {
-            (
-                Fallible {
-                    payload: source_payload,
-                    error: source_error,
-                    ..
-                },
-                Fallible {
-                    payload: target_payload,
-                    error: target_error,
-                    ..
-                },
-            ) => LayoutChange::Immutable {
-                target: Box::new(target.clone()),
-                elements: vec![
-                    self.resolve_layout_change(source_payload, target_payload),
-                    self.resolve_layout_change(source_error, target_error),
-                ],
-            },
-            (
-                Tuple {
-                    elements: source_elements,
-                    ..
-                },
-                Tuple {
-                    elements: target_elements,
-                    ..
-                },
-            ) => {
-                assert_eq!(
-                    source_elements.len(),
-                    target_elements.len(),
-                    "tuple layout change preserves arity"
-                );
-                LayoutChange::Immutable {
-                    target: Box::new(target.clone()),
-                    elements: source_elements
-                        .iter()
-                        .zip(target_elements)
-                        .map(|(source, target)| self.resolve_layout_change(source, target))
-                        .collect(),
-                }
-            }
-            _ => unreachable!("immutable_layout_change takes a fallible or tuple pair"),
+    fn immutable_layout_change<'l>(
+        &self,
+        target: &ValueLayout,
+        pairs: impl Iterator<Item = (&'l ValueLayout, &'l ValueLayout)>,
+    ) -> LayoutChange {
+        LayoutChange::Immutable {
+            target: Box::new(target.clone()),
+            elements: pairs
+                .map(|(source, target)| self.resolve_layout_change(source, target))
+                .collect(),
         }
     }
 
-    fn reference_layout_change(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutChange {
-        use ValueLayout::{Function, Reference};
-        let (
-            Reference {
-                pointee: source_pointee,
-                ..
-            },
-            Reference {
-                pointee: target_pointee,
-                ..
-            },
-        ) = (source, target)
-        else {
-            unreachable!("reference_layout_change takes a reference pair");
-        };
+    fn reference_layout_change(
+        &self,
+        source_pointee: &ValueLayout,
+        target_pointee: &ValueLayout,
+        target: &ValueLayout,
+    ) -> LayoutChange {
+        use ValueLayout::Function;
 
         if let (
             Function { layout: source, .. },
@@ -604,47 +655,14 @@ impl Planner<'_> {
         }
     }
 
-    fn aggregate_layout_change(&self, source: &ValueLayout, target: &ValueLayout) -> LayoutChange {
-        use ValueLayout::{Array, Map, Slice};
-        let (key_layouts, source_element, target_element) = match (source, target) {
-            (
-                Slice {
-                    element: source_element,
-                    ..
-                },
-                Slice {
-                    element: target_element,
-                    ..
-                },
-            )
-            | (
-                Array {
-                    element: source_element,
-                    ..
-                },
-                Array {
-                    element: target_element,
-                    ..
-                },
-            ) => (None, source_element, target_element),
-            (
-                Map {
-                    key: source_key,
-                    value: source_value,
-                    ..
-                },
-                Map {
-                    key: target_key,
-                    value: target_value,
-                    ..
-                },
-            ) => (
-                Some((source_key.as_ref(), target_key.as_ref())),
-                source_value,
-                target_value,
-            ),
-            _ => unreachable!("aggregate_layout_change takes a slice, array or map pair"),
-        };
+    fn aggregate_layout_change(
+        &self,
+        source: &ValueLayout,
+        target: &ValueLayout,
+        key_layouts: Option<(&ValueLayout, &ValueLayout)>,
+        element_layouts: (&ValueLayout, &ValueLayout),
+    ) -> LayoutChange {
+        let (source_element, target_element) = element_layouts;
 
         let key = key_layouts
             .map(|(source, target)| Box::new(self.resolve_layout_change(source, target)));
@@ -652,12 +670,12 @@ impl Planner<'_> {
         if element.is_identity() && key.as_deref().is_none_or(LayoutChange::is_identity) {
             LayoutChange::Identity
         } else {
-            LayoutChange::Aggregate {
+            LayoutChange::Aggregate(AggregateLayoutChange {
                 source: Box::new(source.clone()),
                 target: Box::new(target.clone()),
                 key,
                 element: Box::new(element),
-            }
+            })
         }
     }
 

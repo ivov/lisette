@@ -1,7 +1,9 @@
+use crate::lowering::planner::queries::PlannerQueries;
 mod arguments;
 pub(in crate::lowering) mod bound_value;
 pub(in crate::lowering) mod bounds_checks;
 pub(in crate::lowering) mod call_plan;
+pub(in crate::lowering) mod call_site;
 mod clone;
 pub(in crate::lowering) mod comma_ok;
 pub(in crate::lowering) mod dispatch;
@@ -16,56 +18,13 @@ mod ufcs;
 pub(in crate::lowering) mod unwrap_or;
 pub(in crate::lowering) mod wrap_err;
 
-use crate::Planner;
 use crate::lowering::abi::callable::CallableAbi;
 use crate::lowering::calls::call_plan::CallableOrigin;
+use crate::lowering::calls::call_site::CallSite;
 use crate::target::ir::values::CaptureBoundary;
 use syntax::ast::Expression;
 use syntax::program::{CallOperation, NativeTypeKind};
 use syntax::types::Type;
-
-impl<'p> Planner<'p> {
-    pub(in crate::lowering) fn native_method_call<'a>(
-        &self,
-        value: &'a Expression,
-    ) -> Option<NativeCallContext<'a>>
-    where
-        'p: 'a,
-    {
-        let Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            type_arguments,
-            ty,
-            ..
-        } = value
-        else {
-            return None;
-        };
-
-        let plan = self.plan_call(value)?;
-        let CallableOrigin::Source(CallOperation::Native { kind, method }) = plan.resolved.origin
-        else {
-            return None;
-        };
-        let form = NativeCallForm::method(callee);
-        form.split(args)?;
-        Some(NativeCallContext {
-            native_type: *kind,
-            form,
-            method,
-            function: callee,
-            args,
-            spread: spread.as_deref(),
-            written_type_arguments: type_arguments.annotations().len(),
-            abi: plan.resolved.abi,
-            call_ty: Some(ty),
-            capture_boundary: CaptureBoundary::SiblingSequence,
-            assigned_place: None,
-        })
-    }
-}
 
 #[derive(Clone, Copy)]
 pub(super) enum NativeCallForm<'a> {
@@ -121,5 +80,48 @@ impl<'a> NativeCallContext<'a> {
         &self,
     ) -> Option<(&'a Expression, &'a [Expression])> {
         self.form.split(self.args)
+    }
+}
+
+impl<'p> PlannerQueries<'_, 'p> {
+    pub(in crate::lowering) fn native_method_call<'a>(
+        &self,
+        value: &'a Expression,
+    ) -> Option<NativeCallContext<'a>>
+    where
+        'p: 'a,
+    {
+        let Expression::Call {
+            expression: callee,
+            args,
+            spread,
+            type_arguments,
+            ty,
+            ..
+        } = value
+        else {
+            return None;
+        };
+
+        let plan = self.plan_call(CallSite::of(value)?);
+        let CallableOrigin::Source(CallOperation::Native { kind, method }) = plan.resolved.origin
+        else {
+            return None;
+        };
+        let form = NativeCallForm::method(callee);
+        form.split(args)?;
+        Some(NativeCallContext {
+            native_type: *kind,
+            form,
+            method,
+            function: callee,
+            args,
+            spread: spread.as_deref(),
+            written_type_arguments: type_arguments.annotations().len(),
+            abi: plan.resolved.abi,
+            call_ty: Some(ty),
+            capture_boundary: CaptureBoundary::SiblingSequence,
+            assigned_place: None,
+        })
     }
 }

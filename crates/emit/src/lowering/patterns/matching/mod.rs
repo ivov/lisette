@@ -212,7 +212,7 @@ impl Planner<'_> {
         if arms.iter().any(MatchArm::has_guard) {
             return None;
         }
-        let fuse = self.option_fuse_plan(subject)?;
+        let fuse = self.queries().option_fuse_plan(subject)?;
         if !matches!(fuse, OptionFusePlan::CommaOk { .. }) {
             return None;
         }
@@ -297,7 +297,7 @@ impl Planner<'_> {
         for ((operand, tested), element) in operands.iter_mut().zip(&tested).zip(elements) {
             let rereadable = is_inert_value(element, operand.expression())
                 || operand.rests_in_fixed_name()
-                || self.plan_rests_in_stable_name(operand);
+                || self.queries().plan_rests_in_stable_name(operand);
             if *tested && !rereadable {
                 self.pin_to_temp(operand, "arg");
             }
@@ -345,15 +345,18 @@ impl Planner<'_> {
             let has_collision = arms
                 .iter()
                 .any(|arm| pattern_binds_name(&arm.pattern, &name));
-            if self.can_reuse_subject_identifier(&name, resolution, has_collision) {
-                let identifier = self.reference_go_identifier(&name, resolution);
-                return if identifier.id().is_some() {
-                    ResolvedSubject::Materialized {
-                        subject: GoExpression::identifier(identifier.clone()),
-                        local: identifier,
-                    }
-                } else {
-                    ResolvedSubject::Existing(GoExpression::identifier(identifier))
+            if self
+                .queries()
+                .can_reuse_subject_identifier(&name, resolution, has_collision)
+            {
+                let subject = self.queries().reference_expression(&name, resolution);
+                return match subject
+                    .as_identifier()
+                    .filter(|identifier| identifier.id().is_some())
+                    .cloned()
+                {
+                    Some(local) => ResolvedSubject::Materialized { subject, local },
+                    None => ResolvedSubject::Existing(subject),
                 };
             }
         }
@@ -364,14 +367,16 @@ impl Planner<'_> {
             return ResolvedSubject::Existing(value);
         }
         let operand = self.plan_composite_value(subject, ExpressionContext::value());
-        let rests_in_stable_name = self.plan_rests_in_stable_name(&operand);
+        let rests_in_stable_name = self.queries().plan_rests_in_stable_name(&operand);
         let (subject_setup, value) = operand.into_parts();
         setup.extend(subject_setup);
         let reads_in_place = matches!(value.node(), GoExpressionNode::Identifier(_))
-            || self.field_path_reads_in_place(subject, &value, |root| {
-                arms.iter()
-                    .any(|arm| pattern_binds_name(&arm.pattern, root))
-            });
+            || self
+                .queries()
+                .field_path_reads_in_place(subject, &value, |root| {
+                    arms.iter()
+                        .any(|arm| pattern_binds_name(&arm.pattern, root))
+                });
         if !any_guard && reads_in_place {
             return ResolvedSubject::Existing(value);
         }

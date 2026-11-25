@@ -9,7 +9,8 @@ use crate::target::ir::bodies::{
     LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan, assign, declare,
 };
 use crate::target::ir::declarations::{
-    ConstantDeclaration, DeclarationKind, FunctionSignature, GoDeclaration, TypeParameter,
+    ConstantDeclaration, DeclarationKind, Documentation, FunctionSignature, GoDeclaration,
+    TypeParameter,
 };
 use crate::target::ir::go_expression::{CompositeLayout, GoBinaryOperator, GoParameter};
 use crate::target::ir::local::GoIdentifier;
@@ -29,11 +30,12 @@ impl EnumLayout {
         &self,
         planner: &mut Planner,
         generics: Vec<TypeParameter>,
-        doc: &str,
+        documentation: Documentation,
     ) -> Vec<GoDeclaration> {
-        let tag = GoType::new(go_name::enum_tag_type(&self.enum_name));
+        let tag_name = go_name::enum_tag_type(&self.enum_name);
+        let tag = GoType::new(tag_name.clone());
         let mut declarations = vec![GoDeclaration::new(DeclarationKind::Type {
-            name: tag.code.clone(),
+            name: tag_name,
             parameters: Vec::new(),
             underlying: GoType::new(self.tag_go_type()),
         })];
@@ -45,16 +47,18 @@ impl EnumLayout {
                     .iter()
                     .enumerate()
                     .map(|(i, variant)| ConstantDeclaration {
-                        documentation: variant
-                            .doc
-                            .as_ref()
-                            .map(|doc| doc.lines().map(comment_line).collect::<Vec<_>>().join("\n"))
-                            .unwrap_or_default()
-                            .into(),
+                        documentation: Documentation(
+                            variant
+                                .doc
+                                .iter()
+                                .flat_map(|doc| doc.lines())
+                                .map(str::to_string)
+                                .collect(),
+                        ),
                         name: variant.tag_constant.clone(),
                         ty: (renumbered || i == 0).then(|| tag.clone()),
                         value: if renumbered {
-                            Some(GoExpression::literal(values[i].to_string()))
+                            Some(GoExpression::integer(values[i] as i128))
                         } else {
                             (i == 0).then(|| GoExpression::external_name("iota".to_string()))
                         },
@@ -65,7 +69,7 @@ impl EnumLayout {
         let mut fields = vec![(ENUM_TAG_FIELD.to_string(), tag)];
         for variant in &self.variants {
             for field in &variant.fields {
-                let ty = planner.go_type(&field.ty);
+                let ty = planner.queries().go_type(&field.ty);
                 let ty = if field.is_recursive() {
                     GoType::pointer_to(&ty)
                 } else {
@@ -84,7 +88,7 @@ impl EnumLayout {
             parameters: generics,
             underlying: GoType::structure(fields),
         });
-        declaration.documentation = doc.to_string().into();
+        declaration.documentation = documentation;
         declarations.push(declaration);
         declarations
     }
@@ -277,7 +281,7 @@ impl EnumLayout {
                         member(receiver, &variant.fields[0].go_name)
                     } else {
                         GoExpression::composite(
-                            Some(GoType::slice_of(&GoType::new("any"))),
+                            Some(GoType::slice_of(&GoType::any())),
                             variant
                                 .fields
                                 .iter()
@@ -502,12 +506,12 @@ fn member(name: &GoIdentifier, field: &str) -> GoExpression {
 }
 
 fn string(value: &str) -> GoExpression {
-    GoExpression::literal(format!("{value:?}"))
+    GoExpression::token(format!("{value:?}"))
 }
 
 fn map(fields: Vec<(String, GoExpression)>) -> GoExpression {
     GoExpression::composite(
-        Some(GoType::map_of(&GoType::new("string"), &GoType::new("any"))),
+        Some(GoType::map_of(&GoType::new("string"), &GoType::any())),
         fields
             .into_iter()
             .map(|(key, value)| (Some(string(&key)), value))
@@ -541,14 +545,6 @@ fn unmarshal(value: GoExpression, target: GoExpression) -> GoExpression {
         GoExpression::generated(GeneratedPackage::Json, "Unmarshal"),
         vec![value, GoExpression::address_of(target)],
     )
-}
-
-fn comment_line(line: &str) -> String {
-    if line.is_empty() {
-        "//".to_string()
-    } else {
-        format!("// {line}")
-    }
 }
 
 impl Planner<'_> {
@@ -592,7 +588,7 @@ impl Planner<'_> {
             .map(|(index, field)| {
                 let value = GoExpression::index(
                     GoExpression::identifier(array.clone()),
-                    GoExpression::literal(index.to_string()),
+                    GoExpression::integer(index as i128),
                 );
                 let target = member(receiver, &field.go_name);
                 if index + 1 == variant.fields.len() {
@@ -675,7 +671,7 @@ fn json_payload_variant_case(
                 GoExpression::binary(
                     len.clone(),
                     GoBinaryOperator::NotEqual,
-                    GoExpression::literal(variant.fields.len().to_string()),
+                    GoExpression::integer(variant.fields.len() as i128),
                 ),
                 LoweredBlock {
                     statements: vec![plain_return(GoExpression::call(

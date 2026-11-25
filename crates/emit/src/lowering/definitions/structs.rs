@@ -2,7 +2,8 @@ use crate::Planner;
 use crate::lookup::facts::synthesized_methods::{StringFormat, StructShape, SynthesizedMethod};
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::tags::{format_tag_string, interpret_field_attributes};
-use crate::lowering::definitions::top_items::item_doc_text;
+use crate::lowering::definitions::top_items::item_documentation;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::LoweredBlock;
 use crate::target::ir::declarations::GoDeclaration;
 use crate::target::ir::declarations::{DeclarationKind, FieldDeclaration, TypeParameter};
@@ -28,8 +29,9 @@ impl Planner<'_> {
         fields: &StructFields,
         attributes: &[Attribute],
     ) -> Vec<GoDeclaration> {
-        let parameters =
-            self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
+        let parameters = self
+            .queries()
+            .plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
         let StructFields::Record(fields) = fields else {
             let StructFields::Tuple(fields) = fields else {
                 unreachable!();
@@ -40,9 +42,12 @@ impl Planner<'_> {
         let qualified = self.facts.qualified_current(name);
         let (fields_plan, stringer_fields): (Vec<_>, Vec<_>) = fields
             .iter()
-            .map(|field| self.emit_struct_field(&qualified, field, attributes))
+            .map(|field| {
+                self.queries()
+                    .emit_struct_field(&qualified, field, attributes)
+            })
             .unzip();
-        let receiver_generics = self.receiver_generics(generics);
+        let receiver_generics = self.names.receiver_generics(generics);
         let mut result = vec![GoDeclaration::new(DeclarationKind::Struct {
             name: go_name::escape_type_name(name).into_owned(),
             parameters,
@@ -87,7 +92,7 @@ impl Planner<'_> {
         let underlying = self
             .facts
             .is_newtype_definition(name)
-            .then(|| self.go_type(&fields[0].ty));
+            .then(|| self.queries().go_type(&fields[0].ty));
         let go_name = go_name::escape_type_name(name).into_owned();
         let definition = match &underlying {
             Some(underlying) => DeclarationKind::Type {
@@ -104,7 +109,7 @@ impl Planner<'_> {
                     .map(|(index, field)| FieldDeclaration {
                         documentation: Default::default(),
                         name: Some(go_name::tuple_struct_field(index)),
-                        ty: self.go_type(&field.ty),
+                        ty: self.queries().go_type(&field.ty),
                         tag: None,
                     })
                     .collect(),
@@ -112,7 +117,7 @@ impl Planner<'_> {
         };
 
         let mut result = vec![GoDeclaration::new(definition)];
-        let receiver_generics = self.receiver_generics(generics);
+        let receiver_generics = self.names.receiver_generics(generics);
         let formats = fields
             .iter()
             .map(|field| DisplayForm::of(&field.ty, |id| self.facts.definition(id)))
@@ -140,44 +145,13 @@ impl Planner<'_> {
         result
     }
 
-    fn emit_struct_field(
-        &self,
-        struct_id: &str,
-        field: &StructFieldDefinition,
-        attributes: &[Attribute],
-    ) -> (FieldDeclaration, StringerField) {
-        let name = self.facts.declared_field_go_name(struct_id, field);
-        let tag = if field.is_embedded() {
-            None
-        } else {
-            let configs = interpret_field_attributes(field, attributes);
-            format_tag_string(&field.name, &configs, self.facts.is_option(&field.ty))
-        };
-
-        let declaration = FieldDeclaration {
-            documentation: item_doc_text(&field.doc, &field.name, &name).into(),
-            name: (!field.is_embedded()).then(|| name.clone()),
-            ty: self.go_type(&field.ty),
-            tag,
-        };
-
-        (
-            declaration,
-            StringerField {
-                source_name: field.name.to_string(),
-                go_name: name,
-                format: DisplayForm::of(&field.ty, |id| self.facts.definition(id)),
-            },
-        )
-    }
-
     fn struct_equals_method(
         &mut self,
         name: &str,
         generics: &[Generic],
         fields: &[StructFieldDefinition],
     ) -> GoDeclaration {
-        let receiver_generics = self.receiver_generics(generics);
+        let receiver_generics = self.names.receiver_generics(generics);
         let receiver = synthesized_receiver_name(name, &receiver_generics);
         let other = synthesized_local_name("other", &receiver, &receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
@@ -209,7 +183,7 @@ impl Planner<'_> {
         let body = comparisons
             .into_iter()
             .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
-            .unwrap_or_else(|| GoExpression::literal("true".to_string()));
+            .unwrap_or_else(|| GoExpression::boolean(true));
         let receiver_type = receiver_type(&receiver_generics, name);
         GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
@@ -389,7 +363,7 @@ pub(in crate::lowering) fn format_value(
     text: &str,
     mut arguments: Vec<GoExpression>,
 ) -> GoExpression {
-    let text = GoExpression::literal(format!("{text:?}"));
+    let text = GoExpression::token(format!("{text:?}"));
     if arguments.is_empty() {
         return text;
     }
@@ -398,4 +372,37 @@ pub(in crate::lowering) fn format_value(
         GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
         arguments,
     )
+}
+
+impl PlannerQueries<'_, '_> {
+    fn emit_struct_field(
+        &self,
+        struct_id: &str,
+        field: &StructFieldDefinition,
+        attributes: &[Attribute],
+    ) -> (FieldDeclaration, StringerField) {
+        let name = self.facts.declared_field_go_name(struct_id, field);
+        let tag = if field.is_embedded() {
+            None
+        } else {
+            let configs = interpret_field_attributes(field, attributes);
+            format_tag_string(&field.name, &configs, self.facts.is_option(&field.ty))
+        };
+
+        let declaration = FieldDeclaration {
+            documentation: item_documentation(&field.doc, &field.name, &name),
+            name: (!field.is_embedded()).then(|| name.clone()),
+            ty: self.go_type(&field.ty),
+            tag,
+        };
+
+        (
+            declaration,
+            StringerField {
+                source_name: field.name.to_string(),
+                go_name: name,
+                format: DisplayForm::of(&field.ty, |id| self.facts.definition(id)),
+            },
+        )
+    }
 }

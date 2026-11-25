@@ -1,5 +1,5 @@
-use crate::Planner;
 use crate::lowering::calls::call_plan::{ResolvedCallee, callable_declaration};
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
 use crate::target::types::go_type::GoType;
@@ -45,7 +45,26 @@ fn all_type_params_inferrable(
     })
 }
 
-impl Planner<'_> {
+fn generic_function(declared: Option<&Type>) -> Option<(&[EcoString], &FunctionType)> {
+    let Type::Forall { vars, body } = declared? else {
+        return None;
+    };
+    let Type::Function(f) = body.as_ref() else {
+        return None;
+    };
+    Some((vars, f))
+}
+
+fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
+    let Some(Type::Forall { body, .. }) = callee.declared_type() else {
+        return false;
+    };
+    matches!(body.as_ref(), Type::Function(_))
+        && callee.instantiated.as_function_type().is_some()
+        && callee.receiver_offset > 0
+}
+
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn prelude_container_type_args(&self, ty: &Type) -> Option<GoType> {
         let params = self.facts.prelude_container_arguments(ty)?;
         if params.is_empty() {
@@ -197,7 +216,7 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> Option<GoType> {
         let recorded = self.facts.checked(expression).function_value()?;
-        let declaration = callable_declaration(&self.facts, recorded.definition.as_deref()?)?;
+        let declaration = callable_declaration(self.facts, recorded.definition.as_deref()?)?;
         let instantiation = &recorded.type_arguments;
         match declaration.go_type_param_recipe() {
             Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
@@ -292,23 +311,4 @@ impl Planner<'_> {
             .collect();
         GoType::type_arguments(&arguments)
     }
-}
-
-fn generic_function(declared: Option<&Type>) -> Option<(&[EcoString], &FunctionType)> {
-    let Type::Forall { vars, body } = declared? else {
-        return None;
-    };
-    let Type::Function(f) = body.as_ref() else {
-        return None;
-    };
-    Some((vars, f))
-}
-
-fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
-    let Some(Type::Forall { body, .. }) = callee.declared_type() else {
-        return false;
-    };
-    matches!(body.as_ref(), Type::Function(_))
-        && callee.instantiated.as_function_type().is_some()
-        && callee.receiver_offset > 0
 }

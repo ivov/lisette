@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::callable::CallableAbi;
 use crate::lowering::calls::call_plan::{CallableOrigin, FunctionLayoutChange};
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::{SequencedValues, ValuePlan};
 use crate::output::finish::verify::verify_operand_order;
@@ -154,7 +155,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         if value.must_evaluate_now()
             && value.expression().constant_kind().is_none()
-            && !self.plan_rests_in_stable_name(&value)
+            && !self.queries().plan_rests_in_stable_name(&value)
         {
             self.pin_to_temp(&mut value, prefix);
         }
@@ -179,70 +180,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(in crate::lowering) fn callee_lowers_to_type_construction(
-        &self,
-        callee: &Expression,
-    ) -> bool {
-        self.resolve_callee_definition(callee)
-            .1
-            .is_some_and(|definition| definition.is_type_definition())
-    }
-
-    pub(in crate::lowering) fn is_pure_constructor_callee(&self, callee: &Expression) -> bool {
-        prelude_constructor(callee).is_some() || self.callee_lowers_to_type_construction(callee)
-    }
-
-    pub(in crate::lowering) fn plan_rests_in_stable_name(&self, plan: &ValuePlan) -> bool {
-        if plan.rests_in_fixed_name() {
-            return true;
-        }
-        plan.expression().as_identifier().is_some_and(|local| {
-            plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
-        })
-    }
-
-    pub(in crate::lowering) fn path_read_stability(&self, path: &GoExpression) -> Stability {
-        if path.effects().reads() == Stability::Observable {
-            return Stability::Observable;
-        }
-        let mut stability = Stability::Fixed;
-        path.node().visit(&mut |node| {
-            if let GoExpressionNode::Identifier(name) = node {
-                stability = stability.max(match self.scope.source_binding_for_local(name) {
-                    Some(id) => binding_read_stability(&self.facts, id),
-                    None => Stability::StableAcrossCalls,
-                });
-            }
-        });
-        stability
-    }
-
-    pub(in crate::lowering) fn place_read_stability(&self, place: &Expression) -> Stability {
-        match place {
-            Expression::Identifier { .. } => identifier_read_stability(&self.facts, place),
-            Expression::DotAccess {
-                expression,
-                resolution,
-                ..
-            } if resolution.is_field_read()
-                && !self.facts.reads_value_member(
-                    resolution,
-                    expression,
-                    &expression.get_type(),
-                ) =>
-            {
-                Stability::Observable
-            }
-            Expression::DotAccess { expression, .. } => self.place_read_stability(expression),
-            Expression::IndexedAccess { .. }
-            | Expression::Unary {
-                operator: UnaryOperator::Deref,
-                ..
-            } => Stability::Observable,
-            _ => Stability::StableAcrossCalls,
-        }
-    }
-
     pub(in crate::lowering) fn plan_prelude_arg(
         &mut self,
         expression: &Expression,
@@ -252,56 +189,17 @@ impl Planner<'_> {
         let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
         let operand = self.plan_composite_value(expression, arg_ctx);
 
-        if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
+        if suppress
+            && let Some(adapter) = self
+                .queries()
+                .detect_lower_arg_to_tagged(expression, param_ty)
+        {
             return operand.map_expression(|setup, value| {
                 self.plan_function_layout_change(setup, value, &adapter.source, &adapter.target)
             });
         }
 
         self.convert_to_recorded_slot(expression, operand)
-    }
-
-    pub(in crate::lowering) fn prelude_callback_operands_as_is(
-        &self,
-        callback: &Expression,
-        declared_param: Option<&Type>,
-        param_ty: Option<&Type>,
-    ) -> bool {
-        let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
-        suppress
-            && self
-                .never_result_layout_change(&callback.get_type(), arg_ctx)
-                .is_none()
-            && (!self.is_go_callable(callback)
-                || self
-                    .function_value_layout_change(callback, arg_ctx)
-                    .is_none())
-            && self
-                .detect_lower_arg_to_tagged(callback, param_ty)
-                .is_none()
-    }
-
-    pub(in crate::lowering) fn detect_lower_arg_to_tagged(
-        &self,
-        arg: &Expression,
-        param_ty: Option<&Type>,
-    ) -> Option<FunctionLayoutChange> {
-        if matches!(arg, Expression::Lambda { .. }) {
-            return None;
-        }
-        let callee = self.resolve_callable_value(arg)?;
-        if matches!(callee.origin, CallableOrigin::GoInterop) {
-            return None;
-        }
-        if !callee.abi.result.is_lowered() {
-            return None;
-        }
-        self.callable_slot_layout_change(
-            callee.function_layout(&self.facts),
-            param_ty?.unwrap_forall(),
-            None,
-            SlotOrigin::Lisette,
-        )
     }
 
     pub(in crate::lowering) fn plan_native_method_args_from(
@@ -322,40 +220,6 @@ impl Planner<'_> {
                 )
             })
             .collect()
-    }
-
-    fn finalize_spread_operand(
-        &self,
-        values: &mut Vec<GoExpression>,
-        wrap_to_any: bool,
-        combine: Option<VariadicCombine>,
-    ) {
-        let mut spread = values.pop().expect("a spread argument is always last");
-        if wrap_to_any {
-            spread = GoExpression::call(
-                GoExpression::generated(GeneratedPackage::Prelude, "SliceToAny"),
-                vec![spread],
-            );
-        }
-        if let Some(combine) = combine
-            && values.len() > combine.fixed_count
-        {
-            let element_go = self.go_type(&combine.element_ty);
-            let leading = GoExpression::composite(
-                Some(GoType::slice_of(&element_go)),
-                values
-                    .drain(combine.fixed_count..)
-                    .map(|value| (None, value))
-                    .collect(),
-                CompositeLayout::Inline { padded: false },
-            );
-
-            spread = GoExpression::call(
-                GoExpression::external_name("append".to_string()),
-                vec![leading, GoExpression::spread(spread)],
-            );
-        }
-        values.push(GoExpression::spread(spread));
     }
 
     pub(in crate::lowering) fn sequence_values(
@@ -444,7 +308,7 @@ impl Planner<'_> {
         operands.extend(spread_operand);
         let mut sequenced = self.sequence_values(operands, options.boundary, "arg");
         if has_spread {
-            self.finalize_spread_operand(
+            self.queries().finalize_spread_operand(
                 &mut sequenced.values,
                 options.wrap_to_any,
                 options.combine,
@@ -499,5 +363,148 @@ pub(in crate::lowering) fn identifier_read_stability(
         Stability::StableAcrossCalls
     } else {
         Stability::Observable
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn callee_lowers_to_type_construction(
+        &self,
+        callee: &Expression,
+    ) -> bool {
+        self.resolve_callee_definition(callee)
+            .1
+            .is_some_and(|definition| definition.is_type_definition())
+    }
+
+    pub(in crate::lowering) fn is_pure_constructor_callee(&self, callee: &Expression) -> bool {
+        prelude_constructor(callee).is_some() || self.callee_lowers_to_type_construction(callee)
+    }
+
+    pub(in crate::lowering) fn plan_rests_in_stable_name(&self, plan: &ValuePlan) -> bool {
+        if plan.rests_in_fixed_name() {
+            return true;
+        }
+        plan.expression().as_identifier().is_some_and(|local| {
+            plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
+        })
+    }
+
+    pub(in crate::lowering) fn path_read_stability(&self, path: &GoExpression) -> Stability {
+        if path.effects().reads() == Stability::Observable {
+            return Stability::Observable;
+        }
+        let mut stability = Stability::Fixed;
+        path.node().visit(&mut |node| {
+            if let GoExpressionNode::Identifier(name) = node {
+                stability = stability.max(match self.scope.source_binding_for_local(name) {
+                    Some(id) => binding_read_stability(self.facts, id),
+                    None => Stability::StableAcrossCalls,
+                });
+            }
+        });
+        stability
+    }
+
+    pub(in crate::lowering) fn place_read_stability(&self, place: &Expression) -> Stability {
+        match place {
+            Expression::Identifier { .. } => identifier_read_stability(self.facts, place),
+            Expression::DotAccess {
+                expression,
+                resolution,
+                ..
+            } if resolution.is_field_read()
+                && !self.facts.reads_value_member(
+                    resolution,
+                    expression,
+                    &expression.get_type(),
+                ) =>
+            {
+                Stability::Observable
+            }
+            Expression::DotAccess { expression, .. } => self.place_read_stability(expression),
+            Expression::IndexedAccess { .. }
+            | Expression::Unary {
+                operator: UnaryOperator::Deref,
+                ..
+            } => Stability::Observable,
+            _ => Stability::StableAcrossCalls,
+        }
+    }
+
+    pub(in crate::lowering) fn prelude_callback_operands_as_is(
+        &self,
+        callback: &Expression,
+        declared_param: Option<&Type>,
+        param_ty: Option<&Type>,
+    ) -> bool {
+        let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
+        suppress
+            && self
+                .never_result_layout_change(&callback.get_type(), arg_ctx)
+                .is_none()
+            && (!self.is_go_callable(callback)
+                || self
+                    .function_value_layout_change(callback, arg_ctx)
+                    .is_none())
+            && self
+                .detect_lower_arg_to_tagged(callback, param_ty)
+                .is_none()
+    }
+
+    pub(in crate::lowering) fn detect_lower_arg_to_tagged(
+        &self,
+        arg: &Expression,
+        param_ty: Option<&Type>,
+    ) -> Option<FunctionLayoutChange> {
+        if matches!(arg, Expression::Lambda { .. }) {
+            return None;
+        }
+        let callee = self.resolve_callable_value(arg)?;
+        if matches!(callee.origin, CallableOrigin::GoInterop) {
+            return None;
+        }
+        if !callee.abi.result.is_lowered() {
+            return None;
+        }
+        self.callable_slot_layout_change(
+            callee.function_layout(self.facts),
+            param_ty?.unwrap_forall(),
+            None,
+            SlotOrigin::Lisette,
+        )
+    }
+
+    fn finalize_spread_operand(
+        &self,
+        values: &mut Vec<GoExpression>,
+        wrap_to_any: bool,
+        combine: Option<VariadicCombine>,
+    ) {
+        let mut spread = values.pop().expect("a spread argument is always last");
+        if wrap_to_any {
+            spread = GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Prelude, "SliceToAny"),
+                vec![spread],
+            );
+        }
+        if let Some(combine) = combine
+            && values.len() > combine.fixed_count
+        {
+            let element_go = self.go_type(&combine.element_ty);
+            let leading = GoExpression::composite(
+                Some(GoType::slice_of(&element_go)),
+                values
+                    .drain(combine.fixed_count..)
+                    .map(|value| (None, value))
+                    .collect(),
+                CompositeLayout::Inline { padded: false },
+            );
+
+            spread = GoExpression::call(
+                GoExpression::external_name("append".to_string()),
+                vec![leading, GoExpression::spread(spread)],
+            );
+        }
+        values.push(GoExpression::spread(spread));
     }
 }

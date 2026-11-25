@@ -153,11 +153,12 @@ fn take_inline_else(plan: &mut IfPlan) -> Option<LoweredBlock> {
         ElseArm::ElseIf(inner) => take_inline_else(inner),
         ElseArm::Else {
             layout: ElseLayout::Inline,
-            ..
-        } => match mem::replace(&mut plan.else_arm, ElseArm::None) {
-            ElseArm::Else { body, .. } => Some(body),
-            _ => unreachable!("the arm was just matched as an inline else"),
-        },
+            body,
+        } => {
+            let body = mem::take(body);
+            plan.else_arm = ElseArm::None;
+            Some(body)
+        }
         ElseArm::Else {
             layout: ElseLayout::Block,
             ..

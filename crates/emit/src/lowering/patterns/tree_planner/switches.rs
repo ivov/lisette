@@ -69,7 +69,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) -> bool {
         let checkpoint = self.planner.planning_snapshot();
         let mut collected: Vec<FlatCase> = Vec::new();
-        if !self.collect_flat_cases(tree, &mut Vec::new(), &mut collected, true) {
+        if !self.collect_flat_cases(tree, &mut Vec::new(), &mut collected, CasePosition::Tail) {
             self.planner.restore_planning(checkpoint);
             return false;
         }
@@ -118,7 +118,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         decision: &'d Decision,
         conditions: &mut Vec<GoExpression>,
         out: &mut Vec<FlatCase<'d>>,
-        tail: bool,
+        position: CasePosition,
     ) -> bool {
         match decision {
             Decision::Unreachable => true,
@@ -133,7 +133,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 if !self.collect_guard_case(&guard.leaf, conditions, out) {
                     return false;
                 }
-                !tail || self.collect_flat_cases(&guard.failure, conditions, out, tail)
+                position == CasePosition::Nested
+                    || self.collect_flat_cases(&guard.failure, conditions, out, position)
             }
             Decision::Chain { tests, tail } => {
                 let (cased, lifted) = split_chain_with_catchall_lift(tests, tail);
@@ -192,15 +193,19 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                             })
                             .expect("a switch branch has a label"),
                     );
-                    let flattened =
-                        self.collect_flat_cases(&branch.decision, conditions, out, false);
+                    let flattened = self.collect_flat_cases(
+                        &branch.decision,
+                        conditions,
+                        out,
+                        CasePosition::Nested,
+                    );
                     conditions.pop();
                     if !flattened {
                         return false;
                     }
                 }
                 match lifted {
-                    Some(lifted) => self.collect_flat_cases(lifted, conditions, out, tail),
+                    Some(lifted) => self.collect_flat_cases(lifted, conditions, out, position),
                     None => true,
                 }
             }
@@ -254,7 +259,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 continue;
             }
             let composable = binding.path.render(self.subject.root());
-            let stability = self.planner.path_read_stability(&composable);
+            let stability = self.planner.queries().path_read_stability(&composable);
             self.planner.scope.bind_inline_expression(
                 &binding.lisette_name,
                 &binding.binding_ids,
@@ -520,6 +525,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         });
         (!body.is_empty()).then_some(LoweredBlock { statements: body })
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CasePosition {
+    Tail,
+    Nested,
 }
 
 struct FlatCase<'d> {

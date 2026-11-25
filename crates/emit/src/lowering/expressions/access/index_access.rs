@@ -178,7 +178,7 @@ impl Planner<'_> {
             end_value = Some(GoExpression::binary(
                 end_expression,
                 GoBinaryOperator::Addition,
-                GoExpression::literal("1".to_string()),
+                GoExpression::integer(1),
             ));
         }
 
@@ -251,13 +251,8 @@ pub(in crate::lowering) fn range_var_bounds(
 ) -> (Option<GoExpression>, Option<GoExpression>) {
     let start = || GoExpression::selector(range.clone(), go_name::RANGE_START_FIELD.to_string());
     let end = || GoExpression::selector(range.clone(), go_name::RANGE_END_FIELD.to_string());
-    let end_inclusive = || {
-        GoExpression::binary(
-            end(),
-            GoBinaryOperator::Addition,
-            GoExpression::literal("1".to_string()),
-        )
-    };
+    let end_inclusive =
+        || GoExpression::binary(end(), GoBinaryOperator::Addition, GoExpression::integer(1));
     match range_kind {
         RangeKind::Range => (Some(start()), Some(end())),
         RangeKind::RangeInclusive => (Some(start()), Some(end_inclusive())),

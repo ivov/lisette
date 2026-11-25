@@ -1,4 +1,6 @@
 use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
+use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::expressions::tuple_literal::TupleLiteral;
 use crate::target::ir::prelude as tags;
 use crate::target::names::go_name;
 use syntax::go_names::ENUM_TAG_FIELD;
@@ -130,12 +132,12 @@ impl Planner<'_> {
             LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
                 let inner = self.facts.ok_payload(return_ty);
                 let mut values = self.lowered_payload_zeros(shape, &inner);
-                values.push(GoExpression::literal("false".to_string()));
+                values.push(GoExpression::boolean(false));
                 values
             }
             LoweredReturnAbi::Option(OptionReturnAbi::Nullable) => vec![GoExpression::nil()],
             LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
-                vec![GoExpression::literal(value.to_string())]
+                vec![GoExpression::integer(i128::from(*value))]
             }
             _ => unreachable!("only Option's `None` lacks a payload"),
         }
@@ -293,7 +295,7 @@ impl Planner<'_> {
                 if let (Some(adaptation), Some(source_tys)) = (adaptation, &source_tys) {
                     let slot_layout = slot_layouts.get(i);
                     let coercion = CoercionPlan::adapted(
-                        self,
+                        &self.queries(),
                         adaptation,
                         &source_tys[i],
                         slot_ty,
@@ -308,7 +310,7 @@ impl Planner<'_> {
                     slot_layouts.get(i),
                     Some(ValueLayout::NullableOption { .. })
                 ) {
-                    let inner = self.go_type(&slot_ty.ok_type());
+                    let inner = self.queries().go_type(&slot_ty.ok_type());
                     self.plan_option_payload_wrap(
                         &mut statements,
                         raw,
@@ -327,12 +329,11 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn lowered_tuple_literal_values(
         &mut self,
-        tuple: &Expression,
+        literal: TupleLiteral<'_>,
         tuple_ty: &Type,
     ) -> (Vec<Statement>, Vec<GoExpression>) {
-        let Expression::Tuple { elements, .. } = tuple else {
-            unreachable!("only a tuple literal lowers into return slots")
-        };
+        let tuple = literal.expression;
+        let elements = literal.elements;
         let slot_tys = self.facts.tuple_or_type_arguments(tuple_ty);
         let slot_layouts = self.facts.lowered_tuple_slot_layouts(tuple_ty);
         let adaptations = match &self.facts.checked(tuple).value_use().adaptation {
@@ -368,7 +369,7 @@ impl Planner<'_> {
         let mut statements = sequenced.setup;
         let parts = self.coerce_elements_to_slots(
             &mut statements,
-            tuple,
+            literal,
             sequenced.values,
             &slot_tys,
             ElementTarget::LoweredReturn,
@@ -420,7 +421,9 @@ impl Planner<'_> {
                 || CallableReturnAbi::unlowered(&return_ty),
                 CallableReturnAbi::Lowered,
             );
-            let source = self.emitted_value_layout(expression, ExpressionContext::value());
+            let source = self
+                .queries()
+                .emitted_value_layout(expression, ExpressionContext::value());
             let target = self.facts.callable_result_layout(
                 &return_ty,
                 SlotOrigin::Lisette,
@@ -428,7 +431,7 @@ impl Planner<'_> {
                 &abi,
             );
 
-            let coercion = CoercionPlan::change(self, &source, &target);
+            let coercion = CoercionPlan::change(&self.queries(), &source, &target);
             if coercion.changes_layout() {
                 self.record_converted_value(expression);
                 let (mut statements, value) = self
@@ -454,18 +457,17 @@ impl Planner<'_> {
     }
 
     fn lower_tuple_tail(&mut self, expression: &Expression, arity: usize) -> Vec<Statement> {
-        use Expression;
         let return_ty = self.scope.current_return_ctx().expect_ty();
-        if let Expression::Tuple { elements, .. } = expression
-            && elements.len() == arity
+        if let Some(literal) = TupleLiteral::of(expression)
+            && literal.elements.len() == arity
         {
-            let (mut statements, parts) = self.lowered_tuple_literal_values(expression, &return_ty);
+            let (mut statements, parts) = self.lowered_tuple_literal_values(literal, &return_ty);
             statements.push(multi_value_return(parts));
             return statements;
         }
 
-        if let Some(plan) = self.plan_call(expression)
-            && self.kept_layout_tuple_arity(&plan, &return_ty) == Some(arity)
+        if let Some(plan) = CallSite::of(expression).map(|site| self.queries().plan_call(site))
+            && self.queries().kept_layout_tuple_arity(&plan, &return_ty) == Some(arity)
             && self.facts.same_type(&expression.get_type(), &return_ty)
             && plan
                 .resolved
@@ -479,7 +481,7 @@ impl Planner<'_> {
                 ))
         {
             let (mut statements, call) = self
-                .plan_call_expression(expression, None, ExpressionContext::value())
+                .plan_call_with_plan(plan, None, ExpressionContext::value())
                 .into_parts();
             statements.push(plain_return(call));
             return statements;
@@ -589,10 +591,10 @@ impl Planner<'_> {
                 .with_constructor_stability();
         }
         if prelude_constructor(expression) == Some(PreludeVariant::None) {
-            return ValuePlan::literal("nil".to_string());
+            return ValuePlan::nil();
         }
         let value = self.plan_value(expression, ExpressionContext::value());
-        let inner = self.go_type(&slot_ty.ok_type());
+        let inner = self.queries().go_type(&slot_ty.ok_type());
         value.map_expression(|setup, value| {
             self.plan_option_payload_wrap(
                 setup,

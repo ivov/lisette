@@ -1,9 +1,11 @@
 use super::*;
 use crate::lowering::abi::fallible_producer::ErrorNilGuard;
 use crate::lowering::abi::go_result_wrapping::partial_ok_nil_guard;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::PairPlacement;
 use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::calls::wrap_err::wrap_error;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::names::source_name::SourceName;
 
@@ -14,7 +16,7 @@ fn error_use(uses: &[bool]) -> ErrorUse {
     }
 }
 
-impl Planner<'_> {
+impl<'p> Planner<'p> {
     pub(in crate::lowering) fn try_lower_fused_result_match_into(
         &mut self,
         value: &Expression,
@@ -34,7 +36,7 @@ impl Planner<'_> {
         let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
-        let fuse = self.option_fuse_plan(subject)?;
+        let fuse = self.queries().option_fuse_plan(subject)?;
         let arms = classify_option_arms(arms)?;
         let payload = arms.some_binding?;
         if !arms.none_body.get_type().is_never()
@@ -71,7 +73,7 @@ impl Planner<'_> {
         let Expression::Match { subject, arms, .. } = value else {
             return None;
         };
-        let arms = self.partial_outcome_arms(subject, arms)?;
+        let (plan, arms) = self.queries().partial_outcome_arms(subject, arms)?;
         let ok_value = arms.value_binding?;
         if !arms.failure.expression.get_type().is_never()
             || arm_body_is_identifier(&arms.ok.expression) != Some(ok_value.name)
@@ -81,7 +83,7 @@ impl Planner<'_> {
         }
 
         let (mut statements, call) = self
-            .plan_call_expression(subject, None, ExpressionContext::value())
+            .plan_call_with_plan(plan, None, ExpressionContext::value())
             .into_parts();
         self.scope.declare_go_name(go_name.spelling());
         let error_hint = arms.error_hint();
@@ -106,7 +108,7 @@ impl Planner<'_> {
         place: &PlacePlan,
         destination: Option<&GoIdentifier>,
     ) -> Option<Vec<Statement>> {
-        let fuse = self.result_fuse_plan(subject)?;
+        let fuse = self.queries().result_fuse_plan(subject)?;
         let (ok, err) = classify_result_arms(arms)?;
 
         let ok_name = if ok.is_catch_all {
@@ -147,8 +149,9 @@ impl Planner<'_> {
             if fuse.is_bound() {
                 return Some(Vec::new());
             }
+            let site = CallSite::of(subject)?;
             let (mut statements, call) = self
-                .plan_call_expression(subject, None, ExpressionContext::value())
+                .plan_call_expression(site, None, ExpressionContext::value())
                 .into_parts();
             statements.push(effect_statement(call));
             return Some(statements);
@@ -225,7 +228,7 @@ impl Planner<'_> {
         if arms.iter().any(MatchArm::has_guard) {
             return None;
         }
-        let fuse = self.result_fuse_plan(subject)?;
+        let fuse = self.queries().result_fuse_plan(subject)?;
         if !fuse.carries_payload() {
             return None;
         }
@@ -311,22 +314,14 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn fusable_partial(&self, subject: &Expression, plan: &CallPlan<'_>) -> bool {
-        matches!(
-            plan.resolved.abi.result.lowered(),
-            Some(LoweredReturnAbi::Partial { .. })
-        ) && self.call_result_keeps_layout(plan, &subject.get_type())
-            && !self.facts.has_tuple_payload(&subject.get_type())
-    }
-
     pub(super) fn try_lower_fused_partial_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
-        let plan = self.plan_call(subject)?;
-        if !self.fusable_partial(subject, &plan) {
+        let plan = self.queries().plan_call(CallSite::of(subject)?);
+        if !self.queries().fusable_partial(&plan) {
             return None;
         }
         let (ok_arm, both_arm, err_arm) = classify_partial_arms(arms)?;
@@ -339,7 +334,7 @@ impl Planner<'_> {
         let nilable = self.facts.partial_ok_is_nilable(&ok_ty);
 
         let (mut statements, call) = self
-            .plan_call_expression(subject, None, ExpressionContext::value())
+            .plan_call_with_plan(plan, None, ExpressionContext::value())
             .into_parts();
         let value_var = match ok_name.or(both_value) {
             Some(value) => Some(self.arm_value_name(&value.go_name())),
@@ -364,10 +359,10 @@ impl Planner<'_> {
 
         let value_used = nilable || ok_uses[0] || both_uses[0];
 
-        let nil_check = names
-            .value
-            .as_ref()
-            .and_then(|v| self.partial_ok_nil_check(&ok_ty, GoExpression::identifier(v.clone())));
+        let nil_check = names.value.as_ref().and_then(|v| {
+            self.queries()
+                .partial_ok_nil_check(&ok_ty, GoExpression::identifier(v.clone()))
+        });
 
         let else_arm = match nil_check {
             Some(check) => {
@@ -420,18 +415,6 @@ impl Planner<'_> {
         PartialPairNames { value, error }
     }
 
-    fn partial_outcome_arms<'a>(
-        &self,
-        subject: &Expression,
-        arms: &'a [MatchArm],
-    ) -> Option<PartialOutcomeArms<'a>> {
-        let plan = self.plan_call(subject)?;
-        if !self.fusable_partial(subject, &plan) {
-            return None;
-        }
-        classify_partial_outcome_arms(arms)
-    }
-
     fn lower_partial_failure_arm(
         &mut self,
         arms: PartialOutcomeArms<'_>,
@@ -453,9 +436,9 @@ impl Planner<'_> {
         arms: &[MatchArm],
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
-        let arms = self.partial_outcome_arms(subject, arms)?;
+        let (plan, arms) = self.queries().partial_outcome_arms(subject, arms)?;
         let (mut statements, call) = self
-            .plan_call_expression(subject, None, ExpressionContext::value())
+            .plan_call_with_plan(plan, None, ExpressionContext::value())
             .into_parts();
         let value = arms
             .value_binding
@@ -500,9 +483,9 @@ impl Planner<'_> {
         arms: &[MatchArm],
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
-        let plan = self.plan_call(subject)?;
+        let plan = self.queries().plan_call(CallSite::of(subject)?);
         if !matches!(plan.resolved.origin, CallableOrigin::GoInterop)
-            || !self.fusable_partial(subject, &plan)
+            || !self.queries().fusable_partial(&plan)
         {
             return None;
         }
@@ -513,7 +496,7 @@ impl Planner<'_> {
         let (value_binding, error_binding) = (arms.value_binding, arms.error_binding);
 
         let (mut statements, call) = self
-            .plan_call_expression(subject, None, ExpressionContext::value())
+            .plan_call_with_plan(plan, None, ExpressionContext::value())
             .into_parts();
 
         if !arms.selects_both && nil_guard.is_none() {
@@ -604,7 +587,7 @@ impl Planner<'_> {
         arms: &[MatchArm],
         place: &PlacePlan,
     ) -> Option<Vec<Statement>> {
-        let fuse = self.option_fuse_plan(subject)?;
+        let fuse = self.queries().option_fuse_plan(subject)?;
         let arms = classify_option_arms(arms)?;
         Some(self.lower_fused_option_arms(fuse, arms, place))
     }
@@ -1071,5 +1054,27 @@ fn prepend_error_prologue(
         else_body
             .statements
             .splice(after_nil_guard..after_nil_guard, prologue);
+    }
+}
+
+impl<'p> PlannerQueries<'_, 'p> {
+    fn fusable_partial(&self, plan: &CallPlan<'_, '_>) -> bool {
+        matches!(
+            plan.resolved.abi.result.lowered(),
+            Some(LoweredReturnAbi::Partial { .. })
+        ) && self.call_result_keeps_layout(plan, plan.site.ty)
+            && !self.facts.has_tuple_payload(plan.site.ty)
+    }
+
+    fn partial_outcome_arms<'s, 'a>(
+        &self,
+        subject: &'s Expression,
+        arms: &'a [MatchArm],
+    ) -> Option<(CallPlan<'p, 's>, PartialOutcomeArms<'a>)> {
+        let plan = self.plan_call(CallSite::of(subject)?);
+        if !self.fusable_partial(&plan) {
+            return None;
+        }
+        Some((plan, classify_partial_outcome_arms(arms)?))
     }
 }

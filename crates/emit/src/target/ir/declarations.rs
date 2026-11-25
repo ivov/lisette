@@ -6,17 +6,11 @@ use crate::target::types::go_type::GoType;
 #[derive(Clone, Default)]
 pub(crate) struct Documentation(pub(crate) Vec<String>);
 
-impl From<String> for Documentation {
-    fn from(comments: String) -> Self {
+impl Documentation {
+    pub(crate) fn of_text(text: &str) -> Self {
         Self(
-            comments
-                .lines()
-                .map(|line| {
-                    line.strip_prefix("// ")
-                        .or_else(|| line.strip_prefix("//"))
-                        .unwrap_or(line)
-                        .to_string()
-                })
+            text.split('\n')
+                .map(|line| line.strip_suffix('\r').unwrap_or(line).to_string())
                 .collect(),
         )
     }

@@ -19,7 +19,14 @@ impl ReusableBindings {
     ) -> Self {
         let mut hidden = FxHashMap::default();
         let mut shared = FxHashSet::default();
-        collect(body, params, false, facts, &mut hidden, &mut shared);
+        collect(
+            body,
+            params,
+            CaptureContext::Function,
+            facts,
+            &mut hidden,
+            &mut shared,
+        );
         hidden.retain(|_, id| !shared.contains(id));
         Self { hidden }
     }
@@ -27,6 +34,12 @@ impl ReusableBindings {
     pub(crate) fn hidden_by(&self, id: BindingId) -> Option<BindingId> {
         self.hidden.get(&id).copied()
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CaptureContext {
+    Function,
+    Closure,
 }
 
 type BlockBindings = FxHashMap<BindingId, Type>;
@@ -49,12 +62,12 @@ fn record(bindings: &mut BlockBindings, binding: &Binding) {
 fn collect(
     expression: &Expression,
     params: &[Binding],
-    captured: bool,
+    context: CaptureContext,
     facts: &EmitFacts<'_>,
     hidden: &mut FxHashMap<BindingId, BindingId>,
     shared: &mut FxHashSet<BindingId>,
 ) {
-    let captured = match expression {
+    let context = match expression {
         Expression::Block { items, .. } => {
             let mut bindings = BlockBindings::default();
             for param in params {
@@ -71,18 +84,20 @@ fn collect(
                     pair_let(&mut bindings, binding, value, mode, hidden, facts);
                 }
             }
-            captured
+            context
         }
         Expression::Lambda { params, body, .. } => {
-            collect(body, params, true, facts, hidden, shared);
+            collect(body, params, CaptureContext::Closure, facts, hidden, shared);
             return;
         }
-        Expression::Task { .. } | Expression::Defer { .. } => true,
+        Expression::Task { .. } | Expression::Defer { .. } => CaptureContext::Closure,
         Expression::Identifier { resolution, .. } => {
-            if captured && let Some(id) = resolution.binding_id() {
+            if context == CaptureContext::Closure
+                && let Some(id) = resolution.binding_id()
+            {
                 shared.insert(id);
             }
-            captured
+            context
         }
         Expression::Reference { expression, .. }
         | Expression::DotAccess {
@@ -93,7 +108,7 @@ fn collect(
             ..
         } => {
             shared.extend(expression.root_binding_id());
-            captured
+            context
         }
         Expression::Call {
             expression: callee,
@@ -114,15 +129,15 @@ fn collect(
                 .chain(args)
                 .chain(spread.as_deref())
             {
-                collect(child, &[], captured, facts, hidden, shared);
+                collect(child, &[], context, facts, hidden, shared);
             }
             return;
         }
-        _ => captured,
+        _ => context,
     };
 
     for child in expression.children() {
-        collect(child, &[], captured, facts, hidden, shared);
+        collect(child, &[], context, facts, hidden, shared);
     }
 }
 

@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::expressions::operators::flip_preserves_nan;
 use crate::lowering::expressions::{BinaryOperand, flip_comparison};
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::effect_statement;
@@ -32,9 +33,9 @@ pub(in crate::lowering) fn test_context_call(
     arguments: Vec<GoExpression>,
 ) -> GoExpression {
     let mut located_arguments = vec![
-        GoExpression::literal(span.file_id.to_string()),
-        GoExpression::literal(span.byte_offset.to_string()),
-        GoExpression::literal((span.byte_offset + span.byte_length).to_string()),
+        GoExpression::integer(i128::from(span.file_id)),
+        GoExpression::integer(i128::from(span.byte_offset)),
+        GoExpression::integer(i128::from(span.byte_offset + span.byte_length)),
     ];
     located_arguments.extend(arguments);
     GoExpression::call(
@@ -47,15 +48,8 @@ impl Planner<'_> {
     pub(in crate::lowering) fn lower_assert_statement(
         &mut self,
         expression: &Expression,
+        operand: &Expression,
     ) -> LoweredStatement {
-        let Expression::Assert {
-            expression: operand,
-            ..
-        } = expression
-        else {
-            unreachable!("lower_assert_statement requires an Assert expression");
-        };
-
         self.require_testkit();
 
         let mut statements = Vec::new();
@@ -64,7 +58,7 @@ impl Planner<'_> {
             left,
             right,
             ..
-        } = &**operand
+        } = operand
             && is_assert_relation(operator)
         {
             let conversion = self.facts.checked(operand).operand_conversion();
@@ -90,7 +84,7 @@ impl Planner<'_> {
             .expect("assert without a test handle should be rejected by semantics")
             .clone();
         let span = operand.get_span();
-        let literal = |text: String| GoExpression::literal(text);
+        let literal = |text: String| GoExpression::token(text);
         let mut arguments = vec![
             literal(format!("\"{kind}\"")),
             literal(format!("\"{message}\"")),
@@ -120,37 +114,22 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn lower_test_log_statement(
         &mut self,
-        expression: &Expression,
+        call: TestLogCall<'_>,
     ) -> LoweredStatement {
-        let (mut statements, call) = self.plan_test_log_call(expression);
+        let (mut statements, call) = self.plan_test_log_call(call);
         statements.push(effect_statement(call));
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
     pub(in crate::lowering) fn plan_test_log_call(
         &mut self,
-        expression: &Expression,
+        call: TestLogCall<'_>,
     ) -> (Vec<Statement>, GoExpression) {
-        let Expression::Call {
-            expression: callee,
-            args: arguments,
-            ..
-        } = expression
-        else {
-            unreachable!("plan_test_log_call requires a call");
-        };
-
-        let Expression::DotAccess {
-            expression: receiver,
-            ..
-        } = &**callee
-        else {
-            unreachable!("plan_test_log_call requires a method receiver");
-        };
-
-        let handle = self.plan_value(receiver, ExpressionContext::value());
-        let value = self.plan_value(&arguments[0], ExpressionContext::value());
-        let value = self.convert_to_recorded_slot(&arguments[0], value);
+        let TestLogCall { handle, value } = call;
+        let handle = self.plan_value(handle, ExpressionContext::value());
+        let logged = value;
+        let value = self.plan_value(logged, ExpressionContext::value());
+        let value = self.convert_to_recorded_slot(logged, value);
         let sequenced =
             self.sequence_values(vec![handle, value], CaptureBoundary::SiblingSequence, "log");
         let statements = sequenced.setup;
@@ -159,7 +138,7 @@ impl Planner<'_> {
             .try_into()
             .expect("handle and logged value");
 
-        let span = arguments[0].get_span();
+        let span = logged.get_span();
         let call = test_context_call(
             handle,
             "Log",
@@ -272,38 +251,16 @@ impl Planner<'_> {
             && right_plan.setup().is_empty()
             && left_plan.effects().can_duplicate()
             && right_plan.effects().can_duplicate();
-        let left_temp = self.assert_operand_temp_type(left, &left_plan, literals, names_inline);
-        let right_temp = self.assert_operand_temp_type(right, &right_plan, literals, names_inline);
+        let left_temp =
+            self.queries()
+                .assert_operand_temp_type(left, &left_plan, literals, names_inline);
+        let right_temp =
+            self.queries()
+                .assert_operand_temp_type(right, &right_plan, literals, names_inline);
         let lhs = self.bind_assert_operand(left, left_plan, "assertLeft", left_temp, statements);
         let rhs =
             self.bind_assert_operand(right, right_plan, "assertRight", right_temp, statements);
         (lhs, rhs)
-    }
-
-    fn assert_operand_temp_type(
-        &self,
-        expression: &Expression,
-        plan: &ValuePlan,
-        literals: LiteralInlining,
-        names_inline: bool,
-    ) -> Option<GoType> {
-        let expression_ty = expression.get_type();
-        let go_type = self.go_type(&expression_ty);
-        let inlines = plan.setup().is_empty()
-            && match plan.expression().syntax_form() {
-                OperandForm::Name => names_inline && plan.expression().as_identifier().is_some(),
-                OperandForm::Call => false,
-                _ => {
-                    let constant = plan.expression().constant_kind();
-                    matches!(literals, LiteralInlining::Allowed)
-                        && constant.is_some()
-                        && self
-                            .constant_needs_go_type(constant, &expression_ty)
-                            .is_none()
-                }
-            };
-
-        (!inlines).then_some(go_type)
     }
 
     fn bind_assert_operand(
@@ -327,10 +284,11 @@ impl Planner<'_> {
         let (_, value) = plan.into_parts();
         let name = self.fresh_declared(hint);
         let constant_needs_type = self
+            .queries()
             .constant_needs_go_type(constant, &expression.get_type())
             .is_some();
         statements.push(
-            if constant_needs_type || self.is_go_constant_expression(expression) {
+            if constant_needs_type || self.queries().is_go_constant_expression(expression) {
                 LoweredStatement::VarDeclaration {
                     name: name.clone(),
                     go_type,
@@ -401,7 +359,7 @@ fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> 
             vec![
                 (
                     "Label".to_string(),
-                    GoExpression::literal(format!("\"{label}\"")),
+                    GoExpression::token(format!("\"{label}\"")),
                 ),
                 (
                     "Value".to_string(),
@@ -426,21 +384,66 @@ fn is_assert_relation(operator: &BinaryOperator) -> bool {
     )
 }
 
-pub(in crate::lowering) fn is_test_log_call(
+#[derive(Clone, Copy)]
+pub(in crate::lowering) struct TestLogCall<'e> {
+    handle: &'e Expression,
+    value: &'e Expression,
+}
+
+pub(in crate::lowering) fn test_log_call<'e>(
     facts: &EmitFacts<'_>,
-    expression: &Expression,
-) -> bool {
+    expression: &'e Expression,
+) -> Option<TestLogCall<'e>> {
     let Expression::Call {
-        expression: callee, ..
+        expression: callee,
+        args,
+        ..
     } = expression
     else {
-        return false;
+        return None;
     };
-
-    facts
+    let is_test_log = facts
         .checked(callee)
         .callee()
         .definition
         .as_deref()
-        .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD)
+        .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD);
+    let Expression::DotAccess {
+        expression: handle, ..
+    } = &**callee
+    else {
+        return None;
+    };
+    let [value] = args.as_slice() else {
+        return None;
+    };
+    is_test_log.then_some(TestLogCall { handle, value })
+}
+
+impl PlannerQueries<'_, '_> {
+    fn assert_operand_temp_type(
+        &self,
+        expression: &Expression,
+        plan: &ValuePlan,
+        literals: LiteralInlining,
+        names_inline: bool,
+    ) -> Option<GoType> {
+        let expression_ty = expression.get_type();
+        let go_type = self.go_type(&expression_ty);
+        let inlines = plan.setup().is_empty()
+            && match plan.expression().syntax_form() {
+                OperandForm::Name => names_inline && plan.expression().as_identifier().is_some(),
+                OperandForm::Call => false,
+                _ => {
+                    let constant = plan.expression().constant_kind();
+                    matches!(literals, LiteralInlining::Allowed)
+                        && constant.is_some()
+                        && self
+                            .constant_needs_go_type(constant, &expression_ty)
+                            .is_none()
+                }
+            };
+
+        (!inlines).then_some(go_type)
+    }
 }

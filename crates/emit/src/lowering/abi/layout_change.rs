@@ -1,11 +1,14 @@
 use crate::Planner;
 use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
-use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange, LayoutChangeDirection};
+use crate::lowering::abi::coercion_plan::{
+    AggregateLayoutChange, CoercionPlan, LayoutChange, LayoutChangeDirection,
+};
 use crate::lowering::abi::go_result_wrapping::option_nil_guard;
 use crate::lowering::abi::go_result_wrapping::{WrapperTarget, non_nil_condition};
 use crate::lowering::abi::go_returns::{multi_value_return, tag_condition};
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::finish::function_literals::function_literal;
@@ -55,7 +58,8 @@ impl Planner<'_> {
         let source = self
             .facts
             .value_layout(&expression.get_type(), SlotOrigin::Lisette);
-        let CoercionPlan::Layout(change) = CoercionPlan::change(self, &source, target) else {
+        let CoercionPlan::Layout(change) = CoercionPlan::change(&self.queries(), &source, target)
+        else {
             return None;
         };
         let (payload, pointee) = match &change {
@@ -69,7 +73,7 @@ impl Planner<'_> {
         };
 
         if prelude_constructor(expression) == Some(PreludeVariant::None) {
-            return Some(ValuePlan::literal("nil".to_string()));
+            return Some(ValuePlan::nil());
         }
         let Expression::Call {
             expression: callee,
@@ -89,13 +93,17 @@ impl Planner<'_> {
         }
         if let LayoutChange::UnwrapNullableOption { target_payload, .. } = &change {
             let context = ExpressionContext::value().with_function_slot_origin(SlotOrigin::GoField);
-            let value = self.peel_go_slot_alias_cast(inner, context);
-            let emitted = self.emitted_value_layout(value, context);
-            let direct = CoercionPlan::change(self, &emitted, target_payload);
+            let value = self.queries().peel_go_slot_alias_cast(inner, context);
+            let emitted = self.queries().emitted_value_layout(value, context);
+            let direct = CoercionPlan::change(&self.queries(), &emitted, target_payload);
             if matches!(value, Expression::Lambda { .. }) && direct.is_identity() {
                 return Some(self.plan_composite_value(value, context));
             }
-            if self.go_slot_declaration_layout(value, context).is_some() {
+            if self
+                .queries()
+                .go_slot_declaration_layout(value, context)
+                .is_some()
+            {
                 return Some(self.plan_composite_value(value, context).map_expression(
                     |setup, value| {
                         let (layout_change_setup, value) = direct.lower(self, value);
@@ -117,7 +125,7 @@ impl Planner<'_> {
             let Some(pointee) = pointee else {
                 return value;
             };
-            let go_type = pointee.go_type(self);
+            let go_type = pointee.go_type(&self.queries());
             let copy = self.fresh_declared("ptr");
             setup.push(
                 LoweredStatement::VarDeclaration {
@@ -206,7 +214,7 @@ impl Planner<'_> {
         let payload_type = target
             .payload()
             .expect("Option has a payload layout")
-            .go_type(self);
+            .go_type(&self.queries());
         let type_args = GoType::type_argument(&payload_type);
         let raw_payload = match option_slot {
             OptionSlot::Pointer => GoExpression::dereference(raw.clone()),
@@ -253,7 +261,7 @@ impl Planner<'_> {
         match change {
             LayoutChange::Identity => value,
             LayoutChange::Conversion { target } => {
-                let target = target.go_type(self);
+                let target = target.go_type(&self.queries());
                 GoExpression::conversion(target, value)
             }
             LayoutChange::UnwrapNullableOption {
@@ -261,7 +269,7 @@ impl Planner<'_> {
                 payload,
                 ..
             } => {
-                let slot_type = target_payload.go_type(self);
+                let slot_type = target_payload.go_type(&self.queries());
                 self.plan_option_payload_wrap(
                     statements,
                     value,
@@ -275,7 +283,7 @@ impl Planner<'_> {
                 payload,
                 ..
             } => {
-                let slot_type = target_payload.go_type(self);
+                let slot_type = target_payload.go_type(&self.queries());
                 let slot_type = GoType::pointer_to(&slot_type);
                 self.plan_option_payload_wrap(
                     statements,
@@ -289,7 +297,7 @@ impl Planner<'_> {
                 target, payload, ..
             } => {
                 if payload.is_identity() {
-                    let value = self.option_from_nilable(value, target);
+                    let value = self.queries().option_from_nilable(value, target);
                     GoExpression::identifier(self.hoist_temp(statements, "option", value))
                 } else {
                     self.plan_option_wrap_with_layout_change(
@@ -308,7 +316,7 @@ impl Planner<'_> {
                     let inner_type = target
                         .payload()
                         .expect("Option has a payload layout")
-                        .go_type(self);
+                        .go_type(&self.queries());
                     let value = prelude_call(
                         "OptionFromPointer",
                         GoType::type_argument(&inner_type),
@@ -344,8 +352,8 @@ impl Planner<'_> {
             LayoutChange::Immutable { target, elements } => {
                 self.plan_immutable_layout_change(statements, value, target, elements)
             }
-            LayoutChange::Aggregate { .. } => {
-                self.plan_aggregate_layout_change(statements, value, change)
+            LayoutChange::Aggregate(aggregate) => {
+                self.plan_aggregate_layout_change(statements, value, aggregate)
             }
         }
     }
@@ -364,7 +372,7 @@ impl Planner<'_> {
         };
         let source = self.stable_source(statements, "raw", value);
         let output = self.fresh_declared("adapted");
-        let go_type = target.go_type(self);
+        let go_type = target.go_type(&self.queries());
         statements.push(declare(output.clone(), go_type));
         let mut body = Vec::new();
         let inner = if pointer {
@@ -400,7 +408,7 @@ impl Planner<'_> {
         elements: &[LayoutChange],
     ) -> GoExpression {
         let source = self.stable_source(statements, "src", value);
-        let go_type = target.go_type(self);
+        let go_type = target.go_type(&self.queries());
         let output = self.fresh_declared("adapted");
         statements.push(declare(output.clone(), go_type));
         let output = GoExpression::identifier(output);
@@ -459,7 +467,7 @@ impl Planner<'_> {
         option_slot: OptionSlot,
     ) -> GoExpression {
         let source = self.stable_source(statements, "raw", raw_value);
-        let option_type = target.go_type(self);
+        let option_type = target.go_type(&self.queries());
         let option = self.fresh_declared("option");
         statements.push(declare(option.clone(), option_type));
         statements.push(
@@ -479,17 +487,14 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         value: GoExpression,
-        change: &LayoutChange,
+        aggregate: &AggregateLayoutChange,
     ) -> GoExpression {
-        let LayoutChange::Aggregate {
+        let AggregateLayoutChange {
             source,
             target,
             key,
             element,
-        } = change
-        else {
-            unreachable!("plan_aggregate_layout_change requires an Aggregate change");
-        };
+        } = aggregate;
 
         let source_layout: &ValueLayout = source;
         let target_layout: &ValueLayout = target;
@@ -504,7 +509,7 @@ impl Planner<'_> {
             Some(LayoutChangeDirection::FromGo) => "wrapped",
             None => "adapted",
         };
-        let target_type = target_layout.go_type(self);
+        let target_type = target_layout.go_type(&self.queries());
         let output = if matches!(target_layout, ValueLayout::Array { .. }) {
             let output = self.fresh_declared(output_hint);
             statements.push(declare(output.clone(), target_type));
@@ -619,7 +624,7 @@ impl Planner<'_> {
                 }
             }
             LayoutChange::Conversion { .. }
-            | LayoutChange::Aggregate { .. }
+            | LayoutChange::Aggregate(_)
             | LayoutChange::Immutable { .. }
             | LayoutChange::NilablePayload { .. }
             | LayoutChange::Reference { .. }
@@ -676,14 +681,14 @@ impl Planner<'_> {
         let mut names = Vec::new();
         for (index, target) in target.parameters.iter().enumerate() {
             let name = self.scope.helper_local(&format!("arg{index}"), self.names);
-            let target_type = target.go_type(self);
+            let target_type = target.go_type(&self.queries());
             parameters.push(GoParameter::new(name.clone(), target_type));
             names.push(GoExpression::identifier(name));
         }
         let arguments = self.plan_layout_changed_arguments(&mut body, names, source, target);
         let call = GoExpression::call(callee.clone(), arguments);
         self.plan_function_result_layout_change(&mut body, call, source, target);
-        let result = target.result_go_type(self).unwrap_or_default();
+        let result = target.result_go_type(&self.queries()).unwrap_or_default();
         let callback = function_literal(
             parameters,
             result,
@@ -695,7 +700,7 @@ impl Planner<'_> {
             return callback;
         }
         let adapted = self.fresh_declared("adapted");
-        let go_type = target.go_type(self);
+        let go_type = target.go_type(&self.queries());
         statements.push(declare(adapted.clone(), go_type));
         statements.push(
             LoweredStatement::If(IfPlan::plain(
@@ -727,7 +732,7 @@ impl Planner<'_> {
             .zip(source.parameters.iter().zip(&target.parameters))
             .enumerate()
             .map(|(index, (parameter, (source, target)))| {
-                let change = self.resolve_layout_change(target, source);
+                let change = self.queries().resolve_layout_change(target, source);
                 let argument = self.plan_layout_change(statements, parameter, &change);
                 if Some(index) == spread_index {
                     GoExpression::spread(argument)
@@ -736,44 +741,6 @@ impl Planner<'_> {
                 }
             })
             .collect()
-    }
-
-    fn fallible_payload_layout_change(
-        &self,
-        source: &FunctionLayout,
-        target: &FunctionLayout,
-    ) -> Option<GoResultLayoutChange> {
-        if target.return_abi != CallableReturnAbi::Value
-            || !matches!(
-                source.return_abi.lowered(),
-                Some(
-                    LoweredReturnAbi::Result { .. }
-                        | LoweredReturnAbi::Partial { .. }
-                        | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })
-                )
-            )
-        {
-            return None;
-        }
-        self.payload_result_layout_change(&source.result_layout, &target.result_layout)
-    }
-
-    pub(in crate::lowering) fn payload_result_layout_change(
-        &self,
-        source: &ValueLayout,
-        target: &ValueLayout,
-    ) -> Option<GoResultLayoutChange> {
-        let value = self.resolve_layout_change(source.payload()?, target.payload()?);
-        let error = match (source.underlying(), target.underlying()) {
-            (
-                ValueLayout::Fallible { error: source, .. },
-                ValueLayout::Fallible { error: target, .. },
-            ) => self.resolve_layout_change(source, target),
-            _ => LayoutChange::Identity,
-        };
-
-        let change = GoResultLayoutChange::Payload(PayloadLayoutChanges { value, error });
-        change.changes_layout().then_some(change)
     }
 
     pub(in crate::lowering) fn plan_function_result_layout_change(
@@ -809,7 +776,7 @@ impl Planner<'_> {
                 .results
                 .iter()
                 .zip(target_slots)
-                .map(|(source, target)| self.resolve_layout_change(source, target))
+                .map(|(source, target)| self.queries().resolve_layout_change(source, target))
                 .collect();
 
             let (body, _) = self.plan_abi_wrapping(
@@ -826,20 +793,25 @@ impl Planner<'_> {
         if target.return_abi == CallableReturnAbi::Value
             && let Some(source) = source.single_result_layout()
         {
-            let change = self.resolve_layout_change(&source, &target.results[0]);
+            let change = self
+                .queries()
+                .resolve_layout_change(&source, &target.results[0]);
             let raw = self.hoist_temp(statements, "raw", call);
             let raw = GoExpression::identifier(raw);
             let value = match &change {
                 LayoutChange::WrapNullableOption {
                     target, payload, ..
-                } if payload.is_identity() => self.option_from_nilable(raw, target),
+                } if payload.is_identity() => self.queries().option_from_nilable(raw, target),
                 _ => self.plan_layout_change(statements, raw, &change),
             };
 
             statements.push(plain_return(value));
             return;
         }
-        if let Some(change) = self.fallible_payload_layout_change(source, target) {
+        if let Some(change) = self
+            .queries()
+            .fallible_payload_layout_change(source, target)
+        {
             let (body, _) = self.plan_abi_wrapping(
                 call,
                 LoweredProducer::of_layout(source),
@@ -875,7 +847,7 @@ impl Planner<'_> {
             if !intermediate.same_result_representation(target) {
                 let body = self.reencode_return(call, source, &intermediate.return_abi);
                 let result = intermediate
-                    .result_go_type(self)
+                    .result_go_type(&self.queries())
                     .expect("a lowered result has a Go signature");
                 let call = GoExpression::call(
                     function_literal(
@@ -918,7 +890,9 @@ impl Planner<'_> {
                     statements.push(effect_statement(call));
                     return;
                 }
-                let change = self.resolve_layout_change(&source.results[0], &target.results[0]);
+                let change = self
+                    .queries()
+                    .resolve_layout_change(&source.results[0], &target.results[0]);
                 let value = self.plan_layout_change(statements, call, &change);
                 statements.push(plain_return(value));
             }
@@ -942,7 +916,9 @@ impl Planner<'_> {
                     ))
                     .into(),
                 );
-                let change = self.resolve_layout_change(&source.results[0], &target.results[0]);
+                let change = self
+                    .queries()
+                    .resolve_layout_change(&source.results[0], &target.results[0]);
                 let value =
                     self.plan_layout_change(statements, GoExpression::identifier(raw), &change);
                 statements.push(plain_return(value));
@@ -957,7 +933,7 @@ impl Planner<'_> {
                     .into_iter()
                     .zip(source.results.iter().zip(&target.results))
                     .map(|(value, (source, target))| {
-                        let change = self.resolve_layout_change(source, target);
+                        let change = self.queries().resolve_layout_change(source, target);
                         self.plan_layout_change(statements, value, &change)
                     })
                     .collect::<Vec<_>>();
@@ -985,8 +961,9 @@ impl Planner<'_> {
         ) && !source_flat
         {
             let ok_type = source.result_layout.logical_type().ok_type();
-            if let Some(condition) =
-                self.partial_ok_nil_check(&ok_type, GoExpression::identifier(values[0].clone()))
+            if let Some(condition) = self
+                .queries()
+                .partial_ok_nil_check(&ok_type, GoExpression::identifier(values[0].clone()))
             {
                 statements.push(
                     LoweredStatement::If(IfPlan::plain(
@@ -1021,7 +998,7 @@ impl Planner<'_> {
         let target_flat = target.return_abi.has_flattened_payload();
         let (source, target) = (source.results.as_slice(), target.results.as_slice());
         if !source_flat && !target_flat {
-            let change = self.resolve_layout_change(&source[0], &target[0]);
+            let change = self.queries().resolve_layout_change(&source[0], &target[0]);
             let [value] = <[GoExpression; 1]>::try_from(values)
                 .unwrap_or_else(|_| unreachable!("a packed payload is one value"));
             return vec![self.plan_layout_change(statements, value, &change)];
@@ -1051,7 +1028,7 @@ impl Planner<'_> {
             .into_iter()
             .zip(source_slots.iter().zip(target_slots))
             .map(|(value, (source, target))| {
-                let change = self.resolve_layout_change(source, target);
+                let change = self.queries().resolve_layout_change(source, target);
                 self.plan_layout_change(statements, value, &change)
             })
             .collect();
@@ -1132,5 +1109,45 @@ fn immutable_layout_change_fields(
             })
             .collect(),
         _ => unreachable!("immutable changes require a tuple or tagged container"),
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    fn fallible_payload_layout_change(
+        &self,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) -> Option<GoResultLayoutChange> {
+        if target.return_abi != CallableReturnAbi::Value
+            || !matches!(
+                source.return_abi.lowered(),
+                Some(
+                    LoweredReturnAbi::Result { .. }
+                        | LoweredReturnAbi::Partial { .. }
+                        | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })
+                )
+            )
+        {
+            return None;
+        }
+        self.payload_result_layout_change(&source.result_layout, &target.result_layout)
+    }
+
+    pub(in crate::lowering) fn payload_result_layout_change(
+        &self,
+        source: &ValueLayout,
+        target: &ValueLayout,
+    ) -> Option<GoResultLayoutChange> {
+        let value = self.resolve_layout_change(source.payload()?, target.payload()?);
+        let error = match (source.underlying(), target.underlying()) {
+            (
+                ValueLayout::Fallible { error: source, .. },
+                ValueLayout::Fallible { error: target, .. },
+            ) => self.resolve_layout_change(source, target),
+            _ => LayoutChange::Identity,
+        };
+
+        let change = GoResultLayoutChange::Payload(PayloadLayoutChanges { value, error });
+        change.changes_layout().then_some(change)
     }
 }

@@ -1,5 +1,6 @@
 use crate::Planner;
-use crate::lowering::definitions::top_items::item_doc_text;
+use crate::lowering::definitions::top_items::item_documentation;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::{ConstPlan, LoweredStatement};
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration};
@@ -19,31 +20,6 @@ pub(in crate::lowering) enum ConstPlacement {
 }
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn emit_type_alias(
-        &self,
-        name: &str,
-        generics: &[Generic],
-        ty: &Type,
-    ) -> GoDeclaration {
-        let params: Vec<Type> = generics
-            .iter()
-            .map(|generic| Type::Parameter(generic.name.clone()))
-            .collect();
-        let declared_target = self
-            .facts
-            .definition(&self.facts.qualified_current(name))
-            .and_then(|definition| definition.instantiate_alias_target(&params, false));
-        let underlying_type = self.component_go_type(declared_target.as_ref().unwrap_or(ty));
-
-        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
-
-        GoDeclaration::new(DeclarationKind::Alias {
-            name: go_name::escape_type_name(name).into_owned(),
-            parameters: generics,
-            underlying: underlying_type,
-        })
-    }
-
     pub(in crate::lowering) fn lower_const(
         &mut self,
         identifier: &EcoString,
@@ -62,10 +38,10 @@ impl Planner<'_> {
             self.fresh_declared(&name)
         };
         let go_type = (!matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
-            .then(|| self.go_type(ty));
+            .then(|| self.queries().go_type(ty));
 
         if let Some(binding) = binding
-            && let Some(constant) = constant::local_constant(expression, ty, self)
+            && let Some(constant) = constant::local_constant(expression, ty, &self.queries())
         {
             self.scope.record_local_constant(binding, constant);
         }
@@ -97,7 +73,34 @@ impl Planner<'_> {
             .scope
             .bound_go_identifier(identifier)
             .expect("`lower_const` binds the identifier");
-        declaration.documentation = item_doc_text(doc, identifier, go_name.spelling()).into();
+        declaration.documentation = item_documentation(doc, identifier, go_name.spelling());
         declaration
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn emit_type_alias(
+        &self,
+        name: &str,
+        generics: &[Generic],
+        ty: &Type,
+    ) -> GoDeclaration {
+        let params: Vec<Type> = generics
+            .iter()
+            .map(|generic| Type::Parameter(generic.name.clone()))
+            .collect();
+        let declared_target = self
+            .facts
+            .definition(&self.facts.qualified_current(name))
+            .and_then(|definition| definition.instantiate_alias_target(&params, false));
+        let underlying_type = self.component_go_type(declared_target.as_ref().unwrap_or(ty));
+
+        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
+
+        GoDeclaration::new(DeclarationKind::Alias {
+            name: go_name::escape_type_name(name).into_owned(),
+            parameters: generics,
+            underlying: underlying_type,
+        })
     }
 }

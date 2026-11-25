@@ -1,3 +1,4 @@
+use crate::lookup::state::scope_stack::ScopeStack;
 use std::mem;
 
 use rustc_hash::FxHashMap;
@@ -314,7 +315,7 @@ struct Resolution {
 }
 
 struct Resolve {
-    frames: Vec<FxHashMap<String, usize>>,
+    frames: ScopeStack<FxHashMap<String, usize>>,
     bindings: usize,
     resolution: Resolution,
 }
@@ -322,7 +323,7 @@ struct Resolve {
 impl Resolution {
     fn of(statements: &mut Vec<Statement>, parameters: &[GoIdentifier]) -> Self {
         let mut resolve = Resolve {
-            frames: vec![FxHashMap::default()],
+            frames: ScopeStack::new(FxHashMap::default()),
             bindings: 0,
             resolution: Resolution {
                 reads: Vec::new(),
@@ -343,7 +344,7 @@ impl Resolve {
         if spelling == "_" {
             return;
         }
-        let frame = self.frames.last_mut().expect("a local scope exists");
+        let frame = self.frames.innermost_mut();
         if let Some(existing) = frame.get(spelling) {
             self.resolution.reuses.push(*existing);
             return;
@@ -385,7 +386,7 @@ impl VisitorMut for Resolve {
     }
 
     fn exit_scope(&mut self) {
-        self.frames.pop().expect("a local scope exists");
+        self.frames.pop();
     }
 }
 

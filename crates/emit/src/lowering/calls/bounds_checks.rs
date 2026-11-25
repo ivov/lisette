@@ -21,14 +21,10 @@ impl BoundsCheckedIndex {
             GoExpression::external_name("len".to_string()),
             vec![self.receiver.clone()],
         );
-        if let Some(literal) = self
-            .index
-            .as_literal()
-            .filter(|value| value.parse::<u64>().is_ok())
-        {
+        if let Some(literal) = self.index.as_integer().filter(|value| *value >= 0) {
             let operator = match polarity {
                 Polarity::Positive => GoBinaryOperator::GreaterThan,
-                Polarity::Negated if literal == "0" => GoBinaryOperator::Equal,
+                Polarity::Negated if literal == 0 => GoBinaryOperator::Equal,
                 Polarity::Negated => GoBinaryOperator::LessThanOrEqual,
             };
             return GoExpression::binary(length, operator, self.index.clone());
@@ -46,11 +42,7 @@ impl BoundsCheckedIndex {
             ),
         };
         GoExpression::binary(
-            GoExpression::binary(
-                self.index.clone(),
-                lower,
-                GoExpression::literal("0".to_string()),
-            ),
+            GoExpression::binary(self.index.clone(), lower, GoExpression::integer(0)),
             join,
             GoExpression::binary(self.index.clone(), upper, length),
         )

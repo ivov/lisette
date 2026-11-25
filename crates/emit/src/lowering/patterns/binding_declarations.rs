@@ -1,28 +1,24 @@
+use crate::lowering::expressions::literals::integer_literal;
+use crate::lowering::planner::queries::PlannerQueries;
+use crate::target::ir::go_expression::GoLiteral;
 use std::borrow::Cow;
 
 use syntax::ast::{Literal, Pattern, RestPattern, expand_or_patterns, outermost_or_patterns};
 
-use crate::Planner;
 use crate::lowering::expressions::literals::{convert_escape_sequences, raw_string_literal};
 
-pub(in crate::lowering) fn pattern_literal_text(literal: &Literal) -> String {
+pub(in crate::lowering) fn pattern_literal(literal: &Literal) -> GoLiteral {
     match literal {
-        Literal::Integer { value, text } => {
-            if let Some(original) = text {
-                original.clone()
-            } else {
-                value.to_string()
-            }
+        Literal::Integer { value, text } => integer_literal(*value, text),
+        Literal::Float { value, text } => {
+            GoLiteral::Token(text.clone().unwrap_or_else(|| value.to_string()))
         }
-        Literal::Float { value, text } => text.clone().unwrap_or_else(|| value.to_string()),
-        Literal::Boolean(b) => b.to_string(),
+        Literal::Boolean(b) => GoLiteral::Bool(*b),
         Literal::String { value, raw: false } => {
-            format!("\"{}\"", convert_escape_sequences(value))
+            GoLiteral::Token(format!("\"{}\"", convert_escape_sequences(value)))
         }
-        Literal::String { value, raw: true } => raw_string_literal(value),
-        Literal::Char(c) => {
-            format!("'{}'", convert_escape_sequences(c))
-        }
+        Literal::String { value, raw: true } => GoLiteral::Token(raw_string_literal(value)),
+        Literal::Char(c) => GoLiteral::Token(format!("'{}'", convert_escape_sequences(c))),
         Literal::Imaginary(_) | Literal::FormatString(_) | Literal::Slice(_) => {
             unreachable!("FormatString, Slice, and Imaginary are not valid pattern literals")
         }
@@ -70,7 +66,34 @@ pub(in crate::lowering) fn pattern_binds_name(pattern: &Pattern, name: &str) -> 
     }
 }
 
-impl Planner<'_> {
+pub(in crate::lowering) fn pattern_has_bindings(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::Tuple { elements, .. } => elements.iter().any(pattern_has_bindings),
+        Pattern::EnumVariant { fields, .. } => fields.iter().any(pattern_has_bindings),
+        Pattern::Struct { fields, .. } => fields.iter().any(|f| pattern_has_bindings(&f.value)),
+        Pattern::Slice { prefix, rest, .. } => {
+            prefix.iter().any(pattern_has_bindings) || matches!(rest, RestPattern::Bind { .. })
+        }
+        Pattern::Or { patterns, .. } => patterns.iter().any(pattern_has_bindings),
+        Pattern::Identifier { .. } | Pattern::AsBinding { .. } => true,
+        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
+    }
+}
+
+pub(in crate::lowering) fn has_binding_or_pattern(pattern: &Pattern) -> bool {
+    outermost_or_patterns(pattern)
+        .into_iter()
+        .any(pattern_has_bindings)
+}
+
+pub(in crate::lowering) fn split_binding_or_patterns(pattern: &Pattern) -> Vec<Cow<'_, Pattern>> {
+    expand_or_patterns(pattern, &pattern_has_bindings)
+        .into_iter()
+        .map(|expansion| expansion.pattern)
+        .collect()
+}
+
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn pattern_has_binding_collisions(&self, pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Tuple { elements, .. } => elements
@@ -106,31 +129,4 @@ impl Planner<'_> {
             | Pattern::Unit { .. } => false,
         }
     }
-}
-
-pub(in crate::lowering) fn pattern_has_bindings(pattern: &Pattern) -> bool {
-    match pattern {
-        Pattern::Tuple { elements, .. } => elements.iter().any(pattern_has_bindings),
-        Pattern::EnumVariant { fields, .. } => fields.iter().any(pattern_has_bindings),
-        Pattern::Struct { fields, .. } => fields.iter().any(|f| pattern_has_bindings(&f.value)),
-        Pattern::Slice { prefix, rest, .. } => {
-            prefix.iter().any(pattern_has_bindings) || matches!(rest, RestPattern::Bind { .. })
-        }
-        Pattern::Or { patterns, .. } => patterns.iter().any(pattern_has_bindings),
-        Pattern::Identifier { .. } | Pattern::AsBinding { .. } => true,
-        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
-    }
-}
-
-pub(in crate::lowering) fn has_binding_or_pattern(pattern: &Pattern) -> bool {
-    outermost_or_patterns(pattern)
-        .into_iter()
-        .any(pattern_has_bindings)
-}
-
-pub(in crate::lowering) fn split_binding_or_patterns(pattern: &Pattern) -> Vec<Cow<'_, Pattern>> {
-    expand_or_patterns(pattern, &pattern_has_bindings)
-        .into_iter()
-        .map(|expansion| expansion.pattern)
-        .collect()
 }

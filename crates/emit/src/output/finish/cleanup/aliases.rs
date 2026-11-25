@@ -1,3 +1,5 @@
+use std::mem;
+
 use super::name_uses::NameUses;
 
 use crate::target::ir::bodies::{
@@ -15,27 +17,30 @@ pub(super) fn inline_return_aliases(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |list| {
         let mut index = 0;
         while index + 1 < list.len() {
-            let Some(name) = returned_alias(&list[index].kind, &list[index + 1].kind) else {
-                index += 1;
-                continue;
-            };
-            if uses.reads(&name) != 1 || uses.bindings(&name) != 1 || uses.is_written(&name) {
-                index += 1;
-                continue;
+            if let [definition, next, ..] = &mut list[index..]
+                && let Some(alias) = returned_alias(&mut definition.kind, &mut next.kind)
+                && uses.reads(alias.name) == 1
+                && uses.bindings(alias.name) == 1
+                && !uses.is_written(alias.name)
+            {
+                *alias.returned = mem::replace(alias.value, GoExpression::empty());
+                list.remove(index);
             }
-            let LoweredStatement::Define(Definition { value, .. }) = list.remove(index).kind else {
-                unreachable!("returned_alias matched a definition");
-            };
-            let LoweredStatement::Return(values) = &mut list[index].kind else {
-                unreachable!("returned_alias matched a return");
-            };
-            values[0] = value;
             index += 1;
         }
     });
 }
 
-fn returned_alias(definition: &LoweredStatement, next: &LoweredStatement) -> Option<GoIdentifier> {
+struct ReturnedAlias<'s> {
+    name: &'s GoIdentifier,
+    value: &'s mut GoExpression,
+    returned: &'s mut GoExpression,
+}
+
+fn returned_alias<'s>(
+    definition: &'s mut LoweredStatement,
+    next: &'s mut LoweredStatement,
+) -> Option<ReturnedAlias<'s>> {
     let LoweredStatement::Define(Definition { names, value }) = definition else {
         return None;
     };
@@ -48,11 +53,15 @@ fn returned_alias(definition: &LoweredStatement, next: &LoweredStatement) -> Opt
     let LoweredStatement::Return(values) = next else {
         return None;
     };
-    let [returned] = values.as_slice() else {
+    let [returned] = values.as_mut_slice() else {
         return None;
     };
     matches!(returned.node(), GoExpressionNode::Identifier(read) if read.refers_to_same(name))
-        .then(|| name.clone())
+        .then_some(ReturnedAlias {
+            name,
+            value,
+            returned,
+        })
 }
 
 pub(super) fn inline_name_aliases(statements: &mut Vec<Statement>) {

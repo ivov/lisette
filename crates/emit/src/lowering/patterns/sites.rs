@@ -1,5 +1,6 @@
 use crate::lowering::abi::fallible_producer::ResultFusePlan;
 use crate::lowering::expressions::operand_order::is_unmutated_identifier;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::effect_statement;
 use std::borrow::Cow;
 use std::slice;
@@ -152,33 +153,6 @@ fn field_path_go_root(expression: &GoExpression) -> Option<&GoIdentifier> {
 }
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn can_reuse_subject_identifier(
-        &self,
-        value: &str,
-        resolution: &IdentifierResolution,
-        binds_name: bool,
-    ) -> bool {
-        !binds_name
-            && !value.contains('.')
-            && self
-                .scope
-                .resolve_identifier_with_resolution(value, resolution)
-                .is_none_or(BindingValue::can_reuse_pattern_subject)
-    }
-
-    pub(in crate::lowering) fn field_path_reads_in_place(
-        &self,
-        subject: &Expression,
-        expression: &GoExpression,
-        binds_root: impl Fn(&str) -> bool,
-    ) -> bool {
-        let Some((root, resolution)) = field_path_root(subject) else {
-            return false;
-        };
-        field_path_go_root(expression).is_some()
-            && self.can_reuse_subject_identifier(root, resolution, binds_root(root))
-    }
-
     fn resolve_pattern_subject(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -194,15 +168,15 @@ impl Planner<'_> {
                 if let Expression::Identifier {
                     value, resolution, ..
                 } = scrutinee
-                    && self.can_reuse_subject_identifier(
+                    && self.queries().can_reuse_subject_identifier(
                         value,
                         resolution,
                         pattern_binds_name(pattern, value),
                     )
                 {
-                    return ResolvedSubject::Existing(GoExpression::identifier(
-                        self.reference_go_identifier(value, resolution),
-                    ));
+                    return ResolvedSubject::Existing(
+                        self.queries().reference_expression(value, resolution),
+                    );
                 }
                 let plan = self.plan_value(scrutinee, ExpressionContext::value());
                 let materialized = plan
@@ -222,13 +196,15 @@ impl Planner<'_> {
                     });
 
                 let rests_in_stable_name =
-                    rests_in_own_temp_path || self.plan_rests_in_stable_name(&plan);
+                    rests_in_own_temp_path || self.queries().plan_rests_in_stable_name(&plan);
                 let (operator_setup, expression) = plan.into_parts();
                 setup.extend(operator_setup);
                 if rests_in_stable_name
-                    || self.field_path_reads_in_place(scrutinee, &expression, |root| {
-                        pattern_binds_name(pattern, root)
-                    })
+                    || self
+                        .queries()
+                        .field_path_reads_in_place(scrutinee, &expression, |root| {
+                            pattern_binds_name(pattern, root)
+                        })
                 {
                     return match materialized {
                         Some(local) => ResolvedSubject::Materialized {
@@ -335,7 +311,7 @@ impl Planner<'_> {
         scrutinee: &Expression,
         else_block: &Expression,
     ) -> Option<Vec<Statement>> {
-        let fuse = self.result_fuse_plan(scrutinee)?;
+        let fuse = self.queries().result_fuse_plan(scrutinee)?;
         if !fuse.carries_payload() {
             return None;
         }
@@ -402,7 +378,7 @@ impl Planner<'_> {
         scrutinee: &Expression,
         else_block: &Expression,
     ) -> Option<Vec<Statement>> {
-        let fuse = self.option_fuse_plan(scrutinee)?;
+        let fuse = self.queries().option_fuse_plan(scrutinee)?;
         let field = some_pattern_field(pattern)?;
 
         let binding = self.declare_fused_binding(field);
@@ -450,7 +426,7 @@ impl Planner<'_> {
         let name = field_binding(field).flatten()?;
         let source = name.go_name();
         let preferred = source.preferred();
-        let go_name = if self.shadows_declaration(&preferred)
+        let go_name = if self.queries().shadows_declaration(&preferred)
             || self
                 .scope
                 .go_name_bound_by_other_lisette_name(&preferred, name.name)
@@ -474,9 +450,12 @@ impl Planner<'_> {
         } = scrutinee
         {
             let has_collision = pattern_binds_name(pattern, value);
-            if self.can_reuse_subject_identifier(value, resolution, has_collision) {
+            if self
+                .queries()
+                .can_reuse_subject_identifier(value, resolution, has_collision)
+            {
                 return (
-                    GoExpression::identifier(self.reference_go_identifier(value, resolution)),
+                    self.queries().reference_expression(value, resolution),
                     Vec::new(),
                 );
             }
@@ -484,6 +463,7 @@ impl Planner<'_> {
         let operand = self.plan_operand(scrutinee, ExpressionContext::value());
         let (mut setup, value) = operand.into_parts();
         if self
+            .queries()
             .field_path_reads_in_place(scrutinee, &value, |root| pattern_binds_name(pattern, root))
         {
             return (value, setup);
@@ -517,7 +497,7 @@ impl Planner<'_> {
             },
             body,
         );
-        let plan = self.build_source_loop(
+        let plan = self.queries().build_source_loop(
             LoopHeader::Infinite,
             LoweredBlock {
                 statements: loop_body,
@@ -535,7 +515,7 @@ impl Planner<'_> {
         scrutinee: &Expression,
         body: &Expression,
     ) -> Option<LoweredBlock> {
-        let fuse = self.option_fuse_plan(scrutinee)?;
+        let fuse = self.queries().option_fuse_plan(scrutinee)?;
         let field = some_pattern_field(pattern)?;
         let binding = self.declare_fused_binding(field);
 
@@ -552,7 +532,7 @@ impl Planner<'_> {
             LoweredStatement::If(IfPlan::pair_if(
                 none_condition,
                 LoweredBlock {
-                    statements: vec![self.loop_break().into()],
+                    statements: vec![self.queries().loop_break().into()],
                 },
                 ElseArm::None,
                 IfOrigin::User,
@@ -570,7 +550,7 @@ impl Planner<'_> {
 
         loop_body.extend(body_block.statements);
 
-        let plan = self.build_source_loop(
+        let plan = self.queries().build_source_loop(
             LoopHeader::Infinite,
             LoweredBlock {
                 statements: loop_body,
@@ -601,7 +581,7 @@ impl Planner<'_> {
                     .current_test_handle()
                     .expect("let assert without a test handle should be rejected by semantics")
                     .clone();
-                let literal = |text: String| GoExpression::literal(text);
+                let literal = |text: String| GoExpression::token(text);
                 let operand = GoExpression::struct_literal(
                     testkit_operand_type(),
                     vec![(
@@ -803,7 +783,7 @@ impl Planner<'_> {
                 self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, go_name)
             };
 
-            let go_type = self.go_type(ty);
+            let go_type = self.queries().go_type(ty);
             statements.push(declare(go_name, go_type));
         }
     }
@@ -863,13 +843,9 @@ impl Planner<'_> {
         }
 
         let terminal = LoweredBlock {
-            statements: vec![self.loop_break().into()],
+            statements: vec![self.queries().loop_break().into()],
         };
         statements.push(assemble_if_else_chain(pieces, terminal).into());
-    }
-
-    fn loop_break(&self) -> LoweredStatement {
-        LoweredStatement::Break(self.current_loop_transfer())
     }
 }
 
@@ -884,4 +860,37 @@ fn assemble_if_else_chain(
     }
     let (condition, then_body) = pieces.pop().expect("pieces is non-empty");
     LoweredStatement::If(IfPlan::plain(condition, then_body, else_arm))
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn can_reuse_subject_identifier(
+        &self,
+        value: &str,
+        resolution: &IdentifierResolution,
+        binds_name: bool,
+    ) -> bool {
+        !binds_name
+            && !value.contains('.')
+            && self
+                .scope
+                .resolve_identifier_with_resolution(value, resolution)
+                .is_none_or(BindingValue::can_reuse_pattern_subject)
+    }
+
+    pub(in crate::lowering) fn field_path_reads_in_place(
+        &self,
+        subject: &Expression,
+        expression: &GoExpression,
+        binds_root: impl Fn(&str) -> bool,
+    ) -> bool {
+        let Some((root, resolution)) = field_path_root(subject) else {
+            return false;
+        };
+        field_path_go_root(expression).is_some()
+            && self.can_reuse_subject_identifier(root, resolution, binds_root(root))
+    }
+
+    fn loop_break(&self) -> LoweredStatement {
+        LoweredStatement::Break(self.current_loop_transfer())
+    }
 }

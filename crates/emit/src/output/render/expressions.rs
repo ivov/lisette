@@ -1,13 +1,15 @@
 use crate::output::render::bodies::{can_inline_block, render_lowered_block};
 use crate::output::render::declarations::group_params;
+use crate::output::render::types::{go_type_text, is_plain_type_name};
 use crate::output::render::writer::GoWriter;
 use crate::target::ir::bodies::LoweredBlock;
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{
     CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout, GoExpressionNode,
     GoParameter, Operand, SourcePosition,
 };
 use crate::target::ir::values::GoExpression;
-use crate::target::types::go_type::{GoType, conversion_prefix};
+use crate::target::types::go_type::{GoType, GoTypeShape};
 
 impl GoExpression {
     pub(in crate::output::render) fn write(&self, output: &mut GoWriter) {
@@ -51,7 +53,8 @@ impl GoExpressionNode {
 
     fn binding(&self) -> Binding {
         match self {
-            Self::Literal(text) if text.starts_with(['-', '+']) => {
+            Self::Literal(GoLiteral::Int(value)) if *value < 0 => Binding::Prefix('-'),
+            Self::Literal(GoLiteral::Token(text)) if text.starts_with(['-', '+']) => {
                 Binding::Prefix(text.chars().next().unwrap_or(' '))
             }
             Self::Identifier(_)
@@ -92,6 +95,7 @@ impl GoExpressionNode {
         match (self.binding(), slot.kind) {
             (Binding::Primary, SlotKind::Postfix) => {
                 matches!(self, Self::Literal(_) | Self::FunctionLiteral { .. })
+                    || matches!(self, Self::Type(go_type) if matches!(go_type.shape.as_ref(), GoTypeShape::Pointer(_)))
             }
             (Binding::Prefix(sign), SlotKind::Prefix(operator)) => {
                 sign == operator && matches!(sign, '-' | '+' | '&')
@@ -138,9 +142,14 @@ impl GoExpressionNode {
     fn write(&self, output: &mut GoWriter, slot: Slot) {
         match self {
             Self::Identifier(text) => output.push_str(text.spelling()),
-            Self::Literal(text) => output.push_str(text),
+            Self::Literal(GoLiteral::Nil) => output.push_str("nil"),
+            Self::Literal(GoLiteral::Bool(value)) => {
+                output.push_str(if *value { "true" } else { "false" })
+            }
+            Self::Literal(GoLiteral::Int(value)) => output.push_str(&value.to_string()),
+            Self::Literal(GoLiteral::Token(text)) => output.push_str(text),
             Self::Verbatim(text) => output.push_foreign(text),
-            Self::Type(go_type) => output.push_str(&go_type.code),
+            Self::Type(go_type) => output.push_str(&go_type_text(go_type)),
             Self::Qualified { package, name } => {
                 output.push_str(package.qualifier());
                 output.push('.');
@@ -202,7 +211,14 @@ impl GoExpressionNode {
                 Self::write_child(right, slot.with(SlotKind::Right(level)), output);
             }
             Self::Conversion { go_type, operand } => {
-                output.push_str(&conversion_prefix(&go_type.code));
+                if is_plain_type_name(go_type) {
+                    output.push_str(&go_type_text(go_type));
+                    output.push('(');
+                } else {
+                    output.push('(');
+                    output.push_str(&go_type_text(go_type));
+                    output.push_str(")(");
+                }
                 operand.write(output, Slot::FREE);
                 output.push(')');
             }
@@ -223,7 +239,7 @@ impl GoExpressionNode {
                 type_arguments,
             } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
-                output.push_str(&type_arguments.code);
+                output.push_str(&go_type_text(type_arguments));
             }
             Self::Selector { base, field, .. } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
@@ -261,7 +277,7 @@ impl GoExpressionNode {
             Self::TypeAssertion { base, go_type } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push_str(".(");
-                output.push_str(&go_type.code);
+                output.push_str(&go_type_text(go_type));
                 output.push(')');
             }
             Self::Spread(operand) => {
@@ -280,7 +296,7 @@ impl GoExpressionNode {
         end: &SourcePosition,
     ) {
         if let Some(go_type) = go_type {
-            output.push_str(&go_type.code);
+            output.push_str(&go_type_text(go_type));
         }
         match layout {
             _ if elements.is_empty() => output.push_str("{}"),
@@ -327,7 +343,7 @@ impl GoExpressionNode {
         output.push(')');
         if !result.is_empty() {
             output.push(' ');
-            output.push_str(&result.code);
+            output.push_str(&go_type_text(result));
         }
         output.push_str(" {");
         let single_line = can_inline_block(body);
@@ -335,9 +351,7 @@ impl GoExpressionNode {
         if matches!(layout, FunctionLiteralLayout::Inline) && single_line {
             if !body.renders_empty() {
                 output.push(' ');
-                let outer = output.set_inline(true);
-                render_lowered_block(output, body);
-                output.set_inline(outer);
+                output.render_inline(|output| render_lowered_block(output, body));
                 output.push(' ');
             }
             output.push('}');
@@ -353,7 +367,7 @@ impl GoExpressionNode {
 
 impl GoParameter {
     fn pair(&self) -> (String, String) {
-        (self.name.to_string(), self.go_type.code.clone())
+        (self.name.to_string(), go_type_text(&self.go_type))
     }
 }
 

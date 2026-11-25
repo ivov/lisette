@@ -5,6 +5,7 @@ use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, SwitchCasePlan, SwitchKind,
     SwitchStatementPlan,
 };
+use crate::target::ir::declarations::Documentation;
 use crate::target::ir::declarations::GoDeclaration;
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::go_expression::{CompositeLayout, GoParameter};
@@ -27,17 +28,19 @@ impl Planner<'_> {
         name: &str,
         generics: &[Generic],
         attributes: &[Attribute],
-        doc_comment: &str,
+        documentation: Documentation,
     ) -> Option<Vec<GoDeclaration>> {
         let enum_id = self.facts.qualified_current(name);
 
         let layout = self.facts.enum_layout(&enum_id)?;
 
-        let receiver_generics = self.receiver_generics(generics);
-        let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
+        let receiver_generics = self.names.receiver_generics(generics);
+        let generics = self
+            .queries()
+            .plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
-        let mut result = layout.emit_definition(self, generics, doc_comment);
+        let mut result = layout.emit_definition(self, generics, documentation);
         for method in self.facts.enum_synthesized_methods(name, attributes) {
             match method {
                 SynthesizedMethod::Format(format) => {
@@ -143,7 +146,7 @@ impl Planner<'_> {
             let value = comparisons
                 .into_iter()
                 .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
-                .unwrap_or_else(|| GoExpression::literal("true".to_string()));
+                .unwrap_or_else(|| GoExpression::boolean(true));
             cases.push(SwitchCasePlan {
                 labels: vec![GoExpression::external_name(
                     layout_variant.tag_constant.clone(),
@@ -184,7 +187,10 @@ impl Planner<'_> {
         let mut parameters = Vec::new();
         for (index, field) in variant.fields.iter().enumerate() {
             let name = self.scope.new_local_identifier(format!("arg{index}"));
-            parameters.push(GoParameter::new(name.clone(), self.go_type(&field.ty)));
+            parameters.push(GoParameter::new(
+                name.clone(),
+                self.queries().go_type(&field.ty),
+            ));
             let value = GoExpression::identifier(name);
             fields.push((
                 field.go_name.clone(),
@@ -195,7 +201,7 @@ impl Planner<'_> {
                 },
             ));
         }
-        let result = self.go_type(&Type::Nominal {
+        let result = self.queries().go_type(&Type::Nominal {
             id: Symbol::from_raw(layout.enum_name.clone()),
             writable: false,
             params: layout
@@ -208,7 +214,7 @@ impl Planner<'_> {
         GoDeclaration::function(
             None,
             go_name::enum_make_function(&layout.enum_name, &variant.name),
-            self.plan_generics(
+            self.queries().plan_generics(
                 &layout
                     .generics
                     .iter()
@@ -252,7 +258,7 @@ fn lower_enum_equals_body(
             LoweredStatement::If(IfPlan::plain(
                 GoExpression::binary(left.clone(), GoBinaryOperator::NotEqual, right),
                 LoweredBlock {
-                    statements: vec![plain_return(GoExpression::literal("false".to_string()))],
+                    statements: vec![plain_return(GoExpression::boolean(false))],
                 },
                 ElseArm::None,
             ))
@@ -261,7 +267,7 @@ fn lower_enum_equals_body(
                 kind: SwitchKind::Value { subject: left },
                 cases,
                 default: Some(LoweredBlock {
-                    statements: vec![plain_return(GoExpression::literal("true".to_string()))],
+                    statements: vec![plain_return(GoExpression::boolean(true))],
                 }),
                 default_line: None,
             })

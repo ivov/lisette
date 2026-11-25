@@ -1,6 +1,8 @@
 use crate::lowering::abi::go_result_wrapping::WrapperOutcome;
 use crate::lowering::abi::go_result_wrapping::{NilGuard, WrapperTarget};
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
+use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::planner::queries::PlannerQueries;
 
 use crate::Planner;
 use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
@@ -45,17 +47,16 @@ impl<'r> LoweredProducer<'r> {
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_go_abi_wrapped_call(
         &mut self,
-        call_expression: &Expression,
-        abi: &CallableAbi,
-        origin: CallableOrigin<'_>,
+        plan: &CallPlan<'_, '_>,
         result_ty: &Type,
     ) -> ValuePlan {
-        let change = self.go_result_layout_change(abi, result_ty);
+        let abi = &plan.resolved.abi;
+        let origin = plan.resolved.origin;
+        let change = self.queries().go_result_layout_change(abi, result_ty);
         let changed = change
             .as_ref()
             .is_some_and(|change| change.changes_layout());
-        let call_plan =
-            self.plan_call_expression(call_expression, None, ExpressionContext::value());
+        let call_plan = self.plan_call_expression(plan.site, None, ExpressionContext::value());
         let mut wrapped_in_place = false;
         let mut plan = call_plan.map_expression(|setup, call| {
             let shortcut = match &abi.result {
@@ -63,15 +64,20 @@ impl Planner<'_> {
                     if !changed =>
                 {
                     let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                    let nil_guard =
-                        self.lowered_payload_nil_guard(shape, origin.producer(), result_ty);
-                    self.result_from_pair(call, &layout, *payload, None, nil_guard)
+                    let nil_guard = self.queries().lowered_payload_nil_guard(
+                        shape,
+                        origin.producer(),
+                        result_ty,
+                    );
+                    self.queries()
+                        .result_from_pair(call, &layout, *payload, None, nil_guard)
                 }
                 CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
                     OptionReturnAbi::CommaOk { payload },
                 )) if !changed => {
                     let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                    self.option_from_comma_ok(call, &layout, *payload, None)
+                    self.queries()
+                        .option_from_comma_ok(call, &layout, *payload, None)
                 }
                 _ => Err(call),
             };
@@ -100,87 +106,6 @@ impl Planner<'_> {
             plan.make_observable();
         }
         plan
-    }
-
-    pub(in crate::lowering) fn go_result_layout_change(
-        &self,
-        abi: &CallableAbi,
-        result_ty: &Type,
-    ) -> Option<GoResultLayoutChange> {
-        let CallableReturnAbi::Lowered(lowered) = &abi.result else {
-            return self
-                .whole_result_layout_change(abi, result_ty)
-                .map(GoResultLayoutChange::Whole);
-        };
-        match lowered {
-            LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => None,
-            LoweredReturnAbi::Tuple { .. } => Some(GoResultLayoutChange::Tuple(
-                self.tuple_result_layout_changes(abi, result_ty),
-            )),
-            LoweredReturnAbi::Option(OptionReturnAbi::Nullable) => self
-                .whole_result_layout_change(abi, result_ty)
-                .map(GoResultLayoutChange::Whole),
-            LoweredReturnAbi::BareError
-            | LoweredReturnAbi::Result { .. }
-            | LoweredReturnAbi::Partial { .. }
-            | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => self
-                .payload_result_layout_change(
-                    &abi.return_layout,
-                    &self.facts.value_layout(result_ty, SlotOrigin::Lisette),
-                ),
-        }
-    }
-
-    fn whole_result_layout_change(
-        &self,
-        abi: &CallableAbi,
-        result_ty: &Type,
-    ) -> Option<CoercionPlan> {
-        let target = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-        match abi.result {
-            CallableReturnAbi::Value => {}
-            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
-                let source_payload = abi.return_layout.payload()?;
-                let target_payload = target.payload()?;
-                if self
-                    .resolve_layout_change(source_payload, target_payload)
-                    .is_identity()
-                {
-                    return None;
-                }
-                let source = ValueLayout::NullableOption {
-                    option_type: result_ty.clone(),
-                    payload: Box::new(source_payload.clone()),
-                };
-                let change = CoercionPlan::change(self, &source, &target);
-                return change.changes_layout().then_some(change);
-            }
-            _ => return None,
-        }
-        let change = CoercionPlan::change(self, &abi.return_layout, &target);
-        change.changes_layout().then_some(change)
-    }
-
-    fn tuple_result_layout_changes(
-        &self,
-        abi: &CallableAbi,
-        result_ty: &Type,
-    ) -> Vec<LayoutChange> {
-        let source = abi.function_layout(&self.facts).results;
-        let target = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-        let target = target
-            .tuple_elements()
-            .expect("a tuple result ABI has a tuple value layout");
-        assert_eq!(
-            source.len(),
-            target.len(),
-            "tuple result slot arity differs"
-        );
-        source
-            .iter()
-            .zip(target)
-            .map(|(source, target)| self.resolve_layout_change(source, target))
-            .collect()
     }
 
     pub(in crate::lowering) fn plan_abi_wrapping(
@@ -333,21 +258,21 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn try_lower_abi_wrapped_call_to(
         &mut self,
-        expression: &Expression,
-        abi: &CallableAbi,
-        origin: CallableOrigin<'_>,
+        plan: &CallPlan<'_, '_>,
         result_ty: &Type,
         target: WrapperTarget<'_>,
     ) -> Option<Vec<Statement>> {
+        let abi = &plan.resolved.abi;
+        let origin = plan.resolved.origin;
         if matches!(
             abi.result.lowered(),
             None | Some(LoweredReturnAbi::Tuple { .. })
         ) {
             return None;
         }
-        let change = self.go_result_layout_change(abi, result_ty);
+        let change = self.queries().go_result_layout_change(abi, result_ty);
         let (mut statements, call) = self
-            .plan_call_expression(expression, None, ExpressionContext::value())
+            .plan_call_expression(plan.site, None, ExpressionContext::value())
             .into_parts();
         let producer = LoweredProducer::of_call(abi, origin);
         let (wrap, _) = self.plan_abi_wrapping(call, producer, result_ty, change, target);
@@ -355,43 +280,24 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    pub(in crate::lowering) fn call_result_keeps_layout(
-        &self,
-        plan: &CallPlan<'_>,
-        ty: &Type,
-    ) -> bool {
-        self.go_result_layout_change(&plan.resolved.abi, ty)
-            .is_none_or(|change| change.is_identity())
-    }
-
-    pub(in crate::lowering) fn kept_layout_tuple_arity(
-        &self,
-        plan: &CallPlan<'_>,
-        ty: &Type,
-    ) -> Option<usize> {
-        let CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }) =
-            plan.resolved.abi.result
-        else {
-            return None;
-        };
-        self.call_result_keeps_layout(plan, ty).then_some(arity)
-    }
-
     pub(in crate::lowering) fn try_plan_go_call_discarded(
         &mut self,
         setup: &mut Vec<Statement>,
         call_expression: &Expression,
     ) -> Option<GoExpression> {
-        let plan = self.plan_call(call_expression)?;
+        let plan = self.queries().plan_call(CallSite::of(call_expression)?);
+        let site = plan.site;
         if !plan.resolved.abi.result.is_lowered()
             && (!matches!(plan.resolved.origin, CallableOrigin::GoInterop)
-                || self.call_result_keeps_layout(&plan, &call_expression.get_type()))
+                || self
+                    .queries()
+                    .call_result_keeps_layout(&plan, &call_expression.get_type()))
         {
             return None;
         }
 
         let (call_setup, call) = self
-            .plan_call_expression(call_expression, None, ExpressionContext::value())
+            .plan_call_expression(site, None, ExpressionContext::value())
             .into_parts();
         setup.extend(call_setup);
 
@@ -414,47 +320,6 @@ impl Planner<'_> {
         let constructor = build_tuple_literal(values);
         GoExpression::identifier(self.hoist_temp(statements, "tup", constructor))
     }
-
-    pub(in crate::lowering) fn lowered_call<'a>(
-        &self,
-        subject: &'a Expression,
-    ) -> Option<LoweredCall<'a>> {
-        let (call, wraps) = self.peel_wrap_err(subject);
-        let plan = self.plan_call(call)?;
-        self.lowered_call_of(call, wraps, &plan)
-    }
-
-    pub(in crate::lowering) fn lowered_call_of<'a>(
-        &self,
-        call: &'a Expression,
-        wraps: Vec<&'a Expression>,
-        plan: &CallPlan<'_>,
-    ) -> Option<LoweredCall<'a>> {
-        let shape = plan.resolved.abi.result.lowered()?.clone();
-        if !matches!(
-            shape,
-            LoweredReturnAbi::Result { .. }
-                | LoweredReturnAbi::BareError
-                | LoweredReturnAbi::Option(_)
-        ) {
-            return None;
-        }
-        let ty = call.get_type();
-        let ok_ty = self.facts.ok_payload(&ty);
-        let nil_guard =
-            self.lowered_payload_nil_guard(&shape, plan.resolved.origin.producer(), &ty);
-
-        let change = self.go_result_layout_change(&plan.resolved.abi, &ty);
-        Some(LoweredCall {
-            call,
-            wraps,
-            shape,
-            from_go: matches!(plan.resolved.origin, CallableOrigin::GoInterop),
-            ok_ty,
-            nil_guard,
-            change,
-        })
-    }
 }
 
 pub(in crate::lowering) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
@@ -469,7 +334,7 @@ pub(in crate::lowering) fn build_tuple_literal(values: Vec<GoExpression>) -> GoE
 
 #[derive(Debug, Clone)]
 pub(in crate::lowering) struct LoweredCall<'a> {
-    pub(in crate::lowering) call: &'a Expression,
+    pub(in crate::lowering) site: CallSite<'a>,
     pub(in crate::lowering) wraps: Vec<&'a Expression>,
     pub(in crate::lowering) shape: LoweredReturnAbi,
     pub(in crate::lowering) from_go: bool,
@@ -523,7 +388,154 @@ impl LoweredCall<'_> {
             .is_some_and(|change| change.changes_layout())
     }
 
-    pub(in crate::lowering) fn has_tuple_payload(&self, planner: &Planner<'_>) -> bool {
-        planner.facts.has_tuple_payload(&self.call.get_type())
+    pub(in crate::lowering) fn has_tuple_payload(&self, planner: &PlannerQueries<'_, '_>) -> bool {
+        planner
+            .facts
+            .has_tuple_payload(&self.site.expression.get_type())
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn go_result_layout_change(
+        &self,
+        abi: &CallableAbi,
+        result_ty: &Type,
+    ) -> Option<GoResultLayoutChange> {
+        let CallableReturnAbi::Lowered(lowered) = &abi.result else {
+            return self
+                .whole_result_layout_change(abi, result_ty)
+                .map(GoResultLayoutChange::Whole);
+        };
+        match lowered {
+            LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => None,
+            LoweredReturnAbi::Tuple { .. } => Some(GoResultLayoutChange::Tuple(
+                self.tuple_result_layout_changes(abi, result_ty),
+            )),
+            LoweredReturnAbi::Option(OptionReturnAbi::Nullable) => self
+                .whole_result_layout_change(abi, result_ty)
+                .map(GoResultLayoutChange::Whole),
+            LoweredReturnAbi::BareError
+            | LoweredReturnAbi::Result { .. }
+            | LoweredReturnAbi::Partial { .. }
+            | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => self
+                .payload_result_layout_change(
+                    &abi.return_layout,
+                    &self.facts.value_layout(result_ty, SlotOrigin::Lisette),
+                ),
+        }
+    }
+
+    fn whole_result_layout_change(
+        &self,
+        abi: &CallableAbi,
+        result_ty: &Type,
+    ) -> Option<CoercionPlan> {
+        let target = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
+        match abi.result {
+            CallableReturnAbi::Value => {}
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
+                let source_payload = abi.return_layout.payload()?;
+                let target_payload = target.payload()?;
+                if self
+                    .resolve_layout_change(source_payload, target_payload)
+                    .is_identity()
+                {
+                    return None;
+                }
+                let source = ValueLayout::NullableOption {
+                    option_type: result_ty.clone(),
+                    payload: Box::new(source_payload.clone()),
+                };
+                let change = CoercionPlan::change(self, &source, &target);
+                return change.changes_layout().then_some(change);
+            }
+            _ => return None,
+        }
+        let change = CoercionPlan::change(self, &abi.return_layout, &target);
+        change.changes_layout().then_some(change)
+    }
+
+    fn tuple_result_layout_changes(
+        &self,
+        abi: &CallableAbi,
+        result_ty: &Type,
+    ) -> Vec<LayoutChange> {
+        let source = abi.function_layout(self.facts).results;
+        let target = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
+        let target = target
+            .tuple_elements()
+            .expect("a tuple result ABI has a tuple value layout");
+        assert_eq!(
+            source.len(),
+            target.len(),
+            "tuple result slot arity differs"
+        );
+        source
+            .iter()
+            .zip(target)
+            .map(|(source, target)| self.resolve_layout_change(source, target))
+            .collect()
+    }
+
+    pub(in crate::lowering) fn call_result_keeps_layout(
+        &self,
+        plan: &CallPlan<'_, '_>,
+        ty: &Type,
+    ) -> bool {
+        self.go_result_layout_change(&plan.resolved.abi, ty)
+            .is_none_or(|change| change.is_identity())
+    }
+
+    pub(in crate::lowering) fn kept_layout_tuple_arity(
+        &self,
+        plan: &CallPlan<'_, '_>,
+        ty: &Type,
+    ) -> Option<usize> {
+        let CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }) =
+            plan.resolved.abi.result
+        else {
+            return None;
+        };
+        self.call_result_keeps_layout(plan, ty).then_some(arity)
+    }
+
+    pub(in crate::lowering) fn lowered_call<'a>(
+        &self,
+        subject: &'a Expression,
+    ) -> Option<LoweredCall<'a>> {
+        let (call, wraps) = self.peel_wrap_err(subject);
+        let plan = self.plan_call(CallSite::of(call)?);
+        self.lowered_call_of(wraps, &plan)
+    }
+
+    pub(in crate::lowering) fn lowered_call_of<'a>(
+        &self,
+        wraps: Vec<&'a Expression>,
+        plan: &CallPlan<'_, 'a>,
+    ) -> Option<LoweredCall<'a>> {
+        let shape = plan.resolved.abi.result.lowered()?.clone();
+        if !matches!(
+            shape,
+            LoweredReturnAbi::Result { .. }
+                | LoweredReturnAbi::BareError
+                | LoweredReturnAbi::Option(_)
+        ) {
+            return None;
+        }
+        let ty = plan.site.expression.get_type();
+        let ok_ty = self.facts.ok_payload(&ty);
+        let nil_guard =
+            self.lowered_payload_nil_guard(&shape, plan.resolved.origin.producer(), &ty);
+
+        let change = self.go_result_layout_change(&plan.resolved.abi, &ty);
+        Some(LoweredCall {
+            site: plan.site,
+            wraps,
+            shape,
+            from_go: matches!(plan.resolved.origin, CallableOrigin::GoInterop),
+            ok_ty,
+            nil_guard,
+            change,
+        })
     }
 }

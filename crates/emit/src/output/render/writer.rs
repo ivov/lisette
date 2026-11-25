@@ -13,9 +13,9 @@ pub(crate) struct GoWriter {
 }
 
 impl GoWriter {
-    pub(crate) fn new(directives: bool) -> Self {
+    pub(crate) fn with_source_directives() -> Self {
         Self {
-            directives,
+            directives: true,
             ..Self::default()
         }
     }
@@ -66,7 +66,7 @@ impl GoWriter {
     }
 
     pub(crate) fn push_line_directive(&mut self, position: &Position) {
-        let directive = position.line_directive();
+        let directive = line_directive(position);
         if !self.directives || self.inline || self.text.ends_with(&directive) {
             return;
         }
@@ -90,9 +90,12 @@ impl GoWriter {
         }
     }
 
-    pub(crate) fn set_inline(&mut self, inline: bool) -> bool {
+    pub(crate) fn render_inline(&mut self, render: impl FnOnce(&mut Self)) {
         self.separator = false;
-        mem::replace(&mut self.inline, inline)
+        let outer = mem::replace(&mut self.inline, true);
+        render(self);
+        self.separator = false;
+        self.inline = outer;
     }
 
     fn next_line(&mut self) {
@@ -123,7 +126,7 @@ impl GoWriter {
         }
         match self.indentation_start() {
             Some(start) => self.push_directive_line(position, start),
-            None => self.text.push_str(&position.inline_directive()),
+            None => self.text.push_str(&inline_directive(position)),
         }
         self.line = Some(position.clone());
     }
@@ -142,7 +145,7 @@ impl GoWriter {
         if self.text[previous..].starts_with("//line ") {
             self.text.truncate(previous);
         }
-        self.text.push_str(&position.line_directive());
+        self.text.push_str(&line_directive(position));
         self.text.push_str(&indentation);
     }
 }
@@ -160,4 +163,18 @@ impl fmt::Write for GoWriter {
         self.push_str(text);
         Ok(())
     }
+}
+
+fn inline_directive(position: &Position) -> String {
+    format!(
+        "/*line {}:{}:{}*/ ",
+        position.path, position.line, position.column
+    )
+}
+
+fn line_directive(position: &Position) -> String {
+    format!(
+        "//line {}:{}:{}\n",
+        position.path, position.line, position.column
+    )
 }

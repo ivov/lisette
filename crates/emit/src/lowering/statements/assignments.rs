@@ -4,6 +4,7 @@ use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::expressions::operand_order::LaterOperands;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::with_setup;
@@ -78,13 +79,14 @@ impl Planner<'_> {
             return self.build_compound_assignment_plan(target, operator, rhs);
         }
 
-        if self.target_binds_to_discard(target) {
+        if self.queries().target_binds_to_discard(target) {
             return LoweredStatement::Body(raw_body(self.lower_discard_value(value)));
         }
 
         let go_field_slot = self
+            .queries()
             .go_place_layout(target)
-            .or_else(|| self.go_physical_expression_layout(target));
+            .or_else(|| self.queries().go_physical_expression_layout(target));
 
         let literal_slot = go_field_slot
             .as_ref()
@@ -109,9 +111,12 @@ impl Planner<'_> {
         let value = if is_literal_slot {
             value_go
         } else {
-            let go_slot = go_field_slot
-                .as_ref()
-                .map(|target| (self.emitted_value_layout(value, value_context), target));
+            let go_slot = go_field_slot.as_ref().map(|target| {
+                (
+                    self.queries().emitted_value_layout(value, value_context),
+                    target,
+                )
+            });
             self.coerce_into_slot(
                 &mut setup,
                 (value, value_go),
@@ -127,26 +132,6 @@ impl Planner<'_> {
                 value,
             }),
         )
-    }
-
-    fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
-        match target {
-            Expression::DotAccess {
-                expression,
-                member,
-                ty,
-                ..
-            } => self.facts.field_slot_layout(
-                &expression.get_type(),
-                self.facts.checked(target).field_selection(),
-                member,
-                ty,
-            ),
-            Expression::IndexedAccess { expression, .. } => {
-                self.go_place_layout(expression)?.indexed_element().cloned()
-            }
-            _ => None,
-        }
     }
 
     fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {
@@ -201,7 +186,7 @@ impl Planner<'_> {
         let mut ordering = PlaceOrdering::before(&right_hand_side);
         let needs_left_pin = ordering
             .later()
-            .can_change(self.place_read_stability(target));
+            .can_change(self.queries().place_read_stability(target));
         if needs_left_pin {
             ordering = ordering.read_twice();
         }
@@ -236,23 +221,6 @@ impl Planner<'_> {
         let mut target_capture: Vec<Statement> = Vec::new();
         let target = self.plan_place(&mut target_capture, target, ordering);
         (target_capture, target)
-    }
-
-    fn target_binds_to_discard(&self, target: &Expression) -> bool {
-        let Expression::Identifier {
-            value, resolution, ..
-        } = target
-        else {
-            return false;
-        };
-
-        match self
-            .scope
-            .resolve_identifier_with_resolution(value, resolution)
-        {
-            Some(binding) => binding.is_discard(),
-            None => value == "_",
-        }
     }
 
     pub(in crate::lowering) fn plan_place(
@@ -294,7 +262,10 @@ impl Planner<'_> {
                         MemberSpelling::Plain,
                     );
 
-                    return GoExpression::qualified(self.package_use_for_package(package), field);
+                    return GoExpression::qualified(
+                        self.queries().package_use_for_package(package),
+                        field,
+                    );
                 }
                 let elided_deref = base
                     .deref_inner()
@@ -309,9 +280,12 @@ impl Planner<'_> {
                     self.plan_place(setup, base, ordering)
                 };
 
-                if let Some(access) =
-                    self.try_plan_tuple_member_dot(&base_value, &expression_ty, member, resolution)
-                {
+                if let Some(access) = self.queries().try_plan_tuple_member_dot(
+                    &base_value,
+                    &expression_ty,
+                    member,
+                    resolution,
+                ) {
                     return access;
                 }
                 let field = self.facts.dot_member_go_name(
@@ -363,7 +337,7 @@ impl Planner<'_> {
         let index_plan = self.plan_composite_value(index, ExpressionContext::value());
         let pin_index = ordering.pins(&index_plan);
         let base_plan = ValuePlan::computed(Vec::new(), base_expression)
-            .with_stability(self.place_read_stability(base));
+            .with_stability(self.queries().place_read_stability(base));
         let mut later = ordering.later();
         later.prepend(&index_plan);
         let pin_base = ordering.pins(&base_plan)
@@ -556,5 +530,44 @@ pub(in crate::lowering) fn is_lvalue_chain(facts: &EmitFacts<'_>, expression: &E
         }
         Expression::Call { .. } => facts.is_reference(&expression.get_type()),
         _ => false,
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
+        match target {
+            Expression::DotAccess {
+                expression,
+                member,
+                ty,
+                ..
+            } => self.facts.field_slot_layout(
+                &expression.get_type(),
+                self.facts.checked(target).field_selection(),
+                member,
+                ty,
+            ),
+            Expression::IndexedAccess { expression, .. } => {
+                self.go_place_layout(expression)?.indexed_element().cloned()
+            }
+            _ => None,
+        }
+    }
+
+    fn target_binds_to_discard(&self, target: &Expression) -> bool {
+        let Expression::Identifier {
+            value, resolution, ..
+        } = target
+        else {
+            return false;
+        };
+
+        match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+        {
+            Some(binding) => binding.is_discard(),
+            None => value == "_",
+        }
     }
 }

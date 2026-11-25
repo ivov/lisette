@@ -156,13 +156,21 @@ pub(crate) enum CallPurity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GoLiteral {
+    Nil,
+    Bool(bool),
+    Int(i128),
+    Token(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GoExpressionNode {
     Identifier(GoIdentifier),
     Qualified {
         package: PackageUse,
         name: String,
     },
-    Literal(String),
+    Literal(GoLiteral),
     Type(GoType),
     CompositeLiteral {
         go_type: Option<Box<GoType>>,
@@ -267,16 +275,6 @@ pub(crate) struct Position {
     pub(crate) path: Arc<str>,
     pub(crate) line: usize,
     pub(crate) column: usize,
-}
-
-impl Position {
-    pub(crate) fn inline_directive(&self) -> String {
-        format!("/*line {}:{}:{}*/ ", self.path, self.line, self.column)
-    }
-
-    pub(crate) fn line_directive(&self) -> String {
-        format!("//line {}:{}:{}\n", self.path, self.line, self.column)
-    }
 }
 
 #[derive(Debug, Clone, Default)]

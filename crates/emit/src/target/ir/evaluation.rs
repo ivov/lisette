@@ -201,10 +201,10 @@ impl GoExpressionNode {
             Self::CompositeLiteral { go_type, .. } => {
                 let shape = go_type.as_ref().map(|ty| ty.physical_kind());
                 Effects {
-                    may_panic: matches!(shape, Some(GoTypeKind::Map | GoTypeKind::Unclassified)),
+                    may_panic: matches!(shape, Some(GoTypeKind::Map)),
                     creates_identity: matches!(
                         shape,
-                        None | Some(GoTypeKind::Slice | GoTypeKind::Map | GoTypeKind::Unclassified)
+                        None | Some(GoTypeKind::Slice | GoTypeKind::Map)
                     ),
                     ..Effects::default()
                 }

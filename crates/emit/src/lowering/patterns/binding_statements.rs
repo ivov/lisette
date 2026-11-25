@@ -159,7 +159,7 @@ impl Planner<'_> {
                     == InlineDecision::Inline
             {
                 let composable = binding.path.render(subject);
-                let stability = self.path_read_stability(&composable);
+                let stability = self.queries().path_read_stability(&composable);
                 self.scope.bind_inline_expression(
                     &binding.lisette_name,
                     &binding.binding_ids,

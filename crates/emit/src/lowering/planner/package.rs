@@ -1,11 +1,8 @@
-use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::package_names::PackageNames;
-use crate::lookup::state::adapter_registry::AdapterRegistry;
-use crate::lookup::state::conversion_record::ConversionRecord;
-use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lookup::state::imports::ImportPlan;
 use crate::lowering::planner::collectors::{collect_escape_remap, collect_generic_renames};
+use crate::lowering::planner::collisions::NameCollector;
 use crate::target::names::go_name;
 use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashSet;
@@ -49,42 +46,30 @@ pub(in crate::lowering) fn build_package_plan<'f>(
         .flat_map(|plan| plan.imports.qualifiers())
         .collect();
 
-    let mut conversions = ConversionRecord::default();
-    let mut adapters = AdapterRegistry::default();
-    let mut namespace = FileNamespace::default();
     let mut names = PackageNames::default();
 
-    let fixed_names = Planner::new(
-        facts.clone(),
-        &names,
-        &mut conversions,
-        &mut adapters,
-        &mut namespace,
-    )
+    let fixed_names = NameCollector {
+        facts,
+        names: &names,
+    }
     .collect_fixed_names(files);
 
     names.set_block_names(fixed_names, qualifier_names.clone());
     let escape_remap = collect_escape_remap(&names, files);
     names.set_escape_remap(escape_remap);
-    let collected = Planner::new(
-        facts.clone(),
-        &names,
-        &mut conversions,
-        &mut adapters,
-        &mut namespace,
-    )
+    let collected = NameCollector {
+        facts,
+        names: &names,
+    }
     .collect_names(files);
 
     names.set_block_names(collected.declared_names(), qualifier_names);
     let generic_renames = collect_generic_renames(&names, files);
     names.set_generic_renames(generic_renames);
-    let collision_diagnostics = Planner::new(
-        facts.clone(),
-        &names,
-        &mut conversions,
-        &mut adapters,
-        &mut namespace,
-    )
+    let collision_diagnostics = NameCollector {
+        facts,
+        names: &names,
+    }
     .name_collision_diagnostics(files, collected, &import_qualifiers);
 
     let package_id = facts.current_package();

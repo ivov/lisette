@@ -1,11 +1,13 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::predicates::strip_negations;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
 };
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression};
@@ -23,11 +25,11 @@ fn imaginary_product(value: GoExpression, coefficient: f64) -> GoExpression {
     GoExpression::call(
         GoExpression::external_name("complex".to_string()),
         vec![
-            GoExpression::literal("0".to_string()),
+            GoExpression::integer(0),
             GoExpression::binary(
                 value,
                 GoBinaryOperator::Multiplication,
-                GoExpression::literal(coefficient.to_string()),
+                GoExpression::token(coefficient.to_string()),
             ),
         ],
     )
@@ -65,8 +67,8 @@ impl Planner<'_> {
         let typed_left = (matches!(
             operator,
             BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
-        ) && self.is_go_constant_expression(left_expression)
-            && !self.is_go_constant_expression(right_expression))
+        ) && self.queries().is_go_constant_expression(left_expression)
+            && !self.queries().is_go_constant_expression(right_expression))
         .then_some(&left.ty);
 
         if let Some(casts) = conversion.map(|conversion| operand_casts(conversion, &left, &right)) {
@@ -136,7 +138,7 @@ impl Planner<'_> {
             .next()
             .expect("binary expression has a right operand");
         if let Some(left_ty) = typed_left {
-            left = GoExpression::conversion(self.go_type(left_ty), left);
+            left = GoExpression::conversion(self.queries().go_type(left_ty), left);
         }
         let Some(casts) = casts else {
             return ValuePlan::new(
@@ -147,10 +149,10 @@ impl Planner<'_> {
         };
 
         if let Some(ty) = &casts.cast_left_to {
-            left = GoExpression::conversion(self.go_type(ty), left);
+            left = GoExpression::conversion(self.queries().go_type(ty), left);
         }
         if let Some(ty) = &casts.cast_right_to {
-            right = GoExpression::conversion(self.go_type(ty), right);
+            right = GoExpression::conversion(self.queries().go_type(ty), right);
         }
         ValuePlan::computed(setup, GoExpression::binary(left, operator.into(), right))
     }
@@ -212,7 +214,7 @@ impl Planner<'_> {
                 ..
             } = expression
         {
-            return ValuePlan::constant("-9223372036854775808".to_string(), ConstantKind::Int);
+            return ValuePlan::constant(GoLiteral::Int(i128::from(i64::MIN)), ConstantKind::Int);
         }
 
         if matches!(operator, UnaryOperator::Not) {
@@ -260,10 +262,6 @@ impl Planner<'_> {
 
         let operand = self.plan_operand(expression, ctx);
         operand.unary(GoUnaryOperator::Not)
-    }
-
-    pub(in crate::lowering) fn is_go_constant_expression(&self, expression: &Expression) -> bool {
-        !matches!(constant::evaluate(expression, self), Ok(None))
     }
 }
 
@@ -376,12 +374,18 @@ fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
         .is_some_and(|kind| !kind.is_float())
 }
 
-impl ConstantSource for Planner<'_> {
+impl ConstantSource for PlannerQueries<'_, '_> {
     fn definition(&self, qualified_name: &str) -> Option<&program::Definition> {
         self.facts.definition(qualified_name)
     }
 
     fn local_constant(&self, binding: BindingId) -> Option<Constant> {
         self.scope.local_constant(binding)
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn is_go_constant_expression(&self, expression: &Expression) -> bool {
+        !matches!(constant::evaluate(expression, self), Ok(None))
     }
 }

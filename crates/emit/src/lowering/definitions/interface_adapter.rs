@@ -7,6 +7,7 @@ use crate::lowering::abi::go_callable_return_abi;
 use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::BodyOrigin;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::output::finish::verify::BodyResult;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{
@@ -69,27 +70,6 @@ enum RequirementAbi {
 }
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn member_spelling(&self, expression: &Expression) -> MemberSpelling {
-        let selects_twin = matches!(
-            expression,
-            Expression::DotAccess {
-                resolution: DotAccessResolution::InstanceMethodValue { .. }
-                    | DotAccessResolution::InstanceMethod { .. },
-                ..
-            } | Expression::Identifier { .. }
-        ) && self
-            .facts
-            .checked(expression)
-            .function_value()
-            .is_some_and(|callee| callee_selects_tagged_counterpart(&self.facts, callee));
-
-        if selects_twin {
-            MemberSpelling::TaggedCounterpart
-        } else {
-            MemberSpelling::Plain
-        }
-    }
-
     pub(in crate::lowering) fn emit_tagged_counterpart(
         &mut self,
         method: FunctionDefinitionView<'_>,
@@ -141,180 +121,6 @@ impl Planner<'_> {
         )
     }
 
-    pub(in crate::lowering) fn bound_dispatch_requirement(
-        &self,
-        expression: &Expression,
-    ) -> Option<(Type, InterfaceRequirement)> {
-        self.bound_requirement(expression)
-            .filter(|(bound, _)| bound_needs_dispatch(&self.facts, bound))
-    }
-
-    fn bound_requirement(&self, expression: &Expression) -> Option<(Type, InterfaceRequirement)> {
-        let CallOperation::BoundMethod { bound, requirement } =
-            &self.facts.checked(expression).function_value()?.operation
-        else {
-            return None;
-        };
-        Some((bound.clone(), (**requirement).clone()))
-    }
-
-    pub(in crate::lowering) fn go_bound_requirement(
-        &self,
-        expression: &Expression,
-    ) -> Option<InterfaceRequirement> {
-        self.bound_requirement(expression)
-            .map(|(_, requirement)| requirement)
-            .filter(|requirement| is_go_import(&requirement.declaring_interface))
-    }
-
-    pub(in crate::lowering) fn bound_dispatch_layout(
-        &self,
-        expression: &Expression,
-    ) -> Option<FunctionLayout> {
-        let (_, requirement) = self.bound_dispatch_requirement(expression)?;
-        self.requirement_value_layout(&requirement)
-    }
-
-    fn requirement_value_layout(
-        &self,
-        requirement: &InterfaceRequirement,
-    ) -> Option<FunctionLayout> {
-        let layout = self.requirement_layout(requirement, RequirementAbi::Lisette)?;
-        Some(layout.with_return_abi(&self.facts, CallableReturnAbi::Value, SlotOrigin::Lisette))
-    }
-
-    fn requirement_layout(
-        &self,
-        requirement: &InterfaceRequirement,
-        abi: RequirementAbi,
-    ) -> Option<FunctionLayout> {
-        let function = requirement.ty.as_function_type()?;
-        let declared =
-            if abi == RequirementAbi::Go && !is_go_import(&requirement.declaring_interface) {
-                function
-            } else {
-                requirement.method.ty.as_function_type()?
-            };
-
-        let parameters = function
-            .params
-            .iter()
-            .zip(&declared.params)
-            .map(|(parameter, declared)| {
-                let origin = match abi {
-                    RequirementAbi::Go => {
-                        SlotOrigin::of_go_declaration(SlotOrigin::GoParameter, &declared.ty, |id| {
-                            self.facts.definition(id)
-                        })
-                    }
-                    RequirementAbi::Lisette => SlotOrigin::Lisette,
-                };
-
-                self.facts
-                    .value_layout_with_declaration(&parameter.ty, origin, &declared.ty)
-            })
-            .collect();
-
-        let origin = match abi {
-            RequirementAbi::Go => {
-                SlotOrigin::of_go_declaration(SlotOrigin::GoReturn, &declared.return_type, |id| {
-                    self.facts.definition(id)
-                })
-            }
-            RequirementAbi::Lisette => SlotOrigin::Lisette,
-        };
-
-        let result = self.facts.target_layout_with_declaration(
-            &function.return_type,
-            origin,
-            &declared.return_type,
-        );
-        let return_abi = match abi {
-            RequirementAbi::Go => {
-                requirement_go_return_abi(&self.facts, requirement, &declared.return_type)
-            }
-            RequirementAbi::Lisette => requirement_return_abi(&self.facts, requirement),
-        };
-
-        Some(self.facts.function_layout(
-            parameters,
-            &result,
-            return_abi,
-            Some(&declared.return_type),
-        ))
-    }
-
-    pub(in crate::lowering) fn dynamic_interface_adapter(
-        &self,
-        source: &Type,
-        target: &Type,
-        witness: Option<&ConformanceWitness>,
-    ) -> Option<AdapterPlan> {
-        let name = ref_stripped_type_parameter(source)?;
-        let Type::Nominal { id, .. } = target else {
-            return None;
-        };
-        let mut methods = Vec::new();
-        let mut seen = FxHashSet::default();
-        for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
-            if !seen.insert(
-                self.facts
-                    .method_go_name(&requirement.name, GoExport::Unexported),
-            ) {
-                continue;
-            }
-            let selected = match witness {
-                Some(witness) => witness
-                    .method_for(&requirement)
-                    .selected_requirement
-                    .clone()
-                    .expect("internal error: a checked conformance selects a method of a bound"),
-                None => requirement.clone(),
-            };
-
-            let local = self.requirement_layout(&selected, RequirementAbi::Lisette)?;
-            let foreign = self.requirement_layout(&selected, RequirementAbi::Go)?;
-            let target = match witness {
-                Some(_) => {
-                    let abi = if is_go_import(&requirement.declaring_interface) {
-                        RequirementAbi::Go
-                    } else {
-                        RequirementAbi::Lisette
-                    };
-                    self.requirement_layout(&requirement, abi)?
-                }
-                None => self.requirement_value_layout(&selected)?,
-            };
-
-            methods.push(AdapterMethod {
-                source_go_name: requirement_go_name(&self.facts, &selected),
-                go_name: requirement_go_name(&self.facts, &requirement),
-                source_name: selected.name,
-                source: local,
-                alternate: Some(foreign),
-                target,
-            });
-        }
-        Some(AdapterPlan {
-            concrete_id: name,
-            interface_id: id.as_eco().clone(),
-            interface_ty: target.clone(),
-            concrete_ty: source.clone(),
-            generic_context: self.adapter_generic_context(source, &methods),
-            methods,
-        })
-    }
-
-    fn dynamic_method_interface(&self, method_name: &str, layout: &FunctionLayout) -> GoType {
-        let parameters: Vec<GoType> = layout
-            .parameters
-            .iter()
-            .map(|parameter| parameter.go_type(self))
-            .collect();
-        let result = layout.result_go_type(self).unwrap_or_default();
-        GoType::method_interface(method_name, &parameters, &result)
-    }
-
     fn lower_dynamic_adapter_body(
         &mut self,
         method: &AdapterMethod,
@@ -323,7 +129,7 @@ impl Planner<'_> {
         parameters: &[GoIdentifier],
     ) -> Vec<Statement> {
         let inner = GoExpression::conversion(
-            GoType::new("any"),
+            GoType::any(),
             GoExpression::selector(
                 GoExpression::identifier(receiver.clone()),
                 "inner".to_string(),
@@ -332,7 +138,9 @@ impl Planner<'_> {
 
         let mut statements = Vec::new();
         if !method.source.same_representation(alternate) {
-            let local_type = self.dynamic_method_interface(&method.source_go_name, &method.source);
+            let local_type = self
+                .queries()
+                .dynamic_method_interface(&method.source_go_name, &method.source);
             let local = self.fresh_local("receiver");
             let ok = self.fresh_local("ok");
             statements.push(define_many(
@@ -379,7 +187,9 @@ impl Planner<'_> {
         let foreign_name = self
             .facts
             .method_go_name(&method.source_name, GoExport::Unexported);
-        let foreign_type = self.dynamic_method_interface(&foreign_name, alternate);
+        let foreign_type = self
+            .queries()
+            .dynamic_method_interface(&foreign_name, alternate);
         let foreign = GoExpression::type_assertion(inner, foreign_type);
         let arguments = self.plan_layout_changed_arguments(
             &mut statements,
@@ -396,236 +206,14 @@ impl Planner<'_> {
         statements
     }
 
-    pub(in crate::lowering) fn interface_adapter(
-        &self,
-        conversion: &InterfaceConversion,
-    ) -> Option<AdapterPlan> {
-        let source_ty = &conversion.source;
-        let target = conversion.target_interface.as_ref()?;
-        let Type::Nominal { id: target_id, .. } = target else {
-            return None;
-        };
-        let source_shape = &conversion.source_shape;
-        if let Type::Parameter(name) = source_shape
-            && self.scope.type_params().iter().any(|parameter| {
-                &parameter.name == name
-                    && parameter
-                        .bounds
-                        .iter()
-                        .any(|bound| bound_needs_dispatch(&self.facts, bound))
-            })
-        {
-            return self.dynamic_interface_adapter(source_ty, target, conversion.witness.as_ref());
-        }
-        let Type::Nominal { id: source_id, .. } = source_shape else {
-            return None;
-        };
-        let methods = self.adapted_methods(source_shape, target, conversion.witness.as_ref())?;
-        Some(AdapterPlan {
-            concrete_id: source_id.as_eco().clone(),
-            interface_id: target_id.as_eco().clone(),
-            interface_ty: target.clone(),
-            concrete_ty: source_ty.clone(),
-            generic_context: self.adapter_generic_context(source_ty, &methods),
-            methods,
-        })
-    }
-
-    fn adapted_methods(
-        &self,
-        source_stripped: &Type,
-        target: &Type,
-        witness: Option<&ConformanceWitness>,
-    ) -> Option<Vec<AdapterMethod>> {
-        let requirements = interface_requirements(target, |id| self.facts.definition(id));
-        if requirements.is_empty() {
-            return None;
-        }
-        let witness = witness
-            .expect("internal error: an interface conversion that requires methods has a checked conformance");
-
-        let mut methods = Vec::new();
-        let mut any_adapted = false;
-        let mut seen = FxHashSet::default();
-        for requirement in requirements {
-            let selector = self
-                .facts
-                .method_go_name(&requirement.name, GoExport::Unexported);
-            if !seen.insert(selector) {
-                continue;
-            }
-            let checked = witness.method_for(&requirement);
-            let method = self.build_adapter_method(
-                &requirement,
-                source_stripped,
-                checked.selected_requirement.as_ref(),
-                checked,
-            )?;
-
-            any_adapted |= method.changes_signature();
-            methods.push(method);
-        }
-        any_adapted.then_some(methods)
-    }
-
-    fn adapter_generic_context(
-        &self,
-        source_ty: &Type,
-        methods: &[AdapterMethod],
-    ) -> Vec<(EcoString, Vec<Type>)> {
-        let context = self.scope.type_params();
-        if context
-            .iter()
-            .any(|param| adapter_uses_type_parameter(source_ty, methods, &param.name))
-        {
-            context
-                .iter()
-                .map(|param| (param.name.clone(), param.bounds.clone()))
-                .collect()
-        } else {
-            Vec::new()
-        }
-    }
-
-    fn build_adapter_method(
-        &self,
-        requirement: &InterfaceRequirement,
-        concrete_ty: &Type,
-        source_requirement: Option<&InterfaceRequirement>,
-        checked: &CheckedMethod,
-    ) -> Option<AdapterMethod> {
-        let implementation_name = &checked.selected_name;
-        let function = checked.declared_signature.as_function_type()?;
-        let instantiated = checked.instantiated_declared_signature.as_function_type()?;
-        let (_, parameters) = instantiated.params.split_first()?;
-        let param_types: Vec<Type> = parameters.iter().map(|param| param.ty.clone()).collect();
-        let return_type = instantiated.return_type.as_ref().clone();
-
-        let source_owner = source_requirement
-            .map(|source| source.declaring_interface.as_str())
-            .or_else(|| {
-                checked
-                    .selected_definition
-                    .rsplit_once('.')
-                    .map(|(owner, _)| owner)
-            })
-            .or_else(|| concrete_ty.get_qualified_id())?;
-
-        let source_go_method =
-            is_go_import(source_owner).then(|| format!("{source_owner}.{implementation_name}"));
-        let source_return = source_requirement
-            .and_then(|source| source.method.ty.get_function_ret())
-            .unwrap_or(&function.return_type);
-        let user_abi = if let Some(id) = &source_go_method {
-            let hints = self
-                .facts
-                .method(source_owner, implementation_name)
-                .map_or(&[][..], |method| method.go_hints.as_slice());
-            go_callable_return_abi(&self.facts, id, source_return, hints)
-        } else if let Some(source) = source_requirement {
-            requirement_return_abi(&self.facts, source)
-        } else if requirement_uses_tagged_counterpart(&self.facts, requirement) {
-            CallableReturnAbi::Value
-        } else {
-            return_abi(&self.facts, &function.return_type, ReturnSlot::Method)
-        };
-
-        let user_result = self
-            .facts
-            .interface_result_layout(source_go_method.as_deref(), &return_type);
-        let producer = if source_go_method.is_none() && source_requirement.is_none() {
-            ResultProducer::Lisette
-        } else {
-            ResultProducer::Go
-        };
-        let source = FunctionLayout {
-            producer,
-            ..self.facts.function_layout(
-                self.interface_parameter_layouts(
-                    source_go_method.as_deref(),
-                    &param_types,
-                    usize::from(source_requirement.is_none()),
-                ),
-                &user_result,
-                user_abi,
-                Some(source_return),
-            )
-        };
-
-        let interface_return = &requirement.method.ty.as_function_type()?.return_type;
-        let go_method = is_go_import(&requirement.declaring_interface).then(|| {
-            requirement
-                .declaring_interface
-                .with_segment(&requirement.method.source_name)
-        });
-        let interface_abi = if go_method.is_some() {
-            requirement_go_return_abi(&self.facts, requirement, interface_return)
-        } else {
-            requirement_return_abi(&self.facts, requirement)
-        };
-        let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
-        let target = if interface_abi.fits_return_type(&self.facts, &return_type) {
-            let result = self
-                .facts
-                .interface_result_layout(go_method.as_deref(), &return_type);
-            self.facts
-                .function_layout(parameters, &result, interface_abi, Some(interface_return))
-        } else {
-            self.facts.function_layout(
-                parameters,
-                &user_result,
-                source.return_abi.clone(),
-                Some(&function.return_type),
-            )
-        };
-
-        Some(AdapterMethod {
-            go_name: requirement_go_name(&self.facts, requirement),
-            source_name: implementation_name.clone(),
-            source_go_name: adapter_source_go_name(
-                &self.facts,
-                requirement,
-                source_requirement,
-                Some(source_owner),
-                checked,
-            ),
-            alternate: None,
-            source,
-            target,
-        })
-    }
-
-    fn interface_parameter_layouts(
-        &self,
-        go_method: Option<&str>,
-        param_types: &[Type],
-        offset: usize,
-    ) -> Vec<ValueLayout> {
-        param_types
-            .iter()
-            .enumerate()
-            .map(|(index, ty)| {
-                match go_method.and_then(|id| self.facts.go_callable_parameter(id, index + offset))
-                {
-                    Some(slot) => self.facts.value_layout_with_declaration(
-                        ty,
-                        slot.origin,
-                        &slot.declared_type,
-                    ),
-                    None => self.facts.value_layout(ty, SlotOrigin::Lisette),
-                }
-            })
-            .collect()
-    }
-
-    pub(in crate::lowering) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
+    pub(in crate::lowering) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> GoType {
         let key = (plan.concrete_ty.clone(), plan.interface_ty.clone());
         let cacheable = plan.generic_context.is_empty();
         if cacheable
             && let Some(name) = self.adapter_registry.lookup(&key)
             && !self.scope.is_go_name_declared(name)
         {
-            return name.to_string();
+            return GoType::named(name, &[], None);
         }
 
         let scope = &self.scope;
@@ -639,18 +227,16 @@ impl Planner<'_> {
                 name
             });
 
-        let generic_parameters = self.plan_generics(&plan.generic_context);
+        let generic_parameters = self.queries().plan_generics(&plan.generic_context);
         let receiver_type = GoType::named(
             &base_name,
             &plan
                 .generic_context
                 .iter()
-                .map(|(name, _)| GoType::new(self.generic_go_name(name).into_owned()))
+                .map(|(name, _)| GoType::new(self.names.generic_go_name(name).into_owned()))
                 .collect::<Vec<_>>(),
             None,
         );
-
-        let adapter_type = receiver_type.code.clone();
 
         let mut declarations = vec![GoDeclaration::new(DeclarationKind::Struct {
             name: base_name,
@@ -658,7 +244,7 @@ impl Planner<'_> {
             fields: vec![FieldDeclaration {
                 documentation: Default::default(),
                 name: Some("inner".to_string()),
-                ty: self.go_type(&plan.concrete_ty),
+                ty: self.queries().go_type(&plan.concrete_ty),
                 tag: None,
             }],
         })];
@@ -673,7 +259,7 @@ impl Planner<'_> {
             ));
         }
         self.namespace.collect_adapters(declarations);
-        adapter_type
+        receiver_type
     }
 
     fn emit_adapter_method(
@@ -688,9 +274,9 @@ impl Planner<'_> {
             let (receiver_type, receiver_name, wraps_inner) = match receiver {
                 MethodReceiver::Adapter(ty) => (ty.clone(), "a".to_string(), true),
                 MethodReceiver::Itself(ty) => {
-                    let receiver_type = this.go_type(ty);
-                    let name = fresh_receiver_name(&receiver_type.code, |name| {
-                        this.shadows_declaration(name)
+                    let receiver_type = this.queries().go_type(ty);
+                    let name = fresh_receiver_name(receiver_type.leading_name(), |name| {
+                        this.queries().shadows_declaration(name)
                     });
                     (receiver_type, name, false)
                 }
@@ -704,7 +290,9 @@ impl Planner<'_> {
             let parameters = param_names
                 .iter()
                 .zip(&method.target.parameters)
-                .map(|(name, layout)| GoParameter::new(name.clone(), layout.go_type(this)))
+                .map(|(name, layout)| {
+                    GoParameter::new(name.clone(), layout.go_type(&this.queries()))
+                })
                 .collect();
 
             let go_method_name = method.go_name.clone();
@@ -771,7 +359,10 @@ impl Planner<'_> {
             .split_first()
             .expect("an adapter method binds its receiver");
         if let Some(alternate) = &method.alternate {
-            let go_result = method.target.result_go_type(self).unwrap_or_default();
+            let go_result = method
+                .target
+                .result_go_type(&self.queries())
+                .unwrap_or_default();
             return (
                 go_result,
                 self.lower_dynamic_adapter_body(method, alternate, receiver, parameters),
@@ -798,7 +389,10 @@ impl Planner<'_> {
         );
 
         let return_type = method.source.result_layout.logical_type();
-        let go_result = method.target.result_go_type(self).unwrap_or_default();
+        let go_result = method
+            .target
+            .result_go_type(&self.queries())
+            .unwrap_or_default();
         if method.target.return_abi == CallableReturnAbi::Void {
             statements.push(effect_statement(inner_call));
         } else if method.source.return_abi == CallableReturnAbi::Void {
@@ -1003,5 +597,424 @@ impl AdapterPlan {
             iface_name,
             index
         )
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn member_spelling(&self, expression: &Expression) -> MemberSpelling {
+        let selects_twin = matches!(
+            expression,
+            Expression::DotAccess {
+                resolution: DotAccessResolution::InstanceMethodValue { .. }
+                    | DotAccessResolution::InstanceMethod { .. },
+                ..
+            } | Expression::Identifier { .. }
+        ) && self
+            .facts
+            .checked(expression)
+            .function_value()
+            .is_some_and(|callee| callee_selects_tagged_counterpart(self.facts, callee));
+
+        if selects_twin {
+            MemberSpelling::TaggedCounterpart
+        } else {
+            MemberSpelling::Plain
+        }
+    }
+
+    pub(in crate::lowering) fn bound_dispatch_requirement(
+        &self,
+        expression: &Expression,
+    ) -> Option<(Type, InterfaceRequirement)> {
+        self.bound_requirement(expression)
+            .filter(|(bound, _)| bound_needs_dispatch(self.facts, bound))
+    }
+
+    fn bound_requirement(&self, expression: &Expression) -> Option<(Type, InterfaceRequirement)> {
+        let CallOperation::BoundMethod { bound, requirement } =
+            &self.facts.checked(expression).function_value()?.operation
+        else {
+            return None;
+        };
+        Some((bound.clone(), (**requirement).clone()))
+    }
+
+    pub(in crate::lowering) fn go_bound_requirement(
+        &self,
+        expression: &Expression,
+    ) -> Option<InterfaceRequirement> {
+        self.bound_requirement(expression)
+            .map(|(_, requirement)| requirement)
+            .filter(|requirement| is_go_import(&requirement.declaring_interface))
+    }
+
+    pub(in crate::lowering) fn bound_dispatch_layout(
+        &self,
+        expression: &Expression,
+    ) -> Option<FunctionLayout> {
+        let (_, requirement) = self.bound_dispatch_requirement(expression)?;
+        self.requirement_value_layout(&requirement)
+    }
+
+    fn requirement_value_layout(
+        &self,
+        requirement: &InterfaceRequirement,
+    ) -> Option<FunctionLayout> {
+        let layout = self.requirement_layout(requirement, RequirementAbi::Lisette)?;
+        Some(layout.with_return_abi(self.facts, CallableReturnAbi::Value, SlotOrigin::Lisette))
+    }
+
+    fn requirement_layout(
+        &self,
+        requirement: &InterfaceRequirement,
+        abi: RequirementAbi,
+    ) -> Option<FunctionLayout> {
+        let function = requirement.ty.as_function_type()?;
+        let declared =
+            if abi == RequirementAbi::Go && !is_go_import(&requirement.declaring_interface) {
+                function
+            } else {
+                requirement.method.ty.as_function_type()?
+            };
+
+        let parameters = function
+            .params
+            .iter()
+            .zip(&declared.params)
+            .map(|(parameter, declared)| {
+                let origin = match abi {
+                    RequirementAbi::Go => {
+                        SlotOrigin::of_go_declaration(SlotOrigin::GoParameter, &declared.ty, |id| {
+                            self.facts.definition(id)
+                        })
+                    }
+                    RequirementAbi::Lisette => SlotOrigin::Lisette,
+                };
+
+                self.facts
+                    .value_layout_with_declaration(&parameter.ty, origin, &declared.ty)
+            })
+            .collect();
+
+        let origin = match abi {
+            RequirementAbi::Go => {
+                SlotOrigin::of_go_declaration(SlotOrigin::GoReturn, &declared.return_type, |id| {
+                    self.facts.definition(id)
+                })
+            }
+            RequirementAbi::Lisette => SlotOrigin::Lisette,
+        };
+
+        let result = self.facts.target_layout_with_declaration(
+            &function.return_type,
+            origin,
+            &declared.return_type,
+        );
+        let return_abi = match abi {
+            RequirementAbi::Go => {
+                requirement_go_return_abi(self.facts, requirement, &declared.return_type)
+            }
+            RequirementAbi::Lisette => requirement_return_abi(self.facts, requirement),
+        };
+
+        Some(self.facts.function_layout(
+            parameters,
+            &result,
+            return_abi,
+            Some(&declared.return_type),
+        ))
+    }
+
+    pub(in crate::lowering) fn dynamic_interface_adapter(
+        &self,
+        source: &Type,
+        target: &Type,
+        witness: Option<&ConformanceWitness>,
+    ) -> Option<AdapterPlan> {
+        let name = ref_stripped_type_parameter(source)?;
+        let Type::Nominal { id, .. } = target else {
+            return None;
+        };
+        let mut methods = Vec::new();
+        let mut seen = FxHashSet::default();
+        for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
+            if !seen.insert(
+                self.facts
+                    .method_go_name(&requirement.name, GoExport::Unexported),
+            ) {
+                continue;
+            }
+            let selected = match witness {
+                Some(witness) => witness
+                    .method_for(&requirement)
+                    .selected_requirement
+                    .clone()
+                    .expect("internal error: a checked conformance selects a method of a bound"),
+                None => requirement.clone(),
+            };
+
+            let local = self.requirement_layout(&selected, RequirementAbi::Lisette)?;
+            let foreign = self.requirement_layout(&selected, RequirementAbi::Go)?;
+            let target = match witness {
+                Some(_) => {
+                    let abi = if is_go_import(&requirement.declaring_interface) {
+                        RequirementAbi::Go
+                    } else {
+                        RequirementAbi::Lisette
+                    };
+                    self.requirement_layout(&requirement, abi)?
+                }
+                None => self.requirement_value_layout(&selected)?,
+            };
+
+            methods.push(AdapterMethod {
+                source_go_name: requirement_go_name(self.facts, &selected),
+                go_name: requirement_go_name(self.facts, &requirement),
+                source_name: selected.name,
+                source: local,
+                alternate: Some(foreign),
+                target,
+            });
+        }
+        Some(AdapterPlan {
+            concrete_id: name,
+            interface_id: id.as_eco().clone(),
+            interface_ty: target.clone(),
+            concrete_ty: source.clone(),
+            generic_context: self.adapter_generic_context(source, &methods),
+            methods,
+        })
+    }
+
+    fn dynamic_method_interface(&self, method_name: &str, layout: &FunctionLayout) -> GoType {
+        let parameters: Vec<GoType> = layout
+            .parameters
+            .iter()
+            .map(|parameter| parameter.go_type(self))
+            .collect();
+        let result = layout.result_go_type(self).unwrap_or_default();
+        GoType::method_interface(method_name, &parameters, &result)
+    }
+
+    pub(in crate::lowering) fn interface_adapter(
+        &self,
+        conversion: &InterfaceConversion,
+    ) -> Option<AdapterPlan> {
+        let source_ty = &conversion.source;
+        let target = conversion.target_interface.as_ref()?;
+        let Type::Nominal { id: target_id, .. } = target else {
+            return None;
+        };
+        let source_shape = &conversion.source_shape;
+        if let Type::Parameter(name) = source_shape
+            && self.scope.type_params().iter().any(|parameter| {
+                &parameter.name == name
+                    && parameter
+                        .bounds
+                        .iter()
+                        .any(|bound| bound_needs_dispatch(self.facts, bound))
+            })
+        {
+            return self.dynamic_interface_adapter(source_ty, target, conversion.witness.as_ref());
+        }
+        let Type::Nominal { id: source_id, .. } = source_shape else {
+            return None;
+        };
+        let methods = self.adapted_methods(source_shape, target, conversion.witness.as_ref())?;
+        Some(AdapterPlan {
+            concrete_id: source_id.as_eco().clone(),
+            interface_id: target_id.as_eco().clone(),
+            interface_ty: target.clone(),
+            concrete_ty: source_ty.clone(),
+            generic_context: self.adapter_generic_context(source_ty, &methods),
+            methods,
+        })
+    }
+
+    fn adapted_methods(
+        &self,
+        source_stripped: &Type,
+        target: &Type,
+        witness: Option<&ConformanceWitness>,
+    ) -> Option<Vec<AdapterMethod>> {
+        let requirements = interface_requirements(target, |id| self.facts.definition(id));
+        if requirements.is_empty() {
+            return None;
+        }
+        let witness = witness
+            .expect("internal error: an interface conversion that requires methods has a checked conformance");
+
+        let mut methods = Vec::new();
+        let mut any_adapted = false;
+        let mut seen = FxHashSet::default();
+        for requirement in requirements {
+            let selector = self
+                .facts
+                .method_go_name(&requirement.name, GoExport::Unexported);
+            if !seen.insert(selector) {
+                continue;
+            }
+            let checked = witness.method_for(&requirement);
+            let method = self.build_adapter_method(
+                &requirement,
+                source_stripped,
+                checked.selected_requirement.as_ref(),
+                checked,
+            )?;
+
+            any_adapted |= method.changes_signature();
+            methods.push(method);
+        }
+        any_adapted.then_some(methods)
+    }
+
+    fn adapter_generic_context(
+        &self,
+        source_ty: &Type,
+        methods: &[AdapterMethod],
+    ) -> Vec<(EcoString, Vec<Type>)> {
+        let context = self.scope.type_params();
+        if context
+            .iter()
+            .any(|param| adapter_uses_type_parameter(source_ty, methods, &param.name))
+        {
+            context
+                .iter()
+                .map(|param| (param.name.clone(), param.bounds.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn build_adapter_method(
+        &self,
+        requirement: &InterfaceRequirement,
+        concrete_ty: &Type,
+        source_requirement: Option<&InterfaceRequirement>,
+        checked: &CheckedMethod,
+    ) -> Option<AdapterMethod> {
+        let implementation_name = &checked.selected_name;
+        let function = checked.declared_signature.as_function_type()?;
+        let instantiated = checked.instantiated_declared_signature.as_function_type()?;
+        let (_, parameters) = instantiated.params.split_first()?;
+        let param_types: Vec<Type> = parameters.iter().map(|param| param.ty.clone()).collect();
+        let return_type = instantiated.return_type.as_ref().clone();
+
+        let source_owner = source_requirement
+            .map(|source| source.declaring_interface.as_str())
+            .or_else(|| {
+                checked
+                    .selected_definition
+                    .rsplit_once('.')
+                    .map(|(owner, _)| owner)
+            })
+            .or_else(|| concrete_ty.get_qualified_id())?;
+
+        let source_go_method =
+            is_go_import(source_owner).then(|| format!("{source_owner}.{implementation_name}"));
+        let source_return = source_requirement
+            .and_then(|source| source.method.ty.get_function_ret())
+            .unwrap_or(&function.return_type);
+        let user_abi = if let Some(id) = &source_go_method {
+            let hints = self
+                .facts
+                .method(source_owner, implementation_name)
+                .map_or(&[][..], |method| method.go_hints.as_slice());
+            go_callable_return_abi(self.facts, id, source_return, hints)
+        } else if let Some(source) = source_requirement {
+            requirement_return_abi(self.facts, source)
+        } else if requirement_uses_tagged_counterpart(self.facts, requirement) {
+            CallableReturnAbi::Value
+        } else {
+            return_abi(self.facts, &function.return_type, ReturnSlot::Method)
+        };
+
+        let user_result = self
+            .facts
+            .interface_result_layout(source_go_method.as_deref(), &return_type);
+        let producer = if source_go_method.is_none() && source_requirement.is_none() {
+            ResultProducer::Lisette
+        } else {
+            ResultProducer::Go
+        };
+        let source = FunctionLayout {
+            producer,
+            ..self.facts.function_layout(
+                self.interface_parameter_layouts(
+                    source_go_method.as_deref(),
+                    &param_types,
+                    usize::from(source_requirement.is_none()),
+                ),
+                &user_result,
+                user_abi,
+                Some(source_return),
+            )
+        };
+
+        let interface_return = &requirement.method.ty.as_function_type()?.return_type;
+        let go_method = is_go_import(&requirement.declaring_interface).then(|| {
+            requirement
+                .declaring_interface
+                .with_segment(&requirement.method.source_name)
+        });
+        let interface_abi = if go_method.is_some() {
+            requirement_go_return_abi(self.facts, requirement, interface_return)
+        } else {
+            requirement_return_abi(self.facts, requirement)
+        };
+        let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
+        let target = if interface_abi.fits_return_type(self.facts, &return_type) {
+            let result = self
+                .facts
+                .interface_result_layout(go_method.as_deref(), &return_type);
+            self.facts
+                .function_layout(parameters, &result, interface_abi, Some(interface_return))
+        } else {
+            self.facts.function_layout(
+                parameters,
+                &user_result,
+                source.return_abi.clone(),
+                Some(&function.return_type),
+            )
+        };
+
+        Some(AdapterMethod {
+            go_name: requirement_go_name(self.facts, requirement),
+            source_name: implementation_name.clone(),
+            source_go_name: adapter_source_go_name(
+                self.facts,
+                requirement,
+                source_requirement,
+                Some(source_owner),
+                checked,
+            ),
+            alternate: None,
+            source,
+            target,
+        })
+    }
+
+    fn interface_parameter_layouts(
+        &self,
+        go_method: Option<&str>,
+        param_types: &[Type],
+        offset: usize,
+    ) -> Vec<ValueLayout> {
+        param_types
+            .iter()
+            .enumerate()
+            .map(|(index, ty)| {
+                match go_method.and_then(|id| self.facts.go_callable_parameter(id, index + offset))
+                {
+                    Some(slot) => self.facts.value_layout_with_declaration(
+                        ty,
+                        slot.origin,
+                        &slot.declared_type,
+                    ),
+                    None => self.facts.value_layout(ty, SlotOrigin::Lisette),
+                }
+            })
+            .collect()
     }
 }

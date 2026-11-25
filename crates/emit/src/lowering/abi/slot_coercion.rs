@@ -23,7 +23,7 @@ impl Planner<'_> {
             .record_applied_conversion(ValueUseKey::cast_operand(cast.id()));
         let adaptation = &self.facts.checked(cast).cast_operand().adaptation;
         matches!(adaptation, Adaptation::Interface(_))
-            .then(|| CoercionPlan::adapted(self, adaptation, source_ty, target_ty, None))
+            .then(|| CoercionPlan::adapted(&self.queries(), adaptation, source_ty, target_ty, None))
     }
 
     pub(in crate::lowering) fn propagated_error_coercion(
@@ -40,7 +40,7 @@ impl Planner<'_> {
         if !recorded.adaptation.converts() {
             return CoercionPlan::Identity;
         }
-        CoercionPlan::adapted(self, &recorded.adaptation, from, to, None)
+        CoercionPlan::adapted(&self.queries(), &recorded.adaptation, from, to, None)
     }
 
     pub(in crate::lowering) fn applied_element_adaptations(
@@ -107,7 +107,7 @@ impl Planner<'_> {
         match &value_use.adaptation {
             Adaptation::Delegated { .. } => CoercionPlan::Identity,
             adaptation => CoercionPlan::adapted(
-                self,
+                &self.queries(),
                 adaptation,
                 &value.get_type(),
                 &value_use.slot,
@@ -131,15 +131,17 @@ impl Planner<'_> {
             value.get_type()
         };
         let change = if delegated {
-            self.function_type_slot_layout_change(&source_ty, layout)
+            self.queries()
+                .function_type_slot_layout_change(&source_ty, layout)
         } else {
-            self.function_slot_layout_change(value, layout)
+            self.queries().function_slot_layout_change(value, layout)
         };
         if change.changes_layout() {
             return change;
         }
         if !delegated {
-            let internal = CoercionPlan::adapted(self, adaptation, &source_ty, slot, None);
+            let internal =
+                CoercionPlan::adapted(&self.queries(), adaptation, &source_ty, slot, None);
             if internal.changes_layout() {
                 return internal;
             }
@@ -153,7 +155,7 @@ impl Planner<'_> {
                 | ValueLayout::Reference { .. }
         ) {
             let source = self.facts.value_layout(&source_ty, SlotOrigin::Lisette);
-            let change = CoercionPlan::change(self, &source, &target);
+            let change = CoercionPlan::change(&self.queries(), &source, &target);
             let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
             if change.changes_layout()
                 && (!reference
@@ -193,7 +195,7 @@ impl Planner<'_> {
         go_slot: Option<(&ValueLayout, &ValueLayout)>,
     ) -> GoExpression {
         let layout_change = go_slot.map_or(CoercionPlan::Identity, |(source, target)| {
-            CoercionPlan::change(self, source, target)
+            CoercionPlan::change(&self.queries(), source, target)
         });
         let (layout_change_setup, value) = layout_change.lower(self, value);
         statements.extend(layout_change_setup);

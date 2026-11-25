@@ -1,8 +1,10 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::render::expressions::rendered;
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{CompositeLayout, GoBinaryOperator};
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
 use crate::target::names::go_name::GeneratedPackage;
@@ -19,13 +21,7 @@ use syntax::types::Type;
 impl Planner<'_> {
     pub(super) fn plan_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
         let (value, kind) = match literal {
-            Literal::Integer { value, text } => {
-                let rendered = match text {
-                    Some(original) => original.clone(),
-                    None => value.to_string(),
-                };
-                (rendered, ConstantKind::Int)
-            }
+            Literal::Integer { value, text } => (integer_literal(*value, text), ConstantKind::Int),
             Literal::Float { value, text } => {
                 let rendered = match text {
                     Some(t) => t.clone(),
@@ -39,7 +35,7 @@ impl Planner<'_> {
                     }
                 };
 
-                (rendered, ConstantKind::Float)
+                (GoLiteral::Token(rendered), ConstantKind::Float)
             }
             Literal::Imaginary(coefficient) => {
                 let rendered = if *coefficient == coefficient.trunc() && coefficient.abs() < 1e15 {
@@ -47,18 +43,19 @@ impl Planner<'_> {
                 } else {
                     format!("{}i", coefficient)
                 };
-                (rendered, ConstantKind::Complex)
+                (GoLiteral::Token(rendered), ConstantKind::Complex)
             }
-            Literal::Boolean(b) => (b.to_string(), ConstantKind::Bool),
+            Literal::Boolean(b) => (GoLiteral::Bool(*b), ConstantKind::Bool),
             Literal::String { value, raw: false } => (
-                format!("\"{}\"", convert_escape_sequences(value)),
+                GoLiteral::Token(format!("\"{}\"", convert_escape_sequences(value))),
                 ConstantKind::String,
             ),
-            Literal::String { value, raw: true } => {
-                (raw_string_literal(value), ConstantKind::String)
-            }
+            Literal::String { value, raw: true } => (
+                GoLiteral::Token(raw_string_literal(value)),
+                ConstantKind::String,
+            ),
             Literal::Char(c) => (
-                format!("'{}'", convert_escape_sequences(c)),
+                GoLiteral::Token(format!("'{}'", convert_escape_sequences(c))),
                 ConstantKind::Rune,
             ),
             Literal::FormatString(parts) => return self.plan_format_string(parts),
@@ -66,22 +63,6 @@ impl Planner<'_> {
         };
 
         ValuePlan::constant(value, kind)
-    }
-
-    pub(in crate::lowering) fn constant_needs_go_type(
-        &self,
-        constant: Option<ConstantKind>,
-        slot_ty: &Type,
-    ) -> Option<GoType> {
-        let kind = constant?;
-        if self.facts.is_interface_or_unknown(slot_ty) {
-            return None;
-        }
-        let peeled = self.plain_literal_go_type(slot_ty)?;
-        if kind.is_default_go_type(&peeled) {
-            return None;
-        }
-        Some(self.go_type(slot_ty))
     }
 
     fn plan_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
@@ -93,8 +74,8 @@ impl Planner<'_> {
                 .expect("Slice type must have element type"),
         };
 
-        let element_ty = self.go_type(&element_lisette_ty);
-        let go_type = self.go_type(ty);
+        let element_ty = self.queries().go_type(&element_lisette_ty);
+        let go_type = self.queries().go_type(ty);
         if elements.is_empty() {
             return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }
@@ -200,12 +181,21 @@ impl Planner<'_> {
             return ValuePlan::new(setup, concatenation, stability);
         }
 
-        let (format_string, args) = sprintf_pieces(&self.facts, parts, values, has_interpolation);
+        let (format_string, args) = sprintf_pieces(
+            &self.facts,
+            parts,
+            values,
+            if has_interpolation {
+                PercentSigns::Escape
+            } else {
+                PercentSigns::Literal
+            },
+        );
 
         if args.is_empty() {
             return ValuePlan::computed(
                 setup,
-                GoExpression::literal(format!("\"{}\"", format_string)),
+                GoExpression::token(format!("\"{}\"", format_string)),
             );
         }
 
@@ -218,7 +208,7 @@ impl Planner<'_> {
                 ),
             );
         }
-        let mut arguments = vec![GoExpression::literal(format!("\"{}\"", format_string))];
+        let mut arguments = vec![GoExpression::token(format!("\"{}\"", format_string))];
         arguments.extend(args);
         ValuePlan::plain_call(
             setup,
@@ -247,7 +237,7 @@ impl Planner<'_> {
         slot: Option<&Type>,
     ) -> GoExpression {
         if let Some(slot) = slot
-            && !self.slot_holds_unit(slot)
+            && !self.queries().slot_holds_unit(slot)
         {
             panic!("internal error: a unit value reached a slot of type `{slot}`");
         }
@@ -256,16 +246,13 @@ impl Planner<'_> {
         }
         GoExpression::unit()
     }
-
-    fn slot_holds_unit(&self, slot: &Type) -> bool {
-        self.facts.resolves_to_unit(slot)
-            || self.facts.is_interface_or_unknown(slot)
-            || self.facts.is_parameter_or_open(slot)
-    }
 }
 
 fn string_constant(text: String) -> GoExpression {
-    GoExpression::constant(format!("\"{text}\""), ConstantKind::String)
+    GoExpression::constant(
+        GoLiteral::Token(format!("\"{text}\"")),
+        ConstantKind::String,
+    )
 }
 
 pub(in crate::lowering) fn raw_string_literal(value: &str) -> String {
@@ -337,15 +324,28 @@ fn write_unicode_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
     }
 }
 
+pub(in crate::lowering) fn integer_literal(value: u64, text: &Option<String>) -> GoLiteral {
+    match text {
+        Some(original) if *original != value.to_string() => GoLiteral::Token(original.clone()),
+        _ => GoLiteral::Int(i128::from(value)),
+    }
+}
+
 fn display_form(facts: &EmitFacts<'_>, expression: &Expression) -> DisplayForm {
     DisplayForm::of(&expression.get_type(), |id| facts.definition(id))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::lowering) enum PercentSigns {
+    Escape,
+    Literal,
 }
 
 pub(in crate::lowering) fn sprintf_pieces(
     facts: &EmitFacts<'_>,
     parts: &[FormatStringPart],
     values: impl IntoIterator<Item = GoExpression>,
-    escape_percent: bool,
+    percent_signs: PercentSigns,
 ) -> (String, Vec<GoExpression>) {
     let mut values = values.into_iter();
     let mut format_string = String::new();
@@ -355,7 +355,7 @@ pub(in crate::lowering) fn sprintf_pieces(
             FormatStringPart::Text(text) => {
                 let unescaped = text.replace("{{", "{").replace("}}", "}");
                 let unescaped = convert_escape_sequences(&unescaped);
-                if escape_percent {
+                if percent_signs == PercentSigns::Escape {
                     format_string.push_str(&unescaped.replace('%', "%%"));
                 } else {
                     format_string.push_str(&unescaped);
@@ -408,4 +408,28 @@ pub(in crate::lowering) fn format_string_lowers_to_sprintf(
         return true;
     };
     display_form(facts, solo) == DisplayForm::Char
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn constant_needs_go_type(
+        &self,
+        constant: Option<ConstantKind>,
+        slot_ty: &Type,
+    ) -> Option<GoType> {
+        let kind = constant?;
+        if self.facts.is_interface_or_unknown(slot_ty) {
+            return None;
+        }
+        let peeled = self.plain_literal_go_type(slot_ty)?;
+        if kind.is_default_go_type(&peeled) {
+            return None;
+        }
+        Some(self.go_type(slot_ty))
+    }
+
+    fn slot_holds_unit(&self, slot: &Type) -> bool {
+        self.facts.resolves_to_unit(slot)
+            || self.facts.is_interface_or_unknown(slot)
+            || self.facts.is_parameter_or_open(slot)
+    }
 }

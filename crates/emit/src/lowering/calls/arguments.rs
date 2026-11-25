@@ -3,6 +3,9 @@ use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::abi::return_abi;
+use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
+use crate::lowering::planner::queries::PlannerQueries;
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::EcoString;
 
@@ -26,7 +29,7 @@ use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
 pub(super) struct CallArgumentsContext<'plan, 'facts> {
-    pub(super) plan: &'plan CallPlan<'facts>,
+    pub(super) plan: &'plan CallPlan<'facts, 'plan>,
     pub(super) spread: Option<&'plan Expression>,
     pub(super) capture_boundary: CaptureBoundary,
     pub(super) assigned_place: Option<&'plan Expression>,
@@ -57,7 +60,7 @@ impl Planner<'_> {
             .enumerate()
             .map(|(i, arg)| self.plan_call_arg(arg, i, ctx))
             .collect();
-        let operands = self.type_constant_arguments(operands, ctx);
+        let operands = self.queries().type_constant_arguments(operands, ctx);
         let extra_leading = usize::from(leading.is_some());
         let operands: Vec<ValuePlan> = leading.into_iter().chain(operands).collect();
         let variadic = ctx.plan.resolved.abi.variadic_param();
@@ -101,6 +104,144 @@ impl Planner<'_> {
         }
     }
 
+    fn plan_direct_arg(
+        &mut self,
+        arg: &Expression,
+        ctx: &CallArgumentsContext<'_, '_>,
+        param: Option<&CallableParamAbi>,
+        declared_param_ty: Option<&Type>,
+    ) -> ValuePlan {
+        let spelling = if would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty) {
+            MemberSpelling::TaggedCounterpart
+        } else {
+            MemberSpelling::Plain
+        };
+        let mut arg_ctx = self.queries().direct_arg_emit_ctx(param, spelling);
+        if let Some(assigned) = ctx.assigned_place {
+            arg_ctx = arg_ctx.with_assigned_place(assigned);
+        }
+        let argument = self.plan_composite_value(arg, arg_ctx);
+        let Some(param) = param else {
+            return self.convert_to_recorded_slot(arg, argument);
+        };
+        let coercion = self.slot_coercion(arg, &param.instantiated, Some(&param.layout));
+        let inferred = converts_for_inference(&self.facts, arg, param, |name| {
+            ctx.callee_pins_type_args || ctx.receiver_bound_parameters().contains(name)
+        });
+        if coercion.is_identity() && !inferred {
+            return argument;
+        }
+        argument.map_expression(|setup, value| {
+            let (coercion_setup, coerced) = coercion.lower(self, value);
+            setup.extend(coercion_setup);
+            if inferred {
+                GoExpression::conversion(self.queries().go_type(&param.instantiated), coerced)
+            } else {
+                coerced
+            }
+        })
+    }
+
+    fn plan_go_slot_layout_change(
+        &mut self,
+        argument: &Expression,
+        plan: &ArgumentSlotLayoutChange,
+    ) -> ValuePlan {
+        if let Some(literal) = self.try_plan_option_literal_into_layout(argument, &plan.target) {
+            return literal;
+        }
+        let value = match plan.source {
+            ArgumentValueSource::GoPhysical => match CallSite::of(argument) {
+                Some(site) => {
+                    self.plan_call_expression(site, Some(site.ty), ExpressionContext::value())
+                }
+                None => self.plan_operand(argument, ExpressionContext::value()),
+            },
+            ArgumentValueSource::Callable => self.plan_operand(
+                argument,
+                ExpressionContext::value()
+                    .with_go_function_spelling(MemberSpelling::TaggedCounterpart),
+            ),
+            ArgumentValueSource::GoSlot => match DotAccessSite::of(argument) {
+                Some(field) => self.plan_raw_nullable_field(field),
+                None => self.plan_value(argument, ExpressionContext::value()),
+            },
+            ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
+        };
+
+        let slot = &self.facts.checked(argument).value_use().slot;
+        let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
+        value.map_expression(|setup, value| {
+            let mut coercion_setup = Vec::new();
+            let changed = self.plan_layout_change(&mut coercion_setup, value, &plan.change);
+            let (conversion_setup, coerced) = coercion.lower(self, changed);
+            setup.extend(coercion_setup);
+            setup.extend(conversion_setup);
+            coerced
+        })
+    }
+
+    fn try_plan_variadic_spread_slot_layout_change(
+        &mut self,
+        spread: &Expression,
+        parameter: Option<&CallableParamAbi>,
+    ) -> Option<ValuePlan> {
+        let parameter = parameter?;
+        parameter.variadic.as_ref()?;
+
+        let raw_source = self.queries().go_physical_expression_layout(spread);
+        let source = raw_source.clone().unwrap_or_else(|| {
+            self.facts
+                .value_layout(&spread.get_type(), SlotOrigin::Lisette)
+        });
+        let target = ValueLayout::Slice {
+            collection_type: spread.get_type(),
+            element: Box::new(parameter.layout.clone()),
+        };
+        let coercion = CoercionPlan::change(&self.queries(), &source, &target);
+        if coercion.is_identity() && raw_source.is_none() {
+            return None;
+        }
+
+        let value = match CallSite::of(spread).filter(|_| raw_source.is_some()) {
+            Some(site) => {
+                self.plan_call_expression(site, Some(site.ty), ExpressionContext::value())
+            }
+            None => self.plan_value(spread, ExpressionContext::value()),
+        };
+        Some(value.map_expression(|setup, value| {
+            let (coercion_setup, coerced) = coercion.lower(self, value);
+            setup.extend(coercion_setup);
+            coerced
+        }))
+    }
+}
+
+fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Option<&Type>) -> bool {
+    callee.is_prelude_dispatch && takes_prelude_callback(declared_param_ty)
+}
+
+pub(in crate::lowering) fn converts_for_inference(
+    facts: &EmitFacts<'_>,
+    argument: &Expression,
+    parameter: &CallableParamAbi,
+    pinned: impl FnOnce(&str) -> bool,
+) -> bool {
+    let Some(Type::Parameter(name)) = &parameter.declared else {
+        return false;
+    };
+    if pinned(name) {
+        return false;
+    }
+    let checked = facts.checked(argument);
+    let value_use = match argument {
+        Expression::Cast { .. } => checked.cast_operand(),
+        _ => checked.value_use(),
+    };
+    matches!(value_use.adaptation, Adaptation::Interface(_))
+}
+
+impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn plan_argument(
         &self,
         argument: &Expression,
@@ -194,44 +335,6 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn plan_direct_arg(
-        &mut self,
-        arg: &Expression,
-        ctx: &CallArgumentsContext<'_, '_>,
-        param: Option<&CallableParamAbi>,
-        declared_param_ty: Option<&Type>,
-    ) -> ValuePlan {
-        let spelling = if would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty) {
-            MemberSpelling::TaggedCounterpart
-        } else {
-            MemberSpelling::Plain
-        };
-        let mut arg_ctx = self.direct_arg_emit_ctx(param, spelling);
-        if let Some(assigned) = ctx.assigned_place {
-            arg_ctx = arg_ctx.with_assigned_place(assigned);
-        }
-        let argument = self.plan_composite_value(arg, arg_ctx);
-        let Some(param) = param else {
-            return self.convert_to_recorded_slot(arg, argument);
-        };
-        let coercion = self.slot_coercion(arg, &param.instantiated, Some(&param.layout));
-        let inferred = converts_for_inference(&self.facts, arg, param, |name| {
-            ctx.callee_pins_type_args || ctx.receiver_bound_parameters().contains(name)
-        });
-        if coercion.is_identity() && !inferred {
-            return argument;
-        }
-        argument.map_expression(|setup, value| {
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
-            if inferred {
-                GoExpression::conversion(self.go_type(&param.instantiated), coerced)
-            } else {
-                coerced
-            }
-        })
-    }
-
     fn direct_arg_emit_ctx<'b>(
         &self,
         param: Option<&'b CallableParamAbi>,
@@ -267,7 +370,7 @@ impl Planner<'_> {
             return None;
         };
         let CallableReturnAbi::Lowered(target) = return_abi(
-            &self.facts,
+            self.facts,
             &param_f.return_type,
             ReturnSlot::FunctionValue(parameter.origin),
         ) else {
@@ -277,7 +380,7 @@ impl Planner<'_> {
         let source = self
             .resolve_callable_value(argument)?
             .abi
-            .function_layout(&self.facts);
+            .function_layout(self.facts);
         if !source.return_abi.is_lowered()
             || source.return_abi == CallableReturnAbi::Lowered(target.clone())
         {
@@ -288,7 +391,7 @@ impl Planner<'_> {
             return None;
         };
         let target = layout.with_return_abi(
-            &self.facts,
+            self.facts,
             CallableReturnAbi::Lowered(target),
             parameter.origin,
         );
@@ -349,47 +452,6 @@ impl Planner<'_> {
         })
     }
 
-    fn plan_go_slot_layout_change(
-        &mut self,
-        argument: &Expression,
-        plan: &ArgumentSlotLayoutChange,
-    ) -> ValuePlan {
-        if let Some(literal) = self.try_plan_option_literal_into_layout(argument, &plan.target) {
-            return literal;
-        }
-        let value = match plan.source {
-            ArgumentValueSource::GoPhysical => {
-                if matches!(argument, Expression::Call { .. }) {
-                    self.plan_call_expression(
-                        argument,
-                        Some(&argument.get_type()),
-                        ExpressionContext::value(),
-                    )
-                } else {
-                    self.plan_operand(argument, ExpressionContext::value())
-                }
-            }
-            ArgumentValueSource::Callable => self.plan_operand(
-                argument,
-                ExpressionContext::value()
-                    .with_go_function_spelling(MemberSpelling::TaggedCounterpart),
-            ),
-            ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
-            ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
-        };
-
-        let slot = &self.facts.checked(argument).value_use().slot;
-        let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
-        value.map_expression(|setup, value| {
-            let mut coercion_setup = Vec::new();
-            let changed = self.plan_layout_change(&mut coercion_setup, value, &plan.change);
-            let (conversion_setup, coerced) = coercion.lower(self, changed);
-            setup.extend(coercion_setup);
-            setup.extend(conversion_setup);
-            coerced
-        })
-    }
-
     fn raw_go_slot_layout(&self, expression: &Expression) -> Option<ValueLayout> {
         let Expression::DotAccess {
             expression: base,
@@ -425,7 +487,7 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> Option<ValueLayout> {
         if self.call_target_is_go(expression)
-            && let Some(plan) = self.plan_call(expression)
+            && let Some(plan) = CallSite::of(expression).map(|site| self.plan_call(site))
             && matches!(plan.resolved.abi.result, CallableReturnAbi::Value)
         {
             return Some(plan.resolved.abi.return_layout);
@@ -436,65 +498,7 @@ impl Planner<'_> {
         let callable = self.resolve_callable_value(expression)?;
         matches!(callable.origin, CallableOrigin::GoInterop).then(|| ValueLayout::Function {
             function_type: expression.get_type(),
-            layout: callable.function_layout(&self.facts),
+            layout: callable.function_layout(self.facts),
         })
     }
-
-    fn try_plan_variadic_spread_slot_layout_change(
-        &mut self,
-        spread: &Expression,
-        parameter: Option<&CallableParamAbi>,
-    ) -> Option<ValuePlan> {
-        let parameter = parameter?;
-        parameter.variadic.as_ref()?;
-
-        let raw_source = self.go_physical_expression_layout(spread);
-        let source = raw_source.clone().unwrap_or_else(|| {
-            self.facts
-                .value_layout(&spread.get_type(), SlotOrigin::Lisette)
-        });
-        let target = ValueLayout::Slice {
-            collection_type: spread.get_type(),
-            element: Box::new(parameter.layout.clone()),
-        };
-        let coercion = CoercionPlan::change(self, &source, &target);
-        if coercion.is_identity() && raw_source.is_none() {
-            return None;
-        }
-
-        let value = if raw_source.is_some() {
-            self.plan_call_expression(spread, Some(&spread.get_type()), ExpressionContext::value())
-        } else {
-            self.plan_value(spread, ExpressionContext::value())
-        };
-        Some(value.map_expression(|setup, value| {
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
-            coerced
-        }))
-    }
-}
-
-fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Option<&Type>) -> bool {
-    callee.is_prelude_dispatch && takes_prelude_callback(declared_param_ty)
-}
-
-pub(in crate::lowering) fn converts_for_inference(
-    facts: &EmitFacts<'_>,
-    argument: &Expression,
-    parameter: &CallableParamAbi,
-    pinned: impl FnOnce(&str) -> bool,
-) -> bool {
-    let Some(Type::Parameter(name)) = &parameter.declared else {
-        return false;
-    };
-    if pinned(name) {
-        return false;
-    }
-    let checked = facts.checked(argument);
-    let value_use = match argument {
-        Expression::Cast { .. } => checked.cast_operand(),
-        _ => checked.value_use(),
-    };
-    matches!(value_use.adaptation, Adaptation::Interface(_))
 }

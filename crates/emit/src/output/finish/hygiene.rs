@@ -32,7 +32,7 @@ fn terminate_function_literals(statements: &mut Vec<Statement>) {
     impl VisitorMut for Literals {
         fn expression(&mut self, node: &mut GoExpressionNode) {
             if let GoExpressionNode::FunctionLiteral { result, body, .. } = node
-                && !result.code.is_empty()
+                && !result.is_empty()
             {
                 body.ensure_go_termination();
             }

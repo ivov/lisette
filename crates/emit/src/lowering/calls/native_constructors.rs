@@ -4,6 +4,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_returns::multi_value_return;
 use crate::lowering::abi::return_abi;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::finish::function_literals::function_literal;
@@ -46,17 +47,12 @@ fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKin
 }
 
 impl Planner<'_> {
-    fn native_element_type(&self, function: &Expression) -> GoType {
-        let element = self.facts.checked(function).callee().first_type_argument();
-        self.go_type(element)
-    }
-
     fn plan_size_argument(&mut self, ctx: &NativeCallContext) -> (Vec<Statement>, GoExpression) {
         match ctx.args.first() {
             Some(a) => self
                 .plan_operand(a, ExpressionContext::value())
                 .into_parts(),
-            None => (Vec::new(), GoExpression::literal("0".to_string())),
+            None => (Vec::new(), GoExpression::integer(0)),
         }
     }
 
@@ -66,7 +62,7 @@ impl Planner<'_> {
     ) -> Option<ValuePlan> {
         match (ctx.native_type, ctx.method) {
             (NativeTypeKind::Channel, "new") => {
-                let element = self.native_element_type(ctx.function);
+                let element = self.queries().native_element_type(ctx.function);
                 Some(ValuePlan::computed(
                     Vec::new(),
                     GoExpression::call(
@@ -79,7 +75,7 @@ impl Planner<'_> {
                 ))
             }
             (NativeTypeKind::Channel, "buffered") => {
-                let element = self.native_element_type(ctx.function);
+                let element = self.queries().native_element_type(ctx.function);
                 let (setup, capacity) = self.plan_size_argument(ctx);
                 Some(ValuePlan::computed(
                     setup,
@@ -97,7 +93,7 @@ impl Planner<'_> {
             }
             (NativeTypeKind::Map, "new") => {
                 let (key, value) = map_entry_types(&self.facts, ctx.function);
-                let (key, value) = (self.go_type(&key), self.go_type(&value));
+                let (key, value) = (self.queries().go_type(&key), self.queries().go_type(&value));
                 Some(ValuePlan::computed(
                     Vec::new(),
                     GoExpression::call(
@@ -108,7 +104,7 @@ impl Planner<'_> {
             }
             (NativeTypeKind::Map, "from") => self.try_plan_map_from_pairs(ctx),
             (NativeTypeKind::Slice, "new") => {
-                let element = self.native_element_type(ctx.function);
+                let element = self.queries().native_element_type(ctx.function);
                 Some(ValuePlan::computed(
                     Vec::new(),
                     GoExpression::empty_composite(GoType::slice_of(&element)),
@@ -134,7 +130,7 @@ impl Planner<'_> {
             .first_type_argument()
             .clone();
 
-        let element = self.go_type(&element_ty);
+        let element = self.queries().go_type(&element_ty);
         let (setup, length) = self.plan_size_argument(ctx);
         let value = if self.facts.go_zero_is_lisette_zero(&element_ty) {
             GoExpression::call(
@@ -169,10 +165,10 @@ impl Planner<'_> {
             return None;
         };
 
-        let result_list = self.return_go_type(&abi, returned);
+        let result_list = self.queries().return_go_type(&abi, returned);
         let none_values = self.lowered_none_values(shape, returned);
 
-        let element_go = self.go_type(&element);
+        let element_go = self.queries().go_type(&element);
         let array_go = GoType::array_of(length, &element_go);
 
         let operand = self.plan_operand(argument, ExpressionContext::value());
@@ -180,7 +176,7 @@ impl Planner<'_> {
 
         let slice_name = self.scope.helper_local("s", self.names);
         let slice = || GoExpression::identifier(slice_name.clone());
-        let literal = |text: String| GoExpression::literal(text);
+        let literal = |text: String| GoExpression::token(text);
         let value = GoExpression::call(
             function_literal(
                 vec![GoParameter::new(
@@ -249,8 +245,8 @@ impl Planner<'_> {
         if !keys_checked_as_go_constants(&keys, self.facts.simple_kind(&key_ty)) {
             return None;
         }
-        let value_go_ty = self.go_type(&value_ty);
-        let map_ty = GoType::map_of(&self.go_type(&key_ty), &value_go_ty);
+        let value_go_ty = self.queries().go_type(&value_ty);
+        let map_ty = GoType::map_of(&self.queries().go_type(&key_ty), &value_go_ty);
 
         if pairs.is_empty() {
             return Some(ValuePlan::computed(
@@ -310,5 +306,12 @@ fn map_entry_types<'a>(facts: &EmitFacts<'a>, function: &Expression) -> (Type, T
     match (types.next(), types.next()) {
         (Some(key), Some(value)) => (key.clone(), value.clone()),
         _ => panic!("internal error: a map constructor has no checked entry types"),
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    fn native_element_type(&self, function: &Expression) -> GoType {
+        let element = self.facts.checked(function).callee().first_type_argument();
+        self.go_type(element)
     }
 }

@@ -254,6 +254,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let arm_index = *arm_index;
         let pattern_has_collisions = self
             .planner
+            .queries()
             .pattern_has_binding_collisions(&self.arms[arm_index].pattern);
         let arm_body = &*self.arms[arm_index].expression;
 

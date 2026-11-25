@@ -1,5 +1,6 @@
 use super::aliases::replace_identifier;
 use super::name_uses::NameUses;
+use crate::target::ir::go_expression::GoLiteral;
 
 use crate::target::ir::bodies::{
     AssignForm, Definition, ElseArm, LoopKind, LoopTransfer, LoweredBlock, LoweredStatement,
@@ -11,10 +12,10 @@ use crate::target::ir::values::GoExpression;
 
 pub(super) fn return_found_elements_directly(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |block| {
+        let uses = NameUses::of(block);
         let Some(found) = search_loop_return(block) else {
             return;
         };
-        let uses = NameUses::of(block);
         if uses.reads(&found.flag) != 2 || uses.bindings(&found.flag) != 1 {
             return;
         }
@@ -24,32 +25,32 @@ pub(super) fn return_found_elements_directly(statements: &mut Vec<Statement>) {
             return;
         }
 
-        let mut success = found.success.clone();
-        if let (Some(value), Some(element)) = (&found.value, &found.element) {
+        let SearchLoopReturn {
+            declares_at,
+            loop_at,
+            value,
+            element,
+            mut success,
+            failure,
+            hit_body,
+            ..
+        } = found;
+        if let (Some(value), Some(element)) = (&value, &element) {
             for returned in &mut success {
                 replace_identifier(returned.node_mut(), value, element);
             }
         }
-
-        let LoweredStatement::Loop(plan) = &mut block[found.loop_at].kind else {
-            unreachable!("search_loop_return matched a loop");
-        };
-        let Some(LoweredStatement::If(hit)) =
-            plan.body.statements.last_mut().map(|last| &mut last.kind)
-        else {
-            unreachable!("search_loop_return matched a trailing if");
-        };
-        hit.then_body = LoweredBlock {
+        *hit_body = LoweredBlock {
             statements: vec![LoweredStatement::Return(success).into()],
         };
 
-        block.truncate(found.loop_at + 1);
-        block.push(LoweredStatement::Return(found.failure).into());
-        block.drain(found.declares_at..found.loop_at);
+        block.truncate(loop_at + 1);
+        block.push(LoweredStatement::Return(failure).into());
+        block.drain(declares_at..loop_at);
     });
 }
 
-struct SearchLoopReturn {
+struct SearchLoopReturn<'b> {
     declares_at: usize,
     loop_at: usize,
     flag: GoIdentifier,
@@ -57,9 +58,10 @@ struct SearchLoopReturn {
     element: Option<GoIdentifier>,
     success: Vec<GoExpression>,
     failure: Vec<GoExpression>,
+    hit_body: &'b mut LoweredBlock,
 }
 
-fn search_loop_return(block: &[Statement]) -> Option<SearchLoopReturn> {
+fn search_loop_return(block: &mut [Statement]) -> Option<SearchLoopReturn<'_>> {
     let loop_at = block.len().checked_sub(3)?;
     let define_at = loop_at.checked_sub(1)?;
     let flag = false_define(&block[define_at].kind)?;
@@ -85,14 +87,22 @@ fn search_loop_return(block: &[Statement]) -> Option<SearchLoopReturn> {
     let LoweredStatement::Return(success) = &block[loop_at + 2].kind else {
         return None;
     };
+    let success = success.clone();
+    let LoweredStatement::Loop(plan) = &mut block[loop_at].kind else {
+        return None;
+    };
+    let LoweredStatement::If(hit) = &mut plan.body.statements.last_mut()?.kind else {
+        return None;
+    };
     Some(SearchLoopReturn {
         declares_at,
         loop_at,
         flag,
         value,
         element,
-        success: success.clone(),
+        success,
         failure,
+        hit_body: &mut hit.then_body,
     })
 }
 
@@ -103,7 +113,11 @@ fn false_define(statement: &LoweredStatement) -> Option<GoIdentifier> {
     let [name] = names.as_slice() else {
         return None;
     };
-    matches!(value.node(), GoExpressionNode::Literal(text) if text == "false").then(|| name.clone())
+    matches!(
+        value.node(),
+        GoExpressionNode::Literal(GoLiteral::Bool(false))
+    )
+    .then(|| name.clone())
 }
 
 fn found_hit(
@@ -162,7 +176,10 @@ fn assigns_true(statement: &LoweredStatement, target: &GoIdentifier) -> bool {
     };
 
     matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target))
-        && matches!(value.node(), GoExpressionNode::Literal(text) if text == "true")
+        && matches!(
+            value.node(),
+            GoExpressionNode::Literal(GoLiteral::Bool(true))
+        )
 }
 
 fn flag_guarded_return(

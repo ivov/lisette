@@ -2,6 +2,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::output::finish::function_literals::immediate_call;
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::local::GoIdentifier;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
@@ -19,7 +20,7 @@ use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::control_flow::propagation::plain_return;
-use crate::lowering::patterns::binding_declarations::pattern_literal_text;
+use crate::lowering::patterns::binding_declarations::pattern_literal;
 use crate::target::ir::bodies::{LoweredBlock, define_many};
 use crate::target::ir::go_expression::{
     FunctionLiteralLayout, GoBinaryOperator, GoExpressionNode, GoUnaryOperator,
@@ -105,12 +106,12 @@ impl AccessPath {
                 PathSegment::Field(name) => GoExpression::selector(result, name.clone()),
                 PathSegment::ValueField(name) => GoExpression::value_field(result, name.clone()),
                 PathSegment::Index(index) => {
-                    GoExpression::index(result, GoExpression::literal(index.to_string()))
+                    GoExpression::index(result, GoExpression::integer(*index as i128))
                         .proven_in_bounds()
                 }
                 PathSegment::SliceFrom(offset) => GoExpression::slice(
                     result,
-                    Some(&GoExpression::literal(offset.to_string())),
+                    Some(&GoExpression::integer(*offset as i128)),
                     None,
                     None,
                 )
@@ -119,7 +120,7 @@ impl AccessPath {
                     go_type.clone(),
                     GoExpression::slice(
                         result,
-                        Some(&GoExpression::literal(offset.to_string())),
+                        Some(&GoExpression::integer(*offset as i128)),
                         None,
                         None,
                     )
@@ -284,7 +285,7 @@ impl Check {
                 GoExpression::binary(
                     length_of(path),
                     operator,
-                    GoExpression::literal(length.to_string()),
+                    GoExpression::integer(*length as i128),
                 )
             }
             Check::SliceLengthAtLeast { path, min_length } => {
@@ -296,7 +297,7 @@ impl Check {
                 GoExpression::binary(
                     length_of(path),
                     operator,
-                    GoExpression::literal(min_length.to_string()),
+                    GoExpression::integer(*min_length as i128),
                 )
             }
             Check::Or { alternatives } if !negative => alternatives
@@ -643,8 +644,7 @@ pub(in crate::lowering) enum SwitchShape {
 
 pub(in crate::lowering) fn boolean_literal(expression: &GoExpression) -> Option<bool> {
     match expression.node() {
-        GoExpressionNode::Literal(text) if text == "true" => Some(true),
-        GoExpressionNode::Literal(text) if text == "false" => Some(false),
+        GoExpressionNode::Literal(GoLiteral::Bool(value)) => Some(*value),
         _ => None,
     }
 }
@@ -1044,7 +1044,7 @@ pub(super) fn render_condition(
     subject_var: SubjectRoot<'_>,
 ) -> GoExpression {
     if checks.is_empty() {
-        return GoExpression::literal("true".to_string());
+        return GoExpression::boolean(true);
     }
     join_conditions(scope, checks, subject_var)
 }

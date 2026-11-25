@@ -1,7 +1,10 @@
 use crate::lowering::calls::predicates::Polarity;
+use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::lowering::expressions::values::with_source_positions;
+use crate::lowering::planner::queries::PlannerQueries;
+use crate::target::ir::go_expression::GoLiteral;
 
 use super::{NativeCallContext, NativeCallForm};
 use crate::Planner;
@@ -9,6 +12,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::planner::written_span;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -51,7 +55,7 @@ impl<'a> Planner<'a> {
         };
 
         let spread = spread.as_deref();
-        if self.is_local_binding(callee) {
+        if self.queries().is_local_binding(callee) {
             return None;
         }
         let CallOperation::Native { kind, method } = &self.facts.checked(callee).callee().operation
@@ -59,7 +63,7 @@ impl<'a> Planner<'a> {
             return None;
         };
         let kind = *kind;
-        let plan = self.plan_call(call_expression)?;
+        let plan = self.queries().plan_call(CallSite::of(call_expression)?);
         let native_ctx = NativeCallContext {
             function: callee,
             form: NativeCallForm::method(callee),
@@ -79,47 +83,36 @@ impl<'a> Planner<'a> {
 
     pub(in crate::lowering) fn plan_call_expression(
         &mut self,
-        call_expression: &Expression,
+        site: CallSite<'_>,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let plan = self
-            .plan_call(call_expression)
-            .expect("plan_call yields Some for a Call expression");
-        self.plan_call_with_plan(call_expression, call_ty, ctx, plan)
+        let plan = self.queries().plan_call(site);
+        self.plan_call_with_plan(plan, call_ty, ctx)
     }
 
     pub(in crate::lowering) fn plan_call_with_plan(
         &mut self,
-        call_expression: &Expression,
+        plan: CallPlan<'a, '_>,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
-        plan: CallPlan<'a>,
     ) -> ValuePlan {
-        let lowered = self.plan_unpositioned_call(call_expression, call_ty, ctx, plan);
+        let call_expression = plan.site.expression;
+        let lowered = self.plan_unpositioned_call(plan, call_ty, ctx);
         with_source_positions(&self.facts, &written_span(call_expression), lowered)
     }
 
     fn plan_unpositioned_call(
         &mut self,
-        call_expression: &Expression,
+        plan: CallPlan<'a, '_>,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
-        plan: CallPlan<'a>,
     ) -> ValuePlan {
-        let Expression::Call {
-            expression: callee,
-            args,
-            type_arguments,
-            spread,
-            ..
-        } = call_expression
-        else {
-            unreachable!("plan_call_expression requires a Call expression");
-        };
-
-        let spread = spread.as_deref();
-        let written_type_arguments = type_arguments.annotations().len();
+        let call_expression = plan.site.expression;
+        let callee = plan.site.callee;
+        let args = plan.site.args;
+        let spread = plan.site.spread;
+        let written_type_arguments = plan.site.written_type_arguments();
 
         if let Some(predicate) =
             self.try_plan_fused_predicate_value(call_expression, Polarity::Positive)
@@ -149,7 +142,10 @@ impl<'a> Planner<'a> {
                     .clone();
 
                 let value = self.lisette_zero(&ty);
-                let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {
+                let value = match self
+                    .queries()
+                    .constant_needs_go_type(value.constant_kind(), &ty)
+                {
                     Some(go_type) => GoExpression::conversion(go_type, value),
                     None => value,
                 };
@@ -160,7 +156,9 @@ impl<'a> Planner<'a> {
                 return ValuePlan::plain_call(setup, value);
             }
             CallableOrigin::Source(CallOperation::UfcsFunction) => {
-                return self.plan_ufcs_call(callee, args, written_type_arguments, spread, &plan);
+                if let Some(function) = DotAccessSite::of(callee) {
+                    return self.plan_ufcs_call(function, &plan);
+                }
             }
             CallableOrigin::Source(
                 operation @ (CallOperation::NativeConstructor { kind, method }
@@ -192,7 +190,9 @@ impl<'a> Planner<'a> {
                 } else {
                     GoExport::Unexported
                 };
-                let go_method = self.receiver_method_ufcs_go_name(callee, &plan, export);
+                let go_method = self
+                    .queries()
+                    .receiver_method_ufcs_go_name(callee, &plan, export);
                 return self.plan_receiver_method_ufcs(args, go_method, spread, &plan);
             }
             CallableOrigin::GoInterop
@@ -206,25 +206,7 @@ impl<'a> Planner<'a> {
             ) => {}
         }
 
-        self.plan_regular_call(call_expression, &plan, call_ty, ctx)
-    }
-
-    fn receiver_method_ufcs_go_name(
-        &self,
-        callee: &Expression,
-        plan: &CallPlan<'_>,
-        export: GoExport,
-    ) -> String {
-        let method = extract_receiver_ufcs_method(callee);
-        let receiver = plan
-            .resolved
-            .instantiated
-            .as_function_type()
-            .and_then(|f| f.params.first())
-            .map_or(&Type::Never, |receiver| &receiver.ty);
-
-        self.facts
-            .receiver_method_go_name(receiver, &method, export, self.member_spelling(callee))
+        self.plan_regular_call(&plan, call_ty, ctx)
     }
 
     pub(super) fn plan_native_call(&mut self, context: &NativeCallContext) -> ValuePlan {
@@ -242,8 +224,8 @@ impl<'a> Planner<'a> {
         {
             result.setup.push(discard(result.value));
             result.value = GoExpression::conversion(
-                self.go_type(&Type::int()),
-                GoExpression::constant(length.to_string(), ConstantKind::Int),
+                self.queries().go_type(&Type::int()),
+                GoExpression::constant(GoLiteral::Int(i128::from(length)), ConstantKind::Int),
             );
         }
         let reads_fixed_length = reads_length
@@ -289,7 +271,9 @@ impl<'a> Planner<'a> {
         let Expression::Call { args, .. } = call_expression else {
             return None;
         };
-        let target = self.resolve_tuple_struct_target(call_expression, call_ty)?;
+        let target = self
+            .queries()
+            .resolve_tuple_struct_target(call_expression, call_ty)?;
 
         let arg_ctx = match (ctx.assigned_place(), args.len()) {
             (Some(assigned), 1) => ExpressionContext::value().with_assigned_place(assigned),
@@ -316,7 +300,7 @@ impl<'a> Planner<'a> {
             .map(|(a, slot)| {
                 let origin = self.facts.function_type_origin(slot, SlotOrigin::Lisette);
                 let ctx = arg_ctx.with_function_slot_origin(origin);
-                let source = self.emitted_value_layout(a, ctx);
+                let source = self.queries().emitted_value_layout(a, ctx);
                 (self.plan_composite_value(a, ctx), source)
             })
             .unzip();
@@ -346,42 +330,6 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::computed(setup, value))
     }
 
-    fn resolve_tuple_struct_target(
-        &self,
-        call_expression: &Expression,
-        call_ty: Option<&Type>,
-    ) -> Option<TupleStructTarget<'a>> {
-        let Expression::Call {
-            expression: function,
-            args,
-            ..
-        } = call_expression
-        else {
-            return None;
-        };
-
-        let ty = function.get_type();
-        let f = ty.as_function_type()?;
-        let return_ty = call_ty
-            .cloned()
-            .unwrap_or_else(|| f.return_type.as_ref().clone());
-        let checked = self.facts.checked(call_expression);
-        let selections: Vec<&'a FieldSelection> = (0..args.len())
-            .map(|index| checked.positional_field(index))
-            .collect();
-        let field_tys = selections
-            .iter()
-            .map(|selection| selection.field_ty())
-            .collect();
-        let go_ty = self.go_type(&return_ty);
-        Some(TupleStructTarget {
-            go_ty,
-            field_tys,
-            selections,
-            owner_type: return_ty,
-        })
-    }
-
     fn plan_assert_type(
         &mut self,
         function: &Expression,
@@ -394,10 +342,10 @@ impl<'a> Planner<'a> {
             .first_type_argument()
             .clone();
 
-        let function_layouts = self.any_slot_function_layouts(&asserted);
+        let function_layouts = self.queries().any_slot_function_layouts(&asserted);
         let target_ty = match &function_layouts {
-            Some((stored, _)) => stored.go_type(self),
-            None => self.go_type(&asserted),
+            Some((stored, _)) => stored.go_type(&self.queries()),
+            None => self.queries().go_type(&asserted),
         };
         let (mut setup, arguments) = match args.first() {
             Some(a) => {
@@ -428,23 +376,14 @@ impl<'a> Planner<'a> {
             option_type: option_type.clone(),
             payload: Box::new(payload),
         };
-        let change = CoercionPlan::change(self, &option_layout(stored), &option_layout(lisette));
+        let change = CoercionPlan::change(
+            &self.queries(),
+            &option_layout(stored),
+            &option_layout(lisette),
+        );
         let (layout_change_setup, value) = change.lower(self, call);
         setup.extend(layout_change_setup);
         (setup, value)
-    }
-
-    fn is_local_binding(&self, function: &Expression) -> bool {
-        if let Expression::Identifier {
-            value, resolution, ..
-        } = function
-        {
-            self.scope
-                .resolve_identifier_with_resolution(value, resolution)
-                .is_some()
-        } else {
-            false
-        }
     }
 }
 
@@ -485,4 +424,73 @@ fn is_constant_go_len(value: &GoExpression) -> bool {
         GoExpressionNode::Call { arguments, .. }
             if matches!(arguments.as_slice(), [argument] if !argument.has_call())
     )
+}
+
+impl<'a> PlannerQueries<'_, 'a> {
+    fn receiver_method_ufcs_go_name(
+        &self,
+        callee: &Expression,
+        plan: &CallPlan<'_, '_>,
+        export: GoExport,
+    ) -> String {
+        let method = extract_receiver_ufcs_method(callee);
+        let receiver = plan
+            .resolved
+            .instantiated
+            .as_function_type()
+            .and_then(|f| f.params.first())
+            .map_or(&Type::Never, |receiver| &receiver.ty);
+
+        self.facts
+            .receiver_method_go_name(receiver, &method, export, self.member_spelling(callee))
+    }
+
+    fn resolve_tuple_struct_target(
+        &self,
+        call_expression: &Expression,
+        call_ty: Option<&Type>,
+    ) -> Option<TupleStructTarget<'a>> {
+        let Expression::Call {
+            expression: function,
+            args,
+            ..
+        } = call_expression
+        else {
+            return None;
+        };
+
+        let ty = function.get_type();
+        let f = ty.as_function_type()?;
+        let return_ty = call_ty
+            .cloned()
+            .unwrap_or_else(|| f.return_type.as_ref().clone());
+        let checked = self.facts.checked(call_expression);
+        let selections: Vec<&'a FieldSelection> = (0..args.len())
+            .map(|index| checked.positional_field(index))
+            .collect();
+        let field_tys = selections
+            .iter()
+            .map(|selection| selection.field_ty())
+            .collect();
+        let go_ty = self.go_type(&return_ty);
+        Some(TupleStructTarget {
+            go_ty,
+            field_tys,
+            selections,
+            owner_type: return_ty,
+        })
+    }
+
+    fn is_local_binding(&self, function: &Expression) -> bool {
+        if let Expression::Identifier {
+            value, resolution, ..
+        } = function
+        {
+            self.scope
+                .resolve_identifier_with_resolution(value, resolution)
+                .is_some()
+        } else {
+            false
+        }
+    }
 }

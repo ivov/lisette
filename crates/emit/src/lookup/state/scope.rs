@@ -1,3 +1,4 @@
+use crate::lookup::state::scope_stack::ScopeStack;
 use crate::target::names::go_name::escape_local;
 use std::ptr;
 
@@ -23,7 +24,7 @@ pub(crate) struct ScopeState {
     pub(super) names: LocalNames,
     next_local_id: u32,
     next_loop_id: u32,
-    frames: Vec<ScopeFrame>,
+    frames: ScopeStack<ScopeFrame>,
     type_params: Vec<ScopedTypeParameter>,
     reusable_bindings: ReusableBindings,
     local_constants: FxHashMap<BindingId, Constant>,
@@ -122,9 +123,9 @@ impl ScopeState {
             names: LocalNames::default(),
             next_local_id: 0,
             next_loop_id: 0,
-            frames: vec![ScopeFrame::new(DeclarationScope::Function(
+            frames: ScopeStack::new(ScopeFrame::new(DeclarationScope::Function(
                 FunctionScope::new(Declarations::default(), ReturnContext::None),
-            ))],
+            ))),
             type_params: Vec::new(),
             reusable_bindings: ReusableBindings::default(),
             local_constants: FxHashMap::default(),
@@ -415,7 +416,7 @@ impl ScopeState {
     pub(crate) fn pop_binding_frame(&mut self) {
         assert!(
             matches!(
-                self.current_frame().declarations,
+                self.frames.innermost().declarations,
                 DeclarationScope::Transparent
             ),
             "a binding frame must be pushed before it is popped"
@@ -478,7 +479,7 @@ impl ScopeState {
     pub(crate) fn exit_block(&mut self) {
         assert!(
             matches!(
-                self.current_frame().declarations,
+                self.frames.innermost().declarations,
                 DeclarationScope::Block(_)
             ),
             "a block must be entered before it is exited"
@@ -522,7 +523,7 @@ impl ScopeState {
     pub(crate) fn exit_isolated_function(&mut self) {
         assert!(
             matches!(
-                self.current_frame().declarations,
+                self.frames.innermost().declarations,
                 DeclarationScope::Function(_)
             ),
             "an isolated function must be entered before it is exited"
@@ -630,24 +631,12 @@ impl ScopeState {
     }
 
     fn pop_frame(&mut self) {
-        assert!(self.frames.len() > 1, "cannot pop a stack's base frame");
-        self.frames.pop();
-    }
-
-    fn current_frame(&self) -> &ScopeFrame {
-        self.frames
-            .last()
-            .expect("scope state always retains a frame")
-    }
-
-    fn current_frame_mut(&mut self) -> &mut ScopeFrame {
-        self.frames
-            .last_mut()
-            .expect("scope state always retains a frame")
+        let popped = self.frames.pop();
+        assert!(popped.is_some(), "cannot pop a stack's base frame");
     }
 
     fn push_binding(&mut self, name: String, ids: &[BindingId], value: BindingValue) {
-        self.current_frame_mut().bindings.push(Binding {
+        self.frames.innermost_mut().bindings.push(Binding {
             name,
             ids: ids.to_vec(),
             value,

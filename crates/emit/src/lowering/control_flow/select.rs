@@ -326,7 +326,7 @@ impl Planner<'_> {
     }
 
     fn fresh_ok_var(&mut self) -> GoIdentifier {
-        if self.scope.has_binding_for_go_name("ok") || self.shadows_declaration("ok") {
+        if self.scope.has_binding_for_go_name("ok") || self.queries().shadows_declaration("ok") {
             self.fresh_local("ok")
         } else {
             GoIdentifier::local("ok".to_string(), self.scope.new_local_id())
@@ -533,7 +533,7 @@ impl Planner<'_> {
                     var: &case_subject,
                     ty: element_ty,
                 },
-                needs_receiver_destructure,
+                needs_receiver_destructure.then_some(receiver_var_pattern),
                 place,
             );
 
@@ -572,20 +572,17 @@ impl Planner<'_> {
         some_arm: &MatchArm,
         match_arms: &[MatchArm],
         subject: TypedSubject<'_>,
-        needs_receiver_destructure: bool,
+        destructured_payload: Option<&Pattern>,
         place: &PlacePlan,
     ) -> Option<LoweredBlock> {
         self.capture_scoped_block(|this| {
-            if !needs_receiver_destructure {
+            let Some(payload) = destructured_payload else {
                 return this.lower_block_to_place(&some_arm.expression, place);
-            }
-            let Pattern::EnumVariant { fields, .. } = &some_arm.pattern else {
-                unreachable!("Some arm must carry an EnumVariant pattern");
             };
             LoweredBlock {
                 statements: this.lower_select_match_receive_some_site(
                     subject,
-                    &fields[0],
+                    payload,
                     &some_arm.expression,
                     match_arms,
                     place,

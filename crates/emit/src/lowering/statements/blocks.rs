@@ -4,7 +4,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::control_flow::branches::if_let_match_arms;
 use crate::lowering::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::lowering::definitions::top_level::ConstPlacement;
-use crate::lowering::statements::asserts::is_test_log_call;
+use crate::lowering::statements::asserts::test_log_call;
 use crate::lowering::statements::placement::ElidableTail;
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -23,7 +23,7 @@ impl Planner<'_> {
         ty: &Type,
     ) -> (GoIdentifier, Statement) {
         let result_var = self.fresh_local("tmp");
-        let declaration = declare(result_var.clone(), self.go_type(ty));
+        let declaration = declare(result_var.clone(), self.queries().go_type(ty));
         self.scope.declare_go_name(&result_var);
         (result_var, declaration)
     }
@@ -34,9 +34,9 @@ impl Planner<'_> {
         last: &Expression,
     ) -> (Vec<Statement>, bool) {
         let mut statements: Vec<Statement> = Vec::with_capacity(rest.len() + 1);
-        let forwarded = rest
-            .split_last()
-            .and_then(|(check, rest)| Some((check, rest, self.forwarded_tail(check, last)?)));
+        let forwarded = rest.split_last().and_then(|(check, rest)| {
+            Some((check, rest, self.queries().forwarded_tail(check, last)?))
+        });
         let lowered = forwarded.map_or(rest, |(_, rest, _)| rest);
         for (index, item) in lowered.iter().enumerate() {
             let region = rest[index + 1..].iter().chain(iter::once(last));
@@ -193,8 +193,18 @@ impl Planner<'_> {
                 self.with_scope(|this| this.lower_block_as_body(expression)),
             )
             .into(),
-            Expression::For { .. } => self.lower_for_statement(expression),
-            Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
+            Expression::For {
+                binding,
+                iterable,
+                body,
+                ..
+            } => self.lower_for_statement(expression, binding, iterable, body),
+            Expression::WhileLet {
+                pattern,
+                scrutinee,
+                body,
+                ..
+            } => self.lower_while_let_statement(expression, pattern, scrutinee, body),
             Expression::Const {
                 binding,
                 identifier,
@@ -243,13 +253,17 @@ impl Planner<'_> {
             Expression::While {
                 condition, body, ..
             } => LoweredStatement::Loop(self.lower_while(condition, body)),
-            Expression::Continue { .. } => LoweredStatement::Continue(self.current_loop_transfer()),
+            Expression::Continue { .. } => {
+                LoweredStatement::Continue(self.queries().current_loop_transfer())
+            }
             Expression::Break { value: None, .. } => {
-                let transfer = LoweredStatement::Break(self.current_loop_transfer());
+                let transfer = LoweredStatement::Break(self.queries().current_loop_transfer());
                 let wide_result = self
                     .scope
                     .current_loop()
-                    .filter(|loop_context| self.widens_unit(loop_context.result_ty.as_ref()))
+                    .filter(|loop_context| {
+                        self.queries().widens_unit(loop_context.result_ty.as_ref())
+                    })
                     .and_then(|loop_context| {
                         Some((loop_context.result.clone()?, loop_context.result_ty.clone()))
                     });
@@ -305,9 +319,13 @@ impl Planner<'_> {
             Expression::Select { arms, span, .. } => {
                 self.lower_select(arms, span, &PlacePlan::Statement)
             }
-            Expression::Assert { .. } => self.lower_assert_statement(expression),
-            Expression::Call { .. } if is_test_log_call(&self.facts, expression) => {
-                self.lower_test_log_statement(expression)
+            Expression::Assert {
+                expression: operand,
+                ..
+            } => self.lower_assert_statement(expression, operand),
+            Expression::Call { .. } => {
+                let call = test_log_call(&self.facts, expression)?;
+                self.lower_test_log_statement(call)
             }
             _ => return None,
         };

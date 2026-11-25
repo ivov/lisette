@@ -55,7 +55,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
             let condition = condition
                 .clone()
-                .unwrap_or_else(|| GoExpression::literal("true".to_string()));
+                .unwrap_or_else(|| GoExpression::boolean(true));
             let body = self.with_scope(|this| {
                 let mut body: Vec<Statement> = Vec::new();
                 match &test.arm {

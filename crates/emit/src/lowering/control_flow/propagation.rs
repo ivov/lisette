@@ -1,5 +1,7 @@
 use crate::Planner;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::wrap_err::wrap_error;
+use crate::lowering::planner::queries::PlannerQueries;
 
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::lookup::facts::value_layout::ValueLayout;
@@ -40,7 +42,7 @@ pub(in crate::lowering) fn plain_return(value: GoExpression) -> Statement {
 
 #[derive(Clone, Copy)]
 pub(in crate::lowering) enum ForwardedTail<'a> {
-    ErrorCall(&'a Expression),
+    ErrorCall(CallSite<'a>),
     TaggedResult(&'a Expression),
 }
 
@@ -174,7 +176,7 @@ impl Planner<'_> {
             .facts
             .value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
         let coercion = CoercionPlan::change(
-            self,
+            &self.queries(),
             source
                 .payload()
                 .expect("propagation requires a payload layout"),
@@ -198,7 +200,7 @@ impl Planner<'_> {
         if self.scope.is_go_name_declared(var_name.spelling()) {
             statements.push(assign(GoExpression::identifier(var_name.clone()), zero));
         } else {
-            let go_ty = self.go_type(inner_ty);
+            let go_ty = self.queries().go_type(inner_ty);
             statements.push(
                 LoweredStatement::VarDeclaration {
                     name: var_name.clone(),
@@ -239,7 +241,7 @@ impl Planner<'_> {
             SlotOrigin::Lisette,
         );
         let source_layout = self.facts.value_layout(expression_ty, SlotOrigin::Lisette);
-        let (setup, values) = if self.returns_tagged_type(expression)
+        let (setup, values) = if self.queries().returns_tagged_type(expression)
             && source_layout
                 .underlying()
                 .same_representation(return_layout.underlying())
@@ -259,7 +261,7 @@ impl Planner<'_> {
                     .facts
                     .value_layout(source.logical_type(), SlotOrigin::Lisette);
                 let (error_setup, error) =
-                    CoercionPlan::change(self, source, &target).lower(self, error);
+                    CoercionPlan::change(&self.queries(), source, &target).lower(self, error);
                 setup.extend(error_setup);
                 error
             } else {
@@ -273,13 +275,6 @@ impl Planner<'_> {
         };
 
         go_returns::tag_check(fallible.failure_condition(check), setup, values)
-    }
-
-    fn returns_tagged_type(&self, operand: &Expression) -> bool {
-        let return_ctx = self.scope.current_return_ctx();
-        return_ctx.lowered_shape().is_none()
-            && return_ctx.ty().is_some()
-            && self.facts.checked(operand).forwards_failure()
     }
 
     fn propagate_failure_values(
@@ -325,7 +320,7 @@ impl Planner<'_> {
         fallible: &Fallible,
         target: PropagateTarget<'_>,
     ) -> Option<(Vec<Statement>, Option<GoExpression>)> {
-        let lowered = self.lowered_call(expression)?;
+        let lowered = self.queries().lowered_call(expression)?;
         let RawPair {
             has_value_slot,
             nil_guard,
@@ -337,13 +332,13 @@ impl Planner<'_> {
         ) {
             return None;
         }
-        let LoweredCall { call, wraps, .. } = lowered;
-        if !self.returns_fallible() {
+        let LoweredCall { site, wraps, .. } = lowered;
+        if !self.queries().returns_fallible() {
             return None;
         }
 
         let (mut statements, call) = self
-            .plan_call_expression(call, None, ExpressionContext::value())
+            .plan_call_expression(site, None, ExpressionContext::value())
             .into_parts();
         let want_value = !matches!(target, PropagateTarget::Discard);
         let named = if has_value_slot && payload_layout_change.is_none() {
@@ -431,10 +426,10 @@ impl Planner<'_> {
         fallible: &Fallible,
         target: PropagateTarget<'_>,
     ) -> Option<(Vec<Statement>, Option<GoExpression>)> {
-        if fallible.is_result() || !self.returns_fallible() {
+        if fallible.is_result() || !self.queries().returns_fallible() {
             return None;
         }
-        let producer = self.fallible_producer(expression)?;
+        let producer = self.queries().fallible_producer(expression)?;
         let named = self.declare_propagate_target(target);
         let slot = match (named, target) {
             (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
@@ -464,23 +459,25 @@ impl Planner<'_> {
         fallible: &Fallible,
         target: PropagateTarget<'_>,
     ) -> Option<(Vec<Statement>, Option<GoExpression>)> {
-        if !fallible.is_result() || !self.returns_fallible() {
+        if !fallible.is_result() || !self.queries().returns_fallible() {
             return None;
         }
-        let mapped = if let Some((fuse, mappers)) = self.map_err_call(expression) {
+        let mapped = if let Some((fuse, mappers)) = self.queries().map_err_call(expression) {
             if !fuse.carries_payload() && !matches!(target, PropagateTarget::Discard) {
                 return None;
             }
             Mapped::MapErr(fuse, mappers)
-        } else if let Some((receiver, [error])) =
-            self.prelude_method_call(expression, "Option", "ok_or")
+        } else if let Some((receiver, [error])) = self
+            .queries()
+            .prelude_method_call(expression, "Option", "ok_or")
         {
-            Mapped::OkOr(self.option_fuse_plan(receiver)?, error)
+            Mapped::OkOr(self.queries().option_fuse_plan(receiver)?, error)
         } else if let Some((receiver, [function])) =
-            self.prelude_method_call(expression, "Option", "ok_or_else")
+            self.queries()
+                .prelude_method_call(expression, "Option", "ok_or_else")
         {
             let map = map_lambda(function)?;
-            Mapped::OkOrElse(self.option_fuse_plan(receiver)?, map)
+            Mapped::OkOrElse(self.queries().option_fuse_plan(receiver)?, map)
         } else {
             return None;
         };
@@ -598,56 +595,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(super) fn map_err_call<'a>(
-        &self,
-        expression: &'a Expression,
-    ) -> Option<(ResultFusePlan<'a>, Vec<ErrorMapper<'a>>)> {
-        let (receiver, mappers) = self.error_mapper_chain(expression)?;
-        Some((self.result_fuse_plan(receiver)?, mappers))
-    }
-
-    fn error_mapper_chain<'a>(
-        &self,
-        expression: &'a Expression,
-    ) -> Option<(&'a Expression, Vec<ErrorMapper<'a>>)> {
-        let mut mappers = Vec::new();
-        let mut source = expression;
-        while let Some((receiver, [function])) =
-            self.prelude_method_call(source, "Result", "map_err")
-        {
-            let Some(mapper) = self.error_mapper(function) else {
-                break;
-            };
-            mappers.push(mapper);
-            source = receiver;
-        }
-        if mappers.is_empty() {
-            return None;
-        }
-        mappers.reverse();
-        Some((source, mappers))
-    }
-
-    fn error_mapper<'a>(&self, function: &'a Expression) -> Option<ErrorMapper<'a>> {
-        if let Some(lambda) = map_lambda(function) {
-            return Some(ErrorMapper::Lambda(lambda));
-        }
-        let named = match function {
-            Expression::Identifier { .. } => true,
-            Expression::DotAccess { resolution, .. } => matches!(
-                resolution,
-                DotAccessResolution::PackageMember { .. }
-                    | DotAccessResolution::EnumVariant { .. }
-                    | DotAccessResolution::StaticMethod { .. }
-                    | DotAccessResolution::InstanceMethodValue { .. }
-            ),
-            _ => false,
-        };
-
-        (named && !self.callee_lowers_to_type_construction(function))
-            .then_some(ErrorMapper::Function(function))
-    }
-
     fn apply_error_mappers(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -746,17 +693,17 @@ impl Planner<'_> {
         if !fallible.is_result() {
             return None;
         }
-        let (receiver, mappers) = self.error_mapper_chain(expression)?;
+        let (receiver, mappers) = self.queries().error_mapper_chain(expression)?;
         let receiver_ty = receiver.get_type();
         let plan = self.plan_operand(receiver, ExpressionContext::value());
         let local =
             matches!(receiver, Expression::Identifier { .. }) && plan.effects().can_duplicate();
-        let operand = self.plan_rests_in_stable_name(&plan);
+        let operand = self.queries().plan_rests_in_stable_name(&plan);
         let (mut statements, value) = plan.into_parts();
         let (check, stability) = if operand {
             (value, Stability::Fixed)
         } else if local {
-            let stability = self.path_read_stability(&value);
+            let stability = self.queries().path_read_stability(&value);
             (value, stability)
         } else {
             let check = self.hoist_temp(&mut statements, "check", value);
@@ -776,13 +723,14 @@ impl Planner<'_> {
         let error_target = self
             .facts
             .value_layout(error_layout.logical_type(), SlotOrigin::Lisette);
-        let (error_setup, error) = CoercionPlan::change(self, error_layout, &error_target).lower(
-            self,
-            GoExpression::value_field(
-                check.clone(),
-                tags::result_variant("Err").fields[0].to_string(),
-            ),
-        );
+        let (error_setup, error) =
+            CoercionPlan::change(&self.queries(), error_layout, &error_target).lower(
+                self,
+                GoExpression::value_field(
+                    check.clone(),
+                    tags::result_variant("Err").fields[0].to_string(),
+                ),
+            );
 
         failure_setup.extend(error_setup);
         let error = self.apply_error_mappers(&mut failure_setup, &mappers, error, Some(stability));
@@ -803,7 +751,7 @@ impl Planner<'_> {
             .facts
             .value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
         let coercion = CoercionPlan::change(
-            self,
+            &self.queries(),
             source_layout
                 .payload()
                 .expect("propagation requires a payload layout"),
@@ -814,78 +762,6 @@ impl Planner<'_> {
         statements.extend(setup);
         let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
         Some((statements, value))
-    }
-
-    pub(in crate::lowering) fn forwarded_tail<'a>(
-        &self,
-        check: &'a Expression,
-        last: &Expression,
-    ) -> Option<ForwardedTail<'a>> {
-        let Expression::Propagate {
-            expression: inner, ..
-        } = check
-        else {
-            return None;
-        };
-
-        let Expression::Call {
-            expression: callee,
-            args,
-            ..
-        } = last
-        else {
-            return None;
-        };
-
-        if prelude_constructor(callee) != Some(PreludeVariant::Ok)
-            || !matches!(args.as_slice(), [Expression::Unit { .. }])
-        {
-            return None;
-        }
-        match self.scope.current_return_ctx().lowered_shape() {
-            Some(LoweredReturnAbi::BareError) => self
-                .forwarded_error_call(inner)
-                .map(ForwardedTail::ErrorCall),
-            None => self
-                .forwarded_tagged_result(inner)
-                .map(ForwardedTail::TaggedResult),
-            Some(_) => None,
-        }
-    }
-
-    fn forwarded_error_call<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
-        if !self
-            .facts
-            .is_prelude_error(self.return_fallible()?.err_ty()?)
-        {
-            return None;
-        }
-        let lowered = self.lowered_call(inner)?;
-        if lowered.shape != LoweredReturnAbi::BareError
-            || !lowered.wraps.is_empty()
-            || lowered.changes_layout()
-            || !self
-                .facts
-                .is_prelude_error(&self.facts.err_payload(&lowered.call.get_type()))
-        {
-            return None;
-        }
-        Some(lowered.call)
-    }
-
-    fn forwarded_tagged_result<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
-        let return_ty = self.scope.current_return_ctx().ty()?.clone();
-        (self.facts.is_result(&return_ty)
-            && self
-                .facts
-                .resolves_to_unit(&self.facts.ok_payload(&return_ty))
-            && self.facts.checked(inner).forwards_failure())
-        .then_some(inner)
-    }
-
-    fn returns_fallible(&self) -> bool {
-        self.scope.current_return_ctx().lowered_shape().is_some()
-            || self.return_fallible().is_some()
     }
 
     fn declare_propagate_target<'a>(
@@ -942,4 +818,135 @@ struct MappedFailure {
     late_binding: Option<Statement>,
     failure_setup: Vec<Statement>,
     error: GoExpression,
+}
+
+impl PlannerQueries<'_, '_> {
+    fn returns_tagged_type(&self, operand: &Expression) -> bool {
+        let return_ctx = self.scope.current_return_ctx();
+        return_ctx.lowered_shape().is_none()
+            && return_ctx.ty().is_some()
+            && self.facts.checked(operand).forwards_failure()
+    }
+
+    pub(super) fn map_err_call<'a>(
+        &self,
+        expression: &'a Expression,
+    ) -> Option<(ResultFusePlan<'a>, Vec<ErrorMapper<'a>>)> {
+        let (receiver, mappers) = self.error_mapper_chain(expression)?;
+        Some((self.result_fuse_plan(receiver)?, mappers))
+    }
+
+    fn error_mapper_chain<'a>(
+        &self,
+        expression: &'a Expression,
+    ) -> Option<(&'a Expression, Vec<ErrorMapper<'a>>)> {
+        let mut mappers = Vec::new();
+        let mut source = expression;
+        while let Some((receiver, [function])) =
+            self.prelude_method_call(source, "Result", "map_err")
+        {
+            let Some(mapper) = self.error_mapper(function) else {
+                break;
+            };
+            mappers.push(mapper);
+            source = receiver;
+        }
+        if mappers.is_empty() {
+            return None;
+        }
+        mappers.reverse();
+        Some((source, mappers))
+    }
+
+    fn error_mapper<'a>(&self, function: &'a Expression) -> Option<ErrorMapper<'a>> {
+        if let Some(lambda) = map_lambda(function) {
+            return Some(ErrorMapper::Lambda(lambda));
+        }
+        let named = match function {
+            Expression::Identifier { .. } => true,
+            Expression::DotAccess { resolution, .. } => matches!(
+                resolution,
+                DotAccessResolution::PackageMember { .. }
+                    | DotAccessResolution::EnumVariant { .. }
+                    | DotAccessResolution::StaticMethod { .. }
+                    | DotAccessResolution::InstanceMethodValue { .. }
+            ),
+            _ => false,
+        };
+
+        (named && !self.callee_lowers_to_type_construction(function))
+            .then_some(ErrorMapper::Function(function))
+    }
+
+    pub(in crate::lowering) fn forwarded_tail<'a>(
+        &self,
+        check: &'a Expression,
+        last: &Expression,
+    ) -> Option<ForwardedTail<'a>> {
+        let Expression::Propagate {
+            expression: inner, ..
+        } = check
+        else {
+            return None;
+        };
+
+        let Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } = last
+        else {
+            return None;
+        };
+
+        if prelude_constructor(callee) != Some(PreludeVariant::Ok)
+            || !matches!(args.as_slice(), [Expression::Unit { .. }])
+        {
+            return None;
+        }
+        match self.scope.current_return_ctx().lowered_shape() {
+            Some(LoweredReturnAbi::BareError) => self
+                .forwarded_error_call(inner)
+                .map(ForwardedTail::ErrorCall),
+            None => self
+                .forwarded_tagged_result(inner)
+                .map(ForwardedTail::TaggedResult),
+            Some(_) => None,
+        }
+    }
+
+    fn forwarded_error_call<'a>(&self, inner: &'a Expression) -> Option<CallSite<'a>> {
+        if !self
+            .facts
+            .is_prelude_error(self.return_fallible()?.err_ty()?)
+        {
+            return None;
+        }
+        let lowered = self.lowered_call(inner)?;
+        if lowered.shape != LoweredReturnAbi::BareError
+            || !lowered.wraps.is_empty()
+            || lowered.changes_layout()
+            || !self
+                .facts
+                .is_prelude_error(&self.facts.err_payload(&lowered.site.expression.get_type()))
+        {
+            return None;
+        }
+        Some(lowered.site)
+    }
+
+    fn forwarded_tagged_result<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
+        let return_ty = self.scope.current_return_ctx().ty()?.clone();
+        (self.facts.is_result(&return_ty)
+            && self
+                .facts
+                .resolves_to_unit(&self.facts.ok_payload(&return_ty))
+            && self.facts.checked(inner).forwards_failure())
+        .then_some(inner)
+    }
+
+    fn returns_fallible(&self) -> bool {
+        self.scope.current_return_ctx().lowered_shape().is_some()
+            || self.return_fallible().is_some()
+    }
 }

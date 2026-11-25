@@ -60,12 +60,18 @@ fn statement_terminates(statement: &LoweredStatement) -> bool {
                 LoopHeader::Counted { condition, .. } => condition.is_none(),
                 LoopHeader::While(_) | LoopHeader::Range { .. } => false,
             };
-            unconditional && !breaks_out(&plan.body.statements, plan.kind.label(), true)
+            unconditional
+                && !breaks_out(
+                    &plan.body.statements,
+                    plan.kind.label(),
+                    UnlabeledBreak::Exits,
+                )
         }
         LoweredStatement::Switch(plan) => switch_terminates(plan),
         LoweredStatement::Select(plan) => plan.arms.iter().all(|arm| {
             let body = arm.body();
-            list_terminates(&body.statements) && !breaks_out(&body.statements, None, true)
+            list_terminates(&body.statements)
+                && !breaks_out(&body.statements, None, UnlabeledBreak::Exits)
         }),
         _ => false,
     }
@@ -92,7 +98,10 @@ fn switch_terminates(plan: &SwitchStatementPlan) -> bool {
         .iter()
         .map(|case| &case.body)
         .chain([default])
-        .all(|body| list_terminates(&body.statements) && !breaks_out(&body.statements, None, true))
+        .all(|body| {
+            list_terminates(&body.statements)
+                && !breaks_out(&body.statements, None, UnlabeledBreak::Exits)
+        })
 }
 
 fn is_panic_call(expression: &GoExpression) -> bool {
@@ -101,7 +110,13 @@ fn is_panic_call(expression: &GoExpression) -> bool {
             if name.is_external() && name.spelling() == "panic"))
 }
 
-fn breaks_out(statements: &[Statement], label: Option<&str>, unlabeled: bool) -> bool {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UnlabeledBreak {
+    Exits,
+    Captured,
+}
+
+fn breaks_out(statements: &[Statement], label: Option<&str>, unlabeled: UnlabeledBreak) -> bool {
     statements
         .iter()
         .any(|statement| statement_breaks_out(&statement.kind, label, unlabeled))
@@ -110,11 +125,12 @@ fn breaks_out(statements: &[Statement], label: Option<&str>, unlabeled: bool) ->
 fn statement_breaks_out(
     statement: &LoweredStatement,
     label: Option<&str>,
-    unlabeled: bool,
+    unlabeled: UnlabeledBreak,
 ) -> bool {
-    let nested = |body: &LoweredBlock| breaks_out(&body.statements, label, false);
+    let nested =
+        |body: &LoweredBlock| breaks_out(&body.statements, label, UnlabeledBreak::Captured);
     match statement {
-        LoweredStatement::Break(LoopTransfer::Unlabeled) => unlabeled,
+        LoweredStatement::Break(LoopTransfer::Unlabeled) => unlabeled == UnlabeledBreak::Exits,
         LoweredStatement::Break(LoopTransfer::Labeled(target)) => label == Some(target.as_str()),
         LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
             breaks_out(&body.statements, label, unlabeled)
@@ -130,7 +146,7 @@ fn statement_breaks_out(
     }
 }
 
-fn if_breaks_out(plan: &IfPlan, label: Option<&str>, unlabeled: bool) -> bool {
+fn if_breaks_out(plan: &IfPlan, label: Option<&str>, unlabeled: UnlabeledBreak) -> bool {
     breaks_out(&plan.then_body.statements, label, unlabeled)
         || match &plan.else_arm {
             ElseArm::None => false,

@@ -3,10 +3,15 @@ use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::abi::return_abi;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::split_native_receiver;
+use crate::lowering::control_flow::branches::Branching;
+use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::lowering::expressions::operand_order::identifier_read_stability;
-use crate::lowering::statements::asserts::is_test_log_call;
+use crate::lowering::expressions::tuple_literal::TupleLiteral;
+use crate::lowering::planner::queries::PlannerQueries;
+use crate::lowering::statements::asserts::test_log_call;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::AsyncKind;
 use crate::target::names::go_name;
@@ -56,8 +61,11 @@ impl Planner<'_> {
         expression: &Expression,
         context: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let expression = self.peel_go_slot_alias_cast(expression, context);
-        if let Some(change) = self.function_value_layout_change(expression, context) {
+        let expression = self.queries().peel_go_slot_alias_cast(expression, context);
+        if let Some(change) = self
+            .queries()
+            .function_value_layout_change(expression, context)
+        {
             return self
                 .plan_operand(expression, context)
                 .map_expression(|statements, value| {
@@ -72,48 +80,12 @@ impl Planner<'_> {
         self.plan_operand(expression, context)
     }
 
-    pub(in crate::lowering) fn function_value_layout_change(
-        &self,
-        expression: &Expression,
-        context: ExpressionContext<'_>,
-    ) -> Option<FunctionLayoutChange> {
-        if context.is_callee() {
-            return None;
-        }
-        let callee = self.resolve_callable_value(expression)?;
-        let from_go = matches!(callee.origin, CallableOrigin::GoInterop);
-        if from_go {
-            if !self.is_go_callable(expression) {
-                return None;
-            }
-        } else if context.forces_tagged_go_function()
-            || is_closure_literal(expression)
-            || self
-                .go_slot_declaration_layout(expression, context)
-                .is_some()
-        {
-            return None;
-        }
-        let origin = if from_go || callee.is_prelude_dispatch {
-            context.function_slot_origin()
-        } else {
-            SlotOrigin::Lisette
-        };
-        let return_abi = if from_go {
-            Some(self.go_fn_slot_abi(expression, context)?)
-        } else {
-            None
-        };
-        let source = callee.function_layout(&self.facts);
-        self.callable_slot_layout_change(source, &expression.get_type(), return_abi, origin)
-    }
-
     pub(in crate::lowering) fn plan_composite_value(
         &mut self,
         expression: &Expression,
         context: ExpressionContext<'_>,
     ) -> ValuePlan {
-        if self.is_unit_call(expression)
+        if self.queries().is_unit_call(expression)
             || (self.facts.resolves_to_unit(&expression.get_type())
                 && matches!(expression, Expression::Block { .. }))
         {
@@ -129,70 +101,19 @@ impl Planner<'_> {
         self.plan_value(expression, context)
     }
 
-    pub(in crate::lowering) fn never_result_layout_change(
-        &self,
-        function_ty: &Type,
-        context: ExpressionContext<'_>,
-    ) -> Option<(FunctionLayout, FunctionLayout)> {
-        let slot = context.generic_result_slot()?;
-        if !function_ty.get_function_ret().is_some_and(Type::is_never) {
-            return None;
-        }
-        let return_type = slot
-            .get_function_ret()
-            .filter(|return_type| !self.facts.returns_go_void(return_type));
-        let (source_result, target_result, return_abi) = match return_type {
-            Some(return_type) => (
-                self.facts.value_layout(&Type::Never, SlotOrigin::Lisette),
-                self.facts.value_layout(return_type, SlotOrigin::Lisette),
-                return_abi(
-                    &self.facts,
-                    return_type,
-                    ReturnSlot::FunctionExpression(context),
-                ),
-            ),
-            None => (
-                self.facts.value_layout(&Type::unit(), SlotOrigin::Lisette),
-                self.facts.value_layout(&Type::unit(), SlotOrigin::Lisette),
-                CallableReturnAbi::Value,
-            ),
-        };
-
-        let parameters = function_ty
-            .get_function_params()
-            .expect("a function has parameters")
-            .iter()
-            .map(|parameter| self.facts.value_layout(&parameter.ty, SlotOrigin::Lisette))
-            .collect::<Vec<_>>();
-
-        let source = self.facts.function_layout(
-            parameters.clone(),
-            &source_result,
-            CallableReturnAbi::Void,
-            None,
-        );
-
-        let target = self
-            .facts
-            .function_layout(parameters, &target_result, return_abi, None);
-        Some((source, target))
-    }
-
     pub(in crate::lowering) fn plan_call_value(
         &mut self,
-        expression: &Expression,
+        site: CallSite<'_>,
         result_type: &Type,
         context: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let plan = self
-            .plan_call(expression)
-            .expect("plan_call yields Some for a Call expression");
-        let layout_change = self.call_result_layout_change(&plan, result_type);
+        let plan = self.queries().plan_call(site);
+        let layout_change = self.queries().call_result_layout_change(&plan, result_type);
         let wraps_result = plan.wraps_result();
 
         if let Some(change) = layout_change {
             let call_type = (!wraps_result).then_some(result_type);
-            let call = self.plan_call_with_plan(expression, call_type, context, plan);
+            let call = self.plan_call_with_plan(plan, call_type, context);
             return call.map_observable_expression(|setup, call| {
                 let (layout_change_setup, value) = change.lower(self, call);
                 setup.extend(layout_change_setup);
@@ -201,44 +122,10 @@ impl Planner<'_> {
         }
 
         if wraps_result {
-            self.plan_go_abi_wrapped_call(
-                expression,
-                &plan.resolved.abi,
-                plan.resolved.origin,
-                result_type,
-            )
+            self.plan_go_abi_wrapped_call(&plan, result_type)
         } else {
-            self.plan_call_with_plan(expression, Some(result_type), context, plan)
+            self.plan_call_with_plan(plan, Some(result_type), context)
         }
-    }
-
-    pub(in crate::lowering) fn call_result_layout_change(
-        &self,
-        plan: &CallPlan<'_>,
-        result_type: &Type,
-    ) -> Option<CoercionPlan> {
-        match self.go_result_layout_change(&plan.resolved.abi, result_type)? {
-            GoResultLayoutChange::Whole(change) => Some(change),
-            GoResultLayoutChange::Tuple(_) | GoResultLayoutChange::Payload(_) => None,
-        }
-    }
-
-    fn go_fn_slot_abi(
-        &self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<CallableReturnAbi> {
-        let expression_ty = expression.get_type();
-        let origin = self
-            .facts
-            .function_type_origin(&expression_ty, ctx.function_slot_origin());
-        let fn_ty = self.facts.resolve_to_function_type(&expression_ty)?;
-        let f = fn_ty.as_function_type()?;
-        Some(return_abi(
-            &self.facts,
-            &f.return_type,
-            ReturnSlot::FunctionExpression(ctx.with_function_slot_origin(origin)),
-        ))
     }
 
     pub(in crate::lowering) fn plan_operand_leaf(
@@ -254,7 +141,9 @@ impl Planner<'_> {
                 resolution,
                 ..
             } => {
-                let go_expression = self.plan_identifier(expression, value, resolution, ty, ctx);
+                let go_expression = self
+                    .queries()
+                    .plan_identifier(expression, value, resolution, ty, ctx);
                 let stability = match self
                     .scope
                     .resolve_identifier_with_resolution(value, resolution)
@@ -265,7 +154,24 @@ impl Planner<'_> {
 
                 ValuePlan::from_identifier_expression(go_expression, stability)
             }
-            Expression::Call { ty, .. } => self.plan_call_value(expression, ty, ctx),
+            Expression::Call {
+                expression: callee,
+                args,
+                spread,
+                type_arguments,
+                ty,
+                ..
+            } => {
+                let site = CallSite {
+                    expression,
+                    callee,
+                    args,
+                    spread: spread.as_deref(),
+                    type_arguments,
+                    ty,
+                };
+                self.plan_call_value(site, ty, ctx)
+            }
             Expression::RawGo { text, .. } => ValuePlan::verbatim(text.clone()),
             Expression::Unit { .. } => {
                 ValuePlan::computed(Vec::new(), self.unit_value(Some(expression), None))
@@ -305,8 +211,11 @@ impl Planner<'_> {
                 ];
                 ValuePlan::computed(setup, self.unit_value(Some(expression), None))
             }
-            Expression::Assert { .. } => ValuePlan::computed(
-                vec![self.lower_assert_statement(expression).into()],
+            Expression::Assert {
+                expression: operand,
+                ..
+            } => ValuePlan::computed(
+                vec![self.lower_assert_statement(expression, operand).into()],
                 self.unit_value(Some(expression), None),
             ),
             _ => unreachable!(
@@ -319,14 +228,16 @@ impl Planner<'_> {
     pub(in crate::lowering) fn coerce_elements_to_slots(
         &mut self,
         setup: &mut Vec<Statement>,
-        tuple: &Expression,
+        literal: TupleLiteral<'_>,
         values: Vec<GoExpression>,
         slot_types: &[Type],
         target: ElementTarget,
     ) -> Vec<GoExpression> {
-        let Expression::Tuple { elements, ty, .. } = tuple else {
-            unreachable!("only a tuple literal has elements to coerce")
-        };
+        let TupleLiteral {
+            expression: tuple,
+            elements,
+            ty,
+        } = literal;
         let tuple_use = self.facts.checked(tuple).value_use();
         let placed = match &tuple_use.adaptation {
             Adaptation::Tuple(adaptations)
@@ -381,53 +292,22 @@ impl Planner<'_> {
         coerced_elements
     }
 
-    pub(in crate::lowering) fn make_tuple_callee(
-        &self,
-        slot_types: &[Type],
-        arity: usize,
-    ) -> GoExpression {
-        let callee = GoExpression::generated(
-            GeneratedPackage::Prelude,
-            go_name::make_tuple_constructor(arity),
-        );
-        if slot_types.len() != arity {
-            return callee;
-        }
-        GoExpression::instantiation(callee, self.format_type_args(slot_types))
-    }
-
-    pub(in crate::lowering) fn tail_tuple_return_slots(
-        &self,
-        tuple: &Expression,
-    ) -> Option<Vec<Type>> {
-        let Expression::Tuple {
-            ty: Type::Tuple(inferred),
-            ..
-        } = tuple
-        else {
-            return None;
-        };
-
-        let slots = self
-            .facts
-            .tuple_elements(self.scope.current_return_ctx().ty()?)?;
-        (slots.len() == inferred.len()).then_some(slots)
-    }
-
     pub(in crate::lowering) fn plan_tuple_value(
         &mut self,
-        tuple: &Expression,
+        literal: TupleLiteral<'_>,
         position: TuplePosition,
     ) -> ValuePlan {
-        let Expression::Tuple { elements, ty, .. } = tuple else {
-            unreachable!("plan_tuple_value lowers a tuple literal")
-        };
+        let TupleLiteral {
+            expression: tuple,
+            elements,
+            ty,
+        } = literal;
         let inferred_slot_types: Vec<Type> = match ty {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
         let tail_slots = match position {
-            TuplePosition::Tail => self.tail_tuple_return_slots(tuple),
+            TuplePosition::Tail => self.queries().tail_tuple_return_slots(tuple),
             TuplePosition::Value => None,
         };
         let slot_types = tail_slots.unwrap_or(inferred_slot_types);
@@ -452,13 +332,15 @@ impl Planner<'_> {
 
         let element_expressions = self.coerce_elements_to_slots(
             &mut setup,
-            tuple,
+            literal,
             sequenced.values,
             &slot_types,
             ElementTarget::Value,
         );
 
-        let callee = self.make_tuple_callee(&slot_types, element_expressions.len());
+        let callee = self
+            .queries()
+            .make_tuple_callee(&slot_types, element_expressions.len());
         ValuePlan::computed(setup, GoExpression::pure_call(callee, element_expressions))
     }
 
@@ -486,9 +368,9 @@ impl Planner<'_> {
         }
 
         let inner = self.plan_value(expression, ctx);
-        let go_type = self.go_type(ty);
+        let go_type = self.queries().go_type(ty);
 
-        let function_layout_change = self.function_slot_layout_change(expression, ty);
+        let function_layout_change = self.queries().function_slot_layout_change(expression, ty);
         if function_layout_change.changes_layout() {
             return inner
                 .map_expression(|setup, value| {
@@ -499,33 +381,18 @@ impl Planner<'_> {
                 .conversion(go_type);
         }
 
-        if self.is_identity_conversion(expression, &inner, ty) {
+        if self
+            .queries()
+            .is_identity_conversion(expression, &inner, ty)
+        {
             return inner;
         }
 
         inner.conversion(go_type)
     }
 
-    fn is_identity_conversion(
-        &self,
-        expression: &Expression,
-        inner: &ValuePlan,
-        ty: &Type,
-    ) -> bool {
-        if inner.expression().constant_kind().is_some() {
-            return false;
-        }
-        let source_ty = expression.get_type();
-        if self.facts.resolve_to_function_type(&source_ty).is_some()
-            || self.facts.resolve_to_function_type(ty).is_some()
-        {
-            return false;
-        }
-        self.target_go_type(&source_ty) == self.target_go_type(ty)
-    }
-
     pub(in crate::lowering) fn plan_reference(&mut self, inner: &Expression) -> ValuePlan {
-        if self.is_unit_call(inner) {
+        if self.queries().is_unit_call(inner) {
             let operand = self.plan_operand(inner, ExpressionContext::value());
             return operand.map_observable_expression(|setup, value_operand| {
                 if !value_operand.is_empty() {
@@ -537,7 +404,7 @@ impl Planner<'_> {
             });
         }
 
-        let unaddressable = self.is_go_unaddressable(inner);
+        let unaddressable = self.queries().is_go_unaddressable(inner);
         let reads_field = match inner {
             Expression::DotAccess { resolution, .. } => resolution.is_field_read(),
             _ => false,
@@ -575,7 +442,7 @@ impl Planner<'_> {
         end: &Option<Box<Expression>>,
         ty: &Type,
     ) -> ValuePlan {
-        let type_string = self.go_type(ty);
+        let type_string = self.queries().go_type(ty);
 
         let mut operands: Vec<ValuePlan> = Vec::new();
         let has_start = start.is_some();
@@ -680,6 +547,345 @@ impl Planner<'_> {
         statement_plan(setup)
     }
 
+    pub(in crate::lowering) fn plan_operand(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        let plan = self.plan_unpositioned_operand(expression, ctx);
+        with_source_positions(&self.facts, &written_span(expression), plan)
+    }
+
+    fn plan_unpositioned_operand(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        if let Some(call) = test_log_call(&self.facts, expression) {
+            let (setup, call) = self.plan_test_log_call(call);
+            return ValuePlan::plain_call(setup, call);
+        }
+        if runs_as_never_statement(expression) && self.facts.is_never(&expression.get_type()) {
+            return self.plan_never_value(expression);
+        }
+        match expression {
+            Expression::Paren { .. } => {
+                unreachable!("internal error: emit received a parenthesized expression")
+            }
+            Expression::Cast {
+                expression: operand,
+                ty,
+                ..
+            } => self.plan_cast(expression, operand, ty, ctx),
+            Expression::IndexedAccess {
+                expression, index, ..
+            } => self.plan_index_access(expression, index),
+            Expression::Binary {
+                operator,
+                left,
+                right,
+                ..
+            } => {
+                let conversion = self.facts.checked(expression).operand_conversion();
+                self.plan_binary(operator, left, right, conversion, ctx)
+            }
+            Expression::Unary {
+                operator,
+                expression,
+                ..
+            } => self.plan_unary(operator, expression, ctx),
+            Expression::Tuple { elements, ty, .. } => {
+                let literal = TupleLiteral {
+                    expression,
+                    elements,
+                    ty,
+                };
+                self.plan_tuple_value(literal, TuplePosition::Value)
+            }
+            Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
+            Expression::StructCall {
+                name,
+                field_assignments,
+                spread,
+                ty,
+                ..
+            } => self.plan_struct_call(expression, name, field_assignments, spread, ty),
+            Expression::Reference {
+                expression: inner, ..
+            } => self.plan_reference(inner),
+            Expression::DotAccess {
+                expression: receiver,
+                member,
+                ty,
+                resolution,
+                ..
+            } => {
+                let site = DotAccessSite {
+                    expression,
+                    receiver,
+                    member,
+                    ty,
+                    resolution,
+                };
+                self.plan_dot_access(site, ctx)
+            }
+            Expression::Task {
+                expression: inner, ..
+            } => self.plan_async_wrapper(AsyncKind::Task, inner),
+            Expression::Defer {
+                expression: inner, ..
+            } => self.plan_async_wrapper(AsyncKind::Defer, inner),
+            Expression::TryBlock { items, ty, .. } => {
+                let ty = self.queries().fallible_block_type(expression, ty);
+                self.plan_try_block(items, &ty)
+            }
+            Expression::RecoverBlock { items, ty, .. } => {
+                let ty = self.queries().fallible_block_type(expression, ty);
+                self.plan_recover_block(items, &ty)
+            }
+            Expression::Propagate { expression, .. } => {
+                let (setup, value) = self.plan_propagate(expression);
+                let stability = self.queries().path_read_stability(&value);
+                ValuePlan::new(setup, value, stability)
+            }
+            Expression::Loop { body, ty, .. } => self.plan_loop_as_operand_temp(body, ty),
+            Expression::If { ty, .. }
+            | Expression::IfLet { ty, .. }
+            | Expression::Match { ty, .. }
+            | Expression::Select { ty, .. }
+                if let Some(branching) = Branching::of(expression) =>
+            {
+                self.plan_branching_as_operand_temp(expression, branching, ty)
+            }
+            _ => self.plan_operand_leaf(expression, ctx),
+        }
+    }
+}
+
+fn needs_iife_for_async(
+    expression: &Expression,
+    operation: Option<&CallOperation>,
+    value: &GoExpression,
+) -> bool {
+    let (
+        Expression::Call {
+            expression: callee,
+            args,
+            ..
+        },
+        Some(CallOperation::Native { kind, method }),
+    ) = (expression, operation)
+    else {
+        return false;
+    };
+
+    let arity = split_native_receiver(callee, args).map_or(0, |(_, arguments)| arguments.len());
+    !matches!(value.syntax_form(), OperandForm::Call)
+        || !NativeOperation::new(*kind, method).lowers_to_plain_call(arity)
+}
+
+pub(in crate::lowering) fn with_source_positions(
+    facts: &EmitFacts<'_>,
+    span: &Span,
+    plan: ValuePlan,
+) -> ValuePlan {
+    if !facts.sourcemap() {
+        return plan;
+    }
+    let (Some(start), Some(end)) = (facts.source_position(span), facts.end_position(span)) else {
+        return plan;
+    };
+    plan.map_expression(|_, mut value| {
+        value.node_mut().fill_positions(&start, &end);
+        value.positioned(start.clone())
+    })
+}
+
+pub(in crate::lowering) fn contains_newtype_access(expression: &Expression) -> bool {
+    let mut current = expression;
+    while let Expression::DotAccess {
+        expression: inner,
+        resolution,
+        ..
+    } = current
+    {
+        if matches!(
+            resolution,
+            DotAccessResolution::TupleStructField { is_newtype: true }
+        ) {
+            return true;
+        }
+        current = inner;
+    }
+    false
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn function_value_layout_change(
+        &self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+    ) -> Option<FunctionLayoutChange> {
+        if context.is_callee() {
+            return None;
+        }
+        let callee = self.resolve_callable_value(expression)?;
+        let from_go = matches!(callee.origin, CallableOrigin::GoInterop);
+        if from_go {
+            if !self.is_go_callable(expression) {
+                return None;
+            }
+        } else if context.forces_tagged_go_function()
+            || is_closure_literal(expression)
+            || self
+                .go_slot_declaration_layout(expression, context)
+                .is_some()
+        {
+            return None;
+        }
+        let origin = if from_go || callee.is_prelude_dispatch {
+            context.function_slot_origin()
+        } else {
+            SlotOrigin::Lisette
+        };
+        let return_abi = if from_go {
+            Some(self.go_fn_slot_abi(expression, context)?)
+        } else {
+            None
+        };
+        let source = callee.function_layout(self.facts);
+        self.callable_slot_layout_change(source, &expression.get_type(), return_abi, origin)
+    }
+
+    pub(in crate::lowering) fn never_result_layout_change(
+        &self,
+        function_ty: &Type,
+        context: ExpressionContext<'_>,
+    ) -> Option<(FunctionLayout, FunctionLayout)> {
+        let slot = context.generic_result_slot()?;
+        if !function_ty.get_function_ret().is_some_and(Type::is_never) {
+            return None;
+        }
+        let return_type = slot
+            .get_function_ret()
+            .filter(|return_type| !self.facts.returns_go_void(return_type));
+        let (source_result, target_result, return_abi) = match return_type {
+            Some(return_type) => (
+                self.facts.value_layout(&Type::Never, SlotOrigin::Lisette),
+                self.facts.value_layout(return_type, SlotOrigin::Lisette),
+                return_abi(
+                    self.facts,
+                    return_type,
+                    ReturnSlot::FunctionExpression(context),
+                ),
+            ),
+            None => (
+                self.facts.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                self.facts.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                CallableReturnAbi::Value,
+            ),
+        };
+
+        let parameters = function_ty
+            .get_function_params()
+            .expect("a function has parameters")
+            .iter()
+            .map(|parameter| self.facts.value_layout(&parameter.ty, SlotOrigin::Lisette))
+            .collect::<Vec<_>>();
+
+        let source = self.facts.function_layout(
+            parameters.clone(),
+            &source_result,
+            CallableReturnAbi::Void,
+            None,
+        );
+
+        let target = self
+            .facts
+            .function_layout(parameters, &target_result, return_abi, None);
+        Some((source, target))
+    }
+
+    pub(in crate::lowering) fn call_result_layout_change(
+        &self,
+        plan: &CallPlan<'_, '_>,
+        result_type: &Type,
+    ) -> Option<CoercionPlan> {
+        match self.go_result_layout_change(&plan.resolved.abi, result_type)? {
+            GoResultLayoutChange::Whole(change) => Some(change),
+            GoResultLayoutChange::Tuple(_) | GoResultLayoutChange::Payload(_) => None,
+        }
+    }
+
+    fn go_fn_slot_abi(
+        &self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<CallableReturnAbi> {
+        let expression_ty = expression.get_type();
+        let origin = self
+            .facts
+            .function_type_origin(&expression_ty, ctx.function_slot_origin());
+        let fn_ty = self.facts.resolve_to_function_type(&expression_ty)?;
+        let f = fn_ty.as_function_type()?;
+        Some(return_abi(
+            self.facts,
+            &f.return_type,
+            ReturnSlot::FunctionExpression(ctx.with_function_slot_origin(origin)),
+        ))
+    }
+
+    pub(in crate::lowering) fn make_tuple_callee(
+        &self,
+        slot_types: &[Type],
+        arity: usize,
+    ) -> GoExpression {
+        let callee = GoExpression::generated(
+            GeneratedPackage::Prelude,
+            go_name::make_tuple_constructor(arity),
+        );
+        if slot_types.len() != arity {
+            return callee;
+        }
+        GoExpression::instantiation(callee, self.format_type_args(slot_types))
+    }
+
+    pub(in crate::lowering) fn tail_tuple_return_slots(
+        &self,
+        tuple: &Expression,
+    ) -> Option<Vec<Type>> {
+        let Expression::Tuple {
+            ty: Type::Tuple(inferred),
+            ..
+        } = tuple
+        else {
+            return None;
+        };
+
+        let slots = self
+            .facts
+            .tuple_elements(self.scope.current_return_ctx().ty()?)?;
+        (slots.len() == inferred.len()).then_some(slots)
+    }
+
+    fn is_identity_conversion(
+        &self,
+        expression: &Expression,
+        inner: &ValuePlan,
+        ty: &Type,
+    ) -> bool {
+        if inner.expression().constant_kind().is_some() {
+            return false;
+        }
+        let source_ty = expression.get_type();
+        if self.facts.resolve_to_function_type(&source_ty).is_some()
+            || self.facts.resolve_to_function_type(ty).is_some()
+        {
+            return false;
+        }
+        self.target_go_type(&source_ty) == self.target_go_type(ty)
+    }
+
     fn is_go_unaddressable(&self, expression: &Expression) -> bool {
         if self
             .facts
@@ -752,144 +958,4 @@ impl Planner<'_> {
             None => self.facts.is_lisette_enum(ty),
         }
     }
-
-    pub(in crate::lowering) fn plan_operand(
-        &mut self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        let plan = self.plan_unpositioned_operand(expression, ctx);
-        with_source_positions(&self.facts, &written_span(expression), plan)
-    }
-
-    fn plan_unpositioned_operand(
-        &mut self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        if is_test_log_call(&self.facts, expression) {
-            let (setup, call) = self.plan_test_log_call(expression);
-            return ValuePlan::plain_call(setup, call);
-        }
-        if runs_as_never_statement(expression) && self.facts.is_never(&expression.get_type()) {
-            return self.plan_never_value(expression);
-        }
-        match expression {
-            Expression::Paren { .. } => {
-                unreachable!("internal error: emit received a parenthesized expression")
-            }
-            Expression::Cast {
-                expression: operand,
-                ty,
-                ..
-            } => self.plan_cast(expression, operand, ty, ctx),
-            Expression::IndexedAccess {
-                expression, index, ..
-            } => self.plan_index_access(expression, index),
-            Expression::Binary {
-                operator,
-                left,
-                right,
-                ..
-            } => {
-                let conversion = self.facts.checked(expression).operand_conversion();
-                self.plan_binary(operator, left, right, conversion, ctx)
-            }
-            Expression::Unary {
-                operator,
-                expression,
-                ..
-            } => self.plan_unary(operator, expression, ctx),
-            Expression::Tuple { .. } => self.plan_tuple_value(expression, TuplePosition::Value),
-            Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
-            Expression::StructCall { .. } => self.plan_struct_call(expression),
-            Expression::Reference {
-                expression: inner, ..
-            } => self.plan_reference(inner),
-            Expression::DotAccess { .. } => self.plan_dot_access(expression, ctx),
-            Expression::Task {
-                expression: inner, ..
-            } => self.plan_async_wrapper(AsyncKind::Task, inner),
-            Expression::Defer {
-                expression: inner, ..
-            } => self.plan_async_wrapper(AsyncKind::Defer, inner),
-            Expression::TryBlock { items, ty, .. } => {
-                let ty = self.fallible_block_type(expression, ty);
-                self.plan_try_block(items, &ty)
-            }
-            Expression::RecoverBlock { items, ty, .. } => {
-                let ty = self.fallible_block_type(expression, ty);
-                self.plan_recover_block(items, &ty)
-            }
-            Expression::Propagate { expression, .. } => {
-                let (setup, value) = self.plan_propagate(expression);
-                let stability = self.path_read_stability(&value);
-                ValuePlan::new(setup, value, stability)
-            }
-            Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty),
-            Expression::If { ty, .. }
-            | Expression::IfLet { ty, .. }
-            | Expression::Match { ty, .. }
-            | Expression::Select { ty, .. } => self.plan_branching_as_operand_temp(expression, ty),
-            _ => self.plan_operand_leaf(expression, ctx),
-        }
-    }
-}
-
-fn needs_iife_for_async(
-    expression: &Expression,
-    operation: Option<&CallOperation>,
-    value: &GoExpression,
-) -> bool {
-    let (
-        Expression::Call {
-            expression: callee,
-            args,
-            ..
-        },
-        Some(CallOperation::Native { kind, method }),
-    ) = (expression, operation)
-    else {
-        return false;
-    };
-
-    let arity = split_native_receiver(callee, args).map_or(0, |(_, arguments)| arguments.len());
-    !matches!(value.syntax_form(), OperandForm::Call)
-        || !NativeOperation::new(*kind, method).lowers_to_plain_call(arity)
-}
-
-pub(in crate::lowering) fn with_source_positions(
-    facts: &EmitFacts<'_>,
-    span: &Span,
-    plan: ValuePlan,
-) -> ValuePlan {
-    if !facts.sourcemap() {
-        return plan;
-    }
-    let (Some(start), Some(end)) = (facts.source_position(span), facts.end_position(span)) else {
-        return plan;
-    };
-    plan.map_expression(|_, mut value| {
-        value.node_mut().fill_positions(&start, &end);
-        value.positioned(start.clone())
-    })
-}
-
-pub(in crate::lowering) fn contains_newtype_access(expression: &Expression) -> bool {
-    let mut current = expression;
-    while let Expression::DotAccess {
-        expression: inner,
-        resolution,
-        ..
-    } = current
-    {
-        if matches!(
-            resolution,
-            DotAccessResolution::TupleStructField { is_newtype: true }
-        ) {
-            return true;
-        }
-        current = inner;
-    }
-    false
 }

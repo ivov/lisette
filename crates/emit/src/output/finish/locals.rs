@@ -1,4 +1,5 @@
 use crate::lookup::state::scope::ScopeState;
+use crate::lookup::state::scope_stack::ScopeStack;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::{GoIdentifier, LocalId};
@@ -13,7 +14,7 @@ pub(crate) fn identify_body_locals(
 ) -> FxHashSet<LocalId> {
     struct Resolve<'a> {
         scope: &'a mut ScopeState,
-        frames: Vec<FxHashMap<String, LocalId>>,
+        frames: ScopeStack<FxHashMap<String, LocalId>>,
         shadowing: FxHashSet<LocalId>,
     }
 
@@ -44,25 +45,20 @@ pub(crate) fn identify_body_locals(
                 name.finish();
                 return;
             }
-            let current = self
-                .frames
-                .last()
-                .expect("a local scope exists")
-                .get(name.spelling())
-                .copied();
+            let current = self.frames.innermost().get(name.spelling()).copied();
 
             let id =
                 current.unwrap_or_else(|| name.id().unwrap_or_else(|| self.scope.new_local_id()));
             name.identify(id);
-            if self.frames[..self.frames.len() - 1]
-                .iter()
+            if self
+                .frames
+                .enclosing()
                 .any(|frame| frame.get(name.spelling()).is_some_and(|outer| *outer != id))
             {
                 self.shadowing.insert(id);
             }
             self.frames
-                .last_mut()
-                .expect("a local scope exists")
+                .innermost_mut()
                 .insert(name.spelling().to_string(), id);
         }
 
@@ -71,13 +67,13 @@ pub(crate) fn identify_body_locals(
         }
 
         fn exit_scope(&mut self) {
-            self.frames.pop().expect("a local scope exists");
+            self.frames.pop();
         }
     }
 
     let mut resolver = Resolve {
         scope,
-        frames: vec![FxHashMap::default()],
+        frames: ScopeStack::new(FxHashMap::default()),
         shadowing: FxHashSet::default(),
     };
     for name in parameters {

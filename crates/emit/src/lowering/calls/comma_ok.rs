@@ -4,6 +4,8 @@ use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::calls::bound_value::{BoundValue, LoweredPair, PairValue};
 use crate::lowering::calls::call_plan::CallableOrigin;
+use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::{Statement, define, define_many};
 use crate::target::ir::local::GoIdentifier;
@@ -91,88 +93,13 @@ impl Planner<'_> {
         BoundValue::pair(statements, pair)
     }
 
-    pub(in crate::lowering) fn component_binding(
-        &self,
-        expression: &Expression,
-    ) -> Option<ComponentBinding> {
-        let Expression::Identifier {
-            value, resolution, ..
-        } = expression
-        else {
-            return None;
-        };
-
-        match self
-            .scope
-            .resolve_identifier_with_resolution(value, resolution)
-        {
-            Some(BindingValue::Components(components)) => Some(components.clone()),
-            _ => None,
-        }
-    }
-
-    pub(in crate::lowering) fn comma_ok_source(
-        &self,
-        expression: &Expression,
-    ) -> Option<CommaOkSource> {
-        let plan = self.plan_call(expression)?;
-        let Expression::Call {
-            expression: function,
-            args,
-            spread,
-            ..
-        } = expression
-        else {
-            return None;
-        };
-
-        match &plan.resolved.origin {
-            CallableOrigin::Source(CallOperation::AssertType) => {
-                let [operand] = args.as_slice() else {
-                    return None;
-                };
-                let operand_ty = operand.get_type();
-                let asserts_on_interface =
-                    self.facts.is_interface_or_unknown(&operand_ty) || operand_ty.is_error();
-                let asserts_function = self
-                    .any_slot_function_layouts(&self.facts.ok_payload(&expression.get_type()))
-                    .is_some();
-                (asserts_on_interface && !asserts_function).then_some(CommaOkSource::TypeAssert)
-            }
-            CallableOrigin::Source(CallOperation::Native {
-                kind: kind @ NativeTypeKind::Map,
-                method,
-            }) if NativeOperation::new(*kind, method).indexes_receiver()
-                && matches!(**function, Expression::DotAccess { .. })
-                && args.len() == 1
-                && spread.is_none() =>
-            {
-                Some(CommaOkSource::MapIndex)
-            }
-            _ => {
-                let lowered = self.lowered_call_of(expression, Vec::new(), &plan)?;
-                let pair = lowered.raw_pair()?;
-                if !matches!(
-                    lowered.shape,
-                    LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })
-                ) || pair.payload_layout_change.is_some()
-                {
-                    return None;
-                }
-                Some(CommaOkSource::LoweredCall {
-                    nil_guard: pair.nil_guard,
-                })
-            }
-        }
-    }
-
     pub(in crate::lowering) fn bind_comma_ok_pair(
         &mut self,
-        expression: &Expression,
+        site: CallSite<'_>,
         source: CommaOkSource,
         slot: CommaOkValueSlot,
     ) -> BoundValue {
-        let (statements, pair) = self.plan_comma_ok_pair(expression, &source);
+        let (statements, pair) = self.plan_comma_ok_pair(site, &source);
         self.bind_pair(
             statements,
             pair,
@@ -296,23 +223,91 @@ impl Planner<'_> {
 
     fn plan_comma_ok_pair(
         &mut self,
-        expression: &Expression,
+        site: CallSite<'_>,
         source: &CommaOkSource,
     ) -> (Vec<Statement>, GoExpression) {
         match source {
             CommaOkSource::LoweredCall { .. } => self
-                .plan_call_expression(expression, None, ExpressionContext::value())
+                .plan_call_expression(site, None, ExpressionContext::value())
                 .into_parts(),
-            CommaOkSource::MapIndex => self.plan_map_index_pair(expression),
+            CommaOkSource::MapIndex => self.plan_map_index_pair(site),
             CommaOkSource::TypeAssert => {
-                let Expression::Call { args, .. } = expression else {
-                    unreachable!("comma_ok_source only accepts Call expressions");
-                };
+                let args = site.args;
+                let expression = site.expression;
                 let plan = self.plan_composite_value(&args[0], ExpressionContext::value());
                 let (setup, operand) = self.convert_to_recorded_slot(&args[0], plan).into_parts();
                 let target_ty = self.facts.ok_payload(&expression.get_type());
-                let target = self.go_type(&target_ty);
+                let target = self.queries().go_type(&target_ty);
                 (setup, GoExpression::type_assertion(operand, target))
+            }
+        }
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn component_binding(
+        &self,
+        expression: &Expression,
+    ) -> Option<ComponentBinding> {
+        let Expression::Identifier {
+            value, resolution, ..
+        } = expression
+        else {
+            return None;
+        };
+
+        match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+        {
+            Some(BindingValue::Components(components)) => Some(components.clone()),
+            _ => None,
+        }
+    }
+
+    pub(in crate::lowering) fn comma_ok_source(&self, site: CallSite<'_>) -> Option<CommaOkSource> {
+        let plan = self.plan_call(site);
+        let expression = site.expression;
+        let function = site.callee;
+        let args = site.args;
+        let spread = site.spread;
+
+        match &plan.resolved.origin {
+            CallableOrigin::Source(CallOperation::AssertType) => {
+                let [operand] = args else {
+                    return None;
+                };
+                let operand_ty = operand.get_type();
+                let asserts_on_interface =
+                    self.facts.is_interface_or_unknown(&operand_ty) || operand_ty.is_error();
+                let asserts_function = self
+                    .any_slot_function_layouts(&self.facts.ok_payload(&expression.get_type()))
+                    .is_some();
+                (asserts_on_interface && !asserts_function).then_some(CommaOkSource::TypeAssert)
+            }
+            CallableOrigin::Source(CallOperation::Native {
+                kind: kind @ NativeTypeKind::Map,
+                method,
+            }) if NativeOperation::new(*kind, method).indexes_receiver()
+                && matches!(function, Expression::DotAccess { .. })
+                && args.len() == 1
+                && spread.is_none() =>
+            {
+                Some(CommaOkSource::MapIndex)
+            }
+            _ => {
+                let lowered = self.lowered_call_of(Vec::new(), &plan)?;
+                let pair = lowered.raw_pair()?;
+                if !matches!(
+                    lowered.shape,
+                    LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })
+                ) || pair.payload_layout_change.is_some()
+                {
+                    return None;
+                }
+                Some(CommaOkSource::LoweredCall {
+                    nil_guard: pair.nil_guard,
+                })
             }
         }
     }

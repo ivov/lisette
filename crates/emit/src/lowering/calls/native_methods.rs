@@ -2,11 +2,13 @@ use super::{NativeCallContext, NativeCallForm, split_native_receiver};
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::arguments::converts_for_inference;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::calls::slice_loop::SliceLoopTarget;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::index_access::range_var_bounds;
 use crate::lowering::expressions::operand_order::SpreadSequenceOptions;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::assignments::lvalues_match;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -148,7 +150,7 @@ fn build_inline(
                 return GoExpression::binary(
                     receiver.clone(),
                     operator,
-                    GoExpression::literal("\"\"".to_string()),
+                    GoExpression::token("\"\"".to_string()),
                 );
             }
             GoExpression::binary(
@@ -157,7 +159,7 @@ fn build_inline(
                     vec![receiver.clone()],
                 ),
                 operator,
-                GoExpression::literal("0".to_string()),
+                GoExpression::integer(0),
             )
         }
         NativeInlineForm::Receiver => receiver.clone(),
@@ -278,10 +280,7 @@ impl Planner<'_> {
             }
             "reserve" => {
                 let count = &arguments[0];
-                if let Some(value) = count
-                    .as_literal()
-                    .and_then(|value| value.parse::<i64>().ok())
-                {
+                if let Some(value) = count.as_integer() {
                     return if value == 0 {
                         clone_slice(receiver)
                     } else {
@@ -308,11 +307,7 @@ impl Planner<'_> {
 
             statements.push(
                 LoweredStatement::If(IfPlan::plain(
-                    GoExpression::binary(
-                        count,
-                        GoBinaryOperator::Equal,
-                        GoExpression::literal("0".to_string()),
-                    ),
+                    GoExpression::binary(count, GoBinaryOperator::Equal, GoExpression::integer(0)),
                     LoweredBlock {
                         statements: vec![plain_return(clone_slice(receiver))],
                     },
@@ -322,7 +317,7 @@ impl Planner<'_> {
             );
             statements.push(plain_return(slice_growth_call(method, clipped, &arguments)));
             immediate_call(
-                this.go_type(result_ty),
+                this.queries().go_type(result_ty),
                 LoweredBlock { statements },
                 FunctionLiteralLayout::MultiLine,
             )
@@ -410,7 +405,7 @@ impl Planner<'_> {
             return operand.finish(inlined);
         }
 
-        self.lower_prelude_native_call(context, operand)
+        self.queries().lower_prelude_native_call(context, operand)
     }
 
     fn try_lower_native_equality(
@@ -459,60 +454,6 @@ impl Planner<'_> {
         None
     }
 
-    fn lower_prelude_native_call(
-        &self,
-        context: &NativeCallContext,
-        operand: NativeMethodOperands,
-    ) -> NativeCallResult {
-        let fn_name = GoExpression::generated(
-            GeneratedPackage::Prelude,
-            format!(
-                "{}{}",
-                method_prefix(context.native_type),
-                go_name::snake_to_camel(context.method)
-            ),
-        );
-
-        let written = self
-            .facts
-            .checked(context.function)
-            .callee()
-            .written_type_arguments(context.written_type_arguments);
-        let type_args = match context.form {
-            NativeCallForm::Dot { receiver }
-                if context.written_type_arguments > 0 && context.call_ty.is_some() =>
-            {
-                self.format_type_args_with_receiver(&receiver.get_type(), written)
-            }
-            NativeCallForm::Dot { .. }
-            | NativeCallForm::Identifier
-            | NativeCallForm::Constructor => self.format_type_arg_iter(written),
-        };
-
-        let mut emitted_args = vec![operand.receiver.clone()];
-        let first_param = usize::from(!matches!(context.form, NativeCallForm::Dot { .. }));
-        let argument_expressions = context
-            .receiver_and_arguments()
-            .map_or(&[][..], |(_, arguments)| arguments);
-        emitted_args.extend(operand.arguments.iter().enumerate().map(|(index, value)| {
-            let parameter = context.abi.param(first_param + index);
-            match argument_expressions.get(index).zip(parameter) {
-                Some((argument, parameter))
-                    if converts_for_inference(&self.facts, argument, parameter, |_| {
-                        !type_args.is_empty()
-                    }) =>
-                {
-                    GoExpression::conversion(self.go_type(&parameter.instantiated), value.clone())
-                }
-                _ => value.clone(),
-            }
-        }));
-        operand.finish(GoExpression::call(
-            GoExpression::instantiation(fn_name, type_args),
-            emitted_args,
-        ))
-    }
-
     fn plan_array_method_body(
         &mut self,
         method: &str,
@@ -546,49 +487,12 @@ impl Planner<'_> {
         receiver: GoExpression,
         setup: &mut Vec<Statement>,
     ) -> GoExpression {
-        let base = if self.receiver_is_addressable(expression) {
+        let base = if self.queries().receiver_is_addressable(expression) {
             receiver
         } else {
             GoExpression::identifier(self.hoist_temp(setup, "arr", receiver))
         };
         GoExpression::slice(base, None, None, None)
-    }
-
-    pub(in crate::lowering) fn receiver_is_addressable(&self, expression: &Expression) -> bool {
-        if self.facts.is_reference(&expression.get_type()) {
-            return true;
-        }
-        match expression {
-            Expression::Identifier { .. }
-            | Expression::Unary {
-                operator: UnaryOperator::Deref,
-                ..
-            } => true,
-            Expression::DotAccess {
-                expression: base,
-                resolution,
-                ..
-            } => {
-                if matches!(
-                    resolution,
-                    DotAccessResolution::TupleStructField { is_newtype: true }
-                ) {
-                    return false;
-                }
-                let fresh_value = matches!(&**base, Expression::StructCall { .. })
-                    || (matches!(&**base, Expression::Call { .. })
-                        && !self.facts.is_reference(&base.get_type()));
-                !fresh_value && self.receiver_is_addressable(base)
-            }
-            Expression::IndexedAccess {
-                expression: base, ..
-            } => match self.facts.native_kind(&base.get_type()) {
-                Some(NativeTypeKind::Map) => false,
-                Some(NativeTypeKind::Slice) => true,
-                _ => self.receiver_is_addressable(base),
-            },
-            _ => false,
-        }
     }
 
     pub(super) fn try_plan_negated_native_method(
@@ -652,7 +556,7 @@ impl Planner<'_> {
         if self.facts.is_reference(&array.get_type()) {
             operand = operand.dereference();
         }
-        if !self.receiver_is_addressable(array) {
+        if !self.queries().receiver_is_addressable(array) {
             self.pin_to_temp(&mut operand, "arr");
         }
         operand.map_observable_expression(|_setup, array| {
@@ -714,22 +618,14 @@ impl Planner<'_> {
 
     pub(super) fn plan_map_index_pair(
         &mut self,
-        expression: &Expression,
+        site: CallSite<'_>,
     ) -> (Vec<Statement>, GoExpression) {
-        let Expression::Call {
-            expression: function,
-            args,
-            type_arguments,
-            ..
-        } = expression
-        else {
-            unreachable!("plan_map_index_pair requires a Call expression");
-        };
+        let function = site.callee;
+        let args = site.args;
+        let type_arguments = site.type_arguments;
 
         let native_type = NativeTypeKind::Map;
-        let plan = self
-            .plan_call(expression)
-            .expect("plan_call yields Some for a Call expression");
+        let plan = self.queries().plan_call(site);
         let ctx = NativeCallContext {
             function,
             form: NativeCallForm::method(function),
@@ -790,11 +686,7 @@ impl Planner<'_> {
             let end_bound = end.is_some().then(|| {
                 let end = values.next().expect("range has an end");
                 if *inclusive {
-                    GoExpression::binary(
-                        end,
-                        GoBinaryOperator::Addition,
-                        GoExpression::literal("1".to_string()),
-                    )
+                    GoExpression::binary(end, GoBinaryOperator::Addition, GoExpression::integer(1))
                 } else {
                     end
                 }
@@ -868,7 +760,7 @@ impl Planner<'_> {
     }
 
     fn equality_closure(&mut self, element: &ElementEquality) -> GoExpression {
-        let go_ty = self.go_type(&element.ty);
+        let go_ty = self.queries().go_type(&element.ty);
         let a = self.fresh_local("a");
         let b = self.fresh_local("b");
         let body = self.equality_test(
@@ -892,7 +784,7 @@ impl Planner<'_> {
         element: &ElementEquality,
         target: GoExpression,
     ) -> GoExpression {
-        let go_ty = self.go_type(&element.ty);
+        let go_ty = self.queries().go_type(&element.ty);
         let candidate = self.fresh_local("e");
         let body = self.equality_test(
             GoExpression::identifier(candidate.clone()),
@@ -961,4 +853,97 @@ fn growth_detach_applies(
         && !context
             .assigned_place
             .is_some_and(|target| assigned_place_covers_receiver(target, receiver))
+}
+
+impl PlannerQueries<'_, '_> {
+    fn lower_prelude_native_call(
+        &self,
+        context: &NativeCallContext,
+        operand: NativeMethodOperands,
+    ) -> NativeCallResult {
+        let fn_name = GoExpression::generated(
+            GeneratedPackage::Prelude,
+            format!(
+                "{}{}",
+                method_prefix(context.native_type),
+                go_name::snake_to_camel(context.method)
+            ),
+        );
+
+        let written = self
+            .facts
+            .checked(context.function)
+            .callee()
+            .written_type_arguments(context.written_type_arguments);
+        let type_args = match context.form {
+            NativeCallForm::Dot { receiver }
+                if context.written_type_arguments > 0 && context.call_ty.is_some() =>
+            {
+                self.format_type_args_with_receiver(&receiver.get_type(), written)
+            }
+            NativeCallForm::Dot { .. }
+            | NativeCallForm::Identifier
+            | NativeCallForm::Constructor => self.format_type_arg_iter(written),
+        };
+
+        let mut emitted_args = vec![operand.receiver.clone()];
+        let first_param = usize::from(!matches!(context.form, NativeCallForm::Dot { .. }));
+        let argument_expressions = context
+            .receiver_and_arguments()
+            .map_or(&[][..], |(_, arguments)| arguments);
+        emitted_args.extend(operand.arguments.iter().enumerate().map(|(index, value)| {
+            let parameter = context.abi.param(first_param + index);
+            match argument_expressions.get(index).zip(parameter) {
+                Some((argument, parameter))
+                    if converts_for_inference(self.facts, argument, parameter, |_| {
+                        !type_args.is_empty()
+                    }) =>
+                {
+                    GoExpression::conversion(self.go_type(&parameter.instantiated), value.clone())
+                }
+                _ => value.clone(),
+            }
+        }));
+        operand.finish(GoExpression::call(
+            GoExpression::instantiation(fn_name, type_args),
+            emitted_args,
+        ))
+    }
+
+    pub(in crate::lowering) fn receiver_is_addressable(&self, expression: &Expression) -> bool {
+        if self.facts.is_reference(&expression.get_type()) {
+            return true;
+        }
+        match expression {
+            Expression::Identifier { .. }
+            | Expression::Unary {
+                operator: UnaryOperator::Deref,
+                ..
+            } => true,
+            Expression::DotAccess {
+                expression: base,
+                resolution,
+                ..
+            } => {
+                if matches!(
+                    resolution,
+                    DotAccessResolution::TupleStructField { is_newtype: true }
+                ) {
+                    return false;
+                }
+                let fresh_value = matches!(&**base, Expression::StructCall { .. })
+                    || (matches!(&**base, Expression::Call { .. })
+                        && !self.facts.is_reference(&base.get_type()));
+                !fresh_value && self.receiver_is_addressable(base)
+            }
+            Expression::IndexedAccess {
+                expression: base, ..
+            } => match self.facts.native_kind(&base.get_type()) {
+                Some(NativeTypeKind::Map) => false,
+                Some(NativeTypeKind::Slice) => true,
+                _ => self.receiver_is_addressable(base),
+            },
+            _ => false,
+        }
+    }
 }

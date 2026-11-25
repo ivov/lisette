@@ -11,9 +11,69 @@ use crate::target::ir::bodies::{
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::GoExpression;
 use syntax::ast::{
-    BinaryOperator, Expression, ExpressionId, IfLetAlternative, MatchArm, Pattern, Span,
+    BinaryOperator, Expression, ExpressionId, IfLetAlternative, MatchArm, Pattern, SelectArm, Span,
 };
 use syntax::types::Type;
+
+#[derive(Clone, Copy)]
+pub(in crate::lowering) enum Branching<'e> {
+    If {
+        condition: &'e Expression,
+        consequence: &'e Expression,
+        alternative: Option<&'e Expression>,
+    },
+    IfLet {
+        expression: &'e Expression,
+        pattern: &'e Pattern,
+        scrutinee: &'e Expression,
+        consequence: &'e Expression,
+        alternative: &'e IfLetAlternative,
+        span: Span,
+    },
+    Match {
+        subject: &'e Expression,
+        arms: &'e [MatchArm],
+    },
+    Select {
+        arms: &'e [SelectArm],
+        span: &'e Span,
+    },
+}
+
+impl<'e> Branching<'e> {
+    pub(in crate::lowering) fn of(expression: &'e Expression) -> Option<Self> {
+        match expression {
+            Expression::If {
+                condition,
+                consequence,
+                alternative,
+                ..
+            } => Some(Self::If {
+                condition,
+                consequence,
+                alternative: alternative.as_deref(),
+            }),
+            Expression::IfLet {
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                span,
+                ..
+            } => Some(Self::IfLet {
+                expression,
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                span: *span,
+            }),
+            Expression::Match { subject, arms, .. } => Some(Self::Match { subject, arms }),
+            Expression::Select { arms, span, .. } => Some(Self::Select { arms, span }),
+            _ => None,
+        }
+    }
+}
 
 pub(in crate::lowering) fn if_let_match_arms(
     pattern: &Pattern,
@@ -123,13 +183,14 @@ impl Planner<'_> {
     pub(in crate::lowering) fn plan_branching_as_operand_temp(
         &mut self,
         expression: &Expression,
+        branching: Branching<'_>,
         ty: &Type,
     ) -> ValuePlan {
         let ty = self.facts.value_use_slot(expression).unwrap_or(ty);
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let target = GoExpression::identifier(result_var.clone());
         let block = self.lower_branching_to_block(
-            expression,
+            branching,
             &PlacePlan::Assign {
                 local: &target,
                 target_ty: Some(ty),
@@ -215,46 +276,41 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn lower_branching_to_block(
         &mut self,
-        expression: &Expression,
+        branching: Branching<'_>,
         place: &PlacePlan,
     ) -> LoweredBlock {
-        match expression {
-            Expression::If {
+        match branching {
+            Branching::If {
                 condition,
                 consequence,
                 alternative,
-                ..
             } => {
-                let statement =
-                    self.lower_if(condition, consequence, alternative.as_deref(), place);
+                let statement = self.lower_if(condition, consequence, alternative, place);
                 LoweredBlock {
                     statements: vec![statement.into()],
                 }
             }
-            Expression::IfLet {
+            Branching::IfLet {
+                expression,
                 pattern,
                 scrutinee,
                 consequence,
                 alternative,
                 span,
-                ..
             } => {
                 let implicit_unit = self.facts.checked(expression).implicit_unit();
                 let arms =
-                    if_let_match_arms(pattern, consequence, alternative, *span, implicit_unit);
+                    if_let_match_arms(pattern, consequence, alternative, span, implicit_unit);
                 let place = match alternative {
                     IfLetAlternative::Absent => &PlacePlan::Statement,
                     IfLetAlternative::Present { .. } => place,
                 };
                 self.lower_match_to_block(scrutinee, &arms, place)
             }
-            Expression::Match { subject, arms, .. } => {
-                self.lower_match_to_block(subject, arms, place)
-            }
-            Expression::Select { arms, span, .. } => LoweredBlock {
+            Branching::Match { subject, arms } => self.lower_match_to_block(subject, arms, place),
+            Branching::Select { arms, span } => LoweredBlock {
                 statements: vec![self.lower_select(arms, span, place).into()],
             },
-            _ => unreachable!("lower_branching_to_block: expected if/if-let/match/select"),
         }
     }
 

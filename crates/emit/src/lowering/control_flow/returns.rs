@@ -3,12 +3,16 @@ use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::fallible_producer::OptionFusePlan;
 use crate::lowering::abi::go_returns;
 use crate::lowering::calls::call_plan::CallPlan;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::calls::wrap_err::wrap_error;
+use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::is_go_never;
+use crate::lowering::expressions::tuple_literal::TupleLiteral;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::statements::placement::{ElidableTail, requires_temp_var};
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -88,9 +92,11 @@ impl Planner<'_> {
             .unwrap_or_else(|| expression.get_type());
         let fallible = self.facts.fallible(&written_ty)?;
 
-        if is_go_never(&self.facts, expression) {
+        if let Some(site) = CallSite::of(expression)
+            && is_go_never(&self.facts, expression)
+        {
             let (mut statements, call) = self
-                .plan_call_expression(expression, None, ExpressionContext::value())
+                .plan_call_expression(site, None, ExpressionContext::value())
                 .into_parts();
             statements.push(diverging_statement(call));
             return Some(statements);
@@ -100,19 +106,20 @@ impl Planner<'_> {
             return Some(self.lower_failure_constructor_return(&[], &fallible, &[]));
         }
 
-        if matches!(
-            expression,
-            Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
-        ) {
+        if let Some(branching) = Branching::of(expression)
+            && !matches!(branching, Branching::Select { .. })
+        {
             return Some(
-                self.lower_branching_to_block(expression, &PlacePlan::Return)
+                self.lower_branching_to_block(branching, &PlacePlan::Return)
                     .statements,
             );
         }
 
         let coercion = self.value_slot_coercion(expression, &written_ty);
-        if coercion.is_identity() && matches!(expression, Expression::Call { .. }) {
-            return Some(self.lower_wrapped_call_return(expression, &fallible, &written_ty));
+        if coercion.is_identity()
+            && let Some(site) = CallSite::of(expression)
+        {
+            return Some(self.lower_wrapped_call_return(site, &fallible, &written_ty));
         }
 
         let (mut statements, value) = match expression {
@@ -139,20 +146,12 @@ impl Planner<'_> {
 
     fn lower_wrapped_call_return(
         &mut self,
-        expression: &Expression,
+        site: CallSite<'_>,
         fallible: &Fallible,
         return_ty: &Type,
     ) -> Vec<Statement> {
-        let Expression::Call {
-            expression: call_expression,
-            args,
-            ..
-        } = expression
-        else {
-            unreachable!("lower_wrapped_call_return requires a Call expression");
-        };
-
-        let (inner, wraps) = self.peel_wrap_err(expression);
+        let args = site.args;
+        let (inner, wraps) = self.queries().peel_wrap_err(site.expression);
         if let Expression::Call {
             expression: inner_callee,
             args: inner_args,
@@ -163,12 +162,12 @@ impl Planner<'_> {
         {
             return self.lower_failure_constructor_return(inner_args, fallible, &wraps);
         }
-        match fallible.classify_constructor(call_expression) {
+        match fallible.classify_constructor(site.callee) {
             Some(ConstructorKind::Success) => self.lower_success_constructor_return(args, fallible),
             Some(ConstructorKind::Failure) => {
                 self.lower_failure_constructor_return(args, fallible, &[])
             }
-            None => self.lower_wrapped_passthrough_return(expression, return_ty),
+            None => self.lower_wrapped_passthrough_return(site, return_ty),
         }
     }
 
@@ -197,9 +196,9 @@ impl Planner<'_> {
             }
             Some(shape)
                 if shape.has_flattened_payload()
-                    && let tuple @ Expression::Tuple { .. } = &args[0] =>
+                    && let Some(literal) = TupleLiteral::of(&args[0]) =>
             {
-                let (setup, parts) = self.lowered_tuple_literal_values(tuple, fallible.ok_ty());
+                let (setup, parts) = self.lowered_tuple_literal_values(literal, fallible.ok_ty());
                 statements.extend(setup);
                 statements.push(go_returns::multi_value_return(shape.ok_values(parts)));
             }
@@ -239,6 +238,7 @@ impl Planner<'_> {
             let (setup, error) = error.into_parts();
             statements.extend(setup);
             let to = self
+                .queries()
                 .contextual_err_ty(fallible)
                 .expect("Result must have error type");
             let error = self.apply_type_coercion(&mut statements, Some(&to), arg, error);
@@ -266,16 +266,17 @@ impl Planner<'_> {
 
     fn lower_wrapped_passthrough_return(
         &mut self,
-        expression: &Expression,
+        site: CallSite<'_>,
         return_ty: &Type,
     ) -> Vec<Statement> {
+        let expression = site.expression;
         let lowered = self.scope.current_return_ctx().lowered_shape();
         let lowered = lowered.as_ref();
         let mut statements = Vec::new();
         if let Some(LoweredReturnAbi::Option(_)) = lowered
             && !self.facts.converts(expression)
             && matches!(
-                self.option_fuse_plan(expression),
+                self.queries().option_fuse_plan(expression),
                 Some(OptionFusePlan::Found { .. })
             )
         {
@@ -285,19 +286,21 @@ impl Planner<'_> {
             lowered,
             Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::BareError)
         ) && (self
+            .queries()
             .result_fuse_plan(expression)
             .is_some_and(|plan| plan.wraps_error())
             || self
+                .queries()
                 .map_err_call(expression)
                 .is_some_and(|(plan, _)| plan.carries_payload()))
         {
             return self.lower_propagated_return(expression, return_ty);
         }
         if let Some(shape) = lowered
-            && self.callee_matches_lowered_shape(expression, shape)
+            && self.queries().callee_matches_lowered_shape(site, shape)
         {
             let (setup, call) = self
-                .plan_call_expression(expression, None, ExpressionContext::value())
+                .plan_call_expression(site, None, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
             statements.push(plain_return(call));
@@ -306,10 +309,10 @@ impl Planner<'_> {
         if let Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
             payload: PayloadLayout::Packed,
         })) = lowered
-            && let Some(source) = self.comma_ok_source(expression)
+            && let Some(source) = self.queries().comma_ok_source(site)
             && !source.has_nil_guard()
         {
-            let pair = self.bind_comma_ok_pair(expression, source, CommaOkValueSlot::Temp);
+            let pair = self.bind_comma_ok_pair(site, source, CommaOkValueSlot::Temp);
             let ok = GoExpression::identifier(pair.status_identifier().clone());
             let value = GoExpression::identifier(
                 pair.payload_identifier()
@@ -320,10 +323,9 @@ impl Planner<'_> {
             statements.push(go_returns::multi_value_return(vec![value, ok]));
             return statements;
         }
-        if let Some(plan) = self.plan_call(expression)
-            && plan.resolved.abi.result.is_lowered()
-        {
-            return self.lower_lowered_call_return(expression, &plan, lowered, return_ty);
+        let plan = self.queries().plan_call(site);
+        if plan.resolved.abi.result.is_lowered() {
+            return self.lower_lowered_call_return(&plan, lowered, return_ty);
         }
         if let Some(shape) = lowered {
             let (setup, value) = self
@@ -334,7 +336,7 @@ impl Planner<'_> {
             return statements;
         }
         let (setup, call) = self
-            .plan_call_expression(expression, None, ExpressionContext::value())
+            .plan_call_with_plan(plan, None, ExpressionContext::value())
             .into_parts();
         statements.extend(setup);
         statements.push(plain_return(call));
@@ -343,29 +345,25 @@ impl Planner<'_> {
 
     fn lower_lowered_call_return(
         &mut self,
-        expression: &Expression,
-        plan: &CallPlan<'_>,
+        plan: &CallPlan<'_, '_>,
         lowered: Option<&LoweredReturnAbi>,
         return_ty: &Type,
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
-            let (setup, result_var) = self
-                .plan_go_abi_wrapped_call(
-                    expression,
-                    &plan.resolved.abi,
-                    plan.resolved.origin,
-                    return_ty,
-                )
-                .into_parts();
+            let (setup, result_var) = self.plan_go_abi_wrapped_call(plan, return_ty).into_parts();
 
             statements.extend(setup);
             statements.extend(self.lower_result_return(result_var, "res", return_ty, shape));
         } else {
             let abi = &plan.resolved.abi;
-            if self.go_result_layout_change(abi, return_ty).is_none() {
+            if self
+                .queries()
+                .go_result_layout_change(abi, return_ty)
+                .is_none()
+            {
                 let (setup, call) = self
-                    .plan_call_expression(expression, None, ExpressionContext::value())
+                    .plan_call_expression(plan.site, None, ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
                 statements.extend(self.lower_abi_to_tagged_return(
@@ -374,36 +372,13 @@ impl Planner<'_> {
                     return_ty,
                 ));
             } else {
-                let (setup, result_var) = self
-                    .plan_go_abi_wrapped_call(expression, abi, plan.resolved.origin, return_ty)
-                    .into_parts();
+                let (setup, result_var) =
+                    self.plan_go_abi_wrapped_call(plan, return_ty).into_parts();
                 statements.extend(setup);
                 statements.push(plain_return(result_var));
             }
         }
         statements
-    }
-
-    fn callee_matches_lowered_shape(
-        &self,
-        call_expression: &Expression,
-        enclosing_shape: &LoweredReturnAbi,
-    ) -> bool {
-        let Some(plan) = self.plan_call(call_expression) else {
-            return false;
-        };
-        plan.resolved.abi.result.lowered() == Some(enclosing_shape)
-            && self.call_result_keeps_layout(&plan, &call_expression.get_type())
-    }
-
-    pub(in crate::lowering) fn return_fallible(&self) -> Option<Fallible> {
-        self.facts.fallible(self.scope.current_return_ctx().ty()?)
-    }
-
-    pub(in crate::lowering) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
-        self.return_fallible()
-            .and_then(|returned| returned.err_ty().cloned())
-            .or_else(|| fallible.err_ty().cloned())
     }
 
     pub(in crate::lowering) fn convert_error_to_return_context(
@@ -413,8 +388,10 @@ impl Planner<'_> {
         value: GoExpression,
         fallible: &Fallible,
     ) -> GoExpression {
-        let (Some(from), Some(to)) = (fallible.err_ty().cloned(), self.contextual_err_ty(fallible))
-        else {
+        let (Some(from), Some(to)) = (
+            fallible.err_ty().cloned(),
+            self.queries().contextual_err_ty(fallible),
+        ) else {
             return value;
         };
         let (setup, value) = self
@@ -439,7 +416,7 @@ impl Planner<'_> {
                 _ => self.lowered_none_values(&shape, &return_ty),
             };
         }
-        vec![self.contextual_failure(fallible, error)]
+        vec![self.queries().contextual_failure(fallible, error)]
     }
 
     pub(in crate::lowering) fn failure_return(
@@ -462,46 +439,13 @@ impl Planner<'_> {
         value: GoExpression,
     ) -> Vec<Statement> {
         let Some(shape) = self.scope.current_return_ctx().lowered_shape() else {
-            let success = self.fallible_success(fallible, value);
+            let success = self.queries().fallible_success(fallible, value);
             return vec![plain_return(success)];
         };
         let (mut statements, payload) =
             self.lowered_payload_values(&shape, fallible.ok_ty(), value);
         statements.push(go_returns::multi_value_return(shape.ok_values(payload)));
         statements
-    }
-
-    pub(in crate::lowering) fn fallible_call(
-        &self,
-        fallible: &Fallible,
-        constructor: &str,
-        arguments: Vec<GoExpression>,
-    ) -> GoExpression {
-        let type_args = self.format_type_arg_iter(
-            [Some(fallible.ok_ty()), fallible.err_ty()]
-                .into_iter()
-                .flatten(),
-        );
-        prelude_call(constructor, type_args, arguments)
-    }
-
-    fn fallible_success(&self, fallible: &Fallible, value: GoExpression) -> GoExpression {
-        self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
-    }
-
-    fn contextual_failure(&self, fallible: &Fallible, error: Option<GoExpression>) -> GoExpression {
-        let ok_ty = match self.scope.current_return_ctx().ty() {
-            Some(ty) => self.facts.ok_payload(ty),
-            None => fallible.ok_ty().clone(),
-        };
-        let err_ty = fallible.is_result().then(|| {
-            self.contextual_err_ty(fallible)
-                .expect("Result must have error type")
-        });
-        let type_args =
-            self.format_type_arg_iter([Some(&ok_ty), err_ty.as_ref()].into_iter().flatten());
-        let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
-        prelude_call(fallible.err_constructor(), type_args, arguments)
     }
 
     pub(in crate::lowering) fn lower_block_to_return(
@@ -549,16 +493,13 @@ impl Planner<'_> {
 
         let line = self.facts.source_position(&return_span);
         match last {
-            Expression::If { .. } | Expression::Select { .. } => {
-                let mut block = self.lower_branching_to_block(last, &PlacePlan::Return);
-                let statement = block
-                    .statements
-                    .pop()
-                    .expect("if and select lower to one statement");
-                statements.extend(directed_first(line, vec![statement]));
-            }
-            Expression::IfLet { .. } | Expression::Match { .. } => {
-                let block = self.lower_branching_to_block(last, &PlacePlan::Return);
+            Expression::If { .. }
+            | Expression::Select { .. }
+            | Expression::IfLet { .. }
+            | Expression::Match { .. }
+                if let Some(branching) = Branching::of(last) =>
+            {
+                let block = self.lower_branching_to_block(branching, &PlacePlan::Return);
                 statements.extend(directed_first(line, block.statements));
             }
             Expression::TryBlock { .. }
@@ -592,7 +533,7 @@ impl Planner<'_> {
             statements
         } else {
             let (mut statements, expression) = self.plan_tail_value(last);
-            let expression = if self.tail_tuple_return_slots(last).is_some() {
+            let expression = if self.queries().tail_tuple_return_slots(last).is_some() {
                 expression
             } else {
                 let return_ctx = self.scope.current_return_ctx();
@@ -602,5 +543,60 @@ impl Planner<'_> {
             statements.push(plain_return(expression));
             statements
         }
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    fn callee_matches_lowered_shape(
+        &self,
+        site: CallSite<'_>,
+        enclosing_shape: &LoweredReturnAbi,
+    ) -> bool {
+        let plan = self.plan_call(site);
+        plan.resolved.abi.result.lowered() == Some(enclosing_shape)
+            && self.call_result_keeps_layout(&plan, &site.expression.get_type())
+    }
+
+    pub(in crate::lowering) fn return_fallible(&self) -> Option<Fallible> {
+        self.facts.fallible(self.scope.current_return_ctx().ty()?)
+    }
+
+    pub(in crate::lowering) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
+        self.return_fallible()
+            .and_then(|returned| returned.err_ty().cloned())
+            .or_else(|| fallible.err_ty().cloned())
+    }
+
+    pub(in crate::lowering) fn fallible_call(
+        &self,
+        fallible: &Fallible,
+        constructor: &str,
+        arguments: Vec<GoExpression>,
+    ) -> GoExpression {
+        let type_args = self.format_type_arg_iter(
+            [Some(fallible.ok_ty()), fallible.err_ty()]
+                .into_iter()
+                .flatten(),
+        );
+        prelude_call(constructor, type_args, arguments)
+    }
+
+    fn fallible_success(&self, fallible: &Fallible, value: GoExpression) -> GoExpression {
+        self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
+    }
+
+    fn contextual_failure(&self, fallible: &Fallible, error: Option<GoExpression>) -> GoExpression {
+        let ok_ty = match self.scope.current_return_ctx().ty() {
+            Some(ty) => self.facts.ok_payload(ty),
+            None => fallible.ok_ty().clone(),
+        };
+        let err_ty = fallible.is_result().then(|| {
+            self.contextual_err_ty(fallible)
+                .expect("Result must have error type")
+        });
+        let type_args =
+            self.format_type_arg_iter([Some(&ok_ty), err_ty.as_ref()].into_iter().flatten());
+        let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
+        prelude_call(fallible.err_constructor(), type_args, arguments)
     }
 }

@@ -7,3 +7,4 @@ pub(crate) mod imports;
 mod local_names;
 pub(crate) mod rejections;
 pub(crate) mod scope;
+pub(crate) mod scope_stack;

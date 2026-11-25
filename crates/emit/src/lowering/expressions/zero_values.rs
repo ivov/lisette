@@ -2,11 +2,13 @@ use crate::Planner;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, declare, define,
 };
 use crate::target::ir::go_expression::FunctionLiteralLayout;
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::prelude::option_variant;
 use crate::target::ir::values::{ConstantKind, GoExpression};
 use crate::target::names::go_name;
@@ -24,22 +26,6 @@ pub(in crate::lowering) enum ZeroSpelling {
 }
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn go_field_map_zero(
-        &self,
-        owner: &Type,
-        selection: &FieldSelection,
-        field: &str,
-        field_ty: &Type,
-    ) -> Option<GoExpression> {
-        let layout = self
-            .facts
-            .field_slot_layout(owner, Some(selection), field, field_ty)?;
-        if !layout_is_map(&layout) {
-            return None;
-        }
-        Some(GoExpression::empty_composite(layout.go_type(self)))
-    }
-
     pub(in crate::lowering) fn go_imported_newtype_zero(
         &mut self,
         ty: &Type,
@@ -51,7 +37,7 @@ impl Planner<'_> {
             return None;
         }
         let underlying = self.facts.newtype_underlying(ty)?;
-        let go_ty = self.go_type(ty);
+        let go_ty = self.queries().go_type(ty);
         self.go_newtype_zero(go_ty, &underlying)
     }
 
@@ -83,41 +69,6 @@ impl Planner<'_> {
         }
     }
 
-    fn go_imported_zero(&self, ty: &Type, id: &str) -> GoExpression {
-        let go_ty = self.go_type(ty);
-        let is_struct = matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::Struct { .. })
-        );
-        let is_opaque = matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::TypeAlias {
-                alias: AliasKind::Opaque(_),
-                ..
-            })
-        );
-
-        if !is_struct && !is_opaque {
-            return GoExpression::new_zero(go_ty);
-        }
-        if is_struct && let Some(fields) = self.facts.struct_fields(ty) {
-            let mut pairs: Vec<(String, GoExpression)> = Vec::new();
-            for (name, selection) in fields {
-                let field_ty = selection.field_ty();
-                let Some(zero) = self.go_field_map_zero(ty, &selection, &name, &field_ty) else {
-                    continue;
-                };
-                pairs.push((
-                    self.facts
-                        .struct_field_go_name(ty, &name, GoExport::Unexported),
-                    zero,
-                ));
-            }
-            return plan_struct_literal(&go_ty, pairs);
-        }
-        GoExpression::empty_composite(go_ty)
-    }
-
     pub(in crate::lowering) fn lisette_zero(&mut self, ty: &Type) -> GoExpression {
         self.lisette_zero_expression(ty, ZeroSpelling::Explicit)
             .expect("required zero expression")
@@ -136,13 +87,14 @@ impl Planner<'_> {
             (Type::Simple(kind), _) => {
                 let zero = match kind {
                     SimpleKind::Bool => {
-                        GoExpression::constant("false".to_string(), ConstantKind::Bool)
+                        GoExpression::constant(GoLiteral::Bool(false), ConstantKind::Bool)
                     }
-                    SimpleKind::String => {
-                        GoExpression::constant("\"\"".to_string(), ConstantKind::String)
-                    }
+                    SimpleKind::String => GoExpression::constant(
+                        GoLiteral::Token("\"\"".to_string()),
+                        ConstantKind::String,
+                    ),
                     SimpleKind::Unit => self.unit_value(None, None),
-                    _ => GoExpression::constant("0".to_string(), ConstantKind::Int),
+                    _ => GoExpression::constant(GoLiteral::Int(0), ConstantKind::Int),
                 };
 
                 return Some(zero);
@@ -154,7 +106,7 @@ impl Planner<'_> {
                 },
                 ValueLayout::Slice { element, .. },
             ) => {
-                let element = element.go_type(self);
+                let element = element.go_type(&self.queries());
                 let go_type = GoType::slice_of(&element);
                 GoExpression::conversion(go_type, GoExpression::nil())
             }
@@ -165,8 +117,8 @@ impl Planner<'_> {
                 },
                 ValueLayout::Map { key, value, .. },
             ) => {
-                let key = key.go_type(self);
-                let value = value.go_type(self);
+                let key = key.go_type(&self.queries());
+                let value = value.go_type(&self.queries());
                 GoExpression::empty_composite(GoType::map_of(&key, &value))
             }
             (Type::Nominal { id, params, .. }, _) => {
@@ -177,7 +129,7 @@ impl Planner<'_> {
                     .iter()
                     .map(|element| self.lisette_zero(element.logical_type()))
                     .collect();
-                let callee = self.make_tuple_callee(slots, parts.len());
+                let callee = self.queries().make_tuple_callee(slots, parts.len());
                 GoExpression::pure_call(callee, parts)
             }
             (
@@ -187,10 +139,10 @@ impl Planner<'_> {
                 },
             ) => self.array_zero(*length, element.logical_type()),
             (Type::Parameter(name), _) => {
-                let go_name = self.generic_go_name(name);
+                let go_name = self.names.generic_go_name(name);
                 GoExpression::new_zero(GoType::new(go_name.to_string()))
             }
-            _ => GoExpression::empty_composite(self.go_type(ty)),
+            _ => GoExpression::empty_composite(self.queries().go_type(ty)),
         };
 
         Some(zero)
@@ -206,8 +158,8 @@ impl Planner<'_> {
         if id == "prelude.Option" {
             let inner = params
                 .first()
-                .map(|a| self.go_type(a))
-                .unwrap_or_else(|| GoType::new("any"));
+                .map(|a| self.queries().go_type(a))
+                .unwrap_or_else(GoType::any);
             let zero = GoExpression::call(
                 GoExpression::instantiation(
                     GoExpression::generated(
@@ -228,7 +180,7 @@ impl Planner<'_> {
             return Some(self.go_zero(ty));
         }
         if let Some(underlying) = self.facts.newtype_underlying(ty) {
-            let go_ty = self.go_type(ty);
+            let go_ty = self.queries().go_type(ty);
             if go_import {
                 let zero = self
                     .go_newtype_zero(go_ty.clone(), &underlying)
@@ -239,7 +191,7 @@ impl Planner<'_> {
             return Some(GoExpression::conversion(go_ty, inner));
         }
         if go_import {
-            return Some(self.go_imported_zero(ty, id));
+            return Some(self.queries().go_imported_zero(ty, id));
         }
         if let Some(fields) = self.facts.struct_fields(ty) {
             let is_tuple = self.facts.is_tuple_struct_type(ty);
@@ -265,16 +217,16 @@ impl Planner<'_> {
                 })
                 .collect();
 
-            return Some(plan_struct_literal(&self.go_type(ty), pairs));
+            return Some(plan_struct_literal(&self.queries().go_type(ty), pairs));
         }
         if let Some(underlying) = self.facts.immediate_underlying(ty) {
             return self.lisette_zero_expression(&underlying, spelling);
         }
-        Some(GoExpression::empty_composite(self.go_type(ty)))
+        Some(GoExpression::empty_composite(self.queries().go_type(ty)))
     }
 
     fn array_zero(&mut self, len: u64, element: &Type) -> GoExpression {
-        let element_go = self.go_type(element);
+        let element_go = self.queries().go_type(element);
         let array_type = GoType::array_of(len, &element_go);
         if len == 0 || self.facts.go_zero_is_lisette_zero(element) {
             return GoExpression::empty_composite(array_type);
@@ -341,10 +293,9 @@ impl Planner<'_> {
             return GoExpression::nil();
         }
 
-        let go_ty = layout.go_type(self);
+        let go_ty = layout.go_type(&self.queries());
 
-        let literal = |text: &str| GoExpression::literal(text.to_string());
-        let constant = |text: &str, kind| GoExpression::constant(text.to_string(), kind);
+        let constant = |literal: GoLiteral, kind| GoExpression::constant(literal, kind);
 
         match layout {
             ValueLayout::Plain(Type::Simple(kind)) => match kind {
@@ -360,10 +311,14 @@ impl Planner<'_> {
                 | SimpleKind::Uint64
                 | SimpleKind::Uintptr
                 | SimpleKind::Byte
-                | SimpleKind::Rune => constant("0", ConstantKind::Int),
-                SimpleKind::Float32 | SimpleKind::Float64 => constant("0.0", ConstantKind::Float),
-                SimpleKind::Bool => constant("false", ConstantKind::Bool),
-                SimpleKind::String => constant("\"\"", ConstantKind::String),
+                | SimpleKind::Rune => constant(GoLiteral::Int(0), ConstantKind::Int),
+                SimpleKind::Float32 | SimpleKind::Float64 => {
+                    constant(GoLiteral::Token("0.0".to_string()), ConstantKind::Float)
+                }
+                SimpleKind::Bool => constant(GoLiteral::Bool(false), ConstantKind::Bool),
+                SimpleKind::String => {
+                    constant(GoLiteral::Token("\"\"".to_string()), ConstantKind::String)
+                }
                 SimpleKind::Unit => self.unit_value(None, None),
                 SimpleKind::Complex64 | SimpleKind::Complex128 => GoExpression::new_zero(go_ty),
             },
@@ -384,7 +339,7 @@ impl Planner<'_> {
                     | CompoundKind::Sender
                     | CompoundKind::Receiver,
                 ..
-            }) => literal("nil"),
+            }) => GoExpression::nil(),
             ValueLayout::Plain(Type::Nominal { id, .. })
                 if self
                     .facts
@@ -408,5 +363,58 @@ fn layout_is_map(layout: &ValueLayout) -> bool {
         ValueLayout::Map { .. } => true,
         ValueLayout::Named { underlying, .. } => layout_is_map(underlying),
         _ => false,
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn go_field_map_zero(
+        &self,
+        owner: &Type,
+        selection: &FieldSelection,
+        field: &str,
+        field_ty: &Type,
+    ) -> Option<GoExpression> {
+        let layout = self
+            .facts
+            .field_slot_layout(owner, Some(selection), field, field_ty)?;
+        if !layout_is_map(&layout) {
+            return None;
+        }
+        Some(GoExpression::empty_composite(layout.go_type(self)))
+    }
+
+    fn go_imported_zero(&self, ty: &Type, id: &str) -> GoExpression {
+        let go_ty = self.go_type(ty);
+        let is_struct = matches!(
+            self.facts.definition(id).map(|d| &d.body),
+            Some(DefinitionBody::Struct { .. })
+        );
+        let is_opaque = matches!(
+            self.facts.definition(id).map(|d| &d.body),
+            Some(DefinitionBody::TypeAlias {
+                alias: AliasKind::Opaque(_),
+                ..
+            })
+        );
+
+        if !is_struct && !is_opaque {
+            return GoExpression::new_zero(go_ty);
+        }
+        if is_struct && let Some(fields) = self.facts.struct_fields(ty) {
+            let mut pairs: Vec<(String, GoExpression)> = Vec::new();
+            for (name, selection) in fields {
+                let field_ty = selection.field_ty();
+                let Some(zero) = self.go_field_map_zero(ty, &selection, &name, &field_ty) else {
+                    continue;
+                };
+                pairs.push((
+                    self.facts
+                        .struct_field_go_name(ty, &name, GoExport::Unexported),
+                    zero,
+                ));
+            }
+            return plan_struct_literal(&go_ty, pairs);
+        }
+        GoExpression::empty_composite(go_ty)
     }
 }

@@ -1,5 +1,9 @@
+use crate::target::names::go_name::GoExport;
+use crate::target::names::receiver::ReceiverGenerics;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use std::borrow::Cow;
+use syntax::ast::Generic;
 use syntax::go_names::is_go_reserved_word;
 
 use crate::target::names::go_name;
@@ -13,6 +17,35 @@ pub(crate) struct PackageNames {
 }
 
 impl PackageNames {
+    pub(crate) fn generic_go_name<'argument>(
+        &'argument self,
+        source_name: &'argument str,
+    ) -> Cow<'argument, str> {
+        match self.generic_rename(source_name) {
+            Some(renamed) => Cow::Borrowed(renamed),
+            None => go_name::escape_type_name(source_name),
+        }
+    }
+
+    pub(crate) fn receiver_generics(&self, generics: &[Generic]) -> ReceiverGenerics {
+        ReceiverGenerics(
+            generics
+                .iter()
+                .map(|generic| self.generic_go_name(&generic.name).into_owned())
+                .collect(),
+        )
+    }
+
+    pub(crate) fn free_function_go_name(&self, name: &str, export: GoExport) -> String {
+        match export {
+            GoExport::Exported => go_name::snake_to_camel(name),
+            GoExport::Unexported => self
+                .escape_remap(name)
+                .map(str::to_string)
+                .unwrap_or_else(|| go_name::escape_reserved(name).into_owned()),
+        }
+    }
+
     pub(crate) fn set_block_names(
         &mut self,
         declared_names: FxHashSet<String>,

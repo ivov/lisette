@@ -36,7 +36,7 @@ impl TryBlockPairPlan<'_> {
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
     ) -> BoundValue {
-        let go_return = planner.return_go_type(
+        let go_return = planner.queries().return_go_type(
             &CallableReturnAbi::Lowered(self.shape.clone()),
             &self.effective_ty,
         );
@@ -111,10 +111,10 @@ impl Planner<'_> {
             .expect("`try` block must have Result or Option type");
 
         self.scope.declare_go_name(result_var.spelling());
-        let full_ty = self.go_type(ty);
+        let full_ty = self.queries().go_type(ty);
         let source = self.facts.value_layout(ty, SlotOrigin::Lisette);
         let target = self.facts.value_layout(target_ty, SlotOrigin::Lisette);
-        let coercion = CoercionPlan::change(self, &source, &target);
+        let coercion = CoercionPlan::change(&self.queries(), &source, &target);
 
         let body_ctx = ReturnContext::Tagged(ty.clone());
         let body = self
@@ -180,7 +180,7 @@ impl Planner<'_> {
                 | Expression::Loop { .. }
         );
 
-        if is_statement_only || self.is_unit_call(last) {
+        if is_statement_only || self.queries().is_unit_call(last) {
             let mut statements = vec![self.lower_statement(last)];
             statements.extend(self.lower_try_unit_return(fallible));
             return statements;
@@ -263,7 +263,7 @@ impl Planner<'_> {
             .expect("recover block type must be Result<T, PanicValue>");
 
         let result_var = self.fresh_declared("recoverResult");
-        let inner_ty_str = self.component_go_type(fallible.ok_ty());
+        let inner_ty_str = self.queries().component_go_type(fallible.ok_ty());
 
         let ok_ty = fallible.ok_ty().clone();
         let body_return_ctx = if ok_ty.is_never() {

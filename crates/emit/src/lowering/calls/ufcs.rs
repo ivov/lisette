@@ -1,6 +1,8 @@
 use crate::lowering::calls::arguments::CallArgumentsContext;
 use crate::lowering::calls::regular::receiver_type_binding;
 use crate::lowering::calls::type_arguments::{CallArgumentShape, CallTypeArgumentsRequest};
+use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::names::go_name::GoExport;
 
 use crate::Planner;
@@ -20,41 +22,38 @@ use syntax::types::Type;
 impl Planner<'_> {
     pub(super) fn plan_ufcs_call(
         &mut self,
-        function: &Expression,
-        args: &[Expression],
-        written_type_arguments: usize,
-        spread: Option<&Expression>,
-        call_plan: &CallPlan<'_>,
+        callee: DotAccessSite<'_>,
+        call_plan: &CallPlan<'_, '_>,
     ) -> ValuePlan {
-        let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = function
-        else {
-            unreachable!("plan_ufcs_call called on non-DotAccess");
-        };
+        let function = callee.expression;
+        let receiver = callee.receiver;
+        let member = callee.member;
+        let args = call_plan.site.args;
+        let spread = call_plan.site.spread;
+        let written_type_arguments = call_plan.site.written_type_arguments();
 
         let mut coercion = self.facts.dot_receiver_coercion(receiver, member);
-        let type_args_string = self.call_type_arguments(CallTypeArgumentsRequest {
-            function,
-            callee: &call_plan.resolved,
-            written_type_arguments,
-            call_ty: None,
-            arg_shape: CallArgumentShape {
-                value_count: args.len(),
-                has_spread: spread.is_some(),
-            },
-            slot: None,
-            receiver_passed: true,
-        });
+        let type_args_string = self
+            .queries()
+            .call_type_arguments(CallTypeArgumentsRequest {
+                function,
+                callee: &call_plan.resolved,
+                written_type_arguments,
+                call_ty: None,
+                arg_shape: CallArgumentShape {
+                    value_count: args.len(),
+                    has_spread: spread.is_some(),
+                },
+                slot: None,
+                receiver_passed: true,
+            });
 
         let mut receiver_operand = self.plan_operand(receiver, ExpressionContext::value());
         if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
         {
             let source = self.facts.dereferenced_layout(&receiver.get_type());
             let target = self.facts.receiver_layout(&receiver.get_type());
-            let change = CoercionPlan::change(self, &source, &target);
+            let change = CoercionPlan::change(&self.queries(), &source, &target);
             if change.changes_layout() {
                 receiver_operand = receiver_operand.map_expression(|setup, value| {
                     let value = if coercion == Some(ReceiverCoercion::AutoDeref) {
@@ -92,7 +91,7 @@ impl Planner<'_> {
         let mut new_args = vec![receiver_arg];
         new_args.extend(emitted_args);
 
-        let callee = self.build_ufcs_qualified_call(
+        let callee = self.queries().build_ufcs_qualified_call(
             &call_plan.resolved,
             &receiver.get_type(),
             member,
@@ -100,7 +99,7 @@ impl Planner<'_> {
         );
 
         let expression = GoExpression::call(callee, new_args);
-        if self.callee_lowers_to_type_construction(function) {
+        if self.queries().callee_lowers_to_type_construction(function) {
             ValuePlan::computed(setup, expression)
         } else {
             ValuePlan::plain_call(setup, expression)
@@ -146,26 +145,6 @@ impl Planner<'_> {
         (sequenced.setup, receiver_arg, all_values)
     }
 
-    fn build_ufcs_qualified_call(
-        &self,
-        callee: &ResolvedCallee<'_>,
-        receiver_ty: &Type,
-        member: &str,
-        type_args_string: GoType,
-    ) -> GoExpression {
-        let qualified_name = self
-            .facts
-            .receiver_nominal_id(receiver_ty)
-            .unwrap_or_else(|| unreachable!("UFCS receiver must be a constructor type"));
-        let export = callee
-            .declaration
-            .map(|declaration| GoExport::from_visibility(*declaration.visibility()))
-            .unwrap_or(GoExport::Unexported);
-
-        let qualified_method_name = self.qualify_method_call(&qualified_name, member, export);
-        GoExpression::instantiation(qualified_method_name, type_args_string)
-    }
-
     fn coerce_receiver_address_operand(
         &mut self,
         receiver: &Expression,
@@ -198,7 +177,7 @@ impl Planner<'_> {
         args: &[Expression],
         go_method: String,
         spread: Option<&Expression>,
-        call_plan: &CallPlan<'_>,
+        call_plan: &CallPlan<'_, '_>,
     ) -> ValuePlan {
         let args_ctx = CallArgumentsContext {
             plan: call_plan,
@@ -246,4 +225,26 @@ fn is_address_of_composite_literal(arg: Option<&Expression>) -> bool {
                 ..
             }
     )
+}
+
+impl PlannerQueries<'_, '_> {
+    fn build_ufcs_qualified_call(
+        &self,
+        callee: &ResolvedCallee<'_>,
+        receiver_ty: &Type,
+        member: &str,
+        type_args_string: GoType,
+    ) -> GoExpression {
+        let qualified_name = self
+            .facts
+            .receiver_nominal_id(receiver_ty)
+            .unwrap_or_else(|| unreachable!("UFCS receiver must be a constructor type"));
+        let export = callee
+            .declaration
+            .map(|declaration| GoExport::from_visibility(*declaration.visibility()))
+            .unwrap_or(GoExport::Unexported);
+
+        let qualified_method_name = self.qualify_method_call(&qualified_name, member, export);
+        GoExpression::instantiation(qualified_method_name, type_args_string)
+    }
 }

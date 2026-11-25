@@ -1,7 +1,8 @@
 mod collectors;
-mod collisions;
+pub(in crate::lowering) mod collisions;
 mod generics;
 pub(in crate::lowering) mod package;
+pub(in crate::lowering) mod queries;
 mod resolution;
 
 use crate::lookup::facts::emit_facts::EmitFacts;
@@ -11,6 +12,7 @@ use crate::lookup::state::conversion_record::ConversionRecord;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lookup::state::scope::ScopeState;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::{LoopTransfer, LoweredBlock, LoweredStatement, Statement, define};
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration};
 use crate::target::ir::go_expression::{GoExpressionNode, TreeVisitor};
@@ -40,6 +42,15 @@ pub(in crate::lowering) struct PlanningSnapshot {
 }
 
 impl<'a> Planner<'a> {
+    pub(in crate::lowering) fn queries(&self) -> PlannerQueries<'_, 'a> {
+        PlannerQueries {
+            facts: &self.facts,
+            names: self.names,
+            scope: &self.scope,
+            namespace: &*self.namespace,
+        }
+    }
+
     pub(in crate::lowering) fn planning_snapshot(&self) -> PlanningSnapshot {
         let Self {
             facts: _,
@@ -193,16 +204,6 @@ impl<'a> Planner<'a> {
         result
     }
 
-    pub(in crate::lowering) fn current_loop_transfer(&self) -> LoopTransfer {
-        self.scope
-            .current_loop_id()
-            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source)
-    }
-
-    pub(in crate::lowering) fn shadows_declaration(&self, go_name: &str) -> bool {
-        self.scope.is_go_name_declared(go_name) || self.names.is_package_block_name(go_name)
-    }
-
     pub(in crate::lowering) fn claim_declared_binding(
         &mut self,
         lisette_name: &str,
@@ -259,7 +260,7 @@ impl<'a> Planner<'a> {
         preferred: &SourceName,
     ) -> GoIdentifier {
         let go_name = self.scope.new_local_identifier(preferred);
-        let go_name = if self.shadows_declaration(&go_name)
+        let go_name = if self.queries().shadows_declaration(&go_name)
             || self.scope.go_name_bound_outside_ids(&go_name, ids)
         {
             let fresh = self
@@ -465,4 +466,16 @@ pub(in crate::lowering) fn written_span(expression: &Expression) -> Span {
         }
     }
     span
+}
+
+impl<'a> PlannerQueries<'_, 'a> {
+    pub(in crate::lowering) fn current_loop_transfer(&self) -> LoopTransfer {
+        self.scope
+            .current_loop_id()
+            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source)
+    }
+
+    pub(in crate::lowering) fn shadows_declaration(&self, go_name: &str) -> bool {
+        self.scope.is_go_name_declared(go_name) || self.names.is_package_block_name(go_name)
+    }
 }

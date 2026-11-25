@@ -1,5 +1,6 @@
 use crate::target::ir::bodies::LoweredBlock;
 use crate::target::ir::evaluation::Effects;
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{
     CallPurity, CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout,
     GoBinaryOperator, GoExpressionNode, GoParameter, GoUnaryOperator, Operand, Position,
@@ -137,8 +138,8 @@ impl GoExpression {
         peeled
     }
 
-    pub(crate) fn constant(rendered: String, kind: ConstantKind) -> Self {
-        Self::literal(rendered).with_constant(Some(kind))
+    pub(crate) fn constant(literal: GoLiteral, kind: ConstantKind) -> Self {
+        Self::literal(literal).with_constant(Some(kind))
     }
 
     pub(crate) fn with_constant(mut self, constant: Option<ConstantKind>) -> Self {
@@ -174,7 +175,7 @@ impl GoExpression {
     }
 
     pub(crate) fn nil() -> Self {
-        Self::literal("nil".to_string())
+        Self::literal(GoLiteral::Nil)
     }
 
     pub(crate) fn empty() -> Self {
@@ -185,8 +186,20 @@ impl GoExpression {
         Self::new(GoExpressionNode::Verbatim(source))
     }
 
-    pub(crate) fn literal(rendered: String) -> Self {
-        Self::new(GoExpressionNode::Literal(rendered))
+    pub(crate) fn literal(literal: GoLiteral) -> Self {
+        Self::new(GoExpressionNode::Literal(literal))
+    }
+
+    pub(crate) fn boolean(value: bool) -> Self {
+        Self::literal(GoLiteral::Bool(value))
+    }
+
+    pub(crate) fn integer(value: i128) -> Self {
+        Self::literal(GoLiteral::Int(value))
+    }
+
+    pub(crate) fn token(text: String) -> Self {
+        Self::literal(GoLiteral::Token(text))
     }
 
     pub(crate) fn type_name(go_type: impl Into<GoType>) -> Self {
@@ -238,7 +251,7 @@ impl GoExpression {
     }
 
     pub(crate) fn unit() -> Self {
-        Self::empty_composite(GoType::new("struct{}"))
+        Self::empty_composite(GoType::structure(Vec::new()))
     }
 
     pub(crate) fn empty_composite(go_type: impl Into<GoType>) -> Self {
@@ -503,9 +516,16 @@ impl GoExpression {
         }
     }
 
-    pub(crate) fn as_literal(&self) -> Option<&str> {
+    pub(crate) fn as_boolean(&self) -> Option<bool> {
         match &self.node {
-            GoExpressionNode::Literal(value) => Some(value),
+            GoExpressionNode::Literal(GoLiteral::Bool(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_integer(&self) -> Option<i128> {
+        match &self.node {
+            GoExpressionNode::Literal(GoLiteral::Int(value)) => Some(*value),
             _ => None,
         }
     }

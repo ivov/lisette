@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::FallibleProducer;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::PairCondition;
 
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -43,6 +44,45 @@ pub(in crate::lowering) fn strip_negations(mut expression: &Expression) -> (&Exp
 }
 
 impl<'p> Planner<'p> {
+    fn bind_fused_predicate(
+        &mut self,
+        predicate: FusedPredicate<'_>,
+        polarity: Polarity,
+        slot: CommaOkValueSlot,
+    ) -> (Vec<Statement>, PairCondition) {
+        let predicate_polarity = predicate.polarity;
+        let bound = predicate.producer.bind_slot(self, slot);
+        let condition = if predicate_polarity == polarity {
+            bound.success_condition()
+        } else {
+            bound.failure_condition()
+        };
+        (bound.statements, condition)
+    }
+
+    pub(in crate::lowering) fn try_plan_fused_predicate_condition(
+        &mut self,
+        condition: &Expression,
+    ) -> Option<(Vec<Statement>, PairCondition)> {
+        let (target, polarity) = strip_negations(condition);
+        let predicate = self.queries().fused_predicate(target)?;
+        Some(self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Unused))
+    }
+
+    pub(in crate::lowering) fn try_plan_fused_predicate_value(
+        &mut self,
+        expression: &Expression,
+        polarity: Polarity,
+    ) -> Option<ValuePlan> {
+        let predicate = self.queries().fused_predicate(expression)?;
+        let (setup, condition) =
+            self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Discarded);
+        debug_assert!(condition.initializer.is_none());
+        Some(ValuePlan::plain_call(setup, condition.condition))
+    }
+}
+
+impl<'p> PlannerQueries<'_, 'p> {
     fn fused_predicate<'a>(&self, expression: &'a Expression) -> Option<FusedPredicate<'a>>
     where
         'p: 'a,
@@ -84,42 +124,5 @@ impl<'p> Planner<'p> {
             producer: self.fallible_producer(receiver)?,
             polarity,
         })
-    }
-
-    fn bind_fused_predicate(
-        &mut self,
-        predicate: FusedPredicate<'_>,
-        polarity: Polarity,
-        slot: CommaOkValueSlot,
-    ) -> (Vec<Statement>, PairCondition) {
-        let predicate_polarity = predicate.polarity;
-        let bound = predicate.producer.bind_slot(self, slot);
-        let condition = if predicate_polarity == polarity {
-            bound.success_condition()
-        } else {
-            bound.failure_condition()
-        };
-        (bound.statements, condition)
-    }
-
-    pub(in crate::lowering) fn try_plan_fused_predicate_condition(
-        &mut self,
-        condition: &Expression,
-    ) -> Option<(Vec<Statement>, PairCondition)> {
-        let (target, polarity) = strip_negations(condition);
-        let predicate = self.fused_predicate(target)?;
-        Some(self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Unused))
-    }
-
-    pub(in crate::lowering) fn try_plan_fused_predicate_value(
-        &mut self,
-        expression: &Expression,
-        polarity: Polarity,
-    ) -> Option<ValuePlan> {
-        let predicate = self.fused_predicate(expression)?;
-        let (setup, condition) =
-            self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Discarded);
-        debug_assert!(condition.initializer.is_none());
-        Some(ValuePlan::plain_call(setup, condition.condition))
     }
 }

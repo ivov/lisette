@@ -7,6 +7,7 @@ use crate::lowering::expressions::operand_order::OrderedOperand;
 use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::blocks::directed_at;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -14,6 +15,7 @@ use crate::target::ir::bodies::{
     ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, define, discard, with_setup,
 };
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression};
@@ -39,26 +41,17 @@ impl Planner<'_> {
     pub(in crate::lowering) fn lower_for_statement(
         &mut self,
         full_expression: &Expression,
+        binding: &Binding,
+        iterable: &Expression,
+        body: &Expression,
     ) -> Statement {
-        let Expression::For {
-            binding,
-            iterable,
-            body,
-            ..
-        } = full_expression
-        else {
-            unreachable!("lower_for_statement requires a For expression");
-        };
-
-        let iterable = iterable.as_ref();
-        let body = body.as_ref();
         let kind = self.facts.checked(full_expression).iterable_kind();
         let shape = classify_for(&self.facts, binding, iterable, kind);
 
         let line = self.facts.source_position(&full_expression.get_span());
         let plan = self.with_loop(None, None, |this| {
             let (prologue, header, lowered_body) = match shape {
-                ForShape::Range => this.lower_range_for(binding, iterable, body),
+                ForShape::Range(range) => this.lower_range_for(binding, range, body),
                 ForShape::StoredRange(range_shape) => {
                     this.lower_stored_range_for(binding, iterable, range_shape, body)
                 }
@@ -68,7 +61,9 @@ impl Planner<'_> {
                 ForShape::StringView(StringViewKind::Bytes, receiver) => {
                     this.lower_bytes_for(binding, receiver, body)
                 }
-                ForShape::MapTuple => this.lower_map_tuple_for(binding, iterable, body),
+                ForShape::MapTuple { first, second } => {
+                    this.lower_map_tuple_for(binding, first, second, iterable, body)
+                }
                 ForShape::Iterate {
                     yields,
                     simple_pattern,
@@ -77,7 +72,7 @@ impl Planner<'_> {
 
             with_setup(
                 prologue,
-                LoweredStatement::Loop(this.build_source_loop(header, lowered_body)),
+                LoweredStatement::Loop(this.queries().build_source_loop(header, lowered_body)),
             )
         });
 
@@ -195,7 +190,7 @@ impl Planner<'_> {
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = LoopHeader::Counted {
                 variable: index_var.clone(),
-                start: GoExpression::literal("0".to_string()),
+                start: GoExpression::integer(0),
                 condition: Some(GoExpression::binary(
                     GoExpression::identifier(index_var.clone()),
                     GoBinaryOperator::LessThan,
@@ -258,15 +253,11 @@ impl Planner<'_> {
     fn lower_map_tuple_for(
         &mut self,
         binding: &Binding,
+        first: &Pattern,
+        second: &Pattern,
         iterable: &Expression,
         body: &Expression,
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
-        let Pattern::Tuple { elements, .. } = &binding.pattern else {
-            unreachable!("lower_map_tuple_for requires a tuple pattern");
-        };
-        let first = &elements[0];
-        let second = &elements[1];
-
         let (prologue, iter_expression) = self.capture_iterable_operand(iterable);
 
         let first_is_simple =
@@ -407,24 +398,20 @@ impl Planner<'_> {
     fn lower_range_for(
         &mut self,
         binding: &Binding,
-        iterable: &Expression,
+        range: LiteralRange<'_>,
         body: &Expression,
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
-        let Expression::Range {
+        let LiteralRange {
             start,
             end,
             inclusive,
-            ..
-        } = iterable
-        else {
-            unreachable!("lower_range_for requires a Range iterable");
-        };
+        } = range;
 
-        let start_plan = start.as_ref().map_or_else(
-            || ValuePlan::constant("0".to_string(), ConstantKind::Int),
+        let start_plan = start.map_or_else(
+            || ValuePlan::constant(GoLiteral::Int(0), ConstantKind::Int),
             |start| self.plan_operand(start, ExpressionContext::value()),
         );
-        let counts_from_zero = !*inclusive && start_plan.expression().as_literal() == Some("0");
+        let counts_from_zero = !inclusive && start_plan.expression().as_integer() == Some(0);
         let mut operands = vec![OrderedOperand {
             plan: start_plan,
             prefix: "start",
@@ -456,7 +443,7 @@ impl Planner<'_> {
                 }
                 Some(end_expression) => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
-                    let operator = if *inclusive {
+                    let operator = if inclusive {
                         GoBinaryOperator::LessThanOrEqual
                     } else {
                         GoBinaryOperator::LessThan
@@ -501,7 +488,7 @@ impl Planner<'_> {
         {
             let preferred = go_name.preferred();
             let go_name = if self.scope.has_binding_for_go_name(&preferred)
-                || self.shadows_declaration(&preferred)
+                || self.queries().shadows_declaration(&preferred)
             {
                 self.fresh_local(&go_name)
             } else {
@@ -520,12 +507,9 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn plan_loop_as_operand_temp(
         &mut self,
-        expression: &Expression,
+        body: &Expression,
         ty: &Type,
     ) -> ValuePlan {
-        let Expression::Loop { body, .. } = expression else {
-            unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
-        };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let result = GoExpression::identifier(result_var.clone());
         let plan = self.with_loop(Some(result), Some(ty.clone()), |this| {
@@ -540,17 +524,10 @@ impl Planner<'_> {
     pub(in crate::lowering) fn lower_while_let_statement(
         &mut self,
         expression: &Expression,
+        pattern: &Pattern,
+        scrutinee: &Expression,
+        body: &Expression,
     ) -> Statement {
-        let Expression::WhileLet {
-            pattern,
-            scrutinee,
-            body,
-            ..
-        } = expression
-        else {
-            unreachable!("lower_while_let_statement requires a WhileLet expression");
-        };
-
         let body = self.with_loop(None, None, |this| {
             this.lower_while_let(pattern, scrutinee, body)
         });
@@ -614,7 +591,8 @@ impl Planner<'_> {
         );
         let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
         statements.extend(lowered_body.statements);
-        self.build_source_loop(LoopHeader::Infinite, LoweredBlock { statements })
+        self.queries()
+            .build_source_loop(LoopHeader::Infinite, LoweredBlock { statements })
     }
 
     pub(in crate::lowering) fn lower_loop_with_header(
@@ -623,32 +601,25 @@ impl Planner<'_> {
         body: &Expression,
     ) -> LoopPlan {
         let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
-        self.build_source_loop(header, lowered_body)
-    }
-
-    pub(in crate::lowering) fn build_source_loop(
-        &self,
-        header: LoopHeader,
-        mut body: LoweredBlock,
-    ) -> LoopPlan {
-        let target = self
-            .scope
-            .current_loop_id()
-            .expect("source loop plan requires an active loop context");
-        let label = legalize_source_loop(&mut body, target);
-        LoopPlan {
-            kind: LoopKind::Source { label },
-            header,
-            body,
-        }
+        self.queries().build_source_loop(header, lowered_body)
     }
 }
 
+#[derive(Clone, Copy)]
+struct LiteralRange<'a> {
+    start: Option<&'a Expression>,
+    end: Option<&'a Expression>,
+    inclusive: bool,
+}
+
 enum ForShape<'a> {
-    Range,
+    Range(LiteralRange<'a>),
     StoredRange(RangeKind),
     StringView(StringViewKind, &'a Expression),
-    MapTuple,
+    MapTuple {
+        first: &'a Pattern,
+        second: &'a Pattern,
+    },
     Iterate {
         yields: RangeYield,
         simple_pattern: bool,
@@ -673,8 +644,18 @@ fn classify_for<'a>(
     iterable: &'a Expression,
     kind: IterableKind,
 ) -> ForShape<'a> {
-    if matches!(iterable, Expression::Range { .. }) {
-        return ForShape::Range;
+    if let Expression::Range {
+        start,
+        end,
+        inclusive,
+        ..
+    } = iterable
+    {
+        return ForShape::Range(LiteralRange {
+            start: start.as_deref(),
+            end: end.as_deref(),
+            inclusive: *inclusive,
+        });
     }
     if let IterableKind::Range(range) = kind
         && range.has_start()
@@ -685,10 +666,10 @@ fn classify_for<'a>(
         return ForShape::StringView(kind, receiver);
     }
     if let Pattern::Tuple { elements, .. } = &binding.pattern
-        && elements.len() == 2
+        && let [first, second] = elements.as_slice()
         && kind.yields_key_value()
     {
-        return ForShape::MapTuple;
+        return ForShape::MapTuple { first, second };
     }
     let yields = if matches!(kind, IterableKind::Channel | IterableKind::Seq) {
         RangeYield::Single
@@ -747,5 +728,24 @@ fn recognize_string_view_loop<'a>(
         "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
         "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
         _ => None,
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(in crate::lowering) fn build_source_loop(
+        &self,
+        header: LoopHeader,
+        mut body: LoweredBlock,
+    ) -> LoopPlan {
+        let target = self
+            .scope
+            .current_loop_id()
+            .expect("source loop plan requires an active loop context");
+        let label = legalize_source_loop(&mut body, target);
+        LoopPlan {
+            kind: LoopKind::Source { label },
+            header,
+            body,
+        }
     }
 }

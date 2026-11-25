@@ -222,6 +222,53 @@ fn emit_layers_use_only_lower_layers() {
     );
 }
 
+const RENDER_IN_LOWERING: [(&str, &str); 2] = [
+    (
+        "crates/emit/src/lowering/calls/native_constructors.rs",
+        "rendered",
+    ),
+    (
+        "crates/emit/src/lowering/expressions/literals.rs",
+        "rendered",
+    ),
+];
+
+#[test]
+fn emit_lowering_leaves_go_text_to_the_printer() {
+    let files = source_files("crates/emit/src");
+    let lib = files
+        .iter()
+        .find(|(path, _)| path == "crates/emit/src/lib.rs")
+        .map(|(_, text)| text.as_str())
+        .expect("emit has a lib.rs");
+    let roots = root_reexports(lib);
+    let mut failures = Vec::new();
+    for (path, text) in &files {
+        let Some(layer) = layer_of(&file_segments(path)) else {
+            continue;
+        };
+        if !layer.starts_with("lowering") || layer == "lowering/driver" {
+            continue;
+        }
+        for segments in referenced_paths(path, text, &roots) {
+            if layer_of(&segments).as_deref() != Some("output/render") {
+                continue;
+            }
+            let item = segments.last().map_or("", String::as_str);
+            if !RENDER_IN_LOWERING.contains(&(path.as_str(), item)) {
+                failures.push(format!("{path}: uses `{}`", segments.join("::")));
+            }
+        }
+    }
+    failures.sort();
+    failures.dedup();
+    assert!(
+        failures.is_empty(),
+        "lowering builds IR and only `output/render` writes Go text:\n{}",
+        failures.join("\n")
+    );
+}
+
 fn strip_visibility(line: &str) -> (&str, Option<&str>) {
     let Some(rest) = line.strip_prefix("pub") else {
         return (line, None);

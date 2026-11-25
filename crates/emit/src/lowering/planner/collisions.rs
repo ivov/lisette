@@ -8,7 +8,7 @@ use syntax::attributes;
 use syntax::go_names;
 use syntax::program::File;
 
-use crate::Planner;
+use crate::lookup::facts::package_names::PackageNames;
 use crate::lookup::facts::synthesized_methods::StructShape;
 use crate::target::names::go_name::{self, GoExport};
 use syntax::go_names::ENUM_TAG_FIELD;
@@ -65,7 +65,12 @@ impl CollectedNames {
     }
 }
 
-impl Planner<'_> {
+pub(in crate::lowering) struct NameCollector<'n, 'a> {
+    pub(in crate::lowering) facts: &'n EmitFacts<'a>,
+    pub(in crate::lowering) names: &'n PackageNames,
+}
+
+impl NameCollector<'_, '_> {
     pub(in crate::lowering) fn name_collision_diagnostics(
         &self,
         files: &[&File],
@@ -129,7 +134,7 @@ impl Planner<'_> {
             } => collect_const(identifier, *identifier_span, collected),
             Expression::TypeAlias {
                 name, name_span, ..
-            } => collect_type_alias(&self.facts, name, *name_span, collected),
+            } => collect_type_alias(self.facts, name, *name_span, collected),
             Expression::Struct {
                 name,
                 name_span,
@@ -137,7 +142,7 @@ impl Planner<'_> {
                 attributes,
                 ..
             } => self.collect_struct(name, *name_span, fields, attributes, collected),
-            Expression::Enum { .. } => collect_enum(&self.facts, item, collected),
+            Expression::Enum { .. } => collect_enum(self.facts, item, collected),
             Expression::Interface {
                 name,
                 name_span,
@@ -145,7 +150,7 @@ impl Planner<'_> {
                 visibility,
                 ..
             } => collect_interface(
-                &self.facts,
+                self.facts,
                 name,
                 *name_span,
                 method_signatures,
@@ -156,7 +161,7 @@ impl Planner<'_> {
                 receiver_name,
                 methods,
                 ..
-            } => collect_impl_block(&self.facts, receiver_name, methods, collected),
+            } => collect_impl_block(self.facts, receiver_name, methods, collected),
             _ => {}
         }
     }
@@ -181,7 +186,7 @@ impl Planner<'_> {
         let name_span = *name_span;
         let export = GoExport::from_visibility(*visibility);
         if export == GoExport::Exported || private_functions == PrivateFunctions::Include {
-            let go = self.free_function_go_name(name, export);
+            let go = self.names.free_function_go_name(name, export);
             check_reserved_prefix(name, &name_span, &mut collected.diagnostics);
             check_reserved_prefix(&go, &name_span, &mut collected.diagnostics);
             collected.package_block.claim(go, name_span);
@@ -305,7 +310,7 @@ impl Planner<'_> {
         let mut emitted = SpanMap::default();
         for generic in generics {
             check_reserved_qualifier(&generic.name, &generic.span, out);
-            emitted.claim(self.generic_go_name(&generic.name), generic.span);
+            emitted.claim(self.names.generic_go_name(&generic.name), generic.span);
         }
         emitted.report(out);
     }
@@ -318,12 +323,12 @@ impl Planner<'_> {
     ) {
         let mut emitted = SpanMap::default();
         for generic in impl_generics {
-            emitted.claim(self.generic_go_name(&generic.name), generic.span);
+            emitted.claim(self.names.generic_go_name(&generic.name), generic.span);
         }
         let mut method_names: FxHashSet<String> = FxHashSet::default();
         for generic in method_generics {
             check_reserved_qualifier(&generic.name, &generic.span, out);
-            let go = self.generic_go_name(&generic.name).into_owned();
+            let go = self.names.generic_go_name(&generic.name).into_owned();
             emitted.claim(go.clone(), generic.span);
             method_names.insert(go);
         }

@@ -1,5 +1,6 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::expressions::zero_values::ZeroSpelling;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::names::go_name::GoExport;
 use rustc_hash::FxHashSet;
 
@@ -60,18 +61,14 @@ impl StructCallField {
 }
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn plan_struct_call(&mut self, expression: &Expression) -> ValuePlan {
-        let Expression::StructCall {
-            name,
-            field_assignments,
-            spread,
-            ty,
-            ..
-        } = expression
-        else {
-            unreachable!("plan_struct_call called with a non-StructCall expression")
-        };
-
+    pub(in crate::lowering) fn plan_struct_call(
+        &mut self,
+        expression: &Expression,
+        name: &str,
+        field_assignments: &[StructFieldAssignment],
+        spread: &StructSpread,
+        ty: &Type,
+    ) -> ValuePlan {
         let checked = self.facts.checked(expression);
         let ctx = self.analyze_struct_call(name, ty, checked);
 
@@ -159,7 +156,7 @@ impl Planner<'_> {
                 let declared = &ctx.checked.literal_field(&f.name).declared_ty;
                 let field_ctx = ExpressionContext::value()
                     .with_generic_result_slot(Some(declared), Some(field_ty));
-                let source_layout = self.emitted_value_layout(&f.value, field_ctx);
+                let source_layout = self.queries().emitted_value_layout(&f.value, field_ctx);
                 (
                     self.plan_composite_value(&f.value, field_ctx),
                     source_layout,
@@ -195,7 +192,7 @@ impl Planner<'_> {
             .zip(emitted_values.into_iter().zip(source_layouts))
             .zip(literal_slots)
         {
-            let field_name = self.resolve_struct_call_field_name(&f.name, ctx);
+            let field_name = self.queries().resolve_struct_call_field_name(&f.name, ctx);
             if let Some(position) = self.facts.source_position(&f.name_span) {
                 positions.push((field_name.clone(), position));
             }
@@ -264,7 +261,10 @@ impl Planner<'_> {
         for (field_name, field_ty) in &ctx.checked.struct_literal().unset_fields {
             let zero = if is_go_struct {
                 let selection = ctx.checked.literal_field(field_name);
-                match self.go_field_map_zero(ctx.ty, selection, field_name, field_ty) {
+                match self
+                    .queries()
+                    .go_field_map_zero(ctx.ty, selection, field_name, field_ty)
+                {
                     Some(zero) => zero,
                     None => continue,
                 }
@@ -276,7 +276,9 @@ impl Planner<'_> {
                 zero
             };
 
-            let go_field_name = self.resolve_struct_call_field_name(field_name, ctx);
+            let go_field_name = self
+                .queries()
+                .resolve_struct_call_field_name(field_name, ctx);
             field_pairs.push((go_field_name, zero));
         }
     }
@@ -314,7 +316,7 @@ impl Planner<'_> {
             enum_id.as_deref(),
         );
 
-        let enum_ctx = enum_id.map(|id| self.compute_enum_call_context(name, &id));
+        let enum_ctx = enum_id.map(|id| self.queries().compute_enum_call_context(name, &id));
 
         StructCallContext {
             ty,
@@ -337,7 +339,7 @@ impl Planner<'_> {
                 .definition(id)
                 .is_some_and(|definition| definition.is_anon_struct())
         {
-            return self.go_type(ty);
+            return self.queries().go_type(ty);
         }
 
         if !self.facts.is_prelude_nominal(ty) {
@@ -355,65 +357,19 @@ impl Planner<'_> {
                 let type_args = if literal.via_alias {
                     GoType::default()
                 } else if let Type::Nominal { params, .. } = ty {
-                    self.format_type_args(params)
+                    self.queries().format_type_args(params)
                 } else {
                     GoType::default()
                 };
 
                 let canonical = self.canonical_package(package);
                 let member = self.facts.type_member_go_name(&canonical, type_name);
-                let package = self.package_use_for_package(&canonical);
+                let package = self.queries().package_use_for_package(&canonical);
                 return GoType::named(&member, type_args.arguments(), Some(package));
             }
         }
 
-        self.go_type(ty)
-    }
-
-    fn compute_enum_call_context(&self, name: &str, enum_id: &str) -> EnumCallContext {
-        let variant_name = unqualified_name(name).to_string();
-
-        let tag_constant = self.resolve_variant(name, enum_id);
-
-        let pointer_fields = if let Some(layout) = self.facts.enum_layout(enum_id) {
-            if let Some(variant) = layout.variant(&variant_name) {
-                variant
-                    .fields
-                    .iter()
-                    .filter(|f| f.is_recursive())
-                    .map(|f| f.source_name.clone())
-                    .collect()
-            } else {
-                FxHashSet::default()
-            }
-        } else {
-            FxHashSet::default()
-        };
-
-        EnumCallContext {
-            enum_id: enum_id.to_string(),
-            variant_name,
-            tag_constant,
-            pointer_fields,
-        }
-    }
-
-    fn resolve_struct_call_field_name(
-        &self,
-        field_name: &str,
-        ctx: &StructCallContext<'_>,
-    ) -> String {
-        if let Some(ref enum_ctx) = ctx.enum_ctx {
-            self.facts
-                .enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
-                .unwrap_or_else(|| {
-                    self.facts
-                        .struct_field_go_name(ctx.ty, field_name, GoExport::Exported)
-                })
-        } else {
-            self.facts
-                .struct_field_go_name(ctx.ty, field_name, GoExport::Unexported)
-        }
+        self.queries().go_type(ty)
     }
 
     fn hoist_observable_fields(
@@ -486,7 +442,9 @@ impl Planner<'_> {
             base_value
         };
         for (field_name, _) in carried {
-            let slot = self.resolve_struct_call_field_name(field_name, ctx);
+            let slot = self
+                .queries()
+                .resolve_struct_call_field_name(field_name, ctx);
             field_pairs.push((slot.clone(), GoExpression::selector(source.clone(), slot)));
         }
         (statements, plan_struct_literal(&ctx.go_type, field_pairs))
@@ -518,4 +476,52 @@ fn omits_none_field(
         && matches!(spread, StructSpread::None | StructSpread::Autofill { .. })
         && prelude_constructor(&field.value) == Some(PreludeVariant::None)
         && facts.go_zero_is_lisette_zero(field_ty)
+}
+
+impl PlannerQueries<'_, '_> {
+    fn resolve_struct_call_field_name(
+        &self,
+        field_name: &str,
+        ctx: &StructCallContext<'_>,
+    ) -> String {
+        if let Some(ref enum_ctx) = ctx.enum_ctx {
+            self.facts
+                .enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
+                .unwrap_or_else(|| {
+                    self.facts
+                        .struct_field_go_name(ctx.ty, field_name, GoExport::Exported)
+                })
+        } else {
+            self.facts
+                .struct_field_go_name(ctx.ty, field_name, GoExport::Unexported)
+        }
+    }
+
+    fn compute_enum_call_context(&self, name: &str, enum_id: &str) -> EnumCallContext {
+        let variant_name = unqualified_name(name).to_string();
+
+        let tag_constant = self.resolve_variant(name, enum_id);
+
+        let pointer_fields = if let Some(layout) = self.facts.enum_layout(enum_id) {
+            if let Some(variant) = layout.variant(&variant_name) {
+                variant
+                    .fields
+                    .iter()
+                    .filter(|f| f.is_recursive())
+                    .map(|f| f.source_name.clone())
+                    .collect()
+            } else {
+                FxHashSet::default()
+            }
+        } else {
+            FxHashSet::default()
+        };
+
+        EnumCallContext {
+            enum_id: enum_id.to_string(),
+            variant_name,
+            tag_constant,
+            pointer_fields,
+        }
+    }
 }

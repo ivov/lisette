@@ -1,13 +1,17 @@
 use crate::Planner;
+use crate::lookup::facts::component_uses::ValueDemand;
 use crate::lookup::state::bindings::{ComponentBinding, ComponentKind};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::go_returns::tag_check_with_initializer;
 use crate::lowering::calls::NativeCallContext;
 use crate::lowering::calls::bound_value::BoundValue;
+use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
 use crate::lowering::calls::slice_loop::FoundSink;
 use crate::lowering::calls::wrap_err::{ErrorUse, WrapMessage};
 use crate::lowering::control_flow::try_recover_blocks::TryBlockPairPlan;
+use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::{Statement, define};
 use crate::target::ir::local::GoIdentifier;
@@ -23,21 +27,32 @@ use syntax::program::NativeTypeKind;
 use syntax::types::Type;
 
 pub(in crate::lowering) struct ResultFusePlan<'a> {
-    subject: &'a Expression,
     shape: LoweredReturnAbi,
-    nil_guard: Option<NilGuard>,
-    wraps: Vec<&'a Expression>,
-    bound: Option<ComponentBinding>,
+    source: ResultFuseSource<'a>,
+}
+
+enum ResultFuseSource<'a> {
+    Bound(ComponentBinding),
+    Call {
+        site: CallSite<'a>,
+        nil_guard: Option<NilGuard>,
+        wraps: Vec<&'a Expression>,
+    },
+}
+
+pub(in crate::lowering) enum NullableSource<'a> {
+    Field(DotAccessSite<'a>),
+    Call(CallSite<'a>),
 }
 
 pub(in crate::lowering) enum OptionFusePlan<'a> {
     Bound(ComponentBinding),
     CommaOk {
-        subject: &'a Expression,
+        subject: CallSite<'a>,
         source: CommaOkSource,
     },
     Nullable {
-        subject: &'a Expression,
+        subject: NullableSource<'a>,
         nil_guard: NilGuard,
     },
 
@@ -59,10 +74,11 @@ impl OptionFusePlan<'_> {
             Self::Bound(components) => planner.bind_component_pair(components, slot),
             Self::CommaOk { subject, source } => planner.bind_comma_ok_pair(subject, source, slot),
             Self::Nullable { subject, nil_guard } => {
-                let value = if matches!(subject, Expression::DotAccess { .. }) {
-                    planner.plan_raw_nullable_field(subject)
-                } else {
-                    planner.plan_call_expression(subject, None, ExpressionContext::value())
+                let value = match subject {
+                    NullableSource::Field(field) => planner.plan_raw_nullable_field(field),
+                    NullableSource::Call(site) => {
+                        planner.plan_call_expression(site, None, ExpressionContext::value())
+                    }
                 };
                 let (mut statements, call) = value.into_parts();
                 let (value, opens_if) = match slot {
@@ -125,17 +141,22 @@ pub(in crate::lowering) enum ErrorNilGuard {
 
 impl ResultFusePlan<'_> {
     pub(in crate::lowering) fn wraps_error(&self) -> bool {
-        !self.wraps.is_empty()
+        matches!(&self.source, ResultFuseSource::Call { wraps, .. } if !wraps.is_empty())
     }
 
     pub(in crate::lowering) fn is_bound(&self) -> bool {
-        self.bound.is_some()
+        matches!(self.source, ResultFuseSource::Bound(_))
     }
 
     pub(in crate::lowering) fn error_nil_guard(&self) -> ErrorNilGuard {
-        match self.nil_guard {
-            Some(_) => ErrorNilGuard::Guarded,
-            None => ErrorNilGuard::Unguarded,
+        match self.source {
+            ResultFuseSource::Call {
+                nil_guard: Some(_), ..
+            } => ErrorNilGuard::Guarded,
+            ResultFuseSource::Call {
+                nil_guard: None, ..
+            }
+            | ResultFuseSource::Bound(_) => ErrorNilGuard::Unguarded,
         }
     }
 
@@ -164,15 +185,21 @@ impl ResultFusePlan<'_> {
         error_name: Option<&SourceName>,
         error_use: ErrorUse,
     ) -> (BoundValue, Vec<WrapMessage>) {
-        if let Some(components) = self.bound {
-            return (planner.bind_component_pair(components, slot), Vec::new());
-        }
-
         let carries_value = self.carries_payload();
+        let (site, nil_guard, wraps) = match self.source {
+            ResultFuseSource::Bound(components) => {
+                return (planner.bind_component_pair(components, slot), Vec::new());
+            }
+            ResultFuseSource::Call {
+                site,
+                nil_guard,
+                wraps,
+            } => (site, nil_guard, wraps),
+        };
         let (setup, call) = planner
-            .plan_call_expression(self.subject, None, ExpressionContext::value())
+            .plan_call_expression(site, None, ExpressionContext::value())
             .into_parts();
-        let (message_setup, messages) = planner.prepare_wrap_messages(&self.wraps, error_use);
+        let (message_setup, messages) = planner.prepare_wrap_messages(&wraps, error_use);
 
         let slot = if message_setup.is_empty() {
             slot
@@ -192,9 +219,7 @@ impl ResultFusePlan<'_> {
             call,
             slot,
             if carries_value {
-                PairKind::Result {
-                    nil_guard: self.nil_guard,
-                }
+                PairKind::Result { nil_guard }
             } else {
                 PairKind::BareError
             },
@@ -311,6 +336,28 @@ impl FallibleProducer<'_> {
 }
 
 impl<'p> Planner<'p> {
+    pub(in crate::lowering) fn component_producer<'a>(
+        &self,
+        subject: &'a Expression,
+        value_demand: ValueDemand,
+        kind: ComponentKind,
+    ) -> Option<FallibleProducer<'a>>
+    where
+        'p: 'a,
+    {
+        if value_demand == ValueDemand::Whole && kind.whole_value_constructor().is_none() {
+            return None;
+        }
+        let producer = if let Expression::TryBlock { items, ty, .. } = subject {
+            FallibleProducer::TryBlock(self.try_block_pair_plan(items, ty)?)
+        } else {
+            self.queries().fallible_producer(subject)?
+        };
+        producer.supports_components().then_some(producer)
+    }
+}
+
+impl<'p> PlannerQueries<'_, 'p> {
     pub(in crate::lowering) fn rebuild_from_components(
         &self,
         components: &ComponentBinding,
@@ -347,39 +394,16 @@ impl<'p> Planner<'p> {
         }
     }
 
-    pub(in crate::lowering) fn component_producer<'a>(
-        &self,
-        subject: &'a Expression,
-        needs_whole_value: bool,
-        kind: ComponentKind,
-    ) -> Option<FallibleProducer<'a>>
-    where
-        'p: 'a,
-    {
-        if needs_whole_value && kind.whole_value_constructor().is_none() {
-            return None;
-        }
-        let producer = if let Expression::TryBlock { items, ty, .. } = subject {
-            FallibleProducer::TryBlock(self.try_block_pair_plan(items, ty)?)
-        } else {
-            self.fallible_producer(subject)?
-        };
-        producer.supports_components().then_some(producer)
-    }
-
     pub(in crate::lowering) fn result_fuse_plan<'a>(
         &self,
         subject: &'a Expression,
     ) -> Option<ResultFusePlan<'a>> {
         if let Some(components) = self.component_binding(subject) {
             return (components.kind.is_result()).then(|| ResultFusePlan {
-                subject,
                 shape: LoweredReturnAbi::Result {
                     payload: PayloadLayout::Packed,
                 },
-                nil_guard: None,
-                wraps: Vec::new(),
-                bound: Some(components),
+                source: ResultFuseSource::Bound(components),
             });
         }
         let lowered = self.lowered_call(subject)?;
@@ -389,13 +413,13 @@ impl<'p> Planner<'p> {
         if lowered.from_go && lowered.has_tuple_payload(self) {
             return None;
         }
-        let nil_guard = lowered.nil_guard;
         Some(ResultFusePlan {
-            subject: lowered.call,
             shape: lowered.shape,
-            nil_guard,
-            wraps: lowered.wraps,
-            bound: None,
+            source: ResultFuseSource::Call {
+                site: lowered.site,
+                nil_guard: lowered.nil_guard,
+                wraps: lowered.wraps,
+            },
         })
     }
 
@@ -423,8 +447,13 @@ impl<'p> Planner<'p> {
             return (components.kind == ComponentKind::Option)
                 .then_some(OptionFusePlan::Bound(components));
         }
-        if let Some(source) = self.comma_ok_source(subject) {
-            return Some(OptionFusePlan::CommaOk { subject, source });
+        if let Some(site) = CallSite::of(subject)
+            && let Some(source) = self.comma_ok_source(site)
+        {
+            return Some(OptionFusePlan::CommaOk {
+                subject: site,
+                source,
+            });
         }
         if let Some(call) = self.native_method_call(subject) {
             let (receiver, arguments) = call.receiver_and_arguments()?;
@@ -441,8 +470,13 @@ impl<'p> Planner<'p> {
             }
         }
 
-        if let Some(nil_guard) = self.nullable_field_guard(subject) {
-            return Some(OptionFusePlan::Nullable { subject, nil_guard });
+        if let Some(field) = DotAccessSite::of(subject)
+            && let Some(nil_guard) = self.nullable_field_guard(field)
+        {
+            return Some(OptionFusePlan::Nullable {
+                subject: NullableSource::Field(field),
+                nil_guard,
+            });
         }
 
         let lowered = self.lowered_call(subject)?;
@@ -456,6 +490,9 @@ impl<'p> Planner<'p> {
             return None;
         }
         let nil_guard = lowered.nil_guard?;
-        Some(OptionFusePlan::Nullable { subject, nil_guard })
+        Some(OptionFusePlan::Nullable {
+            subject: NullableSource::Call(lowered.site),
+            nil_guard,
+        })
     }
 }

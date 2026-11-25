@@ -4,6 +4,7 @@ use crate::lowering::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::patterns::matching::{FusedName, OptionArms, field_binding};
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::placement::collapse_declared_temp;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
@@ -105,6 +106,237 @@ pub(in crate::lowering) fn map_lambda(function: &Expression) -> Option<MapLambda
 }
 
 impl<'p> Planner<'p> {
+    fn zero_defaulted_map_read(
+        &mut self,
+        call: &DefaultedCall<'_>,
+        ty: &Type,
+    ) -> Option<(Vec<Statement>, GoExpression)> {
+        let FallibleProducer::Option(OptionFusePlan::CommaOk { subject, source }) = &call.producer
+        else {
+            return None;
+        };
+        if call.map.is_some()
+            || !source.is_map_index()
+            || !self
+                .facts
+                .simple_kind(ty)
+                .is_some_and(|kind| is_go_zero_literal(call.default, kind))
+        {
+            return None;
+        }
+        Some(self.plan_map_index_pair(*subject))
+    }
+
+    fn plan_default_into_slot(
+        &mut self,
+        producer: FallibleProducer<'_>,
+        default: &Expression,
+        ty: &Type,
+        slot: CommaOkValueSlot,
+    ) -> (Vec<Statement>, GoIdentifier) {
+        let (bound, value) = match producer {
+            FallibleProducer::Option(OptionFusePlan::Index { call }) => {
+                return self.plan_defaulted_index_into_slot(&call, default, ty, slot);
+            }
+            producer => producer.payload(self, slot),
+        };
+
+        let failure = bound.failure_condition();
+        let mut statements = bound.statements;
+        let literal_default = is_literal_default(default);
+        let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
+        let value_plan = self.plan_value(
+            default,
+            ExpressionContext::value().with_function_slot_origin(origin),
+        );
+        let value_plan = if literal_default {
+            value_plan
+        } else {
+            self.eager_operand(value_plan, "default")
+        };
+        let (default_setup, default_value) = value_plan.into_parts();
+        statements.extend(default_setup);
+        let default_value =
+            self.apply_type_coercion(&mut statements, Some(ty), default, default_value);
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                initializer: failure.initializer,
+                condition: failure.condition,
+                then_body: LoweredBlock {
+                    statements: vec![assign(
+                        GoExpression::identifier(value.clone()),
+                        default_value,
+                    )],
+                },
+                else_arm: ElseArm::None,
+                else_if_line: None,
+                origin: IfOrigin::User,
+            })
+            .into(),
+        );
+        (statements, value)
+    }
+
+    fn plan_defaulted_index_into_slot(
+        &mut self,
+        call: &NativeCallContext<'_>,
+        default: &Expression,
+        ty: &Type,
+        slot: CommaOkValueSlot,
+    ) -> (Vec<Statement>, GoIdentifier) {
+        let (mut statements, index) = self.lower_bounds_checked_index(call);
+        let value = match slot {
+            CommaOkValueSlot::Named(name) => name,
+            _ => self.fresh_declared("ret"),
+        };
+        let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
+        let plan = self.plan_value(
+            default,
+            ExpressionContext::value().with_function_slot_origin(origin),
+        );
+        let coercion = self.value_slot_coercion(default, ty);
+        let typed = self.queries().declaration_needs_go_type(
+            default,
+            plan.expression().constant_kind(),
+            &coercion,
+            ty,
+        );
+
+        let (setup, default) = plan.into_parts();
+        statements.extend(setup);
+        let (coercion_setup, default) = coercion.lower(self, default);
+        statements.extend(coercion_setup);
+        statements.push(if typed {
+            LoweredStatement::VarDeclaration {
+                name: value.clone(),
+                go_type: self.queries().go_type(ty),
+                value: Some(default),
+            }
+            .into()
+        } else {
+            define(value.clone(), default)
+        });
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                initializer: None,
+                condition: index.condition(Polarity::Positive),
+                then_body: LoweredBlock {
+                    statements: vec![assign(
+                        GoExpression::identifier(value.clone()),
+                        index.element(),
+                    )],
+                },
+                else_arm: ElseArm::None,
+                else_if_line: None,
+                origin: IfOrigin::User,
+            })
+            .into(),
+        );
+        (statements, value)
+    }
+
+    fn lower_mapped_default_into(
+        &mut self,
+        producer: OptionFusePlan<'_>,
+        map: MapLambda<'_>,
+        default: &Expression,
+        target: &GoIdentifier,
+        target_ty: &Type,
+    ) -> Vec<Statement> {
+        let arms = OptionArms {
+            some_binding: map.param,
+            some_body: map.body,
+            none_body: default,
+        };
+        let target = GoExpression::identifier(target.clone());
+        self.lower_fused_option_arms(
+            producer,
+            arms,
+            &PlacePlan::Assign {
+                local: &target,
+                target_ty: Some(target_ty),
+            },
+        )
+    }
+
+    pub(in crate::lowering) fn try_lower_defaulted_call_into(
+        &mut self,
+        value: &Expression,
+        go_name: &GoIdentifier,
+    ) -> Option<Vec<Statement>> {
+        let call = self.queries().defaulted_call(value)?;
+        if let Some((mut statements, read)) = self.zero_defaulted_map_read(&call, &value.get_type())
+        {
+            self.scope.declare_go_name(go_name.spelling());
+            statements.push(define(go_name.clone(), read));
+            return Some(statements);
+        }
+        self.scope.declare_go_name(go_name.spelling());
+        let ty = value.get_type();
+        let Some(map) = call.map else {
+            let slot = CommaOkValueSlot::Named(go_name.clone());
+            return Some(
+                self.plan_default_into_slot(call.producer, call.default, &ty, slot)
+                    .0,
+            );
+        };
+
+        let FallibleProducer::Option(producer) = call.producer else {
+            unreachable!("a mapped chain is recognized on Option receivers only");
+        };
+        let mut statements = vec![declare(go_name.clone(), self.queries().go_type(&ty))];
+        statements.extend(self.lower_mapped_default_into(
+            producer,
+            map,
+            call.default,
+            go_name,
+            &ty,
+        ));
+        Some(statements)
+    }
+
+    pub(in crate::lowering) fn try_plan_defaulted_call_value(
+        &mut self,
+        expression: &Expression,
+    ) -> Option<ValuePlan> {
+        let call = self.queries().defaulted_call(expression)?;
+        if let Some((setup, read)) = self.zero_defaulted_map_read(&call, &expression.get_type()) {
+            return Some(ValuePlan::computed(setup, read));
+        }
+        let ty = expression.get_type();
+        let Some(map) = call.map else {
+            let (statements, value) = self.plan_default_into_slot(
+                call.producer,
+                call.default,
+                &ty,
+                CommaOkValueSlot::Temp,
+            );
+
+            return Some(ValuePlan::captured(statements, value));
+        };
+
+        let FallibleProducer::Option(producer) = call.producer else {
+            unreachable!("a mapped chain is recognized on Option receivers only");
+        };
+        let (result_var, declaration) = self.operand_temp_declaration(&ty);
+        let mut statements = vec![declaration];
+        statements.extend(self.lower_mapped_default_into(
+            producer,
+            map,
+            call.default,
+            &result_var,
+            &ty,
+        ));
+        collapse_declared_temp(
+            &mut statements,
+            &result_var,
+            self.facts.short_declaration_keeps_type(&ty),
+        );
+        Some(ValuePlan::captured(statements, result_var))
+    }
+}
+
+impl<'p> PlannerQueries<'_, 'p> {
     pub(in crate::lowering) fn prelude_method_call<'a>(
         &self,
         expression: &'a Expression,
@@ -206,234 +438,5 @@ impl<'p> Planner<'p> {
             map,
             default,
         })
-    }
-
-    fn zero_defaulted_map_read(
-        &mut self,
-        call: &DefaultedCall<'_>,
-        ty: &Type,
-    ) -> Option<(Vec<Statement>, GoExpression)> {
-        let FallibleProducer::Option(OptionFusePlan::CommaOk { subject, source }) = &call.producer
-        else {
-            return None;
-        };
-        if call.map.is_some()
-            || !source.is_map_index()
-            || !self
-                .facts
-                .simple_kind(ty)
-                .is_some_and(|kind| is_go_zero_literal(call.default, kind))
-        {
-            return None;
-        }
-        Some(self.plan_map_index_pair(subject))
-    }
-
-    fn plan_default_into_slot(
-        &mut self,
-        producer: FallibleProducer<'_>,
-        default: &Expression,
-        ty: &Type,
-        slot: CommaOkValueSlot,
-    ) -> (Vec<Statement>, GoIdentifier) {
-        let (bound, value) = match producer {
-            FallibleProducer::Option(OptionFusePlan::Index { call }) => {
-                return self.plan_defaulted_index_into_slot(&call, default, ty, slot);
-            }
-            producer => producer.payload(self, slot),
-        };
-
-        let failure = bound.failure_condition();
-        let mut statements = bound.statements;
-        let literal_default = is_literal_default(default);
-        let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
-        let value_plan = self.plan_value(
-            default,
-            ExpressionContext::value().with_function_slot_origin(origin),
-        );
-        let value_plan = if literal_default {
-            value_plan
-        } else {
-            self.eager_operand(value_plan, "default")
-        };
-        let (default_setup, default_value) = value_plan.into_parts();
-        statements.extend(default_setup);
-        let default_value =
-            self.apply_type_coercion(&mut statements, Some(ty), default, default_value);
-        statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: failure.initializer,
-                condition: failure.condition,
-                then_body: LoweredBlock {
-                    statements: vec![assign(
-                        GoExpression::identifier(value.clone()),
-                        default_value,
-                    )],
-                },
-                else_arm: ElseArm::None,
-                else_if_line: None,
-                origin: IfOrigin::User,
-            })
-            .into(),
-        );
-        (statements, value)
-    }
-
-    fn plan_defaulted_index_into_slot(
-        &mut self,
-        call: &NativeCallContext<'_>,
-        default: &Expression,
-        ty: &Type,
-        slot: CommaOkValueSlot,
-    ) -> (Vec<Statement>, GoIdentifier) {
-        let (mut statements, index) = self.lower_bounds_checked_index(call);
-        let value = match slot {
-            CommaOkValueSlot::Named(name) => name,
-            _ => self.fresh_declared("ret"),
-        };
-        let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
-        let plan = self.plan_value(
-            default,
-            ExpressionContext::value().with_function_slot_origin(origin),
-        );
-        let coercion = self.value_slot_coercion(default, ty);
-        let typed = self.declaration_needs_go_type(
-            default,
-            plan.expression().constant_kind(),
-            &coercion,
-            ty,
-        );
-
-        let (setup, default) = plan.into_parts();
-        statements.extend(setup);
-        let (coercion_setup, default) = coercion.lower(self, default);
-        statements.extend(coercion_setup);
-        statements.push(if typed {
-            LoweredStatement::VarDeclaration {
-                name: value.clone(),
-                go_type: self.go_type(ty),
-                value: Some(default),
-            }
-            .into()
-        } else {
-            define(value.clone(), default)
-        });
-        statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: None,
-                condition: index.condition(Polarity::Positive),
-                then_body: LoweredBlock {
-                    statements: vec![assign(
-                        GoExpression::identifier(value.clone()),
-                        index.element(),
-                    )],
-                },
-                else_arm: ElseArm::None,
-                else_if_line: None,
-                origin: IfOrigin::User,
-            })
-            .into(),
-        );
-        (statements, value)
-    }
-
-    fn lower_mapped_default_into(
-        &mut self,
-        producer: OptionFusePlan<'_>,
-        map: MapLambda<'_>,
-        default: &Expression,
-        target: &GoIdentifier,
-        target_ty: &Type,
-    ) -> Vec<Statement> {
-        let arms = OptionArms {
-            some_binding: map.param,
-            some_body: map.body,
-            none_body: default,
-        };
-        let target = GoExpression::identifier(target.clone());
-        self.lower_fused_option_arms(
-            producer,
-            arms,
-            &PlacePlan::Assign {
-                local: &target,
-                target_ty: Some(target_ty),
-            },
-        )
-    }
-
-    pub(in crate::lowering) fn try_lower_defaulted_call_into(
-        &mut self,
-        value: &Expression,
-        go_name: &GoIdentifier,
-    ) -> Option<Vec<Statement>> {
-        let call = self.defaulted_call(value)?;
-        if let Some((mut statements, read)) = self.zero_defaulted_map_read(&call, &value.get_type())
-        {
-            self.scope.declare_go_name(go_name.spelling());
-            statements.push(define(go_name.clone(), read));
-            return Some(statements);
-        }
-        self.scope.declare_go_name(go_name.spelling());
-        let ty = value.get_type();
-        let Some(map) = call.map else {
-            let slot = CommaOkValueSlot::Named(go_name.clone());
-            return Some(
-                self.plan_default_into_slot(call.producer, call.default, &ty, slot)
-                    .0,
-            );
-        };
-
-        let FallibleProducer::Option(producer) = call.producer else {
-            unreachable!("a mapped chain is recognized on Option receivers only");
-        };
-        let mut statements = vec![declare(go_name.clone(), self.go_type(&ty))];
-        statements.extend(self.lower_mapped_default_into(
-            producer,
-            map,
-            call.default,
-            go_name,
-            &ty,
-        ));
-        Some(statements)
-    }
-
-    pub(in crate::lowering) fn try_plan_defaulted_call_value(
-        &mut self,
-        expression: &Expression,
-    ) -> Option<ValuePlan> {
-        let call = self.defaulted_call(expression)?;
-        if let Some((setup, read)) = self.zero_defaulted_map_read(&call, &expression.get_type()) {
-            return Some(ValuePlan::computed(setup, read));
-        }
-        let ty = expression.get_type();
-        let Some(map) = call.map else {
-            let (statements, value) = self.plan_default_into_slot(
-                call.producer,
-                call.default,
-                &ty,
-                CommaOkValueSlot::Temp,
-            );
-
-            return Some(ValuePlan::captured(statements, value));
-        };
-
-        let FallibleProducer::Option(producer) = call.producer else {
-            unreachable!("a mapped chain is recognized on Option receivers only");
-        };
-        let (result_var, declaration) = self.operand_temp_declaration(&ty);
-        let mut statements = vec![declaration];
-        statements.extend(self.lower_mapped_default_into(
-            producer,
-            map,
-            call.default,
-            &result_var,
-            &ty,
-        ));
-        collapse_declared_temp(
-            &mut statements,
-            &result_var,
-            self.facts.short_declaration_keeps_type(&ty),
-        );
-        Some(ValuePlan::captured(statements, result_var))
     }
 }

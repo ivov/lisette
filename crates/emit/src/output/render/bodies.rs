@@ -1,9 +1,11 @@
+use crate::output::render::types::go_type_text;
 use crate::output::render::writer::GoWriter;
 use crate::target::ir::bodies::{
     AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, ElseLayout, IfPlan, LoopHeader,
     LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement, SelectArmKind, SelectStatementPlan,
     Statement, SwitchKind, SwitchStatementPlan,
 };
+use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::Position;
 use crate::target::ir::go_expression::{
     CompositeLayout, FunctionLiteralLayout, GoExpressionNode, TreeVisitor,
@@ -173,11 +175,11 @@ fn render_statement(output: &mut GoWriter, statement: &Statement) {
             value,
         } => match value {
             Some(value) => {
-                output.push_str(&format!("var {} {} = ", name, go_type.code));
+                output.push_str(&format!("var {} {} = ", name, go_type_text(go_type)));
                 value.write(output);
                 output.push('\n');
             }
-            None => write_line!(output, "var {} {}", name, go_type.code),
+            None => write_line!(output, "var {} {}", name, go_type_text(go_type)),
         },
         LoweredStatement::Discard { arity, value } => {
             output.push_str(&vec!["_"; *arity].join(", "));
@@ -234,7 +236,7 @@ fn render_const_declaration(output: &mut GoWriter, plan: &ConstPlan) {
     output.push_str(&plan.name);
     if let Some(go_type) = &plan.go_type {
         output.push(' ');
-        output.push_str(&go_type.code);
+        output.push_str(&go_type_text(go_type));
     }
     output.push_str(" = ");
     plan.value.write(output);
@@ -362,7 +364,8 @@ pub(crate) fn can_inline_block(block: &LoweredBlock) -> bool {
                     layout: FunctionLiteralLayout::MultiLine,
                     ..
                 } => self.inline = false,
-                GoExpressionNode::Literal(text) | GoExpressionNode::Verbatim(text)
+                GoExpressionNode::Literal(GoLiteral::Token(text))
+                | GoExpressionNode::Verbatim(text)
                     if text.contains('\n') =>
                 {
                     self.inline = false
