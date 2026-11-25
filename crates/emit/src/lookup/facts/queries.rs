@@ -39,22 +39,6 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
 }
 
 impl<'a> EmitFacts<'a> {
-    pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<SourceName> {
-        let name = match pattern {
-            Pattern::Identifier { identifier, .. } => identifier,
-            Pattern::AsBinding { name, .. } => name,
-            _ => return None,
-        };
-        Some(SourceName::new(name))
-    }
-
-    pub(crate) fn go_name_for_rest_binding(&self, rest: &RestPattern) -> Option<SourceName> {
-        match rest {
-            RestPattern::Bind { name, .. } => Some(SourceName::new(name)),
-            _ => None,
-        }
-    }
-
     pub(crate) fn field_read_cannot_panic(&self, ty: &Type) -> bool {
         !self.is_nilable_go_type(ty) && !ty.is_variable() && !ty.is_placeholder()
     }
@@ -367,20 +351,13 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
-    fn type_uses_exported_members(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.strip_refs() else {
-            return false;
-        };
-        is_prelude_symbol(&id) || is_go_import(&id)
-    }
-
     pub(crate) fn resolve_go_export(
         &self,
         expression: &Expression,
         expression_ty: &Type,
         member: &str,
     ) -> GoExport {
-        if self.compute_is_exported_context(expression, expression_ty)
+        if compute_is_exported_context(expression, expression_ty)
             || self.field_is_public(expression_ty, member)
             || self.method_needs_export(member)
         {
@@ -390,16 +367,8 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
-    fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
-        let is_import_namespace_identifier = matches!(
-            expression,
-            Expression::Identifier { ty, .. } if ty.as_import_namespace().is_some()
-        );
-        is_import_namespace_identifier || self.type_uses_exported_members(expression_ty)
-    }
-
     fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {
-        self.field_is_public(ty, field) || self.type_uses_exported_members(ty)
+        self.field_is_public(ty, field) || type_uses_exported_members(ty)
     }
 
     pub(crate) fn struct_field_go_name(
@@ -439,4 +408,35 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn is_native_shape(&self, ty: &Type, kind: NativeTypeKind) -> bool {
         self.native_shape(ty).is_some_and(|shape| shape == kind)
     }
+}
+
+pub(crate) fn go_name_for_binding(pattern: &Pattern) -> Option<SourceName> {
+    let name = match pattern {
+        Pattern::Identifier { identifier, .. } => identifier,
+        Pattern::AsBinding { name, .. } => name,
+        _ => return None,
+    };
+    Some(SourceName::new(name))
+}
+
+pub(crate) fn go_name_for_rest_binding(rest: &RestPattern) -> Option<SourceName> {
+    match rest {
+        RestPattern::Bind { name, .. } => Some(SourceName::new(name)),
+        _ => None,
+    }
+}
+
+fn type_uses_exported_members(ty: &Type) -> bool {
+    let Type::Nominal { id, .. } = ty.strip_refs() else {
+        return false;
+    };
+    is_prelude_symbol(&id) || is_go_import(&id)
+}
+
+fn compute_is_exported_context(expression: &Expression, expression_ty: &Type) -> bool {
+    let is_import_namespace_identifier = matches!(
+        expression,
+        Expression::Identifier { ty, .. } if ty.as_import_namespace().is_some()
+    );
+    is_import_namespace_identifier || type_uses_exported_members(expression_ty)
 }

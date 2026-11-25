@@ -84,7 +84,14 @@ fn collect(
             }
             captured
         }
-        Expression::Reference { expression, .. } => {
+        Expression::Reference { expression, .. }
+        | Expression::DotAccess {
+            expression,
+            resolution:
+                DotAccessResolution::InstanceMethod { .. }
+                | DotAccessResolution::InstanceMethodValue { .. },
+            ..
+        } => {
             shared.extend(expression.root_binding_id());
             captured
         }
@@ -110,16 +117,6 @@ fn collect(
                 collect(child, &[], captured, facts, hidden, shared);
             }
             return;
-        }
-        Expression::DotAccess {
-            expression,
-            resolution:
-                DotAccessResolution::InstanceMethod { .. }
-                | DotAccessResolution::InstanceMethodValue { .. },
-            ..
-        } => {
-            shared.extend(expression.root_binding_id());
-            captured
         }
         _ => captured,
     };

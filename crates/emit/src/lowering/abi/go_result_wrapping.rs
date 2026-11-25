@@ -251,7 +251,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn partial_ok_nil_check(
-        &mut self,
+        &self,
         ok_ty: &Type,
         value: GoExpression,
     ) -> Option<GoExpression> {
@@ -301,7 +301,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn result_from_pair(
-        &mut self,
+        &self,
         call: GoExpression,
         result_layout: &ValueLayout,
         layout: PayloadLayout,
@@ -552,7 +552,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn option_from_comma_ok(
-        &mut self,
+        &self,
         call: GoExpression,
         option_layout: &ValueLayout,
         layout: PayloadLayout,

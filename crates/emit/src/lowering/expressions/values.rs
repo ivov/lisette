@@ -382,7 +382,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn make_tuple_callee(
-        &mut self,
+        &self,
         slot_types: &[Type],
         arity: usize,
     ) -> GoExpression {

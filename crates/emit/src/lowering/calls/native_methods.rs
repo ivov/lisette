@@ -97,7 +97,7 @@ fn is_fresh_slice_value(operation: Option<&CallOperation>, receiver: &Expression
     }
 }
 
-fn retired_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
+fn assigned_place_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
     let mut current = receiver;
     loop {
         if lvalues_match(target, current) {
@@ -458,7 +458,7 @@ impl Planner<'_> {
     }
 
     fn lower_prelude_native_call(
-        &mut self,
+        &self,
         context: &NativeCallContext,
         operand: NativeMethodOperands,
     ) -> NativeCallResult {
@@ -557,8 +557,8 @@ impl Planner<'_> {
             return true;
         }
         match expression {
-            Expression::Identifier { .. } => true,
-            Expression::Unary {
+            Expression::Identifier { .. }
+            | Expression::Unary {
                 operator: UnaryOperator::Deref,
                 ..
             } => true,
@@ -739,7 +739,7 @@ impl Planner<'_> {
             native_type,
             method: "get",
             capture_boundary: CaptureBoundary::SiblingSequence,
-            retired_receiver: None,
+            assigned_place: None,
         };
 
         let mut operand = self.plan_native_method_operands(&ctx);
@@ -952,6 +952,6 @@ fn growth_detach_applies(
     facts.checked(context.function).callee().copies_storage
         && !is_fresh_slice_value(facts.call_operation(receiver), receiver)
         && !context
-            .retired_receiver
-            .is_some_and(|target| retired_covers_receiver(target, receiver))
+            .assigned_place
+            .is_some_and(|target| assigned_place_covers_receiver(target, receiver))
 }

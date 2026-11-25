@@ -46,7 +46,7 @@ fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKin
 }
 
 impl Planner<'_> {
-    fn native_element_type(&mut self, function: &Expression) -> GoType {
+    fn native_element_type(&self, function: &Expression) -> GoType {
         let element = self.facts.checked(function).callee().first_type_argument();
         self.go_type(element)
     }

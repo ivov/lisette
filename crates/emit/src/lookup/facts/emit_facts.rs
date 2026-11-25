@@ -398,13 +398,6 @@ impl<'a> EmitFacts<'a> {
         }
     }
 
-    pub(crate) fn ref_stripped_type_parameter(&self, ty: &Type) -> Option<EcoString> {
-        match ty.strip_refs() {
-            Type::Parameter(name) => Some(name),
-            _ => None,
-        }
-    }
-
     pub(crate) fn is_ref_to_type_parameter(&self, ty: &Type) -> bool {
         let peeled = self.peel_alias(ty);
         peeled.is_ref()
@@ -700,4 +693,11 @@ fn is_nilable_go_type(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) ->
 
 fn peel_alias(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> Type {
     types::peel_alias(ty, |id| definitions.get(id))
+}
+
+pub(crate) fn ref_stripped_type_parameter(ty: &Type) -> Option<EcoString> {
+    match ty.strip_refs() {
+        Type::Parameter(name) => Some(name),
+        _ => None,
+    }
 }

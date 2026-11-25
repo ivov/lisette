@@ -73,7 +73,6 @@ pub(in crate::lowering) fn pattern_binds_name(pattern: &Pattern, name: &str) -> 
 impl Planner<'_> {
     pub(in crate::lowering) fn pattern_has_binding_collisions(&self, pattern: &Pattern) -> bool {
         match pattern {
-            Pattern::Identifier { .. } => false,
             Pattern::Tuple { elements, .. } => elements
                 .iter()
                 .any(|e| self.pattern_has_binding_collisions(e)),
@@ -101,14 +100,16 @@ impl Planner<'_> {
                 name,
                 ..
             } => self.pattern_has_binding_collisions(inner) || self.shadows_declaration(name),
-            Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
+            Pattern::Identifier { .. }
+            | Pattern::WildCard { .. }
+            | Pattern::Literal { .. }
+            | Pattern::Unit { .. } => false,
         }
     }
 }
 
 pub(in crate::lowering) fn pattern_has_bindings(pattern: &Pattern) -> bool {
     match pattern {
-        Pattern::Identifier { .. } => true,
         Pattern::Tuple { elements, .. } => elements.iter().any(pattern_has_bindings),
         Pattern::EnumVariant { fields, .. } => fields.iter().any(pattern_has_bindings),
         Pattern::Struct { fields, .. } => fields.iter().any(|f| pattern_has_bindings(&f.value)),
@@ -116,7 +117,7 @@ pub(in crate::lowering) fn pattern_has_bindings(pattern: &Pattern) -> bool {
             prefix.iter().any(pattern_has_bindings) || matches!(rest, RestPattern::Bind { .. })
         }
         Pattern::Or { patterns, .. } => patterns.iter().any(pattern_has_bindings),
-        Pattern::AsBinding { .. } => true,
+        Pattern::Identifier { .. } | Pattern::AsBinding { .. } => true,
         Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
     }
 }

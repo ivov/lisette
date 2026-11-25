@@ -2850,7 +2850,7 @@ fn main() {
 }
 
 #[test]
-fn nil_ref_in_ok_from_lisette_method_tagged_twin_reads_as_ok() {
+fn nil_ref_in_ok_from_lisette_method_tagged_counterpart_reads_as_ok() {
     let input = r#"
 import "go:cmp"
 

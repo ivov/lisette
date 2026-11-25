@@ -280,7 +280,7 @@ impl Planner<'_> {
     }
 
     fn assert_operand_temp_type(
-        &mut self,
+        &self,
         expression: &Expression,
         plan: &ValuePlan,
         literals: LiteralInlining,

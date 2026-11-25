@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::emit_facts::ref_stripped_type_parameter;
 use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_callable_return_abi;
@@ -80,16 +81,16 @@ impl Planner<'_> {
             .facts
             .checked(expression)
             .function_value()
-            .is_some_and(|callee| callee_selects_tagged_twin(&self.facts, callee));
+            .is_some_and(|callee| callee_selects_tagged_counterpart(&self.facts, callee));
 
         if selects_twin {
-            MemberSpelling::TaggedTwin
+            MemberSpelling::TaggedCounterpart
         } else {
             MemberSpelling::Plain
         }
     }
 
-    pub(in crate::lowering) fn emit_tagged_twin(
+    pub(in crate::lowering) fn emit_tagged_counterpart(
         &mut self,
         method: FunctionDefinitionView<'_>,
         go_name: &str,
@@ -123,7 +124,7 @@ impl Planner<'_> {
         );
 
         let twin = AdapterMethod {
-            go_name: go_name::tagged_twin(go_name),
+            go_name: go_name::tagged_counterpart(go_name),
             source_name: method.name.clone(),
             source_go_name: go_name.to_string(),
             alternate: None,
@@ -249,7 +250,7 @@ impl Planner<'_> {
         target: &Type,
         witness: Option<&ConformanceWitness>,
     ) -> Option<AdapterPlan> {
-        let name = self.facts.ref_stripped_type_parameter(source)?;
+        let name = ref_stripped_type_parameter(source)?;
         let Type::Nominal { id, .. } = target else {
             return None;
         };
@@ -304,7 +305,7 @@ impl Planner<'_> {
         })
     }
 
-    fn dynamic_method_interface(&mut self, method_name: &str, layout: &FunctionLayout) -> GoType {
+    fn dynamic_method_interface(&self, method_name: &str, layout: &FunctionLayout) -> GoType {
         let parameters: Vec<GoType> = layout
             .parameters
             .iter()
@@ -523,7 +524,7 @@ impl Planner<'_> {
             go_callable_return_abi(&self.facts, id, source_return, hints)
         } else if let Some(source) = source_requirement {
             requirement_return_abi(&self.facts, source)
-        } else if requirement_uses_tagged_twin(&self.facts, requirement) {
+        } else if requirement_uses_tagged_counterpart(&self.facts, requirement) {
             CallableReturnAbi::Value
         } else {
             return_abi(&self.facts, &function.return_type, ReturnSlot::Method)
@@ -889,12 +890,15 @@ fn requirement_return_abi(
     )
 }
 
-fn requirement_uses_tagged_twin(facts: &EmitFacts<'_>, requirement: &InterfaceRequirement) -> bool {
+fn requirement_uses_tagged_counterpart(
+    facts: &EmitFacts<'_>,
+    requirement: &InterfaceRequirement,
+) -> bool {
     !is_go_import(&requirement.declaring_interface)
         && facts.method_uses_tagged_return(&requirement.name)
 }
 
-pub(in crate::lowering) fn has_tagged_twin(
+pub(in crate::lowering) fn has_tagged_counterpart(
     facts: &EmitFacts<'_>,
     owner: &str,
     member: &str,
@@ -905,23 +909,23 @@ pub(in crate::lowering) fn has_tagged_twin(
         && facts.emits_go_method(owner, member)
 }
 
-fn callee_selects_tagged_twin(facts: &EmitFacts<'_>, callee: &CheckedCallee) -> bool {
+fn callee_selects_tagged_counterpart(facts: &EmitFacts<'_>, callee: &CheckedCallee) -> bool {
     match callee.interface_requirement() {
-        Some(requirement) => requirement_uses_tagged_twin(facts, requirement),
+        Some(requirement) => requirement_uses_tagged_counterpart(facts, requirement),
         None => callee
             .definition
             .as_deref()
-            .is_some_and(|symbol| definition_selects_tagged_twin(facts, symbol)),
+            .is_some_and(|symbol| definition_selects_tagged_counterpart(facts, symbol)),
     }
 }
 
-pub(in crate::lowering) fn definition_selects_tagged_twin(
+pub(in crate::lowering) fn definition_selects_tagged_counterpart(
     facts: &EmitFacts<'_>,
     symbol: &str,
 ) -> bool {
     symbol
         .rsplit_once('.')
-        .is_some_and(|(owner, name)| has_tagged_twin(facts, owner, name))
+        .is_some_and(|(owner, name)| has_tagged_counterpart(facts, owner, name))
 }
 
 fn adapter_source_go_name(
@@ -940,9 +944,9 @@ fn adapter_source_go_name(
                 GoExport::Unexported
             };
             let spelling = if !source_owner.is_some_and(is_go_import)
-                && requirement_uses_tagged_twin(facts, requirement)
+                && requirement_uses_tagged_counterpart(facts, requirement)
             {
-                MemberSpelling::TaggedTwin
+                MemberSpelling::TaggedCounterpart
             } else {
                 MemberSpelling::Plain
             };
@@ -953,8 +957,8 @@ fn adapter_source_go_name(
 }
 
 fn requirement_go_name(facts: &EmitFacts<'_>, requirement: &InterfaceRequirement) -> String {
-    let spelling = if requirement_uses_tagged_twin(facts, requirement) {
-        MemberSpelling::TaggedTwin
+    let spelling = if requirement_uses_tagged_counterpart(facts, requirement) {
+        MemberSpelling::TaggedCounterpart
     } else {
         MemberSpelling::Plain
     };

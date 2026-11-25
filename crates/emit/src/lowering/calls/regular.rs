@@ -198,10 +198,9 @@ impl<'a> Planner<'a> {
             plan: call_plan,
             spread,
             capture_boundary: expression_ctx.capture_boundary(),
-            retired_receiver: (args.len() == 1
-                && self.callee_lowers_to_type_construction(function))
-            .then(|| expression_ctx.retired_receiver())
-            .flatten(),
+            assigned_place: (args.len() == 1 && self.callee_lowers_to_type_construction(function))
+                .then(|| expression_ctx.assigned_place())
+                .flatten(),
             callee_is_builtin: callee_is_go_builtin(&self.facts, function),
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: receiver_type_binding(&self.facts, function, &call_plan.resolved),
@@ -277,9 +276,9 @@ impl<'a> Planner<'a> {
         expression_ctx: ExpressionContext<'_>,
     ) -> Option<ValuePlan> {
         let go_name = callee_go_name(&self.facts, function)?.to_string();
-        let arg_ctx = match (expression_ctx.retired_receiver(), args.len()) {
-            (Some(retired), 1) if self.callee_lowers_to_type_construction(function) => {
-                ExpressionContext::value().with_retired_receiver(retired)
+        let arg_ctx = match (expression_ctx.assigned_place(), args.len()) {
+            (Some(assigned), 1) if self.callee_lowers_to_type_construction(function) => {
+                ExpressionContext::value().with_assigned_place(assigned)
             }
             _ => ExpressionContext::value(),
         };

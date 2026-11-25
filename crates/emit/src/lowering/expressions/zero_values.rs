@@ -25,7 +25,7 @@ pub(in crate::lowering) enum ZeroSpelling {
 
 impl Planner<'_> {
     pub(in crate::lowering) fn go_field_map_zero(
-        &mut self,
+        &self,
         owner: &Type,
         selection: &FieldSelection,
         field: &str,
@@ -83,7 +83,7 @@ impl Planner<'_> {
         }
     }
 
-    fn go_imported_zero(&mut self, ty: &Type, id: &str) -> GoExpression {
+    fn go_imported_zero(&self, ty: &Type, id: &str) -> GoExpression {
         let go_ty = self.go_type(ty);
         let is_struct = matches!(
             self.facts.definition(id).map(|d| &d.body),
@@ -169,7 +169,6 @@ impl Planner<'_> {
                 let value = value.go_type(self);
                 GoExpression::empty_composite(GoType::map_of(&key, &value))
             }
-            (Type::Compound { .. }, _) => GoExpression::empty_composite(self.go_type(ty)),
             (Type::Nominal { id, params, .. }, _) => {
                 return self.lisette_zero_nominal(ty, id.as_str(), params, spelling);
             }
@@ -368,7 +367,10 @@ impl Planner<'_> {
                 SimpleKind::Unit => self.unit_value(None, None),
                 SimpleKind::Complex64 | SimpleKind::Complex128 => GoExpression::new_zero(go_ty),
             },
-            ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty),
+            ValueLayout::Array { .. }
+            | ValueLayout::Tuple { .. }
+            | ValueLayout::TaggedOption { .. }
+            | ValueLayout::Fallible { .. } => GoExpression::empty_composite(go_ty),
             ValueLayout::Slice { .. }
             | ValueLayout::Map { .. }
             | ValueLayout::Function { .. }
@@ -383,9 +385,6 @@ impl Planner<'_> {
                     | CompoundKind::Receiver,
                 ..
             }) => literal("nil"),
-            ValueLayout::Tuple { .. }
-            | ValueLayout::TaggedOption { .. }
-            | ValueLayout::Fallible { .. } => GoExpression::empty_composite(go_ty),
             ValueLayout::Plain(Type::Nominal { id, .. })
                 if self
                     .facts

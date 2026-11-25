@@ -62,7 +62,7 @@ impl<'p> Planner<'p> {
             abi: plan.resolved.abi,
             call_ty: Some(ty),
             capture_boundary: CaptureBoundary::SiblingSequence,
-            retired_receiver: None,
+            assigned_place: None,
         })
     }
 }
@@ -113,7 +113,7 @@ pub(in crate::lowering) struct NativeCallContext<'a> {
     pub native_type: NativeTypeKind,
     pub method: &'a str,
     pub capture_boundary: CaptureBoundary,
-    pub retired_receiver: Option<&'a Expression>,
+    pub assigned_place: Option<&'a Expression>,
 }
 
 impl<'a> NativeCallContext<'a> {

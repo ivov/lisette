@@ -116,7 +116,9 @@ impl<'a> Walker<'a> {
                 }
             }
 
-            Expression::Loop { body, .. } => self.walk(body, AccessRole::Capture),
+            Expression::Loop { body, .. } | Expression::Lambda { body, .. } => {
+                self.walk(body, AccessRole::Capture)
+            }
             Expression::While {
                 condition, body, ..
             } => {
@@ -136,7 +138,6 @@ impl<'a> Walker<'a> {
                 self.walk(body, AccessRole::Capture);
             }
 
-            Expression::Lambda { body, .. } => self.walk(body, AccessRole::Capture),
             Expression::Function { body, .. } => {
                 if let Some(body) = body.definition() {
                     self.walk(body, AccessRole::Capture);

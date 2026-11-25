@@ -72,7 +72,7 @@ impl FunctionScope {
 #[derive(Clone, Default)]
 struct Declarations {
     names: FxHashSet<String>,
-    spent_errors: Vec<(GoIdentifier, Type)>,
+    reusable_errors: Vec<(GoIdentifier, Type)>,
 }
 
 impl Declarations {
@@ -81,7 +81,7 @@ impl Declarations {
     }
 
     fn insert(&mut self, go_name: &str) -> bool {
-        self.spent_errors
+        self.reusable_errors
             .retain(|(name, _)| name.spelling() != go_name);
         self.names.insert(go_name.to_string())
     }
@@ -421,17 +421,17 @@ impl ScopeState {
         self.current_declarations_mut().insert(go_name);
     }
 
-    pub(crate) fn declare_spent_error(&mut self, name: &GoIdentifier, error_ty: &Type) {
+    pub(crate) fn declare_reusable_error(&mut self, name: &GoIdentifier, error_ty: &Type) {
         let declarations = self.current_declarations_mut();
         declarations.insert(name);
         declarations
-            .spent_errors
+            .reusable_errors
             .push((name.clone(), error_ty.clone()));
     }
 
-    pub(crate) fn spent_error(&self, error_ty: &Type) -> Option<GoIdentifier> {
+    pub(crate) fn reusable_error(&self, error_ty: &Type) -> Option<GoIdentifier> {
         self.current_declarations()
-            .spent_errors
+            .reusable_errors
             .iter()
             .find(|(_, ty)| ty == error_ty)
             .map(|(name, _)| name.clone())
@@ -451,9 +451,8 @@ impl ScopeState {
         }
         for frame in self.frames.iter().rev() {
             match &frame.declarations {
-                DeclarationScope::Transparent => {}
                 DeclarationScope::Block(names) if names.contains(go_name) => return true,
-                DeclarationScope::Block(_) => {}
+                DeclarationScope::Transparent | DeclarationScope::Block(_) => {}
                 DeclarationScope::Function(function) => {
                     return function.declarations.contains(go_name);
                 }

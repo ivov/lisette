@@ -39,14 +39,14 @@ impl EmitFacts<'_> {
             self.method_go_name(method, export)
         };
         match spelling {
-            MemberSpelling::TaggedTwin => go_name::tagged_twin(&name),
+            MemberSpelling::TaggedCounterpart => go_name::tagged_counterpart(&name),
             MemberSpelling::Plain => name,
         }
     }
 
     pub(crate) fn interface_method_go_name(&self, method: &str, export: GoExport) -> String {
         let spelling = if self.method_uses_tagged_return(method) {
-            MemberSpelling::TaggedTwin
+            MemberSpelling::TaggedCounterpart
         } else {
             MemberSpelling::Plain
         };

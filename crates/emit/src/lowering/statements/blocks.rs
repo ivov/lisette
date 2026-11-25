@@ -142,12 +142,12 @@ impl Planner<'_> {
         item: &Expression,
         region: impl IntoIterator<Item = &'r Expression>,
     ) -> Statement {
-        self.focused(item.get_span(), |this| {
-            this.lower_focused_block_item(item, region)
+        self.with_rejection_span(item.get_span(), |this| {
+            this.lower_block_item_within_span(item, region)
         })
     }
 
-    fn lower_focused_block_item<'r>(
+    fn lower_block_item_within_span<'r>(
         &mut self,
         item: &Expression,
         region: impl IntoIterator<Item = &'r Expression>,
@@ -176,12 +176,12 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn lower_statement(&mut self, expression: &Expression) -> Statement {
-        self.focused(expression.get_span(), |this| {
-            this.lower_focused_statement(expression)
+        self.with_rejection_span(expression.get_span(), |this| {
+            this.lower_statement_within_span(expression)
         })
     }
 
-    fn lower_focused_statement(&mut self, expression: &Expression) -> Statement {
+    fn lower_statement_within_span(&mut self, expression: &Expression) -> Statement {
         match expression {
             Expression::Block { items, .. } if items.is_empty() => {
                 LoweredStatement::Body(LoweredBlock {

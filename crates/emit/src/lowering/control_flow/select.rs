@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lowering::expressions::operand_order::OrderedOperand;
 use crate::lowering::patterns::sites::TypedSubject;
 use crate::lowering::planner::OuterBindings;
@@ -435,7 +436,7 @@ impl Planner<'_> {
             binding,
             ..
         } = effective_pattern
-            && let Some(go_name) = self.facts.go_name_for_binding(effective_pattern)
+            && let Some(go_name) = go_name_for_binding(effective_pattern)
         {
             return self.lower_ok_guard(
                 |this| {
@@ -685,7 +686,7 @@ impl Planner<'_> {
                 binding,
                 ..
             } => {
-                let Some(go_name) = self.facts.go_name_for_binding(pattern) else {
+                let Some(go_name) = go_name_for_binding(pattern) else {
                     return (GoIdentifier::blank(), false);
                 };
                 let preferred = go_name.preferred();

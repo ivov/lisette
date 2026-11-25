@@ -97,7 +97,7 @@ impl Planner<'_> {
         };
         let value_context = ExpressionContext::value()
             .with_function_slot_origin(origin)
-            .with_retired_receiver(target);
+            .with_assigned_place(target);
         let right_hand_side =
             literal_slot.unwrap_or_else(|| self.plan_composite_value(value, value_context));
         let (target_capture, target_place) =
@@ -526,8 +526,8 @@ fn is_place_expression(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
     match expression {
         Expression::Identifier { .. }
         | Expression::DotAccess { .. }
-        | Expression::IndexedAccess { .. } => true,
-        Expression::Unary {
+        | Expression::IndexedAccess { .. }
+        | Expression::Unary {
             operator: UnaryOperator::Deref,
             ..
         } => true,
@@ -542,8 +542,8 @@ fn reads_through_reference(facts: &EmitFacts<'_>, base: &Expression) -> bool {
 
 pub(in crate::lowering) fn is_lvalue_chain(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
     match expression {
-        Expression::Identifier { .. } => true,
-        Expression::Unary {
+        Expression::Identifier { .. }
+        | Expression::Unary {
             operator: UnaryOperator::Deref,
             ..
         } => true,

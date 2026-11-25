@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::calls::go_interop::build_tuple_literal;
-use crate::lowering::definitions::interface_adapter::definition_selects_tagged_twin;
+use crate::lowering::definitions::interface_adapter::definition_selects_tagged_counterpart;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
@@ -14,7 +14,7 @@ use syntax::types::Type;
 
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_identifier(
-        &mut self,
+        &self,
         identifier: &Expression,
         value: &str,
         resolution: &IdentifierResolution,
@@ -60,7 +60,7 @@ impl Planner<'_> {
     }
 
     fn plan_definition_identifier(
-        &mut self,
+        &self,
         identifier: &Expression,
         symbol: &str,
         ty: &Type,
@@ -103,7 +103,7 @@ impl Planner<'_> {
     }
 
     pub(super) fn variant_value_type_args(
-        &mut self,
+        &self,
         params: &[Type],
         ctx: ExpressionContext<'_>,
     ) -> GoType {
@@ -113,7 +113,7 @@ impl Planner<'_> {
     }
 
     fn try_plan_method_expression(
-        &mut self,
+        &self,
         identifier: &Expression,
         id_ty: &Type,
     ) -> Option<GoExpression> {
@@ -129,8 +129,8 @@ impl Planner<'_> {
         } else {
             GoExport::Unexported
         };
-        let spelling = if definition_selects_tagged_twin(&self.facts, symbol) {
-            MemberSpelling::TaggedTwin
+        let spelling = if definition_selects_tagged_counterpart(&self.facts, symbol) {
+            MemberSpelling::TaggedCounterpart
         } else {
             MemberSpelling::Plain
         };

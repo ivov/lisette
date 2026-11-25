@@ -6,6 +6,7 @@ use crate::lowering::calls::call_plan::CallPlan;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::calls::wrap_err::ErrorUse;
+use crate::lowering::calls::wrap_err::wrap_error;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::is_go_never;
 use crate::lowering::statements::placement::try_elide_tail_let;
@@ -242,7 +243,7 @@ impl Planner<'_> {
                 .expect("Result must have error type");
             let error = self.apply_type_coercion(&mut statements, Some(&to), arg, error);
             statements.extend(message_setup);
-            self.wrap_error(&wraps, error)
+            wrap_error(&wraps, error)
         });
 
         statements.push(self.failure_return(fallible, error));
@@ -424,7 +425,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn failure_return_values(
-        &mut self,
+        &self,
         fallible: &Fallible,
         error: Option<GoExpression>,
     ) -> Vec<GoExpression> {
@@ -442,7 +443,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn failure_return(
-        &mut self,
+        &self,
         fallible: &Fallible,
         error: Option<GoExpression>,
     ) -> Statement {
@@ -471,7 +472,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn fallible_call(
-        &mut self,
+        &self,
         fallible: &Fallible,
         constructor: &str,
         arguments: Vec<GoExpression>,
@@ -484,15 +485,11 @@ impl Planner<'_> {
         prelude_call(constructor, type_args, arguments)
     }
 
-    fn fallible_success(&mut self, fallible: &Fallible, value: GoExpression) -> GoExpression {
+    fn fallible_success(&self, fallible: &Fallible, value: GoExpression) -> GoExpression {
         self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
     }
 
-    fn contextual_failure(
-        &mut self,
-        fallible: &Fallible,
-        error: Option<GoExpression>,
-    ) -> GoExpression {
+    fn contextual_failure(&self, fallible: &Fallible, error: Option<GoExpression>) -> GoExpression {
         let ok_ty = match self.scope.current_return_ctx().ty() {
             Some(ty) => self.facts.ok_payload(ty),
             None => fallible.ok_ty().clone(),

@@ -329,7 +329,7 @@ impl Planner<'_> {
         statements
     }
 
-    fn lower_unit_return(&mut self, ok_ty: &Type) -> Vec<Statement> {
+    fn lower_unit_return(&self, ok_ty: &Type) -> Vec<Statement> {
         let mut statements = Vec::new();
         let unit_val = self.unit_value(None, Some(ok_ty));
         statements.push(plain_return(unit_val));

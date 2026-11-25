@@ -3,6 +3,7 @@ use crate::lowering::abi::fallible_producer::ErrorNilGuard;
 use crate::lowering::abi::go_result_wrapping::partial_ok_nil_guard;
 use crate::lowering::calls::comma_ok::PairPlacement;
 use crate::lowering::calls::wrap_err::ErrorUse;
+use crate::lowering::calls::wrap_err::wrap_error;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::names::source_name::SourceName;
 
@@ -188,7 +189,7 @@ impl Planner<'_> {
             self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
         let error_use = error_use(&err_used);
-        self.prepend_error_prologue(&mut else_body, error(), nil_guard, error_use, &wraps);
+        prepend_error_prologue(&mut else_body, error(), nil_guard, error_use, &wraps);
         if matches!(then_body, Some((_, false))) {
             bound.discard_value();
         }
@@ -213,41 +214,6 @@ impl Planner<'_> {
         let plan = fused_result_if(ok_condition, err_condition, then_body, else_body);
         statements.push(LoweredStatement::If(plan).into());
         Some(statements)
-    }
-
-    fn prepend_error_prologue(
-        &mut self,
-        else_body: &mut LoweredBlock,
-        error: GoExpression,
-        nil_guard: ErrorNilGuard,
-        error_use: ErrorUse,
-        wraps: &[WrapMessage],
-    ) {
-        let err_read = error_use == ErrorUse::Read || !wraps.is_empty();
-        if nil_guard == ErrorNilGuard::Guarded && err_read {
-            else_body.statements.insert(
-                0,
-                LoweredStatement::If(IfPlan::plain(
-                    nil_condition(error.clone()),
-                    LoweredBlock {
-                        statements: vec![assign(error.clone(), unexpected_nil_error())],
-                    },
-                    ElseArm::None,
-                ))
-                .into(),
-            );
-        }
-        if !wraps.is_empty() {
-            let wrapped = self.wrap_error(wraps, error.clone());
-            let prologue = vec![assign(error, wrapped)];
-            let after_nil_guard = match nil_guard {
-                ErrorNilGuard::Guarded => 1,
-                ErrorNilGuard::Unguarded => 0,
-            };
-            else_body
-                .statements
-                .splice(after_nil_guard..after_nil_guard, prologue);
-        }
     }
 
     pub(super) fn try_lower_nested_result_pair_match(
@@ -322,7 +288,7 @@ impl Planner<'_> {
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
         let error = GoExpression::identifier(bound.status_identifier().clone());
-        self.prepend_error_prologue(
+        prepend_error_prologue(
             &mut else_body,
             error,
             nil_guard,
@@ -454,7 +420,7 @@ impl Planner<'_> {
     }
 
     fn partial_outcome_arms<'a>(
-        &mut self,
+        &self,
         subject: &Expression,
         arms: &'a [MatchArm],
     ) -> Option<PartialOutcomeArms<'a>> {
@@ -1070,5 +1036,39 @@ fn fused_result_if(
             ElseArm::block(else_body),
             IfOrigin::Match { else_label: None },
         )
+    }
+}
+
+fn prepend_error_prologue(
+    else_body: &mut LoweredBlock,
+    error: GoExpression,
+    nil_guard: ErrorNilGuard,
+    error_use: ErrorUse,
+    wraps: &[WrapMessage],
+) {
+    let err_read = error_use == ErrorUse::Read || !wraps.is_empty();
+    if nil_guard == ErrorNilGuard::Guarded && err_read {
+        else_body.statements.insert(
+            0,
+            LoweredStatement::If(IfPlan::plain(
+                nil_condition(error.clone()),
+                LoweredBlock {
+                    statements: vec![assign(error.clone(), unexpected_nil_error())],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+        );
+    }
+    if !wraps.is_empty() {
+        let wrapped = wrap_error(wraps, error.clone());
+        let prologue = vec![assign(error, wrapped)];
+        let after_nil_guard = match nil_guard {
+            ErrorNilGuard::Guarded => 1,
+            ErrorNilGuard::Unguarded => 0,
+        };
+        else_body
+            .statements
+            .splice(after_nil_guard..after_nil_guard, prologue);
     }
 }

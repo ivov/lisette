@@ -78,7 +78,7 @@ impl Planner<'_> {
             plan: call_plan,
             spread,
             capture_boundary: CaptureBoundary::SiblingSequence,
-            retired_receiver: None,
+            assigned_place: None,
             callee_is_builtin: false,
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: (!call_plan.resolved.is_prelude_dispatch)
@@ -147,7 +147,7 @@ impl Planner<'_> {
     }
 
     fn build_ufcs_qualified_call(
-        &mut self,
+        &self,
         callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
         member: &str,
@@ -204,7 +204,7 @@ impl Planner<'_> {
             plan: call_plan,
             spread,
             capture_boundary: CaptureBoundary::SiblingSequence,
-            retired_receiver: None,
+            assigned_place: None,
             callee_is_builtin: false,
             callee_pins_type_args: false,
             receiver_binding: None,

@@ -11,7 +11,7 @@ use syntax::types::Type;
 
 impl Planner<'_> {
     pub(in crate::lowering) fn emit_interface(
-        &mut self,
+        &self,
         name: &str,
         items: &[Expression],
         parents: &[ParentInterface],
@@ -54,7 +54,7 @@ impl Planner<'_> {
     }
 
     fn emit_interface_method(
-        &mut self,
+        &self,
         interface_name: &str,
         item: &Expression,
         export: GoExport,

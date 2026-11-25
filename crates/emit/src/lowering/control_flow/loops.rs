@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lowering::calls::predicates::strip_negations;
 use crate::lowering::control_flow::targets::legalize_source_loop;
 use crate::lowering::expressions::operand_order::OrderedOperand;
@@ -299,10 +300,10 @@ impl Planner<'_> {
         iter_expression: GoExpression,
         body: &Expression,
     ) -> (LoopHeader, LoweredBlock) {
-        let first_is_discard = matches!(first, Pattern::WildCard { .. })
-            || self.facts.go_name_for_binding(first).is_none();
-        let second_is_discard = matches!(second, Pattern::WildCard { .. })
-            || self.facts.go_name_for_binding(second).is_none();
+        let first_is_discard =
+            matches!(first, Pattern::WildCard { .. }) || go_name_for_binding(first).is_none();
+        let second_is_discard =
+            matches!(second, Pattern::WildCard { .. }) || go_name_for_binding(second).is_none();
         let header = if first_is_discard && second_is_discard {
             range_header(None, None, iter_expression)
         } else if second_is_discard {
@@ -496,7 +497,7 @@ impl Planner<'_> {
             binding,
             ..
         } = pattern
-            && let Some(go_name) = self.facts.go_name_for_binding(pattern)
+            && let Some(go_name) = go_name_for_binding(pattern)
         {
             let preferred = go_name.preferred();
             let go_name = if self.scope.has_binding_for_go_name(&preferred)
@@ -626,7 +627,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn build_source_loop(
-        &mut self,
+        &self,
         header: LoopHeader,
         mut body: LoweredBlock,
     ) -> LoopPlan {

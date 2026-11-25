@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
 use crate::output::render::output_file::doc_lines;
@@ -22,10 +22,10 @@ use syntax::types::Type;
 
 impl Planner<'_> {
     pub(in crate::lowering) fn emit_top_item(&mut self, item: &Expression) -> Vec<GoDeclaration> {
-        self.focused(item.get_span(), |this| this.emit_focused_top_item(item))
+        self.with_rejection_span(item.get_span(), |this| this.emit_top_item_within_span(item))
     }
 
-    fn emit_focused_top_item(&mut self, item: &Expression) -> Vec<GoDeclaration> {
+    fn emit_top_item_within_span(&mut self, item: &Expression) -> Vec<GoDeclaration> {
         match item {
             Expression::Function {
                 doc,
@@ -152,7 +152,7 @@ impl Planner<'_> {
         export: GoExport,
         doc_comment: &str,
     ) -> Vec<GoDeclaration> {
-        let injected = synthesized_test_handle_params(&self.facts, function);
+        let injected = synthesized_test_handle_params(function);
         let function = match &injected {
             Some(params) => FunctionDefinitionView { params, ..function },
             None => function,
@@ -271,13 +271,11 @@ pub(in crate::lowering) fn item_doc_text(
     }
 }
 
-fn synthesized_test_handle_params(
-    facts: &EmitFacts<'_>,
-    function: FunctionDefinitionView<'_>,
-) -> Option<Vec<Binding>> {
-    let has_usable_handle = function.params.iter().any(|param| {
-        param.ty.is_test_context() && facts.go_name_for_binding(&param.pattern).is_some()
-    });
+fn synthesized_test_handle_params(function: FunctionDefinitionView<'_>) -> Option<Vec<Binding>> {
+    let has_usable_handle = function
+        .params
+        .iter()
+        .any(|param| param.ty.is_test_context() && go_name_for_binding(&param.pattern).is_some());
     if has_usable_handle {
         return None;
     }

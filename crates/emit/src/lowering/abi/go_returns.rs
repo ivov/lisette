@@ -99,7 +99,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn lowered_err_values(
-        &mut self,
+        &self,
         shape: &LoweredReturnAbi,
         return_ty: &Type,
         err_expr: GoExpression,
@@ -122,7 +122,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn lowered_none_values(
-        &mut self,
+        &self,
         shape: &LoweredReturnAbi,
         return_ty: &Type,
     ) -> Vec<GoExpression> {
@@ -159,7 +159,7 @@ impl Planner<'_> {
     }
 
     fn lowered_payload_zeros(
-        &mut self,
+        &self,
         shape: &LoweredReturnAbi,
         payload_ty: &Type,
     ) -> Vec<GoExpression> {

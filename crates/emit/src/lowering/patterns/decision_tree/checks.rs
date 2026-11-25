@@ -1,5 +1,7 @@
 use super::*;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::queries::go_name_for_binding;
+use crate::lookup::facts::queries::go_name_for_rest_binding;
 use crate::lowering::patterns::decision_tree::field_segment;
 use crate::target::names::go_name::GoExport;
 use syntax::program::FieldSelection;
@@ -44,7 +46,7 @@ impl Planner<'_> {
                 binding,
                 ..
             } => {
-                let go_name = self.facts.go_name_for_binding(pattern);
+                let go_name = go_name_for_binding(pattern);
                 collector.bindings.push(PatternBinding {
                     lisette_name: identifier.to_string(),
                     binding_ids: binding.as_slice().to_vec(),
@@ -106,7 +108,7 @@ impl Planner<'_> {
                 ..
             } => {
                 self.collect_checks_and_bindings(path, inner, path_ty, path_layout, collector);
-                let go_name = self.facts.go_name_for_binding(p);
+                let go_name = go_name_for_binding(p);
                 collector.bindings.push(PatternBinding {
                     lisette_name: name.to_string(),
                     binding_ids: binding.as_slice().to_vec(),
@@ -212,7 +214,7 @@ impl Planner<'_> {
         }
 
         if let RestPattern::Bind { name, binding, .. } = rest {
-            let go_name = self.facts.go_name_for_rest_binding(rest);
+            let go_name = go_name_for_rest_binding(rest);
             let (segment, rest_ty, rest_layout) = match &array_info {
                 Some((length, element_type)) => {
                     let sub_length = length.saturating_sub(prefix.len() as u64);

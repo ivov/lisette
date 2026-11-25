@@ -435,7 +435,7 @@ impl EnumLayout {
         ));
         let cases = payload
             .iter()
-            .map(|variant| self.json_payload_variant_case(planner, names, variant))
+            .map(|variant| json_payload_variant_case(planner, names, variant))
             .collect();
         let choice = switch(
             GoExpression::identifier(names.key.clone()),
@@ -457,101 +457,6 @@ impl EnumLayout {
             .into(),
         );
         body.push(json_error(format!("empty {} JSON object", self.enum_name)));
-    }
-
-    fn json_payload_variant_case(
-        &self,
-        planner: &mut Planner,
-        names: &JsonNames,
-        variant: &VariantLayout,
-    ) -> SwitchCasePlan {
-        let mut body = vec![assign(
-            member(&names.receiver, ENUM_TAG_FIELD),
-            GoExpression::external_name(variant.tag_constant.clone()),
-        )];
-        if variant.json_payload() == JsonPayload::Object {
-            body.push(declare(
-                names.inner.clone(),
-                GoType::map_of(&GoType::new("string"), &json_raw_message()),
-            ));
-            body.push(planner.json_guard(
-                GoExpression::identifier(names.val.clone()),
-                GoExpression::identifier(names.inner.clone()),
-                None,
-                Polarity::Negated,
-            ));
-            for field in &variant.fields {
-                let ok = planner.scope.new_local_identifier("ok");
-                let mut plan = IfPlan::plain(
-                    GoExpression::identifier(ok.clone()),
-                    LoweredBlock {
-                        statements: vec![planner.json_guard(
-                            GoExpression::identifier(names.v.clone()),
-                            member(&names.receiver, &field.go_name),
-                            None,
-                            Polarity::Negated,
-                        )],
-                    },
-                    ElseArm::None,
-                );
-
-                plan.initializer = Some(GoDefinition {
-                    names: vec![names.v.clone(), ok],
-                    value: GoExpression::index(
-                        GoExpression::identifier(names.inner.clone()),
-                        string(&field.source_name),
-                    ),
-                });
-                body.push(LoweredStatement::If(plan).into());
-            }
-            body.push(plain_return(GoExpression::nil()));
-        } else if variant.json_payload() == JsonPayload::Value {
-            body.push(plain_return(unmarshal(
-                GoExpression::identifier(names.val.clone()),
-                member(&names.receiver, &variant.fields[0].go_name),
-            )));
-        } else {
-            body.push(declare(
-                names.arr.clone(),
-                GoType::slice_of(&json_raw_message()),
-            ));
-            body.push(planner.json_guard(
-                GoExpression::identifier(names.val.clone()),
-                GoExpression::identifier(names.arr.clone()),
-                None,
-                Polarity::Negated,
-            ));
-            let len = GoExpression::call(
-                GoExpression::external_name("len".to_string()),
-                vec![GoExpression::identifier(names.arr.clone())],
-            );
-            body.push(
-                LoweredStatement::If(IfPlan::plain(
-                    GoExpression::binary(
-                        len.clone(),
-                        BinaryOp::Ne,
-                        GoExpression::literal(variant.fields.len().to_string()),
-                    ),
-                    LoweredBlock {
-                        statements: vec![plain_return(GoExpression::call(
-                            GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
-                            vec![
-                                string(&format!(
-                                    "{} expects {} fields, got %d",
-                                    variant.name,
-                                    variant.fields.len()
-                                )),
-                                len,
-                            ],
-                        ))],
-                    },
-                    ElseArm::None,
-                ))
-                .into(),
-            );
-            body.extend(planner.unmarshal_tuple_fields(variant, &names.arr, &names.receiver));
-        }
-        case(string(&variant.name), body)
     }
 
     fn json_unknown_variant(&self, value: GoExpression) -> Statement {
@@ -698,4 +603,98 @@ impl Planner<'_> {
             })
             .collect()
     }
+}
+
+fn json_payload_variant_case(
+    planner: &mut Planner,
+    names: &JsonNames,
+    variant: &VariantLayout,
+) -> SwitchCasePlan {
+    let mut body = vec![assign(
+        member(&names.receiver, ENUM_TAG_FIELD),
+        GoExpression::external_name(variant.tag_constant.clone()),
+    )];
+    if variant.json_payload() == JsonPayload::Object {
+        body.push(declare(
+            names.inner.clone(),
+            GoType::map_of(&GoType::new("string"), &json_raw_message()),
+        ));
+        body.push(planner.json_guard(
+            GoExpression::identifier(names.val.clone()),
+            GoExpression::identifier(names.inner.clone()),
+            None,
+            Polarity::Negated,
+        ));
+        for field in &variant.fields {
+            let ok = planner.scope.new_local_identifier("ok");
+            let mut plan = IfPlan::plain(
+                GoExpression::identifier(ok.clone()),
+                LoweredBlock {
+                    statements: vec![planner.json_guard(
+                        GoExpression::identifier(names.v.clone()),
+                        member(&names.receiver, &field.go_name),
+                        None,
+                        Polarity::Negated,
+                    )],
+                },
+                ElseArm::None,
+            );
+
+            plan.initializer = Some(GoDefinition {
+                names: vec![names.v.clone(), ok],
+                value: GoExpression::index(
+                    GoExpression::identifier(names.inner.clone()),
+                    string(&field.source_name),
+                ),
+            });
+            body.push(LoweredStatement::If(plan).into());
+        }
+        body.push(plain_return(GoExpression::nil()));
+    } else if variant.json_payload() == JsonPayload::Value {
+        body.push(plain_return(unmarshal(
+            GoExpression::identifier(names.val.clone()),
+            member(&names.receiver, &variant.fields[0].go_name),
+        )));
+    } else {
+        body.push(declare(
+            names.arr.clone(),
+            GoType::slice_of(&json_raw_message()),
+        ));
+        body.push(planner.json_guard(
+            GoExpression::identifier(names.val.clone()),
+            GoExpression::identifier(names.arr.clone()),
+            None,
+            Polarity::Negated,
+        ));
+        let len = GoExpression::call(
+            GoExpression::external_name("len".to_string()),
+            vec![GoExpression::identifier(names.arr.clone())],
+        );
+        body.push(
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::binary(
+                    len.clone(),
+                    BinaryOp::Ne,
+                    GoExpression::literal(variant.fields.len().to_string()),
+                ),
+                LoweredBlock {
+                    statements: vec![plain_return(GoExpression::call(
+                        GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
+                        vec![
+                            string(&format!(
+                                "{} expects {} fields, got %d",
+                                variant.name,
+                                variant.fields.len()
+                            )),
+                            len,
+                        ],
+                    ))],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+        );
+        body.extend(planner.unmarshal_tuple_fields(variant, &names.arr, &names.receiver));
+    }
+    case(string(&variant.name), body)
 }

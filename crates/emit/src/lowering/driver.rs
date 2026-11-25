@@ -8,7 +8,7 @@ use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lowering::abi::slot_coercion::check_applied_conversions;
 use crate::lowering::planner::Planner;
 use crate::lowering::planner::package::{PackagePlan, build_package_plan};
-use crate::output::render::Renderer;
+use crate::output::render::declarations::render_declaration;
 use crate::output::render::output_file::OutputCollector;
 use crate::target::types::go_type::is_prelude_type;
 use diagnostics::LisetteDiagnostic;
@@ -190,7 +190,7 @@ impl<'a> Planner<'a> {
         }
         let mut source = OutputCollector::new();
         for declaration in &declarations {
-            source.collect_with_blank(Renderer.render_declaration(declaration));
+            source.collect_with_blank(render_declaration(declaration));
         }
         source
     }

@@ -71,7 +71,7 @@ impl<'a> Planner<'a> {
             native_type: kind,
             method,
             capture_boundary: CaptureBoundary::SiblingSequence,
-            retired_receiver: None,
+            assigned_place: None,
         };
 
         self.try_plan_negated_native_method(setup, &native_ctx)
@@ -181,7 +181,7 @@ impl<'a> Planner<'a> {
                     native_type: *kind,
                     method,
                     capture_boundary: ctx.capture_boundary(),
-                    retired_receiver: ctx.retired_receiver(),
+                    assigned_place: ctx.assigned_place(),
                 };
 
                 return self.plan_native_call(&native_ctx);
@@ -291,8 +291,8 @@ impl<'a> Planner<'a> {
         };
         let target = self.resolve_tuple_struct_target(call_expression, call_ty)?;
 
-        let arg_ctx = match (ctx.retired_receiver(), args.len()) {
-            (Some(retired), 1) => ExpressionContext::value().with_retired_receiver(retired),
+        let arg_ctx = match (ctx.assigned_place(), args.len()) {
+            (Some(assigned), 1) => ExpressionContext::value().with_assigned_place(assigned),
             _ => ExpressionContext::value(),
         };
         let field_layouts: Vec<_> = target
@@ -347,7 +347,7 @@ impl<'a> Planner<'a> {
     }
 
     fn resolve_tuple_struct_target(
-        &mut self,
+        &self,
         call_expression: &Expression,
         call_ty: Option<&Type>,
     ) -> Option<TupleStructTarget<'a>> {

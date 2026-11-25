@@ -20,7 +20,7 @@ pub(in crate::lowering) enum ConstPlacement {
 
 impl Planner<'_> {
     pub(in crate::lowering) fn emit_type_alias(
-        &mut self,
+        &self,
         name: &str,
         generics: &[Generic],
         ty: &Type,

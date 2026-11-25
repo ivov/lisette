@@ -312,7 +312,7 @@ impl FallibleProducer<'_> {
 
 impl<'p> Planner<'p> {
     pub(in crate::lowering) fn rebuild_from_components(
-        &mut self,
+        &self,
         components: &ComponentBinding,
     ) -> GoExpression {
         let constructor = components

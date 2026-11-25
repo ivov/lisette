@@ -300,7 +300,7 @@ impl Planner<'_> {
     }
 
     fn analyze_struct_call<'t>(
-        &mut self,
+        &self,
         name: &'t str,
         ty: &'t Type,
         checked: CheckedExpression<'t, 't>,
@@ -325,7 +325,7 @@ impl Planner<'_> {
     }
 
     fn compute_struct_call_go_type(
-        &mut self,
+        &self,
         name: &str,
         ty: &Type,
         literal: &CheckedStructLiteral,
@@ -370,7 +370,7 @@ impl Planner<'_> {
         self.go_type(ty)
     }
 
-    fn compute_enum_call_context(&mut self, name: &str, enum_id: &str) -> EnumCallContext {
+    fn compute_enum_call_context(&self, name: &str, enum_id: &str) -> EnumCallContext {
         let variant_name = unqualified_name(name).to_string();
 
         let tag_constant = self.resolve_variant(name, enum_id);
@@ -399,7 +399,7 @@ impl Planner<'_> {
     }
 
     fn resolve_struct_call_field_name(
-        &mut self,
+        &self,
         field_name: &str,
         ctx: &StructCallContext<'_>,
     ) -> String {

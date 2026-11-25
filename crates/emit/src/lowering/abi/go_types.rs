@@ -56,12 +56,14 @@ impl Planner<'_> {
                 args: arguments,
                 ..
             } => self.compound_go_type(*kind, arguments, ty),
-            Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
-            Type::Forall { .. } => GoType::new("any"),
+            Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Forall { .. }
+            | Type::ReceiverPlaceholder => GoType::new("any"),
             Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
             Type::Error => self.reject_untyped_position("an error type"),
             Type::ImportNamespace(_) => self.reject_untyped_position("a package name"),
-            Type::ReceiverPlaceholder => GoType::new("any"),
             Type::Function(_) | Type::Tuple(_) | Type::Array { .. } => {
                 unreachable!("the value layout renders a structural type")
             }

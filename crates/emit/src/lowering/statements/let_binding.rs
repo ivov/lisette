@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::component_uses::ComponentDemand;
 use crate::lookup::facts::component_uses::ValueDemand;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::{ComponentKind, TupleBinding};
 use crate::lowering::abi::coercion_plan::CoercionPlan;
@@ -44,7 +45,7 @@ pub(in crate::lowering) struct LetSpec<'a> {
 
 impl Planner<'_> {
     pub(in crate::lowering) fn declaration_needs_go_type(
-        &mut self,
+        &self,
         value: &Expression,
         constant: Option<ConstantKind>,
         coercion: &CoercionPlan,
@@ -539,7 +540,7 @@ impl Planner<'_> {
     }
 
     fn let_temp_var_declaration(
-        &mut self,
+        &self,
         name: &GoIdentifier,
         value: &Expression,
         binding_ty: &Type,
@@ -720,8 +721,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     return None;
                 };
 
-                let raw_go_name =
-                    GoIdentifier::from(self.planner.facts.go_name_for_binding(pattern)?);
+                let raw_go_name = GoIdentifier::from(go_name_for_binding(pattern)?);
                 let go_name = if self.planner.scope.has_binding_for_go_name(&raw_go_name) {
                     self.planner.fresh_local(&SourceName::new(identifier))
                 } else {
@@ -816,11 +816,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 statements: self.planner.lower_let_reassign(let_spec, target),
             };
         }
-        let mut raw_go_name = self
-            .planner
-            .facts
-            .go_name_for_binding(&self.binding.pattern)
-            .map(GoIdentifier::from);
+        let mut raw_go_name = go_name_for_binding(&self.binding.pattern).map(GoIdentifier::from);
         if let Some(raw) = &raw_go_name
             && self
                 .planner
@@ -867,7 +863,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 if identifier == "_" {
                     return None;
                 }
-                let go_name = self.planner.facts.go_name_for_binding(pattern)?;
+                let go_name = go_name_for_binding(pattern)?;
                 let preferred = go_name.preferred();
                 let name = if self.planner.shadows_declaration(&preferred)
                     || self

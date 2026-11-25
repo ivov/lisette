@@ -162,12 +162,6 @@ impl GoExpressionNode {
             ..Effects::default()
         };
         match self {
-            Self::Literal(_)
-            | Self::Type(_)
-            | Self::Empty
-            | Self::Instantiation { .. }
-            | Self::Spread(_)
-            | Self::FunctionLiteral { .. } => Effects::default(),
             Self::Identifier(_) => Effects::local_read(),
             Self::Qualified { .. } => reference_read(false),
             Self::Call {
@@ -196,7 +190,6 @@ impl GoExpressionNode {
             }
             Self::Dereference(_) => reference_read(true),
             Self::Selector { may_panic, .. } if *may_panic => reference_read(true),
-            Self::Selector { .. } => Effects::default(),
             Self::TypeAssertion { .. } => Effects {
                 may_panic: true,
                 ..Effects::default()
@@ -227,8 +220,15 @@ impl GoExpressionNode {
                     ..Effects::default()
                 }
             }
-            Self::Conversion { .. } => Effects::default(),
-            Self::Unary { .. } => Effects::default(),
+            Self::Literal(_)
+            | Self::Type(_)
+            | Self::Empty
+            | Self::Instantiation { .. }
+            | Self::Spread(_)
+            | Self::FunctionLiteral { .. }
+            | Self::Selector { .. }
+            | Self::Conversion { .. }
+            | Self::Unary { .. } => Effects::default(),
             Self::Binary {
                 operator,
                 left,
@@ -239,19 +239,6 @@ impl GoExpressionNode {
 
     fn binary_effects(operator: BinaryOp, left: &Self, right: &Self) -> Effects {
         match operator {
-            BinaryOp::Add
-            | BinaryOp::Sub
-            | BinaryOp::Mul
-            | BinaryOp::BitAnd
-            | BinaryOp::BitOr
-            | BinaryOp::BitXor
-            | BinaryOp::BitAndNot
-            | BinaryOp::And
-            | BinaryOp::Or
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge => Effects::default(),
             BinaryOp::Div | BinaryOp::Rem | BinaryOp::Shl | BinaryOp::Shr => Effects {
                 may_panic: true,
                 ..Effects::default()
@@ -266,7 +253,21 @@ impl GoExpressionNode {
                     ..Effects::default()
                 }
             }
-            BinaryOp::Eq | BinaryOp::Ne => Effects::default(),
+            BinaryOp::Add
+            | BinaryOp::Sub
+            | BinaryOp::Mul
+            | BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::BitAndNot
+            | BinaryOp::And
+            | BinaryOp::Or
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge
+            | BinaryOp::Eq
+            | BinaryOp::Ne => Effects::default(),
         }
     }
 }

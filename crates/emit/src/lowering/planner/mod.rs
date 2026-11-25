@@ -312,7 +312,7 @@ impl<'a> Planner<'a> {
         result
     }
 
-    pub(in crate::lowering) fn focused<R>(
+    pub(in crate::lowering) fn with_rejection_span<R>(
         &mut self,
         span: Span,
         f: impl FnOnce(&mut Self) -> R,

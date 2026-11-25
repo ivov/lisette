@@ -1752,7 +1752,7 @@ fn main() {
 }
 
 #[test]
-fn go_type_converts_to_generic_interface_through_tagged_twin_adapter() {
+fn go_type_converts_to_generic_interface_through_tagged_counterpart_adapter() {
     let input = r#"
 import "go:bytes"
 
@@ -1865,7 +1865,7 @@ fn main() {
 }
 
 #[test]
-fn partial_bound_with_tagged_twin_name_calls_the_twin() {
+fn partial_bound_with_tagged_counterpart_name_calls_the_counterpart() {
     let input = r#"
 import "go:fmt"
 import "go:errors"

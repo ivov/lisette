@@ -91,10 +91,9 @@ impl ValuePlan {
     ) -> Self {
         let stability = match expression.syntax_form() {
             OperandForm::Literal => Stability::Fixed,
-            OperandForm::Call => Stability::StableAcrossCalls,
             OperandForm::Name => stability,
             OperandForm::Other if stability.is_observable() => Stability::Observable,
-            OperandForm::Other => Stability::StableAcrossCalls,
+            OperandForm::Call | OperandForm::Other => Stability::StableAcrossCalls,
         };
 
         Self::new(Vec::new(), expression, stability)

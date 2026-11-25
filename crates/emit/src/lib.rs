@@ -3,7 +3,10 @@
     clippy::redundant_clone,
     clippy::assigning_clones,
     clippy::implicit_clone,
-    clippy::clone_on_ref_ptr
+    clippy::clone_on_ref_ptr,
+    clippy::needless_pass_by_ref_mut,
+    clippy::unused_self,
+    clippy::match_same_arms
 )]
 
 mod lookup;

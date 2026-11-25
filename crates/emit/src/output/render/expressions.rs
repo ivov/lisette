@@ -1,4 +1,4 @@
-use crate::output::render::Renderer;
+use crate::output::render::bodies::{can_inline_block, render_lowered_block};
 use crate::output::render::declarations::group_params;
 use crate::output::render::writer::GoWriter;
 use crate::target::ir::bodies::LoweredBlock;
@@ -90,21 +90,38 @@ impl GoExpressionNode {
             return true;
         }
         match (self.binding(), slot.kind) {
-            (Binding::Unknown, SlotKind::Free) => false,
-            (Binding::Unknown, _) => true,
             (Binding::Primary, SlotKind::Postfix) => {
                 matches!(self, Self::Literal(_) | Self::FunctionLiteral { .. })
             }
-            (Binding::Primary, _) => false,
             (Binding::Prefix(sign), SlotKind::Prefix(operator)) => {
                 sign == operator && matches!(sign, '-' | '+' | '&')
             }
-            (Binding::Prefix(_), SlotKind::Callee | SlotKind::Postfix) => true,
-            (Binding::Prefix(_), _) => false,
             (Binding::Binary(level), SlotKind::Left(parent)) => level < parent,
             (Binding::Binary(level), SlotKind::Right(parent)) => level <= parent,
-            (Binding::Binary(_), SlotKind::Free) => false,
-            (Binding::Binary(_), _) => true,
+            (Binding::Unknown | Binding::Binary(_), SlotKind::Free)
+            | (
+                Binding::Primary,
+                SlotKind::Free
+                | SlotKind::Left(_)
+                | SlotKind::Right(_)
+                | SlotKind::Prefix(_)
+                | SlotKind::Callee,
+            )
+            | (Binding::Prefix(_), SlotKind::Free | SlotKind::Left(_) | SlotKind::Right(_)) => {
+                false
+            }
+            (
+                Binding::Unknown,
+                SlotKind::Left(_)
+                | SlotKind::Right(_)
+                | SlotKind::Prefix(_)
+                | SlotKind::Callee
+                | SlotKind::Postfix,
+            )
+            | (Binding::Prefix(_), SlotKind::Callee | SlotKind::Postfix)
+            | (Binding::Binary(_), SlotKind::Prefix(_) | SlotKind::Callee | SlotKind::Postfix) => {
+                true
+            }
         }
     }
 
@@ -157,7 +174,8 @@ impl GoExpressionNode {
             | Self::Selector { .. }
             | Self::Index { .. }
             | Self::Slice { .. }
-            | Self::TypeAssertion { .. } => self.write_postfix(output, slot),
+            | Self::TypeAssertion { .. }
+            | Self::Spread(_) => self.write_postfix(output, slot),
             Self::Unary { operator, operand } => {
                 let sign = operator.sign();
                 output.push(sign);
@@ -188,7 +206,6 @@ impl GoExpressionNode {
                 operand.write(output, Slot::FREE);
                 output.push(')');
             }
-            Self::Spread(_) => self.write_postfix(output, slot),
             Self::FunctionLiteral {
                 parameters,
                 result,
@@ -313,13 +330,13 @@ impl GoExpressionNode {
             output.push_str(&result.code);
         }
         output.push_str(" {");
-        let single_line = Renderer.can_inline_block(body);
+        let single_line = can_inline_block(body);
         let start = output.line();
         if matches!(layout, FunctionLiteralLayout::Inline) && single_line {
             if !body.renders_empty() {
                 output.push(' ');
                 let outer = output.set_inline(true);
-                Renderer.render_lowered_block(output, body);
+                render_lowered_block(output, body);
                 output.set_inline(outer);
                 output.push(' ');
             }
@@ -327,7 +344,7 @@ impl GoExpressionNode {
             output.close_literal(&SourcePosition::default(), start);
         } else {
             output.push('\n');
-            Renderer.render_lowered_block(output, body);
+            render_lowered_block(output, body);
             output.push('}');
             output.close_literal(end, start);
         }

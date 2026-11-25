@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::lowering::calls::wrap_err::wrap_error;
 
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::lookup::facts::value_layout::ValueLayout;
@@ -91,7 +92,7 @@ impl<'a> PropagateTarget<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SpentErrorReuse {
+enum ErrorReuse {
     Allowed,
     Forbidden,
 }
@@ -299,19 +300,19 @@ impl Planner<'_> {
         &mut self,
         fallible: &Fallible,
         placement: PairPlacement,
-        reuse: SpentErrorReuse,
+        reuse: ErrorReuse,
     ) -> GoIdentifier {
         match fallible.err_ty() {
             Some(error_ty) if placement == PairPlacement::Statement => {
                 let error_ty = &self.facts.without_go_aliases(error_ty);
-                let spent = match reuse {
-                    SpentErrorReuse::Allowed => self.scope.spent_error(error_ty),
-                    SpentErrorReuse::Forbidden => None,
+                let reused = match reuse {
+                    ErrorReuse::Allowed => self.scope.reusable_error(error_ty),
+                    ErrorReuse::Forbidden => None,
                 };
-                let name = spent.unwrap_or_else(|| {
+                let name = reused.unwrap_or_else(|| {
                     self.pair_status(None, PairStatusKind::Error, PairPlacement::Statement)
                 });
-                self.scope.declare_spent_error(&name, error_ty);
+                self.scope.declare_reusable_error(&name, error_ty);
                 name
             }
             _ => self.pair_status(None, PairStatusKind::Error, placement),
@@ -359,9 +360,9 @@ impl Planner<'_> {
             PairPlacement::Statement
         };
         let reuse = if message_setup.is_empty() {
-            SpentErrorReuse::Allowed
+            ErrorReuse::Allowed
         } else {
-            SpentErrorReuse::Forbidden
+            ErrorReuse::Forbidden
         };
         let outcome_var = self.propagate_error_status(fallible, placement, reuse);
         let outcome = || GoExpression::identifier(outcome_var.clone());
@@ -387,7 +388,7 @@ impl Planner<'_> {
             GoExpression::identifier(value_var.clone().expect("nil guard requires the value var"))
         };
 
-        let error = self.wrap_error(&wraps, outcome());
+        let error = wrap_error(&wraps, outcome());
         let (failure_setup, failure_values) =
             self.propagate_failure_values(expression, fallible, error);
         statements.push(
@@ -400,7 +401,7 @@ impl Planner<'_> {
             .into(),
         );
         if let Some(guard) = nil_guard {
-            let error = self.wrap_error(&wraps, unexpected_nil_error());
+            let error = wrap_error(&wraps, unexpected_nil_error());
             let (nil_setup, nil_failure) =
                 self.propagate_failure_values(expression, fallible, error);
             statements.push(

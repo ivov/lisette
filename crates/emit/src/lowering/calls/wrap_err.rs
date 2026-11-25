@@ -97,20 +97,19 @@ impl Planner<'_> {
         }
         (setup, prepared)
     }
+}
 
-    pub(in crate::lowering) fn wrap_error(
-        &mut self,
-        messages: &[WrapMessage],
-        error: GoExpression,
-    ) -> GoExpression {
-        messages.iter().fold(error, |error, message| {
-            let mut args = vec![GoExpression::literal(format!("\"{}: %w\"", message.format))];
-            args.extend(message.args.iter().cloned());
-            args.push(error);
-            GoExpression::call(
-                GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
-                args,
-            )
-        })
-    }
+pub(in crate::lowering) fn wrap_error(
+    messages: &[WrapMessage],
+    error: GoExpression,
+) -> GoExpression {
+    messages.iter().fold(error, |error, message| {
+        let mut args = vec![GoExpression::literal(format!("\"{}: %w\"", message.format))];
+        args.extend(message.args.iter().cloned());
+        args.push(error);
+        GoExpression::call(
+            GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
+            args,
+        )
+    })
 }

@@ -69,7 +69,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn constant_needs_go_type(
-        &mut self,
+        &self,
         constant: Option<ConstantKind>,
         slot_ty: &Type,
     ) -> Option<GoType> {

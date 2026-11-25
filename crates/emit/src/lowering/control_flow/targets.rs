@@ -88,15 +88,24 @@ impl Legalizer {
                     self.walk_block(&mut plan.body, Interception::All);
                 }
             }
-            LoweredStatement::Block(body) => self.walk_block(body, interception),
-            LoweredStatement::Body(body) => self.walk_block(body, interception),
+            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
+                self.walk_block(body, interception)
+            }
             LoweredStatement::Break(target) => {
                 self.resolve_transfer(target, interception.intercepts_break())
             }
             LoweredStatement::Continue(target) => {
                 self.resolve_transfer(target, interception.intercepts_continue())
             }
-            LoweredStatement::Assign(_) => {}
+            LoweredStatement::Assign(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Const(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Define(_)
+            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::Discard { .. }
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => {}
             LoweredStatement::Select(plan) => {
                 for arm in &mut plan.arms {
                     self.walk_block(arm.body_mut(), interception.with_break());
@@ -111,14 +120,6 @@ impl Legalizer {
                     self.walk_block(body, case_interception);
                 }
             }
-            LoweredStatement::Return(_)
-            | LoweredStatement::Const(_)
-            | LoweredStatement::Async { .. }
-            | LoweredStatement::Define(_)
-            | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::Discard { .. }
-            | LoweredStatement::ExpressionStatement { .. }
-            | LoweredStatement::UnreachablePanic => {}
         }
     }
 

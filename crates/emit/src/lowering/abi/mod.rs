@@ -184,7 +184,7 @@ impl Planner<'_> {
                 },
             ));
         }
-        if self.member_spelling(callee) == MemberSpelling::TaggedTwin {
+        if self.member_spelling(callee) == MemberSpelling::TaggedCounterpart {
             return Some(CallableReturnAbi::Value);
         }
         let return_ty = signature

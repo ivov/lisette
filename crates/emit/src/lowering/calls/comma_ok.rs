@@ -205,8 +205,7 @@ impl Planner<'_> {
             PairKind::BareError => PairValue::Absent,
             PairKind::CommaOk { nil_guard } | PairKind::Result { nil_guard } => {
                 let name = match slot {
-                    CommaOkValueSlot::Named(name) => Some(name),
-                    CommaOkValueSlot::Arm(name) => Some(name),
+                    CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name) => Some(name),
                     CommaOkValueSlot::Temp => Some(self.fresh_declared("ret")),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => {
                         nil_guard.map(|_| self.fresh_declared("ret"))

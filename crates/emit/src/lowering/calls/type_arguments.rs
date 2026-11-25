@@ -46,7 +46,7 @@ fn all_type_params_inferrable(
 }
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<GoType> {
+    pub(in crate::lowering) fn prelude_container_type_args(&self, ty: &Type) -> Option<GoType> {
         let params = self.facts.prelude_container_arguments(ty)?;
         if params.is_empty() {
             return None;
@@ -60,7 +60,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn call_type_arguments(
-        &mut self,
+        &self,
         request: CallTypeArgsRequest<'_, '_>,
     ) -> GoType {
         let CallTypeArgsRequest {
@@ -148,7 +148,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn constructor_reference_type_arguments(
-        &mut self,
+        &self,
         fn_params: &[FunctionParameter],
         ret_params: &[Type],
         ctx: ExpressionContext<'_>,
@@ -191,7 +191,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn format_value_type_args(
-        &mut self,
+        &self,
         expression: &Expression,
     ) -> Option<GoType> {
         let recorded = self.facts.checked(expression).function_value()?;

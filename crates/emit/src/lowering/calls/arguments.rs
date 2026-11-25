@@ -29,7 +29,7 @@ pub(super) struct CallArgsContext<'plan, 'facts> {
     pub(super) plan: &'plan CallPlan<'facts>,
     pub(super) spread: Option<&'plan Expression>,
     pub(super) capture_boundary: CaptureBoundary,
-    pub(super) retired_receiver: Option<&'plan Expression>,
+    pub(super) assigned_place: Option<&'plan Expression>,
     pub(super) callee_is_builtin: bool,
     pub(super) callee_pins_type_args: bool,
     pub(super) receiver_binding: Option<(Type, Type)>,
@@ -131,7 +131,7 @@ impl Planner<'_> {
     }
 
     fn type_constant_arguments(
-        &mut self,
+        &self,
         operands: Vec<ValuePlan>,
         ctx: &CallArgsContext<'_, '_>,
     ) -> Vec<ValuePlan> {
@@ -202,13 +202,13 @@ impl Planner<'_> {
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {
         let spelling = if would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty) {
-            MemberSpelling::TaggedTwin
+            MemberSpelling::TaggedCounterpart
         } else {
             MemberSpelling::Plain
         };
         let mut arg_ctx = self.direct_arg_emit_ctx(param, spelling);
-        if let Some(retired) = ctx.retired_receiver {
-            arg_ctx = arg_ctx.with_retired_receiver(retired);
+        if let Some(assigned) = ctx.assigned_place {
+            arg_ctx = arg_ctx.with_assigned_place(assigned);
         }
         let argument = self.plan_composite_value(arg, arg_ctx);
         let Some(param) = param else {
@@ -371,7 +371,8 @@ impl Planner<'_> {
             }
             ArgumentValueSource::Callable => self.plan_operand(
                 argument,
-                ExpressionContext::value().with_go_function_spelling(MemberSpelling::TaggedTwin),
+                ExpressionContext::value()
+                    .with_go_function_spelling(MemberSpelling::TaggedCounterpart),
             ),
             ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
             ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),

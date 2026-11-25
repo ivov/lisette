@@ -1,11 +1,12 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lookup::facts::reusable_bindings::ReusableBindings;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;
-use crate::lowering::definitions::interface_adapter::has_tagged_twin;
+use crate::lowering::definitions::interface_adapter::has_tagged_counterpart;
 use crate::lowering::patterns::sites::PatternSubject;
 use crate::lowering::statements::asserts::test_context_call;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -129,7 +130,7 @@ impl Planner<'_> {
     }
 
     fn settle_generated_names(
-        &mut self,
+        &self,
         statements: &mut Vec<Statement>,
         parameters: &mut [GoIdentifier],
     ) {
@@ -270,7 +271,7 @@ impl Planner<'_> {
         })
     }
 
-    fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
+    fn lambda_return_info(&self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
         let Type::Function(function) = ty else {
             return LambdaReturnInfo {
                 signature: None,
@@ -409,9 +410,11 @@ impl Planner<'_> {
         let mut declarations = vec![declaration];
         if receiver_ty
             .and_then(Type::get_qualified_id)
-            .is_some_and(|owner| has_tagged_twin(&self.facts, owner, function_definition.name))
+            .is_some_and(|owner| {
+                has_tagged_counterpart(&self.facts, owner, function_definition.name)
+            })
         {
-            let twin = self.emit_tagged_twin(
+            let twin = self.emit_tagged_counterpart(
                 function_definition,
                 go_name,
                 &generic_context[..signature_generics_start],
@@ -437,7 +440,7 @@ impl Planner<'_> {
     }
 
     fn render_return_ty(
-        &mut self,
+        &self,
         function_definition: FunctionDefinitionView<'_>,
         return_shape: Option<&LoweredReturnAbi>,
     ) -> GoType {
@@ -525,7 +528,7 @@ impl Planner<'_> {
                     binding: id,
                     ..
                 } => {
-                    if let Some(go_name) = self.facts.go_name_for_binding(&param.pattern) {
+                    if let Some(go_name) = go_name_for_binding(&param.pattern) {
                         let name = self.claim_declared_binding(identifier, id.as_slice(), &go_name);
                         lowered.test_handle = lowered
                             .test_handle
@@ -570,7 +573,6 @@ impl Planner<'_> {
 
 fn collect_binder_names(expression: &Expression, out: &mut Vec<SourceName>) {
     match expression {
-        Expression::Let { binding, .. } => push_binder_names(&binding.pattern, out),
         Expression::Lambda { params, .. } => {
             for param in params {
                 push_binder_names(&param.pattern, out);
@@ -597,7 +599,9 @@ fn collect_binder_names(expression: &Expression, out: &mut Vec<SourceName>) {
                 push_binder_names(&arm.pattern, out);
             }
         }
-        Expression::For { binding, .. } => push_binder_names(&binding.pattern, out),
+        Expression::Let { binding, .. } | Expression::For { binding, .. } => {
+            push_binder_names(&binding.pattern, out)
+        }
         _ => {}
     }
     for child in expression.children() {

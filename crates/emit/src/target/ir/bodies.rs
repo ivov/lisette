@@ -1111,6 +1111,7 @@ impl LoweredStatement {
 
     pub(crate) fn emits_output(&self) -> bool {
         match self {
+            LoweredStatement::Body(body) => !body.renders_empty(),
             LoweredStatement::If(_)
             | LoweredStatement::Loop(_)
             | LoweredStatement::Block(_)
@@ -1123,9 +1124,8 @@ impl LoweredStatement {
             | LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
             | LoweredStatement::Discard { .. }
-            | LoweredStatement::UnreachablePanic => true,
-            LoweredStatement::Body(body) => !body.renders_empty(),
-            LoweredStatement::Return(_) => true,
+            | LoweredStatement::UnreachablePanic
+            | LoweredStatement::Return(_) => true,
             LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => true,
             },
@@ -1144,11 +1144,11 @@ impl LoweredStatement {
             LoweredStatement::Continue(target) => {
                 FlowSummary::exit(FlowExit::Continue(target.clone()))
             }
-            LoweredStatement::Return(_) => FlowSummary::terminal(),
+            LoweredStatement::Return(_)
+            | LoweredStatement::ExpressionStatement { diverges: true, .. }
+            | LoweredStatement::UnreachablePanic => FlowSummary::terminal(),
             LoweredStatement::Select(plan) => plan.flow(),
             LoweredStatement::Switch(plan) => plan.flow(),
-            LoweredStatement::ExpressionStatement { diverges: true, .. } => FlowSummary::terminal(),
-            LoweredStatement::UnreachablePanic => FlowSummary::terminal(),
             LoweredStatement::Assign(_)
             | LoweredStatement::Async { .. }
             | LoweredStatement::Const(_)

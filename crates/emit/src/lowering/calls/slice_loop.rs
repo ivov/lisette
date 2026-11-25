@@ -1,3 +1,4 @@
+use crate::lookup::facts::queries::go_name_for_binding;
 use crate::target::ir::local::GoIdentifier;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
@@ -427,7 +428,7 @@ impl Planner<'_> {
         let Pattern::Identifier { binding, .. } = pattern else {
             return self.fresh_local("result");
         };
-        match self.facts.go_name_for_binding(pattern) {
+        match go_name_for_binding(pattern) {
             Some(name)
                 if self
                     .scope
@@ -478,7 +479,7 @@ impl Planner<'_> {
                 );
                 name
             }
-            None => match self.facts.go_name_for_binding(pattern) {
+            None => match go_name_for_binding(pattern) {
                 Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), &name),
                 None => GoIdentifier::blank(),
             },
@@ -486,7 +487,7 @@ impl Planner<'_> {
     }
 
     fn push_slice_loop_declaration(
-        &mut self,
+        &self,
         setup: &mut Vec<Statement>,
         planned: &PlannedLoop<'_>,
         result_ty: &Type,

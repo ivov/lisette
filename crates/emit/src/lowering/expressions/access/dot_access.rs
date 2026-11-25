@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::emit_facts::ref_stripped_type_parameter;
 use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
@@ -186,9 +187,7 @@ impl Planner<'_> {
         let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) else {
             return base;
         };
-        let receiver_type = self
-            .facts
-            .ref_stripped_type_parameter(expression_ty)
+        let receiver_type = ref_stripped_type_parameter(expression_ty)
             .map(Type::Parameter)
             .expect("a dispatched bound has a type parameter receiver");
         let adapter = self
@@ -200,7 +199,7 @@ impl Planner<'_> {
     }
 
     fn try_plan_pre_receiver_dot(
-        &mut self,
+        &self,
         dot_access: &Expression,
         spelling: MemberSpelling,
         ctx: ExpressionContext<'_>,
@@ -254,7 +253,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn try_plan_tuple_member_dot(
-        &mut self,
+        &self,
         base: &GoExpression,
         expression_ty: &Type,
         member: &str,
@@ -365,7 +364,7 @@ impl Planner<'_> {
     }
 
     fn append_cross_package_type_args(
-        &mut self,
+        &self,
         base_access: GoExpression,
         dot_access: &Expression,
         expression_ty: &Type,
@@ -381,7 +380,7 @@ impl Planner<'_> {
     }
 
     fn try_plan_newtype_cast(
-        &mut self,
+        &self,
         expression_ty: &Type,
         base: &GoExpression,
     ) -> Option<GoExpression> {
@@ -429,7 +428,7 @@ impl Planner<'_> {
     }
 
     fn try_plan_enum_variant_dot(
-        &mut self,
+        &self,
         definition: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
@@ -461,7 +460,7 @@ impl Planner<'_> {
     }
 
     fn plan_static_method_dot(
-        &mut self,
+        &self,
         dot_access: &Expression,
         definition: &str,
         ctx: ExpressionContext<'_>,
@@ -475,7 +474,7 @@ impl Planner<'_> {
     }
 
     fn try_plan_instance_method_value_dot(
-        &mut self,
+        &self,
         member: &str,
         result_ty: &Type,
         export: GoExport,

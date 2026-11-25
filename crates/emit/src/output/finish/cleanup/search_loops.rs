@@ -11,7 +11,7 @@ use crate::target::ir::values::GoExpression;
 
 pub(super) fn return_found_elements_directly(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |block| {
-        let Some(found) = found_loop_return(block) else {
+        let Some(found) = search_loop_return(block) else {
             return;
         };
         let uses = NameUses::of(block);
@@ -32,12 +32,12 @@ pub(super) fn return_found_elements_directly(statements: &mut Vec<Statement>) {
         }
 
         let LoweredStatement::Loop(plan) = &mut block[found.loop_at].kind else {
-            unreachable!("found_loop_return matched a loop");
+            unreachable!("search_loop_return matched a loop");
         };
         let Some(LoweredStatement::If(hit)) =
             plan.body.statements.last_mut().map(|last| &mut last.kind)
         else {
-            unreachable!("found_loop_return matched a trailing if");
+            unreachable!("search_loop_return matched a trailing if");
         };
         hit.then_body = LoweredBlock {
             statements: vec![LoweredStatement::Return(success).into()],
@@ -49,7 +49,7 @@ pub(super) fn return_found_elements_directly(statements: &mut Vec<Statement>) {
     });
 }
 
-struct FoundLoopReturn {
+struct SearchLoopReturn {
     declares_at: usize,
     loop_at: usize,
     flag: GoIdentifier,
@@ -59,7 +59,7 @@ struct FoundLoopReturn {
     failure: Vec<GoExpression>,
 }
 
-fn found_loop_return(block: &[Statement]) -> Option<FoundLoopReturn> {
+fn search_loop_return(block: &[Statement]) -> Option<SearchLoopReturn> {
     let loop_at = block.len().checked_sub(3)?;
     let define_at = loop_at.checked_sub(1)?;
     let flag = false_define(&block[define_at].kind)?;
@@ -85,7 +85,7 @@ fn found_loop_return(block: &[Statement]) -> Option<FoundLoopReturn> {
     let LoweredStatement::Return(success) = &block[loop_at + 2].kind else {
         return None;
     };
-    Some(FoundLoopReturn {
+    Some(SearchLoopReturn {
         declares_at,
         loop_at,
         flag,

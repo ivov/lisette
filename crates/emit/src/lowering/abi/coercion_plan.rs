@@ -98,7 +98,6 @@ impl LayoutChange {
 
     pub(in crate::lowering) fn direction(&self) -> Option<LayoutChangeDirection> {
         match self {
-            Self::Identity | Self::Conversion { .. } => None,
             Self::UnwrapNullableOption { .. } | Self::UnwrapPointerOption { .. } => {
                 Some(LayoutChangeDirection::ToGo)
             }
@@ -107,7 +106,7 @@ impl LayoutChange {
             }
             Self::Reference { pointee } => pointee.direction(),
             Self::NilablePayload { payload, .. } => payload.direction(),
-            Self::Function { .. } => None,
+            Self::Identity | Self::Conversion { .. } | Self::Function { .. } => None,
             Self::Immutable { elements, .. } => elements.iter().find_map(LayoutChange::direction),
             Self::Aggregate { key, element, .. } => key
                 .as_deref()

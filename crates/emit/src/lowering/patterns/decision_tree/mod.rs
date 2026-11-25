@@ -1046,7 +1046,7 @@ fn join_conditions(
 }
 
 impl Planner<'_> {
-    pub(super) fn compile_match_arms(&mut self, arms: &[MatchArm], subject_ty: &Type) -> Decision {
+    pub(super) fn compile_match_arms(&self, arms: &[MatchArm], subject_ty: &Type) -> Decision {
         let mut arm_infos = Vec::new();
         for (arm_index, arm) in arms.iter().enumerate() {
             let split = |pattern: &Pattern| arm.has_guard() || pattern_has_bindings(pattern);

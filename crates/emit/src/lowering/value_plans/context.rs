@@ -38,7 +38,7 @@ pub(in crate::lowering) struct ExpressionContext<'a> {
     function_value_abi_target: FunctionValueAbiTarget,
     generic_result_slot: Option<&'a Type>,
     capture_boundary: CaptureBoundary,
-    retired_receiver: Option<&'a Expression>,
+    assigned_place: Option<&'a Expression>,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -58,7 +58,7 @@ impl<'a> ExpressionContext<'a> {
 
     pub(in crate::lowering) fn with_go_function_spelling(self, spelling: MemberSpelling) -> Self {
         match spelling {
-            MemberSpelling::TaggedTwin => Self {
+            MemberSpelling::TaggedCounterpart => Self {
                 function_value_abi_target: FunctionValueAbiTarget::Tagged,
                 ..self
             },
@@ -125,12 +125,12 @@ impl<'a> ExpressionContext<'a> {
         self.capture_boundary
     }
 
-    pub(in crate::lowering) fn with_retired_receiver(mut self, target: &'a Expression) -> Self {
-        self.retired_receiver = Some(target);
+    pub(in crate::lowering) fn with_assigned_place(mut self, target: &'a Expression) -> Self {
+        self.assigned_place = Some(target);
         self
     }
 
-    pub(in crate::lowering) fn retired_receiver(self) -> Option<&'a Expression> {
-        self.retired_receiver
+    pub(in crate::lowering) fn assigned_place(self) -> Option<&'a Expression> {
+        self.assigned_place
     }
 }

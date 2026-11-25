@@ -26,7 +26,7 @@ impl GoExport {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MemberSpelling {
     Plain,
-    TaggedTwin,
+    TaggedCounterpart,
 }
 
 pub(crate) const RANGE_START_FIELD: &str = "Start";
@@ -99,7 +99,7 @@ pub(crate) fn member_go_name(
     }
 }
 
-pub(crate) fn tagged_twin(go_name: &str) -> String {
+pub(crate) fn tagged_counterpart(go_name: &str) -> String {
     format!("{go_name}_")
 }
 

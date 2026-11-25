@@ -110,7 +110,7 @@ fn prelude_arg_context<'a>(
 ) -> (bool, ExpressionContext<'a>) {
     let suppress = takes_prelude_callback(declared_param);
     let spelling = if suppress {
-        MemberSpelling::TaggedTwin
+        MemberSpelling::TaggedCounterpart
     } else {
         MemberSpelling::Plain
     };
@@ -220,7 +220,6 @@ impl Planner<'_> {
     pub(in crate::lowering) fn place_read_stability(&self, place: &Expression) -> Stability {
         match place {
             Expression::Identifier { .. } => identifier_read_stability(&self.facts, place),
-            Expression::Call { .. } => Stability::StableAcrossCalls,
             Expression::DotAccess {
                 expression,
                 resolution,
@@ -235,8 +234,8 @@ impl Planner<'_> {
                 Stability::Observable
             }
             Expression::DotAccess { expression, .. } => self.place_read_stability(expression),
-            Expression::IndexedAccess { .. } => Stability::Observable,
-            Expression::Unary {
+            Expression::IndexedAccess { .. }
+            | Expression::Unary {
                 operator: UnaryOperator::Deref,
                 ..
             } => Stability::Observable,
@@ -326,7 +325,7 @@ impl Planner<'_> {
     }
 
     fn finalize_spread_operand(
-        &mut self,
+        &self,
         values: &mut Vec<GoExpression>,
         wrap_to_any: bool,
         combine: Option<VariadicCombine>,
