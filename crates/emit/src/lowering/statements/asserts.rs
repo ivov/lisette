@@ -8,7 +8,7 @@ use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define,
 };
-use crate::target::ir::go_expression::{BinaryOp, CompositeLayout, UnaryOp};
+use crate::target::ir::go_expression::{CompositeLayout, GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::values::CaptureBoundary;
 use crate::target::ir::values::{GoExpression, OperandForm};
 use crate::target::names::go_name::{self, GeneratedPackage};
@@ -186,7 +186,7 @@ impl Planner<'_> {
         let flipped = flip_comparison(operator)
             .filter(|_| flip_preserves_nan(&self.facts, operator, left, right));
         let operands = paired_operands(lhs.value.expression(), rhs.value.expression());
-        let (cond_setup, condition) = self
+        let (condition_setup, condition) = self
             .plan_lowered_binary(
                 flipped.as_ref().unwrap_or(operator),
                 (&lhs.operand, lhs.value),
@@ -195,11 +195,11 @@ impl Planner<'_> {
             )
             .into_parts();
 
-        statements.extend(cond_setup);
+        statements.extend(condition_setup);
         AssertShape {
             failure_condition: match flipped {
                 Some(_) => condition,
-                None => GoExpression::unary(UnaryOp::Not, condition),
+                None => GoExpression::unary(GoUnaryOperator::Not, condition),
             },
             kind: "relation",
             message: format!("expected {operator}"),
@@ -216,7 +216,8 @@ impl Planner<'_> {
     ) -> AssertShape {
         let (lhs, rhs) = self.plan_assert_operands(recv, arg, LiteralInlining::Denied, statements);
         let (lhs, rhs) = (lhs.value.expression(), rhs.value.expression());
-        let failure_condition = self.equality_test(lhs.clone(), rhs.clone(), recipe, BinaryOp::Ne);
+        let failure_condition =
+            self.equality_test(lhs.clone(), rhs.clone(), recipe, GoBinaryOperator::NotEqual);
         AssertShape {
             failure_condition,
             kind: "labeled",
@@ -243,7 +244,7 @@ impl Planner<'_> {
         } else if matches!(operand, Expression::Binary { .. }) {
             let (setup, condition) = self.plan_operand(operand, ctx).into_parts();
             statements.extend(setup);
-            GoExpression::unary(UnaryOp::Not, condition)
+            GoExpression::unary(GoUnaryOperator::Not, condition)
         } else {
             let (setup, condition) = self.plan_unary_not(operand, ctx).into_parts();
             statements.extend(setup);
@@ -330,7 +331,7 @@ impl Planner<'_> {
             .is_some();
         statements.push(
             if constant_needs_type || self.is_go_constant_expression(expression) {
-                LoweredStatement::VarDecl {
+                LoweredStatement::VarDeclaration {
                     name: name.clone(),
                     go_type,
                     value: Some(value),

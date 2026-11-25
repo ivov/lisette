@@ -9,7 +9,7 @@ use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, declare, define,
     define_many,
 };
-use crate::target::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::{partial_variant, prelude_call};
 use crate::target::ir::values::GoExpression;
@@ -20,11 +20,11 @@ use syntax::program::SlotOrigin;
 use syntax::types::{GoNilForm, Type};
 
 pub(in crate::lowering) fn nil_condition(value: GoExpression) -> GoExpression {
-    GoExpression::binary(value, BinaryOp::Eq, GoExpression::nil())
+    GoExpression::binary(value, GoBinaryOperator::Equal, GoExpression::nil())
 }
 
 pub(in crate::lowering) fn non_nil_condition(value: GoExpression) -> GoExpression {
-    GoExpression::binary(value, BinaryOp::Ne, GoExpression::nil())
+    GoExpression::binary(value, GoBinaryOperator::NotEqual, GoExpression::nil())
 }
 
 fn nil_interface_condition(value: GoExpression) -> GoExpression {
@@ -48,7 +48,7 @@ impl NilGuard {
             NilGuard::Interface => nil_interface_condition(value),
             NilGuard::Sentinel(sentinel) => GoExpression::binary(
                 value,
-                BinaryOp::Eq,
+                GoBinaryOperator::Equal,
                 GoExpression::literal(sentinel.to_string()),
             ),
         }
@@ -58,11 +58,11 @@ impl NilGuard {
         match self {
             NilGuard::Pointer => non_nil_condition(value),
             NilGuard::Interface => {
-                GoExpression::unary(UnaryOp::Not, nil_interface_condition(value))
+                GoExpression::unary(GoUnaryOperator::Not, nil_interface_condition(value))
             }
             NilGuard::Sentinel(sentinel) => GoExpression::binary(
                 value,
-                BinaryOp::Ne,
+                GoBinaryOperator::NotEqual,
                 GoExpression::literal(sentinel.to_string()),
             ),
         }
@@ -143,13 +143,13 @@ impl Planner<'_> {
 
             (temp_vars.last().unwrap().clone(), tuple)
         } else {
-            let val_var = self.fresh_declared("ret");
+            let value_var = self.fresh_declared("ret");
             let error_variable = self.fresh_declared("ret");
             statements.push(define_many(
-                vec![val_var.clone(), error_variable.clone()],
+                vec![value_var.clone(), error_variable.clone()],
                 call,
             ));
-            (error_variable, GoExpression::identifier(val_var))
+            (error_variable, GoExpression::identifier(value_var))
         }
     }
 
@@ -192,11 +192,11 @@ impl Planner<'_> {
         let err_ty_str = error.go_type(self);
 
         let mut statements = Vec::new();
-        let (error_variable, val_value) =
+        let (error_variable, payload_variable) =
             self.push_go_returns(&mut statements, call, payload, layout);
         let error_value = || GoExpression::identifier(error_variable.clone());
-        let val = || val_value.clone();
-        let nil_check = self.partial_ok_nil_check(ok_ty, val());
+        let payload_value = || payload_variable.clone();
+        let nil_check = self.partial_ok_nil_check(ok_ty, payload_value());
 
         let type_params = [ok_ty_str, err_ty_str];
         let result_ty_str = GoType::prelude("Partial", &type_params);
@@ -209,7 +209,7 @@ impl Planner<'_> {
             partial_variant("Both").constructor,
             type_params.clone(),
             vec![
-                (val(), payload_layout_change),
+                (payload_value(), payload_layout_change),
                 (error_value(), error_layout_change),
             ],
         );
@@ -218,7 +218,7 @@ impl Planner<'_> {
             &sink,
             partial_variant("Ok").constructor,
             type_params.clone(),
-            vec![(val(), payload_layout_change)],
+            vec![(payload_value(), payload_layout_change)],
         );
 
         let then_body = if let Some(check) = nil_check {
@@ -541,7 +541,7 @@ impl Planner<'_> {
                 raw(),
                 GoExpression::binary(
                     raw(),
-                    BinaryOp::Ne,
+                    GoBinaryOperator::NotEqual,
                     GoExpression::literal(sentinel.to_string()),
                 ),
             ],
@@ -611,7 +611,7 @@ impl Planner<'_> {
             .fallible(option_ty)
             .expect("Option type expected");
 
-        let val_vars = if layout.is_flattened()
+        let value_vars = if layout.is_flattened()
             && let Some(arity) = inner_tuple_arity
         {
             self.create_temp_vars("ret", arity)
@@ -621,23 +621,23 @@ impl Planner<'_> {
 
         let value_variable = self.fresh_declared("ret");
 
-        let mut all_vars = val_vars.clone();
+        let mut all_vars = value_vars.clone();
         all_vars.push(value_variable.clone());
         statements.push(define_many(all_vars, call));
 
-        let first_val = GoExpression::identifier(val_vars[0].clone());
-        let val_expression = if layout.is_flattened() && inner_tuple_arity.is_some() {
-            let values = val_vars
+        let first_value = GoExpression::identifier(value_vars[0].clone());
+        let value_expression = if layout.is_flattened() && inner_tuple_arity.is_some() {
+            let values = value_vars
                 .iter()
                 .map(|variable| GoExpression::identifier(variable.clone()))
                 .collect();
             build_tuple_literal(values)
         } else {
-            first_val.clone()
+            first_value.clone()
         };
 
-        let (mut payload_setup, val_expression) = self.plan_optional_payload_layout_change(
-            val_expression,
+        let (mut payload_setup, value_expression) = self.plan_optional_payload_layout_change(
+            value_expression,
             payload_changes.map(|changes| &changes.value),
         );
 
@@ -645,9 +645,11 @@ impl Planner<'_> {
 
         let ok = GoExpression::identifier(value_variable);
         let condition = match nullable_option_nil_guard(&self.facts, option_ty) {
-            Some(guard) => {
-                GoExpression::binary(ok, BinaryOp::And, guard.non_nil_condition(first_val))
-            }
+            Some(guard) => GoExpression::binary(
+                ok,
+                GoBinaryOperator::And,
+                guard.non_nil_condition(first_value),
+            ),
             None => ok,
         };
 
@@ -658,7 +660,7 @@ impl Planner<'_> {
         let some_wrapper = prelude_call(
             fallible.ok_constructor(),
             type_params.clone(),
-            vec![val_expression],
+            vec![value_expression],
         );
         let none_wrapper = prelude_call(fallible.err_constructor(), type_params, Vec::new());
 

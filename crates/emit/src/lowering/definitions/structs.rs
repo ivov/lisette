@@ -6,7 +6,7 @@ use crate::lowering::definitions::top_items::item_doc_text;
 use crate::target::ir::bodies::LoweredBlock;
 use crate::target::ir::declarations::GoDeclaration;
 use crate::target::ir::declarations::{DeclarationKind, FieldDeclaration, TypeParameter};
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::go_expression::GoParameter;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -197,13 +197,18 @@ impl Planner<'_> {
                 let field = |base: &GoIdentifier| {
                     GoExpression::selector(GoExpression::identifier(base.clone()), go_field.clone())
                 };
-                self.equality_test(field(&receiver), field(&other), recipe, BinaryOp::Eq)
+                self.equality_test(
+                    field(&receiver),
+                    field(&other),
+                    recipe,
+                    GoBinaryOperator::Equal,
+                )
             })
             .collect();
 
         let body = comparisons
             .into_iter()
-            .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
+            .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
             .unwrap_or_else(|| GoExpression::literal("true".to_string()));
         let receiver_type = receiver_type(&receiver_generics, name);
         GoDeclaration::function(

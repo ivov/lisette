@@ -25,7 +25,7 @@ use syntax::ast::Expression;
 use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
-pub(super) struct CallArgsContext<'plan, 'facts> {
+pub(super) struct CallArgumentsContext<'plan, 'facts> {
     pub(super) plan: &'plan CallPlan<'facts>,
     pub(super) spread: Option<&'plan Expression>,
     pub(super) capture_boundary: CaptureBoundary,
@@ -35,7 +35,7 @@ pub(super) struct CallArgsContext<'plan, 'facts> {
     pub(super) receiver_binding: Option<(Type, Type)>,
 }
 
-impl CallArgsContext<'_, '_> {
+impl CallArgumentsContext<'_, '_> {
     fn receiver_bound_parameters(&self) -> FxHashSet<String> {
         let mut mapping: FxHashMap<String, Type> = FxHashMap::default();
         if let Some((declared, instantiated)) = &self.receiver_binding {
@@ -49,7 +49,7 @@ impl Planner<'_> {
     pub(super) fn plan_call_args(
         &mut self,
         args: &[Expression],
-        ctx: &CallArgsContext<'_, '_>,
+        ctx: &CallArgumentsContext<'_, '_>,
         leading: Option<ValuePlan>,
     ) -> SequencedValues {
         let operands: Vec<ValuePlan> = args
@@ -84,7 +84,7 @@ impl Planner<'_> {
         &mut self,
         argument: &Expression,
         index: usize,
-        ctx: &CallArgsContext<'_, '_>,
+        ctx: &CallArgumentsContext<'_, '_>,
     ) -> ValuePlan {
         let param = ctx.plan.resolved.abi.param(index);
         let declared_param_ty = param.and_then(|param| param.declared.as_ref());
@@ -133,7 +133,7 @@ impl Planner<'_> {
     fn type_constant_arguments(
         &self,
         operands: Vec<ValuePlan>,
-        ctx: &CallArgsContext<'_, '_>,
+        ctx: &CallArgumentsContext<'_, '_>,
     ) -> Vec<ValuePlan> {
         if ctx.callee_is_builtin || ctx.callee_pins_type_args {
             return operands;
@@ -197,7 +197,7 @@ impl Planner<'_> {
     fn plan_direct_arg(
         &mut self,
         arg: &Expression,
-        ctx: &CallArgsContext<'_, '_>,
+        ctx: &CallArgumentsContext<'_, '_>,
         param: Option<&CallableParamAbi>,
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {

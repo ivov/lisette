@@ -102,7 +102,7 @@ impl Legalizer {
             | LoweredStatement::Const(_)
             | LoweredStatement::Async { .. }
             | LoweredStatement::Define(_)
-            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::VarDeclaration { .. }
             | LoweredStatement::Discard { .. }
             | LoweredStatement::ExpressionStatement { .. }
             | LoweredStatement::UnreachablePanic => {}

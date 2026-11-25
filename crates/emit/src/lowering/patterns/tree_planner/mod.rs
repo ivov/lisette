@@ -20,7 +20,7 @@ use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, direct_first, directed_first,
 };
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::GoExpression;
 
 fn guard_renders_inline(facts: &EmitFacts<'_>, guard: &Expression) -> bool {
@@ -95,7 +95,7 @@ fn contains_call(expression: &Expression) -> bool {
 fn join_and(conditions: Vec<GoExpression>) -> GoExpression {
     conditions
         .into_iter()
-        .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
+        .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
         .expect("join_and requires at least one condition")
 }
 
@@ -110,12 +110,12 @@ enum WalkRole<'a> {
 }
 
 #[derive(Clone, Copy)]
-struct WalkCtx<'a> {
+struct WalkContext<'a> {
     arm_place: &'a PlacePlan<'a>,
     role: WalkRole<'a>,
 }
 
-impl<'a> WalkCtx<'a> {
+impl<'a> WalkContext<'a> {
     fn switch_case(arm_place: &'a PlacePlan<'a>) -> Self {
         Self {
             arm_place,
@@ -203,7 +203,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let mut statements: Vec<Statement> = Vec::new();
         match &tree {
             Decision::Switch(_) | Decision::TypeSwitch { .. } => {
-                let ctx = WalkCtx::switch_case(place);
+                let ctx = WalkContext::switch_case(place);
                 self.walk(&mut statements, &tree, &ctx);
             }
             Decision::Success(leaf) => {
@@ -307,7 +307,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let skip_wrapper = !use_direct_return && unguarded_exit && all_arms_diverge;
 
         if use_direct_return || skip_wrapper {
-            let ctx = WalkCtx::retry_loop(place, None);
+            let ctx = WalkContext::retry_loop(place, None);
             self.walk(statements, tree, &ctx);
             if use_direct_return && !root_has_unguarded_terminal {
                 statements.push(LoweredStatement::UnreachablePanic.into());
@@ -325,7 +325,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .planner
             .scope
             .fresh_binding_go_name("match", self.planner.names);
-        let ctx = WalkCtx::retry_loop(place, Some(label.as_str()));
+        let ctx = WalkContext::retry_loop(place, Some(label.as_str()));
         let mut body: Vec<Statement> = Vec::new();
         self.walk(&mut body, tree, &ctx);
         if !unguarded_exit {
@@ -341,7 +341,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         );
     }
 
-    fn walk(&mut self, statements: &mut Vec<Statement>, decision: &Decision, ctx: &WalkCtx) {
+    fn walk(&mut self, statements: &mut Vec<Statement>, decision: &Decision, ctx: &WalkContext) {
         match decision {
             Decision::Success(leaf) => self.walk_leaf(statements, leaf, ctx),
             Decision::Guard(guard) => self.walk_guard(statements, guard, ctx),
@@ -364,7 +364,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn walk_leaf(&mut self, statements: &mut Vec<Statement>, leaf: &ArmLeaf, ctx: &WalkCtx) {
+    fn walk_leaf(&mut self, statements: &mut Vec<Statement>, leaf: &ArmLeaf, ctx: &WalkContext) {
         let wrap = ctx.leaf_scope_explicit();
         let arm_body = &*self.arms[leaf.arm_index].expression;
         let (lowered, declares) = self.with_optional_scope(wrap, |this| {
@@ -395,7 +395,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn lower_arm_leaf(&mut self, statements: &mut Vec<Statement>, arm_index: usize, ctx: &WalkCtx) {
+    fn lower_arm_leaf(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        arm_index: usize,
+        ctx: &WalkContext,
+    ) {
         let mut body_statements: Vec<Statement> = Vec::new();
         self.lower_arm_body(&mut body_statements, arm_index, ctx.arm_place);
         let divergence = capture_diverge(body_statements, statements);
@@ -408,9 +413,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         test: BranchTest,
         then_branch: &Decision,
         else_branch: &Decision,
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
     ) {
-        let inner = WalkCtx::switch_case(ctx.arm_place);
+        let inner = WalkContext::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
             this.planner
                 .scope
@@ -440,7 +445,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         apply_leaf_terminator(statements, ctx, divergence);
     }
 
-    fn walk_guard(&mut self, statements: &mut Vec<Statement>, guard: &GuardedLeaf, ctx: &WalkCtx) {
+    fn walk_guard(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        guard: &GuardedLeaf,
+        ctx: &WalkContext,
+    ) {
         let GuardedLeaf {
             leaf: ArmLeaf {
                 arm_index,
@@ -513,7 +523,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_else_or_flat(
         &mut self,
         decision: &Decision,
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
         preceding: Divergence,
     ) -> ElseArm {
         match decision {
@@ -527,7 +537,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_leaf_else_or_flat(
         &mut self,
         leaf: &ArmLeaf,
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
         preceding: Divergence,
     ) -> ElseArm {
         if leaf.bindings.is_empty() && body_is_unit_or_empty(&self.arms[leaf.arm_index].expression)
@@ -641,7 +651,11 @@ fn capture_diverge(body_statements: Vec<Statement>, statements: &mut Vec<Stateme
     divergence
 }
 
-fn apply_leaf_terminator(statements: &mut Vec<Statement>, ctx: &WalkCtx, divergence: Divergence) {
+fn apply_leaf_terminator(
+    statements: &mut Vec<Statement>,
+    ctx: &WalkContext,
+    divergence: Divergence,
+) {
     if let WalkRole::RetryLoop {
         break_label: Some(label),
         ..

@@ -182,12 +182,12 @@ impl Planner<'_> {
 
         if array_info.is_none() {
             if !rest.is_present() {
-                collector.checks.push(Check::SliceLenEq {
+                collector.checks.push(Check::SliceLengthEqual {
                     path: path.clone(),
                     length: prefix.len(),
                 });
             } else if !prefix.is_empty() {
-                collector.checks.push(Check::SliceLenGe {
+                collector.checks.push(Check::SliceLengthAtLeast {
                     path: path.clone(),
                     min_length: prefix.len(),
                 });
@@ -280,21 +280,30 @@ impl Planner<'_> {
             !pattern_has_bindings(pattern),
             "split or-patterns that bind names with `split_binding_or_patterns` before collection"
         );
-        let alt_collectors: Vec<PatternInfo> = patterns
+        let alternative_collectors: Vec<PatternInfo> = patterns
             .iter()
             .map(|p| {
-                let mut alt_collector = PatternInfo::new();
-                self.collect_checks_and_bindings(path, p, path_ty, path_layout, &mut alt_collector);
-                alt_collector
+                let mut alternative_collector = PatternInfo::new();
+                self.collect_checks_and_bindings(
+                    path,
+                    p,
+                    path_ty,
+                    path_layout,
+                    &mut alternative_collector,
+                );
+                alternative_collector
             })
             .collect();
 
-        if alt_collectors.iter().any(|c| c.checks.is_empty()) {
+        if alternative_collectors.iter().any(|c| c.checks.is_empty()) {
             return;
         }
 
         collector.checks.push(Check::Or {
-            alternatives: alt_collectors.into_iter().map(|c| c.checks).collect(),
+            alternatives: alternative_collectors
+                .into_iter()
+                .map(|c| c.checks)
+                .collect(),
         });
     }
 

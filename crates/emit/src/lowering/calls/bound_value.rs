@@ -5,7 +5,7 @@ use crate::lowering::calls::predicates::Polarity;
 
 use crate::lookup::state::scope::PairStatusKind;
 use crate::target::ir::bodies::{Definition, PairCondition, Statement, define, discard};
-use crate::target::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 
@@ -79,7 +79,9 @@ impl LoweredPair {
         let status = GoExpression::identifier(self.status.clone());
         let status = match (self.status_kind, polarity) {
             (PairStatusKind::Ok, Polarity::Positive) => status,
-            (PairStatusKind::Ok, Polarity::Negated) => GoExpression::unary(UnaryOp::Not, status),
+            (PairStatusKind::Ok, Polarity::Negated) => {
+                GoExpression::unary(GoUnaryOperator::Not, status)
+            }
             (PairStatusKind::Error, Polarity::Positive) => nil_condition(status),
             (PairStatusKind::Error, Polarity::Negated) => non_nil_condition(status),
         };
@@ -91,8 +93,8 @@ impl LoweredPair {
             } => {
                 let value = GoExpression::identifier(name.clone());
                 let (nil_condition, operator) = match polarity {
-                    Polarity::Positive => (guard.non_nil_condition(value), BinaryOp::And),
-                    Polarity::Negated => (guard.nil_condition(value), BinaryOp::Or),
+                    Polarity::Positive => (guard.non_nil_condition(value), GoBinaryOperator::And),
+                    Polarity::Negated => (guard.nil_condition(value), GoBinaryOperator::Or),
                 };
                 GoExpression::binary(status, operator, nil_condition)
             }
@@ -278,7 +280,7 @@ impl BoundValue {
                 plain(GoExpression::identifier(flag.clone()))
             }
             BoundSource::Found { flag, .. } => plain(GoExpression::unary(
-                UnaryOp::Not,
+                GoUnaryOperator::Not,
                 GoExpression::identifier(flag.clone()),
             )),
         }

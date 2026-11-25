@@ -1,6 +1,6 @@
 use crate::target::ir::go_expression::Position;
 use crate::target::ir::go_expression::{
-    BinaryOp, Expressions, FunctionLiteralLayout, GoExpressionNode, TreeVisitor,
+    Expressions, FunctionLiteralLayout, GoBinaryOperator, GoExpressionNode, TreeVisitor,
 };
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
@@ -13,7 +13,7 @@ pub(crate) fn define(name: impl Into<GoIdentifier>, value: GoExpression) -> Stat
 }
 
 pub(crate) fn declare(name: impl Into<GoIdentifier>, go_type: GoType) -> Statement {
-    LoweredStatement::VarDecl {
+    LoweredStatement::VarDeclaration {
         name: name.into(),
         go_type,
         value: None,
@@ -331,7 +331,7 @@ pub(crate) enum LoweredStatement {
     Select(SelectStatementPlan),
     Switch(SwitchStatementPlan),
     Define(Definition),
-    VarDecl {
+    VarDeclaration {
         name: GoIdentifier,
         go_type: GoType,
         value: Option<GoExpression>,
@@ -385,8 +385,8 @@ impl AsyncKind {
 pub(crate) enum CompoundKind {
     Increment,
     Decrement,
-    OpAssign {
-        operator: BinaryOp,
+    OperatorAssign {
+        operator: GoBinaryOperator,
         rhs: GoExpression,
     },
 }
@@ -854,7 +854,7 @@ impl LoweredStatement {
 
     pub(crate) fn own_types(&self, visit: &mut impl FnMut(&GoType)) {
         match self {
-            LoweredStatement::VarDecl { go_type, .. }
+            LoweredStatement::VarDeclaration { go_type, .. }
             | LoweredStatement::Const(ConstPlan {
                 go_type: Some(go_type),
                 ..
@@ -896,7 +896,7 @@ impl LoweredStatement {
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound { target, kind } => {
                     target.node().walk(visit);
-                    if let CompoundKind::OpAssign { rhs, .. } = kind {
+                    if let CompoundKind::OperatorAssign { rhs, .. } = kind {
                         rhs.node().walk(visit);
                     }
                 }
@@ -941,7 +941,7 @@ impl LoweredStatement {
                 }
             }
             LoweredStatement::Define(definition) => definition.value.node().walk(visit),
-            LoweredStatement::VarDecl { value, .. } => {
+            LoweredStatement::VarDeclaration { value, .. } => {
                 if let Some(value) = value {
                     value.node().walk(visit);
                 }
@@ -987,12 +987,12 @@ impl LoweredStatement {
             | LoweredStatement::Body(_)
             | LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
-            | LoweredStatement::VarDecl { value: None, .. }
+            | LoweredStatement::VarDeclaration { value: None, .. }
             | LoweredStatement::UnreachablePanic => {}
             LoweredStatement::Return(values) => values.iter_mut().for_each(visit),
             LoweredStatement::Assign(AssignForm::Compound { target, kind }) => {
                 visit(target);
-                if let CompoundKind::OpAssign { rhs, .. } = kind {
+                if let CompoundKind::OperatorAssign { rhs, .. } = kind {
                     visit(rhs);
                 }
             }
@@ -1025,7 +1025,7 @@ impl LoweredStatement {
             }
             LoweredStatement::Const(ConstPlan { value, .. })
             | LoweredStatement::Define(Definition { value, .. })
-            | LoweredStatement::VarDecl {
+            | LoweredStatement::VarDeclaration {
                 value: Some(value), ..
             }
             | LoweredStatement::Async { call: value, .. }
@@ -1074,7 +1074,7 @@ impl LoweredStatement {
             | LoweredStatement::Assign(_)
             | LoweredStatement::Async { .. }
             | LoweredStatement::Define(_)
-            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::VarDeclaration { .. }
             | LoweredStatement::Discard { .. }
             | LoweredStatement::ExpressionStatement { .. }
             | LoweredStatement::UnreachablePanic => {}
@@ -1086,7 +1086,7 @@ impl LoweredStatement {
             LoweredStatement::Define(Definition { names, .. }) => {
                 names.iter().any(|name| name.id() == Some(id))
             }
-            LoweredStatement::VarDecl { name, .. } => name.id() == Some(id),
+            LoweredStatement::VarDeclaration { name, .. } => name.id() == Some(id),
             _ => false,
         })
     }
@@ -1097,7 +1097,7 @@ impl LoweredStatement {
                 [name] => name,
                 _ => return false,
             },
-            LoweredStatement::VarDecl {
+            LoweredStatement::VarDeclaration {
                 name,
                 value: Some(_),
                 ..
@@ -1122,7 +1122,7 @@ impl LoweredStatement {
             | LoweredStatement::Switch(_)
             | LoweredStatement::Async { .. }
             | LoweredStatement::Define(_)
-            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::VarDeclaration { .. }
             | LoweredStatement::Discard { .. }
             | LoweredStatement::UnreachablePanic
             | LoweredStatement::Return(_) => true,
@@ -1153,7 +1153,7 @@ impl LoweredStatement {
             | LoweredStatement::Async { .. }
             | LoweredStatement::Const(_)
             | LoweredStatement::Define(_)
-            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::VarDeclaration { .. }
             | LoweredStatement::Discard { .. }
             | LoweredStatement::ExpressionStatement { .. } => FlowSummary::next(),
         }

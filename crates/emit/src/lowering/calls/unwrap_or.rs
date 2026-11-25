@@ -309,7 +309,7 @@ impl<'p> Planner<'p> {
         let (coercion_setup, default) = coercion.lower(self, default);
         statements.extend(coercion_setup);
         statements.push(if typed {
-            LoweredStatement::VarDecl {
+            LoweredStatement::VarDeclaration {
                 name: value.clone(),
                 go_type: self.go_type(ty),
                 value: Some(default),

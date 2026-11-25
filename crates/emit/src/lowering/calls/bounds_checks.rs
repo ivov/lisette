@@ -3,7 +3,7 @@ use crate::Planner;
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::Statement;
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 
 pub(in crate::lowering) struct BoundsCheckedIndex {
@@ -27,15 +27,23 @@ impl BoundsCheckedIndex {
             .filter(|value| value.parse::<u64>().is_ok())
         {
             let operator = match polarity {
-                Polarity::Positive => BinaryOp::Gt,
-                Polarity::Negated if literal == "0" => BinaryOp::Eq,
-                Polarity::Negated => BinaryOp::Le,
+                Polarity::Positive => GoBinaryOperator::GreaterThan,
+                Polarity::Negated if literal == "0" => GoBinaryOperator::Equal,
+                Polarity::Negated => GoBinaryOperator::LessThanOrEqual,
             };
             return GoExpression::binary(length, operator, self.index.clone());
         }
         let (lower, join, upper) = match polarity {
-            Polarity::Positive => (BinaryOp::Ge, BinaryOp::And, BinaryOp::Lt),
-            Polarity::Negated => (BinaryOp::Lt, BinaryOp::Or, BinaryOp::Ge),
+            Polarity::Positive => (
+                GoBinaryOperator::GreaterThanOrEqual,
+                GoBinaryOperator::And,
+                GoBinaryOperator::LessThan,
+            ),
+            Polarity::Negated => (
+                GoBinaryOperator::LessThan,
+                GoBinaryOperator::Or,
+                GoBinaryOperator::GreaterThanOrEqual,
+            ),
         };
         GoExpression::binary(
             GoExpression::binary(

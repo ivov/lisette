@@ -8,7 +8,7 @@ use crate::target::ir::bodies::{
     ElseArm, ElseLayout, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
     directed_first, with_setup,
 };
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::GoExpression;
 use syntax::ast::{
     BinaryOperator, Expression, ExpressionId, IfLetAlternative, MatchArm, Pattern, Span,
@@ -183,7 +183,7 @@ impl Planner<'_> {
                 && let Some((outer_setup, current)) = levels.pop()
             {
                 let condition =
-                    GoExpression::binary(current.condition, BinaryOp::And, next.condition);
+                    GoExpression::binary(current.condition, GoBinaryOperator::And, next.condition);
                 let merged = PairCondition {
                     initializer: current.initializer,
                     condition,

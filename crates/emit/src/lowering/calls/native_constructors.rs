@@ -10,7 +10,7 @@ use crate::output::finish::function_literals::function_literal;
 use crate::output::render::expressions::rendered;
 use crate::target::ir::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
 use crate::target::ir::go_expression::{
-    BinaryOp, CompositeLayout, FunctionLiteralLayout, GoParameter,
+    CompositeLayout, FunctionLiteralLayout, GoBinaryOperator, GoParameter,
 };
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::types::go_type::{ChannelDirection, GoType};
@@ -96,13 +96,13 @@ impl Planner<'_> {
                 ))
             }
             (NativeTypeKind::Map, "new") => {
-                let (key, val) = map_entry_types(&self.facts, ctx.function);
-                let (key, val) = (self.go_type(&key), self.go_type(&val));
+                let (key, value) = map_entry_types(&self.facts, ctx.function);
+                let (key, value) = (self.go_type(&key), self.go_type(&value));
                 Some(ValuePlan::computed(
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(GoType::map_of(&key, &val))],
+                        vec![GoExpression::type_name(GoType::map_of(&key, &value))],
                     ),
                 ))
             }
@@ -196,7 +196,7 @@ impl Planner<'_> {
                                     GoExpression::external_name("len".to_string()),
                                     vec![slice()],
                                 ),
-                                BinaryOp::Ne,
+                                GoBinaryOperator::NotEqual,
                                 literal(length.to_string()),
                             ),
                             LoweredBlock {

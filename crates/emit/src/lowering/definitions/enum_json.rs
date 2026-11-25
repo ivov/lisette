@@ -11,7 +11,7 @@ use crate::target::ir::bodies::{
 use crate::target::ir::declarations::{
     ConstantDeclaration, DeclarationKind, FunctionSignature, GoDeclaration, TypeParameter,
 };
-use crate::target::ir::go_expression::{BinaryOp, CompositeLayout, GoParameter};
+use crate::target::ir::go_expression::{CompositeLayout, GoBinaryOperator, GoParameter};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::{self, GeneratedPackage};
@@ -240,12 +240,12 @@ impl EnumLayout {
         let names = JsonNames {
             data: fresh("data"),
             name: fresh("name"),
-            obj: fresh("obj"),
+            object: fresh("obj"),
             key: fresh("key"),
-            val: fresh("val"),
+            value: fresh("val"),
             inner: fresh("inner"),
-            v: fresh("v"),
-            arr: fresh("arr"),
+            field_value: fresh("v"),
+            array: fresh("arr"),
             receiver,
         };
 
@@ -424,12 +424,12 @@ impl EnumLayout {
         body: &mut Vec<Statement>,
     ) {
         body.push(declare(
-            names.obj.clone(),
+            names.object.clone(),
             GoType::map_of(&GoType::new("string"), &json_raw_message()),
         ));
         body.push(planner.json_guard(
             GoExpression::identifier(names.data.clone()),
-            GoExpression::identifier(names.obj.clone()),
+            GoExpression::identifier(names.object.clone()),
             Some(vec![json_error(format!("invalid {} JSON", self.enum_name))]),
             Polarity::Negated,
         ));
@@ -447,8 +447,8 @@ impl EnumLayout {
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Range {
                     key: Some(names.key.clone()),
-                    value: Some(names.val.clone()),
-                    iterable: GoExpression::identifier(names.obj.clone()),
+                    value: Some(names.value.clone()),
+                    iterable: GoExpression::identifier(names.object.clone()),
                 },
                 body: LoweredBlock {
                     statements: vec![choice],
@@ -474,12 +474,12 @@ struct JsonNames {
     receiver: GoIdentifier,
     data: GoIdentifier,
     name: GoIdentifier,
-    obj: GoIdentifier,
+    object: GoIdentifier,
     key: GoIdentifier,
-    val: GoIdentifier,
+    value: GoIdentifier,
     inner: GoIdentifier,
-    v: GoIdentifier,
-    arr: GoIdentifier,
+    field_value: GoIdentifier,
+    array: GoIdentifier,
 }
 
 fn json_raw_message() -> GoType {
@@ -565,8 +565,8 @@ impl Planner<'_> {
         let condition = GoExpression::binary(
             GoExpression::identifier(error.clone()),
             match polarity {
-                Polarity::Positive => BinaryOp::Eq,
-                Polarity::Negated => BinaryOp::Ne,
+                Polarity::Positive => GoBinaryOperator::Equal,
+                Polarity::Negated => GoBinaryOperator::NotEqual,
             },
             GoExpression::nil(),
         );
@@ -620,7 +620,7 @@ fn json_payload_variant_case(
             GoType::map_of(&GoType::new("string"), &json_raw_message()),
         ));
         body.push(planner.json_guard(
-            GoExpression::identifier(names.val.clone()),
+            GoExpression::identifier(names.value.clone()),
             GoExpression::identifier(names.inner.clone()),
             None,
             Polarity::Negated,
@@ -631,7 +631,7 @@ fn json_payload_variant_case(
                 GoExpression::identifier(ok.clone()),
                 LoweredBlock {
                     statements: vec![planner.json_guard(
-                        GoExpression::identifier(names.v.clone()),
+                        GoExpression::identifier(names.field_value.clone()),
                         member(&names.receiver, &field.go_name),
                         None,
                         Polarity::Negated,
@@ -641,7 +641,7 @@ fn json_payload_variant_case(
             );
 
             plan.initializer = Some(GoDefinition {
-                names: vec![names.v.clone(), ok],
+                names: vec![names.field_value.clone(), ok],
                 value: GoExpression::index(
                     GoExpression::identifier(names.inner.clone()),
                     string(&field.source_name),
@@ -652,29 +652,29 @@ fn json_payload_variant_case(
         body.push(plain_return(GoExpression::nil()));
     } else if variant.json_payload() == JsonPayload::Value {
         body.push(plain_return(unmarshal(
-            GoExpression::identifier(names.val.clone()),
+            GoExpression::identifier(names.value.clone()),
             member(&names.receiver, &variant.fields[0].go_name),
         )));
     } else {
         body.push(declare(
-            names.arr.clone(),
+            names.array.clone(),
             GoType::slice_of(&json_raw_message()),
         ));
         body.push(planner.json_guard(
-            GoExpression::identifier(names.val.clone()),
-            GoExpression::identifier(names.arr.clone()),
+            GoExpression::identifier(names.value.clone()),
+            GoExpression::identifier(names.array.clone()),
             None,
             Polarity::Negated,
         ));
         let len = GoExpression::call(
             GoExpression::external_name("len".to_string()),
-            vec![GoExpression::identifier(names.arr.clone())],
+            vec![GoExpression::identifier(names.array.clone())],
         );
         body.push(
             LoweredStatement::If(IfPlan::plain(
                 GoExpression::binary(
                     len.clone(),
-                    BinaryOp::Ne,
+                    GoBinaryOperator::NotEqual,
                     GoExpression::literal(variant.fields.len().to_string()),
                 ),
                 LoweredBlock {
@@ -694,7 +694,7 @@ fn json_payload_variant_case(
             ))
             .into(),
         );
-        body.extend(planner.unmarshal_tuple_fields(variant, &names.arr, &names.receiver));
+        body.extend(planner.unmarshal_tuple_fields(variant, &names.array, &names.receiver));
     }
     case(string(&variant.name), body)
 }

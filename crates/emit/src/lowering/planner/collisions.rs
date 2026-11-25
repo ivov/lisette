@@ -1,7 +1,7 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use diagnostics::{LisetteDiagnostic, emit as emit_diag};
+use diagnostics::{LisetteDiagnostic, emit as emit_diagnostic};
 use syntax::ast::{Attribute, Generic};
 use syntax::ast::{EnumVariant, Expression, Span, StructFields, VariantFields, Visibility};
 use syntax::attributes;
@@ -30,7 +30,9 @@ impl SpanMap {
             let [first, second, rest @ ..] = spans.as_slice() else {
                 continue;
             };
-            diagnostics.push(emit_diag::go_name_collision(&go, first, second, rest, None));
+            diagnostics.push(emit_diagnostic::go_name_collision(
+                &go, first, second, rest, None,
+            ));
         }
     }
 
@@ -357,13 +359,13 @@ fn collect_enum_payload_fields(
 
 fn check_reserved_prefix(go: &str, span: &Span, out: &mut Vec<LisetteDiagnostic>) {
     if let Some(prefix) = go_name::reserved_prefix_of(go) {
-        out.push(emit_diag::reserved_go_prefix(go, prefix, span));
+        out.push(emit_diagnostic::reserved_go_prefix(go, prefix, span));
     }
 }
 
 fn check_reserved_qualifier(go: &str, span: &Span, out: &mut Vec<LisetteDiagnostic>) {
     if go_name::is_generated_import_qualifier(go) {
-        out.push(emit_diag::reserved_go_qualifier(go, span));
+        out.push(emit_diagnostic::reserved_go_qualifier(go, span));
     }
 }
 

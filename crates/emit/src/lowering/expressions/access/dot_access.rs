@@ -438,14 +438,18 @@ impl Planner<'_> {
         match result_ty {
             Type::Function(f) => {
                 let Type::Nominal {
-                    params: ret_params, ..
+                    params: return_type_arguments,
+                    ..
                 } = f.return_type.as_ref()
                 else {
                     return None;
                 };
 
-                let type_args =
-                    self.constructor_reference_type_arguments(&f.params, ret_params, ctx);
+                let type_args = self.constructor_reference_type_arguments(
+                    &f.params,
+                    return_type_arguments,
+                    ctx,
+                );
                 Some(GoExpression::instantiation(make_fn, type_args))
             }
             Type::Nominal { params, .. } => {

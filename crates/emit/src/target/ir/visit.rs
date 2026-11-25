@@ -219,7 +219,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                 visitor.assignment_target(target.node());
                 visit_expression(target.node_mut(), visitor);
                 match kind {
-                    CompoundKind::OpAssign { rhs, .. } => {
+                    CompoundKind::OperatorAssign { rhs, .. } => {
                         visit_expression(rhs.node_mut(), visitor);
                     }
                     CompoundKind::Increment | CompoundKind::Decrement => {}
@@ -235,7 +235,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
         LoweredStatement::Select(plan) => visit_select(plan, visitor),
         LoweredStatement::Switch(plan) => visit_switch(plan, visitor),
         LoweredStatement::Define(definition) => visit_definition(definition, visitor),
-        LoweredStatement::VarDecl { name, value, .. } => {
+        LoweredStatement::VarDeclaration { name, value, .. } => {
             if let Some(value) = value {
                 visit_expression(value.node_mut(), visitor);
             }

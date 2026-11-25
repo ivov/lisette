@@ -6,7 +6,7 @@ use crate::target::ir::bodies::{
     SwitchStatementPlan,
 };
 use crate::target::ir::declarations::GoDeclaration;
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::go_expression::{CompositeLayout, GoParameter};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -83,7 +83,7 @@ impl Planner<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Enum {
-                    variants: sem_variants,
+                    variants: source_variants,
                     ..
                 },
             ..
@@ -92,7 +92,7 @@ impl Planner<'_> {
             return None;
         };
 
-        let sem_variants = sem_variants.clone();
+        let source_variants = source_variants.clone();
         let layout = self
             .facts
             .enum_layout(enum_id)
@@ -107,11 +107,11 @@ impl Planner<'_> {
 
         let mut recipes = self.facts.synthesized_field_equalities(enum_id).iter();
         let mut cases: Vec<SwitchCasePlan> = Vec::new();
-        for (sem_variant, layout_variant) in sem_variants.iter().zip(layout.variants.iter()) {
-            if sem_variant.fields.is_empty() {
+        for (source_variant, layout_variant) in source_variants.iter().zip(layout.variants.iter()) {
+            if source_variant.fields.is_empty() {
                 continue;
             }
-            let comparisons: Vec<GoExpression> = sem_variant
+            let comparisons: Vec<GoExpression> = source_variant
                 .fields
                 .iter()
                 .zip(layout_variant.fields.iter())
@@ -131,13 +131,18 @@ impl Planner<'_> {
                     let recipe = recipes
                         .next()
                         .expect("internal error: the checker records the equality of every field");
-                    self.equality_test(field(&receiver), field(&other), recipe, BinaryOp::Eq)
+                    self.equality_test(
+                        field(&receiver),
+                        field(&other),
+                        recipe,
+                        GoBinaryOperator::Equal,
+                    )
                 })
                 .collect();
 
             let value = comparisons
                 .into_iter()
-                .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
+                .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
                 .unwrap_or_else(|| GoExpression::literal("true".to_string()));
             cases.push(SwitchCasePlan {
                 labels: vec![GoExpression::external_name(
@@ -239,13 +244,13 @@ fn lower_enum_equals_body(
     if cases.is_empty() {
         vec![plain_return(GoExpression::binary(
             left,
-            BinaryOp::Eq,
+            GoBinaryOperator::Equal,
             right,
         ))]
     } else {
         vec![
             LoweredStatement::If(IfPlan::plain(
-                GoExpression::binary(left.clone(), BinaryOp::Ne, right),
+                GoExpression::binary(left.clone(), GoBinaryOperator::NotEqual, right),
                 LoweredBlock {
                     statements: vec![plain_return(GoExpression::literal("false".to_string()))],
                 },

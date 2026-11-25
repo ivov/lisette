@@ -9,7 +9,7 @@ use crate::target::ir::bodies::{
     AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement,
 };
 use crate::target::ir::declarations::GoDeclaration;
-use crate::target::ir::go_expression::{BinaryOp, GoParameter};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoParameter};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::{self, testing_qualifier, testkit_qualifier};
@@ -219,7 +219,7 @@ impl Planner<'_> {
                 testkit("ErrOperand", vec![error.clone()]),
             ]);
             let mut check = IfPlan::plain(
-                GoExpression::binary(error, BinaryOp::Ne, GoExpression::nil()),
+                GoExpression::binary(error, GoBinaryOperator::NotEqual, GoExpression::nil()),
                 LoweredBlock {
                     statements: vec![effect_statement(testkit("Fail", arguments))],
                 },

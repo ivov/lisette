@@ -1,6 +1,6 @@
 use super::chains::split_chain_with_catchall_lift;
 use super::{
-    BranchTest, MatchSubject, TreePlanner, WalkCtx, apply_leaf_terminator, capture_diverge,
+    BranchTest, MatchSubject, TreePlanner, WalkContext, apply_leaf_terminator, capture_diverge,
     contains_call, join_and,
 };
 use crate::lowering::patterns::tree_planner::guard_renders_inline;
@@ -10,7 +10,7 @@ use syntax::go_names::ENUM_TAG_FIELD;
 use crate::target::ir::bodies::GoUses;
 
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
-use crate::lookup::state::bindings::InlineExpr;
+use crate::lookup::state::bindings::InlineExpression;
 use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, Decision, GuardedLeaf, PatternBinding, SwitchBranch,
     SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch, boolean_literal, render_condition,
@@ -20,7 +20,7 @@ use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
-use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::types::go_type::GoType;
@@ -187,7 +187,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                             .map(|label| {
                                 switch_branch_condition(&rendered_path, &switch.kind, &shape, label)
                             })
-                            .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
+                            .reduce(|left, right| {
+                                GoExpression::binary(left, GoBinaryOperator::Or, right)
+                            })
                             .expect("a switch branch has a label"),
                     );
                     let flattened =
@@ -253,16 +255,16 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
             let composable = binding.path.render(self.subject.root());
             let stability = self.planner.path_read_stability(&composable);
-            self.planner.scope.bind_inline_expr(
+            self.planner.scope.bind_inline_expression(
                 &binding.lisette_name,
                 &binding.binding_ids,
-                InlineExpr::new(composable, stability),
+                InlineExpression::new(composable, stability),
             );
         }
     }
 
     fn lower_flat_case_body(&mut self, case: &FlatCase, place: &PlacePlan) -> LoweredBlock {
-        let ctx = WalkCtx::switch_case(place);
+        let ctx = WalkContext::switch_case(place);
         self.with_scope(|this| {
             let mut body: Vec<Statement> = Vec::new();
             match case.body {
@@ -292,7 +294,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         statements: &mut Vec<Statement>,
         switch: &ValueSwitch,
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
     ) {
         let ValueSwitch {
             path,
@@ -329,7 +331,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let test = BranchTest {
                     condition: GoExpression::binary(
                         subject,
-                        BinaryOp::Eq,
+                        GoBinaryOperator::Equal,
                         branches[0].label.clone(),
                     ),
                     else_label: Some(branches[1].label.clone()),
@@ -346,7 +348,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             SwitchShape::SingleArm => {
                 let branch = &branches[0];
                 let Some(fallback) = fallback else {
-                    let inner = WalkCtx::switch_case(ctx.arm_place);
+                    let inner = WalkContext::switch_case(ctx.arm_place);
                     let mut branch_statements: Vec<Statement> = Vec::new();
                     self.walk(&mut branch_statements, &branch.decision, &inner);
                     let divergence = capture_diverge(branch_statements, statements);
@@ -356,7 +358,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
                 let condition = GoExpression::binary(
                     render_switch_expression(rendered_path, kind),
-                    BinaryOp::Eq,
+                    GoBinaryOperator::Equal,
                     branch.label.clone(),
                 );
                 self.walk_condition_branch(
@@ -371,8 +373,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 );
             }
             SwitchShape::Multi => {
-                let expr = render_switch_expression(rendered_path, kind);
-                let switch = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
+                let expression = render_switch_expression(rendered_path, kind);
+                let switch = self.lower_value_switch(expression, branches, fallback, ctx.arm_place);
                 let divergence = capture_diverge(switch, statements);
                 apply_leaf_terminator(statements, ctx, divergence);
             }
@@ -391,7 +393,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .iter()
             .map(|branch| {
                 let established = branch.extra_labels.is_empty().then(|| {
-                    GoExpression::binary(subject.clone(), BinaryOp::Eq, branch.label.clone())
+                    GoExpression::binary(
+                        subject.clone(),
+                        GoBinaryOperator::Equal,
+                        branch.label.clone(),
+                    )
                 });
                 let labels = iter::once(&branch.label)
                     .chain(&branch.extra_labels)
@@ -489,7 +495,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 this.planner.scope.establish_condition(condition);
             }
             let mut body: Vec<Statement> = Vec::new();
-            this.walk(&mut body, decision, &WalkCtx::switch_case(place));
+            this.walk(&mut body, decision, &WalkContext::switch_case(place));
             body
         });
 
@@ -506,7 +512,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         place: &PlacePlan,
     ) -> Option<LoweredBlock> {
         let default_decision = default?;
-        let ctx = WalkCtx::switch_case(place);
+        let ctx = WalkContext::switch_case(place);
         let body = self.with_scope(|this| {
             let mut body: Vec<Statement> = Vec::new();
             this.walk(&mut body, default_decision, &ctx);
@@ -555,7 +561,7 @@ fn switch_branch_condition(
     }
     GoExpression::binary(
         render_switch_expression(rendered_path.clone(), kind),
-        BinaryOp::Eq,
+        GoBinaryOperator::Equal,
         label.clone(),
     )
 }

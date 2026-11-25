@@ -25,7 +25,7 @@ use crate::target::ir::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PairCondition,
     Statement, SwitchKind, assign, define, define_many, discard,
 };
-use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::source_name::SourceName;

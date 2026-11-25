@@ -84,7 +84,15 @@ impl EnumLayout {
         let variants: Vec<_> = variants
             .iter()
             .enumerate()
-            .map(|(vi, v)| Self::compute_variant_layout(vi, v, enum_id, &slots[vi], definition))
+            .map(|(variant_index, v)| {
+                Self::compute_variant_layout(
+                    variant_index,
+                    v,
+                    enum_id,
+                    &slots[variant_index],
+                    definition,
+                )
+            })
             .collect();
         Self {
             enum_name,
@@ -136,19 +144,19 @@ impl EnumLayout {
             .fields
             .iter()
             .enumerate()
-            .map(|(fi, field)| {
+            .map(|(field_index, field)| {
                 let source_name = if field_shape == EnumFieldShape::Struct {
                     field.name.to_string()
                 } else {
-                    fi.to_string()
+                    field_index.to_string()
                 };
 
-                let go_name = slots[fi].clone();
+                let go_name = slots[field_index].clone();
 
                 let kind = if enum_payload_pointer_wrapped(
                     enum_id,
                     variant_index,
-                    fi,
+                    field_index,
                     &field.ty,
                     &definition,
                 ) {

@@ -3,12 +3,12 @@ use crate::target::ir::values::{GoExpression, Stability};
 use syntax::types::Type;
 
 #[derive(Clone, Debug)]
-pub(crate) struct InlineExpr {
+pub(crate) struct InlineExpression {
     expression: GoExpression,
     stability: Stability,
 }
 
-impl InlineExpr {
+impl InlineExpression {
     pub(crate) fn new(expression: GoExpression, stability: Stability) -> Self {
         Self {
             expression: expression.without_positions(),
@@ -29,7 +29,7 @@ impl InlineExpr {
 pub(crate) enum BindingValue {
     GoName(GoIdentifier),
     GoConst(GoIdentifier),
-    InlineExpr(InlineExpr),
+    InlineExpression(InlineExpression),
     Components(ComponentBinding),
     TupleComponents(TupleBinding),
 }
@@ -73,7 +73,7 @@ impl BindingValue {
     pub(crate) fn as_go_name(&self) -> Option<&str> {
         match self {
             BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.spelling()),
-            BindingValue::InlineExpr(_)
+            BindingValue::InlineExpression(_)
             | BindingValue::Components(_)
             | BindingValue::TupleComponents(_) => None,
         }
@@ -82,7 +82,7 @@ impl BindingValue {
     pub(crate) fn as_go_identifier(&self) -> Option<&GoIdentifier> {
         match self {
             BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name),
-            BindingValue::InlineExpr(_)
+            BindingValue::InlineExpression(_)
             | BindingValue::Components(_)
             | BindingValue::TupleComponents(_) => None,
         }
@@ -94,7 +94,7 @@ impl BindingValue {
         };
         match self {
             Self::GoName(name) | Self::GoConst(name) => name.id() == Some(id),
-            Self::InlineExpr(inline) => inline.expression().node().mentions_local(local),
+            Self::InlineExpression(inline) => inline.expression().node().mentions_local(local),
             Self::Components(components) => {
                 components.value.id() == Some(id) || components.status.id() == Some(id)
             }
@@ -105,7 +105,7 @@ impl BindingValue {
     pub(crate) fn mentions(&self, go_name: &str) -> bool {
         match self {
             BindingValue::GoName(name) | BindingValue::GoConst(name) => name.spelling() == go_name,
-            BindingValue::InlineExpr(inline) => inline.expression().node().mentions(go_name),
+            BindingValue::InlineExpression(inline) => inline.expression().node().mentions(go_name),
             BindingValue::Components(components) => {
                 components.value.spelling() == go_name || components.status.spelling() == go_name
             }
@@ -122,7 +122,7 @@ impl BindingValue {
     pub(crate) fn can_reuse_pattern_subject(&self) -> bool {
         match self {
             Self::GoName(_) | Self::GoConst(_) | Self::Components(_) => true,
-            Self::InlineExpr(_) | Self::TupleComponents(_) => false,
+            Self::InlineExpression(_) | Self::TupleComponents(_) => false,
         }
     }
 }

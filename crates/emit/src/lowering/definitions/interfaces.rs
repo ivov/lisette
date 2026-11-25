@@ -59,7 +59,7 @@ impl Planner<'_> {
         item: &Expression,
         export: GoExport,
     ) -> InterfaceMethod {
-        let func = item.function_definition_view();
+        let function = item.function_definition_view();
         let ty = item.get_type();
         let all_args = ty
             .get_function_params()
@@ -81,7 +81,7 @@ impl Planner<'_> {
             .and_then(|methods| {
                 methods
                     .values()
-                    .find(|method| method.source_name == *func.name)
+                    .find(|method| method.source_name == *function.name)
             })
             .expect("interface method must be registered");
 
@@ -89,12 +89,12 @@ impl Planner<'_> {
             &self.facts,
             method.ty.get_function_ret().unwrap_or(&Type::Never),
             ReturnSlot::InterfaceMethod {
-                name: func.name,
+                name: function.name,
                 method,
             },
         );
 
-        let method_name = self.facts.interface_method_go_name(func.name, export);
+        let method_name = self.facts.interface_method_go_name(function.name, export);
 
         InterfaceMethod {
             name: method_name,

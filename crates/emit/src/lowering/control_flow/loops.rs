@@ -14,7 +14,7 @@ use crate::target::ir::bodies::{
     ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, define, discard, with_setup,
 };
-use crate::target::ir::go_expression::{BinaryOp, UnaryOp};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression};
 use crate::target::names::go_name;
@@ -87,9 +87,9 @@ impl Planner<'_> {
     fn capture_operand_into(
         &mut self,
         prologue: &mut Vec<Statement>,
-        expr: &Expression,
+        expression: &Expression,
     ) -> GoExpression {
-        let plan = self.plan_operand(expr, ExpressionContext::value());
+        let plan = self.plan_operand(expression, ExpressionContext::value());
         let (setup, value) = plan.into_parts();
         prologue.extend(setup);
         value
@@ -122,7 +122,7 @@ impl Planner<'_> {
 
             let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
             let bound = |field: &str| GoExpression::selector(range_var.clone(), field.to_string());
-            let compare = |operator: BinaryOp| {
+            let compare = |operator: GoBinaryOperator| {
                 GoExpression::binary(
                     GoExpression::identifier(loop_var.clone()),
                     operator,
@@ -131,8 +131,8 @@ impl Planner<'_> {
             };
 
             let condition = match range_shape {
-                RangeKind::Range => Some(compare(BinaryOp::Lt)),
-                RangeKind::RangeInclusive => Some(compare(BinaryOp::Le)),
+                RangeKind::Range => Some(compare(GoBinaryOperator::LessThan)),
+                RangeKind::RangeInclusive => Some(compare(GoBinaryOperator::LessThanOrEqual)),
                 RangeKind::RangeFrom => None,
                 RangeKind::RangeTo | RangeKind::RangeToInclusive => {
                     unreachable!("RangeTo/RangeToInclusive are not iterable")
@@ -198,7 +198,7 @@ impl Planner<'_> {
                 start: GoExpression::literal("0".to_string()),
                 condition: Some(GoExpression::binary(
                     GoExpression::identifier(index_var.clone()),
-                    BinaryOp::Lt,
+                    GoBinaryOperator::LessThan,
                     GoExpression::call(
                         GoExpression::external_name("len".to_string()),
                         vec![receiver_var.clone()],
@@ -457,9 +457,9 @@ impl Planner<'_> {
                 Some(end_expression) => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
                     let operator = if *inclusive {
-                        BinaryOp::Le
+                        GoBinaryOperator::LessThanOrEqual
                     } else {
-                        BinaryOp::Lt
+                        GoBinaryOperator::LessThan
                     };
                     LoopHeader::Counted {
                         variable: loop_var.clone(),
@@ -576,7 +576,7 @@ impl Planner<'_> {
             }
             let (setup, rendered) = this.plan_condition(condition);
             if !setup.is_empty() {
-                let exit = GoExpression::unary(UnaryOp::Not, rendered);
+                let exit = GoExpression::unary(GoUnaryOperator::Not, rendered);
                 return this.lower_loop_with_exit_test(setup, exit, body);
             }
             let header = if matches!(

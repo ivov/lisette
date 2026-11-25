@@ -1,13 +1,13 @@
 use crate::Planner;
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
-use crate::lookup::state::bindings::{BindingValue, InlineExpr};
+use crate::lookup::state::bindings::{BindingValue, InlineExpression};
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::decision_tree::{
     Check, PatternBinding, PatternInfo, SubjectRoot, lift_root_assertion, render_condition,
 };
 use crate::lowering::planner::OuterBindings;
 use crate::target::ir::bodies::{Definition, LoweredStatement, Statement, assign, define_many};
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{GoExpression, Stability};
 use crate::target::types::go_type::GoType;
@@ -30,7 +30,7 @@ impl AssertedPattern {
         match &self.ok_test {
             None => condition,
             Some(ok) if self.checks.is_empty() => ok.clone(),
-            Some(ok) => GoExpression::binary(ok.clone(), BinaryOp::And, condition),
+            Some(ok) => GoExpression::binary(ok.clone(), GoBinaryOperator::And, condition),
         }
     }
 }
@@ -124,7 +124,7 @@ impl Planner<'_> {
                         ));
                         GoExpression::identifier(ok)
                     })
-                    .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
+                    .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
                     .expect("a multi-type assertion names at least one type");
 
                 (subject.clone(), Some(oks))
@@ -160,10 +160,10 @@ impl Planner<'_> {
             {
                 let composable = binding.path.render(subject);
                 let stability = self.path_read_stability(&composable);
-                self.scope.bind_inline_expr(
+                self.scope.bind_inline_expression(
                     &binding.lisette_name,
                     &binding.binding_ids,
-                    InlineExpr::new(composable, stability),
+                    InlineExpression::new(composable, stability),
                 );
                 continue;
             }
@@ -184,10 +184,10 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn bind_inline_unit(&mut self, binding: &PatternBinding) {
         let unit = self.unit_value(None, None);
-        self.scope.bind_inline_expr(
+        self.scope.bind_inline_expression(
             &binding.lisette_name,
             &binding.binding_ids,
-            InlineExpr::new(unit, Stability::Fixed),
+            InlineExpression::new(unit, Stability::Fixed),
         );
     }
 

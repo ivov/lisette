@@ -12,7 +12,7 @@ use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     SelectArmKind, SelectArmPlan, SelectStatementPlan, Statement, assign, discard,
 };
-use crate::target::ir::go_expression::{GoExpressionNode, UnaryOp};
+use crate::target::ir::go_expression::{GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::{PreludeVariant, prelude_variant};
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
@@ -87,13 +87,13 @@ impl Planner<'_> {
         );
 
         let mut setup: Vec<Statement> = Vec::new();
-        let prep = self.preprocess_select_arms(&mut setup, arms, needs_retry_loop);
+        let prepared = self.preprocess_select_arms(&mut setup, arms, needs_retry_loop);
 
-        let has_default = prep
+        let has_default = prepared
             .iter()
             .any(|arm| matches!(arm, PreparedSelectArm::Default { .. }));
 
-        let arm_plans = self.with_scope(|this| this.lower_select_arms(prep, place));
+        let arm_plans = self.with_scope(|this| this.lower_select_arms(prepared, place));
 
         let all_arms_diverge =
             !arm_plans.is_empty() && arm_plans.iter().all(|arm| arm.body().ends_with_diverge());
@@ -345,7 +345,7 @@ impl Planner<'_> {
         let ok = GoExpression::identifier(ok_var.clone());
         let plan = if body_empty {
             IfPlan::plain(
-                GoExpression::unary(UnaryOp::Not, ok),
+                GoExpression::unary(GoUnaryOperator::Not, ok),
                 else_block,
                 ElseArm::None,
             )
@@ -495,14 +495,14 @@ impl Planner<'_> {
     ) -> SelectArmKind {
         let block = self.lower_block_to_place(body, place);
         match operation {
-            PreparedChannelOperation::Send(ch, val) => SelectArmKind::Send {
-                channel: ch.clone(),
-                value: val.clone(),
+            PreparedChannelOperation::Send(channel, value) => SelectArmKind::Send {
+                channel: channel.clone(),
+                value: value.clone(),
                 body: block,
             },
-            PreparedChannelOperation::Receive(ch) => SelectArmKind::Receive {
+            PreparedChannelOperation::Receive(channel) => SelectArmKind::Receive {
                 receive_vars: Vec::new(),
-                channel: ch.clone(),
+                channel: channel.clone(),
                 body: block,
             },
         }
@@ -753,7 +753,7 @@ fn build_receive_arms_plan(
         (Some(some), Some(none)) => Some(IfPlan::plain(ok(), some, ElseArm::block(none))),
         (Some(some), None) => Some(IfPlan::plain(ok(), some, ElseArm::None)),
         (None, Some(none)) => Some(IfPlan::plain(
-            GoExpression::unary(UnaryOp::Not, ok()),
+            GoExpression::unary(GoUnaryOperator::Not, ok()),
             none,
             ElseArm::None,
         )),

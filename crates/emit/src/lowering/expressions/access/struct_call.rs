@@ -446,19 +446,19 @@ impl Planner<'_> {
         }
 
         let (mut statements, base_value) = base_operand.into_parts();
-        let tmp = self.hoist_temp(&mut statements, "copy", base_value);
-        if let Some(id) = tmp.id() {
+        let temp = self.hoist_temp(&mut statements, "copy", base_value);
+        if let Some(id) = temp.id() {
             self.scope.mark_struct_update_copy(id);
         }
 
         for (name, value) in fields {
             statements.push(assign(
-                GoExpression::selector(GoExpression::identifier(tmp.clone()), name.clone()),
+                GoExpression::selector(GoExpression::identifier(temp.clone()), name.clone()),
                 value.clone(),
             ));
         }
 
-        (statements, GoExpression::identifier(tmp))
+        (statements, GoExpression::identifier(temp))
     }
 
     fn plan_enum_variant_spread(

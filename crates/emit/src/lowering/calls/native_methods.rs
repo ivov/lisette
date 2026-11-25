@@ -14,7 +14,9 @@ use crate::output::finish::function_literals::function_literal;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
 use crate::target::ir::go_expression::GoExpressionNode;
-use crate::target::ir::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
+use crate::target::ir::go_expression::{
+    FunctionLiteralLayout, GoBinaryOperator, GoParameter, GoUnaryOperator,
+};
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
@@ -139,8 +141,8 @@ fn build_inline(
         }
         NativeInlineForm::IsEmpty => {
             let operator = match polarity {
-                Polarity::Negated => BinaryOp::Ne,
-                Polarity::Positive => BinaryOp::Eq,
+                Polarity::Negated => GoBinaryOperator::NotEqual,
+                Polarity::Positive => GoBinaryOperator::Equal,
             };
             if matches!(native_type, NativeTypeKind::String) {
                 return GoExpression::binary(
@@ -308,7 +310,7 @@ impl Planner<'_> {
                 LoweredStatement::If(IfPlan::plain(
                     GoExpression::binary(
                         count,
-                        BinaryOp::Eq,
+                        GoBinaryOperator::Equal,
                         GoExpression::literal("0".to_string()),
                     ),
                     LoweredBlock {
@@ -427,7 +429,7 @@ impl Planner<'_> {
                 operand.receiver.clone(),
                 operand.arguments[0].clone(),
                 &recipe,
-                BinaryOp::Eq,
+                GoBinaryOperator::Equal,
             );
 
             return Some(operand.finish(body));
@@ -514,21 +516,21 @@ impl Planner<'_> {
     fn plan_array_method_body(
         &mut self,
         method: &str,
-        receiver_expr: &Expression,
+        receiver_expression: &Expression,
         receiver: GoExpression,
         index: Option<GoExpression>,
         setup: &mut Vec<Statement>,
     ) -> GoExpression {
         match method {
             "to_slice" => {
-                let view = self.sliceable_receiver(receiver_expr, receiver, setup);
+                let view = self.sliceable_receiver(receiver_expression, receiver, setup);
                 GoExpression::call(
                     GoExpression::generated(GeneratedPackage::Slices, "Clone"),
                     vec![view],
                 )
             }
             "get" => {
-                let view = self.sliceable_receiver(receiver_expr, receiver, setup);
+                let view = self.sliceable_receiver(receiver_expression, receiver, setup);
                 GoExpression::call(
                     GoExpression::generated(GeneratedPackage::Prelude, "SliceGet"),
                     vec![view, index.expect("get needs an index")],
@@ -750,12 +752,12 @@ impl Planner<'_> {
 
     fn lower_string_substring(
         &mut self,
-        receiver_expr: &Expression,
+        receiver_expression: &Expression,
         args: &[Expression],
         capture_boundary: CaptureBoundary,
     ) -> NativeCallResult {
         let arg = &args[0];
-        let is_ref_receiver = self.facts.is_reference(&receiver_expr.get_type());
+        let is_ref_receiver = self.facts.is_reference(&receiver_expression.get_type());
         let deref = |raw: GoExpression| -> GoExpression {
             if is_ref_receiver {
                 GoExpression::dereference(raw)
@@ -771,7 +773,8 @@ impl Planner<'_> {
             ..
         } = arg
         {
-            let mut operands = vec![self.plan_operand(receiver_expr, ExpressionContext::value())];
+            let mut operands =
+                vec![self.plan_operand(receiver_expression, ExpressionContext::value())];
             if let Some(s) = start.as_deref() {
                 operands.push(self.plan_operand(s, ExpressionContext::value()));
             }
@@ -787,7 +790,11 @@ impl Planner<'_> {
             let end_bound = end.is_some().then(|| {
                 let end = values.next().expect("range has an end");
                 if *inclusive {
-                    GoExpression::binary(end, BinaryOp::Add, GoExpression::literal("1".to_string()))
+                    GoExpression::binary(
+                        end,
+                        GoBinaryOperator::Addition,
+                        GoExpression::literal("1".to_string()),
+                    )
                 } else {
                     end
                 }
@@ -804,7 +811,7 @@ impl Planner<'_> {
             .checked(arg)
             .range_kind()
             .expect("substring arg should resolve to a known range type");
-        let receiver_operand = self.plan_operand(receiver_expr, ExpressionContext::value());
+        let receiver_operand = self.plan_operand(receiver_expression, ExpressionContext::value());
         let range_operand = self.plan_or_capture(arg, "range");
         let sequenced = self.sequence_values(
             vec![receiver_operand, range_operand],
@@ -823,7 +830,7 @@ impl Planner<'_> {
         lhs: GoExpression,
         rhs: GoExpression,
         recipe: &EqualityRecipe,
-        operator: BinaryOp,
+        operator: GoBinaryOperator,
     ) -> GoExpression {
         let call = match recipe {
             EqualityRecipe::Operator => return GoExpression::binary(lhs, operator, rhs),
@@ -853,8 +860,8 @@ impl Planner<'_> {
             }
         };
 
-        if operator == BinaryOp::Ne {
-            GoExpression::unary(UnaryOp::Not, call)
+        if operator == GoBinaryOperator::NotEqual {
+            GoExpression::unary(GoUnaryOperator::Not, call)
         } else {
             call
         }
@@ -868,7 +875,7 @@ impl Planner<'_> {
             GoExpression::identifier(a.clone()),
             GoExpression::identifier(b.clone()),
             &element.recipe,
-            BinaryOp::Eq,
+            GoBinaryOperator::Equal,
         );
 
         predicate_literal(
@@ -891,7 +898,7 @@ impl Planner<'_> {
             GoExpression::identifier(candidate.clone()),
             target,
             &element.recipe,
-            BinaryOp::Eq,
+            GoBinaryOperator::Equal,
         );
 
         predicate_literal(vec![GoParameter::new(candidate, go_ty)], body)

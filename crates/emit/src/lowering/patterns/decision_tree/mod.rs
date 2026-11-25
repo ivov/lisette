@@ -22,7 +22,7 @@ use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::patterns::binding_declarations::pattern_literal_text;
 use crate::target::ir::bodies::{LoweredBlock, define_many};
 use crate::target::ir::go_expression::{
-    BinaryOp, FunctionLiteralLayout, GoExpressionNode, UnaryOp,
+    FunctionLiteralLayout, GoBinaryOperator, GoExpressionNode, GoUnaryOperator,
 };
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
@@ -85,9 +85,9 @@ impl AccessPath {
         self.segments.is_empty()
     }
 
-    fn push(&self, seg: PathSegment) -> Self {
+    fn push(&self, segment: PathSegment) -> Self {
         let mut new = self.clone();
-        new.segments.push(seg);
+        new.segments.push(segment);
         new
     }
 
@@ -100,8 +100,8 @@ impl AccessPath {
     pub(in crate::lowering) fn render(&self, subject: SubjectRoot<'_>) -> GoExpression {
         let (root, segments) = subject.resolve(&self.segments);
         let mut result = root;
-        for seg in segments {
-            result = match seg {
+        for segment in segments {
+            result = match segment {
                 PathSegment::Field(name) => GoExpression::selector(result, name.clone()),
                 PathSegment::ValueField(name) => GoExpression::value_field(result, name.clone()),
                 PathSegment::Index(index) => {
@@ -179,11 +179,11 @@ pub(in crate::lowering) enum Check {
         go_literal: GoExpression,
         value: Option<Literal>,
     },
-    SliceLenEq {
+    SliceLengthEqual {
         path: AccessPath,
         length: usize,
     },
-    SliceLenGe {
+    SliceLengthAtLeast {
         path: AccessPath,
         min_length: usize,
     },
@@ -243,7 +243,11 @@ impl Check {
                 }
             }
             Check::EnumTag { path, tag_constant } => {
-                let operator = if negative { BinaryOp::Ne } else { BinaryOp::Eq };
+                let operator = if negative {
+                    GoBinaryOperator::NotEqual
+                } else {
+                    GoBinaryOperator::Equal
+                };
                 GoExpression::binary(
                     GoExpression::selector(path.render(subject), ENUM_TAG_FIELD.to_string()),
                     operator,
@@ -257,26 +261,38 @@ impl Check {
                 match (boolean_literal(go_literal), negative) {
                     (Some(true), false) | (Some(false), true) => rendered_path,
                     (Some(true), true) | (Some(false), false) => {
-                        GoExpression::unary(UnaryOp::Not, rendered_path)
+                        GoExpression::unary(GoUnaryOperator::Not, rendered_path)
                     }
-                    (None, false) => {
-                        GoExpression::binary(rendered_path, BinaryOp::Eq, go_literal.clone())
-                    }
-                    (None, true) => {
-                        GoExpression::binary(rendered_path, BinaryOp::Ne, go_literal.clone())
-                    }
+                    (None, false) => GoExpression::binary(
+                        rendered_path,
+                        GoBinaryOperator::Equal,
+                        go_literal.clone(),
+                    ),
+                    (None, true) => GoExpression::binary(
+                        rendered_path,
+                        GoBinaryOperator::NotEqual,
+                        go_literal.clone(),
+                    ),
                 }
             }
-            Check::SliceLenEq { path, length } => {
-                let operator = if negative { BinaryOp::Ne } else { BinaryOp::Eq };
+            Check::SliceLengthEqual { path, length } => {
+                let operator = if negative {
+                    GoBinaryOperator::NotEqual
+                } else {
+                    GoBinaryOperator::Equal
+                };
                 GoExpression::binary(
                     length_of(path),
                     operator,
                     GoExpression::literal(length.to_string()),
                 )
             }
-            Check::SliceLenGe { path, min_length } => {
-                let operator = if negative { BinaryOp::Lt } else { BinaryOp::Ge };
+            Check::SliceLengthAtLeast { path, min_length } => {
+                let operator = if negative {
+                    GoBinaryOperator::LessThan
+                } else {
+                    GoBinaryOperator::GreaterThanOrEqual
+                };
                 GoExpression::binary(
                     length_of(path),
                     operator,
@@ -286,7 +302,7 @@ impl Check {
             Check::Or { alternatives } if !negative => alternatives
                 .iter()
                 .map(|checks| join_conditions(scope, checks, subject))
-                .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
+                .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
                 .expect("an or-check has at least one alternative"),
             Check::TypeAssert { path, go_type } if !negative => {
                 let ok = scope.new_local_identifier("ok");
@@ -305,7 +321,7 @@ impl Check {
                 )
             }
             Check::Or { .. } | Check::TypeAssert { .. } => GoExpression::unary(
-                UnaryOp::Not,
+                GoUnaryOperator::Not,
                 self.render_with_polarity(scope, subject, CheckPolarity::Positive),
             ),
         }
@@ -316,8 +332,8 @@ impl Check {
             Check::Nilable { path, .. }
             | Check::EnumTag { path, .. }
             | Check::Literal { path, .. }
-            | Check::SliceLenEq { path, .. }
-            | Check::SliceLenGe { path, .. }
+            | Check::SliceLengthEqual { path, .. }
+            | Check::SliceLengthAtLeast { path, .. }
             | Check::TypeAssert { path, .. } => path.rebase_past(segment),
             Check::Or { alternatives } => {
                 for check in alternatives.iter_mut().flatten() {
@@ -332,8 +348,8 @@ impl Check {
             Check::Nilable { path, .. }
             | Check::EnumTag { path, .. }
             | Check::Literal { path, .. }
-            | Check::SliceLenEq { path, .. }
-            | Check::SliceLenGe { path, .. }
+            | Check::SliceLengthEqual { path, .. }
+            | Check::SliceLengthAtLeast { path, .. }
             | Check::TypeAssert { path, .. } => Some(path),
             Check::Or { .. } => None,
         }
@@ -686,8 +702,8 @@ impl ArmInfo {
         };
         alternatives
             .iter()
-            .all(|alt| matches!(alt.first(), Some(Check::TypeAssert { .. })))
-            && alternatives.iter().any(|alt| alt.len() > 1)
+            .all(|alternative| matches!(alternative.first(), Some(Check::TypeAssert { .. })))
+            && alternatives.iter().any(|alternative| alternative.len() > 1)
     }
 }
 
@@ -938,10 +954,10 @@ fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
             let Check::Or { alternatives } = &arm.checks[0] else {
                 unreachable!()
             };
-            for alt in alternatives {
+            for alternative in alternatives {
                 result.push(ArmInfo {
                     arm_index: arm.arm_index,
-                    checks: alt.clone(),
+                    checks: alternative.clone(),
                     bindings: arm.bindings.clone(),
                     has_guard: arm.has_guard,
                 });
@@ -984,7 +1000,7 @@ fn root_assertion_position(checks: &[Check]) -> Option<usize> {
     checks.iter().position(|c| match c {
         Check::TypeAssert { path, .. } => path.is_root(),
         Check::Or { alternatives } => alternatives.iter().all(
-            |alt| matches!(alt.as_slice(), [Check::TypeAssert { path, .. }] if path.is_root()),
+            |alternative| matches!(alternative.as_slice(), [Check::TypeAssert { path, .. }] if path.is_root()),
         ),
         _ => false,
     })
@@ -1009,7 +1025,7 @@ pub(super) fn lift_root_assertion(
         Check::Or { alternatives } => {
             let go_types: Vec<GoType> = alternatives
                 .into_iter()
-                .map(|alt| match <[Check; 1]>::try_from(alt) {
+                .map(|alternative| match <[Check; 1]>::try_from(alternative) {
                     Ok([Check::TypeAssert { go_type, .. }]) => go_type,
                     _ => unreachable!("predicate above confirmed shape"),
                 })
@@ -1041,7 +1057,7 @@ fn join_conditions(
     checks
         .iter()
         .map(|check| check.render(scope, subject))
-        .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
+        .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
         .expect("join_conditions requires at least one check")
 }
 

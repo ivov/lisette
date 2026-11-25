@@ -3,7 +3,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::render::expressions::rendered;
-use crate::target::ir::go_expression::{BinaryOp, CompositeLayout};
+use crate::target::ir::go_expression::{CompositeLayout, GoBinaryOperator};
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::display_form::{DisplayForm, UNIT_DISPLAY};
@@ -41,11 +41,11 @@ impl Planner<'_> {
 
                 (rendered, ConstantKind::Float)
             }
-            Literal::Imaginary(coef) => {
-                let rendered = if *coef == coef.trunc() && coef.abs() < 1e15 {
-                    format!("{}i", *coef as i64)
+            Literal::Imaginary(coefficient) => {
+                let rendered = if *coefficient == coefficient.trunc() && coefficient.abs() < 1e15 {
+                    format!("{}i", *coefficient as i64)
                 } else {
-                    format!("{}i", coef)
+                    format!("{}i", coefficient)
                 };
                 (rendered, ConstantKind::Complex)
             }
@@ -118,8 +118,8 @@ impl Planner<'_> {
 
         let mut wrapped = Vec::with_capacity(sequenced.values.len());
         let mut widest = 0;
-        for (expr, value) in elements.iter().zip(sequenced.values) {
-            let coercion = self.value_slot_coercion(expr, &element_lisette_ty);
+        for (expression, value) in elements.iter().zip(sequenced.values) {
+            let coercion = self.value_slot_coercion(expression, &element_lisette_ty);
             let is_whole_literal = coercion.is_identity() && value.is_composite_literal();
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
@@ -195,7 +195,7 @@ impl Planner<'_> {
             let mut pieces = pieces.into_iter();
             let first = pieces.next().expect("an interpolated f-string has a piece");
             let concatenation = pieces.fold(first, |left, right| {
-                GoExpression::binary(left, BinaryOp::Add, right)
+                GoExpression::binary(left, GoBinaryOperator::Addition, right)
             });
             return ValuePlan::new(setup, concatenation, stability);
         }

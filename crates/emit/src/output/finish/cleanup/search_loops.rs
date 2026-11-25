@@ -5,7 +5,7 @@ use crate::target::ir::bodies::{
     AssignForm, Definition, ElseArm, LoopKind, LoopTransfer, LoweredBlock, LoweredStatement,
     Statement, for_each_statements_mut,
 };
-use crate::target::ir::go_expression::{GoExpressionNode, UnaryOp};
+use crate::target::ir::go_expression::{GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 
@@ -66,7 +66,7 @@ fn search_loop_return(block: &[Statement]) -> Option<SearchLoopReturn> {
     let (declares_at, value) = match define_at.checked_sub(1).map(|at| (at, &block[at].kind)) {
         Some((
             at,
-            LoweredStatement::VarDecl {
+            LoweredStatement::VarDeclaration {
                 name, value: None, ..
             },
         )) => (at, Some(name.clone())),
@@ -176,7 +176,7 @@ fn flag_guarded_return(
         return None;
     }
     let GoExpressionNode::Unary {
-        operator: UnaryOp::Not,
+        operator: GoUnaryOperator::Not,
         operand,
     } = plan.condition.node()
     else {

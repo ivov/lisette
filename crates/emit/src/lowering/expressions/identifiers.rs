@@ -31,7 +31,7 @@ impl Planner<'_> {
         };
 
         let local = match binding {
-            Some(BindingValue::InlineExpr(expr)) => return expr.expression().clone(),
+            Some(BindingValue::InlineExpression(inline)) => return inline.expression().clone(),
             Some(BindingValue::Components(components)) => {
                 let components = components.clone();
                 return self.rebuild_from_components(&components);
@@ -77,11 +77,15 @@ impl Planner<'_> {
                 }
                 Type::Function(f) => {
                     if let Type::Nominal {
-                        params: ret_params, ..
+                        params: return_type_arguments,
+                        ..
                     } = f.return_type.as_ref()
                     {
-                        let type_args =
-                            self.constructor_reference_type_arguments(&f.params, ret_params, ctx);
+                        let type_args = self.constructor_reference_type_arguments(
+                            &f.params,
+                            return_type_arguments,
+                            ctx,
+                        );
                         return GoExpression::instantiation(make_function, type_args);
                     }
                 }

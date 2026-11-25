@@ -259,7 +259,7 @@ impl Planner<'_> {
                     .scope
                     .resolve_identifier_with_resolution(value, resolution)
                 {
-                    Some(BindingValue::InlineExpr(inline)) => inline.stability(),
+                    Some(BindingValue::InlineExpression(inline)) => inline.stability(),
                     _ => identifier_read_stability(&self.facts, expression),
                 };
 
@@ -532,8 +532,8 @@ impl Planner<'_> {
                     setup.push(effect_statement(value_operand));
                 }
                 let unit = self.unit_value(Some(inner), None);
-                let tmp = self.hoist_temp(setup, "ref", unit);
-                GoExpression::address_of(GoExpression::identifier(tmp))
+                let temp = self.hoist_temp(setup, "ref", unit);
+                GoExpression::address_of(GoExpression::identifier(temp))
             });
         }
 
@@ -561,8 +561,8 @@ impl Planner<'_> {
 
         inner_plan.map_observable_expression(|setup, emitted| {
             if unaddressable {
-                let tmp = self.hoist_temp(setup, "ref", emitted);
-                GoExpression::address_of(GoExpression::identifier(tmp))
+                let temp = self.hoist_temp(setup, "ref", emitted);
+                GoExpression::address_of(GoExpression::identifier(temp))
             } else {
                 GoExpression::address_of(emitted)
             }

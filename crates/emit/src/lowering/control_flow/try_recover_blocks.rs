@@ -206,8 +206,8 @@ impl Planner<'_> {
 
     fn lower_try_unit_return(&mut self, fallible: &Fallible) -> Vec<Statement> {
         let mut statements = Vec::new();
-        let unit_val = self.unit_value(None, Some(fallible.ok_ty()));
-        statements.extend(self.success_return(fallible, unit_val));
+        let unit = self.unit_value(None, Some(fallible.ok_ty()));
+        statements.extend(self.success_return(fallible, unit));
         statements
     }
 
@@ -219,11 +219,11 @@ impl Planner<'_> {
         let mut statements: Vec<Statement> = Vec::new();
         let err_arg = match expression {
             Expression::Call {
-                expression: func,
+                expression: function,
                 args,
                 ..
             } => {
-                if fallible.classify_constructor(func) != Some(ConstructorKind::Failure) {
+                if fallible.classify_constructor(function) != Some(ConstructorKind::Failure) {
                     return None;
                 }
                 if !args.is_empty() {
@@ -331,8 +331,8 @@ impl Planner<'_> {
 
     fn lower_unit_return(&self, ok_ty: &Type) -> Vec<Statement> {
         let mut statements = Vec::new();
-        let unit_val = self.unit_value(None, Some(ok_ty));
-        statements.push(plain_return(unit_val));
+        let unit = self.unit_value(None, Some(ok_ty));
+        statements.push(plain_return(unit));
         statements
     }
 }

@@ -380,7 +380,7 @@ impl Planner<'_> {
         if needs_explicit_type_declaration(&self.facts, value, binding_ty) {
             let go_type = self.go_type(binding_ty);
             statements.push(
-                LoweredStatement::VarDecl {
+                LoweredStatement::VarDeclaration {
                     name: go_identifier,
                     go_type,
                     value: Some(unit),
@@ -443,7 +443,7 @@ impl Planner<'_> {
         if typed {
             let var_ty = self.go_type(binding_ty);
             statements.push(
-                LoweredStatement::VarDecl {
+                LoweredStatement::VarDeclaration {
                     name: go_identifier,
                     go_type: var_ty,
                     value: Some(value_expression),
@@ -550,7 +550,7 @@ impl Planner<'_> {
         }
         let resolved_ty = resolve_let_temp_declaration_ty(&self.facts, value, binding_ty);
         let var_ty = self.go_type(&resolved_ty);
-        Some(LoweredStatement::VarDecl {
+        Some(LoweredStatement::VarDeclaration {
             name: name.clone(),
             go_type: var_ty,
             value: None,
@@ -745,7 +745,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 .scope
                 .bind_new_local(identifier, id.as_slice(), &go_name);
             statements.push(
-                LoweredStatement::VarDecl {
+                LoweredStatement::VarDeclaration {
                     name: local,
                     go_type,
                     value: Some(receiver.clone()),

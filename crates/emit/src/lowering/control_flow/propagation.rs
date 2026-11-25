@@ -3,7 +3,7 @@ use crate::lowering::calls::wrap_err::wrap_error;
 
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::lookup::facts::value_layout::ValueLayout;
-use crate::lookup::state::bindings::InlineExpr;
+use crate::lookup::state::bindings::InlineExpression;
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::fallible_producer::{ErrorNilGuard, GuardedPayload};
@@ -200,7 +200,7 @@ impl Planner<'_> {
         } else {
             let go_ty = self.go_type(inner_ty);
             statements.push(
-                LoweredStatement::VarDecl {
+                LoweredStatement::VarDeclaration {
                     name: var_name.clone(),
                     go_type: go_ty,
                     value: Some(zero),
@@ -247,7 +247,7 @@ impl Planner<'_> {
             (Vec::new(), vec![check.clone()])
         } else {
             let mut setup = Vec::new();
-            let err_expr = if fallible.is_result() {
+            let err_expression = if fallible.is_result() {
                 let error = GoExpression::value_field(
                     check.clone(),
                     tags::result_variant("Err").fields[0].to_string(),
@@ -267,7 +267,7 @@ impl Planner<'_> {
             };
 
             let (failure_setup, values) =
-                self.propagate_failure_values(expression, fallible, err_expr);
+                self.propagate_failure_values(expression, fallible, err_expression);
             setup.extend(failure_setup);
             (setup, values)
         };
@@ -286,12 +286,12 @@ impl Planner<'_> {
         &mut self,
         operand: &Expression,
         fallible: &Fallible,
-        err_expr: GoExpression,
+        err_expression: GoExpression,
     ) -> (Vec<Statement>, Vec<GoExpression>) {
         let mut setup = Vec::new();
-        let error = fallible
-            .is_result()
-            .then(|| self.convert_error_to_return_context(&mut setup, operand, err_expr, fallible));
+        let error = fallible.is_result().then(|| {
+            self.convert_error_to_return_context(&mut setup, operand, err_expression, fallible)
+        });
         let values = self.failure_return_values(fallible, error);
         (setup, values)
     }
@@ -410,11 +410,13 @@ impl Planner<'_> {
             );
         }
 
-        let ok_value = value_var.map(|val| {
-            let val = GoExpression::identifier(val);
+        let ok_value = value_var.map(|ok_name| {
+            let ok_expression = GoExpression::identifier(ok_name);
             match &payload_layout_change {
-                Some(change) if want_value => self.plan_layout_change(&mut statements, val, change),
-                _ => val,
+                Some(change) if want_value => {
+                    self.plan_layout_change(&mut statements, ok_expression, change)
+                }
+                _ => ok_expression,
             }
         });
 
@@ -724,8 +726,11 @@ impl Planner<'_> {
             && stability.is_fixed()
             && error.effects().can_duplicate()
         {
-            self.scope
-                .bind_inline_expr(param.name, ids, InlineExpr::new(error.clone(), stability));
+            self.scope.bind_inline_expression(
+                param.name,
+                ids,
+                InlineExpression::new(error.clone(), stability),
+            );
             return;
         }
         let name = self.hoist_temp(setup, &param.go_name(), error.clone());

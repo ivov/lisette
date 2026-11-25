@@ -73,8 +73,9 @@ impl Planner<'_> {
             return LoweredStatement::Body(raw_body(statements));
         }
 
-        if let Some((op, rhs)) = detect_compound_assignment(target, value, compound_operator) {
-            return self.build_compound_assignment_plan(target, op, rhs);
+        if let Some((operator, rhs)) = detect_compound_assignment(target, value, compound_operator)
+        {
+            return self.build_compound_assignment_plan(target, operator, rhs);
         }
 
         if self.target_binds_to_discard(target) {
@@ -171,13 +172,16 @@ impl Planner<'_> {
     fn build_compound_assignment_plan(
         &mut self,
         target: &Expression,
-        op: &BinaryOperator,
+        source_operator: &BinaryOperator,
         rhs: &Expression,
     ) -> LoweredStatement {
         let is_inc_dec = is_literal_one(rhs)
-            && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
+            && matches!(
+                source_operator,
+                BinaryOperator::Addition | BinaryOperator::Subtraction
+            );
         if is_inc_dec {
-            let kind = if *op == BinaryOperator::Addition {
+            let kind = if *source_operator == BinaryOperator::Addition {
                 CompoundKind::Increment
             } else {
                 CompoundKind::Decrement
@@ -203,13 +207,13 @@ impl Planner<'_> {
         }
         let (mut target_capture, target_place) = self.capture_assignment_target(target, ordering);
         let pinned_left = needs_left_pin.then(|| {
-            let tmp = self.fresh_declared("left");
-            target_capture.push(define(tmp.clone(), target_place.clone()));
-            GoExpression::identifier(tmp)
+            let temp = self.fresh_declared("left");
+            target_capture.push(define(temp.clone(), target_place.clone()));
+            GoExpression::identifier(temp)
         });
         let (rhs_setup, rhs) = right_hand_side.into_parts();
         target_capture.extend(rhs_setup);
-        let operator = op.into();
+        let operator = source_operator.into();
         let assignment = match pinned_left {
             Some(left) => AssignForm::Simple {
                 target: target_place,
@@ -217,7 +221,7 @@ impl Planner<'_> {
             },
             None => AssignForm::Compound {
                 target: target_place,
-                kind: CompoundKind::OpAssign { operator, rhs },
+                kind: CompoundKind::OperatorAssign { operator, rhs },
             },
         };
 
@@ -430,8 +434,8 @@ impl Planner<'_> {
         let (pointee_setup, pointee_value) = pointee_plan.into_parts();
         setup.extend(pointee_setup);
         if needs_capture {
-            let tmp = self.hoist_temp(setup, "ref", pointee_value);
-            return GoExpression::dereference(GoExpression::identifier(tmp));
+            let temp = self.hoist_temp(setup, "ref", pointee_value);
+            return GoExpression::dereference(GoExpression::identifier(temp));
         }
         GoExpression::dereference(pointee_value)
     }
@@ -442,8 +446,8 @@ fn detect_compound_assignment<'a>(
     value: &'a Expression,
     compound_operator: Option<&'a BinaryOperator>,
 ) -> Option<(&'a BinaryOperator, &'a Expression)> {
-    if let Some(op) = compound_operator {
-        return Some((op, value));
+    if let Some(operator) = compound_operator {
+        return Some((operator, value));
     }
     let Expression::Binary {
         left,
@@ -511,9 +515,9 @@ pub(in crate::lowering) fn lvalues_match(a: &Expression, b: &Expression) -> bool
     }
 }
 
-fn is_compound_eligible(op: &BinaryOperator) -> bool {
+fn is_compound_eligible(operator: &BinaryOperator) -> bool {
     matches!(
-        op,
+        operator,
         BinaryOperator::Addition
             | BinaryOperator::Subtraction
             | BinaryOperator::Multiplication

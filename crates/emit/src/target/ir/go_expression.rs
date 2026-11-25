@@ -8,13 +8,13 @@ use std::sync::Arc;
 use syntax::ast::BinaryOperator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UnaryOp {
+pub(crate) enum GoUnaryOperator {
     Negate,
     Complement,
     Not,
 }
 
-impl UnaryOp {
+impl GoUnaryOperator {
     pub(crate) fn sign(self) -> char {
         match self {
             Self::Negate => '-',
@@ -25,48 +25,48 @@ impl UnaryOp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
-    BitAnd,
-    BitOr,
-    BitXor,
-    BitAndNot,
-    Shl,
-    Shr,
-    Eq,
-    Ne,
-    Lt,
-    Le,
-    Gt,
-    Ge,
+pub(crate) enum GoBinaryOperator {
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
+    Remainder,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    BitwiseAndNot,
+    ShiftLeft,
+    ShiftRight,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
     And,
     Or,
 }
 
-impl BinaryOp {
+impl GoBinaryOperator {
     pub(crate) fn symbol(self) -> &'static str {
         match self {
-            Self::Add => "+",
-            Self::Sub => "-",
-            Self::Mul => "*",
-            Self::Div => "/",
-            Self::Rem => "%",
-            Self::BitAnd => "&",
-            Self::BitOr => "|",
-            Self::BitXor => "^",
-            Self::BitAndNot => "&^",
-            Self::Shl => "<<",
-            Self::Shr => ">>",
-            Self::Eq => "==",
-            Self::Ne => "!=",
-            Self::Lt => "<",
-            Self::Le => "<=",
-            Self::Gt => ">",
-            Self::Ge => ">=",
+            Self::Addition => "+",
+            Self::Subtraction => "-",
+            Self::Multiplication => "*",
+            Self::Division => "/",
+            Self::Remainder => "%",
+            Self::BitwiseAnd => "&",
+            Self::BitwiseOr => "|",
+            Self::BitwiseXor => "^",
+            Self::BitwiseAndNot => "&^",
+            Self::ShiftLeft => "<<",
+            Self::ShiftRight => ">>",
+            Self::Equal => "==",
+            Self::NotEqual => "!=",
+            Self::LessThan => "<",
+            Self::LessThanOrEqual => "<=",
+            Self::GreaterThan => ">",
+            Self::GreaterThanOrEqual => ">=",
             Self::And => "&&",
             Self::Or => "||",
         }
@@ -74,15 +74,20 @@ impl BinaryOp {
 
     pub(crate) fn level(self) -> u8 {
         match self {
-            Self::Mul
-            | Self::Div
-            | Self::Rem
-            | Self::Shl
-            | Self::Shr
-            | Self::BitAnd
-            | Self::BitAndNot => 5,
-            Self::Add | Self::Sub | Self::BitOr | Self::BitXor => 4,
-            Self::Eq | Self::Ne | Self::Lt | Self::Le | Self::Gt | Self::Ge => 3,
+            Self::Multiplication
+            | Self::Division
+            | Self::Remainder
+            | Self::ShiftLeft
+            | Self::ShiftRight
+            | Self::BitwiseAnd
+            | Self::BitwiseAndNot => 5,
+            Self::Addition | Self::Subtraction | Self::BitwiseOr | Self::BitwiseXor => 4,
+            Self::Equal
+            | Self::NotEqual
+            | Self::LessThan
+            | Self::LessThanOrEqual
+            | Self::GreaterThan
+            | Self::GreaterThanOrEqual => 3,
             Self::And => 2,
             Self::Or => 1,
         }
@@ -90,49 +95,49 @@ impl BinaryOp {
 
     pub(crate) fn has_compound_form(self) -> bool {
         match self {
-            Self::Add
-            | Self::Sub
-            | Self::Mul
-            | Self::Div
-            | Self::Rem
-            | Self::BitAnd
-            | Self::BitOr
-            | Self::BitXor
-            | Self::BitAndNot
-            | Self::Shl
-            | Self::Shr => true,
-            Self::Eq
-            | Self::Ne
-            | Self::Lt
-            | Self::Le
-            | Self::Gt
-            | Self::Ge
+            Self::Addition
+            | Self::Subtraction
+            | Self::Multiplication
+            | Self::Division
+            | Self::Remainder
+            | Self::BitwiseAnd
+            | Self::BitwiseOr
+            | Self::BitwiseXor
+            | Self::BitwiseAndNot
+            | Self::ShiftLeft
+            | Self::ShiftRight => true,
+            Self::Equal
+            | Self::NotEqual
+            | Self::LessThan
+            | Self::LessThanOrEqual
+            | Self::GreaterThan
+            | Self::GreaterThanOrEqual
             | Self::And
             | Self::Or => false,
         }
     }
 }
 
-impl From<&BinaryOperator> for BinaryOp {
+impl From<&BinaryOperator> for GoBinaryOperator {
     fn from(operator: &BinaryOperator) -> Self {
         match operator {
-            BinaryOperator::Addition => Self::Add,
-            BinaryOperator::Subtraction => Self::Sub,
-            BinaryOperator::Multiplication => Self::Mul,
-            BinaryOperator::Division => Self::Div,
-            BinaryOperator::Remainder => Self::Rem,
-            BinaryOperator::BitwiseAnd => Self::BitAnd,
-            BinaryOperator::BitwiseOr => Self::BitOr,
-            BinaryOperator::BitwiseXor => Self::BitXor,
-            BinaryOperator::BitwiseAndNot => Self::BitAndNot,
-            BinaryOperator::ShiftLeft => Self::Shl,
-            BinaryOperator::ShiftRight => Self::Shr,
-            BinaryOperator::Equal => Self::Eq,
-            BinaryOperator::NotEqual => Self::Ne,
-            BinaryOperator::LessThan => Self::Lt,
-            BinaryOperator::LessThanOrEqual => Self::Le,
-            BinaryOperator::GreaterThan => Self::Gt,
-            BinaryOperator::GreaterThanOrEqual => Self::Ge,
+            BinaryOperator::Addition => Self::Addition,
+            BinaryOperator::Subtraction => Self::Subtraction,
+            BinaryOperator::Multiplication => Self::Multiplication,
+            BinaryOperator::Division => Self::Division,
+            BinaryOperator::Remainder => Self::Remainder,
+            BinaryOperator::BitwiseAnd => Self::BitwiseAnd,
+            BinaryOperator::BitwiseOr => Self::BitwiseOr,
+            BinaryOperator::BitwiseXor => Self::BitwiseXor,
+            BinaryOperator::BitwiseAndNot => Self::BitwiseAndNot,
+            BinaryOperator::ShiftLeft => Self::ShiftLeft,
+            BinaryOperator::ShiftRight => Self::ShiftRight,
+            BinaryOperator::Equal => Self::Equal,
+            BinaryOperator::NotEqual => Self::NotEqual,
+            BinaryOperator::LessThan => Self::LessThan,
+            BinaryOperator::LessThanOrEqual => Self::LessThanOrEqual,
+            BinaryOperator::GreaterThan => Self::GreaterThan,
+            BinaryOperator::GreaterThanOrEqual => Self::GreaterThanOrEqual,
             BinaryOperator::And => Self::And,
             BinaryOperator::Or => Self::Or,
             BinaryOperator::Pipeline => {
@@ -197,13 +202,13 @@ pub(crate) enum GoExpressionNode {
         go_type: GoType,
     },
     Unary {
-        operator: UnaryOp,
+        operator: GoUnaryOperator,
         operand: Operand,
     },
     AddressOf(Operand),
     Dereference(Operand),
     Binary {
-        operator: BinaryOp,
+        operator: GoBinaryOperator,
         left: Operand,
         right: Operand,
     },

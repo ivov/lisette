@@ -416,8 +416,8 @@ impl Planner<'_> {
             let (operand_setup, expression, operand_stability) = plan.into_parts_with_stability();
             setup.extend(operand_setup);
             if pin || (eager && !can_delay) {
-                let tmp = self.hoist_temp(&mut setup, prefix, expression);
-                results.push(GoExpression::identifier(tmp));
+                let temp = self.hoist_temp(&mut setup, prefix, expression);
+                results.push(GoExpression::identifier(temp));
             } else {
                 stability = stability.max(operand_stability);
                 results.push(expression);

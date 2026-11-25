@@ -1,4 +1,4 @@
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
@@ -172,7 +172,7 @@ impl Fallible {
     pub(crate) fn failure_condition(&self, value: &GoExpression) -> GoExpression {
         GoExpression::binary(
             GoExpression::value_field(value.clone(), ENUM_TAG_FIELD.to_string()),
-            BinaryOp::Ne,
+            GoBinaryOperator::NotEqual,
             GoExpression::generated(GeneratedPackage::Prelude, self.success().tag),
         )
     }

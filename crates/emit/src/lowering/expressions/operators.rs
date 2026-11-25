@@ -6,7 +6,7 @@ use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
 };
-use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression};
 use syntax::ast::{BinaryOperator, BindingId, Expression, Literal, UnaryOperator};
@@ -26,7 +26,7 @@ fn imaginary_product(value: GoExpression, coefficient: f64) -> GoExpression {
             GoExpression::literal("0".to_string()),
             GoExpression::binary(
                 value,
-                BinaryOp::Mul,
+                GoBinaryOperator::Multiplication,
                 GoExpression::literal(coefficient.to_string()),
             ),
         ],
@@ -181,7 +181,7 @@ impl Planner<'_> {
         let read = GoExpression::identifier(result.clone());
         let reaches_right = match operator {
             BinaryOperator::And => read.clone(),
-            _ => GoExpression::unary(UnaryOp::Not, read.clone()),
+            _ => GoExpression::unary(GoUnaryOperator::Not, read.clone()),
         };
         statements.push(assign(read, right_value));
         setup.push(define(result.clone(), left_value));
@@ -221,8 +221,8 @@ impl Planner<'_> {
 
         let operand = self.plan_operand(expression, ctx);
         match operator {
-            UnaryOperator::Negative => operand.unary(UnaryOp::Negate),
-            UnaryOperator::BitwiseNot => operand.unary(UnaryOp::Complement),
+            UnaryOperator::Negative => operand.unary(GoUnaryOperator::Negate),
+            UnaryOperator::BitwiseNot => operand.unary(GoUnaryOperator::Complement),
             UnaryOperator::Deref => operand.dereference(),
             UnaryOperator::Not => unreachable!("Not handled above"),
         }
@@ -259,7 +259,7 @@ impl Planner<'_> {
         }
 
         let operand = self.plan_operand(expression, ctx);
-        operand.unary(UnaryOp::Not)
+        operand.unary(GoUnaryOperator::Not)
     }
 
     pub(in crate::lowering) fn is_go_constant_expression(&self, expression: &Expression) -> bool {
@@ -352,7 +352,7 @@ fn fold_read(
             left,
             right,
         } => {
-            !matches!(operator, BinaryOp::And | BinaryOp::Or)
+            !matches!(operator, GoBinaryOperator::And | GoBinaryOperator::Or)
                 && fold_read(left, name, value, reads)
                 && fold_read(right, name, value, reads)
         }

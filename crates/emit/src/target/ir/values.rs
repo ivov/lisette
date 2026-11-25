@@ -1,8 +1,9 @@
 use crate::target::ir::bodies::LoweredBlock;
 use crate::target::ir::evaluation::Effects;
 use crate::target::ir::go_expression::{
-    BinaryOp, CallPurity, CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout,
-    GoExpressionNode, GoParameter, Operand, Position, SourcePosition, UnaryOp,
+    CallPurity, CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout,
+    GoBinaryOperator, GoExpressionNode, GoParameter, GoUnaryOperator, Operand, Position,
+    SourcePosition,
 };
 use crate::target::ir::local::GoIdentifier;
 use crate::target::names::go_name::GeneratedPackage;
@@ -50,44 +51,53 @@ impl ConstantKind {
 
 fn binary_constant(
     left: Option<ConstantKind>,
-    operator: BinaryOp,
+    operator: GoBinaryOperator,
     right: Option<ConstantKind>,
 ) -> Option<ConstantKind> {
     let left = left?;
-    if matches!(operator, BinaryOp::Shl | BinaryOp::Shr) {
+    if matches!(
+        operator,
+        GoBinaryOperator::ShiftLeft | GoBinaryOperator::ShiftRight
+    ) {
         return left.is_numeric().then_some(left);
     }
     let right = right?;
     match operator {
-        BinaryOp::Eq
-        | BinaryOp::Ne
-        | BinaryOp::Lt
-        | BinaryOp::Le
-        | BinaryOp::Gt
-        | BinaryOp::Ge
-        | BinaryOp::And
-        | BinaryOp::Or => Some(ConstantKind::Bool),
-        BinaryOp::Add if left == ConstantKind::String && right == ConstantKind::String => {
+        GoBinaryOperator::Equal
+        | GoBinaryOperator::NotEqual
+        | GoBinaryOperator::LessThan
+        | GoBinaryOperator::LessThanOrEqual
+        | GoBinaryOperator::GreaterThan
+        | GoBinaryOperator::GreaterThanOrEqual
+        | GoBinaryOperator::And
+        | GoBinaryOperator::Or => Some(ConstantKind::Bool),
+        GoBinaryOperator::Addition
+            if left == ConstantKind::String && right == ConstantKind::String =>
+        {
             Some(ConstantKind::String)
         }
-        BinaryOp::Add
-        | BinaryOp::Sub
-        | BinaryOp::Mul
-        | BinaryOp::Div
-        | BinaryOp::Rem
-        | BinaryOp::BitAnd
-        | BinaryOp::BitOr
-        | BinaryOp::BitXor
-        | BinaryOp::BitAndNot => left.join(right),
-        BinaryOp::Shl | BinaryOp::Shr => unreachable!("shifts return above"),
+        GoBinaryOperator::Addition
+        | GoBinaryOperator::Subtraction
+        | GoBinaryOperator::Multiplication
+        | GoBinaryOperator::Division
+        | GoBinaryOperator::Remainder
+        | GoBinaryOperator::BitwiseAnd
+        | GoBinaryOperator::BitwiseOr
+        | GoBinaryOperator::BitwiseXor
+        | GoBinaryOperator::BitwiseAndNot => left.join(right),
+        GoBinaryOperator::ShiftLeft | GoBinaryOperator::ShiftRight => {
+            unreachable!("shifts return above")
+        }
     }
 }
 
-fn unary_constant(operator: UnaryOp, value: Option<ConstantKind>) -> Option<ConstantKind> {
+fn unary_constant(operator: GoUnaryOperator, value: Option<ConstantKind>) -> Option<ConstantKind> {
     let value = value?;
     match operator {
-        UnaryOp::Negate | UnaryOp::Complement => value.is_numeric().then_some(value),
-        UnaryOp::Not => (value == ConstantKind::Bool).then_some(value),
+        GoUnaryOperator::Negate | GoUnaryOperator::Complement => {
+            value.is_numeric().then_some(value)
+        }
+        GoUnaryOperator::Not => (value == ConstantKind::Bool).then_some(value),
     }
 }
 
@@ -348,7 +358,11 @@ impl GoExpression {
         Self::new(node)
     }
 
-    pub(crate) fn binary(left: GoExpression, operator: BinaryOp, right: GoExpression) -> Self {
+    pub(crate) fn binary(
+        left: GoExpression,
+        operator: GoBinaryOperator,
+        right: GoExpression,
+    ) -> Self {
         let constant = binary_constant(left.constant, operator, right.constant);
         let node = GoExpressionNode::Binary {
             operator,
@@ -393,7 +407,7 @@ impl GoExpression {
         Self::new(node)
     }
 
-    pub(crate) fn unary(operator: UnaryOp, value: GoExpression) -> Self {
+    pub(crate) fn unary(operator: GoUnaryOperator, value: GoExpression) -> Self {
         let constant = unary_constant(operator, value.constant);
         let node = GoExpressionNode::Unary {
             operator,

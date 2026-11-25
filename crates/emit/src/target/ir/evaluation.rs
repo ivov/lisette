@@ -1,6 +1,6 @@
 use crate::target::types::go_type::GoTypeKind;
 
-use crate::target::ir::go_expression::{BinaryOp, CallPurity, GoExpressionNode};
+use crate::target::ir::go_expression::{CallPurity, GoBinaryOperator, GoExpressionNode};
 use crate::target::ir::values::Stability;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -237,13 +237,16 @@ impl GoExpressionNode {
         }
     }
 
-    fn binary_effects(operator: BinaryOp, left: &Self, right: &Self) -> Effects {
+    fn binary_effects(operator: GoBinaryOperator, left: &Self, right: &Self) -> Effects {
         match operator {
-            BinaryOp::Div | BinaryOp::Rem | BinaryOp::Shl | BinaryOp::Shr => Effects {
+            GoBinaryOperator::Division
+            | GoBinaryOperator::Remainder
+            | GoBinaryOperator::ShiftLeft
+            | GoBinaryOperator::ShiftRight => Effects {
                 may_panic: true,
                 ..Effects::default()
             },
-            BinaryOp::Eq | BinaryOp::Ne
+            GoBinaryOperator::Equal | GoBinaryOperator::NotEqual
                 if !matches!(left, Self::Literal(_))
                     && !matches!(right, Self::Literal(_))
                     && !(left.is_unit_struct_literal() && right.is_unit_struct_literal()) =>
@@ -253,21 +256,21 @@ impl GoExpressionNode {
                     ..Effects::default()
                 }
             }
-            BinaryOp::Add
-            | BinaryOp::Sub
-            | BinaryOp::Mul
-            | BinaryOp::BitAnd
-            | BinaryOp::BitOr
-            | BinaryOp::BitXor
-            | BinaryOp::BitAndNot
-            | BinaryOp::And
-            | BinaryOp::Or
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge
-            | BinaryOp::Eq
-            | BinaryOp::Ne => Effects::default(),
+            GoBinaryOperator::Addition
+            | GoBinaryOperator::Subtraction
+            | GoBinaryOperator::Multiplication
+            | GoBinaryOperator::BitwiseAnd
+            | GoBinaryOperator::BitwiseOr
+            | GoBinaryOperator::BitwiseXor
+            | GoBinaryOperator::BitwiseAndNot
+            | GoBinaryOperator::And
+            | GoBinaryOperator::Or
+            | GoBinaryOperator::LessThan
+            | GoBinaryOperator::LessThanOrEqual
+            | GoBinaryOperator::GreaterThan
+            | GoBinaryOperator::GreaterThanOrEqual
+            | GoBinaryOperator::Equal
+            | GoBinaryOperator::NotEqual => Effects::default(),
         }
     }
 }

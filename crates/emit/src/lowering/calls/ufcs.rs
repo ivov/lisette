@@ -1,6 +1,6 @@
-use crate::lowering::calls::arguments::CallArgsContext;
+use crate::lowering::calls::arguments::CallArgumentsContext;
 use crate::lowering::calls::regular::receiver_type_binding;
-use crate::lowering::calls::type_arguments::{CallArgShape, CallTypeArgsRequest};
+use crate::lowering::calls::type_arguments::{CallArgumentShape, CallTypeArgumentsRequest};
 use crate::target::names::go_name::GoExport;
 
 use crate::Planner;
@@ -36,12 +36,12 @@ impl Planner<'_> {
         };
 
         let mut coercion = self.facts.dot_receiver_coercion(receiver, member);
-        let type_args_string = self.call_type_arguments(CallTypeArgsRequest {
+        let type_args_string = self.call_type_arguments(CallTypeArgumentsRequest {
             function,
             callee: &call_plan.resolved,
             written_type_arguments,
             call_ty: None,
-            arg_shape: CallArgShape {
+            arg_shape: CallArgumentShape {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
@@ -74,7 +74,7 @@ impl Planner<'_> {
         } else if coercion == Some(ReceiverCoercion::AutoDeref) {
             receiver_operand = receiver_operand.dereference();
         }
-        let args_ctx = CallArgsContext {
+        let args_ctx = CallArgumentsContext {
             plan: call_plan,
             spread,
             capture_boundary: CaptureBoundary::SiblingSequence,
@@ -109,7 +109,7 @@ impl Planner<'_> {
 
     fn lower_ufcs_call_args(
         &mut self,
-        ctx: &CallArgsContext<'_, '_>,
+        ctx: &CallArgumentsContext<'_, '_>,
         receiver_operand: ValuePlan,
         args: &[Expression],
     ) -> (Vec<Statement>, GoExpression, Vec<GoExpression>) {
@@ -200,7 +200,7 @@ impl Planner<'_> {
         spread: Option<&Expression>,
         call_plan: &CallPlan<'_>,
     ) -> ValuePlan {
-        let args_ctx = CallArgsContext {
+        let args_ctx = CallArgumentsContext {
             plan: call_plan,
             spread,
             capture_boundary: CaptureBoundary::SiblingSequence,

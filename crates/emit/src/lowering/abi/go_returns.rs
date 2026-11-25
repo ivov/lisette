@@ -16,7 +16,7 @@ use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
 };
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::prelude::{PartialVariant, PreludeVariant, prelude_constructor};
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::go_name::GeneratedPackage;
@@ -59,7 +59,7 @@ pub(in crate::lowering) fn tag_check_with_initializer(
 pub(super) fn tag_condition(value: &GoExpression, tag: &str) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(value.clone(), ENUM_TAG_FIELD.to_string()),
-        BinaryOp::Eq,
+        GoBinaryOperator::Equal,
         GoExpression::generated(GeneratedPackage::Prelude, tag),
     )
 }
@@ -102,14 +102,14 @@ impl Planner<'_> {
         &self,
         shape: &LoweredReturnAbi,
         return_ty: &Type,
-        err_expr: GoExpression,
+        err_expression: GoExpression,
     ) -> Vec<GoExpression> {
         match shape {
-            LoweredReturnAbi::BareError => vec![err_expr],
+            LoweredReturnAbi::BareError => vec![err_expression],
             LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
                 let ok_ty = self.facts.ok_payload(return_ty);
                 let mut values = self.lowered_payload_zeros(shape, &ok_ty);
-                values.push(err_expr);
+                values.push(err_expression);
                 values
             }
             LoweredReturnAbi::Tuple { .. } => {
@@ -145,16 +145,16 @@ impl Planner<'_> {
         &mut self,
         shape: &LoweredReturnAbi,
         payload_ty: &Type,
-        payload_expr: GoExpression,
+        payload_expression: GoExpression,
     ) -> (Vec<Statement>, Vec<GoExpression>) {
         if shape.has_flattened_payload() {
             let mut statements = Vec::new();
-            let tuple = self.stable_source(&mut statements, "tup", payload_expr);
+            let tuple = self.stable_source(&mut statements, "tup", payload_expression);
             let (projection, values) = self.lowered_tuple_values(&tuple, payload_ty, None);
             statements.extend(projection);
             (statements, values)
         } else {
-            (Vec::new(), vec![payload_expr])
+            (Vec::new(), vec![payload_expression])
         }
     }
 
@@ -493,11 +493,11 @@ impl Planner<'_> {
             plan = self.convert_to_recorded_slot(expression, plan);
         }
         let (mut statements, value) = plan.into_parts();
-        let tup = GoExpression::identifier(self.hoist_temp(&mut statements, "tup", value));
+        let tuple = GoExpression::identifier(self.hoist_temp(&mut statements, "tup", value));
         let source_ty = expression.get_type();
         let adaptations = self.applied_element_adaptations(expression);
         let adapted = (!adaptations.is_empty()).then_some((&source_ty, adaptations.as_slice()));
-        let (projection, fields) = self.lowered_tuple_values(&tup, &return_ty, adapted);
+        let (projection, fields) = self.lowered_tuple_values(&tuple, &return_ty, adapted);
         statements.extend(projection);
         statements.push(multi_value_return(fields));
         statements
@@ -515,7 +515,7 @@ impl Planner<'_> {
             && let Some(PreludeVariant::Partial(variant)) = prelude_constructor(callee)
         {
             let mut statements = Vec::new();
-            let ret = match variant {
+            let return_statement = match variant {
                 PartialVariant::Ok => {
                     let (setup, v) = self
                         .plan_composite_value(&args[0], ExpressionContext::value())
@@ -543,7 +543,7 @@ impl Planner<'_> {
                 }
             };
 
-            statements.push(ret);
+            statements.push(return_statement);
             return statements;
         }
 

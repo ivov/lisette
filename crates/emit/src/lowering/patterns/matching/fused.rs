@@ -333,7 +333,7 @@ impl Planner<'_> {
 
         let ok_name = simple_payload_binding(ok_arm)?;
         let err_name = simple_payload_binding(err_arm)?;
-        let (both_val, both_err) = partial_both_bindings(both_arm)?;
+        let (both_value, both_err) = partial_both_bindings(both_arm)?;
 
         let ok_ty = self.facts.ok_payload(&subject.get_type());
         let nilable = self.facts.partial_ok_is_nilable(&ok_ty);
@@ -341,12 +341,12 @@ impl Planner<'_> {
         let (mut statements, call) = self
             .plan_call_expression(subject, None, ExpressionContext::value())
             .into_parts();
-        let val_var = match ok_name.or(both_val) {
+        let value_var = match ok_name.or(both_value) {
             Some(value) => Some(self.arm_value_name(&value.go_name())),
             None => nilable.then(|| self.fresh_local("ret")),
         };
         let err_hint = both_err.or(err_name).map(|err| err.go_name());
-        let names = self.partial_pair_names(val_var, err_hint.as_ref());
+        let names = self.partial_pair_names(value_var, err_hint.as_ref());
 
         let (ok_body, ok_uses) = self.lower_fused_arm(
             &[ArmBinding::alias_at(ok_name, names.value.as_ref())],
@@ -355,14 +355,14 @@ impl Planner<'_> {
         );
         let (both_body, both_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(both_val, names.value.as_ref()),
+                ArmBinding::alias_at(both_value, names.value.as_ref()),
                 ArmBinding::alias_at(both_err, Some(&names.error)),
             ],
             &both_arm.expression,
             place,
         );
 
-        let val_used = nilable || ok_uses[0] || both_uses[0];
+        let value_used = nilable || ok_uses[0] || both_uses[0];
 
         let nil_check = names
             .value
@@ -390,7 +390,8 @@ impl Planner<'_> {
         };
 
         let condition = nil_condition(GoExpression::identifier(names.error.clone()));
-        let test = names.pair_condition(call, names.value.clone().filter(|_| val_used), condition);
+        let test =
+            names.pair_condition(call, names.value.clone().filter(|_| value_used), condition);
         statements.push(
             LoweredStatement::If(IfPlan::pair_if(
                 test,
@@ -558,7 +559,7 @@ impl Planner<'_> {
         let condition = match (arms.selects_both, nil_guard) {
             (true, Some(guard)) => GoExpression::binary(
                 non_nil_condition(err()),
-                BinaryOp::And,
+                GoBinaryOperator::And,
                 guard.non_nil_condition(guarded_value()),
             ),
             (true, None) => non_nil_condition(err()),
@@ -566,7 +567,7 @@ impl Planner<'_> {
                 let guard = guard.expect("non-nilable Err returned above");
                 GoExpression::binary(
                     non_nil_condition(err()),
-                    BinaryOp::And,
+                    GoBinaryOperator::And,
                     guard.nil_condition(guarded_value()),
                 )
             }

@@ -1,6 +1,6 @@
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::evaluation::Effects;
-use crate::target::ir::go_expression::{GoExpressionNode, UnaryOp};
+use crate::target::ir::go_expression::{GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{ConstantKind, GoExpression, OperandForm, Stability};
 use crate::target::types::go_type::GoType;
@@ -212,7 +212,7 @@ impl ValuePlan {
         self
     }
 
-    pub(in crate::lowering) fn unary(mut self, operator: UnaryOp) -> Self {
+    pub(in crate::lowering) fn unary(mut self, operator: GoUnaryOperator) -> Self {
         self.expression = GoExpression::unary(operator, self.expression);
         self.stability = Stability::Observable;
         self

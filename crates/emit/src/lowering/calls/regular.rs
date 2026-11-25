@@ -1,9 +1,9 @@
-use super::arguments::CallArgsContext;
+use super::arguments::CallArgumentsContext;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::dispatch::callee_go_name;
 use crate::lowering::calls::dispatch::callee_is_go_builtin;
 use crate::lowering::calls::dispatch::go_builtin_name;
-use crate::lowering::calls::type_arguments::{CallArgShape, CallTypeArgsRequest};
+use crate::lowering::calls::type_arguments::{CallArgumentShape, CallTypeArgumentsRequest};
 use crate::lowering::expressions::literals::format_string_lowers_to_sprintf;
 use syntax::program::ReceiverCoercion;
 
@@ -171,12 +171,12 @@ impl<'a> Planner<'a> {
         let callee_operand = self.plan_operand(function, expression_ctx.callee());
         let (mut setup, mut callee) = callee_operand.into_parts();
 
-        let mut type_args_string = self.call_type_arguments(CallTypeArgsRequest {
+        let mut type_args_string = self.call_type_arguments(CallTypeArgumentsRequest {
             function,
             callee: &call_plan.resolved,
             written_type_arguments: type_arguments.annotations().len(),
             call_ty,
-            arg_shape: CallArgShape {
+            arg_shape: CallArgumentShape {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
@@ -194,7 +194,7 @@ impl<'a> Planner<'a> {
             callee = callee.without_instantiation();
         }
 
-        let args_ctx = CallArgsContext {
+        let args_ctx = CallArgumentsContext {
             plan: call_plan,
             spread,
             capture_boundary: expression_ctx.capture_boundary(),

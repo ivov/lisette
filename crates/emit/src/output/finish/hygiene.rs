@@ -181,7 +181,7 @@ fn unused_declarations(statements: &[Statement], liveness: &Liveness) -> Option<
     for statement in statements {
         let names: &[GoIdentifier] = match &statement.kind {
             LoweredStatement::Define(Definition { names, .. }) => names,
-            LoweredStatement::VarDecl { name, .. } => slice::from_ref(name),
+            LoweredStatement::VarDeclaration { name, .. } => slice::from_ref(name),
             LoweredStatement::Const(_) => return None,
             LoweredStatement::Body(body) => {
                 count += unused_declarations(&body.statements, liveness)?;
@@ -212,7 +212,7 @@ fn without_unused(
             dead_vars.extend(names);
             keep_effects(value, line)
         }
-        LoweredStatement::VarDecl { name, value, .. } if liveness.unused(&name) => {
+        LoweredStatement::VarDeclaration { name, value, .. } if liveness.unused(&name) => {
             dead_vars.push(name);
             value.and_then(|value| keep_effects(value, line))
         }

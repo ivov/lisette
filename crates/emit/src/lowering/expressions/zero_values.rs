@@ -273,13 +273,13 @@ impl Planner<'_> {
         Some(GoExpression::empty_composite(self.go_type(ty)))
     }
 
-    fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
-        let elem_go = self.go_type(elem);
-        let array_type = GoType::array_of(len, &elem_go);
-        if len == 0 || self.facts.go_zero_is_lisette_zero(elem) {
+    fn array_zero(&mut self, len: u64, element: &Type) -> GoExpression {
+        let element_go = self.go_type(element);
+        let array_type = GoType::array_of(len, &element_go);
+        if len == 0 || self.facts.go_zero_is_lisette_zero(element) {
             return GoExpression::empty_composite(array_type);
         }
-        self.zero_filled(array_type, elem, None)
+        self.zero_filled(array_type, element, None)
     }
 
     pub(in crate::lowering) fn zero_filled(

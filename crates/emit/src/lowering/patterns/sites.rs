@@ -8,7 +8,7 @@ use crate::lowering::patterns::binding_declarations::{
     has_binding_or_pattern, split_binding_or_patterns,
 };
 use crate::target::ir::bodies::GoUses;
-use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 
 use syntax::ast::{Expression, IdentifierResolution, Pattern, Span};
 use syntax::types::Type;
@@ -223,8 +223,8 @@ impl Planner<'_> {
 
                 let rests_in_stable_name =
                     rests_in_own_temp_path || self.plan_rests_in_stable_name(&plan);
-                let (op_setup, expression) = plan.into_parts();
-                setup.extend(op_setup);
+                let (operator_setup, expression) = plan.into_parts();
+                setup.extend(operator_setup);
                 if rests_in_stable_name
                     || self.field_path_reads_in_place(scrutinee, &expression, |root| {
                         pattern_binds_name(pattern, root)
@@ -675,7 +675,7 @@ impl Planner<'_> {
 
         let mut guard_parts: Vec<GoExpression> = Vec::new();
         if let Some(ok) = ok_test {
-            guard_parts.push(GoExpression::unary(UnaryOp::Not, ok));
+            guard_parts.push(GoExpression::unary(GoUnaryOperator::Not, ok));
         }
         if !checks.is_empty() {
             let negated = match checks.as_slice() {
@@ -683,7 +683,7 @@ impl Planner<'_> {
                     check.render_negated(&mut self.scope, SubjectRoot::Var(&effective_subject))
                 }
                 _ => GoExpression::unary(
-                    UnaryOp::Not,
+                    GoUnaryOperator::Not,
                     render_condition(
                         &mut self.scope,
                         &checks,
@@ -696,7 +696,7 @@ impl Planner<'_> {
         }
         let guard = guard_parts
             .into_iter()
-            .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
+            .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
             .expect("a refutable pattern has a check or a type assertion");
         let fail_body = self.lower_refutable_fail(fail, subject_var);
         statements
@@ -728,7 +728,7 @@ impl Planner<'_> {
         let mut infos: Vec<_> = alternatives
             .iter()
             .flat_map(split_binding_or_patterns)
-            .map(|alt| self.collect_pattern_info(&alt, subject_ty))
+            .map(|alternative_pattern| self.collect_pattern_info(&alternative_pattern, subject_ty))
             .collect();
         let mut bindings: Vec<_> = infos.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);
@@ -833,7 +833,7 @@ impl Planner<'_> {
         } = subject;
         let mut alternatives: Vec<_> = patterns
             .iter()
-            .map(|alt| self.collect_pattern_info(alt, subject_ty))
+            .map(|alternative_pattern| self.collect_pattern_info(alternative_pattern, subject_ty))
             .collect();
         let mut bindings: Vec<_> = alternatives.iter_mut().map(|i| &mut i.bindings).collect();
         decision_tree::share_alternative_bindings(&mut bindings);

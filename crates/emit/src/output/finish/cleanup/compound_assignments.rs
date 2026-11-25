@@ -1,7 +1,7 @@
 use crate::target::ir::bodies::{
     AssignForm, CompoundKind, LoweredStatement, Statement, for_each_statements_mut,
 };
-use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode};
 use crate::target::ir::values::GoExpression;
 
 pub(super) fn fold_compound_assignments(statements: &mut Vec<Statement>) {
@@ -38,9 +38,13 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
     }
 
     let kind = match (operator, right.as_ref()) {
-        (BinaryOp::Add, GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Increment,
-        (BinaryOp::Sub, GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Decrement,
-        _ => CompoundKind::OpAssign {
+        (GoBinaryOperator::Addition, GoExpressionNode::Literal(one)) if one == "1" => {
+            CompoundKind::Increment
+        }
+        (GoBinaryOperator::Subtraction, GoExpressionNode::Literal(one)) if one == "1" => {
+            CompoundKind::Decrement
+        }
+        _ => CompoundKind::OperatorAssign {
             operator: *operator,
             rhs: GoExpression::from_operand(right.clone()),
         },

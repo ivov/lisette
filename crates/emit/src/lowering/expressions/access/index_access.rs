@@ -7,7 +7,7 @@ use crate::Planner;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
-use crate::target::ir::go_expression::BinaryOp;
+use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,7 +177,7 @@ impl Planner<'_> {
         {
             end_value = Some(GoExpression::binary(
                 end_expression,
-                BinaryOp::Add,
+                GoBinaryOperator::Addition,
                 GoExpression::literal("1".to_string()),
             ));
         }
@@ -193,9 +193,9 @@ impl Planner<'_> {
             .as_ref()
             .is_none_or(|end| end.effects().must_evaluate_once())
         {
-            let base_expr = expression.deref_inner().unwrap_or(expression);
+            let base_expression = expression.deref_inner().unwrap_or(expression);
             if base.effects().must_evaluate_once()
-                || (is_order_sensitive(base_expr) && runs_effectful_code)
+                || (is_order_sensitive(base_expression) && runs_effectful_code)
             {
                 base = GoExpression::identifier(self.hoist_temp(&mut setup, "base", base));
             }
@@ -251,8 +251,13 @@ pub(in crate::lowering) fn range_var_bounds(
 ) -> (Option<GoExpression>, Option<GoExpression>) {
     let start = || GoExpression::selector(range.clone(), go_name::RANGE_START_FIELD.to_string());
     let end = || GoExpression::selector(range.clone(), go_name::RANGE_END_FIELD.to_string());
-    let end_inclusive =
-        || GoExpression::binary(end(), BinaryOp::Add, GoExpression::literal("1".to_string()));
+    let end_inclusive = || {
+        GoExpression::binary(
+            end(),
+            GoBinaryOperator::Addition,
+            GoExpression::literal("1".to_string()),
+        )
+    };
     match range_kind {
         RangeKind::Range => (Some(start()), Some(end())),
         RangeKind::RangeInclusive => (Some(start()), Some(end_inclusive())),

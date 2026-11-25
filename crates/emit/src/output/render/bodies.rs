@@ -167,7 +167,7 @@ fn render_statement(output: &mut GoWriter, statement: &Statement) {
             render_definition(output, definition);
             output.push('\n');
         }
-        LoweredStatement::VarDecl {
+        LoweredStatement::VarDeclaration {
             name,
             go_type,
             value,
@@ -202,7 +202,7 @@ fn render_assign_statement(output: &mut GoWriter, plan: &AssignForm) {
             match kind {
                 CompoundKind::Increment => output.push_str("++"),
                 CompoundKind::Decrement => output.push_str("--"),
-                CompoundKind::OpAssign { operator, rhs } => {
+                CompoundKind::OperatorAssign { operator, rhs } => {
                     output.push_str(&format!(" {}= ", operator.symbol()));
                     rhs.write(output);
                 }

@@ -77,7 +77,7 @@ pub(crate) fn declare_zero_values(
                 && let [name] = names.as_slice()
                 && let Some(go_type) = value.node().new_zero_type().cloned()
             {
-                statement.kind = LoweredStatement::VarDecl {
+                statement.kind = LoweredStatement::VarDeclaration {
                     name: name.clone(),
                     go_type,
                     value: None,
@@ -97,7 +97,7 @@ pub(crate) fn declare_zero_values(
             for (go_type, name) in zeros {
                 block.push(Statement {
                     line: statement.line.clone(),
-                    kind: LoweredStatement::VarDecl {
+                    kind: LoweredStatement::VarDeclaration {
                         name,
                         go_type,
                         value: None,

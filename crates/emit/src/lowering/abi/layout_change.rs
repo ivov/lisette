@@ -15,7 +15,7 @@ use crate::target::ir::bodies::{
     Statement, assign, declare, define_many,
 };
 use crate::target::ir::go_expression::{
-    BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter,
+    FunctionLiteralLayout, GoBinaryOperator, GoExpressionNode, GoParameter,
 };
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude as tags;
@@ -120,7 +120,7 @@ impl Planner<'_> {
             let go_type = pointee.go_type(self);
             let copy = self.fresh_declared("ptr");
             setup.push(
-                LoweredStatement::VarDecl {
+                LoweredStatement::VarDeclaration {
                     name: copy.clone(),
                     go_type,
                     value: Some(value),
@@ -427,13 +427,13 @@ impl Planner<'_> {
                 GoExpression::selector(output.clone(), field.to_string()),
                 value,
             ));
-            if let Some((tag, op)) = guard {
+            if let Some((tag, operator)) = guard {
                 statements.push(
                     LoweredStatement::If(IfPlan {
                         initializer: None,
                         condition: GoExpression::binary(
                             GoExpression::selector(source.clone(), ENUM_TAG_FIELD.to_string()),
-                            op,
+                            operator,
                             GoExpression::generated(GeneratedPackage::Prelude, tag),
                         ),
                         then_body: LoweredBlock { statements: body },
@@ -1106,25 +1106,30 @@ impl GoResultLayoutChange {
 
 fn immutable_layout_change_fields(
     target: &ValueLayout,
-) -> Vec<(&'static str, Option<(&'static str, BinaryOp)>)> {
+) -> Vec<(&'static str, Option<(&'static str, GoBinaryOperator)>)> {
     match target {
         ValueLayout::Tuple { elements, .. } => (0..elements.len())
             .map(|index| (go_name::tuple_field(index), None))
             .collect(),
         ValueLayout::TaggedOption { .. } => {
             let some = tags::option_variant("Some");
-            vec![(some.fields[0], Some((some.tag, BinaryOp::Eq)))]
+            vec![(some.fields[0], Some((some.tag, GoBinaryOperator::Equal)))]
         }
         ValueLayout::Fallible { fallible_type, .. } if fallible_type.is_partial() => {
             let (ok, err) = (tags::partial_variant("Ok"), tags::partial_variant("Err"));
             vec![
-                (ok.fields[0], Some((err.tag, BinaryOp::Ne))),
-                (err.fields[0], Some((ok.tag, BinaryOp::Ne))),
+                (ok.fields[0], Some((err.tag, GoBinaryOperator::NotEqual))),
+                (err.fields[0], Some((ok.tag, GoBinaryOperator::NotEqual))),
             ]
         }
         ValueLayout::Fallible { .. } => [tags::result_variant("Ok"), tags::result_variant("Err")]
             .into_iter()
-            .map(|variant| (variant.fields[0], Some((variant.tag, BinaryOp::Eq))))
+            .map(|variant| {
+                (
+                    variant.fields[0],
+                    Some((variant.tag, GoBinaryOperator::Equal)),
+                )
+            })
             .collect(),
         _ => unreachable!("immutable changes require a tuple or tagged container"),
     }

@@ -429,7 +429,7 @@ fn binds_spelling(statement: &LoweredStatement, spelling: &str) -> bool {
     let named = |name: &GoIdentifier| name.spelling() == spelling;
     match statement {
         LoweredStatement::Define(definition) => definition.names.iter().any(named),
-        LoweredStatement::VarDecl { name, .. } => named(name),
+        LoweredStatement::VarDeclaration { name, .. } => named(name),
         LoweredStatement::Const(plan) => named(&plan.name),
         LoweredStatement::If(plan) => plan
             .initializer

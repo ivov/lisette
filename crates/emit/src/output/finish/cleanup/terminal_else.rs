@@ -2,13 +2,13 @@ use std::mem;
 
 use rustc_hash::FxHashMap;
 
-use crate::lookup::state::scope::{ScopeState, TypeParam};
+use crate::lookup::state::scope::{ScopeState, ScopedTypeParameter};
 use crate::target::ir::bodies::{
     ElseArm, ElseLayout, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
     for_each_statements_mut,
 };
 use crate::target::ir::go_expression::{
-    BinaryOp, GoExpressionNode, Operand, UnaryOp, verbatim_identifiers,
+    GoBinaryOperator, GoExpressionNode, GoUnaryOperator, Operand, verbatim_identifiers,
 };
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
@@ -49,7 +49,7 @@ fn declares_no_names(body: &LoweredBlock) -> bool {
         !matches!(
             statement.kind,
             LoweredStatement::Define(_)
-                | LoweredStatement::VarDecl { .. }
+                | LoweredStatement::VarDeclaration { .. }
                 | LoweredStatement::Const(_)
                 | LoweredStatement::Select(_)
                 | LoweredStatement::Switch(_)
@@ -113,7 +113,7 @@ fn rewrite_nth_scoped_terminal_else(
     statements: &mut Vec<Statement>,
     target: usize,
     rewrite: Rewrite,
-    type_params: &[TypeParam],
+    type_params: &[ScopedTypeParameter],
 ) -> Option<bool> {
     let mut seen = 0;
     let mut found = None;
@@ -217,12 +217,12 @@ pub(crate) fn flip_branches(plan: &mut IfPlan) {
         (
             Some(label),
             GoExpressionNode::Binary {
-                operator: BinaryOp::Eq,
+                operator: GoBinaryOperator::Equal,
                 left,
                 ..
             },
         ) => plan.condition.with_node(GoExpressionNode::Binary {
-            operator: BinaryOp::Eq,
+            operator: GoBinaryOperator::Equal,
             left: left.clone(),
             right: label.into_operand(),
         }),
@@ -244,15 +244,19 @@ fn negated(node: &GoExpressionNode) -> Option<Operand> {
             right,
         } => {
             let (operator, left, right) = match operator {
-                BinaryOp::Eq => (BinaryOp::Ne, left.clone(), right.clone()),
-                BinaryOp::Ne => (BinaryOp::Eq, left.clone(), right.clone()),
-                BinaryOp::And => (
-                    BinaryOp::Or,
+                GoBinaryOperator::Equal => {
+                    (GoBinaryOperator::NotEqual, left.clone(), right.clone())
+                }
+                GoBinaryOperator::NotEqual => {
+                    (GoBinaryOperator::Equal, left.clone(), right.clone())
+                }
+                GoBinaryOperator::And => (
+                    GoBinaryOperator::Or,
                     negated_in_place(left)?,
                     negated_in_place(right)?,
                 ),
-                BinaryOp::Or => (
-                    BinaryOp::And,
+                GoBinaryOperator::Or => (
+                    GoBinaryOperator::And,
                     negated_in_place(left)?,
                     negated_in_place(right)?,
                 ),
@@ -266,12 +270,12 @@ fn negated(node: &GoExpressionNode) -> Option<Operand> {
             }
         }
         GoExpressionNode::Unary {
-            operator: UnaryOp::Not,
+            operator: GoUnaryOperator::Not,
             operand,
         } => return Some(operand.clone()),
         GoExpressionNode::Identifier(_) | GoExpressionNode::Call { .. } => {
             GoExpressionNode::Unary {
-                operator: UnaryOp::Not,
+                operator: GoUnaryOperator::Not,
                 operand: node.clone().into(),
             }
         }

@@ -18,7 +18,7 @@ impl Planner<'_> {
         let prelude = |name: &str| GoExpression::generated(GeneratedPackage::Prelude, name);
         let (function, closure) = match self.facts.compound_parts(ty) {
             Some((CompoundKind::Slice | CompoundKind::EnumeratedSlice, args)) => {
-                match args.first().and_then(|elem| self.element_clone(elem)) {
+                match args.first().and_then(|element| self.element_clone(element)) {
                     Some(clone) => (prelude("SliceCloneFunc"), Some(clone)),
                     None => (
                         GoExpression::generated(GeneratedPackage::Slices, "Clone"),
@@ -49,8 +49,8 @@ impl Planner<'_> {
         let parameters = vec![GoParameter::new(var.clone(), go_ty.clone())];
         let element = GoExpression::identifier(var);
         match self.facts.tuple_elements(ty) {
-            Some(elems) => {
-                let mut statements = self.tuple_clone_statements(&element, &elems);
+            Some(elements) => {
+                let mut statements = self.tuple_clone_statements(&element, &elements);
                 statements.push(plain_return(element));
                 Some(function_literal(
                     parameters,
@@ -73,16 +73,20 @@ impl Planner<'_> {
         }
     }
 
-    fn tuple_clone_statements(&mut self, place: &GoExpression, elems: &[Type]) -> Vec<Statement> {
+    fn tuple_clone_statements(
+        &mut self,
+        place: &GoExpression,
+        elements: &[Type],
+    ) -> Vec<Statement> {
         let mut statements = Vec::new();
-        for (index, elem) in elems.iter().enumerate() {
+        for (index, element) in elements.iter().enumerate() {
             let field_place =
                 GoExpression::selector(place.clone(), go_name::tuple_field(index).to_string());
-            if self.facts.is_clone_container(elem) {
-                let clone = self.clone_expression(field_place.clone(), elem);
+            if self.facts.is_clone_container(element) {
+                let clone = self.clone_expression(field_place.clone(), element);
                 statements.push(assign(field_place, clone));
-            } else if let Some(inner) = self.facts.tuple_elements(elem)
-                && self.needs_clone(elem)
+            } else if let Some(inner) = self.facts.tuple_elements(element)
+                && self.needs_clone(element)
             {
                 statements.extend(self.tuple_clone_statements(&field_place, &inner))
             }
@@ -92,7 +96,7 @@ impl Planner<'_> {
 
     fn needs_clone(&self, ty: &Type) -> bool {
         match self.facts.tuple_elements(ty) {
-            Some(elems) => elems.iter().any(|e| self.needs_clone(e)),
+            Some(elements) => elements.iter().any(|e| self.needs_clone(e)),
             None => self.facts.is_clone_container(ty),
         }
     }

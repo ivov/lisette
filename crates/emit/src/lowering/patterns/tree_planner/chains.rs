@@ -1,4 +1,4 @@
-use super::{TreePlanner, WalkCtx, merge_binding_ids};
+use super::{TreePlanner, WalkContext, merge_binding_ids};
 use crate::target::ir::go_expression::Position;
 
 use syntax::ast::Expression;
@@ -47,8 +47,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             ChainTail::Catchall(_) | ChainTail::Open => tests.len(),
         };
 
-        let guard_ctx = WalkCtx::switch_case(place);
-        let chain_ctx = WalkCtx::chain_test(place);
+        let guard_ctx = WalkContext::switch_case(place);
+        let chain_ctx = WalkContext::chain_test(place);
 
         let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular_len);
         let mut all_diverge = regular_len > 0;
@@ -113,7 +113,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements: &mut Vec<Statement>,
         tests: &[ChainTest],
         tail: &ChainTail,
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
     ) {
         let conditions = self.render_chain_conditions(tests);
         let inner_ctx = ctx.nested();
@@ -149,7 +149,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         statements: &mut Vec<Statement>,
         group: ChainGroup<'_>,
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
         collapse_as_catchall: bool,
     ) {
         let ChainGroup {
@@ -184,7 +184,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements: &mut Vec<Statement>,
         indices: &[usize],
         tests: &[ChainTest],
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
     ) {
         if bindings_are_hoistable(tests, indices) {
             self.lower_chain_group_hoisted(statements, indices, tests, ctx);
@@ -198,7 +198,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements: &mut Vec<Statement>,
         indices: &[usize],
         tests: &[ChainTest],
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
     ) {
         if let Some(&ref_index) = indices
             .iter()
@@ -229,7 +229,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements: &mut Vec<Statement>,
         indices: &[usize],
         tests: &[ChainTest],
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
     ) {
         for &test_index in indices {
             match &tests[test_index].arm {
@@ -267,7 +267,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements: &mut Vec<Statement>,
         indices: &[usize],
         tests: &[ChainTest],
-        ctx: &WalkCtx,
+        ctx: &WalkContext,
     ) {
         for (j, &test_index) in indices.iter().enumerate() {
             let is_last_in_group = j == indices.len() - 1;
@@ -291,7 +291,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    fn walk_chain_arm(&mut self, statements: &mut Vec<Statement>, arm: &ChainArm, ctx: &WalkCtx) {
+    fn walk_chain_arm(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        arm: &ChainArm,
+        ctx: &WalkContext,
+    ) {
         match arm {
             ChainArm::Leaf(leaf) => self.walk_leaf(statements, leaf, ctx),
             ChainArm::Guard(guard) => self.walk_guard(statements, guard, ctx),

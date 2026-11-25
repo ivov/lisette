@@ -118,7 +118,9 @@ fn remove_temp(statements: &mut Vec<Statement>, name: &GoIdentifier) {
 fn declares(statement: &Statement) -> bool {
     matches!(
         statement.kind,
-        LoweredStatement::Define(_) | LoweredStatement::VarDecl { .. } | LoweredStatement::Const(_)
+        LoweredStatement::Define(_)
+            | LoweredStatement::VarDeclaration { .. }
+            | LoweredStatement::Const(_)
     )
 }
 

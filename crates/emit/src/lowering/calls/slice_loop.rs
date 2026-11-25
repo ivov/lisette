@@ -17,7 +17,7 @@ use crate::target::ir::bodies::{
     ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, assign, declare, define, directed_first,
 };
-use crate::target::ir::go_expression::UnaryOp;
+use crate::target::ir::go_expression::GoUnaryOperator;
 use crate::target::ir::prelude::{option_variant, prelude_call};
 use crate::target::ir::values::{GoExpression, OperandForm, Stability};
 use crate::target::types::go_type::GoType;
@@ -517,7 +517,7 @@ impl Planner<'_> {
                 init,
                 go_type,
             } => match go_type {
-                Some(go_type) => LoweredStatement::VarDecl {
+                Some(go_type) => LoweredStatement::VarDeclaration {
                     name: result.clone(),
                     go_type: go_type.clone(),
                     value: Some(init.clone()),
@@ -646,7 +646,7 @@ impl Planner<'_> {
             LoweredCallback::Callee(callee) => {
                 let call = GoExpression::call(callee.clone(), vec![local(element_name)]);
                 if negated {
-                    ValuePlan::computed(Vec::new(), GoExpression::unary(UnaryOp::Not, call))
+                    ValuePlan::computed(Vec::new(), GoExpression::unary(GoUnaryOperator::Not, call))
                 } else {
                     ValuePlan::computed(Vec::new(), call)
                 }

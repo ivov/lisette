@@ -5,7 +5,9 @@ use super::local_names::LocalNames;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::lookup::facts::reusable_bindings::ReusableBindings;
-use crate::lookup::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
+use crate::lookup::state::bindings::{
+    BindingValue, ComponentBinding, InlineExpression, TupleBinding,
+};
 use crate::lookup::state::enclosing::LoopContext;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::target::ir::bodies::LoopId;
@@ -22,7 +24,7 @@ pub(crate) struct ScopeState {
     next_local_id: u32,
     next_loop_id: u32,
     frames: Vec<ScopeFrame>,
-    type_params: Vec<TypeParam>,
+    type_params: Vec<ScopedTypeParameter>,
     reusable_bindings: ReusableBindings,
     local_constants: FxHashMap<BindingId, Constant>,
 }
@@ -92,7 +94,7 @@ impl Declarations {
 }
 
 #[derive(Clone)]
-pub(crate) struct TypeParam {
+pub(crate) struct ScopedTypeParameter {
     pub(crate) name: EcoString,
     pub(crate) go_name: String,
     pub(crate) bounds: Vec<Type>,
@@ -129,11 +131,11 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn set_type_params(&mut self, type_params: Vec<TypeParam>) {
+    pub(crate) fn set_type_params(&mut self, type_params: Vec<ScopedTypeParameter>) {
         self.type_params = type_params;
     }
 
-    pub(crate) fn type_params(&self) -> &[TypeParam] {
+    pub(crate) fn type_params(&self) -> &[ScopedTypeParameter] {
         &self.type_params
     }
 
@@ -257,13 +259,17 @@ impl ScopeState {
         name.identify(id);
     }
 
-    pub(crate) fn bind_inline_expr(
+    pub(crate) fn bind_inline_expression(
         &mut self,
         lisette_name: impl Into<String>,
         ids: &[BindingId],
-        expr: InlineExpr,
+        expression: InlineExpression,
     ) {
-        self.push_binding(lisette_name.into(), ids, BindingValue::InlineExpr(expr));
+        self.push_binding(
+            lisette_name.into(),
+            ids,
+            BindingValue::InlineExpression(expression),
+        );
     }
 
     pub(crate) fn resolve_identifier_binding(&self, lisette_name: &str) -> Option<&BindingValue> {

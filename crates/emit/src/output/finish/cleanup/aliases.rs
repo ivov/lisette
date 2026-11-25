@@ -110,7 +110,7 @@ fn replace_only_read(
         ),
         LoweredStatement::Assign(AssignForm::Compound {
             target,
-            kind: CompoundKind::OpAssign { rhs, .. },
+            kind: CompoundKind::OperatorAssign { rhs, .. },
         }) => rename_in(
             vec![target.node_mut(), rhs.node_mut()],
             Some(0),

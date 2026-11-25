@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::target::names::go_name;
-use diagnostics::{LisetteDiagnostic, emit as emit_diag};
+use diagnostics::{LisetteDiagnostic, emit as emit_diagnostic};
 use syntax::ast::{ImportAlias, Span};
 use syntax::program::{File, FileImport, ImportKey, strip_go_prefix};
 
@@ -146,7 +146,7 @@ fn detect_collisions(entries: &[OutputImport]) -> Vec<LisetteDiagnostic> {
             let [first, second, rest @ ..] = paths.as_slice() else {
                 unreachable!("collision groups contain at least two paths")
             };
-            emit_diag::go_import_collision(alias, first, second, rest)
+            emit_diagnostic::go_import_collision(alias, first, second, rest)
         })
         .collect()
 }

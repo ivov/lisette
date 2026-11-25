@@ -17,7 +17,7 @@ use crate::target::ir::bodies::{
     directed_first, discard, effect_statement,
 };
 use crate::target::ir::evaluation::Effects;
-use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::ConstructorKind;
 use crate::target::ir::values::Stability;
@@ -118,7 +118,7 @@ pub(in crate::lowering) fn collapse_declared_temp(
     let [declaration, filler] = statements.as_slice() else {
         return;
     };
-    let LoweredStatement::VarDecl {
+    let LoweredStatement::VarDeclaration {
         name: declared,
         go_type,
         value: None,
@@ -188,28 +188,28 @@ fn infers_declared_type(
         | GoExpressionNode::FunctionLiteral { .. }
         | GoExpressionNode::Verbatim(_) => false,
         GoExpressionNode::Binary { operator, .. } => match operator {
-            BinaryOp::Eq
-            | BinaryOp::Ne
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge
-            | BinaryOp::And
-            | BinaryOp::Or => go_type.is_named("bool"),
-            BinaryOp::Shl
-            | BinaryOp::Shr
-            | BinaryOp::Add
-            | BinaryOp::Sub
-            | BinaryOp::Mul
-            | BinaryOp::Div
-            | BinaryOp::Rem
-            | BinaryOp::BitAnd
-            | BinaryOp::BitOr
-            | BinaryOp::BitXor
-            | BinaryOp::BitAndNot => value_has_declared_type,
+            GoBinaryOperator::Equal
+            | GoBinaryOperator::NotEqual
+            | GoBinaryOperator::LessThan
+            | GoBinaryOperator::LessThanOrEqual
+            | GoBinaryOperator::GreaterThan
+            | GoBinaryOperator::GreaterThanOrEqual
+            | GoBinaryOperator::And
+            | GoBinaryOperator::Or => go_type.is_named("bool"),
+            GoBinaryOperator::ShiftLeft
+            | GoBinaryOperator::ShiftRight
+            | GoBinaryOperator::Addition
+            | GoBinaryOperator::Subtraction
+            | GoBinaryOperator::Multiplication
+            | GoBinaryOperator::Division
+            | GoBinaryOperator::Remainder
+            | GoBinaryOperator::BitwiseAnd
+            | GoBinaryOperator::BitwiseOr
+            | GoBinaryOperator::BitwiseXor
+            | GoBinaryOperator::BitwiseAndNot => value_has_declared_type,
         },
         GoExpressionNode::Unary {
-            operator: UnaryOp::Not,
+            operator: GoUnaryOperator::Not,
             ..
         } => go_type.is_named("bool"),
         _ => value_has_declared_type && !go_type.is_channel(),
@@ -238,11 +238,13 @@ fn join_boolean_branches(
     then_value: &GoExpression,
     else_value: &GoExpression,
 ) -> Option<GoExpression> {
-    let and =
-        |left: GoExpression, right: GoExpression| GoExpression::binary(left, BinaryOp::And, right);
-    let or =
-        |left: GoExpression, right: GoExpression| GoExpression::binary(left, BinaryOp::Or, right);
-    let not = |operand: &GoExpression| GoExpression::unary(UnaryOp::Not, operand.clone());
+    let and = |left: GoExpression, right: GoExpression| {
+        GoExpression::binary(left, GoBinaryOperator::And, right)
+    };
+    let or = |left: GoExpression, right: GoExpression| {
+        GoExpression::binary(left, GoBinaryOperator::Or, right)
+    };
+    let not = |operand: &GoExpression| GoExpression::unary(GoUnaryOperator::Not, operand.clone());
     Some(match (then_value.as_literal(), else_value.as_literal()) {
         (Some("true"), Some("false")) => condition.clone(),
         (Some("false"), Some("true")) => not(condition),
@@ -704,7 +706,7 @@ impl<'p> Planner<'p> {
         last: &Expression,
     ) -> Option<Vec<Statement>> {
         let Expression::Call {
-            expression: func,
+            expression: function,
             args,
             spread,
             ..
@@ -713,7 +715,7 @@ impl<'p> Planner<'p> {
             return None;
         };
 
-        let (method, receiver) = slice_growth_method(&self.facts, func)?;
+        let (method, receiver) = slice_growth_method(&self.facts, function)?;
 
         let receiver_is_lvalue =
             is_lvalue_chain(&self.facts, receiver) && !contains_newtype_access(receiver);
@@ -721,11 +723,11 @@ impl<'p> Planner<'p> {
         let (value, mut statements) = if receiver_is_lvalue {
             let (arguments, ordering) = self.lower_growth_args(last, args, spread.as_deref());
             let mut capture: Vec<Statement> = Vec::new();
-            let receiver_lv =
+            let receiver_place =
                 self.plan_place(&mut capture, receiver, PlaceOrdering::before(&ordering));
-            let target_differs = receiver_lv.node() != target.node();
-            let receiver_read = ValuePlan::computed(Vec::new(), receiver_lv.clone())
-                .with_stability(self.path_read_stability(&receiver_lv));
+            let target_differs = receiver_place.node() != target.node();
+            let receiver_read = ValuePlan::computed(Vec::new(), receiver_place.clone())
+                .with_stability(self.path_read_stability(&receiver_place));
             let arguments_effects = arguments
                 .iter()
                 .fold(Effects::default(), |effects, argument| {
@@ -737,11 +739,11 @@ impl<'p> Planner<'p> {
             );
             let receiver = if target_differs
                 && !arguments.is_empty()
-                && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read))
+                && (!is_clip_safe_path(&receiver_place) || later.prepend(&receiver_read))
             {
-                GoExpression::identifier(self.hoist_temp(&mut capture, "recv", receiver_lv))
+                GoExpression::identifier(self.hoist_temp(&mut capture, "recv", receiver_place))
             } else {
-                receiver_lv
+                receiver_place
             };
 
             capture.extend(ordering.into_parts().0);
@@ -851,37 +853,40 @@ impl<'p> Planner<'p> {
         ValuePlan::captured(statements, result_var)
     }
 
-    pub(in crate::lowering) fn build_break_value_plan(&mut self, val: &Expression) -> LoweredBlock {
+    pub(in crate::lowering) fn build_break_value_plan(
+        &mut self,
+        break_value: &Expression,
+    ) -> LoweredBlock {
         let loop_target = self.scope.current_loop().and_then(|loop_context| {
             let result_ty = loop_context.result_ty.clone()?;
             Some((loop_context.result.clone()?, result_ty))
         });
         if let Some((target, result_ty)) = loop_target {
-            let mut statements = self.lower_assign(val, &target, Some(&result_ty));
+            let mut statements = self.lower_assign(break_value, &target, Some(&result_ty));
             statements.push(LoweredStatement::Break(self.current_loop_transfer()).into());
             return LoweredBlock { statements };
         }
         let (mut statements, value) = self
-            .plan_value(val, ExpressionContext::value())
+            .plan_value(break_value, ExpressionContext::value())
             .into_parts();
-        if value.is_empty() && matches!(val, Expression::Propagate { .. }) {
+        if value.is_empty() && matches!(break_value, Expression::Propagate { .. }) {
             return LoweredBlock { statements };
         }
 
         if let Some(loop_context) = self.scope.current_loop().cloned()
             && let Some(target) = loop_context.result
         {
-            if self.is_unit_call(val) {
+            if self.is_unit_call(break_value) {
                 if !value.is_empty() {
                     statements.push(effect_statement(value));
                 }
-                let unit = self.unit_value(Some(val), loop_context.result_ty.as_ref());
+                let unit = self.unit_value(Some(break_value), loop_context.result_ty.as_ref());
                 statements.push(assign(target, unit));
             } else if !value.is_empty() {
                 let value = self.apply_type_coercion(
                     &mut statements,
                     loop_context.result_ty.as_ref(),
-                    val,
+                    break_value,
                     value,
                 );
 
@@ -897,12 +902,12 @@ impl<'p> Planner<'p> {
 
 fn slice_growth_method<'a, 'e>(
     facts: &EmitFacts<'a>,
-    func: &'e Expression,
+    function: &'e Expression,
 ) -> Option<(&'a str, &'e Expression)> {
-    let Expression::DotAccess { expression, .. } = func else {
+    let Expression::DotAccess { expression, .. } = function else {
         return None;
     };
-    let operation = facts.checked(func).callee().native()?;
+    let operation = facts.checked(function).callee().native()?;
     operation
         .grows_slice()
         .then_some((operation.method, expression))

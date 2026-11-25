@@ -253,7 +253,7 @@ impl Planner<'_> {
             let unit_result = return_info.body_result() == BodyResult::Value
                 && ty
                     .get_function_ret()
-                    .is_some_and(|ret| this.facts.resolves_to_unit(ret));
+                    .is_some_and(|return_ty| this.facts.resolves_to_unit(return_ty));
             if unit_result && !body.go_terminates() {
                 let unit = this.unit_value(None, ty.get_function_ret());
                 body.statements.push(plain_return(unit));

@@ -111,8 +111,8 @@ impl<'a> Walker<'a> {
             Expression::StructCall {
                 field_assignments, ..
             } => {
-                for fa in field_assignments {
-                    self.walk(&fa.value, role);
+                for field_assignment in field_assignments {
+                    self.walk(&field_assignment.value, role);
                 }
             }
 

@@ -16,38 +16,46 @@ pub(crate) fn extract_type_mapping(
         return;
     }
 
-    if let (Some(gen_params), Some(conc_params)) =
+    if let (Some(generic_params), Some(concrete_params)) =
         (generic.get_type_params(), concrete.get_type_params())
     {
-        for (generic, c) in gen_params.iter().zip(conc_params.iter()) {
+        for (generic, c) in generic_params.iter().zip(concrete_params.iter()) {
             extract_type_mapping(generic, c, mapping);
         }
         return;
     }
 
     match (generic, concrete) {
-        (Type::Function(gen_f), Type::Function(conc_f)) => {
-            for (generic, c) in gen_f.params.iter().zip(conc_f.params.iter()) {
+        (Type::Function(generic_function), Type::Function(concrete_function)) => {
+            for (generic, c) in generic_function
+                .params
+                .iter()
+                .zip(concrete_function.params.iter())
+            {
                 extract_type_mapping(&generic.ty, &c.ty, mapping);
             }
-            extract_type_mapping(&gen_f.return_type, &conc_f.return_type, mapping);
+            extract_type_mapping(
+                &generic_function.return_type,
+                &concrete_function.return_type,
+                mapping,
+            );
         }
-        (Type::Tuple(generic_elements), Type::Tuple(conc)) => {
-            for (generic, c) in generic_elements.iter().zip(conc.iter()) {
+        (Type::Tuple(generic_elements), Type::Tuple(concrete_elements)) => {
+            for (generic, c) in generic_elements.iter().zip(concrete_elements.iter()) {
                 extract_type_mapping(generic, c, mapping);
             }
         }
         (
             Type::Array {
-                element: gen_element,
+                element: generic_element,
                 ..
             },
             Type::Array {
-                element: conc_element,
+                element: concrete_element,
                 ..
             },
         ) => {
-            extract_type_mapping(gen_element, conc_element, mapping);
+            extract_type_mapping(generic_element, concrete_element, mapping);
         }
         _ => {}
     }

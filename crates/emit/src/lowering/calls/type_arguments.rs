@@ -8,18 +8,18 @@ use syntax::ast::Expression;
 use syntax::program::GoTypeRecipe;
 use syntax::types::{CompoundKind, FunctionParameter, FunctionType, SubstitutionMap, Type};
 
-pub(in crate::lowering) struct CallTypeArgsRequest<'e, 'c> {
+pub(in crate::lowering) struct CallTypeArgumentsRequest<'e, 'c> {
     pub(in crate::lowering) function: &'e Expression,
     pub(in crate::lowering) callee: &'e ResolvedCallee<'c>,
     pub(in crate::lowering) written_type_arguments: usize,
     pub(in crate::lowering) call_ty: Option<&'e Type>,
-    pub(in crate::lowering) arg_shape: CallArgShape,
+    pub(in crate::lowering) arg_shape: CallArgumentShape,
     pub(in crate::lowering) slot: Option<&'e Type>,
     pub(in crate::lowering) receiver_passed: bool,
 }
 
 #[derive(Clone, Copy)]
-pub(in crate::lowering) struct CallArgShape {
+pub(in crate::lowering) struct CallArgumentShape {
     pub value_count: usize,
     pub has_spread: bool,
 }
@@ -28,19 +28,19 @@ fn all_type_params_inferrable(
     vars: &[EcoString],
     params: &[FunctionParameter],
     receiver_count: usize,
-    arg_shape: CallArgShape,
+    arg_shape: CallArgumentShape,
 ) -> bool {
-    let variadic_idx = params
+    let variadic_index = params
         .iter()
         .position(|p| p.ty.is_native(CompoundKind::VarArgs))
         .filter(|&i| i == params.len() - 1);
     let variadic_has_args = arg_shape.has_spread
-        || variadic_idx.is_some_and(|i| arg_shape.value_count + receiver_count > i);
+        || variadic_index.is_some_and(|i| arg_shape.value_count + receiver_count > i);
 
     vars.iter().all(|var| {
         let param_ty = Type::Parameter(var.clone());
         params.iter().enumerate().any(|(i, pt)| {
-            pt.ty.contains_type(&param_ty) && (Some(i) != variadic_idx || variadic_has_args)
+            pt.ty.contains_type(&param_ty) && (Some(i) != variadic_index || variadic_has_args)
         })
     })
 }
@@ -61,9 +61,9 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn call_type_arguments(
         &self,
-        request: CallTypeArgsRequest<'_, '_>,
+        request: CallTypeArgumentsRequest<'_, '_>,
     ) -> GoType {
-        let CallTypeArgsRequest {
+        let CallTypeArgumentsRequest {
             function,
             callee,
             written_type_arguments,
@@ -150,20 +150,22 @@ impl Planner<'_> {
     pub(in crate::lowering) fn constructor_reference_type_arguments(
         &self,
         fn_params: &[FunctionParameter],
-        ret_params: &[Type],
+        return_type_arguments: &[Type],
         ctx: ExpressionContext<'_>,
     ) -> GoType {
-        let return_params_are_inferrable = ret_params.len() <= fn_params.len()
-            && ret_params
-                .iter()
-                .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
+        let return_params_are_inferrable = return_type_arguments.len() <= fn_params.len()
+            && return_type_arguments.iter().all(|argument| {
+                fn_params
+                    .iter()
+                    .any(|param| param.ty.contains_type(argument))
+            });
         let parameters_support_go_inference = fn_params
             .iter()
             .all(|param| !self.facts.is_go_named_function_type(&param.ty));
         if ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference {
             GoType::default()
         } else {
-            self.format_type_args(ret_params)
+            self.format_type_args(return_type_arguments)
         }
     }
 
@@ -172,7 +174,7 @@ impl Planner<'_> {
         function: &Expression,
         declared: Option<&Type>,
         receiver_count: usize,
-        arg_shape: CallArgShape,
+        arg_shape: CallArgumentShape,
         function_alias_pins: bool,
     ) -> Option<GoType> {
         let (vars, f) = generic_function(declared)?;
