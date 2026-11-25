@@ -5,7 +5,7 @@ use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::planner::queries::PlannerQueries;
 
 use crate::Planner;
-use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
+use crate::lookup::facts::value_layout::{ResultProducer, ValueLayout};
 use crate::lowering::abi::callable::CallableAbi;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
@@ -33,13 +33,6 @@ impl<'r> LoweredProducer<'r> {
         Self {
             abi: &abi.result,
             producer: origin.producer(),
-        }
-    }
-
-    pub(in crate::lowering) fn of_layout(layout: &'r FunctionLayout) -> Self {
-        Self {
-            abi: &layout.return_abi,
-            producer: layout.producer,
         }
     }
 }
@@ -430,7 +423,8 @@ impl PlannerQueries<'_, '_> {
         abi: &CallableAbi,
         result_ty: &Type,
     ) -> Vec<LayoutChange> {
-        let source = abi.function_layout(self.facts).results;
+        let layout = abi.function_layout(self.facts);
+        let source = layout.returns.slots();
         let target = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
         let target = target
             .tuple_elements()

@@ -204,7 +204,7 @@ impl Planner<'_> {
         );
 
         self.plan_function_result_layout_change(&mut branch, call, &method.source, &method.target);
-        if method.target.return_abi == CallableReturnAbi::Void {
+        if method.target.return_abi() == CallableReturnAbi::Void {
             branch.push(LoweredStatement::Return(Vec::new()).into());
         }
         let check = LoweredStatement::If(IfPlan::plain(
@@ -415,9 +415,9 @@ impl Planner<'_> {
         method: &AdapterMethod,
         inner_call: GoExpression,
     ) {
-        if method.target.return_abi == CallableReturnAbi::Void {
+        if method.target.return_abi() == CallableReturnAbi::Void {
             statements.push(effect_statement(inner_call));
-        } else if method.source.return_abi == CallableReturnAbi::Void {
+        } else if method.source.return_abi() == CallableReturnAbi::Void {
             let zero = self.go_zero(method.source.result_layout.logical_type());
             statements.push(effect_statement(inner_call));
             statements.push(plain_return(zero));
@@ -981,7 +981,7 @@ impl PlannerQueries<'_, '_> {
 
         let fallback = ResultFallback {
             layout: &user_result,
-            abi: source.return_abi.clone(),
+            abi: source.return_abi(),
             declared: &function.return_type,
         };
         let target =

@@ -267,8 +267,8 @@ impl Planner<'_> {
                 ValueLayout::Function { layout: source, .. },
                 ValueLayout::Function { layout: target, .. },
             ) = (&source_layout, &target_layout)
-            && source.return_abi == CallableReturnAbi::Value
-            && target.return_abi == CallableReturnAbi::Void
+            && source.return_abi() == CallableReturnAbi::Value
+            && target.return_abi() == CallableReturnAbi::Void
             && source.same_parameter_representation(target)
         {
             return None;

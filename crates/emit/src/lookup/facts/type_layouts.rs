@@ -1,11 +1,13 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::return_abi_rules::slot_return_abi;
 use crate::lookup::facts::value_layout::{
-    FallibleKind, FunctionLayout, ResultProducer, ValueLayout,
+    FallibleKind, FunctionLayout, PayloadSlots, ResultProducer, ReturnLayout, ValueLayout,
 };
 use crate::target::ir::prelude::is_prelude_container_type;
 use crate::target::types::go_type::GoTypeKind;
-use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
+use crate::target::types::return_abi::{
+    CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
+};
 use syntax::program::{
     FieldSelection, GoOptionRepresentation, SlotOrigin, go_option_representation,
 };
@@ -13,10 +15,11 @@ use syntax::types::{CompoundKind, FunctionType, Symbol, Type};
 
 impl EmitFacts<'_> {
     pub(crate) fn lowered_tuple_slot_layouts(&self, tuple_ty: &Type) -> Vec<ValueLayout> {
-        self.tuple_result_slots(
-            &self.value_layout(tuple_ty, SlotOrigin::Lisette),
-            Some(tuple_ty),
-        )
+        let layout = self.value_layout(tuple_ty, SlotOrigin::Lisette);
+        let elements = layout
+            .tuple_elements()
+            .expect("a tuple type has a tuple layout");
+        self.tuple_result_slots(elements, Some(tuple_ty))
     }
 
     pub(crate) fn prelude_receiver_method_layouts(
@@ -61,7 +64,7 @@ impl EmitFacts<'_> {
         let source = self.function_layout(
             parameters,
             &result,
-            target.return_abi.clone(),
+            target.return_abi(),
             Some(&declaration.return_type),
         );
 
@@ -348,37 +351,55 @@ impl EmitFacts<'_> {
         return_abi: CallableReturnAbi,
         declaration: Option<&Type>,
     ) -> FunctionLayout {
-        let payload = || {
-            result
-                .payload()
-                .expect("a payload-carrying return ABI has a payload layout")
+        let payload_slots = |encoding: PayloadLayout| {
+            let payload = result.payload()?;
+            Some(match encoding {
+                PayloadLayout::Packed => PayloadSlots::Packed(payload.clone()),
+                PayloadLayout::Flattened => PayloadSlots::Flattened(self.tuple_result_slots(
+                    payload.tuple_elements()?,
+                    declaration.map(Type::ok_type).as_ref(),
+                )),
+            })
         };
-        let results = match return_abi.lowered() {
-            None if return_abi == CallableReturnAbi::Void => Vec::new(),
-            None => vec![result.clone()],
-            Some(LoweredReturnAbi::BareError) => Vec::new(),
-            Some(LoweredReturnAbi::Option(
-                OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
-            )) => vec![payload().clone()],
-            Some(
-                lowered @ (LoweredReturnAbi::Result { .. }
-                | LoweredReturnAbi::Partial { .. }
-                | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })),
-            ) => {
-                if lowered.has_flattened_payload() {
-                    self.tuple_result_slots(payload(), declaration.map(Type::ok_type).as_ref())
-                } else {
-                    vec![payload().clone()]
-                }
+        let returns = match &return_abi {
+            CallableReturnAbi::Void => Some(ReturnLayout::Void),
+            CallableReturnAbi::Value => Some(ReturnLayout::Value(result.clone())),
+            CallableReturnAbi::Lowered(LoweredReturnAbi::BareError) => {
+                Some(ReturnLayout::BareError)
             }
-            Some(LoweredReturnAbi::Tuple { .. }) => self.tuple_result_slots(result, declaration),
-        };
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Result { payload }) => {
+                payload_slots(*payload).map(ReturnLayout::Result)
+            }
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { payload }) => {
+                payload_slots(*payload).map(ReturnLayout::Partial)
+            }
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
+                payload,
+            })) => payload_slots(*payload).map(ReturnLayout::CommaOk),
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
+                result.payload().cloned().map(ReturnLayout::Nullable)
+            }
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(
+                value,
+            ))) => result.payload().map(|payload| ReturnLayout::Sentinel {
+                value: *value,
+                payload: payload.clone(),
+            }),
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }) => {
+                result.tuple_elements().map(|elements| ReturnLayout::Tuple {
+                    arity: *arity,
+                    slots: self.tuple_result_slots(elements, declaration),
+                })
+            }
+        }
+        .unwrap_or_else(|| {
+            unreachable!("the return ABI {return_abi:?} does not fit the result layout {result:?}")
+        });
 
         FunctionLayout {
             parameters,
             result_layout: Box::new(result.clone()),
-            results,
-            return_abi,
+            returns: Box::new(returns),
             producer: ResultProducer::Go,
         }
     }
@@ -447,15 +468,13 @@ impl EmitFacts<'_> {
 
     fn tuple_result_slots(
         &self,
-        tuple: &ValueLayout,
+        elements: &[ValueLayout],
         declaration: Option<&Type>,
     ) -> Vec<ValueLayout> {
         let declared = declaration
             .map(|ty| self.tuple_or_type_arguments(ty))
             .unwrap_or_default();
-        tuple
-            .tuple_elements()
-            .expect("a tuple-shaped return ABI has a tuple layout")
+        elements
             .iter()
             .enumerate()
             .map(|(index, element)| match element {

@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
+use crate::lookup::facts::value_layout::{FunctionLayout, ReturnLayout, ValueLayout};
 use crate::lowering::abi::coercion_plan::{
     AggregateLayoutChange, CoercionPlan, ImmutableContainer, LayoutChange, LayoutChangeDirection,
 };
@@ -801,14 +801,14 @@ impl Planner<'_> {
         target: &FunctionLayout,
     ) {
         if source.result_layout.logical_type().is_never()
-            && target.return_abi != CallableReturnAbi::Void
+            && target.return_abi() != CallableReturnAbi::Void
         {
             statements.push(effect_statement(call));
             statements.push(LoweredStatement::UnreachablePanic.into());
             return;
         }
-        if source.return_abi == CallableReturnAbi::Void
-            && target.return_abi != CallableReturnAbi::Void
+        if source.return_abi() == CallableReturnAbi::Void
+            && target.return_abi() != CallableReturnAbi::Void
         {
             statements.push(effect_statement(call));
             statements.push(plain_return(GoExpression::unit()));
@@ -818,10 +818,10 @@ impl Planner<'_> {
             self.push_rewrapped_result(statements, call, source, change);
             return;
         }
-        if target.return_abi == CallableReturnAbi::Value
+        if let ReturnLayout::Value(target) = &*target.returns
             && let Some(source) = source.single_result_layout()
         {
-            self.plan_single_result_layout_change(statements, call, &source, &target.results[0]);
+            self.plan_single_result_layout_change(statements, call, &source, target);
             return;
         }
         if let Some(change) = self
@@ -831,7 +831,10 @@ impl Planner<'_> {
             self.push_rewrapped_result(statements, call, source, change);
             return;
         }
-        if !source.return_abi.same_logical_contract(&target.return_abi) {
+        if !source
+            .return_abi()
+            .same_logical_contract(&target.return_abi())
+        {
             self.plan_reencoded_result_layout_change(statements, call, source, target);
             return;
         }
@@ -845,9 +848,14 @@ impl Planner<'_> {
         source: &FunctionLayout,
         change: GoResultLayoutChange,
     ) {
+        let abi = source.return_abi();
+        let producer = LoweredProducer {
+            abi: &abi,
+            producer: source.producer,
+        };
         let (body, _) = self.plan_abi_wrapping(
             call,
-            LoweredProducer::of_layout(source),
+            producer,
             source.result_layout.logical_type(),
             Some(change),
             WrapperTarget::Return,
@@ -886,15 +894,15 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
-        if target.return_abi.is_lowered() {
+        if target.return_abi().is_lowered() {
             let tagged = self
                 .facts
                 .value_layout(source.result_layout.logical_type(), SlotOrigin::Lisette);
             let intermediate =
                 self.facts
-                    .function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
+                    .function_layout(Vec::new(), &tagged, target.return_abi(), None);
             if !intermediate.same_result_representation(target) {
-                let body = self.reencode_return(call, source, &intermediate.return_abi);
+                let body = self.reencode_return(call, source, &intermediate.return_abi());
                 let result = intermediate
                     .result_go_type(&self.queries())
                     .expect("a lowered result has a Go signature");
@@ -912,7 +920,7 @@ impl Planner<'_> {
                 return;
             }
         }
-        statements.extend(self.reencode_return(call, source, &target.return_abi));
+        statements.extend(self.reencode_return(call, source, &target.return_abi()));
     }
 
     fn plan_same_contract_result_layout_change(
@@ -922,26 +930,40 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
-        match source.return_abi.lowered() {
-            None => self.plan_unlowered_result_layout_change(statements, call, source, target),
-            Some(LoweredReturnAbi::BareError) => statements.push(plain_return(call)),
-            Some(
-                LoweredReturnAbi::Result { .. }
-                | LoweredReturnAbi::Partial { .. }
-                | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }),
-            ) => self.plan_status_result_layout_change(statements, call, source, target),
-            Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
-                self.plan_nullable_result_layout_change(statements, call, source, target)
+        match (&*source.returns, &*target.returns) {
+            (ReturnLayout::Void | ReturnLayout::Value(_), _) => {
+                self.plan_unlowered_result_layout_change(statements, call, source, target)
             }
-            Some(LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(_))) => {
+            (ReturnLayout::BareError | ReturnLayout::Sentinel { .. }, _) => {
                 statements.push(plain_return(call))
             }
-            Some(LoweredReturnAbi::Tuple { arity }) => {
+            (ReturnLayout::Result(_) | ReturnLayout::Partial(_) | ReturnLayout::CommaOk(_), _) => {
+                self.plan_status_result_layout_change(statements, call, source, target)
+            }
+            (ReturnLayout::Nullable(source_payload), ReturnLayout::Nullable(target_payload)) => {
+                self.plan_nullable_result_layout_change(
+                    statements,
+                    call,
+                    source,
+                    source_payload,
+                    target_payload,
+                )
+            }
+            (
+                ReturnLayout::Tuple {
+                    arity,
+                    slots: source_slots,
+                },
+                ReturnLayout::Tuple {
+                    slots: target_slots,
+                    ..
+                },
+            ) => {
                 let values = self.create_temp_vars("ret", *arity);
                 statements.push(define_many(values.clone(), call));
                 let values = names(&values)
                     .into_iter()
-                    .zip(source.results.iter().zip(&target.results))
+                    .zip(source_slots.iter().zip(target_slots))
                     .map(|(value, (source, target))| {
                         let change = self.queries().resolve_layout_change(source, target);
                         self.plan_layout_change(statements, value, &change)
@@ -950,6 +972,9 @@ impl Planner<'_> {
 
                 statements.push(multi_value_return(values));
             }
+            (source, target) => unreachable!(
+                "one Go return contract has two return layouts: {source:?} and {target:?}"
+            ),
         }
     }
 
@@ -960,26 +985,26 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
-        if source.results.is_empty() {
-            statements.push(effect_statement(call));
-            if !target.results.is_empty() {
-                statements.push(if source.result_layout.logical_type().is_never() {
-                    LoweredStatement::UnreachablePanic.into()
-                } else {
-                    plain_return(GoExpression::unit())
-                });
+        match (&*source.returns, &*target.returns) {
+            (ReturnLayout::Value(source_slot), ReturnLayout::Value(target_slot)) => {
+                let change = self
+                    .queries()
+                    .resolve_layout_change(source_slot, target_slot);
+                let value = self.plan_layout_change(statements, call, &change);
+                statements.push(plain_return(value));
             }
-            return;
+            (ReturnLayout::Value(_), _) => statements.push(effect_statement(call)),
+            (_, target_returns) => {
+                statements.push(effect_statement(call));
+                if matches!(target_returns, ReturnLayout::Value(_)) {
+                    statements.push(if source.result_layout.logical_type().is_never() {
+                        LoweredStatement::UnreachablePanic.into()
+                    } else {
+                        plain_return(GoExpression::unit())
+                    });
+                }
+            }
         }
-        if target.results.is_empty() {
-            statements.push(effect_statement(call));
-            return;
-        }
-        let change = self
-            .queries()
-            .resolve_layout_change(&source.results[0], &target.results[0]);
-        let value = self.plan_layout_change(statements, call, &change);
-        statements.push(plain_return(value));
     }
 
     fn plan_nullable_result_layout_change(
@@ -987,7 +1012,8 @@ impl Planner<'_> {
         statements: &mut Vec<Statement>,
         call: GoExpression,
         source: &FunctionLayout,
-        target: &FunctionLayout,
+        source_payload: &ValueLayout,
+        target_payload: &ValueLayout,
     ) {
         let raw = self.hoist_temp(statements, "raw", call);
         let condition = option_nil_guard(&self.facts, source.result_layout.logical_type())
@@ -1004,7 +1030,7 @@ impl Planner<'_> {
         );
         let change = self
             .queries()
-            .resolve_layout_change(&source.results[0], &target.results[0]);
+            .resolve_layout_change(source_payload, target_payload);
         let value = self.plan_layout_change(statements, GoExpression::identifier(raw), &change);
         statements.push(plain_return(value));
     }
@@ -1016,18 +1042,14 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
-        let source_flat = source.return_abi.has_flattened_payload();
-        let values = self.create_temp_vars("ret", source.results.len());
+        let source_flat = source.return_abi().has_flattened_payload();
+        let values = self.create_temp_vars("ret", source.returns.slots().len());
         let auxiliary = self.fresh_declared("ret");
         let mut all_values = values.clone();
         all_values.push(auxiliary.clone());
         statements.push(define_many(all_values, call));
 
-        if matches!(
-            source.return_abi.lowered(),
-            Some(LoweredReturnAbi::Partial { .. })
-        ) && !source_flat
-        {
+        if matches!(*source.returns, ReturnLayout::Partial(_)) && !source_flat {
             let ok_type = source.result_layout.logical_type().ok_type();
             if let Some(condition) = self
                 .queries()
@@ -1062,9 +1084,9 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) -> Vec<GoExpression> {
-        let source_flat = source.return_abi.has_flattened_payload();
-        let target_flat = target.return_abi.has_flattened_payload();
-        let (source, target) = (source.results.as_slice(), target.results.as_slice());
+        let source_flat = source.return_abi().has_flattened_payload();
+        let target_flat = target.return_abi().has_flattened_payload();
+        let (source, target) = (source.returns.slots(), target.returns.slots());
         if !source_flat && !target_flat {
             let change = self.queries().resolve_layout_change(&source[0], &target[0]);
             let [value] = <[GoExpression; 1]>::try_from(values)
@@ -1186,19 +1208,20 @@ impl PlannerQueries<'_, '_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) -> Option<GoResultLayoutChange> {
-        if target.return_abi != CallableReturnAbi::Value
-            || !matches!(
-                source.return_abi.lowered(),
-                Some(LoweredReturnAbi::Tuple { .. })
-            )
-        {
+        let (
+            ReturnLayout::Tuple {
+                slots: source_slots,
+                ..
+            },
+            ReturnLayout::Value(target),
+        ) = (&*source.returns, &*target.returns)
+        else {
             return None;
-        }
-        let target_slots = target.results[0]
+        };
+        let target_slots = target
             .tuple_elements()
             .expect("a tagged tuple result has tuple element layouts");
-        let changes = source
-            .results
+        let changes = source_slots
             .iter()
             .zip(target_slots)
             .map(|(source, target)| self.resolve_layout_change(source, target))
@@ -1211,9 +1234,9 @@ impl PlannerQueries<'_, '_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) -> Option<GoResultLayoutChange> {
-        if target.return_abi != CallableReturnAbi::Value
+        if target.return_abi() != CallableReturnAbi::Value
             || !matches!(
-                source.return_abi.lowered(),
+                source.return_abi().lowered(),
                 Some(
                     LoweredReturnAbi::Result { .. }
                         | LoweredReturnAbi::Partial { .. }

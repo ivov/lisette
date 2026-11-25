@@ -381,7 +381,11 @@ impl Planner<'_> {
         target: &CallableReturnAbi,
     ) -> Vec<Statement> {
         let return_ty = source.result_layout.logical_type();
-        let producer = LoweredProducer::of_layout(source);
+        let abi = source.return_abi();
+        let producer = LoweredProducer {
+            abi: &abi,
+            producer: source.producer,
+        };
         match target.lowered() {
             None => self.lower_abi_to_tagged_return(call, producer, return_ty),
             Some(target) => {

@@ -148,7 +148,7 @@ impl PlannerQueries<'_, '_> {
         signature: &CalleeSignature<'_, '_>,
     ) -> CallableReturnAbi {
         if let Some(layout) = self.bound_dispatch_layout(signature.callee) {
-            return layout.return_abi;
+            return layout.return_abi();
         }
         if let Some(abi) = self.go_callee_return_abi(signature) {
             return abi;
@@ -371,7 +371,7 @@ impl PlannerQueries<'_, '_> {
             return None;
         };
         let target = match return_abi {
-            Some(return_abi) if layout.return_abi != return_abi => {
+            Some(return_abi) if layout.return_abi() != return_abi => {
                 layout.with_return_abi(self.facts, return_abi, SlotOrigin::Lisette)
             }
             _ => layout.clone(),

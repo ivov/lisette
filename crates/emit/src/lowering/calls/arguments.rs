@@ -388,8 +388,8 @@ impl PlannerQueries<'_, '_> {
             .resolve_callable_value(argument)?
             .abi
             .function_layout(self.facts);
-        if !source.return_abi.is_lowered()
-            || source.return_abi == CallableReturnAbi::Lowered(target.clone())
+        if !source.return_abi().is_lowered()
+            || source.return_abi() == CallableReturnAbi::Lowered(target.clone())
         {
             return None;
         }

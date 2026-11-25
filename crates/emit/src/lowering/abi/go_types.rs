@@ -1,9 +1,9 @@
-use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
+use crate::lookup::facts::value_layout::{FunctionLayout, ReturnLayout, ValueLayout};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::names::go_name;
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::{ChannelDirection, GoType, is_prelude_type};
-use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
+use crate::target::types::return_abi::CallableReturnAbi;
 use syntax::program::DefinitionBody;
 use syntax::program::SlotOrigin;
 use syntax::program::{GO_IMPORT_PREFIX, NativeTypeKind, strip_go_prefix, strip_prelude_prefix};
@@ -90,33 +90,26 @@ impl FunctionLayout {
         &self,
         planner: &PlannerQueries<'_, '_>,
     ) -> Option<GoType> {
-        if self.return_abi == CallableReturnAbi::Void {
-            return None;
-        }
-        let mut slots: Vec<GoType> = self
-            .results
-            .iter()
-            .map(|result| result.go_type(planner))
-            .collect();
-        Some(match self.return_abi.lowered() {
-            None
-            | Some(LoweredReturnAbi::Option(
-                OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
-            )) => {
-                let [slot] = <[GoType; 1]>::try_from(slots)
-                    .unwrap_or_else(|_| unreachable!("a single-result ABI has one result slot"));
-                slot
-            }
-            Some(LoweredReturnAbi::BareError) => planner.go_type(&self.result_err_type(planner)),
-            Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. }) => {
+        let go_types = |slots: &[ValueLayout]| -> Vec<GoType> {
+            slots.iter().map(|slot| slot.go_type(planner)).collect()
+        };
+        Some(match &*self.returns {
+            ReturnLayout::Void => return None,
+            ReturnLayout::Value(slot)
+            | ReturnLayout::Nullable(slot)
+            | ReturnLayout::Sentinel { payload: slot, .. } => slot.go_type(planner),
+            ReturnLayout::BareError => planner.go_type(&self.result_err_type(planner)),
+            ReturnLayout::Result(payload) | ReturnLayout::Partial(payload) => {
+                let mut slots = go_types(payload.slots());
                 slots.push(planner.go_type(&self.result_err_type(planner)));
                 GoType::result_list(&slots)
             }
-            Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })) => {
+            ReturnLayout::CommaOk(payload) => {
+                let mut slots = go_types(payload.slots());
                 slots.push(GoType::new("bool"));
                 GoType::result_list(&slots)
             }
-            Some(LoweredReturnAbi::Tuple { .. }) => GoType::result_list(&slots),
+            ReturnLayout::Tuple { slots, .. } => GoType::result_list(&go_types(slots)),
         })
     }
 }

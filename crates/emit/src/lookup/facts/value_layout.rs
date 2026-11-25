@@ -1,6 +1,9 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::prelude::Fallible;
-use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
+use crate::target::types::return_abi::{
+    CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
+};
+use std::slice;
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
@@ -8,9 +11,87 @@ use syntax::types::Type;
 pub(crate) struct FunctionLayout {
     pub(crate) parameters: Vec<ValueLayout>,
     pub(crate) result_layout: Box<ValueLayout>,
-    pub(crate) results: Vec<ValueLayout>,
-    pub(crate) return_abi: CallableReturnAbi,
+    pub(crate) returns: Box<ReturnLayout>,
     pub(crate) producer: ResultProducer,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum PayloadSlots {
+    Packed(ValueLayout),
+    Flattened(Vec<ValueLayout>),
+}
+
+impl PayloadSlots {
+    fn encoding(&self) -> PayloadLayout {
+        match self {
+            Self::Packed(_) => PayloadLayout::Packed,
+            Self::Flattened(_) => PayloadLayout::Flattened,
+        }
+    }
+
+    pub(crate) fn slots(&self) -> &[ValueLayout] {
+        match self {
+            Self::Packed(slot) => slice::from_ref(slot),
+            Self::Flattened(slots) => slots,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum ReturnLayout {
+    Void,
+    Value(ValueLayout),
+    BareError,
+    Result(PayloadSlots),
+    Partial(PayloadSlots),
+    CommaOk(PayloadSlots),
+    Nullable(ValueLayout),
+    Sentinel {
+        value: i64,
+        payload: ValueLayout,
+    },
+    Tuple {
+        arity: usize,
+        slots: Vec<ValueLayout>,
+    },
+}
+
+impl ReturnLayout {
+    pub(crate) fn abi(&self) -> CallableReturnAbi {
+        let lowered = match self {
+            Self::Void => return CallableReturnAbi::Void,
+            Self::Value(_) => return CallableReturnAbi::Value,
+            Self::BareError => LoweredReturnAbi::BareError,
+            Self::Result(payload) => LoweredReturnAbi::Result {
+                payload: payload.encoding(),
+            },
+            Self::Partial(payload) => LoweredReturnAbi::Partial {
+                payload: payload.encoding(),
+            },
+            Self::CommaOk(payload) => LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
+                payload: payload.encoding(),
+            }),
+            Self::Nullable(_) => LoweredReturnAbi::Option(OptionReturnAbi::Nullable),
+            Self::Sentinel { value, .. } => {
+                LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(*value))
+            }
+            Self::Tuple { arity, .. } => LoweredReturnAbi::Tuple { arity: *arity },
+        };
+        CallableReturnAbi::Lowered(lowered)
+    }
+
+    pub(crate) fn slots(&self) -> &[ValueLayout] {
+        match self {
+            Self::Void | Self::BareError => &[],
+            Self::Value(slot) | Self::Nullable(slot) | Self::Sentinel { payload: slot, .. } => {
+                slice::from_ref(slot)
+            }
+            Self::Result(payload) | Self::Partial(payload) | Self::CommaOk(payload) => {
+                payload.slots()
+            }
+            Self::Tuple { slots, .. } => slots,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,14 +101,16 @@ pub(crate) enum ResultProducer {
 }
 
 impl FunctionLayout {
+    pub(crate) fn return_abi(&self) -> CallableReturnAbi {
+        self.returns.abi()
+    }
+
     pub(crate) fn single_result_layout(&self) -> Option<ValueLayout> {
-        match self.return_abi.lowered() {
-            Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
-                Some(ValueLayout::NullableOption {
-                    option_type: self.result_layout.logical_type().clone(),
-                    payload: Box::new(self.results.first()?.clone()),
-                })
-            }
+        match &*self.returns {
+            ReturnLayout::Nullable(payload) => Some(ValueLayout::NullableOption {
+                option_type: self.result_layout.logical_type().clone(),
+                payload: Box::new(payload.clone()),
+            }),
             _ => None,
         }
     }
@@ -54,7 +137,8 @@ impl FunctionLayout {
     }
 
     pub(crate) fn same_result_representation(&self, other: &Self) -> bool {
-        self.return_abi == other.return_abi && layouts_match(&self.results, &other.results)
+        self.returns.abi() == other.returns.abi()
+            && layouts_match(self.returns.slots(), other.returns.slots())
     }
 }
 
