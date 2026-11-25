@@ -123,6 +123,7 @@ fn collect(
         }
         _ => captured,
     };
+
     for child in expression.children() {
         collect(child, &[], captured, facts, hidden, shared);
     }

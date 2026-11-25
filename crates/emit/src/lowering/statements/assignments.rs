@@ -117,6 +117,7 @@ impl Planner<'_> {
                 go_slot.as_ref().map(|(source, target)| (source, *target)),
             )
         };
+
         with_setup(
             setup,
             LoweredStatement::Assign(AssignForm::Simple {
@@ -218,6 +219,7 @@ impl Planner<'_> {
                 kind: CompoundKind::OpAssign { operator, rhs },
             },
         };
+
         with_setup(target_capture, LoweredStatement::Assign(assignment))
     }
 
@@ -238,6 +240,7 @@ impl Planner<'_> {
         else {
             return false;
         };
+
         match self
             .scope
             .resolve_identifier_with_resolution(value, resolution)
@@ -285,6 +288,7 @@ impl Planner<'_> {
                         resolution,
                         MemberSpelling::Plain,
                     );
+
                     return GoExpression::qualified(self.package_use_for_package(package), field);
                 }
                 let elided_deref = base
@@ -299,6 +303,7 @@ impl Planner<'_> {
                 } else {
                     self.plan_place(setup, base, ordering)
                 };
+
                 if let Some(access) =
                     self.try_plan_tuple_member_dot(&base_value, &expression_ty, member, resolution)
                 {
@@ -311,6 +316,7 @@ impl Planner<'_> {
                     resolution,
                     MemberSpelling::Plain,
                 );
+
                 self.facts.field_access(base_value, &expression_ty, field)
             }
             Expression::IndexedAccess {
@@ -348,6 +354,7 @@ impl Planner<'_> {
         } else {
             self.place_operand(setup, base, "base", ordering)
         };
+
         let index_plan = self.plan_composite_value(index, ExpressionContext::value());
         let pin_index = ordering.pins(&index_plan);
         let base_plan = ValuePlan::computed(Vec::new(), base_expression)
@@ -388,6 +395,7 @@ impl Planner<'_> {
         } else {
             GoExpression::address_of(expression)
         };
+
         GoExpression::identifier(self.hoist_temp(setup, "base", pinned))
     }
 
@@ -445,6 +453,7 @@ fn detect_compound_assignment<'a>(
     else {
         return None;
     };
+
     if !is_compound_eligible(operator) || !lvalues_match(target, left) {
         return None;
     }

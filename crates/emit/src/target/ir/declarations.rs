@@ -5,6 +5,7 @@ use crate::target::types::go_type::GoType;
 
 #[derive(Clone, Default)]
 pub(crate) struct Documentation(pub(crate) Vec<String>);
+
 impl From<String> for Documentation {
     fn from(comments: String) -> Self {
         Self(
@@ -20,11 +21,13 @@ impl From<String> for Documentation {
         )
     }
 }
+
 #[derive(Clone)]
 pub(crate) struct TypeParameter {
     pub(crate) name: String,
     pub(crate) bounds: Vec<GoType>,
 }
+
 #[derive(Clone)]
 pub(crate) struct FunctionSignature {
     pub(crate) receiver: Option<GoParameter>,
@@ -33,6 +36,7 @@ pub(crate) struct FunctionSignature {
     pub(crate) parameters: Vec<GoParameter>,
     pub(crate) result: GoType,
 }
+
 #[derive(Clone)]
 pub(crate) struct FieldDeclaration {
     pub(crate) documentation: Documentation,
@@ -40,12 +44,14 @@ pub(crate) struct FieldDeclaration {
     pub(crate) ty: GoType,
     pub(crate) tag: Option<String>,
 }
+
 #[derive(Clone)]
 pub(crate) struct InterfaceMethod {
     pub(crate) name: String,
     pub(crate) parameters: Vec<GoType>,
     pub(crate) result: GoType,
 }
+
 #[derive(Clone)]
 pub(crate) enum DeclarationKind {
     Type {
@@ -76,6 +82,7 @@ pub(crate) enum DeclarationKind {
         body: LoweredBlock,
     },
 }
+
 #[derive(Clone)]
 pub(crate) struct ConstantDeclaration {
     pub(crate) documentation: Documentation,
@@ -83,12 +90,14 @@ pub(crate) struct ConstantDeclaration {
     pub(crate) ty: Option<GoType>,
     pub(crate) value: Option<GoExpression>,
 }
+
 #[derive(Clone)]
 pub(crate) struct GoDeclaration {
     pub(crate) documentation: Documentation,
     pub(crate) position: Option<Position>,
     pub(crate) kind: DeclarationKind,
 }
+
 impl GoDeclaration {
     pub(crate) fn function(
         receiver: Option<GoParameter>,

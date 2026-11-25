@@ -31,6 +31,7 @@ fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKin
     else {
         return false;
     };
+
     let integer_key = key_kind.is_some_and(SimpleKind::is_integer);
     literals
         .iter()
@@ -132,6 +133,7 @@ impl Planner<'_> {
             .callee()
             .first_type_argument()
             .clone();
+
         let element = self.go_type(&element_ty);
         let (setup, length) = self.stage_size_argument(ctx);
         let value = if self.facts.go_zero_is_lisette_zero(&element_ty) {
@@ -142,6 +144,7 @@ impl Planner<'_> {
         } else {
             self.zero_filled(GoType::slice_of(&element), &element_ty, Some(length))
         };
+
         ValuePlan::computed(setup, value)
     }
 
@@ -165,6 +168,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let result_list = self.return_go_type(&abi, returned);
         let none_values = self.lowered_none_values(shape, returned);
 
@@ -228,6 +232,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let pairs = entries
             .iter()
             .map(|entry| match entry {
@@ -265,6 +270,7 @@ impl Planner<'_> {
                 )
             })
             .collect();
+
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "entry");
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();

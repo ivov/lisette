@@ -36,6 +36,7 @@ impl Planner<'_> {
             };
             return self.emit_tuple_struct(name, parameters, fields, generics, attributes);
         };
+
         let qualified = self.facts.qualified_current(name);
         let (fields_plan, stringer_fields): (Vec<_>, Vec<_>) = fields
             .iter()
@@ -109,6 +110,7 @@ impl Planner<'_> {
                     .collect(),
             },
         };
+
         let mut result = vec![GoDeclaration::new(definition)];
         let receiver_generics = self.receiver_generics(generics);
         let formats = fields
@@ -151,12 +153,14 @@ impl Planner<'_> {
             let configs = interpret_field_attributes(field, attributes);
             format_tag_string(&field.name, &configs, self.facts.is_option(&field.ty))
         };
+
         let declaration = FieldDeclaration {
             documentation: item_doc_text(&field.doc, &field.name, &name).into(),
             name: (!field.is_embedded()).then(|| name.clone()),
             ty: self.go_type(&field.ty),
             tag,
         };
+
         (
             declaration,
             StringerField {
@@ -196,6 +200,7 @@ impl Planner<'_> {
                 self.equality_test(field(&receiver), field(&other), recipe, BinaryOp::Eq)
             })
             .collect();
+
         let body = comparisons
             .into_iter()
             .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
@@ -229,6 +234,7 @@ impl Planner<'_> {
             ),
             vec![],
         );
+
         string_method(name, generics, receiver, method, value)
     }
 
@@ -258,6 +264,7 @@ impl Planner<'_> {
                 )
             })
             .collect();
+
         let text = if fields.is_empty() {
             name.to_string()
         } else {
@@ -291,6 +298,7 @@ impl Planner<'_> {
                 )
             })
             .collect();
+
         string_method(
             name,
             generics,
@@ -323,6 +331,7 @@ impl Planner<'_> {
                 format.format_argument(value, *field)
             })
             .collect();
+
         let text = if fields.is_empty() {
             name.to_string()
         } else {
@@ -335,6 +344,7 @@ impl Planner<'_> {
                     .join(", ")
             )
         };
+
         string_method(
             name,
             generics,
@@ -369,6 +379,7 @@ fn string_method(
         },
     )
 }
+
 pub(in crate::lowering) fn format_value(
     text: &str,
     mut arguments: Vec<GoExpression>,

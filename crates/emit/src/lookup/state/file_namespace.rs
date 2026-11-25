@@ -46,6 +46,7 @@ impl FileNamespace {
     pub(crate) fn collect_adapters(&mut self, declarations: Vec<GoDeclaration>) {
         self.adapter_declarations.extend(declarations);
     }
+
     pub(crate) fn take_adapters(&mut self) -> Vec<GoDeclaration> {
         mem::take(&mut self.adapter_declarations)
     }

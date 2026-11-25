@@ -64,6 +64,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 }
                 body
             });
+
             let body = LoweredBlock { statements: body };
             all_diverge &= body.ends_with_diverge();
             let line = self.arm_line(test.arm.leaf().arm_index);
@@ -348,6 +349,7 @@ fn bindings_are_hoistable(tests: &[ChainTest], indices: &[usize]) -> bool {
             None
         }
     });
+
     let Some(reference) = reference else {
         return false;
     };

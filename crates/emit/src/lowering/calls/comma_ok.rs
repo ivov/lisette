@@ -72,6 +72,7 @@ impl Planner<'_> {
             }
             _ => (Vec::new(), components.value, components.shared_payload),
         };
+
         let status_kind = match components.kind {
             ComponentKind::Option => PairStatusKind::Ok,
             ComponentKind::ErrorResult | ComponentKind::OtherResult => PairStatusKind::Error,
@@ -86,6 +87,7 @@ impl Planner<'_> {
             initializer_call: None,
             borrowed,
         };
+
         BoundValue::pair(statements, pair)
     }
 
@@ -99,6 +101,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         match self
             .scope
             .resolve_identifier_with_resolution(value, resolution)
@@ -122,6 +125,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         match &plan.resolved.origin {
             CallableOrigin::Source(CallOperation::AssertType) => {
                 let [operand] = args.as_slice() else {
@@ -208,12 +212,14 @@ impl Planner<'_> {
                         nil_guard.map(|_| self.fresh_declared("ret"))
                     }
                 };
+
                 match name {
                     Some(name) => PairValue::Named { name, nil_guard },
                     None => PairValue::Discarded,
                 }
             }
         };
+
         let mut status = self.pair_status(status_hint, status_kind, placement);
         if placement == PairPlacement::IfInitializer
             && value.name().map(GoIdentifier::spelling) == Some(status.spelling())
@@ -229,6 +235,7 @@ impl Planner<'_> {
             initializer_call: None,
             borrowed: false,
         };
+
         match placement {
             PairPlacement::IfInitializer => pair.initializer_call = Some(expression),
             PairPlacement::Statement => statements.push(define_many(pair.binding(), expression)),

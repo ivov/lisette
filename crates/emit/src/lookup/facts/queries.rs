@@ -359,6 +359,7 @@ impl<'a> EmitFacts<'a> {
         } else {
             semantic_export
         };
+
         self.member_go_name(ty, field, export)
     }
 

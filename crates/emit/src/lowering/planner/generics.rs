@@ -17,6 +17,7 @@ impl Planner<'_> {
                 bounds: bounds.clone(),
             })
             .collect();
+
         self.scope.set_type_params(type_params);
     }
 

@@ -65,6 +65,7 @@ impl Planner<'_> {
             } => (payload, Some(target_payload)),
             _ => return None,
         };
+
         if prelude_constructor(expression) == Some(PreludeVariant::None) {
             return Some(ValuePlan::literal("nil".to_string()));
         }
@@ -77,6 +78,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let [inner] = arguments.as_slice() else {
             return None;
         };
@@ -163,6 +165,7 @@ impl Planner<'_> {
             payload_layout_change,
             option_slot,
         );
+
         statements.push(
             LoweredStatement::If(IfPlan::plain(some_condition(&option), body, ElseArm::None))
                 .into(),
@@ -225,6 +228,7 @@ impl Planner<'_> {
                 option_nil_guard(&self.facts, target.logical_type()).non_nil_condition(raw)
             }
         };
+
         LoweredStatement::If(IfPlan::plain(
             condition,
             LoweredBlock {
@@ -371,6 +375,7 @@ impl Planner<'_> {
         } else {
             adapted
         };
+
         body.push(assign(GoExpression::identifier(output.clone()), adapted));
         statements.push(
             LoweredStatement::If(IfPlan::plain(
@@ -481,6 +486,7 @@ impl Planner<'_> {
         else {
             unreachable!("plan_aggregate_layout_change requires an Aggregate change");
         };
+
         let source_layout: &ValueLayout = source;
         let target_layout: &ValueLayout = target;
         let element_layout_change: &LayoutChange = element;
@@ -510,8 +516,10 @@ impl Planner<'_> {
                     ),
                 ],
             );
+
             self.hoist_temp(statements, output_hint, make)
         };
+
         let index = self.fresh_declared("i");
         let element = self.fresh_declared("v");
         let mut key_statements = Vec::new();
@@ -523,12 +531,14 @@ impl Planner<'_> {
             ),
             None => GoExpression::identifier(index.clone()),
         };
+
         let mut body = self.plan_aggregate_element_body(
             GoExpression::index(GoExpression::identifier(output.clone()), output_index),
             GoExpression::identifier(element.clone()),
             element_layout_change,
             source_layout,
         );
+
         if !key_statements.is_empty() {
             key_statements.append(&mut body.statements);
             body.statements = key_statements;
@@ -574,6 +584,7 @@ impl Planner<'_> {
                 } else {
                     ElseArm::None
                 };
+
                 LoweredBlock {
                     statements: vec![
                         LoweredStatement::If(IfPlan::plain(
@@ -644,6 +655,7 @@ impl Planner<'_> {
             }
             _ => false,
         };
+
         let names_package_function = match value.node() {
             GoExpressionNode::Instantiation { base, .. } => is_declaration(base),
             node => is_declaration(node),
@@ -674,6 +686,7 @@ impl Planner<'_> {
             LoweredBlock { statements: body },
             FunctionLiteralLayout::MultiLine,
         );
+
         if never_nil {
             return callback;
         }
@@ -754,6 +767,7 @@ impl Planner<'_> {
             ) => self.resolve_layout_change(source, target),
             _ => LayoutChange::Identity,
         };
+
         let change = GoResultLayoutChange::Payload(PayloadLayoutChanges { value, error });
         (!change.is_identity()).then_some(change)
     }
@@ -793,6 +807,7 @@ impl Planner<'_> {
                 .zip(target_slots)
                 .map(|(source, target)| self.resolve_layout_change(source, target))
                 .collect();
+
             let (body, _) = self.plan_abi_wrapping(
                 call,
                 LoweredProducer::of_layout(source),
@@ -800,6 +815,7 @@ impl Planner<'_> {
                 Some(GoResultLayoutChange::Tuple(changes)),
                 WrapperTarget::Return,
             );
+
             statements.extend(body);
             return;
         }
@@ -815,6 +831,7 @@ impl Planner<'_> {
                 } if payload.is_identity() => self.option_from_nilable(raw, target),
                 _ => self.plan_layout_change(statements, raw, &change),
             };
+
             statements.push(plain_return(value));
             return;
         }
@@ -826,6 +843,7 @@ impl Planner<'_> {
                 Some(change),
                 WrapperTarget::Return,
             );
+
             statements.extend(body);
             return;
         }
@@ -862,6 +880,7 @@ impl Planner<'_> {
                     ),
                     Vec::new(),
                 );
+
                 self.plan_function_result_layout_change(statements, call, &intermediate, target);
                 return;
             }
@@ -936,6 +955,7 @@ impl Planner<'_> {
                         self.plan_layout_change(statements, value, &change)
                     })
                     .collect::<Vec<_>>();
+
                 statements.push(multi_value_return(values));
             }
         }
@@ -1020,6 +1040,7 @@ impl Planner<'_> {
                 })
                 .collect()
         };
+
         let changed: Vec<GoExpression> = elements
             .into_iter()
             .zip(source_slots.iter().zip(target_slots))
@@ -1028,6 +1049,7 @@ impl Planner<'_> {
                 self.plan_layout_change(statements, value, &change)
             })
             .collect();
+
         if target_flat {
             changed
         } else {

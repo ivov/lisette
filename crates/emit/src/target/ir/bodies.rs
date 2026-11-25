@@ -77,6 +77,7 @@ pub(crate) fn async_statement(kind: AsyncKind, call: GoExpression) -> Statement 
             Vec::new(),
         )
     };
+
     LoweredStatement::Async { kind, call }.into()
 }
 
@@ -540,6 +541,7 @@ fn consume_loop_exits(exits: &mut Vec<FlowExit>, label: Option<&str>) -> bool {
             FlowExit::Break(LoopTransfer::Source(_))
             | FlowExit::Continue(LoopTransfer::Source(_)) => false,
         };
+
         if targets_loop && matches!(exit, FlowExit::Break(_)) {
             breaks_here = true;
         }
@@ -1102,6 +1104,7 @@ impl LoweredStatement {
             } => name,
             _ => return false,
         };
+
         *bound = go_name.clone();
         true
     }

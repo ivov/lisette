@@ -207,11 +207,13 @@ impl Planner<'_> {
                         vec![base.clone()],
                     ),
                 ));
+
                 return ValuePlan::computed(
                     setup,
                     GoExpression::slice(base, start_value.as_ref(), Some(&length), Some(&length)),
                 );
             };
+
             if start.is_some_and(is_order_sensitive) {
                 start_value = start_value.map(|start_expression| {
                     GoExpression::identifier(self.hoist_temp(&mut setup, "start", start_expression))
@@ -275,5 +277,6 @@ fn range_var_slice(
             vec![base.clone()],
         )
     });
+
     GoExpression::slice(base, start.as_ref(), Some(&bound), Some(&bound))
 }

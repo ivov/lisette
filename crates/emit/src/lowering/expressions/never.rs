@@ -43,6 +43,7 @@ impl Planner<'_> {
                 .into_parts();
             return LoweredStatement::Body(LoweredBlock { statements }).into();
         };
+
         let plan = self.plan_call_value(expression, ty, ExpressionContext::value());
         let (mut statements, call) =
             with_source_positions(&self.facts, &written_span(expression), plan).into_parts();

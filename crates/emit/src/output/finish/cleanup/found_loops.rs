@@ -72,6 +72,7 @@ fn found_loop_return(block: &[Statement]) -> Option<FoundLoopReturn> {
         )) => (at, Some(name.clone())),
         _ => (define_at, None),
     };
+
     let LoweredStatement::Loop(plan) = &block[loop_at].kind else {
         return None;
     };
@@ -141,6 +142,7 @@ fn assigned_name(statement: &LoweredStatement, target: &GoIdentifier) -> Option<
     else {
         return None;
     };
+
     if !matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target)) {
         return None;
     }
@@ -158,6 +160,7 @@ fn assigns_true(statement: &LoweredStatement, target: &GoIdentifier) -> bool {
     else {
         return false;
     };
+
     matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target))
         && matches!(value.node(), GoExpressionNode::Literal(text) if text == "true")
 }

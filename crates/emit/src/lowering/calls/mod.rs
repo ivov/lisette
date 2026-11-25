@@ -43,6 +43,7 @@ impl<'p> Planner<'p> {
         else {
             return None;
         };
+
         let plan = self.plan_call(value)?;
         let CallableOrigin::Source(CallOperation::Native { kind, method }) = plan.resolved.origin
         else {

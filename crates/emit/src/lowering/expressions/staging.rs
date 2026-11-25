@@ -346,6 +346,7 @@ impl Planner<'_> {
                     .collect(),
                 CompositeLayout::Inline { padded: false },
             );
+
             spread = GoExpression::call(
                 GoExpression::external_name("append".to_string()),
                 vec![leading, GoExpression::spread(spread)],
@@ -391,6 +392,7 @@ impl Planner<'_> {
                 } else {
                     later.prepend(&stage.plan)
                 };
+
                 (stage, pin)
             })
             .collect();
@@ -405,6 +407,7 @@ impl Planner<'_> {
                 capture: _,
                 line,
             } = stage;
+
             let start = setup.len();
             let can_delay = plan.can_delay();
             let (stage_setup, expression, stage_stability) = plan.into_parts_with_stability();

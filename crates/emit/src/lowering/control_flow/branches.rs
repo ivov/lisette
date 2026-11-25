@@ -30,6 +30,7 @@ pub(in crate::lowering) fn if_let_match_arms(
             ty: Type::unit(),
             span,
         });
+
     vec![
         MatchArm {
             pattern: pattern.clone(),
@@ -134,6 +135,7 @@ impl Planner<'_> {
                 target_ty: Some(ty),
             },
         );
+
         let mut setup = vec![declaration];
         setup.extend(block.statements);
         collapse_declared_temp(
@@ -359,6 +361,7 @@ impl Planner<'_> {
                         statements: directed_first(line, statements),
                     }
                 });
+
                 ElseArm::Else {
                     body,
                     layout: ElseLayout::Block,

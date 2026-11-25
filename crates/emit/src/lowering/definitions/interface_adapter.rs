@@ -32,6 +32,7 @@ use syntax::program::{
 };
 use syntax::program::{SlotOrigin, is_go_import, is_prelude_symbol, strip_go_prefix};
 use syntax::types::{Type, unqualified_name};
+
 #[derive(Debug, Clone)]
 pub(in crate::lowering) struct AdapterPlan {
     concrete_id: EcoString,
@@ -80,6 +81,7 @@ impl Planner<'_> {
             .checked(expression)
             .function_value()
             .is_some_and(|callee| callee_selects_tagged_twin(&self.facts, callee));
+
         if selects_twin {
             MemberSpelling::TaggedTwin
         } else {
@@ -112,12 +114,14 @@ impl Planner<'_> {
                 Some(return_ty),
             )
         };
+
         let target = self.function_layout(
             parameters,
             &result,
             CallableReturnAbi::Value,
             Some(return_ty),
         );
+
         let twin = AdapterMethod {
             go_name: go_name::tagged_twin(go_name),
             source_name: method.name.clone(),
@@ -126,6 +130,7 @@ impl Planner<'_> {
             source,
             target,
         };
+
         let line = self.facts.source_position(&method.name_span);
         self.emit_adapter_method(
             MethodReceiver::Itself(&receiver.ty),
@@ -189,6 +194,7 @@ impl Planner<'_> {
             } else {
                 requirement.method.ty.as_function_type()?
             };
+
         let parameters = function
             .params
             .iter()
@@ -202,9 +208,11 @@ impl Planner<'_> {
                     }
                     RequirementAbi::Lisette => SlotOrigin::Lisette,
                 };
+
                 self.value_layout_with_declaration(&parameter.ty, origin, &declared.ty)
             })
             .collect();
+
         let origin = match abi {
             RequirementAbi::Go => {
                 SlotOrigin::of_go_declaration(SlotOrigin::GoReturn, &declared.return_type, |id| {
@@ -213,6 +221,7 @@ impl Planner<'_> {
             }
             RequirementAbi::Lisette => SlotOrigin::Lisette,
         };
+
         let result = self.target_layout_with_declaration(
             &function.return_type,
             origin,
@@ -224,6 +233,7 @@ impl Planner<'_> {
             }
             RequirementAbi::Lisette => requirement_return_abi(&self.facts, requirement),
         };
+
         Some(self.function_layout(parameters, &result, return_abi, Some(&declared.return_type)))
     }
 
@@ -254,6 +264,7 @@ impl Planner<'_> {
                     .expect("internal error: a checked conformance selects a method of a bound"),
                 None => requirement.clone(),
             };
+
             let local = self.requirement_layout(&selected, RequirementAbi::Lisette)?;
             let foreign = self.requirement_layout(&selected, RequirementAbi::Go)?;
             let target = match witness {
@@ -267,6 +278,7 @@ impl Planner<'_> {
                 }
                 None => self.requirement_value_layout(&selected)?,
             };
+
             methods.push(AdapterMethod {
                 source_go_name: requirement_go_name(&self.facts, &selected),
                 go_name: requirement_go_name(&self.facts, &requirement),
@@ -310,6 +322,7 @@ impl Planner<'_> {
                 "inner".to_string(),
             ),
         );
+
         let mut statements = Vec::new();
         if !method.source.same_representation(alternate) {
             let local_type = self.dynamic_method_interface(&method.source_go_name, &method.source);
@@ -329,6 +342,7 @@ impl Planner<'_> {
                 &method.source,
                 &method.target,
             );
+
             let call = GoExpression::call(
                 GoExpression::selector(
                     GoExpression::identifier(local),
@@ -336,6 +350,7 @@ impl Planner<'_> {
                 ),
                 arguments,
             );
+
             self.plan_function_result_layout_change(
                 &mut branch,
                 call,
@@ -368,6 +383,7 @@ impl Planner<'_> {
             alternate,
             &method.target,
         );
+
         let call = GoExpression::call(GoExpression::selector(foreign, foreign_name), arguments);
         self.plan_function_result_layout_change(&mut statements, call, alternate, &method.target);
         statements
@@ -438,6 +454,7 @@ impl Planner<'_> {
                 checked.selected_requirement.as_ref(),
                 checked,
             )?;
+
             any_adapted |= method.changes_signature();
             methods.push(method);
         }
@@ -486,6 +503,7 @@ impl Planner<'_> {
                     .map(|(owner, _)| owner)
             })
             .or_else(|| concrete_ty.get_qualified_id())?;
+
         let source_go_method =
             is_go_import(source_owner).then(|| format!("{source_owner}.{implementation_name}"));
         let source_return = source_requirement
@@ -504,6 +522,7 @@ impl Planner<'_> {
         } else {
             return_abi(&self.facts, &function.return_type, ReturnSlot::Method)
         };
+
         let user_result = self.interface_result_layout(source_go_method.as_deref(), &return_type);
         let producer = if source_go_method.is_none() && source_requirement.is_none() {
             ResultProducer::Lisette
@@ -605,6 +624,7 @@ impl Planner<'_> {
                 }
                 name
             });
+
         let generic_parameters = self.plan_generics(&plan.generic_context);
         let receiver_type = GoType::named(
             &base_name,
@@ -615,6 +635,7 @@ impl Planner<'_> {
                 .collect::<Vec<_>>(),
             None,
         );
+
         let adapter_type = receiver_type.code.clone();
 
         let mut declarations = vec![GoDeclaration::new(DeclarationKind::Struct {
@@ -627,6 +648,7 @@ impl Planner<'_> {
                 tag: None,
             }],
         })];
+
         for method in &plan.methods {
             let line = adapter_method_line(&self.facts, &plan, method);
             declarations.push(self.emit_adapter_method(
@@ -659,6 +681,7 @@ impl Planner<'_> {
                     (receiver_type, name, false)
                 }
             };
+
             let receiver_name = this.declare_adapter_method_binding(receiver_name);
             let param_names: Vec<GoIdentifier> = (0..method.target.parameters.len())
                 .map(|i| this.declare_adapter_method_binding(format!("arg{}", i)))
@@ -685,6 +708,7 @@ impl Planner<'_> {
                 },
                 body,
             });
+
             plan.position = line.cloned();
             plan
         })
@@ -719,6 +743,7 @@ impl Planner<'_> {
             body_result,
             BodyOrigin::Adapter,
         );
+
         (go_result, body)
     }
 
@@ -748,6 +773,7 @@ impl Planner<'_> {
             &method.source,
             &method.target,
         );
+
         let mut target = GoExpression::identifier(receiver.clone());
         if wraps_inner {
             target = GoExpression::selector(target, "inner".to_string());
@@ -907,6 +933,7 @@ fn adapter_source_go_name(
             } else {
                 MemberSpelling::Plain
             };
+
             facts.method_selector_go_name(source_owner, &checked.selected_name, export, spelling)
         }
     }

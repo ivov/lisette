@@ -76,6 +76,7 @@ impl Planner<'_> {
                             | ConstructorPatternResolution::ConstValue { .. }
                     ) || matches!(resolution, ConstructorPatternResolution::EnumVariant { .. })
                         && !self.facts.is_tuple_struct_type(ty);
+
                 collector.requires_materialized_subject |= !can_split_tuple;
                 self.collect_enum_variant_checks(path, pattern, path_ty, path_layout, collector);
             }
@@ -168,6 +169,7 @@ impl Planner<'_> {
         else {
             return;
         };
+
         let array_info = match resolution {
             SequencePatternResolution::Array {
                 length,
@@ -225,6 +227,7 @@ impl Planner<'_> {
                             element: Box::new(element.clone()),
                         }
                     });
+
                     let go_type = sub_layout
                         .as_ref()
                         .map_or_else(|| self.go_type(&sub_ty), |layout| layout.go_type(self));
@@ -243,6 +246,7 @@ impl Planner<'_> {
                     path_layout.cloned(),
                 ),
             };
+
             collector.bindings.push(PatternBinding {
                 lisette_name: name.to_string(),
                 binding_ids: binding.as_slice().to_vec(),
@@ -390,6 +394,7 @@ impl Planner<'_> {
         else {
             return;
         };
+
         if let Some(
             layout @ (ValueLayout::NullableOption { .. } | ValueLayout::PointerOption { .. }),
         ) = path_layout
@@ -459,6 +464,7 @@ impl Planner<'_> {
         else {
             unreachable!("nilable option checks read an option variant pattern");
         };
+
         let some = unqualified_name(variant_name) == "Some";
         assert!(
             some || unqualified_name(variant_name) == "None",
@@ -548,6 +554,7 @@ impl Planner<'_> {
             }
             _ => GoExpression::external_name(identifier.to_string()),
         };
+
         collector.checks.push(Check::Literal {
             path: path.clone(),
             go_literal,
@@ -704,6 +711,7 @@ impl Planner<'_> {
         else {
             unreachable!("resolve_struct_child_path requires a Struct pattern");
         };
+
         let enum_info = detect_enum_info(resolution);
         let child_path = self
             .interface_assert_child_path(path, ty, path_ty, collector)

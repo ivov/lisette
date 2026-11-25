@@ -277,6 +277,7 @@ impl CoercionPlan {
                 elements,
             } => planner.plan_tuple_rebuild(&mut statements, value, &slot_types, elements),
         };
+
         (statements, value)
     }
 }
@@ -572,6 +573,7 @@ impl Planner<'_> {
         else {
             unreachable!("reference_layout_change takes a reference pair");
         };
+
         if let (
             Function { layout: source, .. },
             Function {
@@ -636,6 +638,7 @@ impl Planner<'_> {
             ),
             _ => unreachable!("aggregate_layout_change takes a slice, array or map pair"),
         };
+
         let key = key_layouts
             .map(|(source, target)| Box::new(self.resolve_layout_change(source, target)));
         let element = self.resolve_layout_change(source_element, target_element);
@@ -670,6 +673,7 @@ impl Planner<'_> {
         ) else {
             return None;
         };
+
         if from_elements.len() != to_elements.len() {
             return None;
         }

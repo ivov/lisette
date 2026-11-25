@@ -175,6 +175,7 @@ impl Planner<'_> {
         else {
             return;
         };
+
         let name_span = *name_span;
         let export = GoExport::from_visibility(*visibility);
         if export == GoExport::Exported || private_functions == PrivateFunctions::Include {
@@ -273,6 +274,7 @@ impl Planner<'_> {
                         else {
                             continue;
                         };
+
                         if self.facts.emits_go_method(&qualified_type, name) {
                             self.check_reserved_qualifier_generics(
                                 method_generics,
@@ -422,6 +424,7 @@ fn collect_impl_block(
         else {
             continue;
         };
+
         let export = GoExport::from_visibility(*visibility);
         let go = if facts.emits_go_method(&qualified_type, name) {
             let method_go = facts.method_go_name(name, export);
@@ -436,6 +439,7 @@ fn collect_impl_block(
         } else {
             go_name::associated_function_go_name(receiver_name, name, export)
         };
+
         check_reserved_prefix(name, name_span, &mut collected.diagnostics);
         check_reserved_prefix(&go, name_span, &mut collected.diagnostics);
         collected.package_block.claim(go, *name_span);
@@ -482,6 +486,7 @@ fn collect_enum(facts: &EmitFacts<'_>, item: &Expression, collected: &mut Collec
     else {
         return;
     };
+
     let name_span = *name_span;
     let type_go = go_name::escape_type_name(name).into_owned();
     check_reserved_prefix(&type_go, &name_span, &mut collected.diagnostics);

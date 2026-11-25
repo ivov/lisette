@@ -220,6 +220,7 @@ fn copy_keeps_no_name_of_its_own(
             .unwrap_or(name.spelling())
             .to_string()
     };
+
     let Some(copy_id) = copy.id() else {
         return false;
     };

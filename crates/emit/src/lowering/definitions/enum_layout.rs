@@ -114,6 +114,7 @@ impl EnumLayout {
                                 .format_argument(member(&receiver, &field.go_name), field.format())
                         })
                         .collect();
+
                     let (open, close, parts) = if variant.is_struct_variant {
                         (
                             " { ",
@@ -141,11 +142,13 @@ impl EnumLayout {
                                 .collect(),
                         )
                     };
+
                     (
                         format!("{prefix}{}{open}{}{close}", variant.name, parts.join(", ")),
                         arguments,
                     )
                 };
+
                 let value = format_value(&text, arguments);
                 case(
                     GoExpression::external_name(variant.tag_constant.clone()),
@@ -153,6 +156,7 @@ impl EnumLayout {
                 )
             })
             .collect();
+
         let default = vec![plain_return(GoExpression::call(
             GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
             vec![
@@ -160,6 +164,7 @@ impl EnumLayout {
                 member(&receiver, ENUM_TAG_FIELD),
             ],
         ))];
+
         let subject = member(&receiver, ENUM_TAG_FIELD);
         GoDeclaration::function(
             Some(GoParameter::new(
@@ -196,6 +201,7 @@ impl EnumLayout {
                 )
             })
             .collect();
+
         GoDeclaration::new(DeclarationKind::Function {
             signature: FunctionSignature {
                 receiver: None,
@@ -230,6 +236,7 @@ impl EnumLayout {
                 generics,
             ))
         };
+
         let names = JsonNames {
             data: fresh("data"),
             name: fresh("name"),
@@ -241,6 +248,7 @@ impl EnumLayout {
             arr: fresh("arr"),
             receiver,
         };
+
         let unmarshal = self.json_unmarshal_declaration(planner, names, &receiver_type);
         vec![marshal, unmarshal]
     }
@@ -281,8 +289,10 @@ impl EnumLayout {
                             CompositeLayout::Inline { padded: false },
                         )
                     };
+
                     map(vec![(variant.name.clone(), inner)])
                 };
+
                 case(
                     GoExpression::external_name(variant.tag_constant.clone()),
                     vec![plain_return(GoExpression::call(
@@ -292,6 +302,7 @@ impl EnumLayout {
                 )
             })
             .collect();
+
         let default = vec![multi_value_return(vec![
             GoExpression::nil(),
             GoExpression::call(
@@ -302,6 +313,7 @@ impl EnumLayout {
                 ],
             ),
         ])];
+
         GoDeclaration::function(
             Some(GoParameter::new(receiver.clone(), receiver_type.clone())),
             "MarshalJSON",
@@ -380,6 +392,7 @@ impl EnumLayout {
                 )
             })
             .collect();
+
         let choice = switch(
             GoExpression::identifier(names.name.clone()),
             cases,
@@ -484,6 +497,7 @@ impl EnumLayout {
                     },
                     ElseArm::None,
                 );
+
                 plan.initializer = Some(GoDefinition {
                     names: vec![names.v.clone(), ok],
                     value: GoExpression::index(
@@ -584,6 +598,7 @@ fn json_error(message: String) -> Statement {
 fn member(name: &GoIdentifier, field: &str) -> GoExpression {
     GoExpression::selector(GoExpression::identifier(name.clone()), field.to_string())
 }
+
 fn string(value: &str) -> GoExpression {
     GoExpression::literal(format!("{value:?}"))
 }
@@ -598,6 +613,7 @@ fn map(fields: Vec<(String, GoExpression)>) -> GoExpression {
         CompositeLayout::Inline { padded: false },
     )
 }
+
 fn case(label: GoExpression, body: Vec<Statement>) -> SwitchCasePlan {
     SwitchCasePlan {
         labels: vec![label],
@@ -605,6 +621,7 @@ fn case(label: GoExpression, body: Vec<Statement>) -> SwitchCasePlan {
         line: None,
     }
 }
+
 fn switch(subject: GoExpression, cases: Vec<SwitchCasePlan>, default: Vec<Statement>) -> Statement {
     LoweredStatement::Switch(SwitchStatementPlan {
         kind: SwitchKind::Value { subject },
@@ -623,6 +640,7 @@ fn unmarshal(value: GoExpression, target: GoExpression) -> GoExpression {
         vec![value, GoExpression::address_of(target)],
     )
 }
+
 fn comment_line(line: &str) -> String {
     if line.is_empty() {
         "//".to_string()
@@ -650,6 +668,7 @@ impl Planner<'_> {
             },
             GoExpression::nil(),
         );
+
         let mut plan = IfPlan::plain(condition, LoweredBlock { statements: body }, ElseArm::None);
         plan.initializer = Some(GoDefinition {
             names: vec![error],

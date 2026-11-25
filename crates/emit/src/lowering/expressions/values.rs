@@ -157,18 +157,21 @@ impl Planner<'_> {
                 CallableReturnAbi::Value,
             ),
         };
+
         let parameters = function_ty
             .get_function_params()
             .expect("a function has parameters")
             .iter()
             .map(|parameter| self.value_layout(&parameter.ty, SlotOrigin::Lisette))
             .collect::<Vec<_>>();
+
         let source = self.function_layout(
             parameters.clone(),
             &source_result,
             CallableReturnAbi::Void,
             None,
         );
+
         let target = self.function_layout(parameters, &target_result, return_abi, None);
         Some((source, target))
     }
@@ -255,6 +258,7 @@ impl Planner<'_> {
                     Some(BindingValue::InlineExpr(inline)) => inline.stability(),
                     _ => identifier_read_stability(&self.facts, expression),
                 };
+
                 ValuePlan::from_identifier_expression(go_expression, stability)
             }
             Expression::Call { ty, .. } => self.plan_call_value(expression, ty, ctx),
@@ -333,6 +337,7 @@ impl Planner<'_> {
             }
             _ => None,
         };
+
         if placed.is_some() {
             self.record_converted_value(tuple);
         }
@@ -342,6 +347,7 @@ impl Planner<'_> {
             }
             ElementTarget::Value => Vec::new(),
         };
+
         let mut coerced_elements = Vec::with_capacity(values.len());
         for (index, (element, value)) in elements.iter().zip(values).enumerate() {
             let Some(slot) = slot_types.get(index).filter(|_| {
@@ -353,6 +359,7 @@ impl Planner<'_> {
                 coerced_elements.push(value);
                 continue;
             };
+
             let coercion = match placed
                 .as_ref()
                 .and_then(|(adaptations, slots)| adaptations.get(index).zip(slots.get(index)))
@@ -362,6 +369,7 @@ impl Planner<'_> {
                 }
                 None => self.value_slot_coercion(element, slot),
             };
+
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             coerced_elements.push(coerced);
@@ -395,6 +403,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let slots = self
             .facts
             .tuple_elements(self.scope.current_return_ctx().ty()?)?;
@@ -433,6 +442,7 @@ impl Planner<'_> {
                 self.plan_composite_value(e, element_ctx)
             })
             .collect();
+
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let mut setup = sequenced.setup;
 
@@ -443,6 +453,7 @@ impl Planner<'_> {
             &slot_types,
             ElementTarget::Value,
         );
+
         let callee = self.make_tuple_callee(&slot_types, element_expressions.len());
         ValuePlan::computed(setup, GoExpression::pure_call(callee, element_expressions))
     }
@@ -540,6 +551,7 @@ impl Planner<'_> {
         } else {
             self.plan_value(inner, ExpressionContext::value())
         };
+
         inner_plan.map_observable_expression(|setup, emitted| {
             if unaddressable {
                 let tmp = self.hoist_temp(setup, "ref", emitted);
@@ -641,6 +653,7 @@ impl Planner<'_> {
                     ExpressionContext::value().with_capture_boundary(CaptureBoundary::Delayed),
                 )
                 .into_parts();
+
             let mut body_statements = Vec::new();
             if !inner.is_empty() {
                 body_statements.push(if self.facts.resolves_to_unit(&expression.get_type()) {
@@ -832,6 +845,7 @@ fn needs_iife_for_async(
     else {
         return false;
     };
+
     let arity = split_native_receiver(callee, args).map_or(0, |(_, arguments)| arguments.len());
     !matches!(value.syntax_form(), OperandForm::Call)
         || !NativeOperation::new(*kind, method).lowers_to_plain_call(arity)

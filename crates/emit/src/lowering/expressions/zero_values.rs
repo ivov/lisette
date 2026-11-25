@@ -94,6 +94,7 @@ impl Planner<'_> {
                 ..
             })
         );
+
         if !is_struct && !is_opaque {
             return GoExpression::new_zero(go_ty);
         }
@@ -141,6 +142,7 @@ impl Planner<'_> {
                     SimpleKind::Unit => self.unit_value(None, None),
                     _ => GoExpression::constant("0".to_string(), ConstantKind::Int),
                 };
+
                 return Some(zero);
             }
             (
@@ -189,6 +191,7 @@ impl Planner<'_> {
             }
             _ => GoExpression::empty_composite(self.go_type(ty)),
         };
+
         Some(zero)
     }
 
@@ -214,6 +217,7 @@ impl Planner<'_> {
                 ),
                 Vec::new(),
             );
+
             return Some(zero);
         }
         let go_import = is_go_import(id);
@@ -255,9 +259,11 @@ impl Planner<'_> {
                         self.facts
                             .struct_field_go_name(ty, &name, GoExport::Unexported)
                     };
+
                     Some((go_name, zero))
                 })
                 .collect();
+
             return Some(plan_struct_literal(&self.go_type(ty), pairs));
         }
         if let Some(underlying) = self.facts.immediate_underlying(ty) {
@@ -297,6 +303,7 @@ impl Planner<'_> {
             ),
             None => declare(container_name.clone(), container_type.clone()),
         };
+
         immediate_call(
             container_type,
             LoweredBlock {

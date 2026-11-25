@@ -155,6 +155,7 @@ impl Planner<'_> {
                         element_ty,
                         place,
                     };
+
                     self.lower_receive_arm(binding, &receiver_ctx)
                 }
                 PreparedSelectArm::Send {
@@ -170,6 +171,7 @@ impl Planner<'_> {
                     body: self.lower_block_to_place(body, place),
                 },
             };
+
             arm_plans.push(SelectArmPlan { kind, line });
         }
         arm_plans
@@ -182,40 +184,10 @@ impl Planner<'_> {
         needs_retry_loop: bool,
     ) -> Vec<PreparedSelectArm<'a>> {
         let mut stages = Vec::new();
-        let operations: Vec<_> = arms.iter().map(|arm| {
-            let (plan, span, capture, send_value) = match arm {
-                SelectArm::Send { send_expression, .. } => {
-                    let operation = channel_operation(send_expression);
-                    let plan = if let Some(operation) = &operation {
-                        let channel = operation.channel();
-                        let plan = self.plan_value(channel, ExpressionContext::value());
-                        if self.facts.is_reference(&channel.get_type()) {
-                            plan.map_expression(|_, value| cancel_deref_of_address(value))
-                        } else { plan }
-                    } else { self.plan_channel_operand(send_expression) };
-                    let send_value = match operation {
-                        Some(ChannelOperation::Send { value, .. }) => Some(value),
-                        _ => None,
-                    };
-                    (plan, send_expression.get_span(), false, send_value)
-                }
-                SelectArm::Receive { receive_expression, .. }
-                | SelectArm::MatchReceive { receive_expression, .. } => (
-                    self.plan_channel_operand(receive_expression), receive_expression.get_span(),
-                    matches!(arm, SelectArm::Receive { binding, .. } if is_some_pattern(binding)), None,
-                ),
-                SelectArm::WildCard { .. } => return None,
-            };
-            let line = self.facts.source_position(&span);
-            stages.push(SequenceStage { plan, prefix: "ch", capture, line: line.clone() });
-            Some(if let Some(value) = send_value {
-                stages.push(SequenceStage {
-                    plan: self.plan_composite_value(value, ExpressionContext::value()),
-                    prefix: "sendVal", capture: false, line,
-                });
-                ChannelOperationKind::Send
-            } else { ChannelOperationKind::Receive })
-        }).collect();
+        let operations: Vec<_> = arms
+            .iter()
+            .map(|arm| self.stage_select_operation(arm, &mut stages))
+            .collect();
         let boundary = if needs_retry_loop {
             CaptureBoundary::Delayed
         } else {
@@ -240,6 +212,7 @@ impl Planner<'_> {
                     } else {
                         PreparedChannelOperation::Receive(channel)
                     };
+
                     PreparedSelectArm::Send {
                         body,
                         operation,
@@ -273,6 +246,74 @@ impl Planner<'_> {
                 }
             })
             .collect()
+    }
+
+    fn stage_select_operation(
+        &mut self,
+        arm: &SelectArm,
+        stages: &mut Vec<SequenceStage>,
+    ) -> Option<ChannelOperationKind> {
+        let (plan, span, capture, send_value) = match arm {
+            SelectArm::Send {
+                send_expression, ..
+            } => {
+                let operation = channel_operation(send_expression);
+                let plan = if let Some(operation) = &operation {
+                    let channel = operation.channel();
+                    let plan = self.plan_value(channel, ExpressionContext::value());
+                    if self.facts.is_reference(&channel.get_type()) {
+                        plan.map_expression(|_, value| cancel_deref_of_address(value))
+                    } else {
+                        plan
+                    }
+                } else {
+                    self.plan_channel_operand(send_expression)
+                };
+
+                let send_value = match operation {
+                    Some(ChannelOperation::Send { value, .. }) => Some(value),
+                    _ => None,
+                };
+                (plan, send_expression.get_span(), false, send_value)
+            }
+            SelectArm::Receive {
+                receive_expression, ..
+            }
+            | SelectArm::MatchReceive {
+                receive_expression, ..
+            } => {
+                let capture = match arm {
+                    SelectArm::Receive { binding, .. } => is_some_pattern(binding),
+                    _ => false,
+                };
+                (
+                    self.plan_channel_operand(receive_expression),
+                    receive_expression.get_span(),
+                    capture,
+                    None,
+                )
+            }
+            SelectArm::WildCard { .. } => return None,
+        };
+
+        let line = self.facts.source_position(&span);
+        stages.push(SequenceStage {
+            plan,
+            prefix: "ch",
+            capture,
+            line: line.clone(),
+        });
+        Some(if let Some(value) = send_value {
+            stages.push(SequenceStage {
+                plan: self.plan_composite_value(value, ExpressionContext::value()),
+                prefix: "sendVal",
+                capture: false,
+                line,
+            });
+            ChannelOperationKind::Send
+        } else {
+            ChannelOperationKind::Receive
+        })
     }
 
     fn plan_channel_operand(&mut self, receive_expression: &Expression) -> ValuePlan {
@@ -314,6 +355,7 @@ impl Planner<'_> {
             let else_arm = ElseArm::block(else_block);
             IfPlan::plain(ok, body_block, else_arm)
         };
+
         vec![LoweredStatement::If(plan).into()]
     }
 
@@ -344,6 +386,7 @@ impl Planner<'_> {
             } else {
                 this.lower_block_to_place(ctx.body, ctx.place).statements
             };
+
             let receiver_var = if GoUses::of(&body_statements).contains_identifier(&receiver_var) {
                 receiver_var
             } else {
@@ -361,6 +404,7 @@ impl Planner<'_> {
             },
             else_arm,
         );
+
         SelectArmKind::Receive {
             receive_vars,
             channel: ctx.channel.clone(),
@@ -494,6 +538,7 @@ impl Planner<'_> {
                 needs_receiver_destructure,
                 place,
             );
+
             let none_block =
                 this.capture_scoped_block(|this| this.lower_none_arm_body(match_arms, place));
             let Some(arms_plan) = build_receive_arms_plan(&ok_var, some_block, none_block) else {
@@ -505,6 +550,7 @@ impl Planner<'_> {
                     },
                 };
             };
+
             let mut used = GoUses::default();
             used.extend_if(&arms_plan);
 

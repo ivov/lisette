@@ -131,7 +131,6 @@ pub(in crate::lowering) enum ArgumentValueSource {
     Lisette,
     GoPhysical,
     GoSlot,
-
     Callable,
 }
 
@@ -204,6 +203,7 @@ impl<'a> Planner<'a> {
             id.as_deref(),
             &origin,
         );
+
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
         let callee_ty = function.get_type();
         if declaration.is_some_and(CallableDeclaration::is_type_definition)
@@ -229,6 +229,7 @@ impl<'a> Planner<'a> {
             declared_return,
             return_type,
         });
+
         let (return_origin, return_declaration) = callee_return_slot(
             &self.facts,
             &origin,
@@ -236,6 +237,7 @@ impl<'a> Planner<'a> {
             declared_return,
             return_type,
         );
+
         let return_layout =
             self.callable_result_layout(return_type, return_origin, return_declaration, &result);
         let is_prelude_dispatch = is_prelude_dispatch(id.as_deref(), &origin);
@@ -291,6 +293,7 @@ impl<'a> Planner<'a> {
                 .map(ToString::to_string),
             _ => None,
         };
+
         let declaration = id
             .as_deref()
             .and_then(|id| callable_declaration(&self.facts, id));
@@ -341,6 +344,7 @@ impl<'a> Planner<'a> {
                 } else {
                     None
                 };
+
                 let origin = catalog_slot.map_or_else(
                     || {
                         if matches!(callable_origin, CallableOrigin::GoInterop) {
@@ -355,6 +359,7 @@ impl<'a> Planner<'a> {
                     },
                     |slot| slot.origin,
                 );
+
                 let layout = catalog_slot
                     .map(|slot| {
                         self.value_layout_with_declaration(
@@ -369,6 +374,7 @@ impl<'a> Planner<'a> {
                         })
                     })
                     .unwrap_or_else(|| self.value_layout(&instantiated.ty, origin));
+
                 let element = (index + 1 == parameters.len())
                     .then(|| variadic_element.clone())
                     .flatten();
@@ -381,6 +387,7 @@ impl<'a> Planner<'a> {
                         variadic: None,
                     };
                 };
+
                 let declared_element = declared.map(|declared| {
                     if declared.is_native(CompoundKind::VarArgs) {
                         declared.inner().unwrap_or(declared)
@@ -388,6 +395,7 @@ impl<'a> Planner<'a> {
                         declared
                     }
                 });
+
                 let element_layout = declared_element.as_ref().map_or_else(
                     || self.value_layout(&element, origin),
                     |declared| self.value_layout_with_declaration(&element, origin, declared),

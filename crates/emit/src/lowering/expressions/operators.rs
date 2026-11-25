@@ -145,6 +145,7 @@ impl Planner<'_> {
                 stability,
             );
         };
+
         if let Some(ty) = &casts.cast_left_to {
             left = GoExpression::conversion(self.go_type(ty), left);
         }

@@ -145,6 +145,7 @@ impl Planner<'_> {
                     .map(|method| method.go_hints.as_slice())
             })
             .unwrap_or_default();
+
         Some(go_callable_return_abi(
             &self.facts,
             id,
@@ -207,6 +208,7 @@ impl Planner<'_> {
                 self.function_type_origin(&callee_ty, SlotOrigin::Lisette),
             ),
         };
+
         Some(return_abi(&self.facts, return_ty, slot))
     }
 
@@ -246,6 +248,7 @@ impl Planner<'_> {
             } else {
                 SlotOrigin::Lisette
             };
+
         let layout = self.value_layout(&ty, origin);
         let closure = is_closure_literal(value);
         if !closure && !ctx.result_fills_type_parameter() {
@@ -258,6 +261,7 @@ impl Planner<'_> {
         else {
             return layout;
         };
+
         let result_type = layout.result_layout.logical_type();
         let return_abi = return_abi(
             &self.facts,
@@ -304,6 +308,7 @@ impl Planner<'_> {
         else {
             return value;
         };
+
         if !ctx.function_slot_origin().declared_by_go() || self.facts.is_go_named_function_type(ty)
         {
             return value;
@@ -335,6 +340,7 @@ impl Planner<'_> {
             }
             _ => layout.clone(),
         };
+
         (!source.same_representation(&target)).then_some(FunctionLayoutChange { source, target })
     }
 
@@ -449,6 +455,7 @@ fn classify_direct_emission(facts: &EmitFacts<'_>, return_ty: &Type) -> Option<L
                 payload: PayloadLayout::Packed,
             }
         };
+
         return Some(LoweredReturnAbi::Option(encoding));
     }
     if let Some(elements) = facts.tuple_elements(return_ty)

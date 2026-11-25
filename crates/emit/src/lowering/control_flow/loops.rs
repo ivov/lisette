@@ -48,6 +48,7 @@ impl Planner<'_> {
         else {
             unreachable!("lower_for_statement requires a For expression");
         };
+
         let iterable = iterable.as_ref();
         let body = body.as_ref();
         let kind = self.facts.checked(full_expression).iterable_kind();
@@ -72,11 +73,13 @@ impl Planner<'_> {
                     simple_pattern,
                 } => this.lower_iterate_for(binding, iterable, yields, simple_pattern, body),
             };
+
             with_setup(
                 prologue,
                 LoweredStatement::Loop(this.build_source_loop(header, lowered_body)),
             )
         });
+
         Statement { line, kind: plan }
     }
 
@@ -115,6 +118,7 @@ impl Planner<'_> {
                     CaptureBoundary::Delayed,
                 )
             };
+
             let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
             let bound = |field: &str| GoExpression::selector(range_var.clone(), field.to_string());
             let compare = |operator: BinaryOp| {
@@ -124,6 +128,7 @@ impl Planner<'_> {
                     bound(go_name::RANGE_END_FIELD),
                 )
             };
+
             let condition = match range_shape {
                 RangeKind::Range => Some(compare(BinaryOp::Lt)),
                 RangeKind::RangeInclusive => Some(compare(BinaryOp::Le)),
@@ -132,6 +137,7 @@ impl Planner<'_> {
                     unreachable!("RangeTo/RangeToInclusive are not iterable")
                 }
             };
+
             let header = LoopHeader::Counted {
                 variable: loop_var,
                 start: bound(go_name::RANGE_START_FIELD),
@@ -183,6 +189,7 @@ impl Planner<'_> {
                     CaptureBoundary::Delayed,
                 )
             };
+
             let index_var = this.fresh_local("i");
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = LoopHeader::Counted {
@@ -197,6 +204,7 @@ impl Planner<'_> {
                     ),
                 )),
             };
+
             let mut lowered_body = this.lower_block_as_body(body);
             if loop_var.spelling() != "_" {
                 lowered_body.statements.insert(
@@ -242,6 +250,7 @@ impl Planner<'_> {
             };
             (header, this.lower_block_as_body(body))
         });
+
         (prologue, header, lowered_body)
     }
 
@@ -279,6 +288,7 @@ impl Planner<'_> {
                 )
             }
         });
+
         (prologue, header, lowered_body)
     }
 
@@ -303,6 +313,7 @@ impl Planner<'_> {
             let value = self.bind_loop_pattern(second, None);
             range_header(Some(&key), Some(&value), iter_expression)
         };
+
         (header, self.lower_block_as_body(body))
     }
 
@@ -419,6 +430,7 @@ impl Planner<'_> {
             capture: false,
             line: None,
         }];
+
         if let Some(end) = end {
             let plan = self.plan_operand(end, ExpressionContext::value());
             let capture = !counts_from_zero && !plan.can_delay();
@@ -467,8 +479,10 @@ impl Planner<'_> {
                     }
                 }
             };
+
             (header, this.lower_block_as_body(body))
         });
+
         (prologue, header, lowered_body)
     }
 
@@ -492,6 +506,7 @@ impl Planner<'_> {
             } else {
                 self.scope.new_local_identifier(preferred)
             };
+
             return self
                 .scope
                 .bind_new_local(identifier, binding.as_slice(), go_name);
@@ -534,6 +549,7 @@ impl Planner<'_> {
         else {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
+
         let body = self.with_loop(None, None, |this| {
             this.lower_while_let(pattern, scrutinee, body)
         });
@@ -573,6 +589,7 @@ impl Planner<'_> {
             } else {
                 LoopHeader::While(rendered)
             };
+
             this.lower_loop_with_header(header, body)
         })
     }

@@ -48,6 +48,7 @@ impl GlobalEmitData {
         else {
             return;
         };
+
         if is_prelude_symbol(key) {
             return;
         }

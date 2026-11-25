@@ -35,6 +35,7 @@ pub(in crate::lowering) fn build_package_plan<'f>(
             imports: ImportPlan::build(file, facts.go_module(), facts.go_package_names()),
         })
         .collect();
+
     let import_qualifiers: Vec<(String, Span)> = file_plans
         .iter()
         .flat_map(|plan| {
@@ -42,6 +43,7 @@ pub(in crate::lowering) fn build_package_plan<'f>(
                 .used_qualifiers(|key| facts.is_unused_import(key))
         })
         .collect();
+
     let qualifier_names: FxHashSet<String> = file_plans
         .iter()
         .flat_map(|plan| plan.imports.qualifiers())
@@ -60,6 +62,7 @@ pub(in crate::lowering) fn build_package_plan<'f>(
         &mut namespace,
     )
     .collect_fixed_names(files);
+
     names.set_block_names(fixed_names, qualifier_names.clone());
     let escape_remap = collect_escape_remap(&names, files);
     names.set_escape_remap(escape_remap);
@@ -71,6 +74,7 @@ pub(in crate::lowering) fn build_package_plan<'f>(
         &mut namespace,
     )
     .collect_names(files);
+
     names.set_block_names(collected.declared_names(), qualifier_names);
     let generic_renames = collect_generic_renames(&names, files);
     names.set_generic_renames(generic_renames);

@@ -211,12 +211,14 @@ impl Planner<'_> {
                         plan.binds_local(local) && !self.scope.has_binding_for_local(local)
                     })
                     .cloned();
+
                 let rests_in_own_temp_path =
                     field_path_go_root(plan.expression()).is_some_and(|root| {
                         plan.binds_local(root)
                             && !self.scope.has_binding_for_local(root)
                             && !pattern_binds_name(pattern, root)
                     });
+
                 let rests_in_stable_name =
                     rests_in_own_temp_path || self.plan_rests_in_stable_name(&plan);
                 let (op_setup, expression) = plan.into_parts();
@@ -455,6 +457,7 @@ impl Planner<'_> {
         } else {
             self.scope.new_local_identifier(preferred)
         };
+
         self.scope.declare_go_name(&go_name);
         Some((name, go_name))
     }
@@ -518,6 +521,7 @@ impl Planner<'_> {
                 statements: loop_body,
             },
         );
+
         LoweredBlock {
             statements: vec![LoweredStatement::Loop(plan).into()],
         }
@@ -561,6 +565,7 @@ impl Planner<'_> {
             body,
             &PlacePlan::Statement,
         );
+
         loop_body.extend(body_block.statements);
 
         let plan = self.build_source_loop(
@@ -569,6 +574,7 @@ impl Planner<'_> {
                 statements: loop_body,
             },
         );
+
         Some(LoweredBlock {
             statements: vec![LoweredStatement::Loop(plan).into()],
         })
@@ -605,6 +611,7 @@ impl Planner<'_> {
                     )],
                     CompositeLayout::Inline { padded: false },
                 );
+
                 let call = test_context_call(
                     GoExpression::identifier(handle),
                     "FailAssert",
@@ -615,6 +622,7 @@ impl Planner<'_> {
                         operand,
                     ],
                 );
+
                 LoweredBlock {
                     statements: vec![effect_statement(call)],
                 }
@@ -662,6 +670,7 @@ impl Planner<'_> {
             checks,
             bindings,
         } = asserted;
+
         let mut guard_parts: Vec<GoExpression> = Vec::new();
         if let Some(ok) = ok_test {
             guard_parts.push(GoExpression::unary(UnaryOp::Not, ok));
@@ -680,6 +689,7 @@ impl Planner<'_> {
                     ),
                 ),
             };
+
             guard_parts.push(negated);
         }
         let guard = guard_parts
@@ -782,6 +792,7 @@ impl Planner<'_> {
                 }
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
             };
+
             let go_name = if failure_uses.is_some_and(|uses| uses.contains(&go_name.preferred())) {
                 let fresh = self.fresh_declared(go_name);
                 self.scope
@@ -789,6 +800,7 @@ impl Planner<'_> {
             } else {
                 self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, go_name)
             };
+
             let go_type = self.go_type(ty);
             statements.push(declare(go_name, go_type));
         }

@@ -46,6 +46,7 @@ fn finish_nested_pair_arm(bound: &mut BoundValue, body: LoweredBlock) -> Lowered
         ] => inner.clone(),
         _ => body,
     };
+
     if let Some(name) = bound.payload_identifier()
         && !GoUses::of(&body.statements).contains_identifier(name)
     {
@@ -244,6 +245,7 @@ impl Planner<'_> {
             payload_ty,
             place,
         );
+
         let then_body = finish_nested_pair_arm(&mut bound, then_body);
         let else_body = self.lower_block_to_place(none_body, place);
         let else_arm = if then_body.ends_with_diverge() {
@@ -446,6 +448,7 @@ fn leading_subject_read<'n>(
                 | GoExpressionNode::Qualified { .. }
         )
     );
+
     let mut node = node;
     if compares_to_name && let GoExpressionNode::Binary { left, .. } = node {
         node = left.as_mut();

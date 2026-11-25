@@ -82,6 +82,7 @@ impl Planner<'_> {
             None,
             WrapperTarget::FreshSlot,
         );
+
         (wrap, outcome.expect("wrapper produced no slot"))
     }
 
@@ -234,6 +235,7 @@ impl Planner<'_> {
                     )
                     .into(),
                 ];
+
                 statements.extend(both_setup);
                 statements.push(multi_value_return(both_values));
                 statements
@@ -256,6 +258,7 @@ impl Planner<'_> {
             }
             LoweredReturnAbi::Tuple { .. } => self.lower_tuple_return(p, return_ty),
         };
+
         statements.extend(arms);
         statements
     }
@@ -295,6 +298,7 @@ impl Planner<'_> {
                         slot_ty,
                         slot_layout,
                     );
+
                     let (setup, raw) = coercion.lower(self, raw);
                     statements.extend(setup);
                     return raw;
@@ -316,6 +320,7 @@ impl Planner<'_> {
                 }
             })
             .collect();
+
         (statements, fields)
     }
 
@@ -357,6 +362,7 @@ impl Planner<'_> {
                 }
             })
             .collect();
+
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
         let mut statements = sequenced.setup;
         let parts = self.coerce_elements_to_slots(
@@ -366,6 +372,7 @@ impl Planner<'_> {
             &slot_tys,
             ElementTarget::LoweredReturn,
         );
+
         (statements, parts)
     }
 
@@ -419,6 +426,7 @@ impl Planner<'_> {
                 Some(&return_ty),
                 &abi,
             );
+
             let coercion = CoercionPlan::change(self, &source, &target);
             if !coercion.is_identity() {
                 self.record_converted_value(expression);
@@ -533,6 +541,7 @@ impl Planner<'_> {
                     multi_value_return(sequenced.values)
                 }
             };
+
             statements.push(ret);
             return statements;
         }

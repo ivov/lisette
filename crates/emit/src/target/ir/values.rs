@@ -201,6 +201,7 @@ impl GoExpression {
             layout,
             end: SourcePosition::default(),
         };
+
         Self::new(node)
     }
 
@@ -222,6 +223,7 @@ impl GoExpression {
             layout,
             end: SourcePosition::default(),
         };
+
         Self::new(node)
     }
 
@@ -342,6 +344,7 @@ impl GoExpression {
             purity,
             paren: SourcePosition::default(),
         };
+
         Self::new(node)
     }
 
@@ -413,6 +416,7 @@ impl GoExpression {
             max: bound(capacity),
             in_bounds: false,
         };
+
         Self::new(node)
     }
 

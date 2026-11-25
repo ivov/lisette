@@ -126,6 +126,7 @@ impl<'a> Planner<'a> {
             collision_diagnostics,
             files: file_plans,
         } = build_package_plan(&facts, files);
+
         let mut conversions = ConversionRecord::default();
         let mut adapters = AdapterRegistry::default();
         let mut output_files = Vec::new();
@@ -142,6 +143,7 @@ impl<'a> Planner<'a> {
                 &mut namespace,
             )
             .render_file_source(file);
+
             let source = source.render();
             let (imports, mut diagnostics) = namespace.finish();
             all_diagnostics.append(&mut diagnostics);

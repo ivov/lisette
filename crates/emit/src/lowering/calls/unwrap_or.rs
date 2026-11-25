@@ -99,6 +99,7 @@ pub(in crate::lowering) fn map_lambda(function: &Expression) -> Option<MapLambda
         [param] => param,
         _ => return None,
     };
+
     let param = field_binding(&param.pattern)?;
     (!escapes_lambda(body)).then_some(MapLambda { param, body })
 }
@@ -119,6 +120,7 @@ impl<'p> Planner<'p> {
         else {
             return None;
         };
+
         if spread.is_some() {
             return None;
         }
@@ -129,12 +131,14 @@ impl<'p> Planner<'p> {
         else {
             return None;
         };
+
         let definition = self
             .facts
             .checked(callee)
             .function_value()?
             .definition
             .as_deref()?;
+
         let selected = strip_prelude_prefix(definition)?.split_once('.')?;
         (selected == (owner, method)).then_some((receiver, args.as_slice()))
     }
@@ -168,6 +172,7 @@ impl<'p> Planner<'p> {
         } else {
             return None;
         };
+
         if map.is_some() && !is_literal_default(default) {
             return None;
         }
@@ -195,6 +200,7 @@ impl<'p> Planner<'p> {
         } else {
             return None;
         };
+
         Some(DefaultedCall {
             producer,
             map,
@@ -236,6 +242,7 @@ impl<'p> Planner<'p> {
             }
             producer => producer.payload(self, slot),
         };
+
         let failure = bound.failure_condition();
         let mut statements = bound.statements;
         let literal_default = is_literal_default(default);
@@ -296,6 +303,7 @@ impl<'p> Planner<'p> {
             &coercion,
             ty,
         );
+
         let (setup, default) = plan.into_parts();
         statements.extend(setup);
         let (coercion_setup, default) = coercion.lower(self, default);
@@ -374,6 +382,7 @@ impl<'p> Planner<'p> {
                     .0,
             );
         };
+
         let FallibleProducer::Option(producer) = call.producer else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
@@ -404,8 +413,10 @@ impl<'p> Planner<'p> {
                 &ty,
                 CommaOkValueSlot::Temp,
             );
+
             return Some(ValuePlan::captured(statements, value));
         };
+
         let FallibleProducer::Option(producer) = call.producer else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };

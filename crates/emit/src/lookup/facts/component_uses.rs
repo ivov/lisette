@@ -1,16 +1,16 @@
-#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum ValueDemand {
-    #[default]
-    StatusOnly,
-    Payload,
-
-    Whole,
-}
 use crate::target::ir::prelude::{PreludeVariant, prelude_variant};
 use rustc_hash::FxHashSet;
 use syntax::ast::{
     BindingId, Expression, IdentifierResolution, MatchArm, Pattern, collect_pattern_bindings,
 };
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ValueDemand {
+    #[default]
+    StatusOnly,
+    Payload,
+    Whole,
+}
 
 const STATUS_METHODS: &[&str] = &["is_some", "is_none", "is_ok", "is_err"];
 const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
@@ -158,6 +158,7 @@ impl Walker {
             } else {
                 ValueDemand::StatusOnly
             };
+
             self.demand.value = self.demand.value.max(value);
         } else {
             self.walk(subject)?;

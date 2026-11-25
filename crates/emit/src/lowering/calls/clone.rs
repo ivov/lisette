@@ -34,6 +34,7 @@ impl Planner<'_> {
             }
             _ => return value,
         };
+
         let mut arguments = vec![value];
         arguments.extend(closure);
         GoExpression::call(function, arguments)

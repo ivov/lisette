@@ -153,6 +153,7 @@ impl Planner<'_> {
                 })
             })
             .collect();
+
         let mut bound = ctx.receiver_bound_parameters();
         for (stage, slot) in stages.iter().zip(&slots) {
             if stage.expression().constant_kind().is_some() {
@@ -271,6 +272,7 @@ impl Planner<'_> {
         ) else {
             return None;
         };
+
         let source = self
             .resolve_callable_value(argument)?
             .abi
@@ -370,6 +372,7 @@ impl Planner<'_> {
             ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
             ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
         };
+
         let slot = &self.facts.checked(argument).value_use().slot;
         let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
         value.map_expression(|setup, value| {
@@ -392,12 +395,14 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let raw = self.field_slot_layout(
             &base.get_type(),
             self.facts.checked(expression).field_selection(),
             member,
             ty,
         )?;
+
         let ValueLayout::NullableOption { payload, .. } = raw.underlying() else {
             return None;
         };

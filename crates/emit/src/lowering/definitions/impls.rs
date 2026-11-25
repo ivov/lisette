@@ -54,6 +54,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let function = method.function_definition_view();
 
         let export = GoExport::from_visibility(*visibility);
@@ -83,6 +84,7 @@ impl Planner<'_> {
                 &go_name,
                 Some(context.receiver_generics),
             );
+
             (go_name, declarations)
         };
 
@@ -109,6 +111,7 @@ fn free_function_type_parameters<'c>(
         .chain(function_generics)
         .cloned()
         .collect();
+
     (combined, None)
 }
 

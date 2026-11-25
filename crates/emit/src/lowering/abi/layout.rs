@@ -348,6 +348,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let callee = self.resolve_callable_value(expression)?;
         if !callee.is_prelude_dispatch {
             return None;
@@ -401,6 +402,7 @@ impl Planner<'_> {
                 self.layout_with_receiver_slots(&actual.ty, &declared.ty, &bindings)
             })
             .collect();
+
         let result = self.layout_with_receiver_slots(
             &instantiated.return_type,
             &declaration.return_type,
@@ -412,6 +414,7 @@ impl Planner<'_> {
             target.return_abi.clone(),
             Some(&declaration.return_type),
         );
+
         (!source.same_representation(&target)).then_some((source, target))
     }
 
@@ -471,6 +474,7 @@ impl Planner<'_> {
                         self.layout_with_receiver_slots(&actual.ty, &declared.ty, bindings)
                     })
                     .collect();
+
                 let result = self.layout_with_receiver_slots(
                     &actual.return_type,
                     &declared.return_type,
@@ -707,6 +711,7 @@ impl Planner<'_> {
             }
             Some(LoweredReturnAbi::Tuple { .. }) => self.tuple_result_slots(result, declaration),
         };
+
         FunctionLayout {
             parameters,
             result_layout: Box::new(result.clone()),
@@ -794,6 +799,7 @@ impl Planner<'_> {
                     alias_return,
                 ),
             };
+
             let underlying = build(origin);
             let declared_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
             if origin != declared_origin
@@ -979,6 +985,7 @@ impl Planner<'_> {
                 self.value_layout_with_hint(ty, origin.nested(), declaration)
             }
         };
+
         let declared_function = declaration.and_then(|ty| self.facts.resolve_to_function_type(ty));
         let declared_parameters = declared_function
             .as_ref()
@@ -996,6 +1003,7 @@ impl Planner<'_> {
                 )
             })
             .collect();
+
         let result_type = function_type
             .get_function_ret()
             .cloned()
@@ -1012,6 +1020,7 @@ impl Planner<'_> {
             physical_return.and(declared_result),
             &return_abi,
         );
+
         ValueLayout::Function {
             function_type: ty,
             layout: self.function_layout(parameters, &result, return_abi, declared_result),

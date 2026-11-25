@@ -59,6 +59,7 @@ impl<'a> EmitFacts<'a> {
         else {
             return None;
         };
+
         Some(&self.checked(callee).callee().operation)
     }
 
@@ -125,6 +126,7 @@ impl<'a> EmitFacts<'a> {
         else {
             return None;
         };
+
         if !visiting.insert(id.to_string()) {
             return None;
         }
@@ -296,6 +298,7 @@ impl<'a> EmitFacts<'a> {
             else {
                 break;
             };
+
             if !seen.insert(id.clone()) {
                 break;
             }
@@ -498,6 +501,7 @@ impl<'a> EmitFacts<'a> {
         else {
             return None;
         };
+
         Some(target)
     }
 

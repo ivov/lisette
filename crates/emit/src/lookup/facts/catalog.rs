@@ -108,6 +108,7 @@ impl GoAbiCatalog {
                 declared_type: parameter.ty.clone(),
             })
             .collect();
+
         let return_slot = GoSlotDescriptor {
             origin: SlotOrigin::of_go_declaration(
                 SlotOrigin::GoReturn,
@@ -116,6 +117,7 @@ impl GoAbiCatalog {
             ),
             declared_type: (*function.return_type).clone(),
         };
+
         let return_abi = go_return_abi(&function.return_type, go_hints, |id| definitions.get(id));
         self.callables.insert(
             qualified_name.to_string(),
@@ -163,6 +165,7 @@ impl GoAbiCatalog {
         else {
             return;
         };
+
         if matches!(definition.ty.unwrap_forall(), Type::Function(_)) {
             return;
         }

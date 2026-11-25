@@ -249,6 +249,7 @@ pub(crate) fn prelude_variant(pattern: &Pattern) -> Option<(PreludeVariant, &[Pa
     else {
         return None;
     };
+
     let variant = PreludeVariant::from_resolution(enum_name, unqualified_name(variant_name))?;
     Some((variant, fields))
 }

@@ -132,6 +132,7 @@ fn build_inline(
                     GoExpression::generated(GeneratedPackage::Prelude, callee)
                 }
             };
+
             let mut all = vec![receiver.clone()];
             all.extend(arguments.iter().cloned());
             GoExpression::call(callee, all)
@@ -217,6 +218,7 @@ fn array_to_slice_receiver<'e>(
     else {
         return None;
     };
+
     if spread.is_some()
         || !matches!(
             operation,
@@ -288,6 +290,7 @@ impl Planner<'_> {
             }
             _ => unreachable!("not a slice growth method: {method}"),
         };
+
         let shared = self.stable_source(setup, "added", shared);
         self.with_scope(|this| {
             let mut statements = Vec::new();
@@ -300,6 +303,7 @@ impl Planner<'_> {
             } else {
                 (shared.clone(), [shared])
             };
+
             statements.push(
                 LoweredStatement::If(IfPlan::plain(
                     GoExpression::binary(
@@ -363,6 +367,7 @@ impl Planner<'_> {
                 index,
                 &mut staged.setup,
             );
+
             return staged.finish(body);
         }
 
@@ -389,6 +394,7 @@ impl Planner<'_> {
                 &staged.arguments,
                 &receiver_expression.get_type(),
             );
+
             return staged.finish(detached);
         }
 
@@ -423,6 +429,7 @@ impl Planner<'_> {
                 &recipe,
                 BinaryOp::Eq,
             );
+
             return Some(staged.finish(body));
         }
 
@@ -444,6 +451,7 @@ impl Planner<'_> {
                     vec![staged.receiver.clone(), staged.arguments[0].clone()],
                 )
             };
+
             return Some(staged.finish(body));
         }
         None
@@ -462,6 +470,7 @@ impl Planner<'_> {
                 go_name::snake_to_camel(context.method)
             ),
         );
+
         let written = self
             .facts
             .checked(context.function)
@@ -477,6 +486,7 @@ impl Planner<'_> {
             | NativeCallForm::Identifier
             | NativeCallForm::Constructor => self.format_type_arg_iter(written),
         };
+
         let mut emitted_args = vec![staged.receiver.clone()];
         let first_param = usize::from(!matches!(context.form, NativeCallForm::Dot { .. }));
         let argument_expressions = context
@@ -596,6 +606,7 @@ impl Planner<'_> {
             &staged.arguments,
             Polarity::Negated,
         )?;
+
         setup.extend(staged.setup);
         Some(inlined)
     }
@@ -668,6 +679,7 @@ impl Planner<'_> {
                 self.plan_operand(spread, ExpressionContext::value())
             }
         });
+
         if is_dot && self.facts.is_reference(&receiver.get_type()) {
             let receiver = stages.remove(0).dereference();
             stages.insert(0, receiver);
@@ -688,6 +700,7 @@ impl Planner<'_> {
                 boundary: ctx.capture_boundary,
             },
         );
+
         let mut values = sequenced.values;
         let receiver = values.remove(0);
         StagedNativeMethod {
@@ -710,6 +723,7 @@ impl Planner<'_> {
         else {
             unreachable!("plan_map_index_pair requires a Call expression");
         };
+
         let native_type = NativeTypeKind::Map;
         let plan = self
             .plan_call(expression)
@@ -727,6 +741,7 @@ impl Planner<'_> {
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
         };
+
         let mut staged = self.stage_native_method(&ctx);
         let receiver = staged.receiver;
         let key = staged.arguments.remove(0);
@@ -777,6 +792,7 @@ impl Planner<'_> {
                     end
                 }
             });
+
             return NativeCallResult::new(
                 sequenced.setup,
                 substring_call(deref(receiver), start_bound, end_bound),
@@ -833,6 +849,7 @@ impl Planner<'_> {
                 }
             }
         };
+
         if operator == BinaryOp::Ne {
             GoExpression::unary(UnaryOp::Not, call)
         } else {
@@ -850,6 +867,7 @@ impl Planner<'_> {
             &element.recipe,
             BinaryOp::Eq,
         );
+
         predicate_literal(
             vec![
                 GoParameter::new(a.clone(), go_ty.clone()),
@@ -872,6 +890,7 @@ impl Planner<'_> {
             &element.recipe,
             BinaryOp::Eq,
         );
+
         predicate_literal(
             vec![GoParameter::new(candidate.clone(), go_ty.clone())],
             body,
@@ -901,6 +920,7 @@ fn substring_call(
         (None, Some(end)) => ("SubstringTo", vec![end]),
         (None, None) => unreachable!("`s.substring(..)` is rejected upstream"),
     };
+
     let mut arguments = vec![receiver];
     arguments.extend(bounds);
     GoExpression::call(

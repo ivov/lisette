@@ -118,6 +118,7 @@ impl Planner<'_> {
             }
             simple_payload_binding(ok.arm).flatten()
         };
+
         let err_name = if err.is_catch_all {
             None
         } else {
@@ -176,6 +177,7 @@ impl Planner<'_> {
             let (body, uses) = self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place);
             (body, uses[0])
         });
+
         let arm_place = if destination.is_some() {
             &PlacePlan::Statement
         } else {
@@ -311,6 +313,7 @@ impl Planner<'_> {
                 hinted_use,
             )
         };
+
         let value = GoExpression::identifier(bound.payload_identifier()?.clone());
         let then_body =
             self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
@@ -392,6 +395,7 @@ impl Planner<'_> {
             &both_arm.expression,
             place,
         );
+
         let val_used = nilable || ok_uses[0] || both_uses[0];
 
         let nil_check = names
@@ -571,6 +575,7 @@ impl Planner<'_> {
             &arms.selected.expression,
             place,
         );
+
         let fallback = self
             .lower_fused_arm(&[], &arms.fallback.expression, place)
             .0;
@@ -600,6 +605,7 @@ impl Planner<'_> {
                 )
             }
         };
+
         let selected_diverges = selected.ends_with_diverge();
         let bound_value = value_used.then(|| {
             names
@@ -607,6 +613,7 @@ impl Planner<'_> {
                 .clone()
                 .expect("value use allocates a result slot")
         });
+
         let test = names.pair_condition(call, bound_value, condition);
         statements.push(
             LoweredStatement::If(IfPlan::pair_if(
@@ -680,6 +687,7 @@ impl Planner<'_> {
                 IfOrigin::Match { else_label: None },
             )
         };
+
         let mut statements = bound.statements;
         statements.push(LoweredStatement::If(plan).into());
         statements
@@ -717,6 +725,7 @@ impl Planner<'_> {
                     }
                 })
             });
+
             let body_block = this.lower_block_to_place(body, place);
             let used = GoUses::of(&body_block.statements);
             let mut statements = Vec::new();
@@ -834,6 +843,7 @@ fn classify_selective_partial_arms(arms: &[MatchArm]) -> Option<SelectivePartial
         (PartialVariant::Err, [error]) => (false, None, field_binding(error)?),
         _ => return None,
     };
+
     Some(SelectivePartialArms {
         selects_both,
         selected,
@@ -847,6 +857,7 @@ fn classify_partial_outcome_arms(arms: &[MatchArm]) -> Option<PartialOutcomeArms
     if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
         return None;
     }
+
     fn ok_binding(arm: &MatchArm) -> Option<Option<FusedName<'_>>> {
         match prelude_variant(&arm.pattern)? {
             (PreludeVariant::Partial(PartialVariant::Ok), [value]) => field_binding(value),
@@ -886,6 +897,7 @@ fn partial_failure_error_binding(
         }
         _ => None,
     };
+
     let (first_variant, first_error) = error_field(first)?;
     let (second_variant, second_error) = error_field(second)?;
     if first_variant == second_variant {

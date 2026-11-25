@@ -165,6 +165,7 @@ impl EnumLayout {
                 }
             })
             .collect();
+
         VariantLayout {
             name: variant.name.to_string(),
             tag_constant,

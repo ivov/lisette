@@ -390,6 +390,7 @@ impl Planner<'_> {
                 .unwrap_or(name)
                 .clone()
         };
+
         let signature = FunctionSignature {
             receiver: receiver.map(|receiver| {
                 GoParameter::new(declared_parameter_name(&receiver.name), receiver.go_type)
@@ -402,6 +403,7 @@ impl Planner<'_> {
                 .collect(),
             result: return_ty,
         };
+
         let mut declaration = GoDeclaration::new(DeclarationKind::Function { signature, body });
         declaration.position = position;
         let mut declarations = vec![declaration];
@@ -544,6 +546,7 @@ impl Planner<'_> {
                     var.clone()
                 }
             };
+
             lowered.pairs.push((name, self.go_type(&param.ty)));
         }
         lowered

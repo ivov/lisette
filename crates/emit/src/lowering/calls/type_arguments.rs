@@ -72,6 +72,7 @@ impl Planner<'_> {
             slot,
             receiver_passed,
         } = request;
+
         if !receiver_passed && callee_curries_receiver(callee) {
             return GoType::default();
         }

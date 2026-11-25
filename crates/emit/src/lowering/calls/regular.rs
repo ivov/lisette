@@ -59,6 +59,7 @@ pub(super) fn receiver_type_binding(
     else {
         return None;
     };
+
     let declared = callee
         .declared_type()?
         .unwrap_forall()
@@ -66,6 +67,7 @@ pub(super) fn receiver_type_binding(
         .first()?
         .ty
         .clone();
+
     Some((
         declared,
         facts.peel_go_alias(&facts.strip_refs(&receiver.get_type())),
@@ -117,6 +119,7 @@ fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Opti
     else {
         return None;
     };
+
     (fmt_member(called) == Some(callee)).then_some(arguments.as_slice())
 }
 
@@ -153,6 +156,7 @@ impl<'a> Planner<'a> {
         else {
             unreachable!("plan_regular_call requires a Call expression");
         };
+
         let spread = spread.as_deref();
 
         if let Some(plan) =
@@ -182,6 +186,7 @@ impl<'a> Planner<'a> {
             slot: expression_ctx.expected_slot_type(),
             receiver_passed: false,
         });
+
         let builtin_conversion = callee_is_go_builtin(&self.facts, function)
             .then(|| go_builtin_conversion(&type_args_string))
             .flatten();
@@ -204,6 +209,7 @@ impl<'a> Planner<'a> {
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: receiver_type_binding(&self.facts, function, &call_plan.resolved),
         };
+
         let sequenced_args = self.plan_call_args(args, &args_ctx, None);
         let constant_result = go_builtin_name(&self.facts, function)
             .filter(|_| builtin_conversion.is_none())
@@ -229,6 +235,7 @@ impl<'a> Planner<'a> {
                 arguments,
             ),
         };
+
         let call = match builtin_conversion {
             Some(go_type) => GoExpression::conversion(go_type, call),
             None => call,
@@ -279,6 +286,7 @@ impl<'a> Planner<'a> {
             }
             _ => ExpressionContext::value(),
         };
+
         let stages: Vec<ValuePlan> = args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
         let spread_stage =
             spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
@@ -294,6 +302,7 @@ impl<'a> Planner<'a> {
                 boundary: expression_ctx.capture_boundary(),
             },
         );
+
         let callee = GoExpression::external_name(go_name);
         let expression = self.call_of(function, callee, sequenced.values);
         Some(if self.callee_lowers_to_type_construction(function) {
@@ -325,6 +334,7 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
+
         if !format_string_lowers_to_sprintf(&self.facts, parts) {
             return None;
         }
@@ -349,6 +359,7 @@ impl<'a> Planner<'a> {
                 vec![value],
             ),
         };
+
         Some(ValuePlan::plain_call(sequenced.setup, call))
     }
 
@@ -446,6 +457,7 @@ fn pointer_receiver_on_value_local(
     else {
         return false;
     };
+
     matches!(&**receiver, Expression::Identifier { .. })
         && facts.dot_receiver_coercion(receiver, member) == Some(ReceiverCoercion::AutoAddress)
 }

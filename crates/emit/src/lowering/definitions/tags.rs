@@ -166,6 +166,7 @@ fn interpret_struct_attribute(attribute: &Attribute) -> Option<TagConfig> {
     } else {
         (&attribute.name, attribute.args.as_slice())
     };
+
     let mut settings = StructuredTag::default();
     for arg in args {
         settings.apply_common_arg(arg);
@@ -244,6 +245,7 @@ fn interpret_tag_attribute(attribute: &Attribute) -> Option<TagConfig> {
                 .filter(|k| !k.is_empty())
                 .unwrap_or("tag")
                 .to_string();
+
             Some(TagConfig::raw(key, raw.clone()))
         }
 

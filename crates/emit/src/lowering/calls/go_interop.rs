@@ -73,6 +73,7 @@ impl Planner<'_> {
                 }
                 _ => Err(call),
             };
+
             let (wrap, value) = match shortcut {
                 Ok(value) => (Vec::new(), value),
                 Err(call) => {
@@ -83,13 +84,16 @@ impl Planner<'_> {
                         change,
                         WrapperTarget::FreshSlot,
                     );
+
                     (wrap, outcome.expect("wrapper produced no slot"))
                 }
             };
+
             wrapped_in_place = wrap.is_empty() && !changed;
             setup.extend(wrap);
             value
         });
+
         if !wrapped_in_place {
             plan.make_observable();
         }
@@ -263,6 +267,7 @@ impl Planner<'_> {
                 return named(self.lower_sentinel_wrapping(call, result_ty, *value, target));
             }
         };
+
         let outcome = match target {
             WrapperTarget::FreshSlot => Some(value),
             WrapperTarget::Slot(name) => {
@@ -275,6 +280,7 @@ impl Planner<'_> {
                 None
             }
         };
+
         (statements, outcome)
     }
 
@@ -318,6 +324,7 @@ impl Planner<'_> {
                 }
             })
             .collect();
+
         let tuple = self.plan_tuple_from_vars(&mut statements, values);
         (statements, tuple)
     }
@@ -459,7 +466,6 @@ pub(in crate::lowering) fn build_tuple_literal(values: Vec<GoExpression>) -> GoE
 }
 
 #[derive(Debug, Clone)]
-
 pub(in crate::lowering) struct LoweredCall<'a> {
     pub(in crate::lowering) call: &'a Expression,
     pub(in crate::lowering) wraps: Vec<&'a Expression>,
@@ -493,6 +499,7 @@ impl LoweredCall<'_> {
             Some(GoResultLayoutChange::Payload(_)) => return None,
             _ => None,
         };
+
         Some(RawPair {
             has_value_slot,
             nil_guard: self.nil_guard,

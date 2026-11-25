@@ -148,6 +148,7 @@ impl<'a> WalkCtx<'a> {
                 break_label,
             },
         };
+
         Self { role, ..self }
     }
 
@@ -381,6 +382,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 this.planner.scope.current_block_declared_nonempty(),
             )
         });
+
         if wrap && declares {
             statements.push(
                 LoweredStatement::Block(LoweredBlock {
@@ -417,6 +419,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             this.walk(&mut then_statements, then_branch, &inner);
             then_statements
         });
+
         let then_body = LoweredBlock {
             statements: then_statements,
         };
@@ -432,6 +435,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 else_label: test.else_label,
             },
         };
+
         let divergence = capture_diverge(vec![LoweredStatement::If(plan).into()], statements);
         apply_leaf_terminator(statements, ctx, divergence);
     }
@@ -444,6 +448,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             },
             failure,
         } = guard;
+
         let arm_index = *arm_index;
         let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
         let arm = &self.arms[arm_index];
@@ -469,9 +474,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                             statements: then_statements,
                         }
                     });
+
                     Some((condition_setup, condition, then_body))
                 },
             );
+
             if let Some((condition_setup, condition, then_body)) = guarded {
                 let success_divergence = Divergence::of(&then_body);
                 let else_arm = if ctx.role == WalkRole::SwitchCase {
@@ -487,6 +494,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
             guard_statements
         });
+
         if needs_pre_scope {
             statements.push(
                 LoweredStatement::Block(LoweredBlock {
@@ -615,6 +623,7 @@ fn merge_binding_ids(bindings: &mut [PatternBinding], alternatives: &[PatternBin
         else {
             continue;
         };
+
         for id in &alternative.binding_ids {
             if !binding.binding_ids.contains(id) {
                 binding.binding_ids.push(*id);

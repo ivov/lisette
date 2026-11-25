@@ -82,6 +82,7 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
+
         let ids = binding_id.as_slice();
         if self.is_unit_call(value) {
             return self.lower_let_unit_call(let_spec, raw_go_name);
@@ -95,6 +96,7 @@ impl Planner<'_> {
                 self.lower_discard_value(value)
             };
         };
+
         let go_identifier = self.scope.new_local_identifier(raw_go_name);
         if !self.shadows_declaration(&go_identifier)
             && !self.scope.is_active_assign_target(&go_identifier)
@@ -110,6 +112,7 @@ impl Planner<'_> {
                 .or_else(|| self.try_lower_fused_partial_match_into(value, &local))
                 .or_else(|| self.try_lower_defaulted_call_into(value, &local))
                 .or_else(|| self.try_lower_slice_loop_into(value, &local));
+
             if let Some(statements) = into {
                 self.scope.bind_existing_identifier(identifier, ids, local);
                 return statements;
@@ -150,6 +153,7 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
+
         if self.facts.resolves_to_unit(binding_ty)
             || self.facts.is_option_or_result(binding_ty)
             || self.facts.is_partial(binding_ty)
@@ -172,6 +176,7 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
+
         let (mut statements, plan_value) = self
             .plan_value(value, ExpressionContext::value())
             .into_parts();
@@ -220,6 +225,7 @@ impl Planner<'_> {
             }
             Fallible::Result { .. } => ComponentKind::OtherResult,
         };
+
         let source = self.component_producer(value, demand.value == ValueDemand::Whole, kind)?;
         let slot = if demand.value != ValueDemand::StatusOnly {
             self.scope.declare_go_name(go_identifier);
@@ -227,6 +233,7 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Discarded
         };
+
         let (statements, components) = source.components(
             self,
             slot,
@@ -234,6 +241,7 @@ impl Planner<'_> {
             kind,
             demand.defaults > 1,
         )?;
+
         self.scope.bind_components_filling_ids(
             let_spec.identifier,
             let_spec.binding_id.as_slice(),
@@ -259,6 +267,7 @@ impl Planner<'_> {
             value,
             ..
         } = let_spec;
+
         let elements = self.facts.tuple_or_type_arguments(ty);
         if elements.len() < 2 {
             return None;
@@ -280,6 +289,7 @@ impl Planner<'_> {
                 self.fresh_declared(&SourceName::new(identifier).component(index))
             })
             .collect();
+
         let (setup, call) = self
             .plan_call_expression(value, None, ExpressionContext::value())
             .into_parts();
@@ -305,6 +315,7 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
+
         let ids = binding_id.as_slice();
         let Expression::Propagate {
             expression: inner, ..
@@ -312,6 +323,7 @@ impl Planner<'_> {
         else {
             unreachable!("lower_let_propagate requires a Propagate value");
         };
+
         let Some(raw_go_name) = raw_go_name else {
             self.scope.bind_new_local(identifier, ids, "_");
             return self.lower_propagate_statement(inner);
@@ -342,6 +354,7 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
+
         let ids = binding_id.as_slice();
         let (mut statements, value_expression) = self
             .plan_value(value, ExpressionContext::value())
@@ -362,6 +375,7 @@ impl Planner<'_> {
             self.scope.try_declare_go_name(&go_identifier);
             go_identifier
         };
+
         if needs_explicit_type_declaration(&self.facts, value, binding_ty) {
             let go_type = self.go_type(binding_ty);
             statements.push(
@@ -390,6 +404,7 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
+
         let ids = binding_id.as_slice();
         let origin = self.function_type_origin(binding_ty, SlotOrigin::Lisette);
         let plan = self.plan_value(
@@ -457,6 +472,7 @@ impl Planner<'_> {
             binding_ty,
             ..
         } = let_spec;
+
         let go_identifier = self.scope.new_local_identifier(raw_go_name);
         let plan = self.plan_call(value)?;
         if !plan.wraps_result() {
@@ -480,6 +496,7 @@ impl Planner<'_> {
             binding_ty,
             target,
         )?;
+
         self.scope
             .bind_existing_identifier(identifier, binding_id.as_slice(), local);
         Some(statements)
@@ -686,6 +703,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         } else {
             receiver
         };
+
         let receiver = self.planner.stable_source(&mut statements, "ch", receiver);
         let planned: Vec<_> = elements
             .iter()
@@ -699,6 +717,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 else {
                     return None;
                 };
+
                 let raw_go_name =
                     GoIdentifier::from(self.planner.facts.go_name_for_binding(pattern)?);
                 let go_name = if self.planner.scope.has_binding_for_go_name(&raw_go_name) {
@@ -707,6 +726,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     self.planner
                         .choose_let_go_name(identifier, binding.as_slice(), &raw_go_name)
                 };
+
                 self.planner.scope.declare_go_name(&go_name);
                 Some((
                     identifier,
@@ -716,6 +736,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 ))
             })
             .collect();
+
         for (identifier, id, go_name, go_type) in planned {
             let local = self
                 .planner
@@ -741,6 +762,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     Pattern::Identifier { .. } | Pattern::WildCard { .. }
                 )
             });
+
         if !pair_of_names {
             return None;
         }
@@ -785,6 +807,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             binding_ty: &self.binding.ty,
             mutable: self.binding.is_mutable(),
         };
+
         if let Some(target) = self.planner.reassignable_shadow(let_spec) {
             return LoweredBlock {
                 statements: self.planner.lower_let_reassign(let_spec, target),
@@ -815,6 +838,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             self.planner
                 .lower_let_value(let_spec, raw_go_name.as_ref(), self.demand.take())
         };
+
         LoweredBlock { statements }
     }
 
@@ -836,6 +860,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 else {
                     return None;
                 };
+
                 if identifier == "_" {
                     return None;
                 }
@@ -851,6 +876,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 } else {
                     self.planner.scope.new_local_identifier(preferred)
                 };
+
                 self.planner.scope.declare_go_name(&name);
                 Some((identifier.as_str(), *binding, name))
             })
@@ -872,6 +898,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 None => GoIdentifier::blank(),
             })
             .collect();
+
         statements.push(if planned.iter().any(Option::is_some) {
             define_many(go_vars, call)
         } else {

@@ -49,6 +49,7 @@ impl<'a> Planner<'a> {
             adapter_registry,
             namespace,
         } = self;
+
         PlanningSnapshot {
             conversions: (**conversions).clone(),
             scope: scope.clone(),
@@ -64,6 +65,7 @@ impl<'a> Planner<'a> {
             adapter_registry,
             namespace,
         } = saved;
+
         *self.conversions = conversions;
         self.scope = scope;
         *self.adapter_registry = adapter_registry;
@@ -148,6 +150,7 @@ impl<'a> Planner<'a> {
                 signature.generics.as_slice()
             }
         };
+
         types.extend(generics.iter().flat_map(|parameter| &parameter.bounds));
         for ty in types {
             self.require_packages(ty.requirements());
@@ -240,6 +243,7 @@ impl<'a> Planner<'a> {
                 }
                 OuterBindings::StayVisible => self.scope.has_binding_for_go_name(&go_name),
             };
+
         let go_name = if hides {
             self.fresh_local(source)
         } else {
@@ -265,6 +269,7 @@ impl<'a> Planner<'a> {
         } else {
             go_name
         };
+
         self.scope.declare_go_name(&go_name);
         go_name
     }
@@ -329,6 +334,7 @@ impl<'a> Planner<'a> {
             self.adapter_registry,
             self.namespace,
         );
+
         f(&mut declaration)
     }
 

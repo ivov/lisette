@@ -30,6 +30,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
     else {
         return None;
     };
+
     if !matches!(left.as_ref(), GoExpressionNode::Identifier(read) if read.refers_to_same(name))
         || !operator.has_compound_form()
     {
@@ -44,6 +45,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
             rhs: GoExpression::from_operand(right.clone()),
         },
     };
+
     Some(LoweredStatement::Assign(AssignForm::Compound {
         target: target.clone(),
         kind,

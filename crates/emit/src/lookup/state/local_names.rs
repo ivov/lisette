@@ -88,6 +88,7 @@ impl ScopeState {
                     || self.declares_type_param(candidate)
                     || package.is_import_qualifier(candidate)
             });
+
             if name != *base || name == *current {
                 taken.insert(current.clone());
                 continue;
@@ -111,6 +112,7 @@ impl ScopeState {
             .chain(settled.values())
             .cloned()
             .collect();
+
         let mut locals: Vec<_> = present
             .iter()
             .filter(|(id, _)| !settled.contains_key(id))
@@ -155,6 +157,7 @@ impl ScopeState {
                     || is_go_reserved_word(candidate)
                     || self.declares_type_param(candidate)
             });
+
             settled.insert(*id, name);
         }
     }

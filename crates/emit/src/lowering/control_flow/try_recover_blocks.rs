@@ -87,6 +87,7 @@ impl Planner<'_> {
             }) => PairKind::CommaOk { nil_guard: None },
             _ => return None,
         };
+
         Some(TryBlockPairPlan {
             items,
             effective_ty: ty.clone(),
@@ -178,6 +179,7 @@ impl Planner<'_> {
                 | Expression::For { .. }
                 | Expression::Loop { .. }
         );
+
         if is_statement_only || self.is_unit_call(last) {
             let mut statements = vec![self.lower_statement(last)];
             statements.extend(self.lower_try_unit_return(fallible));
@@ -196,6 +198,7 @@ impl Planner<'_> {
                 last,
                 final_expression,
             );
+
             statements.extend(self.success_return(fallible, final_expression));
         }
         statements
@@ -284,6 +287,7 @@ impl Planner<'_> {
                 )],
             ),
         )];
+
         ValuePlan::captured(setup, result_var)
     }
 

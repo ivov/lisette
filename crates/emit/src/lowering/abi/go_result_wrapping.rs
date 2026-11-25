@@ -37,9 +37,7 @@ fn nil_interface_condition(value: GoExpression) -> GoExpression {
 #[derive(Debug, Clone, Copy)]
 pub(in crate::lowering) enum NilGuard {
     Pointer,
-
     Interface,
-
     Sentinel(i64),
 }
 
@@ -74,9 +72,7 @@ impl NilGuard {
 #[derive(Clone, Copy)]
 pub(in crate::lowering) enum WrapperTarget<'a> {
     FreshSlot,
-
     Slot(&'a GoIdentifier),
-
     Return,
 }
 
@@ -144,6 +140,7 @@ impl Planner<'_> {
                     .map(|name| GoExpression::identifier(name.clone()))
                     .collect(),
             );
+
             (temp_vars.last().unwrap().clone(), tuple)
         } else {
             let val_var = self.fresh_declared("ret");
@@ -216,6 +213,7 @@ impl Planner<'_> {
                 (error_value(), error_layout_change),
             ],
         );
+
         let ok_body = self.changed_leaf_block(
             &sink,
             partial_variant("Ok").constructor,
@@ -230,6 +228,7 @@ impl Planner<'_> {
                 type_params,
                 vec![(error_value(), error_layout_change)],
             );
+
             let inner = IfPlan::plain(check, error_body, ElseArm::block(both_body));
             LoweredBlock {
                 statements: vec![LoweredStatement::If(inner).into()],
@@ -315,6 +314,7 @@ impl Planner<'_> {
         else {
             return Err(call);
         };
+
         let ok_ty = fallible.ok_ty();
         let err_is_error = fallible
             .err_ty()
@@ -359,6 +359,7 @@ impl Planner<'_> {
         else {
             unreachable!("Result wrapping requires a fallible layout")
         };
+
         let fallible = self
             .facts
             .fallible(fallible_type)
@@ -373,6 +374,7 @@ impl Planner<'_> {
             }
             Err(call) => call,
         };
+
         let (error_variable, ok_value) =
             self.push_go_returns(&mut statements, call, payload, layout);
         let error_value = || GoExpression::identifier(error_variable.clone());
@@ -390,6 +392,7 @@ impl Planner<'_> {
             type_params.clone(),
             vec![(ok(), changes.map(|changes| &changes.value))],
         );
+
         let then_body = self.changed_leaf_block(
             &sink,
             fallible.err_constructor(),
@@ -477,6 +480,7 @@ impl Planner<'_> {
         else {
             unreachable!("unit Result wrapping requires a fallible layout")
         };
+
         let fallible = self
             .facts
             .fallible(fallible_type)
@@ -501,6 +505,7 @@ impl Planner<'_> {
                 vec![self.unit_value(None, None)],
             )
         };
+
         let else_arm = ElseArm::block(leaf_block(&sink, ok_wrapper));
 
         statements.push(
@@ -541,6 +546,7 @@ impl Planner<'_> {
                 ),
             ],
         );
+
         let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
         (statements, outcome)
     }
@@ -612,6 +618,7 @@ impl Planner<'_> {
         } else {
             self.create_temp_vars("ret", 1)
         };
+
         let value_variable = self.fresh_declared("ret");
 
         let mut all_vars = val_vars.clone();
@@ -628,6 +635,7 @@ impl Planner<'_> {
         } else {
             first_val.clone()
         };
+
         let (mut payload_setup, val_expression) = self.plan_optional_payload_layout_change(
             val_expression,
             payload_changes.map(|changes| &changes.value),

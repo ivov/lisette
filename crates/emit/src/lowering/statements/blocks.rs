@@ -60,6 +60,7 @@ impl Planner<'_> {
                 }
             }
             .into_parts();
+
             body.push(plain_return(value));
             statements.push(directed_at(
                 &self.facts,
@@ -160,6 +161,7 @@ impl Planner<'_> {
         else {
             return self.lower_statement(item);
         };
+
         let demand = match &binding.pattern {
             Pattern::Identifier {
                 binding: Some(id), ..
@@ -168,6 +170,7 @@ impl Planner<'_> {
             }
             _ => None,
         };
+
         let plan = self.build_let_plan(binding, value, mode, demand);
         directed_at(&self.facts, item, LoweredStatement::Body(plan))
     }
@@ -250,6 +253,7 @@ impl Planner<'_> {
                     .and_then(|loop_context| {
                         Some((loop_context.result.clone()?, loop_context.result_ty.clone()))
                     });
+
                 match wide_result {
                     Some((result, result_ty)) => {
                         let mut statements =
@@ -307,6 +311,7 @@ impl Planner<'_> {
             }
             _ => return None,
         };
+
         Some(statement)
     }
 
@@ -331,6 +336,7 @@ impl Planner<'_> {
                 statements: self.lower_discard_value(expression),
             })
         };
+
         directed_at(&self.facts, expression, statement)
     }
 

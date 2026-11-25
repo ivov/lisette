@@ -52,6 +52,7 @@ pub(crate) fn drop_unreachable_statements(statements: &mut Vec<Statement>) {
         else {
             return;
         };
+
         let terminated = matches!(
             list.get(end + 1).map(|statement| &statement.kind),
             Some(LoweredStatement::UnreachablePanic)
@@ -88,6 +89,7 @@ pub(crate) fn declare_zero_values(
                 LoweredStatement::If(plan) => if_initializer_values(plan),
                 _ => Vec::new(),
             };
+
             let mut zeros: Vec<(GoType, GoIdentifier)> = Vec::new();
             for value in values {
                 name_zero_values(value.node_mut(), &mut zeros, scope, package);
@@ -142,6 +144,7 @@ fn name_zero_values(
                 name
             }
         };
+
         *node = GoExpressionNode::Identifier(name);
         return;
     }

@@ -49,6 +49,7 @@ impl Planner<'_> {
         else {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
+
         let receiver_coercion = self.facts.dot_receiver_coercion(expression, member);
         let spelling = self.member_spelling(dot_access);
 
@@ -86,12 +87,14 @@ impl Planner<'_> {
             ),
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
+
         let stability = dot_member_stability(
             &self.facts,
             dot_access,
             &expression_ty,
             base_plan.stability(),
         );
+
         let (mut setup, base) = base_plan.into_parts();
         let base = self.plan_bound_dispatch_receiver(&mut setup, dot_access, base, &expression_ty);
         if let Some(member_access) =
@@ -120,6 +123,7 @@ impl Planner<'_> {
             }
             None => GoExpression::selector(base, field),
         };
+
         if wrap_nullable
             && let Some(wrapped) =
                 self.try_plan_nullable_field_access(&mut setup, dot_access, selector.clone(), ctx)
@@ -135,12 +139,14 @@ impl Planner<'_> {
         } else {
             expression
         };
+
         let expression =
             if let Some((source, target)) = self.prelude_receiver_method_layouts(dot_access) {
                 self.plan_function_layout_change(&mut setup, expression, &source, &target)
             } else {
                 expression
             };
+
         ValuePlan::computed(setup, expression).with_stability(stability)
     }
 
@@ -182,6 +188,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         match resolution {
             DotAccessResolution::EnumVariant { definition, .. } => {
                 self.try_plan_enum_variant_dot(definition, result_ty, ctx)
@@ -208,12 +215,14 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let Some(BindingValue::TupleComponents(tuple)) = self
             .scope
             .resolve_identifier_with_resolution(value, resolution)
         else {
             return None;
         };
+
         let index = member.parse::<usize>().ok()?;
         tuple.names.get(index).cloned()
     }
@@ -304,6 +313,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let expression_ty = expression.get_type();
         let source_layout = self.field_slot_layout(
             &expression_ty,
@@ -311,6 +321,7 @@ impl Planner<'_> {
             member,
             result_ty,
         )?;
+
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
         let CoercionPlan::Layout(LayoutChange::WrapNullableOption { payload, .. }) =
             CoercionPlan::change(self, &source_layout, &target_layout)
@@ -339,6 +350,7 @@ impl Planner<'_> {
         else {
             unreachable!("a nullable field access reads a DotAccess expression");
         };
+
         let expression_ty = &expression.get_type();
         let callee = ctx.is_callee();
         let source_layout = self.field_slot_layout(
@@ -347,6 +359,7 @@ impl Planner<'_> {
             member,
             result_ty,
         )?;
+
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
         if callee
             && let (
@@ -449,6 +462,7 @@ impl Planner<'_> {
                 else {
                     return None;
                 };
+
                 let type_args =
                     self.constructor_reference_type_arguments(&f.params, ret_params, ctx);
                 Some(GoExpression::instantiation(make_fn, type_args))
@@ -508,6 +522,7 @@ fn dot_member_stability(
     else {
         unreachable!("a member stability reads a DotAccess expression");
     };
+
     if let Some(package) = expression_ty.as_import_namespace()
         && package_member_is_fixed(facts, package, member)
     {

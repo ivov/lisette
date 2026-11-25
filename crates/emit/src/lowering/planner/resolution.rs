@@ -29,6 +29,7 @@ impl Planner<'_> {
                         GoExport::from_visibility(definition.visibility)
                     }),
             };
+
             let mut expression = self.qualify_method_call(&owner_id, method, export);
             if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
                 *identifier = GoIdentifier::external(identifier.spelling().to_string());
@@ -52,8 +53,10 @@ impl Planner<'_> {
                     }
                     _ => GoExport::Unexported,
                 };
+
                 self.free_function_go_name(name, export)
             };
+
             return self.package_member_reference(package, go_name);
         }
         self.package_member_reference(package, self.facts.package_member_go_name(package, name))
@@ -101,6 +104,7 @@ impl Planner<'_> {
                 rendered_qualifier(&path, name.to_string())
             }
         };
+
         let qualifier = if self.scope.has_binding_for_go_name(&qualifier)
             || self.scope.is_go_name_declared(&qualifier)
             || self.names.declares_name(&qualifier)
@@ -113,6 +117,7 @@ impl Planner<'_> {
         } else {
             qualifier
         };
+
         PackageUse::new(path, qualifier)
     }
 
@@ -177,6 +182,7 @@ impl Planner<'_> {
                 .package_for_qualified_name(enum_id)
                 .unwrap_or(enum_id)
         };
+
         self.package_member_reference(enum_package, tag_constant)
     }
 

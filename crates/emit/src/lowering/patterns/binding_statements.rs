@@ -62,6 +62,7 @@ impl Planner<'_> {
             }
             _ => subject.clone(),
         };
+
         AssertedPattern {
             subject,
             ok_test: None,
@@ -89,6 +90,7 @@ impl Planner<'_> {
                 bindings,
             };
         };
+
         let needs_asserted = requires_asserted_subject(&checks, &bindings);
         let assertion_of =
             |go_type: &GoType| GoExpression::type_assertion(subject.clone(), go_type.clone());
@@ -124,9 +126,11 @@ impl Planner<'_> {
                     })
                     .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
                     .expect("a multi-type assertion names at least one type");
+
                 (subject.clone(), Some(oks))
             }
         };
+
         AssertedPattern {
             subject,
             ok_test,
@@ -172,6 +176,7 @@ impl Planner<'_> {
                 go_name,
                 OuterBindings::StayVisible,
             );
+
             statements
                 .push(LoweredStatement::Define(Definition::single(name, access_expression)).into());
         }
@@ -223,6 +228,7 @@ impl Planner<'_> {
                 .and_then(BindingValue::as_go_identifier)
                 .expect("a named alternative binding is registered")
                 .clone();
+
             let access_expression = binding.path.render(SubjectRoot::Var(subject));
             let (setup, access_expression) =
                 binding.coercion.clone().lower(self, access_expression);

@@ -85,6 +85,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 line: self.arm_line(case.body.arm_index()),
             })
             .collect::<Vec<_>>();
+
         let default_line = default_case
             .as_ref()
             .and_then(|case| self.arm_line(case.body.arm_index()));
@@ -157,6 +158,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                             self.collect_guard_case(&guard.leaf, conditions, out)
                         }
                     };
+
                     if has_checks {
                         conditions.pop();
                     }
@@ -276,6 +278,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         })
                         .cloned()
                         .collect();
+
                     this.with_bindings(&mut body, &bindings, &[arm_body], |this, body| {
                         this.lower_arm_leaf(body, leaf.arm_index, &ctx);
                     });
@@ -297,6 +300,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             branches,
             fallback,
         } = switch;
+
         let fallback = fallback.as_deref();
         let rendered_path = path.render(self.subject.root());
         match switch.shape() {
@@ -330,6 +334,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     ),
                     else_label: Some(branches[1].label.clone()),
                 };
+
                 self.walk_condition_branch(
                     statements,
                     test,
@@ -348,6 +353,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     apply_leaf_terminator(statements, ctx, divergence);
                     return;
                 };
+
                 let condition = GoExpression::binary(
                     render_switch_expression(rendered_path, kind),
                     BinaryOp::Eq,
@@ -394,6 +400,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 self.lower_switch_case(labels, established, &branch.decision, place)
             })
             .collect();
+
         let default_block = self.try_lower_switch_default(default, place);
         switch_statements(
             SwitchStatementPlan {
@@ -427,12 +434,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 name
             }
         };
+
         let mut nested = TreePlanner::new(
             self.planner,
             arms,
             MatchSubject::Var(GoExpression::identifier(binding_name.clone())),
             subject_ty,
         );
+
         let case_plans: Vec<SwitchCasePlan> = regular
             .iter()
             .map(|branch| {
@@ -444,6 +453,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 nested.lower_switch_case(labels, None, &branch.decision, place)
             })
             .collect();
+
         let default_block = nested.try_lower_switch_default(default, place);
 
         let mut used = GoUses::default();
@@ -482,6 +492,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             this.walk(&mut body, decision, &WalkCtx::switch_case(place));
             body
         });
+
         SwitchCasePlan {
             labels,
             body: LoweredBlock { statements: body },

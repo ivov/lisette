@@ -92,6 +92,7 @@ impl Planner<'_> {
                     ("%s".to_string(), vec![value])
                 }
             };
+
             prepared.push(WrapMessage { format, args });
         }
         (setup, prepared)

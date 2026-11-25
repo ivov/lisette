@@ -89,6 +89,7 @@ impl Planner<'_> {
                 .then(|| receiver_type_binding(&self.facts, function, &call_plan.resolved))
                 .flatten(),
         };
+
         let (setup, receiver_arg, emitted_args) =
             self.lower_ufcs_call_args(&args_ctx, receiver_stage, args);
 
@@ -101,6 +102,7 @@ impl Planner<'_> {
             member,
             type_args_string,
         );
+
         let expression = GoExpression::call(callee, new_args);
         if self.callee_lowers_to_type_construction(function) {
             ValuePlan::computed(setup, expression)
@@ -142,6 +144,7 @@ impl Planner<'_> {
         } else {
             self.plan_call_args(args, ctx, Some(receiver_stage))
         };
+
         let mut all_values = sequenced.values;
         let receiver_arg = all_values.remove(0);
         (sequenced.setup, receiver_arg, all_values)
@@ -210,6 +213,7 @@ impl Planner<'_> {
             callee_pins_type_args: false,
             receiver_binding: None,
         };
+
         let sequenced = self.plan_call_args(args, &args_ctx, None);
         let mut emitted_all = sequenced.values;
         let receiver = emitted_all.remove(0);
@@ -237,6 +241,7 @@ fn is_address_of_composite_literal(arg: Option<&Expression>) -> bool {
     else {
         return false;
     };
+
     matches!(
         &**inner,
         Expression::StructCall { .. }

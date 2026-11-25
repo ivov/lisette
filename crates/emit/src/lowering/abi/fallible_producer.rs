@@ -73,12 +73,14 @@ impl OptionFusePlan<'_> {
                     }
                     CommaOkValueSlot::Unused => (planner.fresh_declared("ret"), true),
                 };
+
                 let initializer_call = if opens_if {
                     Some(call)
                 } else {
                     statements.push(define(value.clone(), call));
                     None
                 };
+
                 BoundValue::nullable(statements, value, nil_guard, initializer_call)
             }
             Self::Index { call } => {
@@ -99,6 +101,7 @@ impl OptionFusePlan<'_> {
                     CommaOkValueSlot::Temp => Some(planner.fresh_declared("ret")),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
                 };
+
                 let flag = planner.fresh_declared("found");
                 let statements = planner.lower_find_loop(
                     &call,
@@ -107,6 +110,7 @@ impl OptionFusePlan<'_> {
                         flag: &flag,
                     },
                 );
+
                 BoundValue::found(statements, value, flag)
             }
         }
@@ -182,6 +186,7 @@ impl ResultFusePlan<'_> {
                 slot => slot,
             }
         };
+
         let mut pair = planner.bind_pair(
             setup,
             call,
@@ -195,6 +200,7 @@ impl ResultFusePlan<'_> {
             },
             error_name,
         );
+
         pair.statements.extend(message_setup);
         (pair, messages)
     }
@@ -257,6 +263,7 @@ impl FallibleProducer<'_> {
             kind,
             shared_payload,
         };
+
         Some((bound.statements, components))
     }
 

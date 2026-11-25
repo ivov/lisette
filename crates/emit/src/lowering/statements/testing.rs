@@ -55,6 +55,7 @@ impl Planner<'_> {
         else {
             unreachable!("lower_assert_statement requires an Assert expression");
         };
+
         self.require_testkit();
 
         let mut statements = Vec::new();
@@ -82,6 +83,7 @@ impl Planner<'_> {
             message,
             operands,
         } = shape;
+
         let handle = self
             .scope
             .current_test_handle()
@@ -100,6 +102,7 @@ impl Planner<'_> {
             span,
             arguments,
         );
+
         let test = LoweredStatement::If(IfPlan::plain(
             failure_condition,
             LoweredBlock {
@@ -107,6 +110,7 @@ impl Planner<'_> {
             },
             ElseArm::None,
         ));
+
         if statements.is_empty() {
             return test;
         }
@@ -135,6 +139,7 @@ impl Planner<'_> {
         else {
             unreachable!("plan_test_log_call requires a call");
         };
+
         let Expression::DotAccess {
             expression: receiver,
             ..
@@ -142,6 +147,7 @@ impl Planner<'_> {
         else {
             unreachable!("plan_test_log_call requires a method receiver");
         };
+
         let handle = self.plan_value(receiver, ExpressionContext::value());
         let value = self.plan_value(&arguments[0], ExpressionContext::value());
         let value = self.convert_to_recorded_slot(&arguments[0], value);
@@ -163,6 +169,7 @@ impl Planner<'_> {
                 vec![value],
             )],
         );
+
         (statements, call)
     }
 
@@ -187,6 +194,7 @@ impl Planner<'_> {
                 conversion,
             )
             .into_parts();
+
         statements.extend(cond_setup);
         AssertShape {
             failure_condition: match flipped {
@@ -241,6 +249,7 @@ impl Planner<'_> {
             statements.extend(setup);
             condition
         };
+
         AssertShape {
             failure_condition,
             kind: "bare",
@@ -292,6 +301,7 @@ impl Planner<'_> {
                             .is_none()
                 }
             };
+
         (!inlines).then_some(go_type)
     }
 
@@ -312,6 +322,7 @@ impl Planner<'_> {
                 value: plan,
             };
         };
+
         let (_, value) = plan.into_parts();
         let name = self.fresh_declared(hint);
         let constant_needs_type = self
@@ -348,6 +359,7 @@ fn equals_decomposition(operand: &Expression) -> Option<(&Expression, &Expressio
     else {
         return None;
     };
+
     let Expression::DotAccess {
         expression: recv,
         member,
@@ -356,6 +368,7 @@ fn equals_decomposition(operand: &Expression) -> Option<(&Expression, &Expressio
     else {
         return None;
     };
+
     if member != "equals" || args.len() != 1 {
         return None;
     }
@@ -400,6 +413,7 @@ fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> 
             CompositeLayout::Inline { padded: false },
         )
     };
+
     vec![operand("left", lhs), operand("right", rhs)]
 }
 
@@ -421,6 +435,7 @@ pub(in crate::lowering) fn is_test_log_call(
     else {
         return false;
     };
+
     facts
         .checked(callee)
         .callee()

@@ -56,6 +56,7 @@ impl<'p> Planner<'p> {
         else {
             return None;
         };
+
         if !args.is_empty()
             || spread.is_some()
             || !matches!(
@@ -72,6 +73,7 @@ impl<'p> Planner<'p> {
         else {
             return None;
         };
+
         let definition = self.facts.checked(callee).callee().definition.as_deref()?;
         let polarity = match definition {
             "prelude.Result.is_ok" | "prelude.Option.is_some" => Polarity::Positive,

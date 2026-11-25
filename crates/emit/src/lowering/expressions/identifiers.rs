@@ -29,6 +29,7 @@ impl Planner<'_> {
 
             IdentifierResolution::Unresolved => self.scope.resolve_identifier_binding(value),
         };
+
         let local = match binding {
             Some(BindingValue::InlineExpr(expr)) => return expr.expression().clone(),
             Some(BindingValue::Components(components)) => {
@@ -54,6 +55,7 @@ impl Planner<'_> {
                 return resolve(value);
             }
         };
+
         GoExpression::identifier(local)
     }
 

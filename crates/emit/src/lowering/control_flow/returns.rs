@@ -46,6 +46,7 @@ impl Planner<'_> {
                     | Expression::Identifier { .. }
                     | Expression::Literal { .. }
             );
+
             let mut statements = Vec::new();
             if !is_pure {
                 statements.push(self.lower_statement(expression));
@@ -121,6 +122,7 @@ impl Planner<'_> {
                 .plan_value(expression, ExpressionContext::value())
                 .into_parts(),
         };
+
         let (coercion_setup, value) = coercion.lower(self, value);
         statements.extend(coercion_setup);
         statements.extend(self.wrapped_value_return(value, &written_ty));
@@ -148,6 +150,7 @@ impl Planner<'_> {
         else {
             unreachable!("lower_wrapped_call_return requires a Call expression");
         };
+
         let (inner, wraps) = self.peel_wrap_err(expression);
         if let Expression::Call {
             expression: inner_callee,
@@ -210,6 +213,7 @@ impl Planner<'_> {
                     &args[0],
                     value,
                 );
+
                 statements.extend(self.success_return(fallible, value));
             }
         }
@@ -240,6 +244,7 @@ impl Planner<'_> {
             statements.extend(message_setup);
             self.wrap_error(&wraps, error)
         });
+
         statements.push(self.failure_return(fallible, error));
         statements
     }
@@ -352,6 +357,7 @@ impl Planner<'_> {
                     return_ty,
                 )
                 .into_parts();
+
             statements.extend(setup);
             statements.extend(self.lower_result_return(result_var, "res", return_ty, shape));
         } else {
@@ -571,6 +577,7 @@ impl Planner<'_> {
                 } else {
                     self.lower_plain_return_tail(last)
                 };
+
                 statements.extend(directed_first(line, tail));
             }
         }
@@ -594,6 +601,7 @@ impl Planner<'_> {
                 let return_ctx = self.scope.current_return_ctx();
                 self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression)
             };
+
             statements.push(plain_return(expression));
             statements
         }

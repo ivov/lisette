@@ -147,6 +147,7 @@ fn replace_only_read(
                     SelectArmKind::Default { .. } => Vec::new(),
                 })
                 .collect();
+
             rename_in(siblings, None, temp, source)
         }
         _ => false,
@@ -238,6 +239,7 @@ fn analyze(node: &GoExpressionNode, temp: &GoIdentifier) -> Analysis {
         }
         _ => false,
     };
+
     let mut children = Vec::new();
     node.visit_children(&mut |child| children.push(analyze(child, temp)));
     let reads = children.iter().map(|child| child.reads).sum();

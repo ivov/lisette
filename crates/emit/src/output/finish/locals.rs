@@ -50,6 +50,7 @@ pub(crate) fn identify_body_locals(
                 .expect("a local scope exists")
                 .get(name.spelling())
                 .copied();
+
             let id =
                 current.unwrap_or_else(|| name.id().unwrap_or_else(|| self.scope.new_local_id()));
             name.identify(id);

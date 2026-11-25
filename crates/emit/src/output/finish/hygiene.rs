@@ -28,6 +28,7 @@ pub(crate) fn apply_go_hygiene(body: &mut LoweredBlock, result: BodyResult) {
 
 fn terminate_function_literals(statements: &mut Vec<Statement>) {
     struct Literals;
+
     impl VisitorMut for Literals {
         fn expression(&mut self, node: &mut GoExpressionNode) {
             if let GoExpressionNode::FunctionLiteral { result, body, .. } = node
@@ -56,6 +57,7 @@ pub(crate) fn blank_unused_parameters(
 
 fn blank_unused_literal_parameters(statements: &mut Vec<Statement>) {
     struct Literals<'a>(&'a NameUses);
+
     impl VisitorMut for Literals<'_> {
         fn expression(&mut self, node: &mut GoExpressionNode) {
             if let GoExpressionNode::FunctionLiteral { parameters, .. } = node {
@@ -187,6 +189,7 @@ fn unused_declarations(statements: &[Statement], liveness: &Liveness) -> Option<
             }
             _ => continue,
         };
+
         if !names.iter().all(|name| liveness.removable(name)) {
             return None;
         }
@@ -234,6 +237,7 @@ fn without_unused(
             } else {
                 LoweredStatement::Define(Definition { names, value })
             };
+
             *changed = true;
             Some(Statement { line, kind })
         }

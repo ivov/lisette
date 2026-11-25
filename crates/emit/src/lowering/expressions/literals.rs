@@ -38,6 +38,7 @@ impl Planner<'_> {
                         }
                     }
                 };
+
                 (rendered, ConstantKind::Float)
             }
             Literal::Imaginary(coef) => {
@@ -63,6 +64,7 @@ impl Planner<'_> {
             Literal::FormatString(parts) => return self.plan_format_string(parts),
             Literal::Slice(elements) => return self.plan_slice_literal(elements, ty),
         };
+
         ValuePlan::constant(value, kind)
     }
 
@@ -90,6 +92,7 @@ impl Planner<'_> {
                 .first_type_argument(ty)
                 .expect("Slice type must have element type"),
         };
+
         let element_ty = self.go_type(&element_lisette_ty);
         let go_type = self.go_type(ty);
         if elements.is_empty() {
@@ -106,6 +109,7 @@ impl Planner<'_> {
                 )
             })
             .collect();
+
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let stability = sequenced.stability;
         let mut setup = sequenced.setup;
@@ -149,6 +153,7 @@ impl Planner<'_> {
                 }
             })
             .collect();
+
         let concatenates = format_string_concatenates(&self.facts, parts);
         if concatenates && stages.len() == 1 && parts.len() == 1 {
             return stages.pop().expect("one staged operand");
@@ -377,6 +382,7 @@ fn format_string_concatenates(facts: &EmitFacts<'_>, parts: &[FormatStringPart])
             FormatStringPart::Text(_) => None,
         })
         .peekable();
+
     operands.peek().is_some()
         && operands.all(|expression| {
             matches!(

@@ -35,6 +35,7 @@ impl Planner<'_> {
                     } else {
                         self.go_type(bound)
                     };
+
                     if !planned.contains(&ty) {
                         planned.push(ty);
                     }

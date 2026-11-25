@@ -203,6 +203,7 @@ impl Planner<'_> {
             callee if self.callback_calls_directly(ctx, callee) => LoopCallback::Value(callee),
             _ => return None,
         };
+
         let result_ty = ctx.call_ty?.clone();
         let element_ty = self.facts.first_type_argument(&receiver.get_type())?;
         Some(SliceLoopShape {
@@ -263,6 +264,7 @@ impl Planner<'_> {
             result_ty,
             element_ty,
         } = self.slice_loop_shape(ctx)?;
+
         if matches!(target, SliceLoopTarget::Found(_)) && kind != SliceLoop::Find {
             return None;
         }
@@ -309,6 +311,7 @@ impl Planner<'_> {
                 callee.as_ref().expect("a function value stages its callee"),
             ),
         };
+
         let lower_body = |planner: &mut Self| {
             planner.with_scope(|this| {
                 if let (PlannedLoop::Fold { result, .. }, LoopCallback::Lambda { patterns, .. }) =
@@ -323,9 +326,11 @@ impl Planner<'_> {
                     result_ty: &result_ty,
                     element_name: &element_name,
                 });
+
                 (element_name, statements)
             })
         };
+
         let (element_name, body_statements) = match planned.result() {
             Some(result) => {
                 self.with_assign_target(&GoExpression::identifier(result.clone()), lower_body)
@@ -365,6 +370,7 @@ impl Planner<'_> {
                     }
                     _ => self.fresh_local("result"),
                 };
+
                 self.scope.declare_go_name(result.spelling());
                 match kind {
                     SliceLoop::Map => {
@@ -459,6 +465,7 @@ impl Planner<'_> {
         else {
             unreachable!("callback parameters are checked for identifier patterns");
         };
+
         match existing {
             Some(name) => {
                 self.scope.declare_go_name(name.spelling());
@@ -540,6 +547,7 @@ impl Planner<'_> {
                 define(result.clone(), GoExpression::literal("true".to_string()))
             }
         };
+
         setup.push(declaration);
     }
 
@@ -651,6 +659,7 @@ impl Planner<'_> {
                 self.plan_value(body, ExpressionContext::value())
             }
         };
+
         let (mut statements, condition) = plan.into_parts();
         statements
             .push(LoweredStatement::If(IfPlan::plain(condition, then_body, ElseArm::None)).into());
@@ -698,6 +707,7 @@ fn slice_loop_statement(
         value: (element_name.spelling() != "_").then_some(element_name),
         iterable: source,
     };
+
     LoweredStatement::Loop(LoopPlan {
         kind: if matches!(planned, PlannedLoop::FindInto(_)) {
             LoopKind::FoundFlagSearch

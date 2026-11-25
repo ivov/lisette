@@ -64,6 +64,7 @@ fn verify_control_structure(statements: &mut Vec<Statement>) -> Result<(), BodyE
                 }
                 _ => None,
             };
+
             error = kind.or(error);
         }
     });
@@ -117,6 +118,7 @@ fn verify_values(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
                 LoweredStatement::Assign(AssignForm::Simple { value, .. }) => vec![value],
                 _ => Vec::new(),
             };
+
             missing |= values
                 .iter()
                 .any(|value| matches!(value.node(), GoExpressionNode::Empty));

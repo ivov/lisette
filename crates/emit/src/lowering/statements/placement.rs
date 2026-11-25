@@ -93,6 +93,7 @@ pub(in crate::lowering) fn rebind_updated_temp(
         ) && !value.node().mentions_local(name)
             && !value.node().mentions_local(temp)
     };
+
     if writes.is_empty() || !writes.iter().all(writes_field_of_temp) {
         return false;
     }
@@ -125,6 +126,7 @@ pub(in crate::lowering) fn collapse_declared_temp(
     else {
         return;
     };
+
     if declared != name {
         return;
     }
@@ -149,6 +151,7 @@ pub(in crate::lowering) fn collapse_declared_temp(
             else {
                 return;
             };
+
             let Some(then_value) = single_simple_assign_value(&plan.then_body, name) else {
                 return;
             };
@@ -163,6 +166,7 @@ pub(in crate::lowering) fn collapse_declared_temp(
         }
         _ => return,
     };
+
     statements.pop();
     statements[0].kind = LoweredStatement::Define(Definition::single(declared, value));
 }
@@ -222,6 +226,7 @@ fn single_simple_assign_value(body: &LoweredBlock, name: &GoIdentifier) -> Optio
     else {
         return None;
     };
+
     let AssignForm::Simple { target, value } = assign else {
         return None;
     };
@@ -509,6 +514,7 @@ impl<'p> Planner<'p> {
                         );
                     }
                 };
+
                 if let Some((constructor_arg, payload_ty)) = constructor_arg {
                     let argument =
                         self.plan_composite_value(constructor_arg, ExpressionContext::value());
@@ -519,6 +525,7 @@ impl<'p> Planner<'p> {
                         constructor_arg,
                         argument,
                     );
+
                     let call = self.fallible_call(&fallible, constructor_name, vec![argument]);
                     let value = ValuePlan::plain_call(arg_setup, call);
                     vec![simple_assign(target, value).into()]
@@ -540,6 +547,7 @@ impl<'p> Planner<'p> {
             }
             _ => self.lower_block_to_var(expression, target, target_ty),
         };
+
         directed_first(line, statements)
     }
 
@@ -587,6 +595,7 @@ impl<'p> Planner<'p> {
             }
             return Vec::new();
         };
+
         self.with_assign_target(target, |this| {
             let mut statements = Vec::new();
             for (index, item) in rest.iter().enumerate() {
@@ -703,6 +712,7 @@ impl<'p> Planner<'p> {
         else {
             return None;
         };
+
         let (method, receiver) = slice_growth_method(&self.facts, func)?;
 
         let receiver_is_lvalue =
@@ -733,6 +743,7 @@ impl<'p> Planner<'p> {
             } else {
                 receiver_lv
             };
+
             capture.extend(ordering.into_parts().0);
             let value = if target_differs {
                 self.detach_slice_growth(
@@ -745,6 +756,7 @@ impl<'p> Planner<'p> {
             } else {
                 slice_growth_call(method, receiver, &arguments)
             };
+
             (value, capture)
         } else {
             let (setup, value) = self
@@ -770,6 +782,7 @@ impl<'p> Planner<'p> {
                 self.convert_to_recorded_slot(argument, plan)
             })
             .collect();
+
         let spread_stage = spread.map(|spread| self.plan_copied_spread(spread));
         let plan = spread.and_then(|_| self.plan_call(call));
         let wrap_to_any = plan
@@ -785,6 +798,7 @@ impl<'p> Planner<'p> {
                 boundary: CaptureBoundary::SiblingSequence,
             },
         );
+
         let ordering = ValuePlan::computed(sequenced.setup, GoExpression::empty());
         (sequenced.values, ordering)
     }
@@ -804,6 +818,7 @@ impl<'p> Planner<'p> {
         } else {
             self.plan_value(last, ExpressionContext::value())
         };
+
         plan.into_parts()
     }
 
@@ -869,6 +884,7 @@ impl<'p> Planner<'p> {
                     val,
                     value,
                 );
+
                 statements.push(assign(target, value));
             }
         } else if !value.is_empty() {
@@ -933,6 +949,7 @@ pub(in crate::lowering) fn try_elide_tail_let<'a, 'i>(
     else {
         return None;
     };
+
     let penultimate = &items[items.len() - 2];
     let Expression::Let {
         binding,
@@ -943,6 +960,7 @@ pub(in crate::lowering) fn try_elide_tail_let<'a, 'i>(
     else {
         return None;
     };
+
     if mode.else_block().is_some() || binding.is_mutable() {
         return None;
     }

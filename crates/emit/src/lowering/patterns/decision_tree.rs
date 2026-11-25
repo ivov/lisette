@@ -52,6 +52,7 @@ fn element_index(segments: &[PathSegment]) -> usize {
     else {
         unreachable!("a tuple-element subject only resolves field paths")
     };
+
     go_name::tuple_field_index(field).expect("a tuple-element subject only resolves tuple fields")
 }
 
@@ -231,6 +232,7 @@ impl Check {
                 vec![path.render(subject)],
             )
         };
+
         match self {
             Check::Nilable { path, guard, some } => {
                 let value = path.render(subject);
@@ -379,6 +381,7 @@ impl Check {
                 }
             })
             .collect::<Option<_>>()?;
+
         Some((path, labels))
     }
 
@@ -389,6 +392,7 @@ impl Check {
         else {
             return None;
         };
+
         match value {
             Literal::Integer { value, .. } => Some(LabelValue::Integer(*value)),
             Literal::Char(text) => {
@@ -739,6 +743,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
                 Vec::new(),
             )
         });
+
         return Some(Decision::TypeSwitch { branches, fallback });
     }
 
@@ -749,6 +754,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
             let path = first_check.switch_labels(&kind)?.0.clone();
             Some((kind, path))
         })?;
+
     validate_value_switch_arms(arms, &kind, &path)?;
 
     let (branches, fallback) = build_switch_branches(cases, fallback_arms, |arm| {
@@ -858,6 +864,7 @@ fn build_switch_branches<L: PartialEq>(
             } else {
                 build_tree(inner_arms)
             };
+
             SwitchBranch {
                 label,
                 extra_labels,
@@ -1007,6 +1014,7 @@ pub(super) fn lift_root_assertion(
                     _ => unreachable!("predicate above confirmed shape"),
                 })
                 .collect();
+
             debug_assert!(!go_types.is_empty(), "at least one alternative");
             Some(go_types)
         }

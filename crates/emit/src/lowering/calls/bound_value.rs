@@ -83,6 +83,7 @@ impl LoweredPair {
             (PairStatusKind::Error, Polarity::Positive) => nil_condition(status),
             (PairStatusKind::Error, Polarity::Negated) => non_nil_condition(status),
         };
+
         let condition = match &self.value {
             PairValue::Named {
                 name,
@@ -97,6 +98,7 @@ impl LoweredPair {
             }
             _ => status,
         };
+
         PairCondition {
             initializer: self.initializer(),
             condition,
@@ -211,6 +213,7 @@ impl BoundValue {
         else {
             return None;
         };
+
         Some(define(target.clone(), index.element()))
     }
 

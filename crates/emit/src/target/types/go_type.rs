@@ -95,6 +95,7 @@ impl PartialEq for GoType {
         self.shape == other.shape
     }
 }
+
 impl Eq for GoType {}
 
 impl Default for GoType {
@@ -119,6 +120,7 @@ impl GoType {
             },
             _ => GoTypeShape::Raw(code.clone()),
         };
+
         Self {
             code,
             shape: Box::new(shape),
@@ -138,6 +140,7 @@ impl GoType {
             requirements: PackageRequirements::default(),
             physical_kind: None,
         };
+
         value.merge_all(dependencies);
         value
     }
@@ -153,11 +156,13 @@ impl GoType {
                 },
                 [],
             );
+
             base.requirements.require(package);
             base
         } else {
             Self::new(member)
         };
+
         if !arguments.is_empty() {
             let code = format!("{}{}", base.code, Self::type_arguments(arguments).code);
             let shape = GoTypeShape::Instantiated {
@@ -182,9 +187,11 @@ impl GoType {
     pub(crate) fn requirements(&self) -> &PackageRequirements {
         &self.requirements
     }
+
     pub(crate) fn is_empty(&self) -> bool {
         matches!(self.shape.as_ref(), GoTypeShape::Empty)
     }
+
     pub(crate) fn compared_as(mut self, target: GoType) -> Self {
         self.shape = target.shape;
         self
@@ -197,6 +204,7 @@ impl GoType {
     pub(crate) fn is_channel(&self) -> bool {
         self.physical_kind() == GoTypeKind::Channel
     }
+
     pub(crate) fn physical_kind(&self) -> GoTypeKind {
         self.physical_kind
             .unwrap_or_else(|| match self.shape.as_ref() {
@@ -211,6 +219,7 @@ impl GoType {
                 _ => GoTypeKind::Value,
             })
     }
+
     pub(crate) fn with_physical_kind(mut self, kind: GoTypeKind) -> Self {
         self.physical_kind = Some(kind);
         self
@@ -235,11 +244,14 @@ impl GoType {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+
         Self::structured(code, GoTypeShape::Arguments(arguments.to_vec()), arguments)
     }
+
     pub(crate) fn type_argument(argument: &GoType) -> Self {
         Self::type_arguments(slice::from_ref(argument))
     }
+
     pub(crate) fn result_list(results: &[GoType]) -> Self {
         let code = format!(
             "({})",
@@ -249,8 +261,10 @@ impl GoType {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+
         Self::structured(code, GoTypeShape::Results(results.to_vec()), results)
     }
+
     pub(crate) fn function(parameters: &[GoType], result: Option<&GoType>) -> Self {
         let parameter_text = parameters
             .iter()
@@ -267,6 +281,7 @@ impl GoType {
             parameters.iter().chain(result),
         )
     }
+
     pub(crate) fn slice_of(element: &GoType) -> Self {
         Self::structured(
             format!("[]{}", element.code),
@@ -274,6 +289,7 @@ impl GoType {
             [element],
         )
     }
+
     pub(crate) fn map_of(key: &GoType, value: &GoType) -> Self {
         Self::structured(
             format!("map[{}]{}", key.code, value.code),
@@ -281,11 +297,13 @@ impl GoType {
             [key, value],
         )
     }
+
     pub(crate) fn parenthesized(&self) -> Self {
         let mut result = self.clone();
         result.code = format!("({})", self.code);
         result
     }
+
     pub(crate) fn pointer_to(pointee: &GoType) -> Self {
         Self::structured(
             format!("*{}", pointee.code),
@@ -293,6 +311,7 @@ impl GoType {
             [pointee],
         )
     }
+
     pub(crate) fn array_of(length: impl Display, element: &GoType) -> Self {
         Self::structured(
             format!("[{length}]{}", element.code),
@@ -300,6 +319,7 @@ impl GoType {
             [element],
         )
     }
+
     pub(crate) fn channel(direction: ChannelDirection, element: &GoType) -> Self {
         let prefix = match direction {
             ChannelDirection::Send => "chan<-",
@@ -312,6 +332,7 @@ impl GoType {
             [element],
         )
     }
+
     pub(crate) fn variadic(element: &GoType) -> Self {
         Self::structured(
             format!("...{}", element.code),
@@ -319,6 +340,7 @@ impl GoType {
             [element],
         )
     }
+
     pub(crate) fn structure(fields: Vec<(String, GoType)>) -> Self {
         let code = if fields.is_empty() {
             "struct{}".to_string()
@@ -332,12 +354,14 @@ impl GoType {
                     .join("; ")
             )
         };
+
         Self::structured(
             code,
             GoTypeShape::Struct(fields.clone()),
             fields.iter().map(|(_, ty)| ty),
         )
     }
+
     pub(crate) fn method_interface(name: &str, parameters: &[GoType], result: &GoType) -> Self {
         let signature = Self::function(parameters, (!result.is_empty()).then_some(result));
         let code = format!(
@@ -349,12 +373,14 @@ impl GoType {
                 .join(", "),
             result.code
         );
+
         Self::structured(
             code,
             GoTypeShape::Interface(vec![(name.to_string(), signature.clone())]),
             [&signature],
         )
     }
+
     pub(crate) fn prelude(name: &str, arguments: &[GoType]) -> Self {
         Self::named(
             name,

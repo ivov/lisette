@@ -187,12 +187,14 @@ impl Planner<'_> {
             ]
             .map(|value| GoExpression::literal(value.to_string()))
         };
+
         let testkit = |name, arguments| {
             GoExpression::call(
                 GoExpression::generated(GeneratedPackage::TestKit, name),
                 arguments,
             )
         };
+
         let mut recover_args = vec![handle_value.clone()];
         recover_args.extend(location());
         let mut statements = vec![async_statement(
@@ -223,6 +225,7 @@ impl Planner<'_> {
                 },
                 ElseArm::None,
             );
+
             check.initializer = Some(Definition {
                 names: vec![error_name],
                 value: call,

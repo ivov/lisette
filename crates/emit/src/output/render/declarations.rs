@@ -18,6 +18,7 @@ fn write_documentation(output: &mut GoWriter, documentation: &Documentation) {
         output.push('\n');
     }
 }
+
 fn generics(output: &mut GoWriter, parameters: &[TypeParameter]) {
     if parameters.is_empty() {
         return;
@@ -45,6 +46,7 @@ fn generics(output: &mut GoWriter, parameters: &[TypeParameter]) {
     }
     output.push(']');
 }
+
 impl Renderer {
     fn render_positioned_body(
         &self,

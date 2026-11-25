@@ -96,6 +96,7 @@ impl ValuePlan {
             OperandForm::Other if stability.is_observable() => Stability::Observable,
             OperandForm::Other => Stability::StableAcrossCalls,
         };
+
         Self::new(Vec::new(), expression, stability)
     }
 

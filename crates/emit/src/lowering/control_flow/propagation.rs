@@ -175,6 +175,7 @@ impl Planner<'_> {
                 .expect("propagation requires a payload layout"),
             &target_layout,
         );
+
         let (setup, ok_access) = coercion.lower(self, ok_access);
         statements.extend(setup);
         let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
@@ -257,11 +258,13 @@ impl Planner<'_> {
             } else {
                 check.clone()
             };
+
             let (failure_setup, values) =
                 self.propagate_failure_values(expression, fallible, err_expr);
             setup.extend(failure_setup);
             (setup, values)
         };
+
         go_returns::tag_check(fallible.failure_condition(check), setup, values)
     }
 
@@ -364,6 +367,7 @@ impl Planner<'_> {
             },
             value: call,
         };
+
         let initializer = match placement {
             PairPlacement::IfInitializer => Some(binding),
             PairPlacement::Statement => {
@@ -371,6 +375,7 @@ impl Planner<'_> {
                 None
             }
         };
+
         statements.extend(message_setup);
         let guarded_value = || {
             GoExpression::identifier(value_var.clone().expect("nil guard requires the value var"))
@@ -405,6 +410,7 @@ impl Planner<'_> {
                 _ => val,
             }
         });
+
         let ok_value = ok_value.unwrap_or_else(GoExpression::unit);
         let value = self.propagated_value(&mut statements, target, named, Some(ok_value));
         Some((statements, value))
@@ -438,6 +444,7 @@ impl Planner<'_> {
             ),
             (_, payload) => payload,
         };
+
         let value = self.propagated_value(&mut statements, target, named, payload);
         Some((statements, value))
     }
@@ -484,6 +491,7 @@ impl Planner<'_> {
             mut failure_setup,
             error,
         } = self.bind_mapped_failure(mapped, slot);
+
         let (values_setup, failure_values) =
             self.propagate_failure_values(expression, fallible, error);
         failure_setup.extend(values_setup);
@@ -530,6 +538,7 @@ impl Planner<'_> {
                     GoExpression::identifier(status),
                     Some(Stability::Fixed),
                 );
+
                 let payload = pair.payload();
                 MappedFailure {
                     statements: pair.statements,
@@ -625,6 +634,7 @@ impl Planner<'_> {
             ),
             _ => false,
         };
+
         (named && !self.callee_lowers_to_type_construction(function))
             .then_some(ErrorMapper::Function(function))
     }
@@ -672,6 +682,7 @@ impl Planner<'_> {
                         lambda_setup.extend(body_setup);
                         (lambda_setup, body)
                     });
+
                     setup.extend(body_setup);
                     body
                 }
@@ -748,6 +759,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let mut failure_setup = Vec::new();
         let error_target = self.value_layout(error_layout.logical_type(), SlotOrigin::Lisette);
         let (error_setup, error) = CoercionPlan::change(self, error_layout, &error_target).lower(
@@ -757,6 +769,7 @@ impl Planner<'_> {
                 tags::result_variant("Err").fields[0].to_string(),
             ),
         );
+
         failure_setup.extend(error_setup);
         let error = self.apply_error_mappers(&mut failure_setup, &mappers, error, Some(stability));
         let (values_setup, failure_values) =
@@ -780,6 +793,7 @@ impl Planner<'_> {
                 .expect("propagation requires a payload layout"),
             &target_layout,
         );
+
         let (setup, ok_access) = coercion.lower(self, ok_access);
         statements.extend(setup);
         let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
@@ -797,6 +811,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let Expression::Call {
             expression: callee,
             args,
@@ -805,6 +820,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         if prelude_constructor(callee) != Some(PreludeVariant::Ok)
             || !matches!(args.as_slice(), [Expression::Unit { .. }])
         {

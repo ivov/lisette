@@ -66,6 +66,7 @@ impl Planner<'_> {
                 .map_or(GoExport::Unexported, |definition| {
                     GoExport::from_visibility(definition.visibility)
                 });
+
             let fn_name = go_name::associated_function_go_name(name, "variants", export);
             result.push(layout.variants_declaration(&fn_name));
         }
@@ -90,6 +91,7 @@ impl Planner<'_> {
         else {
             return None;
         };
+
         let sem_variants = sem_variants.clone();
         let layout = self
             .facts
@@ -132,6 +134,7 @@ impl Planner<'_> {
                     self.equality_test(field(&receiver), field(&other), recipe, BinaryOp::Eq)
                 })
                 .collect();
+
             let value = comparisons
                 .into_iter()
                 .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
@@ -156,6 +159,7 @@ impl Planner<'_> {
             GoType::new("bool"),
             LoweredBlock { statements },
         );
+
         Some(declaration)
     }
 
@@ -195,6 +199,7 @@ impl Planner<'_> {
                 .map(|generic| Type::Parameter(generic.name.clone()))
                 .collect(),
         });
+
         GoDeclaration::function(
             None,
             go_name::enum_make_function(&layout.enum_name, &variant.name),

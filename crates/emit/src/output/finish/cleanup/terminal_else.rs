@@ -76,6 +76,7 @@ pub(super) fn unwrap_scoped_terminal_else(
         ) else {
             return;
         };
+
         let baseline = if flips {
             Resolution::of(&mut flipped, parameters)
         } else {
@@ -83,6 +84,7 @@ pub(super) fn unwrap_scoped_terminal_else(
                 .get_or_insert_with(|| Resolution::of(statements, parameters))
                 .clone()
         };
+
         for hoist in [false, true] {
             let mut rewritten = statements.clone();
             rewrite_nth_scoped_terminal_else(
@@ -146,6 +148,7 @@ fn rewrite_nth_scoped_terminal_else(
                         .any(|param| param.go_name == name.spelling())
                 })
             });
+
             if hoist
                 && !shadows_a_type_param
                 && let Some(definition) = plan.initializer.take()
@@ -197,6 +200,7 @@ fn flips_to_early_exit(plan: &IfPlan) -> bool {
     else {
         return false;
     };
+
     (plan.initializer.is_some() || matches!(plan.origin, IfOrigin::Match { .. }))
         && !plan.then_body.ends_with_diverge()
         && !plan.then_body.renders_empty()
@@ -254,6 +258,7 @@ fn negated(node: &GoExpressionNode) -> Option<Operand> {
                 ),
                 _ => return None,
             };
+
             GoExpressionNode::Binary {
                 operator,
                 left,
@@ -272,6 +277,7 @@ fn negated(node: &GoExpressionNode) -> Option<Operand> {
         }
         _ => return None,
     };
+
     Some(negation.into())
 }
 
@@ -319,6 +325,7 @@ impl Resolution {
                 reuses: Vec::new(),
             },
         };
+
         for parameter in parameters {
             resolve.bind(parameter.spelling());
         }

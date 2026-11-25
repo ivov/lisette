@@ -72,6 +72,7 @@ impl Planner<'_> {
         else {
             unreachable!("plan_struct_call called with a non-StructCall expression")
         };
+
         let checked = self.facts.checked(expression);
         let ctx = self.analyze_struct_call(name, ty, checked);
 
@@ -109,6 +110,7 @@ impl Planner<'_> {
                 .map(|(_, position)| position.clone()),
             _ => None,
         });
+
         if built_from_fields {
             return ValuePlan::new(setup, value, fields_stability);
         }
@@ -138,9 +140,11 @@ impl Planner<'_> {
                         &f.name,
                         &field_ty,
                     );
+
                     Some((f, field_ty, layout))
                 })
                 .collect();
+
         let mut literal_slots = vec![false; kept_fields.len()];
         let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = kept_fields
             .iter()
@@ -163,6 +167,7 @@ impl Planner<'_> {
                 )
             })
             .unzip();
+
         let field_evaluations: Vec<bool> = stages.iter().map(|value| !value.can_delay()).collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let sequenced_stability = sequenced.stability;
@@ -243,6 +248,7 @@ impl Planner<'_> {
             };
             self.plan_struct_update(base_staged, &field_pairs)
         };
+
         setup.extend(spread_setup);
         value
     }
@@ -267,6 +273,7 @@ impl Planner<'_> {
                 };
                 zero
             };
+
             let go_field_name = self.resolve_struct_call_field_name(field_name, ctx);
             field_pairs.push((go_field_name, zero));
         }
@@ -339,6 +346,7 @@ impl Planner<'_> {
                 }
                 _ => None,
             };
+
             if let Some((package, type_name)) = qualified
                 && !self.facts.is_current_package(package)
             {
@@ -349,6 +357,7 @@ impl Planner<'_> {
                 } else {
                     GoType::default()
                 };
+
                 let canonical = self.canonical_package(package);
                 let member = self.facts.type_member_go_name(&canonical, type_name);
                 let package = self.package_use_for_package(&canonical);

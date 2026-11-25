@@ -107,6 +107,7 @@ impl ImportPlan {
                 path: import.path.clone(),
                 qualifier: None,
             });
+
         let used_packages = requirements.iter().map(|package| {
             let path = package.package().path();
             OutputImport {
@@ -115,6 +116,7 @@ impl ImportPlan {
                 qualifier: Some(package.qualifier().to_string()),
             }
         });
+
         let mut entries: Vec<OutputImport> = blank_imports.chain(used_packages).collect();
         entries.sort();
         entries.dedup();

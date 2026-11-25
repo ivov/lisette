@@ -340,6 +340,7 @@ impl Renderer {
         struct InlineEligibility {
             inline: bool,
         }
+
         impl TreeVisitor for InlineEligibility {
             fn statement(&mut self, statement: &LoweredStatement) {
                 match statement {
@@ -354,6 +355,7 @@ impl Renderer {
                     _ => {}
                 }
             }
+
             fn expression(&mut self, expression: &GoExpressionNode) {
                 match expression {
                     GoExpressionNode::CompositeLiteral {

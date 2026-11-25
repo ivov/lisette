@@ -84,6 +84,7 @@ impl Planner<'_> {
                     .find(|method| method.source_name == *func.name)
             })
             .expect("interface method must be registered");
+
         let return_abi = return_abi(
             &self.facts,
             method.ty.get_function_ret().unwrap_or(&Type::Never),

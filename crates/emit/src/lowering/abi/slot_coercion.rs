@@ -102,6 +102,7 @@ impl Planner<'_> {
                 layout,
             );
         };
+
         self.record_converted_value(value);
         match &value_use.adaptation {
             Adaptation::Delegated { .. } => CoercionPlan::Identity,

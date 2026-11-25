@@ -49,6 +49,7 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
+
         let spread = spread.as_deref();
         if self.is_local_binding(callee) {
             return None;
@@ -72,6 +73,7 @@ impl<'a> Planner<'a> {
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
         };
+
         self.try_plan_negated_native_method(setup, &native_ctx)
     }
 
@@ -115,6 +117,7 @@ impl<'a> Planner<'a> {
         else {
             unreachable!("plan_call_expression requires a Call expression");
         };
+
         let spread = spread.as_deref();
         let written_type_arguments = type_arguments.annotations().len();
 
@@ -144,6 +147,7 @@ impl<'a> Planner<'a> {
                     .callee()
                     .first_type_argument()
                     .clone();
+
                 let value = self.lisette_zero(&ty);
                 let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {
                     Some(go_type) => GoExpression::conversion(go_type, value),
@@ -179,6 +183,7 @@ impl<'a> Planner<'a> {
                     capture_boundary: ctx.capture_boundary(),
                     retired_receiver: ctx.retired_receiver(),
                 };
+
                 return self.plan_native_call(&native_ctx);
             }
             CallableOrigin::Source(CallOperation::ReceiverMethod { is_public }) => {
@@ -217,6 +222,7 @@ impl<'a> Planner<'a> {
             .as_function_type()
             .and_then(|f| f.params.first())
             .map_or(&Type::Never, |receiver| &receiver.ty);
+
         self.facts
             .receiver_method_go_name(receiver, &method, export, self.member_spelling(callee))
     }
@@ -249,6 +255,7 @@ impl<'a> Planner<'a> {
                 is_unmutated_identifier(&self.facts, receiver)
                     && !self.facts.is_reference(&receiver.get_type())
             });
+
         if let GoExpressionNode::Identifier(name) = result.value.node()
             && result
                 .setup
@@ -297,6 +304,7 @@ impl<'a> Planner<'a> {
                 self.field_slot_layout(&target.owner_type, Some(selection), &index.to_string(), ty)
             })
             .collect();
+
         let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = args
             .iter()
             .zip(&target.field_tys)
@@ -307,6 +315,7 @@ impl<'a> Planner<'a> {
                 (self.plan_composite_value(a, ctx), source)
             })
             .unzip();
+
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
         let mut setup = sequenced.setup;
 
@@ -320,6 +329,7 @@ impl<'a> Planner<'a> {
                     .as_ref()
                     .map(|target| (&source_layouts[i], target)),
             );
+
             field_pairs.push((go_name::tuple_struct_field(i), coerced));
         }
 
@@ -344,6 +354,7 @@ impl<'a> Planner<'a> {
         else {
             return None;
         };
+
         let ty = function.get_type();
         let f = ty.as_function_type()?;
         let return_ty = call_ty
@@ -377,6 +388,7 @@ impl<'a> Planner<'a> {
             .callee()
             .first_type_argument()
             .clone();
+
         let function_layouts = self.any_slot_function_layouts(&asserted);
         let target_ty = match &function_layouts {
             Some((stored, _)) => stored.go_type(self),
@@ -390,6 +402,7 @@ impl<'a> Planner<'a> {
             }
             None => (Vec::new(), Vec::new()),
         };
+
         let call = GoExpression::call(
             GoExpression::instantiation(
                 GoExpression::generated(GeneratedPackage::Prelude, "AssertType"),
@@ -397,6 +410,7 @@ impl<'a> Planner<'a> {
             ),
             arguments,
         );
+
         let Some((stored, lisette)) = function_layouts else {
             return (setup, call);
         };
