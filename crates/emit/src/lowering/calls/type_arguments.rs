@@ -281,7 +281,7 @@ impl PlannerQueries<'_, '_> {
     ) -> GoType {
         let arguments: Vec<GoType> = parameters
             .into_iter()
-            .map(|param| self.component_go_type(param))
+            .map(|param| self.go_type(param))
             .collect();
         GoType::type_arguments(&arguments)
     }
@@ -304,7 +304,7 @@ impl PlannerQueries<'_, '_> {
         mapping: &SubstitutionMap,
     ) -> Option<GoType> {
         Some(match entry {
-            GoTypeRecipe::Parameter(name) => self.component_go_type(mapping.get(name)?),
+            GoTypeRecipe::Parameter(name) => self.go_type(mapping.get(name)?),
             GoTypeRecipe::Slice(element) => {
                 GoType::slice_of(&self.render_recipe_entry(element, mapping)?)
             }
@@ -327,8 +327,8 @@ impl PlannerQueries<'_, '_> {
         let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
         let arguments: Vec<GoType> = receiver_params
             .iter()
-            .map(|ty| self.component_go_type(ty))
-            .chain(type_args.map(|ty| self.component_go_type(ty)))
+            .map(|ty| self.go_type(ty))
+            .chain(type_args.map(|ty| self.go_type(ty)))
             .collect();
         GoType::type_arguments(&arguments)
     }

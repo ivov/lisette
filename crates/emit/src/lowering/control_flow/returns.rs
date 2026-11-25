@@ -13,13 +13,12 @@ use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::is_go_never;
 use crate::lowering::expressions::tuple_literal::TupleLiteral;
 use crate::lowering::planner::queries::PlannerQueries;
+use crate::lowering::statements::blocks::{BlockTail, TailTarget};
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::statements::placement::{ElidableTail, requires_temp_var};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
-use crate::target::ir::bodies::{
-    LoweredBlock, LoweredStatement, Statement, directed_first, diverging_statement,
-};
+use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement, diverging_statement};
 use crate::target::ir::prelude::{ConstructorKind, Fallible, prelude_call};
 use crate::target::ir::values::GoExpression;
 use crate::target::types::return_abi::{
@@ -36,11 +35,9 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let return_ctx = self.scope.current_return_ctx();
         if self.facts.is_never(&expression.get_type()) {
-            let mut statements = vec![self.lower_never_value(expression)];
-            if !matches!(return_ctx, ReturnContext::Void(_)) {
-                statements.push(LoweredStatement::UnreachablePanic.into());
-            }
-            return LoweredBlock { statements };
+            return LoweredBlock {
+                statements: self.lower_never_value(expression),
+            };
         }
         let is_unit = return_ctx
             .ty()
@@ -87,11 +84,10 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> Option<Vec<Statement>> {
         let return_ctx = self.scope.current_return_ctx();
-        let written_ty = return_ctx
-            .ty()
-            .filter(|ty| self.facts.fallible(ty).is_some())
-            .cloned()
-            .unwrap_or_else(|| expression.get_type());
+        let written_ty = match return_ctx.ty() {
+            Some(ty) => ty.clone(),
+            None => expression.get_type(),
+        };
         let fallible = self.facts.fallible(&written_ty)?;
 
         if let Some(site) = CallSite::of(expression)
@@ -451,32 +447,15 @@ impl Planner<'_> {
             };
         };
 
-        let (statements, _) = self.lower_body_until_diverge(rest, last);
-        LoweredBlock { statements }
+        LoweredBlock {
+            statements: self.lower_block_items(rest, last, BlockTail::Value(TailTarget::Return)),
+        }
     }
 
-    pub(in crate::lowering) fn lower_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
-        let mut statements = Vec::new();
-        let return_span = last.get_span();
-        let last = if let Expression::Return { expression, .. } = last {
-            expression.as_ref()
-        } else {
-            last
-        };
-
-        if self.facts.resolves_to_unit(&last.get_type()) {
-            if !matches!(last, Expression::Unit { .. }) {
-                statements.push(self.lower_statement(last));
-            }
-            return statements;
-        }
-
-        if self.facts.is_never(&last.get_type()) {
-            let line = self.facts.source_position(&return_span);
-            return directed_first(line, vec![self.lower_never_value(last)]);
-        }
-
-        let line = self.facts.source_position(&return_span);
+    pub(in crate::lowering) fn lower_return_value_tail(
+        &mut self,
+        last: &Expression,
+    ) -> Vec<Statement> {
         match last {
             Expression::If { .. }
             | Expression::Select { .. }
@@ -484,28 +463,24 @@ impl Planner<'_> {
             | Expression::Match { .. }
                 if let Some(branching) = Branching::of(last) =>
             {
-                let block = self.lower_branching_to_block(branching, &PlacePlan::Return);
-                statements.extend(directed_first(line, block.statements));
+                self.lower_branching_to_block(branching, &PlacePlan::Return)
+                    .statements
             }
             Expression::TryBlock { .. }
                 if let Some(inlined) = self.try_lower_try_tail_in_place(last) =>
             {
-                statements.extend(directed_first(line, inlined));
+                inlined
             }
             _ => {
-                let tail = if let Some(tail) = self.try_lower_layout_return(last) {
+                if let Some(tail) = self.try_lower_layout_return(last) {
                     tail
                 } else if let Some(wrapped) = self.try_lower_wrapped_return(last) {
                     wrapped
                 } else {
                     self.lower_plain_return_tail(last)
-                };
-
-                statements.extend(directed_first(line, tail));
+                }
             }
         }
-
-        statements
     }
 
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<Statement> {

@@ -16,8 +16,8 @@ use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
-    ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
-    LoweredStatement, Statement, assign, declare, define, directed_first,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
+    Statement, assign, declare, define, directed_first,
 };
 use crate::target::ir::go_expression::GoUnaryOperator;
 use crate::target::ir::prelude::{option_variant, prelude_call};
@@ -513,7 +513,7 @@ impl Planner<'_> {
         let mut operand = self.plan_prelude_arg(callee, declared, instantiated);
         if operand.effects().must_evaluate_once()
             || self.queries().place_read_stability(callee) == Stability::Observable
-            || operand.expression().syntax_form() != OperandForm::Name
+            || operand.expression().map(GoExpression::syntax_form) != Some(OperandForm::Name)
         {
             self.pin_to_temp(&mut operand, "callee");
         }
@@ -740,11 +740,7 @@ fn slice_loop_statement(
 ) -> Statement {
     let header = LoopHeader::Range {
         key: match (planned, element_name.spelling()) {
-            (PlannedLoop::Map { index, .. }, _)
-                if GoUses::of(&body_statements).contains_identifier(index) =>
-            {
-                Some(index.clone())
-            }
+            (PlannedLoop::Map { index, .. }, _) => Some(index.clone()),
             (_, "_") => None,
             _ => Some(GoIdentifier::blank()),
         },

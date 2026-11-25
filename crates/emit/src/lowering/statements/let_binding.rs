@@ -454,7 +454,7 @@ impl<'a> Planner<'a> {
             value,
             ExpressionContext::value().with_function_slot_origin(origin),
         );
-        let constant = plan.expression().constant_kind();
+        let constant = plan.expression().and_then(GoExpression::constant_kind);
         let (mut statements, plan_value) = plan.into_parts();
         let coercion = self.value_slot_coercion(value, binding_ty);
         let coercion_is_identity = coercion.is_identity();
@@ -577,7 +577,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     fn build(mut self) -> LoweredBlock {
         if self.planner.facts.is_never(&self.value.get_type()) {
             return LoweredBlock {
-                statements: vec![self.planner.lower_never_value(self.value)],
+                statements: self.planner.lower_never_value(self.value),
             };
         }
 
@@ -605,7 +605,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         let value_ty = self.value.get_type();
         LoweredBlock {
             statements: self.planner.lower_irrefutable_pattern_site(
-                PatternSubject::expression(self.value, &self.binding.pattern, "tmp"),
+                PatternSubject::expression(self.value, "tmp"),
                 &self.binding.pattern,
                 &value_ty,
             ),

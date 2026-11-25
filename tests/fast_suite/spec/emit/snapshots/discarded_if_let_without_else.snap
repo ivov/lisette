@@ -28,7 +28,6 @@ func test() {
 	}
 	_ = tmp
 	var tmp2 struct{}
-	if _, ok := g(); ok {
-	}
+	g()
 	_ = tmp2
 }

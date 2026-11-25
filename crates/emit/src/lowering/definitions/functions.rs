@@ -18,7 +18,7 @@ use crate::output::finish::hygiene::{
 };
 use crate::output::finish::locals::identify_body_locals;
 use crate::output::finish::verify::verify_local_scopes;
-use crate::output::finish::verify::{BodyResult, verify_final_function_body};
+use crate::output::finish::verify::{BodyResult, verify_final_function_body, verify_go_names};
 use crate::target::ir::bodies::AsyncKind;
 use crate::target::ir::bodies::async_statement;
 use crate::target::ir::bodies::{
@@ -30,7 +30,7 @@ use crate::target::ir::go_expression::{
 };
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
-use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
+use crate::target::ir::visit::{BindingSite, VisitorMut, visit_statements_mut};
 use crate::target::names::generics::generic_bounds;
 use crate::target::names::go_name;
 use crate::target::names::receiver::fresh_receiver_name;
@@ -117,6 +117,8 @@ impl Planner<'_> {
         }
         if cfg!(debug_assertions) {
             verify_final_function_body(&mut body, result).unwrap_or_else(|error| panic!("{error}"));
+            verify_go_names(&mut body.statements, parameters)
+                .unwrap_or_else(|error| panic!("{error}"));
         }
         verify_local_scopes(&mut body.statements, parameters)
             .unwrap_or_else(|error| panic!("{error}"));
@@ -565,7 +567,7 @@ impl VisitorMut for BodyNames {
         }
     }
 
-    fn local_binding(&mut self, name: &mut GoIdentifier) {
+    fn local_binding(&mut self, name: &mut GoIdentifier, _site: BindingSite) {
         if let Some(id) = name.id() {
             self.present.insert(id, name.to_string());
         } else {

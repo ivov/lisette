@@ -75,7 +75,6 @@ impl FunctionScope {
 #[derive(Clone, Default)]
 struct Declarations {
     names: FxHashSet<String>,
-    reusable_errors: Vec<(GoIdentifier, Type)>,
 }
 
 impl Declarations {
@@ -84,8 +83,6 @@ impl Declarations {
     }
 
     fn insert(&mut self, go_name: &str) -> bool {
-        self.reusable_errors
-            .retain(|(name, _)| name.spelling() != go_name);
         self.names.insert(go_name.to_string())
     }
 
@@ -426,22 +423,6 @@ impl ScopeState {
 
     pub(crate) fn declare_go_name(&mut self, go_name: &str) {
         self.current_declarations_mut().insert(go_name);
-    }
-
-    pub(crate) fn declare_reusable_error(&mut self, name: &GoIdentifier, error_ty: &Type) {
-        let declarations = self.current_declarations_mut();
-        declarations.insert(name);
-        declarations
-            .reusable_errors
-            .push((name.clone(), error_ty.clone()));
-    }
-
-    pub(crate) fn reusable_error(&self, error_ty: &Type) -> Option<GoIdentifier> {
-        self.current_declarations()
-            .reusable_errors
-            .iter()
-            .find(|(_, ty)| ty == error_ty)
-            .map(|(name, _)| name.clone())
     }
 
     pub(crate) fn try_declare_go_name(&mut self, go_name: &str) -> bool {

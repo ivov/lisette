@@ -122,26 +122,10 @@ impl PlannerQueries<'_, '_> {
             Type::Nominal { params, .. } if params.is_empty() => {}
             _ => return None,
         }
-        Some(self.layout_go_type(&layout))
-    }
-
-    pub(in crate::lowering) fn target_go_type(&self, ty: &Type) -> GoType {
-        self.layout_go_type(&self.facts.target_value_layout(ty))
+        Some(layout.go_type(self))
     }
 
     pub(in crate::lowering) fn go_type(&self, ty: &Type) -> GoType {
-        self.layout_go_type(&self.facts.value_layout(ty, SlotOrigin::Lisette))
-    }
-
-    pub(in crate::lowering) fn layout_go_type(&self, layout: &ValueLayout) -> GoType {
-        assert!(
-            !self.facts.is_never(layout.logical_type()),
-            "internal error: a `Never` value has no Go type, emit writes it as a statement"
-        );
-        layout.go_type(self)
-    }
-
-    pub(in crate::lowering) fn component_go_type(&self, ty: &Type) -> GoType {
         self.facts
             .value_layout(ty, SlotOrigin::Lisette)
             .go_type(self)
@@ -173,7 +157,7 @@ impl PlannerQueries<'_, '_> {
                 .map(|field| {
                     (
                         self.facts.declared_field_go_name(id, field),
-                        self.component_go_type(&field.ty),
+                        self.go_type(&field.ty),
                     )
                 })
                 .collect(),
@@ -258,8 +242,8 @@ impl PlannerQueries<'_, '_> {
         match kind {
             CompoundKind::Ref => unreachable!("the value layout renders a reference"),
             CompoundKind::VarArgs => {
-                let element = self
-                    .component_go_type(arguments.first().expect("varargs have an element type"));
+                let element =
+                    self.go_type(arguments.first().expect("varargs have an element type"));
                 GoType::variadic(&element)
             }
             _ => {
@@ -286,7 +270,7 @@ impl PlannerQueries<'_, '_> {
         let kind = self.facts.physical_go_kind(ty);
         let param_types: Vec<GoType> = parameters
             .iter()
-            .map(|parameter| self.component_go_type(parameter))
+            .map(|parameter| self.go_type(parameter))
             .collect();
         if let Some(package) = package {
             let member = name.rsplit('.').next().unwrap_or(&name);
@@ -301,7 +285,7 @@ impl PlannerQueries<'_, '_> {
     }
 
     fn native_go_type(&self, kind: NativeTypeKind, arguments: &[Type]) -> GoType {
-        let argument = |index: usize| self.component_go_type(&arguments[index]);
+        let argument = |index: usize| self.go_type(&arguments[index]);
         match kind {
             NativeTypeKind::String => GoType::new("string"),
             NativeTypeKind::Slice | NativeTypeKind::EnumeratedSlice => {

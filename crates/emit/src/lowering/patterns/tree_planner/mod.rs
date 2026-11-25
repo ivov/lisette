@@ -296,7 +296,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let all_arms_diverge = self
             .arms
             .iter()
-            .all(|arm| arm.expression.diverges().is_some());
+            .all(|arm| self.planner.facts.is_never(&arm.expression.get_type()));
         let root_has_unguarded_terminal = tree.has_unguarded_terminal();
         let last_arm_is_any_catchall = self
             .arms

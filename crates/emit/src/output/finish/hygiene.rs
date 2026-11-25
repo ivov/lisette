@@ -14,7 +14,7 @@ use crate::target::ir::bodies::{
 use crate::target::ir::go_expression::{CallPurity, GoExpressionNode, Position};
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
-use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
+use crate::target::ir::visit::{BindingSite, VisitorMut, visit_statements_mut};
 
 pub(crate) fn apply_go_hygiene(body: &mut LoweredBlock, result: BodyResult) {
     drop_unused_locals(&mut body.statements);
@@ -74,7 +74,7 @@ fn blank_unused_literal_parameters(statements: &mut Vec<Statement>) {
 }
 
 fn is_unreferenced(name: &GoIdentifier, uses: &NameUses) -> bool {
-    name.spelling() != "_" && uses.references(name) == 0
+    !name.is_blank() && uses.references(name) == 0
 }
 
 fn keep_effects(value: GoExpression, line: Option<Position>) -> Option<Statement> {
@@ -119,42 +119,44 @@ impl Liveness {
 
     fn unused(&self, name: &GoIdentifier) -> bool {
         name.id().is_some_and(|id| !self.compound.contains(&id))
-            && name.spelling() != "_"
+            && !name.is_blank()
             && self.uses.value_reads(name) == 0
             && self.uses.bindings(name) == 1
     }
+}
 
-    fn removable(&self, name: &GoIdentifier) -> bool {
-        self.unused(name) && !self.uses.is_written(name)
+struct UnreadBindings<'a> {
+    liveness: &'a Liveness,
+    blanked: Vec<GoIdentifier>,
+}
+
+impl VisitorMut for UnreadBindings<'_> {
+    fn expression(&mut self, _node: &mut GoExpressionNode) {}
+
+    fn local_binding(&mut self, name: &mut GoIdentifier, site: BindingSite) {
+        if site.must_be_read() && self.liveness.unused(name) {
+            self.blanked.push(mem::replace(name, GoIdentifier::blank()));
+        }
     }
 }
 
 pub(crate) fn drop_unused_locals(statements: &mut Vec<Statement>) {
     loop {
         let liveness = Liveness::of(statements);
-        let mut dead_vars: Vec<GoIdentifier> = Vec::new();
-        let mut changed = false;
         for_each_statements_mut(statements, &mut |list| {
             for statement in mem::take(list) {
-                for statement in unscoped(statement, &liveness) {
-                    list.extend(without_unused(
-                        statement,
-                        &liveness,
-                        &mut dead_vars,
-                        &mut changed,
-                    ));
-                }
+                list.extend(unscoped(statement, &liveness));
             }
         });
-        changed |= !dead_vars.is_empty();
-        drop_writes_to(statements, &dead_vars);
-        changed |= drop_empty_ifs(statements);
-        for_each_statements_mut(statements, &mut |list| {
-            for statement in list.iter_mut() {
-                changed |= blank_unused_header_names(&mut statement.kind, &liveness);
-            }
-        });
-        if !changed {
+        let mut unread = UnreadBindings {
+            liveness: &liveness,
+            blanked: Vec::new(),
+        };
+        visit_statements_mut(statements, &mut unread);
+        drop_writes_to(statements, &unread.blanked);
+        settle_blank_bindings(statements);
+        let dropped_ifs = drop_empty_ifs(statements);
+        if unread.blanked.is_empty() && !dropped_ifs {
             return;
         }
     }
@@ -190,7 +192,7 @@ fn unused_declarations(statements: &[Statement], liveness: &Liveness) -> Option<
             _ => continue,
         };
 
-        if !names.iter().all(|name| liveness.removable(name)) {
+        if !names.iter().all(|name| liveness.unused(name)) {
             return None;
         }
         count += 1;
@@ -198,98 +200,104 @@ fn unused_declarations(statements: &[Statement], liveness: &Liveness) -> Option<
     Some(count)
 }
 
-fn without_unused(
-    statement: Statement,
-    liveness: &Liveness,
-    dead_vars: &mut Vec<GoIdentifier>,
-    changed: &mut bool,
-) -> Option<Statement> {
-    let line = statement.line;
-    match statement.kind {
-        LoweredStatement::Define(Definition { names, value })
-            if names.len() == 1 && liveness.unused(&names[0]) =>
-        {
-            dead_vars.extend(names);
-            keep_effects(value, line)
-        }
-        LoweredStatement::VarDeclaration { name, value, .. } if liveness.unused(&name) => {
-            dead_vars.push(name);
-            value.and_then(|value| keep_effects(value, line))
-        }
-        LoweredStatement::Define(Definition { mut names, value })
-            if names.len() > 1 && names.iter().any(|name| liveness.removable(name)) =>
-        {
-            for name in names.iter_mut().filter(|name| liveness.removable(name)) {
-                *name = GoIdentifier::blank();
-            }
-            let kind = if names.iter().all(|name| name.spelling() == "_") {
-                *changed = true;
-                if value.stands_as_a_statement() {
-                    return Some(Statement {
-                        line,
-                        kind: effect_statement(value).kind,
-                    });
-                }
-                LoweredStatement::Discard {
-                    arity: names.len(),
-                    value,
-                }
-            } else {
-                LoweredStatement::Define(Definition { names, value })
-            };
+fn discard_values(arity: usize, value: GoExpression, line: Option<Position>) -> Option<Statement> {
+    if arity == 1 {
+        return keep_effects(value, line);
+    }
+    if value.effects().can_erase() {
+        return None;
+    }
+    let kind = if value.stands_as_a_statement() {
+        effect_statement(value).kind
+    } else {
+        LoweredStatement::Discard { arity, value }
+    };
+    Some(Statement { line, kind })
+}
 
-            *changed = true;
-            Some(Statement { line, kind })
+fn hoist_blank_initializers(plan: &mut IfPlan, line: Option<Position>) -> Vec<Statement> {
+    plan.else_arm = match mem::replace(&mut plan.else_arm, ElseArm::None) {
+        ElseArm::ElseIf(mut link) => {
+            let link_line = link.else_if_line.clone();
+            let mut statements = hoist_blank_initializers(&mut link, link_line.clone());
+            if statements.is_empty() {
+                ElseArm::ElseIf(link)
+            } else {
+                statements.push(Statement {
+                    line: link_line,
+                    kind: LoweredStatement::If(*link),
+                });
+                ElseArm::block(LoweredBlock { statements })
+            }
         }
-        kind => Some(Statement { line, kind }),
+        other => other,
+    };
+    match plan
+        .initializer
+        .take_if(|definition| definition.names.iter().all(GoIdentifier::is_blank))
+    {
+        Some(Definition { names, value }) => discard_values(names.len(), value, line)
+            .into_iter()
+            .collect(),
+        None => Vec::new(),
     }
 }
 
-fn blank_unused_header_names(statement: &mut LoweredStatement, liveness: &Liveness) -> bool {
-    let removable = |name: &GoIdentifier| liveness.removable(name);
+fn settle_blank_bindings(statements: &mut Vec<Statement>) {
+    for_each_statements_mut(statements, &mut |list| {
+        for statement in mem::take(list) {
+            let line = statement.line;
+            match statement.kind {
+                LoweredStatement::Define(Definition { names, value })
+                    if names.iter().all(GoIdentifier::is_blank) =>
+                {
+                    list.extend(discard_values(names.len(), value, line));
+                }
+                LoweredStatement::VarDeclaration { name, value, .. } if name.is_blank() => {
+                    list.extend(value.and_then(|value| keep_effects(value, line)));
+                }
+                LoweredStatement::If(mut plan) => {
+                    list.extend(hoist_blank_initializers(&mut plan, line.clone()));
+                    list.push(Statement {
+                        line,
+                        kind: LoweredStatement::If(plan),
+                    });
+                }
+                mut kind => {
+                    settle_blank_header(&mut kind);
+                    list.push(Statement { line, kind });
+                }
+            }
+        }
+    });
+}
+
+fn settle_blank_header(statement: &mut LoweredStatement) {
     match statement {
         LoweredStatement::Loop(LoopPlan {
             header: LoopHeader::Range { key, value, .. },
             ..
         }) => {
-            let mut changed = false;
-            for slot in [&mut *value, &mut *key] {
-                if slot.as_ref().is_some_and(removable) {
+            for slot in [value, key] {
+                if slot.as_ref().is_some_and(GoIdentifier::is_blank) {
                     *slot = None;
-                    changed = true;
                 }
             }
-            if value.is_none() && key.as_ref().is_some_and(|key| key.spelling() == "_") {
-                *key = None;
-                changed = true;
-            }
-            changed
         }
         LoweredStatement::Switch(SwitchStatementPlan {
             kind: SwitchKind::Type { binding, .. },
             ..
-        }) if binding.as_ref().is_some_and(removable) => {
-            *binding = None;
-            true
-        }
+        }) if binding.as_ref().is_some_and(GoIdentifier::is_blank) => *binding = None,
         LoweredStatement::Select(plan) => {
-            let mut changed = false;
             for arm in &mut plan.arms {
-                let SelectArmKind::Receive { receive_vars, .. } = &mut arm.kind else {
-                    continue;
-                };
-                for name in receive_vars.iter_mut().filter(|name| removable(name)) {
-                    *name = GoIdentifier::blank();
-                    changed = true;
-                }
-                if receive_vars.iter().all(|name| name.spelling() == "_") {
-                    changed |= !receive_vars.is_empty();
+                if let SelectArmKind::Receive { receive_vars, .. } = &mut arm.kind
+                    && receive_vars.iter().all(GoIdentifier::is_blank)
+                {
                     receive_vars.clear();
                 }
             }
-            changed
         }
-        _ => false,
+        _ => {}
     }
 }
 
@@ -332,22 +340,23 @@ fn drop_empty_ifs(statements: &mut Vec<Statement>) -> bool {
     let mut changed = false;
     for_each_statements_mut(statements, &mut |list| {
         for statement in mem::take(list) {
+            let line = statement.line;
             match statement.kind {
-                LoweredStatement::If(mut plan) if tests_a_flag(&plan) => {
+                LoweredStatement::If(mut plan) if plan.condition.effects().can_erase() => {
                     drop_empty_else(&mut plan);
                     if plan.then_body.renders_empty() && matches!(plan.else_arm, ElseArm::None) {
                         changed = true;
+                        if let Some(Definition { names, value }) = plan.initializer {
+                            list.extend(discard_values(names.len(), value, line));
+                        }
                     } else {
                         list.push(Statement {
-                            line: statement.line,
+                            line,
                             kind: LoweredStatement::If(plan),
                         });
                     }
                 }
-                kind => list.push(Statement {
-                    line: statement.line,
-                    kind,
-                }),
+                kind => list.push(Statement { line, kind }),
             }
         }
     });

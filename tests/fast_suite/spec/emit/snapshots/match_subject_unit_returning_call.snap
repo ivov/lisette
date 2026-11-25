@@ -18,7 +18,6 @@ func noop() {}
 func main() {
 	var x int
 	noop()
-	_ = struct{}{}
 	x = 1
 	_ = x
 }

@@ -12,10 +12,10 @@ use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
 use crate::lowering::calls::wrap_err::WrapMessage;
 use crate::lowering::patterns::binding_declarations::{
-    has_binding_or_pattern, pattern_binds_name, pattern_has_bindings,
+    has_binding_or_pattern, pattern_has_bindings,
 };
 use crate::lowering::patterns::decision_tree;
-use crate::lowering::patterns::sites::ResolvedSubject;
+use crate::lowering::patterns::sites::{ResolvedSubject, SubjectGuards};
 use crate::lowering::patterns::tree_planner::{MatchSubject, TreePlanner};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
@@ -30,14 +30,14 @@ use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::source_name::SourceName;
 use syntax::EcoString;
-use syntax::ast::{BindingId, Expression, IdentifierResolution, MatchArm, Pattern};
+use syntax::ast::{BindingId, Expression, MatchArm, Pattern};
 use syntax::types::Type;
 
 mod fused;
 pub(in crate::lowering) use fused::*;
 
-fn finish_nested_pair_arm(bound: &mut BoundValue, body: LoweredBlock) -> LoweredBlock {
-    let body = match body.statements.as_slice() {
+fn finish_nested_pair_arm(body: LoweredBlock) -> LoweredBlock {
+    match body.statements.as_slice() {
         [
             Statement {
                 kind: LoweredStatement::Block(inner),
@@ -45,14 +45,7 @@ fn finish_nested_pair_arm(bound: &mut BoundValue, body: LoweredBlock) -> Lowered
             },
         ] => inner.clone(),
         _ => body,
-    };
-
-    if let Some(name) = bound.payload_identifier()
-        && !GoUses::of(&body.statements).contains_identifier(name)
-    {
-        bound.discard_value();
     }
-    body
 }
 
 #[derive(Clone, Copy)]
@@ -142,8 +135,9 @@ impl Planner<'_> {
         let mut statements: Vec<Statement> = Vec::new();
 
         if self.facts.is_never(&subject.get_type()) {
-            statements.push(self.lower_never_value(subject));
-            return LoweredBlock { statements };
+            return LoweredBlock {
+                statements: self.lower_never_value(subject),
+            };
         }
 
         if let Some(statements) = self.try_lower_specialized_match(subject, arms, place) {
@@ -151,7 +145,12 @@ impl Planner<'_> {
         }
 
         let subject_ty = subject.get_type();
-        let resolved = self.lower_match_subject_var(&mut statements, subject, arms);
+        let guards = if arms.iter().any(MatchArm::has_guard) {
+            SubjectGuards::Present
+        } else {
+            SubjectGuards::Absent
+        };
+        let resolved = self.resolve_subject(&mut statements, subject, guards, "subject");
 
         let mut block =
             self.lower_match_tree(arms, MatchSubject::Var(resolved.var()), subject_ty, place);
@@ -160,7 +159,7 @@ impl Planner<'_> {
                 ref name,
                 ref expression,
             } if inline_subject_into_header(&mut block.statements, name, expression) => {}
-            resolved => resolved.push_declaration(&mut statements, &block.statements),
+            resolved => resolved.push_declaration(&mut statements),
         }
         statements.extend(block.statements);
 
@@ -222,7 +221,7 @@ impl Planner<'_> {
         let then_body =
             self.lower_match_tree(&some_arms, MatchSubject::Var(value), payload_ty, place);
 
-        let then_body = finish_nested_pair_arm(&mut bound, then_body);
+        let then_body = finish_nested_pair_arm(then_body);
         let else_body = self.lower_block_to_place(none_body, place);
         let else_arm = if then_body.ends_with_diverge() {
             ElseArm::inline(else_body)
@@ -275,7 +274,9 @@ impl Planner<'_> {
             .map(|element| self.plan_composite_value(element, ExpressionContext::value()))
             .collect();
         for ((operand, tested), element) in operands.iter_mut().zip(&tested).zip(elements) {
-            let rereadable = is_inert_value(element, operand.expression())
+            let rereadable = operand
+                .expression()
+                .is_some_and(|value| is_inert_value(element, value))
                 || operand.rests_in_fixed_name()
                 || self.queries().plan_rests_in_stable_name(operand);
             if *tested && !rereadable {
@@ -307,86 +308,6 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let tree_planner = TreePlanner::new(self, arms, subject_var, subject_ty);
         tree_planner.lower(place)
-    }
-
-    fn reused_subject_identifier(
-        &self,
-        value: &str,
-        resolution: &IdentifierResolution,
-        arms: &[MatchArm],
-    ) -> Option<ResolvedSubject> {
-        let has_collision = arms
-            .iter()
-            .any(|arm| pattern_binds_name(&arm.pattern, value));
-        if !self
-            .queries()
-            .can_reuse_subject_identifier(value, resolution, has_collision)
-        {
-            return None;
-        }
-        let subject = self.queries().reference_expression(value, resolution);
-        Some(
-            match subject
-                .as_identifier()
-                .filter(|identifier| identifier.id().is_some())
-                .cloned()
-            {
-                Some(local) => ResolvedSubject::Materialized { subject, local },
-                None => ResolvedSubject::Existing(subject),
-            },
-        )
-    }
-
-    fn lower_match_subject_var(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        subject: &Expression,
-        arms: &[MatchArm],
-    ) -> ResolvedSubject {
-        let any_guard = arms.iter().any(|arm| arm.has_guard());
-        if let Expression::Identifier {
-            value, resolution, ..
-        } = subject
-            && !any_guard
-            && let Some(reused) = self.reused_subject_identifier(value, resolution, arms)
-        {
-            return reused;
-        }
-        if matches!(subject, Expression::Literal { .. }) {
-            let operand = self.plan_operand(subject, ExpressionContext::value());
-            let (subject_setup, value) = operand.into_parts();
-            setup.extend(subject_setup);
-            return ResolvedSubject::Existing(value);
-        }
-        let operand = self.plan_composite_value(subject, ExpressionContext::value());
-        let rests_in_stable_name = self.queries().plan_rests_in_stable_name(&operand);
-        let (subject_setup, value) = operand.into_parts();
-        setup.extend(subject_setup);
-        let reads_in_place = matches!(value.node(), GoExpressionNode::Identifier(_))
-            || self
-                .queries()
-                .field_path_reads_in_place(subject, &value, |root| {
-                    arms.iter()
-                        .any(|arm| pattern_binds_name(&arm.pattern, root))
-                });
-        if !any_guard && reads_in_place {
-            return ResolvedSubject::Existing(value);
-        }
-        if any_guard
-            && rests_in_stable_name
-            && let GoExpressionNode::Identifier(var) = value.node()
-            && var.id().is_some()
-        {
-            return ResolvedSubject::Materialized {
-                local: var.clone(),
-                subject: value,
-            };
-        }
-        let var = self.fresh_declared("subject");
-        ResolvedSubject::Deferred {
-            name: var,
-            expression: value,
-        }
     }
 }
 

@@ -6,6 +6,31 @@ use super::bodies::{
 use super::go_expression::GoExpressionNode;
 use super::local::GoIdentifier;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BindingSite {
+    ShortVariable,
+    Variable,
+    Constant,
+    RangeVariable,
+    CountedVariable,
+    TypeSwitchVariable,
+    ReceiveVariable,
+    Parameter,
+}
+
+impl BindingSite {
+    pub(crate) fn must_be_read(self) -> bool {
+        match self {
+            Self::ShortVariable
+            | Self::Variable
+            | Self::RangeVariable
+            | Self::TypeSwitchVariable
+            | Self::ReceiveVariable => true,
+            Self::Constant | Self::Parameter | Self::CountedVariable => false,
+        }
+    }
+}
+
 pub(crate) trait VisitorMut {
     fn expression(&mut self, node: &mut GoExpressionNode);
 
@@ -15,9 +40,15 @@ pub(crate) trait VisitorMut {
 
     fn exit_scope(&mut self) {}
 
-    fn local_binding(&mut self, _name: &mut GoIdentifier) {}
+    fn local_binding(&mut self, _name: &mut GoIdentifier, _site: BindingSite) {}
+
+    fn short_variable_declaration(&mut self, _names: &[GoIdentifier]) {}
 
     fn assignment_target(&mut self, _target: &GoExpressionNode) {}
+
+    fn assigned_identifier(&mut self, node: &mut GoExpressionNode) {
+        self.expression(node);
+    }
 }
 
 pub(crate) fn visit_statements_mut(statements: &mut Vec<Statement>, visitor: &mut impl VisitorMut) {
@@ -35,7 +66,7 @@ fn visit_expression(node: &mut GoExpressionNode, visitor: &mut impl VisitorMut) 
     {
         visitor.enter_scope();
         for parameter in parameters {
-            visitor.local_binding(&mut parameter.name);
+            visitor.local_binding(&mut parameter.name, BindingSite::Parameter);
         }
         visit_statements_mut(&mut body.statements, visitor);
         visitor.exit_scope();
@@ -46,8 +77,9 @@ fn visit_expression(node: &mut GoExpressionNode, visitor: &mut impl VisitorMut) 
 
 fn visit_definition(definition: &mut Definition, visitor: &mut impl VisitorMut) {
     visit_expression(definition.value.node_mut(), visitor);
+    visitor.short_variable_declaration(&definition.names);
     for name in &mut definition.names {
-        visitor.local_binding(name);
+        visitor.local_binding(name, BindingSite::ShortVariable);
     }
 }
 
@@ -110,7 +142,7 @@ fn visit_loop(plan: &mut LoopPlan, visitor: &mut impl VisitorMut) {
         } => {
             visit_expression(iterable.node_mut(), visitor);
             for name in key.iter_mut().chain(value.iter_mut()) {
-                visitor.local_binding(name);
+                visitor.local_binding(name, BindingSite::RangeVariable);
             }
         }
         LoopHeader::Counted {
@@ -119,7 +151,7 @@ fn visit_loop(plan: &mut LoopPlan, visitor: &mut impl VisitorMut) {
             condition,
         } => {
             visit_expression(start.node_mut(), visitor);
-            visitor.local_binding(variable);
+            visitor.local_binding(variable, BindingSite::CountedVariable);
             if let Some(condition) = condition {
                 visit_expression(condition.node_mut(), visitor);
             }
@@ -142,7 +174,7 @@ fn visit_select(plan: &mut SelectStatementPlan, visitor: &mut impl VisitorMut) {
                 visit_expression(channel.node_mut(), visitor);
                 visitor.enter_scope();
                 for name in receive_vars {
-                    visitor.local_binding(name);
+                    visitor.local_binding(name, BindingSite::ReceiveVariable);
                 }
                 visit_statements_mut(&mut body.statements, visitor);
                 visitor.exit_scope();
@@ -175,7 +207,7 @@ fn visit_switch(plan: &mut SwitchStatementPlan, visitor: &mut impl VisitorMut) {
         SwitchKind::Type { subject, binding } => {
             visit_expression(subject.node_mut(), visitor);
             if let Some(name) = binding {
-                visitor.local_binding(name);
+                visitor.local_binding(name, BindingSite::TypeSwitchVariable);
             }
         }
     }
@@ -207,7 +239,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
         | LoweredStatement::UnreachablePanic => {}
         LoweredStatement::Const(plan) => {
             visit_expression(plan.value.node_mut(), visitor);
-            visitor.local_binding(&mut plan.name);
+            visitor.local_binding(&mut plan.name, BindingSite::Constant);
         }
         LoweredStatement::Return(values) => {
             for value in values {
@@ -227,7 +259,10 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
             }
             AssignForm::Simple { target, value } => {
                 visitor.assignment_target(target.node());
-                visit_expression(target.node_mut(), visitor);
+                match target.node_mut() {
+                    node @ GoExpressionNode::Identifier(_) => visitor.assigned_identifier(node),
+                    node => visit_expression(node, visitor),
+                }
                 visit_expression(value.node_mut(), visitor);
             }
         },
@@ -239,7 +274,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
             if let Some(value) = value {
                 visit_expression(value.node_mut(), visitor);
             }
-            visitor.local_binding(name);
+            visitor.local_binding(name, BindingSite::Variable);
         }
         LoweredStatement::Discard {
             value: expression, ..

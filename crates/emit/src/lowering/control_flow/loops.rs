@@ -12,8 +12,8 @@ use crate::lowering::statements::blocks::directed_at;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
-    ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
-    LoweredStatement, Statement, define, discard, with_setup,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
+    Statement, define, with_setup,
 };
 use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoUnaryOperator};
@@ -321,10 +321,8 @@ impl Planner<'_> {
         let first_ty = element_tys.first().unwrap_or(binding_ty);
         let second_ty = element_tys.get(1).unwrap_or(binding_ty);
 
-        let key_var = self.fresh_local("key");
-        let value_var = self.fresh_local("value");
-        let key_identifier = key_var;
-        let value_identifier = value_var;
+        let key_identifier = self.fresh_local("key");
+        let value_identifier = self.fresh_local("value");
         let header = LoopHeader::Range {
             key: Some(key_identifier.clone()),
             value: Some(value_identifier.clone()),
@@ -332,30 +330,22 @@ impl Planner<'_> {
         };
 
         let mut bindings = self.lower_irrefutable_pattern_site(
-            PatternSubject::for_identifier(key_identifier.clone()),
+            PatternSubject::for_identifier(key_identifier),
             first,
             first_ty,
         );
         bindings.extend(self.lower_irrefutable_pattern_site(
-            PatternSubject::for_identifier(value_identifier.clone()),
+            PatternSubject::for_identifier(value_identifier),
             second,
             second_ty,
         ));
         bindings.extend(self.lower_block_as_body(body).statements);
-
-        let used = GoUses::of(&bindings);
-        let references_value = used.contains_identifier(&value_identifier);
-        let references_key = used.contains_identifier(&key_identifier);
-
-        let mut statements = Vec::new();
-        if !references_value {
-            statements.push(discard(GoExpression::identifier(value_identifier)));
-        }
-        if !references_key {
-            statements.push(discard(GoExpression::identifier(key_identifier)));
-        }
-        statements.extend(bindings);
-        (header, LoweredBlock { statements })
+        (
+            header,
+            LoweredBlock {
+                statements: bindings,
+            },
+        )
     }
 
     fn lower_pattern_site_body(
@@ -369,27 +359,23 @@ impl Planner<'_> {
             let header = range_header(None, None, iter_expression);
             return (header, self.lower_block_as_body(body));
         }
-        let item_var = self.fresh_local("item");
-        let item_identifier = item_var;
+        let item_identifier = self.fresh_local("item");
         let header = match yields {
             RangeYield::Single => range_header(Some(&item_identifier), None, iter_expression),
             RangeYield::Pair => range_header(None, Some(&item_identifier), iter_expression),
         };
         let mut bindings = self.lower_irrefutable_pattern_site(
-            PatternSubject::for_identifier(item_identifier.clone()),
+            PatternSubject::for_identifier(item_identifier),
             &binding.pattern,
             &binding.ty,
         );
         bindings.extend(self.lower_block_as_body(body).statements);
-
-        let references_item = GoUses::of(&bindings).contains_identifier(&item_identifier);
-
-        let mut statements = Vec::new();
-        if !references_item {
-            statements.push(discard(GoExpression::identifier(item_identifier)));
-        }
-        statements.extend(bindings);
-        (header, LoweredBlock { statements })
+        (
+            header,
+            LoweredBlock {
+                statements: bindings,
+            },
+        )
     }
 
     fn lower_range_for(
@@ -455,7 +441,8 @@ impl Planner<'_> {
             || ValuePlan::constant(GoLiteral::Int(0), ConstantKind::Int),
             |start| self.plan_operand(start, ExpressionContext::value()),
         );
-        let counts_from_zero = !inclusive && start_plan.expression().as_integer() == Some(0);
+        let counts_from_zero =
+            !inclusive && start_plan.expression().and_then(GoExpression::as_integer) == Some(0);
         let mut operands = vec![OrderedOperand {
             plan: start_plan,
             prefix: "start",

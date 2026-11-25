@@ -69,6 +69,10 @@ impl GoIdentifier {
         Self::external("_".to_string())
     }
 
+    pub(crate) fn is_blank(&self) -> bool {
+        self.spelling == "_"
+    }
+
     pub(crate) fn local(spelling: String, id: LocalId) -> Self {
         Self {
             spelling,

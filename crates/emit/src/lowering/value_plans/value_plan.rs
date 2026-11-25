@@ -11,8 +11,16 @@ use syntax::types::Type;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::lowering) struct ValuePlan {
     setup: Vec<Statement>,
-    expression: GoExpression,
-    stability: Stability,
+    value: PlannedValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PlannedValue {
+    Go {
+        expression: GoExpression,
+        stability: Stability,
+    },
+    Diverges,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,31 +31,52 @@ pub(in crate::lowering) struct SequencedValues {
 }
 
 impl ValuePlan {
+    pub(in crate::lowering) fn diverging(setup: Vec<Statement>) -> Self {
+        Self {
+            setup,
+            value: PlannedValue::Diverges,
+        }
+    }
+
+    pub(in crate::lowering) fn diverges(&self) -> bool {
+        matches!(self.value, PlannedValue::Diverges)
+    }
+
     pub(in crate::lowering) fn setup(&self) -> &[Statement] {
         &self.setup
     }
 
-    pub(in crate::lowering) fn expression(&self) -> &GoExpression {
-        &self.expression
+    pub(in crate::lowering) fn expression(&self) -> Option<&GoExpression> {
+        match &self.value {
+            PlannedValue::Go { expression, .. } => Some(expression),
+            PlannedValue::Diverges => None,
+        }
     }
 
     pub(in crate::lowering) fn stability(&self) -> Stability {
-        self.stability
+        match &self.value {
+            PlannedValue::Go { stability, .. } => *stability,
+            PlannedValue::Diverges => Stability::Observable,
+        }
     }
 
     pub(in crate::lowering) fn into_parts_with_stability(
         self,
     ) -> (Vec<Statement>, GoExpression, Stability) {
-        (self.setup, self.expression, self.stability)
+        let stability = self.stability();
+        let (setup, expression) = self.into_parts();
+        (setup, expression, stability)
     }
 
     pub(in crate::lowering) fn split_setup(self) -> (Vec<Statement>, Self) {
-        let Self {
+        let Self { setup, value } = self;
+        (
             setup,
-            expression,
-            stability,
-        } = self;
-        (setup, Self::new(Vec::new(), expression, stability))
+            Self {
+                setup: Vec::new(),
+                value,
+            },
+        )
     }
 
     pub(in crate::lowering) fn new(
@@ -57,8 +86,10 @@ impl ValuePlan {
     ) -> Self {
         Self {
             setup,
-            expression,
-            stability,
+            value: PlannedValue::Go {
+                expression,
+                stability,
+            },
         }
     }
 
@@ -108,13 +139,18 @@ impl ValuePlan {
         self,
         transform: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoExpression,
     ) -> Self {
-        let Self {
-            mut setup,
-            expression,
-            stability,
-        } = self;
-        let expression = transform(&mut setup, expression);
-        Self::new(setup, expression, stability)
+        let Self { mut setup, value } = self;
+        let value = match value {
+            PlannedValue::Go {
+                expression,
+                stability,
+            } => PlannedValue::Go {
+                expression: transform(&mut setup, expression),
+                stability,
+            },
+            PlannedValue::Diverges => PlannedValue::Diverges,
+        };
+        Self { setup, value }
     }
 
     pub(in crate::lowering) fn map_observable_expression(
@@ -127,29 +163,39 @@ impl ValuePlan {
     }
 
     pub(in crate::lowering) fn make_observable(&mut self) {
-        self.stability = Stability::Observable;
+        self.set_stability(Stability::Observable);
+    }
+
+    fn set_stability(&mut self, stability: Stability) {
+        if let PlannedValue::Go {
+            stability: current, ..
+        } = &mut self.value
+        {
+            *current = stability;
+        }
     }
 
     pub(in crate::lowering) fn pin(
         &mut self,
         bind: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoIdentifier,
     ) {
-        let value = mem::replace(&mut self.expression, GoExpression::empty());
-        let name = bind(&mut self.setup, value);
-        self.expression = GoExpression::identifier(name);
+        if let PlannedValue::Go { expression, .. } = &mut self.value {
+            let value = mem::replace(expression, GoExpression::empty());
+            *expression = GoExpression::identifier(bind(&mut self.setup, value));
+        }
     }
 
     pub(in crate::lowering) fn with_constructor_stability(mut self) -> Self {
-        self.stability = if matches!(self.expression.syntax_form(), OperandForm::Call) {
-            Stability::StableAcrossCalls
-        } else {
-            Stability::Observable
+        let stability = match self.expression().map(GoExpression::syntax_form) {
+            Some(OperandForm::Call) => Stability::StableAcrossCalls,
+            _ => Stability::Observable,
         };
+        self.set_stability(stability);
         self
     }
 
     pub(in crate::lowering) fn with_stability(mut self, stability: Stability) -> Self {
-        self.stability = stability;
+        self.set_stability(stability);
         self
     }
 
@@ -160,20 +206,23 @@ impl ValuePlan {
     }
 
     pub(in crate::lowering) fn effects(&self) -> Effects {
-        let reads = if self.reads_only_own_setup() {
+        let PlannedValue::Go { expression, .. } = &self.value else {
+            return Effects::anything();
+        };
+        let reads = if self.reads_only_own_setup(expression) {
             Stability::Fixed
         } else {
-            self.stability
+            self.stability()
         };
-        self.expression.effects().with_known_reads(reads)
+        expression.effects().with_known_reads(reads)
     }
 
-    fn reads_only_own_setup(&self) -> bool {
-        if self.setup.is_empty() || self.expression.effects().reads() == Stability::Observable {
+    fn reads_only_own_setup(&self, expression: &GoExpression) -> bool {
+        if self.setup.is_empty() || expression.effects().reads() == Stability::Observable {
             return false;
         }
         let mut own = true;
-        self.expression.node().visit(&mut |node| {
+        expression.node().visit(&mut |node| {
             if let GoExpressionNode::Identifier(name) = node {
                 own &= self.binds_local(name);
             }
@@ -182,7 +231,7 @@ impl ValuePlan {
     }
 
     pub(in crate::lowering) fn can_delay(&self) -> bool {
-        self.stability.is_fixed() && !self.effects().panics_or_blocks()
+        self.stability().is_fixed() && !self.effects().panics_or_blocks()
     }
 
     pub(in crate::lowering) fn must_evaluate_now(&self) -> bool {
@@ -190,35 +239,38 @@ impl ValuePlan {
     }
 
     pub(in crate::lowering) fn rests_in_fixed_name(&self) -> bool {
-        matches!(self.expression.syntax_form(), OperandForm::Name) && self.stability.is_fixed()
+        self.expression()
+            .is_some_and(|expression| matches!(expression.syntax_form(), OperandForm::Name))
+            && self.stability().is_fixed()
     }
 
     pub(in crate::lowering) fn is_empty(&self) -> bool {
-        self.expression.is_empty()
+        self.expression().is_none_or(GoExpression::is_empty)
     }
 
     pub(in crate::lowering) fn into_parts(self) -> (Vec<Statement>, GoExpression) {
-        (self.setup, self.expression)
-    }
-
-    pub(in crate::lowering) fn conversion(mut self, go_type: impl Into<GoType>) -> Self {
-        self.expression = GoExpression::conversion(go_type, self.expression);
-        if !self.stability.is_stable_across_calls() {
-            self.stability = Stability::Observable;
+        match self.value {
+            PlannedValue::Go { expression, .. } => (self.setup, expression),
+            PlannedValue::Diverges => (self.setup, GoExpression::empty()),
         }
-        self
     }
 
-    pub(in crate::lowering) fn unary(mut self, operator: GoUnaryOperator) -> Self {
-        self.expression = GoExpression::unary(operator, self.expression);
-        self.stability = Stability::Observable;
-        self
+    pub(in crate::lowering) fn conversion(self, go_type: impl Into<GoType>) -> Self {
+        let keeps_stability = self.stability().is_stable_across_calls();
+        let mut plan =
+            self.map_expression(|_, expression| GoExpression::conversion(go_type, expression));
+        if !keeps_stability {
+            plan.make_observable();
+        }
+        plan
     }
 
-    pub(in crate::lowering) fn dereference(mut self) -> Self {
-        self.expression = GoExpression::dereference(self.expression);
-        self.stability = Stability::Observable;
-        self
+    pub(in crate::lowering) fn unary(self, operator: GoUnaryOperator) -> Self {
+        self.map_observable_expression(|_, expression| GoExpression::unary(operator, expression))
+    }
+
+    pub(in crate::lowering) fn dereference(self) -> Self {
+        self.map_observable_expression(|_, expression| GoExpression::dereference(expression))
     }
 }
 

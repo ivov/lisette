@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::{GoExpressionNode, verbatim_identifiers};
 use crate::target::ir::local::{GoIdentifier, LocalId};
-use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
+use crate::target::ir::visit::{BindingSite, VisitorMut, visit_statements_mut};
 
 #[derive(Default)]
 pub(crate) struct NameUses {
@@ -89,7 +89,7 @@ impl VisitorMut for NameUses {
         }
     }
 
-    fn local_binding(&mut self, name: &mut GoIdentifier) {
+    fn local_binding(&mut self, name: &mut GoIdentifier, _site: BindingSite) {
         self.bindings.add(name);
     }
 

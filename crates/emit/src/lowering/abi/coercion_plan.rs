@@ -311,7 +311,7 @@ impl CoercionPlan {
                 let (payload_setup, payload) = payload.lower(planner, value);
                 statements.extend(payload_setup);
                 let type_arguments =
-                    GoType::type_argument(&planner.queries().component_go_type(&payload_type));
+                    GoType::type_argument(&planner.queries().go_type(&payload_type));
                 prelude_call(
                     option_variant("Some").constructor,
                     type_arguments,

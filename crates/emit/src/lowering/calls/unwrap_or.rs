@@ -206,7 +206,7 @@ impl<'p> Planner<'p> {
         let coercion = self.value_slot_coercion(default, ty);
         let typed = self.queries().declaration_needs_go_type(
             default,
-            plan.expression().constant_kind(),
+            plan.expression().and_then(GoExpression::constant_kind),
             &coercion,
             ty,
         );

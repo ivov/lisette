@@ -25,7 +25,6 @@ use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin, FunctionLayoutChange};
-use crate::lowering::expressions::never::runs_as_never_statement;
 use crate::lowering::planner::written_span;
 use crate::lowering::statements::assignments::PlaceOrdering;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -179,13 +178,6 @@ impl Planner<'_> {
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
             | Expression::Block { ty, .. } => self.plan_to_operand_temp(expression, ty),
-            Expression::Return {
-                expression: return_expression,
-                ..
-            } => {
-                let plan = self.build_return_plan(return_expression);
-                ValuePlan::computed(plan.statements, GoExpression::empty())
-            }
             Expression::Assignment {
                 target,
                 value,
@@ -524,13 +516,11 @@ impl Planner<'_> {
             expression,
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
-        if !plan.expression().stands_as_a_statement()
-            || needs_iife_for_async(
-                expression,
-                self.facts.call_operation(expression),
-                plan.expression(),
-            )
-        {
+        let operation = self.facts.call_operation(expression);
+        let runs_directly = plan.expression().is_some_and(|value| {
+            value.stands_as_a_statement() && !needs_iife_for_async(expression, operation, value)
+        });
+        if !runs_directly {
             self.restore_planning(checkpoint);
             let (mut setup, body) = self.plan_delayed_async_body(expression);
             setup.push(async_statement(kind, immediate_call(body)));
@@ -581,9 +571,17 @@ impl Planner<'_> {
             let (setup, call) = self.plan_test_log_call(call);
             return ValuePlan::plain_call(setup, call);
         }
-        if runs_as_never_statement(expression) && self.facts.is_never(&expression.get_type()) {
+        if self.facts.is_never(&expression.get_type()) {
             return self.plan_never_value(expression);
         }
+        self.plan_operand_shape(expression, ctx)
+    }
+
+    pub(in crate::lowering) fn plan_operand_shape(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
         match expression {
             Expression::Paren { .. } => {
                 unreachable!("internal error: emit received a parenthesized expression")
@@ -892,7 +890,11 @@ impl PlannerQueries<'_, '_> {
         inner: &ValuePlan,
         ty: &Type,
     ) -> bool {
-        if inner.expression().constant_kind().is_some() {
+        if inner
+            .expression()
+            .and_then(GoExpression::constant_kind)
+            .is_some()
+        {
             return false;
         }
         let source_ty = expression.get_type();
@@ -901,7 +903,8 @@ impl PlannerQueries<'_, '_> {
         {
             return false;
         }
-        self.target_go_type(&source_ty) == self.target_go_type(ty)
+        self.facts.target_value_layout(&source_ty).go_type(self)
+            == self.facts.target_value_layout(ty).go_type(self)
     }
 
     fn is_go_unaddressable(&self, expression: &Expression) -> bool {

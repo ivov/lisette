@@ -3,7 +3,7 @@ use crate::lookup::state::scope_stack::ScopeStack;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::{GoIdentifier, LocalId};
-use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
+use crate::target::ir::visit::{BindingSite, VisitorMut, visit_statements_mut};
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 
@@ -35,7 +35,7 @@ impl VisitorMut for LocalResolver<'_> {
         );
     }
 
-    fn local_binding(&mut self, name: &mut GoIdentifier) {
+    fn local_binding(&mut self, name: &mut GoIdentifier, _site: BindingSite) {
         if name.spelling() == "_" {
             name.finish();
             return;
@@ -77,7 +77,7 @@ pub(crate) fn identify_body_locals(
     };
     for name in parameters {
         let mut name = name.clone();
-        resolver.local_binding(&mut name);
+        resolver.local_binding(&mut name, BindingSite::Parameter);
     }
     visit_statements_mut(statements, &mut resolver);
     resolver.shadowing

@@ -4,7 +4,7 @@ use crate::lowering::calls::bounds_checks::BoundsCheckedIndex;
 use crate::lowering::calls::predicates::Polarity;
 
 use crate::lookup::state::scope::PairStatusKind;
-use crate::target::ir::bodies::{Definition, PairCondition, Statement, define, discard};
+use crate::target::ir::bodies::{Definition, PairCondition, Statement, define};
 use crate::target::ir::go_expression::{GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -217,29 +217,6 @@ impl BoundValue {
         };
 
         Some(define(target.clone(), index.element()))
-    }
-
-    pub(in crate::lowering) fn discard_value(&mut self) {
-        match &mut self.source {
-            BoundSource::Pair(pair) => {
-                if matches!(
-                    pair.value,
-                    PairValue::Named {
-                        nil_guard: None,
-                        ..
-                    }
-                ) {
-                    pair.value = PairValue::Discarded;
-                }
-            }
-            BoundSource::Found {
-                value: Some(value), ..
-            } => {
-                self.statements
-                    .push(discard(GoExpression::identifier(value.clone())));
-            }
-            _ => {}
-        }
     }
 
     pub(in crate::lowering) fn success_condition(&self) -> PairCondition {

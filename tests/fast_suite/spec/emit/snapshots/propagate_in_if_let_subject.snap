@@ -21,9 +21,8 @@ func f() lisette.Result[int, string] {
 	if check.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check.ErrVal)
 	}
-	subject := check.OkVal
-	if subject.Tag == lisette.OptionSome {
-		return lisette.MakeResultOk[int, string](subject.SomeVal)
+	if check.OkVal.Tag == lisette.OptionSome {
+		return lisette.MakeResultOk[int, string](check.OkVal.SomeVal)
 	}
 	return lisette.MakeResultOk[int, string](0)
 }

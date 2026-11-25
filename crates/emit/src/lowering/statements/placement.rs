@@ -12,6 +12,7 @@ use crate::lowering::patterns::binding_declarations::pattern_binds_name;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::assignments::PlaceOrdering;
 use crate::lowering::statements::assignments::is_lvalue_chain;
+use crate::lowering::statements::blocks::{BlockTail, TailTarget};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -377,7 +378,7 @@ impl<'p> Planner<'p> {
 
         let value_ty = value.get_type();
         if self.facts.is_never(&value_ty) {
-            return vec![self.lower_never_value(value)];
+            return self.lower_never_value(value);
         }
         if self.facts.has_no_go_value(&value_ty) {
             return self.lower_valueless_discard(value);
@@ -430,28 +431,6 @@ impl<'p> Planner<'p> {
         statements
     }
 
-    fn lower_unit_call_into_var(
-        &mut self,
-        value: &Expression,
-        target: &GoExpression,
-        target_ty: Option<&Type>,
-    ) -> Vec<Statement> {
-        let (mut statements, call) = self
-            .plan_value(value, ExpressionContext::value())
-            .into_parts();
-        if !call.is_empty() {
-            statements.push(effect_statement(call));
-        }
-        statements.push(
-            simple_assign(
-                target,
-                ValuePlan::computed(Vec::new(), self.unit_value(Some(value), target_ty)),
-            )
-            .into(),
-        );
-        statements
-    }
-
     pub(in crate::lowering) fn lower_assign(
         &mut self,
         expression: &Expression,
@@ -492,10 +471,7 @@ impl<'p> Planner<'p> {
         target_ty: Option<&Type>,
         expression: &Expression,
     ) -> Vec<Statement> {
-        let written_ty = target_ty
-            .filter(|t| self.facts.is_option_or_result(t))
-            .cloned()
-            .unwrap_or_else(|| expression.get_type());
+        let written_ty = target_ty.cloned().unwrap_or_else(|| expression.get_type());
         let Some(fallible) = self.facts.fallible(&written_ty) else {
             return self.lower_plain_assign(target, target_ty, expression);
         };
@@ -614,14 +590,11 @@ impl<'p> Planner<'p> {
         };
 
         self.with_assign_target(target, |this| {
-            let mut statements = Vec::new();
-            for (index, item) in rest.iter().enumerate() {
-                statements.push(this.lower_block_item(item, &items[index + 1..]));
-            }
-            let line = this.facts.source_position(&last.get_span());
-            let tail = this.lower_assign_tail(last, target, target_ty);
-            statements.extend(directed_first(line, tail));
-            statements
+            this.lower_block_items(
+                rest,
+                last,
+                BlockTail::Value(TailTarget::Assign { target, target_ty }),
+            )
         })
     }
 
@@ -645,42 +618,41 @@ impl<'p> Planner<'p> {
         statements
     }
 
-    fn lower_assign_tail(
+    pub(in crate::lowering) fn lower_assign_unit_tail(
         &mut self,
         last: &Expression,
         target: &GoExpression,
         target_ty: Option<&Type>,
     ) -> Vec<Statement> {
-        if matches!(
-            last,
-            Expression::Return { .. }
-                | Expression::Break { .. }
-                | Expression::Continue { .. }
-                | Expression::Let { .. }
-                | Expression::While { .. }
-                | Expression::WhileLet { .. }
-                | Expression::For { .. }
-                | Expression::Const { .. }
-        ) {
-            return vec![self.lower_statement(last)];
-        }
-        if self.facts.is_never(&last.get_type()) {
-            return vec![self.lower_never_value(last)];
-        }
         if let Expression::Unit { .. } = last {
             return vec![assign(
                 target.clone(),
                 self.unit_value(Some(last), target_ty),
             )];
         }
-        if self.facts.resolves_to_unit(&last.get_type()) && self.queries().widens_unit(target_ty) {
-            return self.lower_unit_into(last, Some(last), target, target_ty);
+        if !self.queries().widens_unit(target_ty) {
+            if matches!(last, Expression::Block { .. }) {
+                return self.lower_assign(last, target, target_ty);
+            }
+            if let Some(branching) = Branching::of(last) {
+                let place = PlacePlan::Assign {
+                    local: target,
+                    target_ty,
+                };
+                return self.lower_branching_to_block(branching, &place).statements;
+            }
         }
+        self.lower_unit_into(last, Some(last), target, target_ty)
+    }
+
+    pub(in crate::lowering) fn lower_assign_value_tail(
+        &mut self,
+        last: &Expression,
+        target: &GoExpression,
+        target_ty: Option<&Type>,
+    ) -> Vec<Statement> {
         if matches!(last, Expression::Block { .. }) {
             return self.lower_assign(last, target, target_ty);
-        }
-        if self.queries().is_unit_call(last) {
-            return self.lower_unit_call_into_var(last, target, target_ty);
         }
         if let Some(statements) = self.try_lower_slice_growth_to_var(target, last) {
             return statements;
@@ -813,12 +785,6 @@ impl<'p> Planner<'p> {
     ) -> (Vec<Statement>, GoExpression) {
         let plan = if let Some(literal) = TupleLiteral::of(last) {
             self.plan_tuple_value(literal, TuplePosition::Tail)
-        } else if matches!(
-            last,
-            Expression::For { .. } | Expression::While { .. } | Expression::WhileLet { .. }
-        ) {
-            let statements = vec![self.lower_statement(last)];
-            ValuePlan::computed(statements, self.unit_value(Some(last), None))
         } else {
             self.plan_value(last, ExpressionContext::value())
         };

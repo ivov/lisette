@@ -4,14 +4,19 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::control_flow::branches::if_let_match_arms;
 use crate::lowering::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::lowering::definitions::top_level::ConstPlacement;
+use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::asserts::test_log_call;
 use crate::lowering::statements::placement::ElidableTail;
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::output::finish::verify::BodyResult;
-use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement, declare};
+use crate::target::ir::bodies::{
+    LoweredBlock, LoweredStatement, Statement, declare, directed_first,
+};
 use crate::target::ir::local::GoIdentifier;
+use crate::target::ir::prelude::Fallible;
+use crate::target::ir::termination::list_terminates;
 use crate::target::ir::values::GoExpression;
 use std::{iter, slice};
 use syntax::ast::{Expression, Pattern};
@@ -28,15 +33,19 @@ impl Planner<'_> {
         (result_var, declaration)
     }
 
-    pub(in crate::lowering) fn lower_body_until_diverge(
+    pub(in crate::lowering) fn lower_block_items(
         &mut self,
         rest: &[Expression],
         last: &Expression,
-    ) -> (Vec<Statement>, bool) {
+        tail: BlockTail<'_>,
+    ) -> Vec<Statement> {
         let mut statements: Vec<Statement> = Vec::with_capacity(rest.len() + 1);
-        let forwarded = rest.split_last().and_then(|(check, rest)| {
-            Some((check, rest, self.queries().forwarded_tail(check, last)?))
-        });
+        let forwarded = match tail {
+            BlockTail::Value(TailTarget::Return) => rest.split_last().and_then(|(check, rest)| {
+                Some((check, rest, self.queries().forwarded_tail(check, last)?))
+            }),
+            _ => None,
+        };
         let lowered = forwarded.map_or(rest, |(_, rest, _)| rest);
         for (index, item) in lowered.iter().enumerate() {
             let region = rest[index + 1..].iter().chain(iter::once(last));
@@ -47,30 +56,97 @@ impl Planner<'_> {
                 for dropped in region {
                     self.conversions.record_dropped_code(dropped.get_span());
                 }
-                return (statements, true);
+                return statements;
             }
         }
-        if let Some((check, _, tail)) = forwarded {
-            let (mut body, value) = match tail {
-                ForwardedTail::ErrorCall(call) => {
-                    self.plan_call_expression(call, None, ExpressionContext::value())
-                }
-                ForwardedTail::TaggedResult(result) => {
-                    self.plan_value(result, ExpressionContext::value())
-                }
-            }
-            .into_parts();
+        if let Some((check, _, forwarded)) = forwarded {
+            statements.push(self.lower_forwarded_tail(check, forwarded));
+            return statements;
+        }
+        match tail {
+            BlockTail::Statement => statements.push(self.lower_block_item(last, iter::empty())),
+            BlockTail::Value(target) => statements.extend(self.lower_block_tail(last, &target)),
+        }
+        statements
+    }
 
-            body.push(plain_return(value));
-            statements.push(directed_at(
-                &self.facts,
-                check,
-                LoweredStatement::Body(LoweredBlock { statements: body }),
-            ));
-            return (statements, true);
+    fn lower_forwarded_tail(&mut self, check: &Expression, tail: ForwardedTail<'_>) -> Statement {
+        let (mut body, value) = match tail {
+            ForwardedTail::ErrorCall(call) => {
+                self.plan_call_expression(call, None, ExpressionContext::value())
+            }
+            ForwardedTail::TaggedResult(result) => {
+                self.plan_value(result, ExpressionContext::value())
+            }
         }
-        statements.extend(self.lower_return_tail(last));
-        (statements, false)
+        .into_parts();
+        body.push(plain_return(value));
+        directed_at(
+            &self.facts,
+            check,
+            LoweredStatement::Body(LoweredBlock { statements: body }),
+        )
+    }
+
+    fn lower_block_tail(&mut self, last: &Expression, target: &TailTarget<'_>) -> Vec<Statement> {
+        let line = self.facts.source_position(&last.get_span());
+        let tail = match (target, last) {
+            (TailTarget::Return, Expression::Return { expression, .. }) => expression.as_ref(),
+            _ => last,
+        };
+        let statements = match self.queries().tail_kind(tail) {
+            TailKind::Diverges => self.lower_never_value(tail),
+            TailKind::Unit => self.lower_unit_tail(tail, target),
+            TailKind::Value => match target {
+                TailTarget::Return => self.lower_return_value_tail(tail),
+                TailTarget::Assign { target, target_ty } => {
+                    self.lower_assign_value_tail(tail, target, *target_ty)
+                }
+                TailTarget::Try(fallible) => self.lower_try_value_tail(tail, fallible),
+                TailTarget::Recover(fallible) => self.lower_recover_value_tail(tail, fallible),
+            },
+        };
+        directed_first(line, statements)
+    }
+
+    fn lower_unit_tail(&mut self, tail: &Expression, target: &TailTarget<'_>) -> Vec<Statement> {
+        match target {
+            TailTarget::Assign { target, target_ty } => {
+                self.lower_assign_unit_tail(tail, target, *target_ty)
+            }
+            TailTarget::Return => {
+                let mut statements = self.lower_unit_effect(tail);
+                let return_ty = self
+                    .scope
+                    .current_return_ctx()
+                    .ty()
+                    .filter(|ty| !self.facts.resolves_to_unit(ty))
+                    .cloned();
+                if let Some(return_ty) = return_ty
+                    && !list_terminates(&statements)
+                {
+                    statements.push(plain_return(self.unit_value(Some(tail), Some(&return_ty))));
+                }
+                statements
+            }
+            TailTarget::Try(fallible) => {
+                let mut statements = self.lower_unit_effect(tail);
+                statements.extend(self.lower_try_unit_return(fallible));
+                statements
+            }
+            TailTarget::Recover(fallible) => {
+                let mut statements = self.lower_unit_effect(tail);
+                statements.extend(self.lower_unit_return(fallible.ok_ty()));
+                statements
+            }
+        }
+    }
+
+    fn lower_unit_effect(&mut self, tail: &Expression) -> Vec<Statement> {
+        if let Expression::Unit { .. } = tail {
+            return Vec::new();
+        }
+        vec![self.lower_statement(tail)]
     }
 
     pub(in crate::lowering) fn lower_function_body(
@@ -109,35 +185,9 @@ impl Planner<'_> {
             };
         };
 
-        let (statements, diverged) = self.lower_body_until_diverge(rest, last);
-        if diverged {
-            return LoweredBlock { statements };
+        LoweredBlock {
+            statements: self.lower_block_items(rest, last, BlockTail::Value(TailTarget::Return)),
         }
-
-        self.return_unit_after_tail(LoweredBlock { statements }, last)
-    }
-
-    fn return_unit_after_tail(&self, mut body: LoweredBlock, last: &Expression) -> LoweredBlock {
-        let is_statement_only = matches!(
-            last,
-            Expression::Assignment { .. } | Expression::Let { .. } | Expression::Const { .. }
-        );
-        let is_unit_tail = !is_statement_only
-            && !matches!(last, Expression::Return { .. })
-            && self.facts.resolves_to_unit(&last.get_type());
-        let return_ctx = self.scope.current_return_ctx();
-        if (is_statement_only || is_unit_tail)
-            && !body.go_terminates()
-            && let Some(return_ty) = return_ctx
-                .ty()
-                .filter(|ty| !self.facts.resolves_to_unit(ty))
-        {
-            let return_ty = return_ty.clone();
-            let unit = self.unit_value(Some(last), Some(&return_ty));
-            body.statements.push(plain_return(unit));
-        }
-
-        body
     }
 
     pub(in crate::lowering) fn lower_block_item<'r>(
@@ -375,18 +425,10 @@ impl Planner<'_> {
         } else {
             slice::from_ref(expression)
         };
-        let mut statements = Vec::with_capacity(items.len());
-        for (index, item) in items.iter().enumerate() {
-            let statement = self.lower_block_item(item, &items[index + 1..]);
-            let diverged = statement.kind.blocks_fallthrough();
-            statements.push(statement);
-            if diverged {
-                for dropped in &items[index + 1..] {
-                    self.conversions.record_dropped_code(dropped.get_span());
-                }
-                break;
-            }
-        }
+        let statements = match items.split_last() {
+            Some((last, rest)) => self.lower_block_items(rest, last, BlockTail::Statement),
+            None => Vec::new(),
+        };
         LoweredBlock { statements }
     }
 
@@ -417,6 +459,40 @@ impl Planner<'_> {
         }
         LoweredBlock {
             statements: self.lower_block_to_var(expression, local, target_ty),
+        }
+    }
+}
+
+pub(in crate::lowering) enum BlockTail<'a> {
+    Statement,
+    Value(TailTarget<'a>),
+}
+
+pub(in crate::lowering) enum TailTarget<'a> {
+    Return,
+    Assign {
+        target: &'a GoExpression,
+        target_ty: Option<&'a Type>,
+    },
+    Try(&'a Fallible),
+    Recover(&'a Fallible),
+}
+
+enum TailKind {
+    Value,
+    Unit,
+    Diverges,
+}
+
+impl PlannerQueries<'_, '_> {
+    fn tail_kind(&self, tail: &Expression) -> TailKind {
+        let ty = tail.get_type();
+        if self.facts.is_never(&ty) {
+            TailKind::Diverges
+        } else if self.facts.has_no_go_value(&ty) {
+            TailKind::Unit
+        } else {
+            TailKind::Value
         }
     }
 }

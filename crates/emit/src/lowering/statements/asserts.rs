@@ -54,7 +54,9 @@ impl Planner<'_> {
         self.require_testkit();
 
         let mut statements = Vec::new();
-        let shape = self.plan_assert_shape(expression, operand, &mut statements);
+        let Some(shape) = self.plan_assert_shape(expression, operand, &mut statements) else {
+            return LoweredStatement::Block(LoweredBlock { statements });
+        };
 
         let AssertShape {
             failure_condition,
@@ -102,7 +104,7 @@ impl Planner<'_> {
         expression: &Expression,
         operand: &Expression,
         statements: &mut Vec<Statement>,
-    ) -> AssertShape {
+    ) -> Option<AssertShape> {
         if let Expression::Binary {
             operator,
             left,
@@ -167,12 +169,12 @@ impl Planner<'_> {
         right: &Expression,
         conversion: Option<OperandConversion>,
         statements: &mut Vec<Statement>,
-    ) -> AssertShape {
+    ) -> Option<AssertShape> {
         let (lhs, rhs) =
-            self.plan_assert_operands(left, right, LiteralInlining::Allowed, statements);
+            self.plan_assert_operands(left, right, LiteralInlining::Allowed, statements)?;
         let flipped = flip_comparison(operator)
             .filter(|_| flip_preserves_nan(&self.facts, operator, left, right));
-        let operands = paired_operands(lhs.value.expression(), rhs.value.expression());
+        let operands = paired_operands(lhs.value.expression()?, rhs.value.expression()?);
         let (condition_setup, condition) = self
             .plan_lowered_binary(
                 flipped.as_ref().unwrap_or(operator),
@@ -183,7 +185,7 @@ impl Planner<'_> {
             .into_parts();
 
         statements.extend(condition_setup);
-        AssertShape {
+        Some(AssertShape {
             failure_condition: match flipped {
                 Some(_) => condition,
                 None => GoExpression::unary(GoUnaryOperator::Not, condition),
@@ -191,7 +193,7 @@ impl Planner<'_> {
             kind: "relation",
             message: format!("expected {operator}"),
             operands,
-        }
+        })
     }
 
     fn lower_labeled_assert(
@@ -200,50 +202,47 @@ impl Planner<'_> {
         arg: &Expression,
         recipe: &EqualityRecipe,
         statements: &mut Vec<Statement>,
-    ) -> AssertShape {
-        let (lhs, rhs) = self.plan_assert_operands(recv, arg, LiteralInlining::Denied, statements);
-        let (lhs, rhs) = (lhs.value.expression(), rhs.value.expression());
+    ) -> Option<AssertShape> {
+        let (lhs, rhs) =
+            self.plan_assert_operands(recv, arg, LiteralInlining::Denied, statements)?;
+        let (lhs, rhs) = (lhs.value.expression()?, rhs.value.expression()?);
         let failure_condition =
             self.equality_test(lhs.clone(), rhs.clone(), recipe, GoBinaryOperator::NotEqual);
-        AssertShape {
+        Some(AssertShape {
             failure_condition,
             kind: "labeled",
             message: "expected ==".to_string(),
             operands: paired_operands(lhs, rhs),
-        }
+        })
     }
 
     fn lower_bare_assert(
         &mut self,
         operand: &Expression,
         statements: &mut Vec<Statement>,
-    ) -> AssertShape {
+    ) -> Option<AssertShape> {
         let ctx = ExpressionContext::value();
-        let failure_condition = if let Expression::Unary {
+        let condition = if let Expression::Unary {
             operator: UnaryOperator::Not,
             expression: negated,
             ..
         } = operand
         {
-            let (setup, condition) = self.plan_operand(negated, ctx).into_parts();
-            statements.extend(setup);
-            condition
+            self.plan_operand(negated, ctx)
         } else if matches!(operand, Expression::Binary { .. }) {
-            let (setup, condition) = self.plan_operand(operand, ctx).into_parts();
-            statements.extend(setup);
-            GoExpression::unary(GoUnaryOperator::Not, condition)
+            self.plan_operand(operand, ctx).unary(GoUnaryOperator::Not)
         } else {
-            let (setup, condition) = self.plan_unary_not(operand, ctx).into_parts();
-            statements.extend(setup);
-            condition
+            self.plan_unary_not(operand, ctx)
         };
+        let (setup, condition) = condition.split_setup();
+        statements.extend(setup);
 
-        AssertShape {
-            failure_condition,
+        Some(AssertShape {
+            failure_condition: condition.expression()?.clone(),
             kind: "bare",
             message: "assertion failed".to_string(),
             operands: Vec::new(),
-        }
+        })
     }
 
     fn plan_assert_operands(
@@ -252,9 +251,17 @@ impl Planner<'_> {
         right: &Expression,
         literals: LiteralInlining,
         statements: &mut Vec<Statement>,
-    ) -> (AssertOperand, AssertOperand) {
+    ) -> Option<(AssertOperand, AssertOperand)> {
         let left_plan = self.plan_value(left, ExpressionContext::value());
+        if left_plan.diverges() {
+            statements.extend(left_plan.split_setup().0);
+            return None;
+        }
         let right_plan = self.plan_value(right, ExpressionContext::value());
+        if right_plan.diverges() {
+            statements.extend(right_plan.split_setup().0);
+            return None;
+        }
         let names_inline = left_plan.setup().is_empty()
             && right_plan.setup().is_empty()
             && left_plan.effects().can_duplicate()
@@ -268,7 +275,7 @@ impl Planner<'_> {
         let lhs = self.bind_assert_operand(left, left_plan, "assertLeft", left_temp, statements);
         let rhs =
             self.bind_assert_operand(right, right_plan, "assertRight", right_temp, statements);
-        (lhs, rhs)
+        Some((lhs, rhs))
     }
 
     fn bind_assert_operand(
@@ -279,7 +286,7 @@ impl Planner<'_> {
         temp_type: Option<GoType>,
         statements: &mut Vec<Statement>,
     ) -> AssertOperand {
-        let constant = plan.expression().constant_kind();
+        let constant = plan.expression().and_then(GoExpression::constant_kind);
         let (setup, plan) = plan.split_setup();
         statements.extend(setup);
         let Some(go_type) = temp_type else {
@@ -439,11 +446,17 @@ impl PlannerQueries<'_, '_> {
         let expression_ty = expression.get_type();
         let go_type = self.go_type(&expression_ty);
         let inlines = plan.setup().is_empty()
-            && match plan.expression().syntax_form() {
-                OperandForm::Name => names_inline && plan.expression().as_identifier().is_some(),
-                OperandForm::Call => false,
-                _ => {
-                    let constant = plan.expression().constant_kind();
+            && match plan.expression().map(GoExpression::syntax_form) {
+                None | Some(OperandForm::Call) => false,
+                Some(OperandForm::Name) => {
+                    names_inline
+                        && plan
+                            .expression()
+                            .and_then(GoExpression::as_identifier)
+                            .is_some()
+                }
+                Some(_) => {
+                    let constant = plan.expression().and_then(GoExpression::constant_kind);
                     matches!(literals, LiteralInlining::Allowed)
                         && constant.is_some()
                         && self

@@ -4,11 +4,12 @@ use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::calls::bound_value::BoundValue;
 use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PairKind};
+use crate::lowering::statements::blocks::{BlockTail, TailTarget};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::finish::function_literals::function_literal;
 use crate::output::finish::function_literals::immediate_call;
-use crate::target::ir::bodies::{LoweredBlock, Statement, define, directed_first};
+use crate::target::ir::bodies::{LoweredBlock, Statement, define};
 use crate::target::ir::go_expression::FunctionLiteralLayout;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::{ConstructorKind, Fallible};
@@ -150,61 +151,31 @@ impl Planner<'_> {
         let Some((last, rest)) = items.split_last() else {
             return self.lower_try_unit_return(fallible);
         };
-        let mut statements: Vec<Statement> = rest
-            .iter()
-            .enumerate()
-            .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
-            .collect();
-        let line = self.facts.source_position(&last.get_span());
-        let tail = self.lower_try_tail(last, fallible);
-        statements.extend(directed_first(line, tail));
-        statements
+        self.lower_block_items(rest, last, BlockTail::Value(TailTarget::Try(fallible)))
     }
 
-    fn lower_try_tail(&mut self, last: &Expression, fallible: &Fallible) -> Vec<Statement> {
-        if self.facts.is_never(&last.get_type()) {
-            return vec![self.lower_never_value(last)];
-        }
-        if last.diverges().is_some() {
-            return vec![self.lower_statement(last)];
-        }
-
-        let is_statement_only = matches!(
-            last,
-            Expression::Let { .. }
-                | Expression::Const { .. }
-                | Expression::Assignment { .. }
-                | Expression::While { .. }
-                | Expression::WhileLet { .. }
-                | Expression::For { .. }
-                | Expression::Loop { .. }
-        );
-
-        if is_statement_only || self.queries().is_unit_call(last) {
-            let mut statements = vec![self.lower_statement(last)];
-            statements.extend(self.lower_try_unit_return(fallible));
-            return statements;
-        }
-
+    pub(in crate::lowering) fn lower_try_value_tail(
+        &mut self,
+        last: &Expression,
+        fallible: &Fallible,
+    ) -> Vec<Statement> {
         let (mut statements, final_expression) = self
             .plan_value(last, ExpressionContext::value())
             .into_parts();
-        if final_expression.is_empty() {
-            statements.extend(self.lower_try_unit_return(fallible));
-        } else {
-            let final_expression = self.apply_type_coercion(
-                &mut statements,
-                Some(fallible.ok_ty()),
-                last,
-                final_expression,
-            );
-
-            statements.extend(self.success_return(fallible, final_expression));
-        }
+        let final_expression = self.apply_type_coercion(
+            &mut statements,
+            Some(fallible.ok_ty()),
+            last,
+            final_expression,
+        );
+        statements.extend(self.success_return(fallible, final_expression));
         statements
     }
 
-    fn lower_try_unit_return(&mut self, fallible: &Fallible) -> Vec<Statement> {
+    pub(in crate::lowering) fn lower_try_unit_return(
+        &mut self,
+        fallible: &Fallible,
+    ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let unit = self.unit_value(None, Some(fallible.ok_ty()));
         statements.extend(self.success_return(fallible, unit));
@@ -263,7 +234,7 @@ impl Planner<'_> {
             .expect("recover block type must be Result<T, PanicValue>");
 
         let result_var = self.fresh_declared("recoverResult");
-        let inner_ty_str = self.queries().component_go_type(fallible.ok_ty());
+        let inner_ty_str = self.queries().go_type(fallible.ok_ty());
 
         let ok_ty = fallible.ok_ty().clone();
         let body_return_ctx = if ok_ty.is_never() {
@@ -301,25 +272,20 @@ impl Planner<'_> {
                 statements: self.lower_unit_return(fallible.ok_ty()),
             };
         };
-        let mut statements: Vec<Statement> = rest
-            .iter()
-            .enumerate()
-            .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
-            .collect();
-        statements.extend(self.lower_recover_tail(last, fallible));
-        LoweredBlock { statements }
+        LoweredBlock {
+            statements: self.lower_block_items(
+                rest,
+                last,
+                BlockTail::Value(TailTarget::Recover(fallible)),
+            ),
+        }
     }
 
-    fn lower_recover_tail(&mut self, last: &Expression, fallible: &Fallible) -> Vec<Statement> {
-        let item_ty = last.get_type();
-        if self.facts.is_never(&item_ty) {
-            return vec![self.lower_never_value(last)];
-        }
-        if item_ty.is_unit() || item_ty.is_ignored() || item_ty.is_variable() {
-            let mut statements = vec![self.lower_statement(last)];
-            statements.extend(self.lower_unit_return(fallible.ok_ty()));
-            return statements;
-        }
+    pub(in crate::lowering) fn lower_recover_value_tail(
+        &mut self,
+        last: &Expression,
+        fallible: &Fallible,
+    ) -> Vec<Statement> {
         let (mut statements, expression) = self
             .plan_value(last, ExpressionContext::value())
             .into_parts();
@@ -329,7 +295,7 @@ impl Planner<'_> {
         statements
     }
 
-    fn lower_unit_return(&self, ok_ty: &Type) -> Vec<Statement> {
+    pub(in crate::lowering) fn lower_unit_return(&self, ok_ty: &Type) -> Vec<Statement> {
         let mut statements = Vec::new();
         let unit = self.unit_value(None, Some(ok_ty));
         statements.push(plain_return(unit));

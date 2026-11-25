@@ -10,7 +10,6 @@ description: |
 ---
 package main
 
-func test(x int) string {
-	_ = x
+func test(_ int) string {
 	return "matched"
 }

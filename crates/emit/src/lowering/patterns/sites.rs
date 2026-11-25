@@ -11,13 +11,11 @@ use crate::lowering::patterns::binding_declarations::{
 use crate::target::ir::bodies::GoUses;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 
-use syntax::ast::{Expression, IdentifierResolution, Pattern, Span};
+use syntax::ast::{Expression, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
-use crate::lowering::patterns::binding_declarations::pattern_binds_name;
 use crate::lowering::patterns::binding_statements::AssertedPattern;
 use crate::lowering::patterns::decision_tree::{
     self, BindingTarget, Check, PatternBinding, PatternInfo, SubjectRoot, render_condition,
@@ -27,11 +25,11 @@ use crate::lowering::patterns::matching::{
 };
 use crate::lowering::statements::asserts::{test_context_call, testkit_operand_type};
 use crate::lowering::value_plans::context::ExpressionContext;
-use crate::lowering::value_plans::value_plan::PlacePlan;
+use crate::lowering::value_plans::value_plan::{PlacePlan, ValuePlan};
 use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, declare,
-    define, discard,
+    define,
 };
 use crate::target::ir::go_expression::CompositeLayout;
 use crate::target::ir::local::GoIdentifier;
@@ -57,7 +55,6 @@ pub(in crate::lowering) enum PatternSubject<'a> {
     },
     Expression {
         scrutinee: &'a Expression,
-        pattern: &'a Pattern,
         temp_hint: &'static str,
     },
 }
@@ -71,12 +68,10 @@ impl<'a> PatternSubject<'a> {
 
     pub(in crate::lowering) fn expression(
         scrutinee: &'a Expression,
-        pattern: &'a Pattern,
         temp_hint: &'static str,
     ) -> Self {
         Self::Expression {
             scrutinee,
-            pattern,
             temp_hint,
         }
     }
@@ -84,10 +79,6 @@ impl<'a> PatternSubject<'a> {
 
 pub(super) enum ResolvedSubject {
     Existing(GoExpression),
-    Materialized {
-        subject: GoExpression,
-        local: GoIdentifier,
-    },
     Deferred {
         name: GoIdentifier,
         expression: GoExpression,
@@ -97,45 +88,22 @@ pub(super) enum ResolvedSubject {
 impl ResolvedSubject {
     pub(super) fn var(&self) -> GoExpression {
         match self {
-            Self::Existing(subject) | Self::Materialized { subject, .. } => {
-                subject.clone().without_positions()
-            }
+            Self::Existing(subject) => subject.clone().without_positions(),
             Self::Deferred { name, .. } => GoExpression::identifier(name.clone()),
         }
     }
 
-    pub(super) fn push_declaration(self, statements: &mut Vec<Statement>, body: &[Statement]) {
-        match self {
-            Self::Existing(_) => {}
-            Self::Materialized { subject, local } => {
-                if !GoUses::of(body).contains_identifier(&local) {
-                    statements.push(discard(subject));
-                }
-            }
-            Self::Deferred { name, expression } => {
-                if GoUses::of(body).contains_identifier(&name) {
-                    statements.push(define(name, expression));
-                } else {
-                    statements.push(discard(expression));
-                }
-            }
+    pub(super) fn push_declaration(self, statements: &mut Vec<Statement>) {
+        if let Self::Deferred { name, expression } = self {
+            statements.push(define(name, expression));
         }
     }
 }
 
-fn field_path_root(mut expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
-    while let Expression::DotAccess {
-        expression: inner, ..
-    } = expression
-    {
-        expression = inner;
-    }
-    match expression {
-        Expression::Identifier {
-            value, resolution, ..
-        } => Some((value, resolution)),
-        _ => None,
-    }
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum SubjectGuards {
+    Absent,
+    Present,
 }
 
 fn field_path_go_root(expression: &GoExpression) -> Option<&GoIdentifier> {
@@ -162,67 +130,26 @@ impl Planner<'_> {
             PatternSubject::Existing { var } => ResolvedSubject::Existing(var),
             PatternSubject::Expression {
                 scrutinee,
-                pattern,
                 temp_hint,
-            } => self.resolve_expression_subject(setup, scrutinee, pattern, temp_hint),
+            } => self.resolve_subject(setup, scrutinee, SubjectGuards::Absent, temp_hint),
         }
     }
 
-    fn resolve_expression_subject(
+    pub(super) fn resolve_subject(
         &mut self,
         setup: &mut Vec<Statement>,
         scrutinee: &Expression,
-        pattern: &Pattern,
+        guards: SubjectGuards,
         temp_hint: &'static str,
     ) -> ResolvedSubject {
-        if let Expression::Identifier {
-            value, resolution, ..
-        } = scrutinee
-            && self.queries().can_reuse_subject_identifier(
-                value,
-                resolution,
-                pattern_binds_name(pattern, value),
-            )
-        {
-            return ResolvedSubject::Existing(
-                self.queries().reference_expression(value, resolution),
-            );
+        let plan = self.plan_composite_value(scrutinee, ExpressionContext::value());
+        let reads_in_place = self.queries().subject_reads_in_place(&plan, guards);
+        let (subject_setup, expression) = plan.into_parts();
+        setup.extend(subject_setup);
+        if reads_in_place {
+            return ResolvedSubject::Existing(expression);
         }
-        let plan = self.plan_value(scrutinee, ExpressionContext::value());
-        let materialized = plan
-            .expression()
-            .as_identifier()
-            .or_else(|| field_path_go_root(plan.expression()))
-            .filter(|local| plan.binds_local(local) && self.scope.lacks_binding_for_local(local))
-            .cloned();
-
-        let rests_in_own_temp_path = field_path_go_root(plan.expression()).is_some_and(|root| {
-            plan.binds_local(root)
-                && self.scope.lacks_binding_for_local(root)
-                && !pattern_binds_name(pattern, root)
-        });
-
-        let rests_in_stable_name =
-            rests_in_own_temp_path || self.queries().plan_rests_in_stable_name(&plan);
-        let (operator_setup, expression) = plan.into_parts();
-        setup.extend(operator_setup);
-        if rests_in_stable_name
-            || self
-                .queries()
-                .field_path_reads_in_place(scrutinee, &expression, |root| {
-                    pattern_binds_name(pattern, root)
-                })
-        {
-            return match materialized {
-                Some(local) => ResolvedSubject::Materialized {
-                    subject: expression,
-                    local,
-                },
-                None => ResolvedSubject::Existing(expression),
-            };
-        }
-        let name = self.fresh_local(temp_hint);
-        self.scope.declare_go_name(&name);
+        let name = self.fresh_declared(temp_hint);
         ResolvedSubject::Deferred { name, expression }
     }
 
@@ -245,7 +172,7 @@ impl Planner<'_> {
             &[],
         );
 
-        resolved.push_declaration(&mut statements, &body);
+        resolved.push_declaration(&mut statements);
         statements.extend(body);
         statements
     }
@@ -291,7 +218,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(
             &mut statements,
-            PatternSubject::expression(scrutinee, pattern, "subject"),
+            PatternSubject::expression(scrutinee, "subject"),
         );
         let subject = TypedSubject {
             var: &resolved.var(),
@@ -305,7 +232,7 @@ impl Planner<'_> {
             self.lower_let_else_single_pattern(pattern, subject, fail, subject_is_fixed)
         };
 
-        resolved.push_declaration(&mut statements, &body);
+        resolved.push_declaration(&mut statements);
         statements.extend(body);
         statements
     }
@@ -445,39 +372,6 @@ impl Planner<'_> {
         Some((name, go_name))
     }
 
-    fn while_let_subject(
-        &mut self,
-        pattern: &Pattern,
-        scrutinee: &Expression,
-    ) -> (GoExpression, Vec<Statement>) {
-        if let Expression::Identifier {
-            value, resolution, ..
-        } = scrutinee
-        {
-            let has_collision = pattern_binds_name(pattern, value);
-            if self
-                .queries()
-                .can_reuse_subject_identifier(value, resolution, has_collision)
-            {
-                return (
-                    self.queries().reference_expression(value, resolution),
-                    Vec::new(),
-                );
-            }
-        }
-        let operand = self.plan_operand(scrutinee, ExpressionContext::value());
-        let (mut setup, value) = operand.into_parts();
-        if self
-            .queries()
-            .field_path_reads_in_place(scrutinee, &value, |root| pattern_binds_name(pattern, root))
-        {
-            return (value, setup);
-        }
-        let var = self.fresh_local("subject");
-        setup.push(define(var.clone(), value));
-        (GoExpression::identifier(var), setup)
-    }
-
     pub(in crate::lowering) fn lower_while_let(
         &mut self,
         pattern: &Pattern,
@@ -489,10 +383,13 @@ impl Planner<'_> {
         }
 
         let scrutinee_ty = scrutinee.get_type();
-        let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
+        let mut loop_body = Vec::new();
+        let subject =
+            self.resolve_subject(&mut loop_body, scrutinee, SubjectGuards::Absent, "subject");
+        let subject_var = subject.var();
+        subject.push_declaration(&mut loop_body);
 
         let alternatives = split_binding_or_patterns(pattern);
-        let mut loop_body = subject_setup;
         self.lower_while_let_alternatives(
             &mut loop_body,
             &alternatives,
@@ -545,7 +442,7 @@ impl Planner<'_> {
             .into(),
         );
         loop_body.extend(late_binding);
-        let (body_block, _) = self.lower_fused_arm(
+        let body_block = self.lower_fused_arm(
             &[binding
                 .as_ref()
                 .and_then(|(name, go_name)| ArmBinding::alias_at(Some(*name), Some(go_name)))],
@@ -860,31 +757,25 @@ fn assemble_if_else_chain(
 }
 
 impl PlannerQueries<'_, '_> {
-    pub(in crate::lowering) fn can_reuse_subject_identifier(
-        &self,
-        value: &str,
-        resolution: &IdentifierResolution,
-        binds_name: bool,
-    ) -> bool {
-        !binds_name
-            && !value.contains('.')
-            && self
-                .scope
-                .resolve_identifier_with_resolution(value, resolution)
-                .is_none_or(BindingValue::can_reuse_pattern_subject)
-    }
-
-    pub(in crate::lowering) fn field_path_reads_in_place(
-        &self,
-        subject: &Expression,
-        expression: &GoExpression,
-        binds_root: impl Fn(&str) -> bool,
-    ) -> bool {
-        let Some((root, resolution)) = field_path_root(subject) else {
+    fn subject_reads_in_place(&self, plan: &ValuePlan, guards: SubjectGuards) -> bool {
+        let Some(expression) = plan.expression() else {
             return false;
         };
-        field_path_go_root(expression).is_some()
-            && self.can_reuse_subject_identifier(root, resolution, binds_root(root))
+        if expression.is_literal() && !expression.is_composite_literal() {
+            return true;
+        }
+        match expression.node() {
+            GoExpressionNode::Identifier(name) if name.id().is_some() => {
+                guards == SubjectGuards::Absent || self.plan_rests_in_stable_name(plan)
+            }
+            GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => {
+                self.plan_rests_in_stable_name(plan)
+            }
+            _ => {
+                guards == SubjectGuards::Absent
+                    && field_path_go_root(expression).is_some_and(|root| root.id().is_some())
+            }
+        }
     }
 
     fn loop_break(&self) -> LoweredStatement {

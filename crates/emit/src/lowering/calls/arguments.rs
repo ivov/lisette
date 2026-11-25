@@ -55,7 +55,11 @@ fn bound_type_parameters(
 ) -> FxHashSet<String> {
     let mut bound = ctx.receiver_bound_parameters();
     for (operand, slot) in operands.iter().zip(slots) {
-        if operand.expression().constant_kind().is_some() {
+        if operand
+            .expression()
+            .and_then(GoExpression::constant_kind)
+            .is_some()
+        {
             continue;
         }
         if let Some((declared, instantiated)) = slot {
@@ -186,8 +190,7 @@ impl Planner<'_> {
             ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
         };
 
-        let slot = &self.facts.checked(argument).value_use().slot;
-        let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
+        let coercion = self.coercion_after_layout_change(argument, &plan.target);
         value.map_expression(|setup, value| {
             let mut coercion_setup = Vec::new();
             let changed = self.plan_layout_change(&mut coercion_setup, value, &plan.change);
@@ -321,7 +324,7 @@ impl PlannerQueries<'_, '_> {
                 let Some((declared, instantiated)) = slot else {
                     return operand;
                 };
-                let constant = operand.expression().constant_kind();
+                let constant = operand.expression().and_then(GoExpression::constant_kind);
                 let direct = matches!(ctx.plan.arguments.get(index), Some(ArgumentPlan::Direct));
                 if !direct || constant.is_none() {
                     return operand;

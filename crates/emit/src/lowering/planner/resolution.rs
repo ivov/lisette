@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::lookup::state::bindings::BindingValue;
 use crate::lookup::state::imports::rendered_qualifier;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::go_expression::GoExpressionNode;
@@ -7,7 +6,6 @@ use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::{self, GoExport};
 use crate::target::names::packages::PackageUse;
-use syntax::ast::IdentifierResolution;
 use syntax::program::{self, Definition, PRELUDE_PACKAGE_ID, is_prelude_symbol};
 use syntax::types::{Type, unqualified_name};
 
@@ -69,30 +67,6 @@ impl PlannerQueries<'_, '_> {
             return self.package_member_reference(package, go_name);
         }
         self.package_member_reference(package, self.facts.package_member_go_name(package, name))
-    }
-
-    pub(in crate::lowering) fn reference_expression(
-        &self,
-        lisette_name: &str,
-        resolution: &IdentifierResolution,
-    ) -> GoExpression {
-        if let IdentifierResolution::Definition { name, .. } = resolution {
-            return self.definition_reference(name);
-        }
-        let identifier = match self
-            .scope
-            .resolve_identifier_with_resolution(lisette_name, resolution)
-        {
-            Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => name.clone(),
-            _ => {
-                assert!(
-                    resolution.binding_id().is_none(),
-                    "source binding has no emitted identifier: {lisette_name}"
-                );
-                GoIdentifier::external(go_name::escape_reserved(lisette_name).into_owned())
-            }
-        };
-        GoExpression::identifier(identifier)
     }
 
     pub(in crate::lowering) fn package_use_for_package(&self, package: &str) -> PackageUse {

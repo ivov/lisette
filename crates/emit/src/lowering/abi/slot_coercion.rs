@@ -116,6 +116,23 @@ impl Planner<'_> {
         }
     }
 
+    pub(in crate::lowering) fn coercion_after_layout_change(
+        &self,
+        value: &Expression,
+        go_layout: &ValueLayout,
+    ) -> CoercionPlan {
+        let value_use = self.facts.checked(value).value_use();
+        match &value_use.adaptation {
+            Adaptation::Interface(conversion) => {
+                self.record_converted_value(value);
+                self.queries()
+                    .interface_adapter(conversion)
+                    .map_or(CoercionPlan::Identity, CoercionPlan::WrapAsInterface)
+            }
+            _ => self.slot_coercion(value, &value_use.slot, Some(go_layout)),
+        }
+    }
+
     pub(in crate::lowering) fn adapted_slot_coercion(
         &self,
         value: &Expression,
@@ -199,8 +216,10 @@ impl Planner<'_> {
         });
         let (layout_change_setup, value) = layout_change.lower(self, value);
         statements.extend(layout_change_setup);
-        let coercion =
-            self.slot_coercion(value_expression, slot_ty, go_slot.map(|(_, target)| target));
+        let coercion = match go_slot {
+            Some((_, target)) => self.coercion_after_layout_change(value_expression, target),
+            None => self.slot_coercion(value_expression, slot_ty, None),
+        };
         let (coercion_setup, coerced) = coercion.lower(self, value);
         statements.extend(coercion_setup);
         coerced

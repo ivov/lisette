@@ -65,7 +65,7 @@ impl PlannerQueries<'_, '_> {
         receiver_param: &Type,
         go_method: String,
     ) -> GoExpression {
-        let receiver_type = self.layout_go_type(&self.facts.dereferenced_layout(receiver_param));
+        let receiver_type = self.facts.dereferenced_layout(receiver_param).go_type(self);
         let receiver = if self.facts.is_reference(receiver_param) {
             GoType::pointer_to(&receiver_type)
         } else {

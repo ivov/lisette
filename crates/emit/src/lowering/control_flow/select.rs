@@ -7,10 +7,9 @@ use crate::lowering::statements::placement::unreachable_panic_if_needed;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::lowering::value_plans::value_plan::ValuePlan;
-use crate::target::ir::bodies::GoUses;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    SelectArmKind, SelectArmPlan, SelectStatementPlan, Statement, assign, discard,
+    SelectArmKind, SelectArmPlan, SelectStatementPlan, Statement, assign,
 };
 use crate::target::ir::go_expression::{GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
@@ -399,11 +398,6 @@ impl Planner<'_> {
                 this.lower_block_to_place(ctx.body, ctx.place).statements
             };
 
-            let receiver_var = if GoUses::of(&body_statements).contains_identifier(&receiver_var) {
-                receiver_var
-            } else {
-                GoIdentifier::blank()
-            };
             (receiver_var, ok_var, body_statements)
         });
 
@@ -563,19 +557,11 @@ impl Planner<'_> {
                 };
             };
 
-            let mut used = GoUses::default();
-            used.extend_if(&arms_plan);
-
-            let mut body_statements: Vec<Statement> = Vec::new();
-            if case_var.spelling() != "_" && !used.contains_identifier(&case_var) {
-                body_statements.push(discard(GoExpression::identifier(case_var.clone())));
-            }
-            body_statements.push(LoweredStatement::If(arms_plan).into());
             SelectArmKind::Receive {
                 receive_vars: vec![case_var, ok_var],
                 channel: channel.clone(),
                 body: LoweredBlock {
-                    statements: body_statements,
+                    statements: vec![LoweredStatement::If(arms_plan).into()],
                 },
             }
         })

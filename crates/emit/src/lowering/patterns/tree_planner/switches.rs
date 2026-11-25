@@ -7,8 +7,6 @@ use crate::lowering::patterns::tree_planner::guard_renders_inline;
 use std::iter;
 use syntax::go_names::ENUM_TAG_FIELD;
 
-use crate::target::ir::bodies::GoUses;
-
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::lookup::state::bindings::InlineExpression;
 use crate::lowering::patterns::decision_tree::{
@@ -480,18 +478,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
         let default_block = nested.try_lower_switch_default(default, place);
 
-        let mut used = GoUses::default();
-        used.extend_cases(&case_plans);
-        if let Some(block) = &default_block {
-            used.extend(&block.statements);
-        }
-        let binding = used
-            .contains_identifier(&binding_name)
-            .then_some(binding_name);
-
         switch_statements(
             SwitchStatementPlan {
-                kind: SwitchKind::Type { subject, binding },
+                kind: SwitchKind::Type {
+                    subject,
+                    binding: Some(binding_name),
+                },
                 cases: case_plans,
                 default: default_block,
                 default_line: self.decision_line(default),

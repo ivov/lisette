@@ -7,11 +7,10 @@ use crate::lowering::statements::blocks::directed_at;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement, diverging_statement};
-use crate::target::ir::values::GoExpression;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
-pub(in crate::lowering) fn runs_as_never_statement(expression: &Expression) -> bool {
+fn runs_as_never_statement(expression: &Expression) -> bool {
     matches!(
         expression,
         Expression::Call { .. }
@@ -29,19 +28,31 @@ pub(in crate::lowering) fn runs_as_never_statement(expression: &Expression) -> b
 
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_never_value(&mut self, expression: &Expression) -> ValuePlan {
-        ValuePlan::computed(
-            vec![self.lower_never_value(expression)],
-            GoExpression::empty(),
-        )
+        ValuePlan::diverging(self.lower_never_value(expression))
     }
 
-    pub(in crate::lowering) fn lower_never_value(&mut self, expression: &Expression) -> Statement {
+    pub(in crate::lowering) fn lower_never_value(
+        &mut self,
+        expression: &Expression,
+    ) -> Vec<Statement> {
+        let mut block = LoweredBlock {
+            statements: vec![self.lower_never_effects(expression)],
+        };
+        if !block.ends_with_diverge() {
+            block
+                .statements
+                .push(LoweredStatement::UnreachablePanic.into());
+        }
+        block.statements
+    }
+
+    fn lower_never_effects(&mut self, expression: &Expression) -> Statement {
         let Some(site) = CallSite::of(expression) else {
             if runs_as_never_statement(expression) {
                 return self.lower_statement(expression);
             }
             let (statements, _) = self
-                .plan_operand(expression, ExpressionContext::value())
+                .plan_operand_shape(expression, ExpressionContext::value())
                 .into_parts();
             return LoweredStatement::Body(LoweredBlock { statements }).into();
         };

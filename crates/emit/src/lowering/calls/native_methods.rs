@@ -684,7 +684,7 @@ impl Planner<'_> {
         }
         if growth_detach_applies(&self.facts, ctx, receiver)
             && (!arguments.is_empty() || ctx.spread.is_some())
-            && !is_clip_safe_path(operands[0].expression())
+            && !operands[0].expression().is_some_and(is_clip_safe_path)
         {
             self.pin_to_temp(&mut operands[0], "recv");
         }

@@ -4,7 +4,7 @@ use crate::target::ir::go_expression::{
 };
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
-use crate::target::ir::visit::VisitorMut;
+use crate::target::ir::visit::{BindingSite, VisitorMut};
 use crate::target::types::go_type::GoType;
 use rustc_hash::FxHashSet;
 
@@ -841,7 +841,7 @@ pub(crate) fn rename_generated_locals(
             }
         }
 
-        fn local_binding(&mut self, name: &mut GoIdentifier) {
+        fn local_binding(&mut self, name: &mut GoIdentifier, _site: BindingSite) {
             if let Some(final_name) = name.id().and_then(|id| self.0.get(&id)) {
                 name.spelling_mut().clone_from(final_name);
             }
@@ -886,20 +886,6 @@ impl GoUses {
             statements,
             &mut Expressions(&mut |node: &GoExpressionNode| self.record(node)),
         );
-    }
-
-    pub(crate) fn extend_cases(&mut self, cases: &[SwitchCasePlan]) {
-        for case in cases {
-            case.walk(&mut Expressions(&mut |node: &GoExpressionNode| {
-                self.record(node)
-            }));
-        }
-    }
-
-    pub(crate) fn extend_if(&mut self, plan: &IfPlan) {
-        plan.walk(&mut Expressions(&mut |node: &GoExpressionNode| {
-            self.record(node)
-        }));
     }
 
     pub(crate) fn contains_identifier(&self, name: &GoIdentifier) -> bool {

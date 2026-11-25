@@ -12,8 +12,7 @@ description: |
 package main
 
 func test() int {
-	subject := 42
 	var x int
-	x = subject
+	x = 42
 	return x
 }

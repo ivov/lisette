@@ -93,12 +93,6 @@ impl<'a> PropagateTarget<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ErrorReuse {
-    Allowed,
-    Forbidden,
-}
-
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_propagate(
         &mut self,
@@ -300,29 +294,6 @@ impl Planner<'_> {
         (setup, values)
     }
 
-    fn propagate_error_status(
-        &mut self,
-        fallible: &Fallible,
-        placement: PairPlacement,
-        reuse: ErrorReuse,
-    ) -> GoIdentifier {
-        match fallible.err_ty() {
-            Some(error_ty) if placement == PairPlacement::Statement => {
-                let error_ty = &self.facts.without_go_aliases(error_ty);
-                let reused = match reuse {
-                    ErrorReuse::Allowed => self.scope.reusable_error(error_ty),
-                    ErrorReuse::Forbidden => None,
-                };
-                let name = reused.unwrap_or_else(|| {
-                    self.pair_status(None, PairStatusKind::Error, PairPlacement::Statement)
-                });
-                self.scope.declare_reusable_error(&name, error_ty);
-                name
-            }
-            _ => self.pair_status(None, PairStatusKind::Error, placement),
-        }
-    }
-
     fn try_plan_fused_propagate(
         &mut self,
         expression: &Expression,
@@ -359,7 +330,7 @@ impl Planner<'_> {
             (None, None) => FusedValueSlot::Absent,
         };
         let (check, outcome_var) =
-            self.bind_fused_pair(&mut statements, fallible, call, value_slot, message_setup);
+            self.bind_fused_pair(&mut statements, call, value_slot, message_setup);
 
         let error = wrap_error(&wraps, GoExpression::identifier(outcome_var));
         statements.push(self.propagate_failure_check(expression, fallible, check, error));
@@ -387,7 +358,6 @@ impl Planner<'_> {
     fn bind_fused_pair(
         &mut self,
         statements: &mut Vec<Statement>,
-        fallible: &Fallible,
         call: GoExpression,
         value_slot: FusedValueSlot,
         message_setup: Vec<Statement>,
@@ -399,12 +369,7 @@ impl Planner<'_> {
         } else {
             PairPlacement::Statement
         };
-        let reuse = if message_setup.is_empty() {
-            ErrorReuse::Allowed
-        } else {
-            ErrorReuse::Forbidden
-        };
-        let outcome_var = self.propagate_error_status(fallible, placement, reuse);
+        let outcome_var = self.pair_status(None, PairStatusKind::Error, placement);
         let binding = Definition {
             names: match value_slot {
                 FusedValueSlot::Bound(value) => vec![value, outcome_var.clone()],

@@ -12,7 +12,7 @@ use crate::target::ir::go_expression::{
     GoBinaryOperator, GoExpressionNode, GoUnaryOperator, Operand, verbatim_identifiers,
 };
 use crate::target::ir::local::GoIdentifier;
-use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
+use crate::target::ir::visit::{BindingSite, VisitorMut, visit_statements_mut};
 
 pub(super) fn unwrap_terminal_else(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |block| {
@@ -377,7 +377,7 @@ impl VisitorMut for Resolve {
         }
     }
 
-    fn local_binding(&mut self, name: &mut GoIdentifier) {
+    fn local_binding(&mut self, name: &mut GoIdentifier, _site: BindingSite) {
         self.bind(name.spelling());
     }
 

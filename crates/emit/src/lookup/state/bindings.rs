@@ -118,11 +118,4 @@ impl BindingValue {
     pub(crate) fn is_discard(&self) -> bool {
         self.as_go_name() == Some("_")
     }
-
-    pub(crate) fn can_reuse_pattern_subject(&self) -> bool {
-        match self {
-            Self::GoName(_) | Self::GoConst(_) | Self::Components(_) => true,
-            Self::InlineExpression(_) | Self::TupleComponents(_) => false,
-        }
-    }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::lowering::abi::fallible_producer::{ErrorNilGuard, ResultFusePlan};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::go_result_wrapping::partial_ok_nil_guard;
@@ -38,10 +39,14 @@ impl GuardedValue {
     }
 }
 
-fn error_use(uses: &[bool]) -> ErrorUse {
-    match uses.first() {
-        Some(true) => ErrorUse::Read,
-        Some(false) | None => ErrorUse::Unread,
+fn error_use(err_name: Option<FusedName<'_>>, body: &Expression) -> ErrorUse {
+    let reads = err_name.and_then(|err| err.binding).is_some_and(|binding| {
+        analyze_inline_candidate_ids(&[binding], &[body]) != InlineDecision::Unused
+    });
+    if reads {
+        ErrorUse::Read
+    } else {
+        ErrorUse::Unread
     }
 }
 
@@ -158,7 +163,7 @@ impl<'p> Planner<'p> {
         let nil_guard = fuse.error_nil_guard();
         let carries_payload = fuse.carries_payload();
         let slot = self.fused_value_slot(destination, ok_name);
-        let (mut bound, wraps) = self.bind_fused_result(fuse, slot, err_name);
+        let (bound, wraps) = self.bind_fused_result(fuse, slot, err_name);
 
         let unit = self.unit_value(None, None);
         let then_body = destination.is_none().then(|| {
@@ -167,8 +172,7 @@ impl<'p> Planner<'p> {
             } else {
                 ArmBinding::copy_at(ok_name, Some(&unit))
             };
-            let (body, uses) = self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place);
-            (body, uses[0])
+            self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place)
         });
 
         let arm_place = if destination.is_some() {
@@ -182,10 +186,6 @@ impl<'p> Planner<'p> {
         };
         let else_body =
             self.lower_fused_err_arm(&bound, err_name, &err.arm.expression, arm_place, prologue);
-        if matches!(then_body, Some((_, false))) {
-            bound.discard_value();
-        }
-        let then_body = then_body.map(|(body, _)| body);
         Some(fused_result_statements(bound, then_body, else_body))
     }
 
@@ -248,13 +248,13 @@ impl<'p> Planner<'p> {
         let err_name = err_payload.and_then(field_binding).flatten();
         let nil_guard = fuse.error_nil_guard();
         let value_name = self.fresh_local("ret");
-        let (mut bound, wraps) =
+        let (bound, wraps) =
             self.bind_fused_result(fuse, CommaOkValueSlot::Arm(value_name), err_name);
 
         let value = GoExpression::identifier(bound.payload_identifier()?.clone());
         let then_body =
             self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
-        let then_body = finish_nested_pair_arm(&mut bound, then_body);
+        let then_body = finish_nested_pair_arm(then_body);
         let prologue = ErrorPrologue {
             nil_guard,
             wraps: &wraps,
@@ -327,13 +327,13 @@ impl<'p> Planner<'p> {
         prologue: ErrorPrologue<'_>,
     ) -> LoweredBlock {
         let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
-        let (mut else_body, err_used) = self.lower_fused_arm(&[err_binding], body, place);
+        let mut else_body = self.lower_fused_arm(&[err_binding], body, place);
         let error = GoExpression::identifier(bound.status_identifier().clone());
         prepend_error_prologue(
             &mut else_body,
             error,
             prologue.nil_guard,
-            error_use(&err_used),
+            error_use(err_name, body),
             prologue.wraps,
         );
         else_body
@@ -364,12 +364,12 @@ impl<'p> Planner<'p> {
         let names =
             self.partial_value_names(ok_name.or(both_value), both_err.or(err_name), ok_value);
 
-        let (ok_body, ok_uses) = self.lower_fused_arm(
+        let ok_body = self.lower_fused_arm(
             &[ArmBinding::alias_at(ok_name, names.value.as_ref())],
             &ok_arm.expression,
             place,
         );
-        let (both_body, both_uses) = self.lower_fused_arm(
+        let both_body = self.lower_fused_arm(
             &[
                 ArmBinding::alias_at(both_value, names.value.as_ref()),
                 ArmBinding::alias_at(both_err, Some(&names.error)),
@@ -377,8 +377,6 @@ impl<'p> Planner<'p> {
             &both_arm.expression,
             place,
         );
-
-        let value_used = matches!(ok_value, PartialOkValue::Nilable) || ok_uses[0] || both_uses[0];
 
         let nil_check = names.value.as_ref().and_then(|v| {
             self.queries()
@@ -388,8 +386,7 @@ impl<'p> Planner<'p> {
         let err_binding = ArmBinding::alias_at(err_name, Some(&names.error));
         let else_arm = self.partial_else_arm(nil_check, err_binding, err_arm, both_body, place);
 
-        let bound_value = names.value.clone().filter(|_| value_used);
-        statements.push(names.error_checked_if(call, bound_value, ok_body, else_arm));
+        statements.push(names.error_checked_if(call, names.value.clone(), ok_body, else_arm));
         Some(statements)
     }
 
@@ -429,7 +426,7 @@ impl<'p> Planner<'p> {
                 .record_dropped_code(err_arm.expression.get_span());
             return ElseArm::block(both_body);
         };
-        let (err_body, _) = self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
+        let err_body = self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
         ElseArm::ElseIf(Box::new(IfPlan::plain(
             check,
             err_body,
@@ -465,7 +462,6 @@ impl<'p> Planner<'p> {
             go_name: error.clone(),
         });
         self.lower_fused_arm(&[binding], &arms.failure.expression, place)
-            .0
     }
 
     pub(super) fn try_lower_fused_partial_outcome_match(
@@ -485,8 +481,7 @@ impl<'p> Planner<'p> {
         let names = self.partial_pair_names(value, error_hint.as_ref());
 
         let ok_binding = ArmBinding::alias_at(arms.value_binding, names.value.as_ref());
-        let (ok_body, [value_used]) =
-            self.lower_fused_arm(&[ok_binding], &arms.ok.expression, place);
+        let ok_body = self.lower_fused_arm(&[ok_binding], &arms.ok.expression, place);
         let failure_body = self.lower_partial_failure_arm(arms, &names.error, place);
         if ok_body.renders_empty() && failure_body.renders_empty() {
             statements.push(effect_statement(call));
@@ -501,8 +496,7 @@ impl<'p> Planner<'p> {
         } else {
             (nil_condition(err), ok_body, failure_body)
         };
-        let test =
-            names.pair_condition(call, names.value.clone().filter(|_| value_used), condition);
+        let test = names.pair_condition(call, names.value.clone(), condition);
         statements.push(
             LoweredStatement::If(IfPlan::pair_if(
                 test,
@@ -545,7 +539,7 @@ impl<'p> Planner<'p> {
 
         let (names, guarded_value) =
             self.selective_pair_names(arms.value_binding, arms.error_binding, value_test);
-        let (selected, binding_uses) = self.lower_fused_arm(
+        let selected = self.lower_fused_arm(
             &[
                 ArmBinding::alias_at(arms.value_binding, names.value.as_ref()),
                 ArmBinding::alias_at(arms.error_binding, Some(&names.error)),
@@ -554,16 +548,13 @@ impl<'p> Planner<'p> {
             place,
         );
 
-        let fallback = self
-            .lower_fused_arm(&[], &arms.fallback.expression, place)
-            .0;
+        let fallback = self.lower_fused_arm(&[], &arms.fallback.expression, place);
 
         if selected.renders_empty() && fallback.renders_empty() {
             statements.push(effect_statement(call));
             return Some(statements);
         }
 
-        let value_used = guarded_value.is_some() || binding_uses[0];
         let error = non_nil_condition(GoExpression::identifier(names.error.clone()));
         let condition = match guarded_value {
             Some(guarded) => {
@@ -571,8 +562,7 @@ impl<'p> Planner<'p> {
             }
             None => error,
         };
-        let bound_value = names.value.clone().filter(|_| value_used);
-        let test = names.pair_condition(call, bound_value, condition);
+        let test = names.pair_condition(call, names.value.clone(), condition);
         statements.push(LoweredStatement::If(selective_if(test, selected, fallback)).into());
         Some(statements)
     }
@@ -585,9 +575,7 @@ impl<'p> Planner<'p> {
     ) -> Vec<Statement> {
         self.conversions
             .record_dropped_code(arms.selected.expression.get_span());
-        let fallback = self
-            .lower_fused_arm(&[], &arms.fallback.expression, place)
-            .0;
+        let fallback = self.lower_fused_arm(&[], &arms.fallback.expression, place);
         let mut statements = vec![effect_statement(call)];
         statements.extend(fallback.statements);
         statements
@@ -636,7 +624,7 @@ impl<'p> Planner<'p> {
             Some(some) => CommaOkValueSlot::Arm(self.arm_value_name(&some.go_name())),
             None => CommaOkValueSlot::Unused,
         };
-        let mut bound = fuse.bind(self, slot);
+        let bound = fuse.bind(self, slot);
 
         let element = bound.payload();
         let some_binding = if bound.binds_value() {
@@ -644,11 +632,8 @@ impl<'p> Planner<'p> {
         } else {
             ArmBinding::copy_at(arms.some_binding, element.as_ref())
         };
-        let (then_body, some_uses) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
-        let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
-        if !some_uses[0] {
-            bound.discard_value();
-        }
+        let then_body = self.lower_fused_arm(&[some_binding], arms.some_body, place);
+        let else_body = self.lower_fused_arm(&[], arms.none_body, place);
 
         let invert = then_body.renders_empty() && !else_body.renders_empty();
         let condition = if invert {
@@ -682,7 +667,7 @@ impl<'p> Planner<'p> {
         bindings: &[Option<ArmBinding<'_>>; N],
         body: &Expression,
         place: &PlacePlan,
-    ) -> (LoweredBlock, [bool; N]) {
+    ) -> LoweredBlock {
         self.with_binding_frame(|this| {
             let bound = bindings.each_ref().map(|binding| {
                 binding.as_ref().map(|binding| match binding {
@@ -711,24 +696,14 @@ impl<'p> Planner<'p> {
             });
 
             let body_block = this.lower_block_to_place(body, place);
-            let used = GoUses::of(&body_block.statements);
             let mut statements = Vec::new();
-            let binding_uses = bound.each_ref().map(|binding| {
-                binding
-                    .as_ref()
-                    .is_some_and(|(go_name, _)| used.contains_identifier(go_name))
-            });
-            for (binding, is_used) in bound.iter().zip(&binding_uses) {
-                let Some((go_name, Some(value))) = binding else {
-                    continue;
-                };
-                if !is_used {
-                    continue;
+            for (go_name, value) in bound.iter().flatten() {
+                if let Some(value) = value {
+                    statements.push(define(go_name.clone(), value.clone()));
                 }
-                statements.push(define(go_name.clone(), value.clone()));
             }
             statements.extend(body_block.statements);
-            (LoweredBlock { statements }, binding_uses)
+            LoweredBlock { statements }
         })
     }
 }

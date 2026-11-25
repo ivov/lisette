@@ -2,11 +2,11 @@ use crate::lookup::state::scope_stack::ScopeStack;
 use crate::target::ir::bodies::{
     AssignForm, LoopTransfer, LoweredBlock, LoweredStatement, Statement, for_each_statements_mut,
 };
-use crate::target::ir::go_expression::GoExpressionNode;
+use crate::target::ir::go_expression::{GoExpressionNode, verbatim_identifiers};
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
-use crate::target::ir::visit::{VisitorMut, visit_statements_mut};
-use rustc_hash::FxHashMap;
+use crate::target::ir::visit::{BindingSite, VisitorMut, visit_statements_mut};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +21,13 @@ pub(crate) enum BodyErrorKind {
     UnidentifiedLocal,
     UnorderedOperand,
     MissingValue,
+    UnusedLocal,
+    NoNewShortVariable,
+    RepeatedShortVariable,
+    RedeclaredLocal,
+    DuplicateParameter,
+    BlankValueRead,
+    UnusedLabel,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -190,8 +197,8 @@ impl VisitorMut for LocalScopeCheck {
         }
     }
 
-    fn local_binding(&mut self, name: &mut GoIdentifier) {
-        if name.spelling() == "_" {
+    fn local_binding(&mut self, name: &mut GoIdentifier, _site: BindingSite) {
+        if name.is_blank() {
             return;
         }
         let Some(id) = name.id() else {
@@ -223,8 +230,158 @@ pub(crate) fn verify_local_scopes(
         error: None,
     };
     for name in bindings {
-        check.local_binding(&mut name.clone());
+        check.local_binding(&mut name.clone(), BindingSite::Parameter);
     }
     visit_statements_mut(statements, &mut check);
     check.error.map_or(Ok(()), |kind| Err(BodyError { kind }))
+}
+
+struct GoNameCheck {
+    frames: ScopeStack<FxHashMap<String, LocalId>>,
+    declared: Vec<LocalId>,
+    read: FxHashSet<LocalId>,
+    labels: FxHashSet<String>,
+    jumps: FxHashSet<String>,
+    error: Option<BodyErrorKind>,
+}
+
+impl GoNameCheck {
+    fn read_spelling(&mut self, spelling: &str) {
+        if let Some(id) = self
+            .frames
+            .iter()
+            .rev()
+            .find_map(|frame| frame.get(spelling))
+        {
+            self.read.insert(*id);
+        }
+    }
+
+    fn finish(self) -> Result<(), BodyError> {
+        let unused_local = self.declared.iter().any(|id| !self.read.contains(id));
+        let unused_label = self.labels.iter().any(|label| !self.jumps.contains(label));
+        let kind = self
+            .error
+            .or(unused_local.then_some(BodyErrorKind::UnusedLocal))
+            .or(unused_label.then_some(BodyErrorKind::UnusedLabel));
+        kind.map_or(Ok(()), |kind| Err(BodyError { kind }))
+    }
+}
+
+impl VisitorMut for GoNameCheck {
+    fn expression(&mut self, node: &mut GoExpressionNode) {
+        match node {
+            GoExpressionNode::Identifier(name) if name.is_blank() => {
+                self.error.get_or_insert(BodyErrorKind::BlankValueRead);
+            }
+            GoExpressionNode::Identifier(name) => {
+                if let Some(id) = name.id() {
+                    self.read.insert(id);
+                }
+            }
+            GoExpressionNode::Verbatim(source) => {
+                for spelling in verbatim_identifiers(source) {
+                    self.read_spelling(spelling);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn statements(&mut self, statements: &mut Vec<Statement>) {
+        for statement in statements.iter() {
+            match &statement.kind {
+                LoweredStatement::Loop(plan) => {
+                    if let Some(label) = plan.kind.label() {
+                        self.labels.insert(label.to_string());
+                    }
+                }
+                LoweredStatement::Break(LoopTransfer::Labeled(label))
+                | LoweredStatement::Continue(LoopTransfer::Labeled(label)) => {
+                    self.jumps.insert(label.clone());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn assigned_identifier(&mut self, _node: &mut GoExpressionNode) {}
+
+    fn short_variable_declaration(&mut self, names: &[GoIdentifier]) {
+        let named: Vec<&str> = names
+            .iter()
+            .filter(|name| !name.is_blank())
+            .map(GoIdentifier::spelling)
+            .collect();
+        if named
+            .iter()
+            .enumerate()
+            .any(|(index, spelling)| named[..index].contains(spelling))
+        {
+            self.error
+                .get_or_insert(BodyErrorKind::RepeatedShortVariable);
+        } else if named
+            .iter()
+            .all(|spelling| self.frames.innermost().contains_key(*spelling))
+        {
+            self.error.get_or_insert(BodyErrorKind::NoNewShortVariable);
+        }
+    }
+
+    fn local_binding(&mut self, name: &mut GoIdentifier, site: BindingSite) {
+        let Some(id) = name.id().filter(|_| !name.is_blank()) else {
+            return;
+        };
+        if self.frames.innermost().contains_key(name.spelling()) {
+            match site {
+                BindingSite::ShortVariable => {}
+                BindingSite::Parameter => {
+                    self.error.get_or_insert(BodyErrorKind::DuplicateParameter);
+                }
+                BindingSite::Variable
+                | BindingSite::Constant
+                | BindingSite::RangeVariable
+                | BindingSite::CountedVariable
+                | BindingSite::TypeSwitchVariable
+                | BindingSite::ReceiveVariable => {
+                    self.error.get_or_insert(BodyErrorKind::RedeclaredLocal);
+                }
+            }
+            return;
+        }
+        self.frames
+            .innermost_mut()
+            .insert(name.spelling().to_string(), id);
+        if site.must_be_read() {
+            self.declared.push(id);
+        }
+    }
+
+    fn enter_scope(&mut self) {
+        self.frames.push(FxHashMap::default());
+    }
+
+    fn exit_scope(&mut self) {
+        self.frames.pop().expect("body has a scope");
+    }
+}
+
+pub(crate) fn verify_go_names(
+    statements: &mut Vec<Statement>,
+    parameters: &[GoIdentifier],
+) -> Result<(), BodyError> {
+    let visible = parameters
+        .iter()
+        .filter_map(|name| Some((name.spelling().to_string(), name.id()?)))
+        .collect();
+    let mut check = GoNameCheck {
+        frames: ScopeStack::new(visible),
+        declared: Vec::new(),
+        read: FxHashSet::default(),
+        labels: FxHashSet::default(),
+        jumps: FxHashSet::default(),
+        error: None,
+    };
+    visit_statements_mut(statements, &mut check);
+    check.finish()
 }

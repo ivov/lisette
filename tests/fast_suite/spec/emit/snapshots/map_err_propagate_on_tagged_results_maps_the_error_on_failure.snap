@@ -145,8 +145,7 @@ func local(ok bool) lisette.Result[int, string] {
 	if result.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](failed(result.ErrVal))
 	}
-	tmp := result.OkVal
-	n := tmp.First
+	n := result.OkVal.First
 	return lisette.MakeResultOk[int, string](n)
 }
 

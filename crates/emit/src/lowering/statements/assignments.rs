@@ -72,7 +72,7 @@ impl Planner<'_> {
 
         if self.facts.is_never(&value.get_type()) {
             let mut statements = self.lower_target_operands(target);
-            statements.push(self.lower_never_value(value));
+            statements.extend(self.lower_never_value(value));
             return LoweredStatement::Body(raw_body(statements));
         }
 
@@ -381,8 +381,7 @@ impl Planner<'_> {
         let pin_base = ordering.pins(&base_plan)
             || later.prepend(&base_plan)
             || (is_order_sensitive(base)
-                && (base_plan.expression().effects().runs_code()
-                    || index_plan.effects().runs_code()));
+                && (base_plan.effects().runs_code() || index_plan.effects().runs_code()));
         let base_expression = base_plan.into_parts().1;
         let base_expression = if pin_base {
             self.pin_place_base(setup, base, base_expression)

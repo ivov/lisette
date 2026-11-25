@@ -207,7 +207,10 @@ impl Planner<'_> {
         prefix: &'static str,
     ) -> ValuePlan {
         if value.must_evaluate_now()
-            && value.expression().constant_kind().is_none()
+            && value
+                .expression()
+                .and_then(GoExpression::constant_kind)
+                .is_none()
             && !self.queries().plan_rests_in_stable_name(&value)
         {
             self.pin_to_temp(&mut value, prefix);
@@ -459,9 +462,11 @@ impl PlannerQueries<'_, '_> {
         if plan.rests_in_fixed_name() {
             return true;
         }
-        plan.expression().as_identifier().is_some_and(|local| {
-            plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
-        })
+        plan.expression()
+            .and_then(GoExpression::as_identifier)
+            .is_some_and(|local| {
+                plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
+            })
     }
 
     pub(in crate::lowering) fn path_read_stability(&self, path: &GoExpression) -> Stability {

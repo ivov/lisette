@@ -92,7 +92,7 @@ impl PlannerQueries<'_, '_> {
             .facts
             .definition(&self.facts.qualified_current(name))
             .and_then(|definition| definition.instantiate_alias_target(&params, false));
-        let underlying_type = self.component_go_type(declared_target.as_ref().unwrap_or(ty));
+        let underlying_type = self.go_type(declared_target.as_ref().unwrap_or(ty));
 
         let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
 
