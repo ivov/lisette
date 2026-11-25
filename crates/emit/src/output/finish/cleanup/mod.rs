@@ -1,13 +1,13 @@
 mod aliases;
 mod compound_assignments;
-mod found_loops;
 pub(crate) mod name_uses;
+mod search_loops;
 pub(crate) mod terminal_else;
 mod unread_temps;
 
 use aliases::{inline_name_aliases, inline_return_aliases};
 use compound_assignments::fold_compound_assignments;
-use found_loops::return_found_elements_directly;
+use search_loops::return_found_elements_directly;
 use terminal_else::{unwrap_scoped_terminal_else, unwrap_terminal_else};
 use unread_temps::drop_unread_temps;
 

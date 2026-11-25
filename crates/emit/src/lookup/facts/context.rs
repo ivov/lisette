@@ -74,7 +74,7 @@ impl EmitFacts<'_> {
         }
         let source = self.line_index(span.file_id)?;
         Some(Position {
-            path: source.path.clone(),
+            path: Arc::clone(&source.path),
             line: source.line_for_offset(byte_offset),
             column: source.col_for_offset(byte_offset),
         })

@@ -10,12 +10,12 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::control_flow::branches::Divergence;
-use crate::lowering::patterns::binding_decls::is_catchall_pattern;
+use crate::lowering::patterns::binding_declarations::is_catchall_pattern;
 use crate::lowering::patterns::decision_tree::{
     AccessPath, ArmLeaf, ChainTail, Decision, GuardedLeaf, PatternBinding, SubjectRoot,
 };
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, direct_first, directed_first,

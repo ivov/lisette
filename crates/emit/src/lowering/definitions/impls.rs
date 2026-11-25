@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lowering::expressions::top_items::item_doc_text;
+use crate::lowering::definitions::top_items::item_doc_text;
 use crate::target::ir::declarations::GoDeclaration;
 use crate::target::names::go_name::{self, GoExport};
 use syntax::EcoString;

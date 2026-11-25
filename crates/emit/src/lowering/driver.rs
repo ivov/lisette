@@ -9,7 +9,7 @@ use crate::lowering::abi::slot_coercion::check_applied_conversions;
 use crate::lowering::planner::Planner;
 use crate::lowering::planner::package::{PackagePlan, build_package_plan};
 use crate::output::render::Renderer;
-use crate::output::render::output::OutputCollector;
+use crate::output::render::output_file::OutputCollector;
 use crate::target::types::go_type::is_prelude_type;
 use diagnostics::LisetteDiagnostic;
 use rustc_hash::{FxHashMap, FxHashSet};

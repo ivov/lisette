@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
-use crate::output::render::output::doc_lines;
+use crate::output::render::output_file::doc_lines;
 use crate::target::ir::bodies::async_statement;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{

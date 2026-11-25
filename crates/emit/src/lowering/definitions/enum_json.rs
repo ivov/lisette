@@ -270,10 +270,7 @@ impl EnumLayout {
                             .fields
                             .iter()
                             .map(|field| {
-                                (
-                                    field.source_name.to_string(),
-                                    member(receiver, &field.go_name),
-                                )
+                                (field.source_name.clone(), member(receiver, &field.go_name))
                             })
                             .collect())
                     } else if variant.json_payload() == JsonPayload::Value {

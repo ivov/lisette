@@ -7,8 +7,8 @@ use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::interface_adapter::has_tagged_twin;
 use crate::lowering::patterns::sites::PatternSubject;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::statements::testing::test_context_call;
+use crate::lowering::statements::asserts::test_context_call;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::output::finish::cleanup::{clean_up, declare_zero_values, drop_unreachable_statements};
 use crate::output::finish::function_literals::function_literal;
 use crate::output::finish::hygiene::{
@@ -193,7 +193,7 @@ impl Planner<'_> {
         rename_generated_locals(statements, &by_id);
         for parameter in parameters {
             if let Some(name) = parameter.id().and_then(|id| by_id.get(&id)) {
-                *parameter.spelling_mut() = name.clone();
+                parameter.spelling_mut().clone_from(name);
             }
         }
     }
@@ -220,7 +220,7 @@ impl Planner<'_> {
                     .position(|param| param.ty.is_test_context())
                     .filter(|&index| param_pairs[index].0.spelling() == "_")?;
                 let name = this.fresh_declared("lisetteSub");
-                let handle = name.clone();
+                let handle = name;
                 param_pairs[index].0 = handle.clone();
                 Some(handle)
             });
@@ -347,7 +347,7 @@ impl Planner<'_> {
         };
 
         self.set_type_params(&generic_context);
-        self.scope.enter_isolated_function(return_ctx.clone());
+        self.scope.enter_isolated_function(return_ctx);
         if let Some(body) = function_definition.body {
             self.reserve_source_binder_names(body);
             self.scope

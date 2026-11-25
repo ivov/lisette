@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::lowering::abi::go_result_wrapping::{NilGuard, nil_condition, non_nil_condition};
-use crate::lowering::calls::bounds::BoundsCheckedIndex;
+use crate::lowering::calls::bounds_checks::BoundsCheckedIndex;
 use crate::lowering::calls::predicates::Polarity;
 
 use crate::lookup::state::scope::PairStatusKind;

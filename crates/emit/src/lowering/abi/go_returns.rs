@@ -11,8 +11,8 @@ use crate::lowering::abi::layout_change::OptionSlot;
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::values::ElementTarget;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
 };

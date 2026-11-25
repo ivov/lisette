@@ -13,7 +13,7 @@ pub(in crate::lowering) mod slot_coercion;
 
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lookup::facts::return_abis::{
+use crate::lookup::facts::return_abi_rules::{
     function_return_abi, interface_method_return_abi, method_return_abi, slot_return_abi,
 };
 use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
@@ -21,7 +21,7 @@ use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::calls::call_plan::{
     CallableDeclaration, CallableOrigin, FunctionLayoutChange,
 };
-use crate::lowering::plan::context::ExpressionContext;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::prelude::prelude_constructor;
 use coercion_plan::CoercionPlan;
 use syntax::ast::Expression;

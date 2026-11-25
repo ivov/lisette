@@ -1,6 +1,6 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::scope::ScopeState;
-use crate::lowering::patterns::binding_decls::pattern_has_bindings;
+use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::local::GoIdentifier;
 use rustc_hash::FxHashMap;
@@ -19,7 +19,7 @@ use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::control_flow::propagation::plain_return;
-use crate::lowering::patterns::binding_decls::pattern_literal_text;
+use crate::lowering::patterns::binding_declarations::pattern_literal_text;
 use crate::target::ir::bodies::{LoweredBlock, define_many};
 use crate::target::ir::go_expression::{
     BinaryOp, FunctionLiteralLayout, GoExpressionNode, UnaryOp,

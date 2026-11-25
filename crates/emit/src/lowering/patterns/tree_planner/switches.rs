@@ -15,8 +15,8 @@ use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, Decision, GuardedLeaf, PatternBinding, SwitchBranch,
     SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch, boolean_literal, render_condition,
 };
-use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
+use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };

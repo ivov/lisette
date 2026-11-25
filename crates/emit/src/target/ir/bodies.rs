@@ -187,7 +187,7 @@ pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: O
     let mut previous = enclosing.cloned();
     for statement in statements {
         if statement.line.is_none() {
-            statement.line = previous.clone();
+            statement.line.clone_from(&previous);
         }
         let line = statement.line.as_ref();
         match &mut statement.kind {
@@ -201,7 +201,7 @@ pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: O
                 });
             }
         }
-        previous = statement.line.clone();
+        previous.clone_from(&statement.line);
     }
 }
 
@@ -739,13 +739,13 @@ pub(crate) fn rename_generated_locals(
             if let GoExpressionNode::Identifier(name) = node
                 && let Some(final_name) = name.id().and_then(|id| self.0.get(&id))
             {
-                *name.spelling_mut() = final_name.clone();
+                name.spelling_mut().clone_from(final_name);
             }
         }
 
         fn local_binding(&mut self, name: &mut GoIdentifier) {
             if let Some(final_name) = name.id().and_then(|id| self.0.get(&id)) {
-                *name.spelling_mut() = final_name.clone();
+                name.spelling_mut().clone_from(final_name);
             }
         }
     }

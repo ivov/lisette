@@ -7,15 +7,15 @@ use crate::lookup::state::bindings::{ComponentKind, TupleBinding};
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::WrapperTarget;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
-use crate::lowering::patterns::binding_decls::pattern_has_bindings;
+use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
-use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::planner::OuterBindings;
 use crate::lowering::statements::placement::is_zero_call;
 use crate::lowering::statements::placement::{
     collapse_declared_temp, expression_contains_binding, rebind_trailing_temp, rebind_updated_temp,
     requires_temp_var,
 };
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, assign, declare, define, define_many,
     effect_statement,
@@ -489,7 +489,7 @@ impl Planner<'_> {
         if self.call_result_layout_change(&plan, binding_ty).is_some() {
             return None;
         }
-        let local = go_identifier.clone();
+        let local = go_identifier;
         let target = WrapperTarget::Slot(&local);
         let statements = self.try_lower_abi_wrapped_call_to(
             value,

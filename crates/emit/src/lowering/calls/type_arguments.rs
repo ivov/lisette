@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::lowering::calls::call_plan::{ResolvedCallee, callable_declaration};
-use crate::lowering::plan::context::ExpressionContext;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
 use crate::target::types::go_type::GoType;
 use syntax::EcoString;

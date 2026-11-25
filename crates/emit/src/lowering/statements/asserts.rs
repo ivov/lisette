@@ -2,8 +2,8 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::expressions::operators::flip_preserves_nan;
 use crate::lowering::expressions::{BinaryOperand, flip_comparison};
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define,

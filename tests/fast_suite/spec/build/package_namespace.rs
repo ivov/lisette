@@ -230,7 +230,7 @@ fn package_block_names_are_numbered_by_one_allocator() {
         "crates/emit/src/lookup/facts/package_names.rs",
         "crates/emit/src/lookup/state/local_names.rs",
         "crates/emit/src/target/names/receiver.rs",
-        "crates/emit/src/lowering/expressions/top_items.rs",
+        "crates/emit/src/lowering/definitions/top_items.rs",
     ];
     let offenders: Vec<String> = source_files("crates/emit/src")
         .into_iter()

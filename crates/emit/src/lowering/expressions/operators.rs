@@ -1,8 +1,8 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::predicates::strip_negations;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
 };

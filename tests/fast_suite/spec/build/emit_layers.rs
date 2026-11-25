@@ -12,7 +12,7 @@ const RANKS: [(&str, usize); 11] = [
     ("lookup/state", 4),
     ("output/finish", 5),
     ("output/render", 5),
-    ("lowering/plan", 6),
+    ("lowering/value_plans", 6),
     ("lowering/planner", 7),
     ("lowering", 8),
     ("lowering/driver", 9),
@@ -38,7 +38,8 @@ fn module_of(segments: &[String]) -> Option<String> {
 fn layer_of(segments: &[String]) -> Option<String> {
     match segments {
         [first, second, ..]
-            if first == "lowering" && ["plan", "planner", "driver"].contains(&second.as_str()) =>
+            if first == "lowering"
+                && ["value_plans", "planner", "driver"].contains(&second.as_str()) =>
         {
             Some(format!("{first}/{second}"))
         }

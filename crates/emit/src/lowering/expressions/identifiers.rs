@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::calls::go_interop::build_tuple_literal;
 use crate::lowering::definitions::interface_adapter::definition_selects_tagged_twin;
-use crate::lowering::plan::context::ExpressionContext;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
 use crate::target::names::go_name::{GeneratedPackage, GoExport, MemberSpelling};

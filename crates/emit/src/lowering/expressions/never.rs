@@ -1,9 +1,9 @@
 use crate::Planner;
 use crate::lowering::expressions::values::with_source_positions;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::planner::written_span;
 use crate::lowering::statements::blocks::directed_at;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement, diverging_statement};
 use crate::target::ir::values::GoExpression;
 use syntax::ast::Expression;

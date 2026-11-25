@@ -8,7 +8,7 @@ use crate::lowering::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind
 use crate::lowering::calls::slice_loop::FoundSink;
 use crate::lowering::calls::wrap_err::{ErrorUse, WrapMessage};
 use crate::lowering::control_flow::try_recover_blocks::TryBlockPairPlan;
-use crate::lowering::plan::context::ExpressionContext;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::{Statement, define};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::Fallible;

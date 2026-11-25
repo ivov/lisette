@@ -1,11 +1,11 @@
 use crate::Planner;
 use crate::lowering::expressions::operand_order::OrderedOperand;
 use crate::lowering::patterns::sites::TypedSubject;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
-use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::planner::OuterBindings;
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::GoUses;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
@@ -696,7 +696,7 @@ impl Planner<'_> {
                     || self.names.is_package_block_name(&preferred)
                 {
                     let name = self.fresh_local("recv");
-                    return (name.clone(), true);
+                    return (name, true);
                 }
                 (
                     self.scope
@@ -706,7 +706,7 @@ impl Planner<'_> {
             }
             _ => {
                 let name = self.fresh_local("recv");
-                (name.clone(), true)
+                (name, true)
             }
         }
     }

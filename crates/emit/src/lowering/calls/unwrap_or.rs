@@ -4,10 +4,10 @@ use crate::lowering::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::patterns::matching::{FusedName, OptionArms, field_binding};
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
-use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::placement::collapse_declared_temp;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, declare, define,
 };

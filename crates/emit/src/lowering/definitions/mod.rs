@@ -1,4 +1,4 @@
-pub(in crate::lowering) mod enum_layout;
+pub(in crate::lowering) mod enum_json;
 mod enums;
 pub(in crate::lowering) mod functions;
 mod generics;
@@ -7,4 +7,5 @@ pub(in crate::lowering) mod interface_adapter;
 mod interfaces;
 pub(in crate::lowering) mod structs;
 mod tags;
-pub(in crate::lowering) mod toplevel;
+pub(in crate::lowering) mod top_items;
+pub(in crate::lowering) mod top_level;

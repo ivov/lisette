@@ -5,13 +5,13 @@ use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
 
 use super::NativeCallContext;
-use super::native::NativeCallResult;
+use super::native_methods::NativeCallResult;
 use crate::Planner;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::control_flow::branches::is_conjunction;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, assign, declare, define, directed_first,

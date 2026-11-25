@@ -15,8 +15,8 @@ use crate::lowering::calls::call_plan::{
     FunctionLayoutChange, ResolvedCallee,
 };
 use crate::lowering::expressions::operand_order::{SpreadSequenceOptions, takes_prelude_callback};
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::{SequencedValues, ValuePlan};
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::{SequencedValues, ValuePlan};
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::generics::extract_type_mapping;
 use crate::target::names::go_name::MemberSpelling;
@@ -427,7 +427,7 @@ impl Planner<'_> {
             && let Some(plan) = self.plan_call(expression)
             && matches!(plan.resolved.abi.result, CallableReturnAbi::Value)
         {
-            return Some(plan.resolved.abi.return_layout.clone());
+            return Some(plan.resolved.abi.return_layout);
         }
         if !self.is_go_callable(expression) {
             return None;

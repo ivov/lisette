@@ -4,11 +4,11 @@ use crate::lowering::calls::predicates::strip_negations;
 use crate::lowering::control_flow::targets::legalize_source_loop;
 use crate::lowering::expressions::operand_order::OrderedOperand;
 use crate::lowering::expressions::operand_order::is_unmutated_identifier;
-use crate::lowering::patterns::binding_decls::pattern_has_bindings;
+use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::blocks::directed_at;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     ElseArm, GoUses, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, Statement, define, discard, with_setup,
@@ -334,8 +334,8 @@ impl Planner<'_> {
 
         let key_var = self.fresh_local("key");
         let value_var = self.fresh_local("value");
-        let key_identifier = key_var.clone();
-        let value_identifier = value_var.clone();
+        let key_identifier = key_var;
+        let value_identifier = value_var;
         let header = LoopHeader::Range {
             key: Some(key_identifier.clone()),
             value: Some(value_identifier.clone()),
@@ -381,7 +381,7 @@ impl Planner<'_> {
             return (header, self.lower_block_as_body(body));
         }
         let item_var = self.fresh_local("item");
-        let item_identifier = item_var.clone();
+        let item_identifier = item_var;
         let header = match yields {
             RangeYield::Single => range_header(Some(&item_identifier), None, iter_expression),
             RangeYield::Pair => range_header(None, Some(&item_identifier), iter_expression),

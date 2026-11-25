@@ -1,8 +1,8 @@
 use crate::Planner;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
-use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::placement::collapse_declared_temp;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     ElseArm, ElseLayout, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
@@ -42,7 +42,7 @@ pub(in crate::lowering) fn if_let_match_arms(
                 span: alternative.get_span(),
             },
             guard: None,
-            expression: Box::new(alternative.clone()),
+            expression: Box::new(alternative),
         },
     ]
 }

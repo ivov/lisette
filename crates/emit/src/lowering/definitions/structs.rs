@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::synthesized_methods::{StringFormat, StructShape, SynthesizedMethod};
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::tags::{format_tag_string, interpret_field_attributes};
-use crate::lowering::expressions::top_items::item_doc_text;
+use crate::lowering::definitions::top_items::item_doc_text;
 use crate::target::ir::bodies::LoweredBlock;
 use crate::target::ir::declarations::GoDeclaration;
 use crate::target::ir::declarations::{DeclarationKind, FieldDeclaration, TypeParameter};

@@ -1,7 +1,7 @@
 use super::NativeCallContext;
 use crate::Planner;
 use crate::lowering::calls::predicates::Polarity;
-use crate::lowering::plan::context::ExpressionContext;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::BinaryOp;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};

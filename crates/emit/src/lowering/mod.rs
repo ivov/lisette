@@ -5,6 +5,6 @@ mod definitions;
 pub(crate) mod driver;
 mod expressions;
 mod patterns;
-mod plan;
 pub(crate) mod planner;
 mod statements;
+mod value_plans;

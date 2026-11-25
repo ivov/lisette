@@ -11,15 +11,15 @@ use crate::target::types::return_abi::LoweredReturnAbi;
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
 use crate::lowering::calls::wrap_err::WrapMessage;
-use crate::lowering::patterns::binding_decls::{
+use crate::lowering::patterns::binding_declarations::{
     has_binding_or_pattern, pattern_binds_name, pattern_has_bindings,
 };
 use crate::lowering::patterns::decision_tree;
 use crate::lowering::patterns::sites::ResolvedSubject;
 use crate::lowering::patterns::tree_planner::{MatchSubject, TreePlanner};
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::GoUses;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PairCondition,
@@ -239,12 +239,8 @@ impl Planner<'_> {
         let mut bound = fuse.bind(self, CommaOkValueSlot::Temp);
         let value = bound.payload()?;
         let condition = bound.success_condition();
-        let then_body = self.lower_match_tree(
-            &some_arms,
-            MatchSubject::Var(value.clone()),
-            payload_ty,
-            place,
-        );
+        let then_body =
+            self.lower_match_tree(&some_arms, MatchSubject::Var(value), payload_ty, place);
 
         let then_body = finish_nested_pair_arm(&mut bound, then_body);
         let else_body = self.lower_block_to_place(none_body, place);

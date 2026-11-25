@@ -8,10 +8,10 @@ use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::is_go_never;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::statements::placement::{ElidableTail, requires_temp_var};
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::{
     LoweredBlock, LoweredStatement, Statement, directed_first, diverging_statement,
 };

@@ -4,8 +4,8 @@ use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::expressions::operand_order::LaterOperands;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::with_setup;
 use crate::target::ir::bodies::{
     AssignForm, CompoundKind, LoweredBlock, LoweredStatement, Statement, define,

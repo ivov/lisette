@@ -1,13 +1,13 @@
 mod arguments;
 pub(in crate::lowering) mod bound_value;
-pub(in crate::lowering) mod bounds;
+pub(in crate::lowering) mod bounds_checks;
 pub(in crate::lowering) mod call_plan;
 mod clone;
 pub(in crate::lowering) mod comma_ok;
 pub(in crate::lowering) mod dispatch;
 pub(in crate::lowering) mod go_interop;
-pub(in crate::lowering) mod native;
 mod native_constructors;
+pub(in crate::lowering) mod native_methods;
 pub(in crate::lowering) mod predicates;
 mod regular;
 pub(in crate::lowering) mod slice_loop;

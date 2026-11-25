@@ -53,7 +53,7 @@ impl Planner<'_> {
                 let mut statements = self.tuple_clone_statements(&element, &elems);
                 statements.push(plain_return(element));
                 Some(function_literal(
-                    parameters.clone(),
+                    parameters,
                     go_ty,
                     LoweredBlock { statements },
                     FunctionLiteralLayout::MultiLine,
@@ -62,7 +62,7 @@ impl Planner<'_> {
             _ => {
                 let body = self.clone_expression(element, ty);
                 Some(function_literal(
-                    parameters.clone(),
+                    parameters,
                     go_ty,
                     LoweredBlock {
                         statements: vec![plain_return(body)],

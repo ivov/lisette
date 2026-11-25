@@ -6,8 +6,8 @@ use crate::lowering::abi::go_result_wrapping::{WrapperTarget, non_nil_condition}
 use crate::lowering::abi::go_returns::{multi_value_return, tag_condition};
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::finish::function_literals::function_literal;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{

@@ -8,7 +8,7 @@ pub(crate) mod member_names;
 pub(crate) mod package_names;
 #[allow(clippy::disallowed_methods)]
 pub(crate) mod queries;
-pub(crate) mod return_abis;
+pub(crate) mod return_abi_rules;
 pub(crate) mod reusable_bindings;
 pub(crate) mod synthesized_methods;
 #[allow(clippy::disallowed_methods)]

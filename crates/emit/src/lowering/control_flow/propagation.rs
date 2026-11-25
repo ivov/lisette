@@ -16,7 +16,7 @@ use crate::lowering::calls::go_interop::{LoweredCall, RawPair};
 use crate::lowering::calls::unwrap_or::{MapLambda, map_lambda};
 use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::patterns::matching::FusedName;
-use crate::lowering::plan::context::ExpressionContext;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,

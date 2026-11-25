@@ -1,16 +1,16 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::inline_uses::region_blocks_inline;
-use crate::lowering::calls::native::{is_clip_safe_path, slice_growth_call};
+use crate::lowering::calls::native_methods::{is_clip_safe_path, slice_growth_call};
 use crate::lowering::expressions::operand_order::{LaterOperands, SpreadSequenceOptions};
 use crate::lowering::expressions::values::TuplePosition;
 use crate::lowering::expressions::values::contains_newtype_access;
-use crate::lowering::patterns::binding_decls::pattern_binds_name;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::patterns::binding_declarations::pattern_binds_name;
 use crate::lowering::statements::assignments::PlaceOrdering;
 use crate::lowering::statements::assignments::is_lvalue_chain;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::with_setup;
 use crate::target::ir::bodies::{
     AssignForm, Definition, ElseArm, LoopHeader, LoweredBlock, LoweredStatement, Statement, assign,

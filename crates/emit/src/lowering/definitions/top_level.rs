@@ -1,6 +1,6 @@
 use crate::Planner;
-use crate::lowering::expressions::top_items::item_doc_text;
-use crate::lowering::plan::context::ExpressionContext;
+use crate::lowering::definitions::top_items::item_doc_text;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::{ConstPlan, LoweredStatement};
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration};
 use crate::target::names::generics::generic_bounds;

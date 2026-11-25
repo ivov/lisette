@@ -4,12 +4,12 @@ use crate::target::ir::go_expression::Position;
 use syntax::ast::Expression;
 
 use crate::lowering::control_flow::branches::Divergence;
-use crate::lowering::patterns::binding_decls::is_unconditional_catchall;
+use crate::lowering::patterns::binding_declarations::is_unconditional_catchall;
 use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, ChainTail, ChainTest, render_condition,
 };
-use crate::lowering::plan::values::PlacePlan;
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
+use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, direct_first, directed_first,
 };

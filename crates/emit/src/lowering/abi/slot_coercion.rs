@@ -5,7 +5,7 @@ use syntax::types::Type;
 
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lowering::plan::values::ValuePlan;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::values::GoExpression;
 

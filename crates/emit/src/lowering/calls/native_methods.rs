@@ -7,9 +7,9 @@ use crate::lowering::calls::slice_loop::SliceLoopTarget;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::index_access::range_var_bounds;
 use crate::lowering::expressions::operand_order::SpreadSequenceOptions;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::statements::assignments::lvalues_match;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::finish::function_literals::function_literal;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
@@ -828,7 +828,7 @@ impl Planner<'_> {
         let call = match recipe {
             EqualityRecipe::Operator => return GoExpression::binary(lhs, operator, rhs),
             EqualityRecipe::Method { .. } => GoExpression::call(
-                GoExpression::selector(lhs, self.facts.equals_method_go_name().to_string()),
+                GoExpression::selector(lhs, self.facts.equals_method_go_name()),
                 vec![rhs],
             ),
             EqualityRecipe::Slice(element) | EqualityRecipe::Map(element) => {
@@ -873,8 +873,8 @@ impl Planner<'_> {
 
         predicate_literal(
             vec![
-                GoParameter::new(a.clone(), go_ty.clone()),
-                GoParameter::new(b.clone(), go_ty.clone()),
+                GoParameter::new(a, go_ty.clone()),
+                GoParameter::new(b, go_ty),
             ],
             body,
         )
@@ -894,10 +894,7 @@ impl Planner<'_> {
             BinaryOp::Eq,
         );
 
-        predicate_literal(
-            vec![GoParameter::new(candidate.clone(), go_ty.clone())],
-            body,
-        )
+        predicate_literal(vec![GoParameter::new(candidate, go_ty)], body)
     }
 }
 

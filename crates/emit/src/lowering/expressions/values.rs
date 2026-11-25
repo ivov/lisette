@@ -6,7 +6,7 @@ use crate::lowering::abi::return_abi;
 use crate::lowering::calls::split_native_receiver;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::lowering::expressions::operand_order::identifier_read_stability;
-use crate::lowering::statements::testing::is_test_log_call;
+use crate::lowering::statements::asserts::is_test_log_call;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::AsyncKind;
 use crate::target::names::go_name;
@@ -21,10 +21,10 @@ use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin, FunctionLayoutChange};
 use crate::lowering::expressions::never::runs_as_never_statement;
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::ValuePlan;
 use crate::lowering::planner::written_span;
 use crate::lowering::statements::assignments::PlaceOrdering;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
     LoweredBlock, Statement, async_statement, discard, effect_statement,
 };

@@ -1,5 +1,5 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lookup::facts::return_abis::slot_return_abi;
+use crate::lookup::facts::return_abi_rules::slot_return_abi;
 use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::target::ir::prelude::is_prelude_container_type;
 use crate::target::types::go_type::GoTypeKind;

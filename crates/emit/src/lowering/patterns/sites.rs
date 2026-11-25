@@ -4,7 +4,9 @@ use crate::target::ir::bodies::effect_statement;
 use std::borrow::Cow;
 use std::slice;
 
-use crate::lowering::patterns::binding_decls::{has_binding_or_pattern, split_binding_or_patterns};
+use crate::lowering::patterns::binding_declarations::{
+    has_binding_or_pattern, split_binding_or_patterns,
+};
 use crate::target::ir::bodies::GoUses;
 use crate::target::ir::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 
@@ -14,7 +16,7 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
-use crate::lowering::patterns::binding_decls::pattern_binds_name;
+use crate::lowering::patterns::binding_declarations::pattern_binds_name;
 use crate::lowering::patterns::binding_statements::AssertedPattern;
 use crate::lowering::patterns::decision_tree::{
     self, BindingTarget, PatternBinding, PatternInfo, SubjectRoot, render_condition,
@@ -22,9 +24,9 @@ use crate::lowering::patterns::decision_tree::{
 use crate::lowering::patterns::matching::{
     ArmBinding, FusedName, field_binding, ok_pattern_field, some_pattern_field,
 };
-use crate::lowering::plan::context::ExpressionContext;
-use crate::lowering::plan::values::PlacePlan;
-use crate::lowering::statements::testing::{test_context_call, testkit_operand_type};
+use crate::lowering::statements::asserts::{test_context_call, testkit_operand_type};
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, declare,
