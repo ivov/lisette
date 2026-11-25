@@ -3,7 +3,8 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::value_layout::{ResultProducer, ValueLayout};
 use crate::lowering::abi::coercion_plan::LayoutChange;
 use crate::lowering::abi::layout_change::PayloadLayoutChanges;
-use crate::lowering::calls::go_interop::{LoweredProducer, build_tuple_literal};
+use crate::lowering::calls::go_interop::build_tuple_literal;
+
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::{
@@ -12,7 +13,7 @@ use crate::target::ir::bodies::{
 };
 use crate::target::ir::go_expression::{GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
-use crate::target::ir::prelude::{partial_variant, prelude_call};
+use crate::target::ir::prelude::{Fallible, partial_variant, prelude_call};
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
@@ -84,6 +85,29 @@ pub(super) enum ResolvedSink {
     Return,
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::lowering) struct GoResultAbi {
+    pub(in crate::lowering) payload: PayloadLayout,
+    pub(in crate::lowering) producer: ResultProducer,
+}
+
+struct PairBranches<'a> {
+    sink: ResolvedSink,
+    type_params: GoType,
+    error: GoExpression,
+    payload: GoExpression,
+    changes: Option<&'a PayloadLayoutChanges>,
+}
+
+struct CommaOkReturns {
+    condition: GoExpression,
+    value: GoExpression,
+}
+
+fn error_branch(error: GoExpression, then_body: LoweredBlock, else_arm: ElseArm) -> Statement {
+    LoweredStatement::If(IfPlan::plain(non_nil_condition(error), then_body, else_arm)).into()
+}
+
 fn leaf_statement(sink: &ResolvedSink, value: GoExpression) -> Statement {
     match sink {
         ResolvedSink::Slot(name) => assign(GoExpression::identifier(name.clone()), value),
@@ -131,18 +155,20 @@ impl Planner<'_> {
         if layout.is_flattened()
             && let Some(elements) = payload.tuple_elements()
         {
-            let tuple_arity = elements.len();
-            let temp_vars = self.create_temp_vars("ret", tuple_arity + 1);
-            statements.push(define_many(temp_vars.clone(), call));
+            let payload_vars = self.create_temp_vars("ret", elements.len());
+            let error_variable = self.fresh_declared("ret");
+            let mut all_vars = payload_vars.clone();
+            all_vars.push(error_variable.clone());
+            statements.push(define_many(all_vars, call));
             let tuple = self.plan_tuple_from_vars(
                 statements,
-                temp_vars[..tuple_arity]
-                    .iter()
-                    .map(|name| GoExpression::identifier(name.clone()))
+                payload_vars
+                    .into_iter()
+                    .map(GoExpression::identifier)
                     .collect(),
             );
 
-            (temp_vars.last().unwrap().clone(), tuple)
+            (error_variable, tuple)
         } else {
             let value_var = self.fresh_declared("ret");
             let error_variable = self.fresh_declared("ret");
@@ -183,8 +209,6 @@ impl Planner<'_> {
         changes: Option<&PayloadLayoutChanges>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let payload_layout_change = changes.map(|changes| &changes.value);
-        let error_layout_change = changes.map(|changes| &changes.error);
         let ValueLayout::Fallible { payload, error, .. } = partial_layout.underlying() else {
             unreachable!("Partial wrapping requires a fallible layout")
         };
@@ -195,39 +219,56 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let (error_variable, payload_variable) =
             self.push_go_returns(&mut statements, call, payload, layout);
-        let error_value = || GoExpression::identifier(error_variable.clone());
-        let payload_value = || payload_variable.clone();
-        let nil_check = self.queries().partial_ok_nil_check(ok_ty, payload_value());
+        let nil_check = self
+            .queries()
+            .partial_ok_nil_check(ok_ty, payload_variable.clone());
 
         let type_params = [ok_ty_str, err_ty_str];
         let result_ty_str = GoType::prelude("Partial", &type_params);
         let type_params = GoType::type_arguments(&type_params);
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
+        let pair = PairBranches {
+            sink,
+            type_params,
+            error: GoExpression::identifier(error_variable),
+            payload: payload_variable,
+            changes,
+        };
+        statements.push(self.partial_pair_branch(pair, nil_check));
+        (statements, outcome)
+    }
 
+    fn partial_pair_branch(
+        &mut self,
+        pair: PairBranches<'_>,
+        nil_check: Option<GoExpression>,
+    ) -> Statement {
+        let payload_layout_change = pair.changes.map(|changes| &changes.value);
+        let error_layout_change = pair.changes.map(|changes| &changes.error);
         let both_body = self.changed_leaf_block(
-            &sink,
+            &pair.sink,
             partial_variant("Both").constructor,
-            type_params.clone(),
+            pair.type_params.clone(),
             vec![
-                (payload_value(), payload_layout_change),
-                (error_value(), error_layout_change),
+                (pair.payload.clone(), payload_layout_change),
+                (pair.error.clone(), error_layout_change),
             ],
         );
 
         let ok_body = self.changed_leaf_block(
-            &sink,
+            &pair.sink,
             partial_variant("Ok").constructor,
-            type_params.clone(),
-            vec![(payload_value(), payload_layout_change)],
+            pair.type_params.clone(),
+            vec![(pair.payload, payload_layout_change)],
         );
 
         let then_body = if let Some(check) = nil_check {
             let error_body = self.changed_leaf_block(
-                &sink,
+                &pair.sink,
                 partial_variant("Err").constructor,
-                type_params,
-                vec![(error_value(), error_layout_change)],
+                pair.type_params,
+                vec![(pair.error.clone(), error_layout_change)],
             );
 
             let inner = IfPlan::plain(check, error_body, ElseArm::block(both_body));
@@ -238,37 +279,20 @@ impl Planner<'_> {
             both_body
         };
 
-        let else_arm = ElseArm::block(ok_body);
-
-        statements.push(
-            LoweredStatement::If(IfPlan::plain(
-                non_nil_condition(error_value()),
-                then_body,
-                else_arm,
-            ))
-            .into(),
-        );
-        (statements, outcome)
+        error_branch(pair.error, then_body, ElseArm::block(ok_body))
     }
 
     pub(in crate::lowering) fn lower_result_wrapping(
         &mut self,
         call: GoExpression,
         result_layout: &ValueLayout,
-        producer: LoweredProducer<'_>,
+        abi: GoResultAbi,
         changes: Option<&PayloadLayoutChanges>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let Some(shape @ LoweredReturnAbi::Result { payload: layout }) = producer.abi.lowered()
-        else {
-            unreachable!("Result wrapping requires a lowered Result ABI")
-        };
-        let layout = *layout;
-        let nil_guard = self.queries().lowered_payload_nil_guard(
-            shape,
-            producer.producer,
-            result_layout.logical_type(),
-        );
+        let nil_guard = self
+            .queries()
+            .go_result_nil_guard(abi.producer, result_layout.logical_type());
         let ValueLayout::Fallible {
             fallible_type,
             payload,
@@ -283,24 +307,20 @@ impl Planner<'_> {
             .fallible(fallible_type)
             .expect("Result type expected");
 
-        let mut statements = Vec::new();
-        let call =
-            match self
-                .queries()
-                .result_from_pair(call, result_layout, layout, changes, nil_guard)
-            {
-                Ok(value) => {
-                    let outcome =
-                        self.push_simple_wrapper_value(&mut statements, target, "result", value);
-                    return (statements, outcome);
-                }
-                Err(call) => call,
-            };
+        let call = match self.queries().result_from_pair(
+            call,
+            result_layout,
+            abi.payload,
+            changes,
+            nil_guard,
+        ) {
+            Ok(value) => return self.simple_wrapper(target, "result", value),
+            Err(call) => call,
+        };
 
+        let mut statements = Vec::new();
         let (error_variable, ok_value) =
-            self.push_go_returns(&mut statements, call, payload, layout);
-        let error_value = || GoExpression::identifier(error_variable.clone());
-        let ok = || ok_value.clone();
+            self.push_go_returns(&mut statements, call, payload, abi.payload);
 
         let result_ty_str = result_layout.underlying().go_type(&self.queries());
         let type_params = GoType::type_arguments(&[
@@ -310,45 +330,71 @@ impl Planner<'_> {
 
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
+        let pair = PairBranches {
+            sink,
+            type_params,
+            error: GoExpression::identifier(error_variable),
+            payload: ok_value,
+            changes,
+        };
+        statements.push(self.result_pair_branch(&fallible, pair, nil_guard));
+        (statements, outcome)
+    }
 
+    fn result_pair_branch(
+        &mut self,
+        fallible: &Fallible,
+        pair: PairBranches<'_>,
+        nil_guard: Option<NilGuard>,
+    ) -> Statement {
         let ok_body = self.changed_leaf_block(
-            &sink,
+            &pair.sink,
             fallible.ok_constructor(),
-            type_params.clone(),
-            vec![(ok(), changes.map(|changes| &changes.value))],
+            pair.type_params.clone(),
+            vec![(
+                pair.payload.clone(),
+                pair.changes.map(|changes| &changes.value),
+            )],
         );
 
         let then_body = self.changed_leaf_block(
-            &sink,
+            &pair.sink,
             fallible.err_constructor(),
-            type_params.clone(),
-            vec![(error_value(), changes.map(|changes| &changes.error))],
+            pair.type_params.clone(),
+            vec![(
+                pair.error.clone(),
+                pair.changes.map(|changes| &changes.error),
+            )],
         );
 
-        let else_arm = if let Some(nil_guard) = nil_guard {
-            let nil_condition = nil_guard.nil_condition(ok());
-            let nil_err = prelude_call(
-                fallible.err_constructor(),
-                type_params,
-                vec![unexpected_nil_error()],
-            );
-            ElseArm::ElseIf(Box::new(IfPlan::plain(
-                nil_condition,
-                leaf_block(&sink, nil_err),
-                ElseArm::block(ok_body),
-            )))
-        } else {
-            ElseArm::block(ok_body)
+        let else_arm = match nil_guard {
+            Some(nil_guard) => {
+                let nil_condition = nil_guard.nil_condition(pair.payload);
+                let nil_err = prelude_call(
+                    fallible.err_constructor(),
+                    pair.type_params,
+                    vec![unexpected_nil_error()],
+                );
+                ElseArm::ElseIf(Box::new(IfPlan::plain(
+                    nil_condition,
+                    leaf_block(&pair.sink, nil_err),
+                    ElseArm::block(ok_body),
+                )))
+            }
+            None => ElseArm::block(ok_body),
         };
 
-        statements.push(
-            LoweredStatement::If(IfPlan::plain(
-                non_nil_condition(error_value()),
-                then_body,
-                else_arm,
-            ))
-            .into(),
-        );
+        error_branch(pair.error, then_body, else_arm)
+    }
+
+    fn simple_wrapper(
+        &mut self,
+        target: WrapperTarget<'_>,
+        name_hint: &'static str,
+        value: GoExpression,
+    ) -> (Vec<Statement>, WrapperOutcome) {
+        let mut statements = Vec::new();
+        let outcome = self.push_simple_wrapper_value(&mut statements, target, name_hint, value);
         (statements, outcome)
     }
 
@@ -434,16 +480,11 @@ impl Planner<'_> {
             )
         };
 
-        let else_arm = ElseArm::block(leaf_block(&sink, ok_wrapper));
-
-        statements.push(
-            LoweredStatement::If(IfPlan::plain(
-                non_nil_condition(error_value()),
-                then_body,
-                else_arm,
-            ))
-            .into(),
-        );
+        statements.push(error_branch(
+            error_value(),
+            then_body,
+            ElseArm::block(leaf_block(&sink, ok_wrapper)),
+        ));
         (statements, outcome)
     }
 
@@ -487,17 +528,12 @@ impl Planner<'_> {
         payload_changes: Option<&PayloadLayoutChanges>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let mut statements = Vec::new();
         let call =
             match self
                 .queries()
                 .option_from_comma_ok(call, option_layout, layout, payload_changes)
             {
-                Ok(value) => {
-                    let outcome =
-                        self.push_simple_wrapper_value(&mut statements, target, "option", value);
-                    return (statements, outcome);
-                }
+                Ok(value) => return self.simple_wrapper(target, "option", value),
                 Err(call) => call,
             };
 
@@ -505,57 +541,21 @@ impl Planner<'_> {
         let payload = option_layout
             .payload()
             .expect("Option wrapping requires a payload layout");
-        let inner_ty = payload.logical_type();
         let inner_ty_str = payload.go_type(&self.queries());
-        let inner_tuple_arity = inner_ty.tuple_arity();
 
         let fallible = self
             .facts
             .fallible(option_ty)
             .expect("Option type expected");
 
-        let value_vars = if layout.is_flattened()
-            && let Some(arity) = inner_tuple_arity
-        {
-            self.create_temp_vars("ret", arity)
-        } else {
-            self.create_temp_vars("ret", 1)
-        };
-
-        let value_variable = self.fresh_declared("ret");
-
-        let mut all_vars = value_vars.clone();
-        all_vars.push(value_variable.clone());
-        statements.push(define_many(all_vars, call));
-
-        let first_value = GoExpression::identifier(value_vars[0].clone());
-        let value_expression = if layout.is_flattened() && inner_tuple_arity.is_some() {
-            let values = value_vars
-                .iter()
-                .map(|variable| GoExpression::identifier(variable.clone()))
-                .collect();
-            build_tuple_literal(values)
-        } else {
-            first_value.clone()
-        };
-
+        let mut statements = Vec::new();
+        let returns = self.push_comma_ok_returns(&mut statements, call, option_ty, payload, layout);
         let (mut payload_setup, value_expression) = self.plan_optional_payload_layout_change(
-            value_expression,
+            returns.value,
             payload_changes.map(|changes| &changes.value),
         );
 
         let option_ty_str = option_layout.underlying().go_type(&self.queries());
-
-        let ok = GoExpression::identifier(value_variable);
-        let condition = match nullable_option_nil_guard(&self.facts, option_ty) {
-            Some(guard) => GoExpression::binary(
-                ok,
-                GoBinaryOperator::And,
-                guard.non_nil_condition(first_value),
-            ),
-            None => ok,
-        };
-
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &option_ty_str, "option");
 
@@ -567,8 +567,8 @@ impl Planner<'_> {
         );
         let none_wrapper = prelude_call(fallible.err_constructor(), type_params, Vec::new());
 
-        let mut then_body = leaf_block(&sink, some_wrapper);
-        payload_setup.append(&mut then_body.statements);
+        payload_setup.push(leaf_statement(&sink, some_wrapper));
+        let condition = returns.condition;
         statements.push(
             LoweredStatement::If(IfPlan::plain(
                 condition,
@@ -582,16 +582,57 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
+    fn push_comma_ok_returns(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        call: GoExpression,
+        option_ty: &Type,
+        payload: &ValueLayout,
+        layout: PayloadLayout,
+    ) -> CommaOkReturns {
+        let flattened_arity = payload
+            .logical_type()
+            .tuple_arity()
+            .filter(|_| layout.is_flattened());
+        let value_vars = self.create_temp_vars("ret", flattened_arity.unwrap_or(1));
+        let status = self.fresh_declared("ret");
+
+        let mut all_vars = value_vars.clone();
+        all_vars.push(status.clone());
+        statements.push(define_many(all_vars, call));
+
+        let first = GoExpression::identifier(value_vars[0].clone());
+        let value = if flattened_arity.is_some() {
+            build_tuple_literal(
+                value_vars
+                    .into_iter()
+                    .map(GoExpression::identifier)
+                    .collect(),
+            )
+        } else {
+            first.clone()
+        };
+        let ok = GoExpression::identifier(status);
+        let condition = match nullable_option_nil_guard(&self.facts, option_ty) {
+            Some(guard) => {
+                GoExpression::binary(ok, GoBinaryOperator::And, guard.non_nil_condition(first))
+            }
+            None => ok,
+        };
+        CommaOkReturns { condition, value }
+    }
+
     pub(in crate::lowering) fn lower_nil_check_option_wrap(
         &mut self,
         raw_value: GoExpression,
         layout: &ValueLayout,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let mut statements = Vec::new();
-        let value = self.queries().option_from_nilable(raw_value, layout);
-        let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
-        (statements, outcome)
+        let payload = layout.payload().expect("Option has a payload layout");
+        let value = self
+            .queries()
+            .option_from_nilable(raw_value, layout.logical_type(), payload);
+        self.simple_wrapper(target, "option", value)
     }
 }
 
@@ -659,14 +700,19 @@ impl PlannerQueries<'_, '_> {
         result_ty: &Type,
     ) -> Option<NilGuard> {
         match shape {
-            LoweredReturnAbi::Result { .. } if producer == ResultProducer::Go => {
-                self.result_nil_guard(&self.facts.ok_payload(result_ty))
-            }
+            LoweredReturnAbi::Result { .. } => self.go_result_nil_guard(producer, result_ty),
             LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
                 Some(NilGuard::Sentinel(*value))
             }
             LoweredReturnAbi::Option(_) => nullable_option_nil_guard(self.facts, result_ty),
             _ => None,
+        }
+    }
+
+    fn go_result_nil_guard(&self, producer: ResultProducer, result_ty: &Type) -> Option<NilGuard> {
+        match producer {
+            ResultProducer::Go => self.result_nil_guard(&self.facts.ok_payload(result_ty)),
+            ResultProducer::Lisette => None,
         }
     }
 
@@ -691,10 +737,15 @@ impl PlannerQueries<'_, '_> {
         payload_changes: Option<&PayloadLayoutChanges>,
         nil_guard: Option<NilGuard>,
     ) -> Result<GoExpression, GoExpression> {
-        let Some(fallible) = self
-            .facts
-            .fallible(result_layout.underlying().logical_type())
+        let ValueLayout::Fallible {
+            fallible_type,
+            payload,
+            ..
+        } = result_layout.underlying()
         else {
+            return Err(call);
+        };
+        let Some(fallible) = self.facts.fallible(fallible_type) else {
             return Err(call);
         };
 
@@ -709,9 +760,6 @@ impl PlannerQueries<'_, '_> {
         {
             return Err(call);
         }
-        let payload = result_layout
-            .payload()
-            .expect("Result layout has a payload");
         Ok(prelude_call(
             "ResultFromPair",
             GoType::type_arguments(&[payload.go_type(self)]),
@@ -727,9 +775,9 @@ impl PlannerQueries<'_, '_> {
         payload_changes: Option<&PayloadLayoutChanges>,
     ) -> Result<GoExpression, GoExpression> {
         let option_ty = option_layout.underlying().logical_type();
-        let payload = option_layout
-            .payload()
-            .expect("Option wrapping requires a payload layout");
+        let Some(payload) = option_layout.payload() else {
+            return Err(call);
+        };
         if payload_changes.is_some()
             || matches!(
                 self.facts.value_layout(option_ty, SlotOrigin::GoReturn),
@@ -751,16 +799,13 @@ impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn option_from_nilable(
         &self,
         value: GoExpression,
-        option_layout: &ValueLayout,
+        option_ty: &Type,
+        payload: &ValueLayout,
     ) -> GoExpression {
-        let inner = option_layout
-            .payload()
-            .expect("Option has a payload layout");
-        let nil =
-            option_nil_guard(self.facts, option_layout.logical_type()).nil_condition(value.clone());
+        let nil = option_nil_guard(self.facts, option_ty).nil_condition(value.clone());
         prelude_call(
             "OptionFromNilable",
-            GoType::type_argument(&inner.go_type(self)),
+            GoType::type_argument(&payload.go_type(self)),
             vec![value, nil],
         )
     }

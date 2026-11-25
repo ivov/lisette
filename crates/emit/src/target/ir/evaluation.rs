@@ -1,4 +1,4 @@
-use crate::target::types::go_type::GoTypeKind;
+use crate::target::types::go_type::{GoType, GoTypeKind};
 
 use crate::target::ir::go_expression::{CallPurity, GoBinaryOperator, GoExpressionNode};
 use crate::target::ir::values::Stability;
@@ -144,6 +144,35 @@ fn observes(reads: Stability, writes: Writes) -> bool {
     )
 }
 
+fn call_effects(purity: CallPurity) -> Effects {
+    match purity {
+        CallPurity::Constructor | CallPurity::Conversion => Effects {
+            calls: EvaluationEffect::PureCall,
+            ..Effects::default()
+        },
+        CallPurity::ReadOnly => Effects {
+            calls: EvaluationEffect::PureCall,
+            reads: Stability::Observable,
+            ..Effects::default()
+        },
+        CallPurity::Effectful => Effects {
+            calls: EvaluationEffect::EffectfulCall,
+            reads: Stability::Observable,
+            writes: Writes::Any,
+            ..Effects::default()
+        },
+    }
+}
+
+fn composite_literal_effects(go_type: Option<&GoType>) -> Effects {
+    let shape = go_type.map(GoType::physical_kind);
+    Effects {
+        may_panic: matches!(shape, Some(GoTypeKind::Map)),
+        creates_identity: matches!(shape, None | Some(GoTypeKind::Slice | GoTypeKind::Map)),
+        ..Effects::default()
+    }
+}
+
 impl GoExpressionNode {
     pub(crate) fn effects(&self) -> Effects {
         let mut effects = Effects::default();
@@ -164,27 +193,8 @@ impl GoExpressionNode {
         match self {
             Self::Identifier(_) => Effects::local_read(),
             Self::Qualified { .. } => reference_read(false),
-            Self::Call {
-                purity: CallPurity::Constructor | CallPurity::Conversion,
-                ..
-            } => Effects {
-                calls: EvaluationEffect::PureCall,
-                ..Effects::default()
-            },
-            Self::Call {
-                purity: CallPurity::ReadOnly,
-                ..
-            } => Effects {
-                calls: EvaluationEffect::PureCall,
-                reads: Stability::Observable,
-                ..Effects::default()
-            },
-            Self::Call { .. } | Self::Verbatim(_) => Effects {
-                calls: EvaluationEffect::EffectfulCall,
-                reads: Stability::Observable,
-                writes: Writes::Any,
-                ..Effects::default()
-            },
+            Self::Call { purity, .. } => call_effects(*purity),
+            Self::Verbatim(_) => call_effects(CallPurity::Effectful),
             Self::Index { in_bounds, .. } | Self::Slice { in_bounds, .. } => {
                 reference_read(!in_bounds)
             }
@@ -198,17 +208,7 @@ impl GoExpressionNode {
                 creates_identity: matches!(operand.as_ref(), Self::CompositeLiteral { .. }),
                 ..Effects::default()
             },
-            Self::CompositeLiteral { go_type, .. } => {
-                let shape = go_type.as_ref().map(|ty| ty.physical_kind());
-                Effects {
-                    may_panic: matches!(shape, Some(GoTypeKind::Map)),
-                    creates_identity: matches!(
-                        shape,
-                        None | Some(GoTypeKind::Slice | GoTypeKind::Map)
-                    ),
-                    ..Effects::default()
-                }
-            }
+            Self::CompositeLiteral { go_type, .. } => composite_literal_effects(go_type.as_deref()),
             Self::Conversion { go_type, .. }
                 if matches!(
                     go_type.physical_kind(),

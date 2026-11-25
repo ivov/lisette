@@ -27,7 +27,7 @@ use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
 use ecow::EcoString;
 use rustc_hash::FxHashSet;
-use syntax::ast::{Expression, FunctionDefinitionView};
+use syntax::ast::{Binding, Expression, FunctionDefinitionView};
 use syntax::program::{CallOperation, CheckedMethod, ConformanceWitness, InterfaceConversion};
 use syntax::program::{
     CheckedCallee, DotAccessResolution, InterfaceRequirement, interface_requirements,
@@ -63,6 +63,12 @@ impl AdapterMethod {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::lowering) struct MethodParameters<'a> {
+    pub(in crate::lowering) receiver: &'a Binding,
+    pub(in crate::lowering) rest: &'a [Binding],
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RequirementAbi {
     Lisette,
@@ -73,13 +79,14 @@ impl Planner<'_> {
     pub(in crate::lowering) fn emit_tagged_counterpart(
         &mut self,
         method: FunctionDefinitionView<'_>,
+        method_parameters: MethodParameters<'_>,
         go_name: &str,
         generic_context: &[(EcoString, Vec<Type>)],
     ) -> GoDeclaration {
-        let (receiver, params) = method
-            .params
-            .split_first()
-            .expect("a method binds its receiver");
+        let MethodParameters {
+            receiver,
+            rest: params,
+        } = method_parameters;
         let return_ty = method.return_type;
         let parameters: Vec<ValueLayout> = params
             .iter()
@@ -138,51 +145,7 @@ impl Planner<'_> {
 
         let mut statements = Vec::new();
         if !method.source.same_representation(alternate) {
-            let local_type = self
-                .queries()
-                .dynamic_method_interface(&method.source_go_name, &method.source);
-            let local = self.fresh_local("receiver");
-            let ok = self.fresh_local("ok");
-            statements.push(define_many(
-                vec![local.clone(), ok.clone()],
-                GoExpression::type_assertion(inner.clone(), local_type),
-            ));
-            let mut branch = Vec::new();
-            let arguments = self.plan_layout_changed_arguments(
-                &mut branch,
-                parameters
-                    .iter()
-                    .map(|parameter| GoExpression::identifier(parameter.clone()))
-                    .collect(),
-                &method.source,
-                &method.target,
-            );
-
-            let call = GoExpression::call(
-                GoExpression::selector(
-                    GoExpression::identifier(local),
-                    method.source_go_name.clone(),
-                ),
-                arguments,
-            );
-
-            self.plan_function_result_layout_change(
-                &mut branch,
-                call,
-                &method.source,
-                &method.target,
-            );
-            if method.target.return_abi == CallableReturnAbi::Void {
-                branch.push(LoweredStatement::Return(Vec::new()).into());
-            }
-            statements.push(
-                LoweredStatement::If(IfPlan::plain(
-                    GoExpression::identifier(ok),
-                    LoweredBlock { statements: branch },
-                    ElseArm::None,
-                ))
-                .into(),
-            );
+            statements.extend(self.lower_local_dynamic_call(method, inner.clone(), parameters));
         }
         let foreign_name = self
             .facts
@@ -204,6 +167,52 @@ impl Planner<'_> {
         let call = GoExpression::call(GoExpression::selector(foreign, foreign_name), arguments);
         self.plan_function_result_layout_change(&mut statements, call, alternate, &method.target);
         statements
+    }
+
+    fn lower_local_dynamic_call(
+        &mut self,
+        method: &AdapterMethod,
+        inner: GoExpression,
+        parameters: &[GoIdentifier],
+    ) -> Vec<Statement> {
+        let local_type = self
+            .queries()
+            .dynamic_method_interface(&method.source_go_name, &method.source);
+        let local = self.fresh_local("receiver");
+        let ok = self.fresh_local("ok");
+        let assertion = define_many(
+            vec![local.clone(), ok.clone()],
+            GoExpression::type_assertion(inner, local_type),
+        );
+        let mut branch = Vec::new();
+        let arguments = self.plan_layout_changed_arguments(
+            &mut branch,
+            parameters
+                .iter()
+                .map(|parameter| GoExpression::identifier(parameter.clone()))
+                .collect(),
+            &method.source,
+            &method.target,
+        );
+
+        let call = GoExpression::call(
+            GoExpression::selector(
+                GoExpression::identifier(local),
+                method.source_go_name.clone(),
+            ),
+            arguments,
+        );
+
+        self.plan_function_result_layout_change(&mut branch, call, &method.source, &method.target);
+        if method.target.return_abi == CallableReturnAbi::Void {
+            branch.push(LoweredStatement::Return(Vec::new()).into());
+        }
+        let check = LoweredStatement::If(IfPlan::plain(
+            GoExpression::identifier(ok),
+            LoweredBlock { statements: branch },
+            ElseArm::None,
+        ));
+        vec![assertion, check.into()]
     }
 
     pub(in crate::lowering) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> GoType {
@@ -296,9 +305,10 @@ impl Planner<'_> {
                 .collect();
 
             let go_method_name = method.go_name.clone();
-            let mut bindings = Vec::with_capacity(param_names.len() + 1);
-            bindings.push(receiver_name.clone());
-            bindings.extend(param_names);
+            let bindings = AdapterBindings {
+                receiver: receiver_name.clone(),
+                parameters: param_names,
+            };
             let (go_result, body) = this.build_adapter_body(method, wraps_inner, &bindings, line);
             let mut plan = GoDeclaration::new(DeclarationKind::Function {
                 signature: FunctionSignature {
@@ -329,19 +339,21 @@ impl Planner<'_> {
         &mut self,
         method: &AdapterMethod,
         wraps_inner: bool,
-        parameters: &[GoIdentifier],
+        bindings: &AdapterBindings,
         line: Option<&Position>,
     ) -> (GoType, LoweredBlock) {
-        let (go_result, statements) = self.plan_adapter_body(method, wraps_inner, parameters);
+        let (go_result, statements) = self.plan_adapter_body(method, wraps_inner, bindings);
         let statements = directed_first(line.cloned(), statements);
         let body_result = if go_result.is_empty() {
             BodyResult::Void
         } else {
             BodyResult::Value
         };
+        let mut parameters = vec![bindings.receiver.clone()];
+        parameters.extend(bindings.parameters.iter().cloned());
         let body = self.finish_function_body(
             LoweredBlock { statements },
-            &mut parameters.to_vec(),
+            &mut parameters,
             body_result,
             BodyOrigin::Adapter,
         );
@@ -353,11 +365,12 @@ impl Planner<'_> {
         &mut self,
         method: &AdapterMethod,
         wraps_inner: bool,
-        bindings: &[GoIdentifier],
+        bindings: &AdapterBindings,
     ) -> (GoType, Vec<Statement>) {
-        let (receiver, parameters) = bindings
-            .split_first()
-            .expect("an adapter method binds its receiver");
+        let AdapterBindings {
+            receiver,
+            parameters,
+        } = bindings;
         if let Some(alternate) = &method.alternate {
             let go_result = method
                 .target
@@ -388,29 +401,71 @@ impl Planner<'_> {
             arguments,
         );
 
-        let return_type = method.source.result_layout.logical_type();
         let go_result = method
             .target
             .result_go_type(&self.queries())
             .unwrap_or_default();
+        self.push_adapter_result(&mut statements, method, inner_call);
+        (go_result, statements)
+    }
+
+    fn push_adapter_result(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        method: &AdapterMethod,
+        inner_call: GoExpression,
+    ) {
         if method.target.return_abi == CallableReturnAbi::Void {
             statements.push(effect_statement(inner_call));
         } else if method.source.return_abi == CallableReturnAbi::Void {
-            let zero = self.go_zero(return_type);
+            let zero = self.go_zero(method.source.result_layout.logical_type());
             statements.push(effect_statement(inner_call));
             statements.push(plain_return(zero));
         } else if method.source.same_result_representation(&method.target) {
             statements.push(plain_return(inner_call));
         } else {
             self.plan_function_result_layout_change(
-                &mut statements,
+                statements,
                 inner_call,
                 &method.source,
                 &method.target,
             );
         }
-        (go_result, statements)
     }
+}
+
+fn adapter_source_owner<'s>(
+    source_requirement: Option<&'s InterfaceRequirement>,
+    checked: &'s CheckedMethod,
+    concrete_ty: &'s Type,
+) -> Option<&'s str> {
+    source_requirement
+        .map(|source| source.declaring_interface.as_str())
+        .or_else(|| {
+            checked
+                .selected_definition
+                .rsplit_once('.')
+                .map(|(owner, _)| owner)
+        })
+        .or_else(|| concrete_ty.get_qualified_id())
+}
+
+struct AdapterBindings {
+    receiver: GoIdentifier,
+    parameters: Vec<GoIdentifier>,
+}
+
+struct AdapterSource<'s> {
+    owner: &'s str,
+    go_method: Option<String>,
+    requirement: Option<&'s InterfaceRequirement>,
+    return_type: &'s Type,
+}
+
+struct ResultFallback<'r> {
+    layout: &'r ValueLayout,
+    abi: CallableReturnAbi,
+    declared: &'r Type,
 }
 
 enum MethodReceiver<'a> {
@@ -901,83 +956,36 @@ impl PlannerQueries<'_, '_> {
         let param_types: Vec<Type> = parameters.iter().map(|param| param.ty.clone()).collect();
         let return_type = instantiated.return_type.as_ref().clone();
 
-        let source_owner = source_requirement
-            .map(|source| source.declaring_interface.as_str())
-            .or_else(|| {
-                checked
-                    .selected_definition
-                    .rsplit_once('.')
-                    .map(|(owner, _)| owner)
-            })
-            .or_else(|| concrete_ty.get_qualified_id())?;
+        let source_owner = adapter_source_owner(source_requirement, checked, concrete_ty)?;
 
-        let source_go_method =
-            is_go_import(source_owner).then(|| format!("{source_owner}.{implementation_name}"));
-        let source_return = source_requirement
-            .and_then(|source| source.method.ty.get_function_ret())
-            .unwrap_or(&function.return_type);
-        let user_abi = if let Some(id) = &source_go_method {
-            let hints = self
-                .facts
-                .method(source_owner, implementation_name)
-                .map_or(&[][..], |method| method.go_hints.as_slice());
-            go_callable_return_abi(self.facts, id, source_return, hints)
-        } else if let Some(source) = source_requirement {
-            requirement_return_abi(self.facts, source)
-        } else if requirement_uses_tagged_counterpart(self.facts, requirement) {
-            CallableReturnAbi::Value
-        } else {
-            return_abi(self.facts, &function.return_type, ReturnSlot::Method)
+        let adapter_source = AdapterSource {
+            owner: source_owner,
+            go_method: is_go_import(source_owner)
+                .then(|| format!("{source_owner}.{implementation_name}")),
+            requirement: source_requirement,
+            return_type: source_requirement
+                .and_then(|source| source.method.ty.get_function_ret())
+                .unwrap_or(&function.return_type),
         };
-
+        let user_abi = self.adapter_source_abi(
+            &adapter_source,
+            requirement,
+            implementation_name,
+            &function.return_type,
+        );
         let user_result = self
             .facts
-            .interface_result_layout(source_go_method.as_deref(), &return_type);
-        let producer = if source_go_method.is_none() && source_requirement.is_none() {
-            ResultProducer::Lisette
-        } else {
-            ResultProducer::Go
-        };
-        let source = FunctionLayout {
-            producer,
-            ..self.facts.function_layout(
-                self.interface_parameter_layouts(
-                    source_go_method.as_deref(),
-                    &param_types,
-                    usize::from(source_requirement.is_none()),
-                ),
-                &user_result,
-                user_abi,
-                Some(source_return),
-            )
-        };
+            .interface_result_layout(adapter_source.go_method.as_deref(), &return_type);
+        let source =
+            self.adapter_source_layout(&adapter_source, &param_types, &user_result, user_abi);
 
-        let interface_return = &requirement.method.ty.as_function_type()?.return_type;
-        let go_method = is_go_import(&requirement.declaring_interface).then(|| {
-            requirement
-                .declaring_interface
-                .with_segment(&requirement.method.source_name)
-        });
-        let interface_abi = if go_method.is_some() {
-            requirement_go_return_abi(self.facts, requirement, interface_return)
-        } else {
-            requirement_return_abi(self.facts, requirement)
+        let fallback = ResultFallback {
+            layout: &user_result,
+            abi: source.return_abi.clone(),
+            declared: &function.return_type,
         };
-        let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
-        let target = if interface_abi.fits_return_type(self.facts, &return_type) {
-            let result = self
-                .facts
-                .interface_result_layout(go_method.as_deref(), &return_type);
-            self.facts
-                .function_layout(parameters, &result, interface_abi, Some(interface_return))
-        } else {
-            self.facts.function_layout(
-                parameters,
-                &user_result,
-                source.return_abi.clone(),
-                Some(&function.return_type),
-            )
-        };
+        let target =
+            self.adapter_target_layout(requirement, &param_types, &return_type, fallback)?;
 
         Some(AdapterMethod {
             go_name: requirement_go_name(self.facts, requirement),
@@ -993,6 +1001,93 @@ impl PlannerQueries<'_, '_> {
             source,
             target,
         })
+    }
+
+    fn adapter_source_abi(
+        &self,
+        source: &AdapterSource<'_>,
+        requirement: &InterfaceRequirement,
+        implementation_name: &str,
+        declared_return: &Type,
+    ) -> CallableReturnAbi {
+        if let Some(id) = &source.go_method {
+            let hints = self
+                .facts
+                .method(source.owner, implementation_name)
+                .map_or(&[][..], |method| method.go_hints.as_slice());
+            go_callable_return_abi(self.facts, id, source.return_type, hints)
+        } else if let Some(source_requirement) = source.requirement {
+            requirement_return_abi(self.facts, source_requirement)
+        } else if requirement_uses_tagged_counterpart(self.facts, requirement) {
+            CallableReturnAbi::Value
+        } else {
+            return_abi(self.facts, declared_return, ReturnSlot::Method)
+        }
+    }
+
+    fn adapter_source_layout(
+        &self,
+        source: &AdapterSource<'_>,
+        param_types: &[Type],
+        user_result: &ValueLayout,
+        user_abi: CallableReturnAbi,
+    ) -> FunctionLayout {
+        let producer = if source.go_method.is_none() && source.requirement.is_none() {
+            ResultProducer::Lisette
+        } else {
+            ResultProducer::Go
+        };
+        FunctionLayout {
+            producer,
+            ..self.facts.function_layout(
+                self.interface_parameter_layouts(
+                    source.go_method.as_deref(),
+                    param_types,
+                    usize::from(source.requirement.is_none()),
+                ),
+                user_result,
+                user_abi,
+                Some(source.return_type),
+            )
+        }
+    }
+
+    fn adapter_target_layout(
+        &self,
+        requirement: &InterfaceRequirement,
+        param_types: &[Type],
+        return_type: &Type,
+        fallback: ResultFallback<'_>,
+    ) -> Option<FunctionLayout> {
+        let interface_return = &requirement.method.ty.as_function_type()?.return_type;
+        let go_method = is_go_import(&requirement.declaring_interface).then(|| {
+            requirement
+                .declaring_interface
+                .with_segment(&requirement.method.source_name)
+        });
+        let interface_abi = if go_method.is_some() {
+            requirement_go_return_abi(self.facts, requirement, interface_return)
+        } else {
+            requirement_return_abi(self.facts, requirement)
+        };
+        let parameters = self.interface_parameter_layouts(go_method.as_deref(), param_types, 0);
+        if interface_abi.fits_return_type(self.facts, return_type) {
+            let result = self
+                .facts
+                .interface_result_layout(go_method.as_deref(), return_type);
+            return Some(self.facts.function_layout(
+                parameters,
+                &result,
+                interface_abi,
+                Some(interface_return),
+            ));
+        }
+        Some(self.facts.function_layout(
+            parameters,
+            fallback.layout,
+            fallback.abi,
+            Some(fallback.declared),
+        ))
     }
 
     fn interface_parameter_layouts(

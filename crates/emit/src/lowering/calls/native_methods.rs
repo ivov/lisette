@@ -7,7 +7,7 @@ use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::calls::slice_loop::SliceLoopTarget;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::index_access::range_var_bounds;
-use crate::lowering::expressions::operand_order::SpreadSequenceOptions;
+use crate::lowering::expressions::operand_order::{SequencedArray, SpreadSequenceOptions};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::assignments::lvalues_match;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -48,19 +48,83 @@ fn clone_slice(receiver: GoExpression) -> GoExpression {
     )
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::lowering) enum SliceGrowth {
+    Append,
+    Reserve,
+}
+
+impl SliceGrowth {
+    pub(in crate::lowering) fn of(operation: NativeOperation<'_>) -> Option<Self> {
+        match (operation.kind, operation.method) {
+            (NativeTypeKind::Slice, "append") => Some(Self::Append),
+            (NativeTypeKind::Slice, "reserve") => Some(Self::Reserve),
+            _ => None,
+        }
+    }
+}
+
 pub(in crate::lowering) fn slice_growth_call(
-    method: &str,
+    growth: SliceGrowth,
     receiver: GoExpression,
     arguments: &[GoExpression],
 ) -> GoExpression {
-    try_inline_native_method(
-        &NativeTypeKind::Slice,
-        method,
-        &receiver,
-        arguments,
-        Polarity::Positive,
-    )
-    .expect("slice growth has an inline rule")
+    let callee = match (growth, arguments) {
+        (SliceGrowth::Append, []) => return receiver,
+        (SliceGrowth::Append, _) => GoExpression::external_name("append".to_string()),
+        (SliceGrowth::Reserve, _) => GoExpression::generated(GeneratedPackage::Slices, "Grow"),
+    };
+    let mut all = vec![receiver];
+    all.extend(arguments.iter().cloned());
+    GoExpression::call(callee, all)
+}
+
+#[derive(Clone, Copy)]
+enum ArrayRead {
+    ToSlice,
+    Get,
+}
+
+impl ArrayRead {
+    fn of(operation: NativeOperation<'_>) -> Option<Self> {
+        match (operation.kind, operation.method) {
+            (NativeTypeKind::Array, "to_slice") => Some(Self::ToSlice),
+            (NativeTypeKind::Array, "get") => Some(Self::Get),
+            _ => None,
+        }
+    }
+}
+
+fn guarded_growth_body(
+    growth: SliceGrowth,
+    shared: GoExpression,
+    receiver: GoExpression,
+    clipped: GoExpression,
+) -> LoweredBlock {
+    let (count, arguments) = match growth {
+        SliceGrowth::Append => {
+            let count = GoExpression::read_only_call(
+                GoExpression::external_name("len".to_string()),
+                vec![shared.clone()],
+            );
+            (count, [GoExpression::spread(shared)])
+        }
+        SliceGrowth::Reserve => (shared.clone(), [shared]),
+    };
+
+    let empty_guard = LoweredStatement::If(IfPlan::plain(
+        GoExpression::binary(count, GoBinaryOperator::Equal, GoExpression::integer(0)),
+        LoweredBlock {
+            statements: vec![plain_return(clone_slice(receiver))],
+        },
+        ElseArm::None,
+    ));
+    LoweredBlock {
+        statements: vec![
+            empty_guard.into(),
+            plain_return(slice_growth_call(growth, clipped, &arguments)),
+        ],
+    }
 }
 
 fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
@@ -124,44 +188,11 @@ fn build_inline(
 ) -> GoExpression {
     match form {
         NativeInlineForm::Call(callee) => {
-            let callee = match package {
-                NativeInlinePackage::None => GoExpression::external_name(callee.to_string()),
-                NativeInlinePackage::Slices => {
-                    GoExpression::generated(GeneratedPackage::Slices, callee)
-                }
-                NativeInlinePackage::Strings => {
-                    GoExpression::generated(GeneratedPackage::Strings, callee)
-                }
-                NativeInlinePackage::Prelude => {
-                    GoExpression::generated(GeneratedPackage::Prelude, callee)
-                }
-            };
-
             let mut all = vec![receiver.clone()];
             all.extend(arguments.iter().cloned());
-            GoExpression::call(callee, all)
+            GoExpression::call(inline_callee(package, callee), all)
         }
-        NativeInlineForm::IsEmpty => {
-            let operator = match polarity {
-                Polarity::Negated => GoBinaryOperator::NotEqual,
-                Polarity::Positive => GoBinaryOperator::Equal,
-            };
-            if matches!(native_type, NativeTypeKind::String) {
-                return GoExpression::binary(
-                    receiver.clone(),
-                    operator,
-                    GoExpression::token("\"\"".to_string()),
-                );
-            }
-            GoExpression::binary(
-                GoExpression::call(
-                    GoExpression::external_name("len".to_string()),
-                    vec![receiver.clone()],
-                ),
-                operator,
-                GoExpression::integer(0),
-            )
-        }
+        NativeInlineForm::IsEmpty => is_empty_test(native_type, receiver, polarity),
         NativeInlineForm::Receiver => receiver.clone(),
         NativeInlineForm::Conversion(go_type) => GoExpression::call(
             GoExpression::type_name(GoType::slice_of(&GoType::new(go_type))),
@@ -176,6 +207,41 @@ fn build_inline(
             GoExpression::index(base, index)
         }
     }
+}
+
+fn inline_callee(package: NativeInlinePackage, callee: &str) -> GoExpression {
+    match package {
+        NativeInlinePackage::None => GoExpression::external_name(callee.to_string()),
+        NativeInlinePackage::Slices => GoExpression::generated(GeneratedPackage::Slices, callee),
+        NativeInlinePackage::Strings => GoExpression::generated(GeneratedPackage::Strings, callee),
+        NativeInlinePackage::Prelude => GoExpression::generated(GeneratedPackage::Prelude, callee),
+    }
+}
+
+fn is_empty_test(
+    native_type: &NativeTypeKind,
+    receiver: &GoExpression,
+    polarity: Polarity,
+) -> GoExpression {
+    let operator = match polarity {
+        Polarity::Negated => GoBinaryOperator::NotEqual,
+        Polarity::Positive => GoBinaryOperator::Equal,
+    };
+    if matches!(native_type, NativeTypeKind::String) {
+        return GoExpression::binary(
+            receiver.clone(),
+            operator,
+            GoExpression::token("\"\"".to_string()),
+        );
+    }
+    GoExpression::binary(
+        GoExpression::call(
+            GoExpression::external_name("len".to_string()),
+            vec![receiver.clone()],
+        ),
+        operator,
+        GoExpression::integer(0),
+    )
 }
 
 pub(super) fn try_inline_native_method(
@@ -258,74 +324,79 @@ impl NativeMethodOperands {
     }
 }
 
+struct SubstringOperands {
+    setup: Vec<Statement>,
+    receiver: GoExpression,
+    start: Option<GoExpression>,
+    end: Option<GoExpression>,
+}
+
+impl SubstringOperands {
+    fn new(
+        setup: Vec<Statement>,
+        receiver: GoExpression,
+        start: Option<GoExpression>,
+        end: Option<GoExpression>,
+    ) -> Self {
+        Self {
+            setup,
+            receiver,
+            start,
+            end,
+        }
+    }
+}
+
 impl Planner<'_> {
     pub(in crate::lowering) fn detach_slice_growth(
         &mut self,
         setup: &mut Vec<Statement>,
-        method: &str,
+        growth: SliceGrowth,
         receiver: GoExpression,
         arguments: &[GoExpression],
         result_ty: &Type,
     ) -> GoExpression {
         let clipped = clip_shared_capacity(receiver.clone());
-        let shared = match method {
-            "append" => {
+        let shared = match growth {
+            SliceGrowth::Append => {
                 let Some(last) = arguments.last() else {
                     return clone_slice(receiver);
                 };
                 let GoExpressionNode::Spread(spread) = last.node() else {
-                    return slice_growth_call(method, clipped, arguments);
+                    return slice_growth_call(growth, clipped, arguments);
                 };
                 last.peeled(spread)
             }
-            "reserve" => {
+            SliceGrowth::Reserve => {
                 let count = &arguments[0];
                 if let Some(value) = count.as_integer() {
                     return if value == 0 {
                         clone_slice(receiver)
                     } else {
-                        slice_growth_call(method, clipped, arguments)
+                        slice_growth_call(growth, clipped, arguments)
                     };
                 }
                 count.clone()
             }
-            _ => unreachable!("not a slice growth method: {method}"),
         };
 
         let shared = self.stable_source(setup, "added", shared);
         self.with_scope(|this| {
-            let mut statements = Vec::new();
-            let (count, arguments) = if method == "append" {
-                let count = GoExpression::read_only_call(
-                    GoExpression::external_name("len".to_string()),
-                    vec![shared.clone()],
-                );
-                (count, [GoExpression::spread(shared)])
-            } else {
-                (shared.clone(), [shared])
-            };
-
-            statements.push(
-                LoweredStatement::If(IfPlan::plain(
-                    GoExpression::binary(count, GoBinaryOperator::Equal, GoExpression::integer(0)),
-                    LoweredBlock {
-                        statements: vec![plain_return(clone_slice(receiver))],
-                    },
-                    ElseArm::None,
-                ))
-                .into(),
-            );
-            statements.push(plain_return(slice_growth_call(method, clipped, &arguments)));
             immediate_call(
                 this.queries().go_type(result_ty),
-                LoweredBlock { statements },
+                guarded_growth_body(growth, shared, receiver, clipped),
                 FunctionLiteralLayout::MultiLine,
             )
         })
     }
 
-    pub(super) fn lower_native_method(&mut self, context: &NativeCallContext) -> NativeCallResult {
-        let mut result = self.lower_selected_native_method(context);
+    pub(super) fn lower_native_method(
+        &mut self,
+        context: &NativeCallContext,
+        receiver: &Expression,
+        arguments: &[Expression],
+    ) -> NativeCallResult {
+        let mut result = self.lower_selected_native_method(context, receiver, arguments);
 
         let operation = NativeOperation::new(context.native_type, context.method);
         if operation.read_only_without_callbacks() {
@@ -334,31 +405,36 @@ impl Planner<'_> {
         result
     }
 
-    fn lower_selected_native_method(&mut self, context: &NativeCallContext) -> NativeCallResult {
-        let (receiver_expression, arguments) = context
-            .receiver_and_arguments()
-            .expect("native method has a receiver");
-
+    fn lower_selected_native_method(
+        &mut self,
+        context: &NativeCallContext,
+        receiver_expression: &Expression,
+        arguments: &[Expression],
+    ) -> NativeCallResult {
         if matches!(context.native_type, NativeTypeKind::String)
             && context.method == "substring"
-            && !arguments.is_empty()
+            && let Some(range) = arguments.first()
         {
             return self.lower_string_substring(
                 receiver_expression,
-                arguments,
+                range,
                 context.capture_boundary,
             );
         }
 
-        if let Some(result) = self.try_lower_native_equality(context) {
+        if let Some(result) =
+            self.try_lower_native_equality(context, receiver_expression, arguments)
+        {
             return result;
         }
 
-        if NativeOperation::new(context.native_type, context.method).reads_array_in_place() {
-            let mut operand = self.plan_native_method_operands(context);
+        if let Some(read) = ArrayRead::of(NativeOperation::new(context.native_type, context.method))
+        {
+            let mut operand =
+                self.plan_native_method_operands(context, receiver_expression, arguments);
             let index = operand.arguments.first().cloned();
             let body = self.plan_array_method_body(
-                context.method,
+                read,
                 receiver_expression,
                 operand.receiver.clone(),
                 index,
@@ -377,16 +453,28 @@ impl Planner<'_> {
         if context.method == "clone"
             && let Some(receiver_ty) = self.facts.clone_container(&receiver_expression.get_type())
         {
-            let operand = self.plan_native_method_operands(context);
+            let operand = self.plan_native_method_operands(context, receiver_expression, arguments);
             let body = self.clone_expression(operand.receiver.clone(), &receiver_ty);
             return operand.finish(body);
         }
 
-        let mut operand = self.plan_native_method_operands(context);
-        if growth_detach_applies(&self.facts, context, receiver_expression) {
+        self.lower_native_method_from_operands(context, receiver_expression, arguments)
+    }
+
+    fn lower_native_method_from_operands(
+        &mut self,
+        context: &NativeCallContext,
+        receiver_expression: &Expression,
+        arguments: &[Expression],
+    ) -> NativeCallResult {
+        let mut operand = self.plan_native_method_operands(context, receiver_expression, arguments);
+        if let Some(growth) =
+            SliceGrowth::of(NativeOperation::new(context.native_type, context.method))
+            && growth_detach_applies(&self.facts, context, receiver_expression)
+        {
             let detached = self.detach_slice_growth(
                 &mut operand.setup,
-                context.method,
+                growth,
                 operand.receiver.clone(),
                 &operand.arguments,
                 &receiver_expression.get_type(),
@@ -405,12 +493,15 @@ impl Planner<'_> {
             return operand.finish(inlined);
         }
 
-        self.queries().lower_prelude_native_call(context, operand)
+        self.queries()
+            .lower_prelude_native_call(context, arguments, operand)
     }
 
     fn try_lower_native_equality(
         &mut self,
         context: &NativeCallContext,
+        receiver: &Expression,
+        arguments: &[Expression],
     ) -> Option<NativeCallResult> {
         if context.method == "equals"
             && matches!(
@@ -418,7 +509,7 @@ impl Planner<'_> {
                 NativeTypeKind::Slice | NativeTypeKind::Map
             )
         {
-            let operand = self.plan_native_method_operands(context);
+            let operand = self.plan_native_method_operands(context, receiver, arguments);
             let recipe = native_equality(&self.facts, context);
             let body = self.equality_test(
                 operand.receiver.clone(),
@@ -431,7 +522,7 @@ impl Planner<'_> {
         }
 
         if context.method == "contains" && matches!(context.native_type, NativeTypeKind::Slice) {
-            let mut operand = self.plan_native_method_operands(context);
+            let mut operand = self.plan_native_method_operands(context, receiver, arguments);
             let body = if let EqualityRecipe::Slice(Some(element)) =
                 &native_equality(&self.facts, context)
             {
@@ -456,28 +547,27 @@ impl Planner<'_> {
 
     fn plan_array_method_body(
         &mut self,
-        method: &str,
+        read: ArrayRead,
         receiver_expression: &Expression,
         receiver: GoExpression,
         index: Option<GoExpression>,
         setup: &mut Vec<Statement>,
     ) -> GoExpression {
-        match method {
-            "to_slice" => {
+        match read {
+            ArrayRead::ToSlice => {
                 let view = self.sliceable_receiver(receiver_expression, receiver, setup);
                 GoExpression::call(
                     GoExpression::generated(GeneratedPackage::Slices, "Clone"),
                     vec![view],
                 )
             }
-            "get" => {
+            ArrayRead::Get => {
                 let view = self.sliceable_receiver(receiver_expression, receiver, setup);
                 GoExpression::call(
                     GoExpression::generated(GeneratedPackage::Prelude, "SliceGet"),
                     vec![view, index.expect("get needs an index")],
                 )
             }
-            other => unreachable!("not a native array method: {other}"),
         }
     }
 
@@ -500,11 +590,11 @@ impl Planner<'_> {
         setup: &mut Vec<Statement>,
         ctx: &NativeCallContext,
     ) -> Option<GoExpression> {
-        let (_, arguments) = ctx.receiver_and_arguments()?;
+        let (receiver, arguments) = ctx.receiver_and_arguments()?;
         if !has_inline_negation(&ctx.native_type, ctx.method, arguments.len()) {
             return None;
         }
-        let operand = self.plan_native_method_operands(ctx);
+        let operand = self.plan_native_method_operands(ctx, receiver, arguments);
         let inlined = try_inline_native_method(
             &ctx.native_type,
             ctx.method,
@@ -565,10 +655,12 @@ impl Planner<'_> {
         })
     }
 
-    fn plan_native_method_operands(&mut self, ctx: &NativeCallContext) -> NativeMethodOperands {
-        let (receiver, arguments) = ctx
-            .receiver_and_arguments()
-            .expect("native method has a receiver");
+    fn plan_native_method_operands(
+        &mut self,
+        ctx: &NativeCallContext,
+        receiver: &Expression,
+        arguments: &[Expression],
+    ) -> NativeMethodOperands {
         let is_dot = matches!(ctx.form, NativeCallForm::Dot { .. });
         let view = self.try_plan_to_slice_view(ctx, receiver, arguments);
         let mut operands = match view {
@@ -619,28 +711,16 @@ impl Planner<'_> {
     pub(super) fn plan_map_index_pair(
         &mut self,
         site: CallSite<'_>,
+        receiver: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
-        let function = site.callee;
-        let args = site.args;
-        let type_arguments = site.type_arguments;
-
-        let native_type = NativeTypeKind::Map;
         let plan = self.queries().plan_call(site);
         let ctx = NativeCallContext {
-            function,
-            form: NativeCallForm::method(function),
-            args,
+            form: NativeCallForm::Dot { receiver },
             spread: None,
-            written_type_arguments: type_arguments.annotations().len(),
-            abi: plan.resolved.abi,
-            call_ty: None,
-            native_type,
-            method: "get",
-            capture_boundary: CaptureBoundary::SiblingSequence,
-            assigned_place: None,
+            ..NativeCallContext::new(site, plan.resolved.abi, NativeTypeKind::Map, "get")
         };
 
-        let mut operand = self.plan_native_method_operands(&ctx);
+        let mut operand = self.plan_native_method_operands(&ctx, receiver, site.args);
         let receiver = operand.receiver;
         let key = operand.arguments.remove(0);
         (operand.setup, GoExpression::index(receiver, key))
@@ -649,72 +729,107 @@ impl Planner<'_> {
     fn lower_string_substring(
         &mut self,
         receiver_expression: &Expression,
-        args: &[Expression],
+        range: &Expression,
         capture_boundary: CaptureBoundary,
     ) -> NativeCallResult {
-        let arg = &args[0];
-        let is_ref_receiver = self.facts.is_reference(&receiver_expression.get_type());
-        let deref = |raw: GoExpression| -> GoExpression {
-            if is_ref_receiver {
-                GoExpression::dereference(raw)
-            } else {
-                raw
+        let operands = match range {
+            Expression::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                let mut operands = self.sequence_range_literal_substring(
+                    receiver_expression,
+                    start.as_deref(),
+                    end.as_deref(),
+                    capture_boundary,
+                );
+                if *inclusive {
+                    operands.end = operands.end.map(|end| {
+                        GoExpression::binary(
+                            end,
+                            GoBinaryOperator::Addition,
+                            GoExpression::integer(1),
+                        )
+                    });
+                }
+                operands
             }
+            _ => self.sequence_range_value_substring(receiver_expression, range, capture_boundary),
         };
 
-        if let Expression::Range {
-            start,
-            end,
-            inclusive,
-            ..
-        } = arg
-        {
-            let mut operands =
-                vec![self.plan_operand(receiver_expression, ExpressionContext::value())];
-            if let Some(s) = start.as_deref() {
-                operands.push(self.plan_operand(s, ExpressionContext::value()));
-            }
-            if let Some(e) = end.as_deref() {
-                operands.push(self.plan_operand(e, ExpressionContext::value()));
-            }
-            let sequenced = self.sequence_values(operands, capture_boundary, "arg");
-            let mut values = sequenced.values.into_iter();
-            let receiver = values.next().expect("substring has a receiver");
-            let start_bound = start
-                .is_some()
-                .then(|| values.next().expect("range has a start"));
-            let end_bound = end.is_some().then(|| {
-                let end = values.next().expect("range has an end");
-                if *inclusive {
-                    GoExpression::binary(end, GoBinaryOperator::Addition, GoExpression::integer(1))
-                } else {
-                    end
-                }
-            });
+        let receiver = if self.facts.is_reference(&receiver_expression.get_type()) {
+            GoExpression::dereference(operands.receiver)
+        } else {
+            operands.receiver
+        };
+        NativeCallResult::new(
+            operands.setup,
+            substring_call(receiver, operands.start, operands.end),
+        )
+    }
 
-            return NativeCallResult::new(
-                sequenced.setup,
-                substring_call(deref(receiver), start_bound, end_bound),
-            );
+    fn sequence_range_literal_substring(
+        &mut self,
+        receiver_expression: &Expression,
+        start: Option<&Expression>,
+        end: Option<&Expression>,
+        capture_boundary: CaptureBoundary,
+    ) -> SubstringOperands {
+        let receiver = self.plan_operand(receiver_expression, ExpressionContext::value());
+        let start = start.map(|start| self.plan_operand(start, ExpressionContext::value()));
+        let end = end.map(|end| self.plan_operand(end, ExpressionContext::value()));
+        let boundary = capture_boundary;
+        match (start, end) {
+            (Some(start), Some(end)) => {
+                let sequenced = self.sequence_value_array([receiver, start, end], boundary, "arg");
+                let [receiver, start, end] = sequenced.values;
+                SubstringOperands::new(sequenced.setup, receiver, Some(start), Some(end))
+            }
+            (Some(start), None) => {
+                let sequenced = self.sequence_value_array([receiver, start], boundary, "arg");
+                let [receiver, start] = sequenced.values;
+                SubstringOperands::new(sequenced.setup, receiver, Some(start), None)
+            }
+            (None, Some(end)) => {
+                let sequenced = self.sequence_value_array([receiver, end], boundary, "arg");
+                let [receiver, end] = sequenced.values;
+                SubstringOperands::new(sequenced.setup, receiver, None, Some(end))
+            }
+            (None, None) => {
+                let sequenced = self.sequence_value_array([receiver], boundary, "arg");
+                let [receiver] = sequenced.values;
+                SubstringOperands::new(sequenced.setup, receiver, None, None)
+            }
         }
+    }
 
+    fn sequence_range_value_substring(
+        &mut self,
+        receiver_expression: &Expression,
+        range: &Expression,
+        capture_boundary: CaptureBoundary,
+    ) -> SubstringOperands {
         let range_kind = self
             .facts
-            .checked(arg)
+            .checked(range)
             .range_kind()
             .expect("substring arg should resolve to a known range type");
         let receiver_operand = self.plan_operand(receiver_expression, ExpressionContext::value());
-        let range_operand = self.plan_or_capture(arg, "range");
-        let sequenced = self.sequence_values(
-            vec![receiver_operand, range_operand],
-            capture_boundary,
-            "arg",
-        );
-        let mut values = sequenced.values.into_iter();
-        let receiver = values.next().expect("substring has a receiver");
-        let range = values.next().expect("substring has a range");
+        let range_operand = self.plan_or_capture(range, "range");
+        let SequencedArray {
+            setup,
+            values: [receiver, range],
+            ..
+        } = self.sequence_value_array([receiver_operand, range_operand], capture_boundary, "arg");
         let (start, end) = range_var_bounds(&range, range_kind);
-        NativeCallResult::new(sequenced.setup, substring_call(deref(receiver), start, end))
+        SubstringOperands {
+            setup,
+            receiver,
+            start,
+            end,
+        }
     }
 
     pub(in crate::lowering) fn equality_test(
@@ -859,6 +974,7 @@ impl PlannerQueries<'_, '_> {
     fn lower_prelude_native_call(
         &self,
         context: &NativeCallContext,
+        argument_expressions: &[Expression],
         operand: NativeMethodOperands,
     ) -> NativeCallResult {
         let fn_name = GoExpression::generated(
@@ -888,9 +1004,6 @@ impl PlannerQueries<'_, '_> {
 
         let mut emitted_args = vec![operand.receiver.clone()];
         let first_param = usize::from(!matches!(context.form, NativeCallForm::Dot { .. }));
-        let argument_expressions = context
-            .receiver_and_arguments()
-            .map_or(&[][..], |(_, arguments)| arguments);
         emitted_args.extend(operand.arguments.iter().enumerate().map(|(index, value)| {
             let parameter = context.abi.param(first_param + index);
             match argument_expressions.get(index).zip(parameter) {

@@ -15,11 +15,12 @@ use crate::target::names::generics::generic_bounds;
 use crate::target::names::go_name::{self, GoExport};
 use crate::target::names::receiver::ReceiverGenerics;
 use crate::target::names::receiver::{synthesized_local_name, synthesized_receiver_name};
+use crate::target::types::enum_layout::{EnumLayout, FieldLayout};
 use crate::target::types::go_type::GoType;
 use crate::target::types::go_type::receiver_type;
 use syntax::ast::{Attribute, Generic};
 use syntax::go_names::ENUM_TAG_FIELD;
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{Definition, DefinitionBody, EqualityRecipe};
 use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
@@ -54,9 +55,12 @@ impl Planner<'_> {
                     &receiver_generics,
                     &self.facts.to_string_method_go_name(),
                 )),
-                SynthesizedMethod::Equals => {
-                    result.extend(self.enum_equals_method(name, &enum_id, &receiver_generics))
-                }
+                SynthesizedMethod::Equals => result.extend(self.enum_equals_method(
+                    name,
+                    &enum_id,
+                    layout,
+                    &receiver_generics,
+                )),
                 SynthesizedMethod::StringerShadow => {
                     unreachable!("only structs embed a stringer to shadow")
                 }
@@ -81,6 +85,7 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         enum_id: &str,
+        layout: &EnumLayout,
         receiver_generics: &ReceiverGenerics,
     ) -> Option<GoDeclaration> {
         let Some(Definition {
@@ -96,11 +101,6 @@ impl Planner<'_> {
         };
 
         let source_variants = source_variants.clone();
-        let layout = self
-            .facts
-            .enum_layout(enum_id)
-            .expect("enum layout should exist");
-
         let receiver = synthesized_receiver_name(name, receiver_generics);
         let other = synthesized_local_name("other", &receiver, receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
@@ -114,39 +114,11 @@ impl Planner<'_> {
             if source_variant.fields.is_empty() {
                 continue;
             }
-            let comparisons: Vec<GoExpression> = source_variant
+            let fields = layout_variant
                 .fields
                 .iter()
-                .zip(layout_variant.fields.iter())
-                .map(|(_, layout_field)| {
-                    let field = |base: &GoIdentifier| {
-                        let access = GoExpression::selector(
-                            GoExpression::identifier(base.clone()),
-                            layout_field.go_name.clone(),
-                        );
-                        if layout_field.is_recursive() {
-                            GoExpression::dereference(access)
-                        } else {
-                            access
-                        }
-                    };
-
-                    let recipe = recipes
-                        .next()
-                        .expect("internal error: the checker records the equality of every field");
-                    self.equality_test(
-                        field(&receiver),
-                        field(&other),
-                        recipe,
-                        GoBinaryOperator::Equal,
-                    )
-                })
-                .collect();
-
-            let value = comparisons
-                .into_iter()
-                .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
-                .unwrap_or_else(|| GoExpression::boolean(true));
+                .take(source_variant.fields.len());
+            let value = self.fields_equality(fields, [&receiver, &other], &mut recipes);
             cases.push(SwitchCasePlan {
                 labels: vec![GoExpression::external_name(
                     layout_variant.tag_constant.clone(),
@@ -169,6 +141,44 @@ impl Planner<'_> {
         );
 
         Some(declaration)
+    }
+
+    fn fields_equality<'r>(
+        &mut self,
+        fields: impl Iterator<Item = &'r FieldLayout>,
+        [receiver, other]: [&GoIdentifier; 2],
+        recipes: &mut impl Iterator<Item = &'r EqualityRecipe>,
+    ) -> GoExpression {
+        let comparisons: Vec<GoExpression> = fields
+            .map(|layout_field| {
+                let field = |base: &GoIdentifier| {
+                    let access = GoExpression::selector(
+                        GoExpression::identifier(base.clone()),
+                        layout_field.go_name.clone(),
+                    );
+                    if layout_field.is_recursive() {
+                        GoExpression::dereference(access)
+                    } else {
+                        access
+                    }
+                };
+
+                let recipe = recipes
+                    .next()
+                    .expect("internal error: the checker records the equality of every field");
+                self.equality_test(
+                    field(receiver),
+                    field(other),
+                    recipe,
+                    GoBinaryOperator::Equal,
+                )
+            })
+            .collect();
+
+        comparisons
+            .into_iter()
+            .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
+            .unwrap_or_else(|| GoExpression::boolean(true))
     }
 
     pub(in crate::lowering) fn create_make_function_code(

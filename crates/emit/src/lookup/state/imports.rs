@@ -138,15 +138,17 @@ fn detect_collisions(entries: &[OutputImport]) -> Vec<LisetteDiagnostic> {
                 .push(entry.path.as_str());
         }
     }
-    let mut groups: Vec<_> = groups.into_iter().filter(|(_, p)| p.len() > 1).collect();
+    let mut groups: Vec<_> = groups.into_iter().collect();
     groups.sort_by(|a, b| a.0.cmp(b.0));
     groups
         .into_iter()
-        .map(|(alias, paths)| {
+        .filter_map(|(alias, paths)| {
             let [first, second, rest @ ..] = paths.as_slice() else {
-                unreachable!("collision groups contain at least two paths")
+                return None;
             };
-            emit_diagnostic::go_import_collision(alias, first, second, rest)
+            Some(emit_diagnostic::go_import_collision(
+                alias, first, second, rest,
+            ))
         })
         .collect()
 }

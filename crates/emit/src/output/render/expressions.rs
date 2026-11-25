@@ -167,73 +167,7 @@ impl GoExpressionNode {
                 arguments,
                 paren,
                 ..
-            } => {
-                Self::write_child(callee, slot.with(SlotKind::Callee), output);
-                output.push_position(paren);
-                output.push('(');
-                for (index, argument) in arguments.iter().enumerate() {
-                    if index > 0 {
-                        output.push_str(", ");
-                    }
-                    argument.write(output, Slot::FREE);
-                }
-                output.push(')');
-            }
-            Self::Instantiation { .. }
-            | Self::Selector { .. }
-            | Self::Index { .. }
-            | Self::Slice { .. }
-            | Self::TypeAssertion { .. }
-            | Self::Spread(_) => self.write_postfix(output, slot),
-            Self::Unary { operator, operand } => {
-                let sign = operator.sign();
-                output.push(sign);
-                Self::write_child(operand, slot.with(SlotKind::Prefix(sign)), output);
-            }
-            Self::AddressOf(operand) => {
-                output.push('&');
-                Self::write_child(operand, slot.with(SlotKind::Prefix('&')), output);
-            }
-            Self::Dereference(operand) => {
-                output.push('*');
-                Self::write_child(operand, slot.with(SlotKind::Prefix('*')), output);
-            }
-            Self::Binary {
-                operator,
-                left,
-                right,
-            } => {
-                let level = operator.level();
-                Self::write_child(left, slot.with(SlotKind::Left(level)), output);
-                output.push(' ');
-                output.push_str(operator.symbol());
-                output.push(' ');
-                Self::write_child(right, slot.with(SlotKind::Right(level)), output);
-            }
-            Self::Conversion { go_type, operand } => {
-                if is_plain_type_name(go_type) {
-                    output.push_str(&go_type_text(go_type));
-                    output.push('(');
-                } else {
-                    output.push('(');
-                    output.push_str(&go_type_text(go_type));
-                    output.push_str(")(");
-                }
-                operand.write(output, Slot::FREE);
-                output.push(')');
-            }
-            Self::FunctionLiteral {
-                parameters,
-                result,
-                body,
-                layout,
-                end,
-            } => Self::write_function_literal(output, parameters, result, body, layout, end),
-        }
-    }
-
-    fn write_postfix(&self, output: &mut GoWriter, slot: Slot) {
-        match self {
+            } => Self::write_call(output, slot, callee, arguments, paren),
             Self::Instantiation {
                 base,
                 type_arguments,
@@ -260,19 +194,7 @@ impl GoExpressionNode {
                 ..
             } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
-                output.push('[');
-                if let Some(low) = low {
-                    low.write(output, Slot::FREE);
-                }
-                output.push(':');
-                if let Some(high) = high {
-                    high.write(output, Slot::FREE);
-                }
-                if let Some(max) = max {
-                    output.push(':');
-                    max.write(output, Slot::FREE);
-                }
-                output.push(']');
+                Self::write_slice_bounds(output, low, high, max);
             }
             Self::TypeAssertion { base, go_type } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
@@ -284,8 +206,92 @@ impl GoExpressionNode {
                 Self::write_child(operand, slot.with(SlotKind::Postfix), output);
                 output.push_str("...");
             }
-            _ => unreachable!("write_postfix takes a postfix expression"),
+            Self::Unary { operator, operand } => {
+                Self::write_prefixed(output, slot, operator.sign(), operand)
+            }
+            Self::AddressOf(operand) => Self::write_prefixed(output, slot, '&', operand),
+            Self::Dereference(operand) => Self::write_prefixed(output, slot, '*', operand),
+            Self::Binary {
+                operator,
+                left,
+                right,
+            } => {
+                let level = operator.level();
+                Self::write_child(left, slot.with(SlotKind::Left(level)), output);
+                output.push(' ');
+                output.push_str(operator.symbol());
+                output.push(' ');
+                Self::write_child(right, slot.with(SlotKind::Right(level)), output);
+            }
+            Self::Conversion { go_type, operand } => {
+                Self::write_conversion(output, go_type, operand)
+            }
+            Self::FunctionLiteral {
+                parameters,
+                result,
+                body,
+                layout,
+                end,
+            } => Self::write_function_literal(output, parameters, result, body, layout, end),
         }
+    }
+
+    fn write_prefixed(output: &mut GoWriter, slot: Slot, sign: char, operand: &Operand) {
+        output.push(sign);
+        Self::write_child(operand, slot.with(SlotKind::Prefix(sign)), output);
+    }
+
+    fn write_call(
+        output: &mut GoWriter,
+        slot: Slot,
+        callee: &Operand,
+        arguments: &[Operand],
+        paren: &SourcePosition,
+    ) {
+        Self::write_child(callee, slot.with(SlotKind::Callee), output);
+        output.push_position(paren);
+        output.push('(');
+        for (index, argument) in arguments.iter().enumerate() {
+            if index > 0 {
+                output.push_str(", ");
+            }
+            argument.write(output, Slot::FREE);
+        }
+        output.push(')');
+    }
+
+    fn write_slice_bounds(
+        output: &mut GoWriter,
+        low: &Option<Operand>,
+        high: &Option<Operand>,
+        max: &Option<Operand>,
+    ) {
+        output.push('[');
+        if let Some(low) = low {
+            low.write(output, Slot::FREE);
+        }
+        output.push(':');
+        if let Some(high) = high {
+            high.write(output, Slot::FREE);
+        }
+        if let Some(max) = max {
+            output.push(':');
+            max.write(output, Slot::FREE);
+        }
+        output.push(']');
+    }
+
+    fn write_conversion(output: &mut GoWriter, go_type: &GoType, operand: &Operand) {
+        if is_plain_type_name(go_type) {
+            output.push_str(&go_type_text(go_type));
+            output.push('(');
+        } else {
+            output.push('(');
+            output.push_str(&go_type_text(go_type));
+            output.push_str(")(");
+        }
+        operand.write(output, Slot::FREE);
+        output.push(')');
     }
 
     fn write_composite_literal(

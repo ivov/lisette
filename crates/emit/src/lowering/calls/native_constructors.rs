@@ -61,45 +61,13 @@ impl Planner<'_> {
         ctx: &NativeCallContext,
     ) -> Option<ValuePlan> {
         match (ctx.native_type, ctx.method) {
-            (NativeTypeKind::Channel, "new") => {
-                let element = self.queries().native_element_type(ctx.function);
-                Some(ValuePlan::computed(
-                    Vec::new(),
-                    GoExpression::call(
-                        GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(GoType::channel(
-                            ChannelDirection::Bidirectional,
-                            &element,
-                        ))],
-                    ),
-                ))
-            }
-            (NativeTypeKind::Channel, "buffered") => {
-                let element = self.queries().native_element_type(ctx.function);
-                let (setup, capacity) = self.plan_size_argument(ctx);
-                Some(ValuePlan::computed(
-                    setup,
-                    GoExpression::call(
-                        GoExpression::external_name("make".to_string()),
-                        vec![
-                            GoExpression::type_name(GoType::channel(
-                                ChannelDirection::Bidirectional,
-                                &element,
-                            )),
-                            capacity,
-                        ],
-                    ),
-                ))
-            }
+            (NativeTypeKind::Channel, "new" | "buffered") => Some(self.plan_channel_make(ctx)),
             (NativeTypeKind::Map, "new") => {
                 let (key, value) = map_entry_types(&self.facts, ctx.function);
                 let (key, value) = (self.queries().go_type(&key), self.queries().go_type(&value));
                 Some(ValuePlan::computed(
                     Vec::new(),
-                    GoExpression::call(
-                        GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(GoType::map_of(&key, &value))],
-                    ),
+                    make_call(vec![GoExpression::type_name(GoType::map_of(&key, &value))]),
                 ))
             }
             (NativeTypeKind::Map, "from") => self.try_plan_map_from_pairs(ctx),
@@ -122,6 +90,17 @@ impl Planner<'_> {
         }
     }
 
+    fn plan_channel_make(&mut self, ctx: &NativeCallContext) -> ValuePlan {
+        let element = self.queries().native_element_type(ctx.function);
+        let channel =
+            GoExpression::type_name(GoType::channel(ChannelDirection::Bidirectional, &element));
+        if ctx.method != "buffered" {
+            return ValuePlan::computed(Vec::new(), make_call(vec![channel]));
+        }
+        let (setup, capacity) = self.plan_size_argument(ctx);
+        ValuePlan::computed(setup, make_call(vec![channel, capacity]))
+    }
+
     fn plan_slice_make(&mut self, ctx: &NativeCallContext) -> ValuePlan {
         let element_ty = self
             .facts
@@ -133,10 +112,10 @@ impl Planner<'_> {
         let element = self.queries().go_type(&element_ty);
         let (setup, length) = self.plan_size_argument(ctx);
         let value = if self.facts.go_zero_is_lisette_zero(&element_ty) {
-            GoExpression::call(
-                GoExpression::external_name("make".to_string()),
-                vec![GoExpression::type_name(GoType::slice_of(&element)), length],
-            )
+            make_call(vec![
+                GoExpression::type_name(GoType::slice_of(&element)),
+                length,
+            ])
         } else {
             self.zero_filled(GoType::slice_of(&element), &element_ty, Some(length))
         };
@@ -175,37 +154,13 @@ impl Planner<'_> {
         let (setup, source) = operand.into_parts();
 
         let slice_name = self.scope.helper_local("s", self.names);
-        let slice = || GoExpression::identifier(slice_name.clone());
-        let literal = |text: String| GoExpression::token(text);
+        let slice = GoExpression::identifier(slice_name.clone());
+        let ok_values = shape.ok_values(vec![GoExpression::conversion(array_go, slice.clone())]);
         let value = GoExpression::call(
             function_literal(
-                vec![GoParameter::new(
-                    slice_name.clone(),
-                    GoType::slice_of(&element_go),
-                )],
+                vec![GoParameter::new(slice_name, GoType::slice_of(&element_go))],
                 result_list,
-                LoweredBlock {
-                    statements: vec![
-                        LoweredStatement::If(IfPlan::plain(
-                            GoExpression::binary(
-                                GoExpression::call(
-                                    GoExpression::external_name("len".to_string()),
-                                    vec![slice()],
-                                ),
-                                GoBinaryOperator::NotEqual,
-                                literal(length.to_string()),
-                            ),
-                            LoweredBlock {
-                                statements: vec![multi_value_return(none_values)],
-                            },
-                            ElseArm::None,
-                        ))
-                        .into(),
-                        multi_value_return(
-                            shape.ok_values(vec![GoExpression::conversion(array_go, slice())]),
-                        ),
-                    ],
-                },
+                array_length_check(slice, length, none_values, ok_values),
                 FunctionLiteralLayout::MultiLine,
             ),
             vec![source],
@@ -215,31 +170,8 @@ impl Planner<'_> {
     }
 
     fn try_plan_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
-        if ctx.spread.is_some() {
-            return None;
-        }
-        let [argument] = ctx.args else {
-            return None;
-        };
-        let Expression::Literal {
-            literal: Literal::Slice(entries),
-            ..
-        } = argument
-        else {
-            return None;
-        };
-
-        let pairs = entries
-            .iter()
-            .map(|entry| match entry {
-                Expression::Tuple { elements, .. } => match elements.as_slice() {
-                    [key, value] => Some((key, value)),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect::<Option<Vec<_>>>()?;
-
+        let entries = map_from_literal_entries(ctx)?;
+        let pairs = literal_map_pairs(entries)?;
         let (key_ty, value_ty) = map_entry_types(&self.facts, ctx.function);
         let keys: Vec<_> = pairs.iter().map(|(key, _)| *key).collect();
         if !keys_checked_as_go_constants(&keys, self.facts.simple_kind(&key_ty)) {
@@ -271,27 +203,21 @@ impl Planner<'_> {
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
 
+        let types = MapEntryTypes {
+            key: &key_ty,
+            value: &value_ty,
+            value_go: &value_go_ty,
+        };
         let mut lowered = Vec::with_capacity(pairs.len());
         let mut widest = 0;
-        for (entry, (key, value)) in entries.iter().zip(&pairs) {
-            let key_operand = values.next().expect("each pair has a key");
-            let value_operand = values.next().expect("each pair has a value");
-            let [key_coercion, value_coercion] =
-                self.pair_slot_coercions(entry, [key, value], [&key_ty, &value_ty]);
-            let (key_setup, coerced_key) = key_coercion.lower(self, key_operand);
-            setup.extend(key_setup);
-            let is_whole_literal =
-                value_coercion.is_identity() && value_operand.is_composite_literal();
-            let (value_setup, coerced_value) = value_coercion.lower(self, value_operand);
-            setup.extend(value_setup);
-            widest = widest
-                .max(rendered(&coerced_key).len() + rendered(&coerced_value).len() + ": ".len());
-            let coerced_value = if is_whole_literal {
-                coerced_value.elide_composite_type(&value_go_ty)
-            } else {
-                coerced_value
-            };
-            lowered.push((Some(coerced_key), coerced_value));
+        for (entry, pair) in entries.iter().zip(&pairs) {
+            let operands = (
+                values.next().expect("each pair has a key"),
+                values.next().expect("each pair has a value"),
+            );
+            let lowered_entry = self.lower_map_entry(&mut setup, entry, *pair, operands, &types);
+            widest = widest.max(lowered_entry.width);
+            lowered.push((Some(lowered_entry.key), lowered_entry.value));
         }
 
         let layout = CompositeLayout::for_elements(lowered.len(), widest);
@@ -299,6 +225,105 @@ impl Planner<'_> {
             .position_elements(|index, _| self.facts.source_position(&entries[index].get_span()));
         Some(ValuePlan::computed(setup, value))
     }
+
+    fn lower_map_entry(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        entry: &Expression,
+        (key, value): (&Expression, &Expression),
+        (key_operand, value_operand): (GoExpression, GoExpression),
+        types: &MapEntryTypes<'_>,
+    ) -> LoweredMapEntry {
+        let [key_coercion, value_coercion] =
+            self.pair_slot_coercions(entry, [key, value], [types.key, types.value]);
+        let (key_setup, coerced_key) = key_coercion.lower(self, key_operand);
+        setup.extend(key_setup);
+        let is_whole_literal = value_coercion.is_identity() && value_operand.is_composite_literal();
+        let (value_setup, coerced_value) = value_coercion.lower(self, value_operand);
+        setup.extend(value_setup);
+        let width = rendered(&coerced_key).len() + rendered(&coerced_value).len() + ": ".len();
+        let coerced_value = if is_whole_literal {
+            coerced_value.elide_composite_type(types.value_go)
+        } else {
+            coerced_value
+        };
+        LoweredMapEntry {
+            key: coerced_key,
+            value: coerced_value,
+            width,
+        }
+    }
+}
+
+struct LoweredMapEntry {
+    key: GoExpression,
+    value: GoExpression,
+    width: usize,
+}
+
+struct MapEntryTypes<'t> {
+    key: &'t Type,
+    value: &'t Type,
+    value_go: &'t GoType,
+}
+
+fn map_from_literal_entries<'e>(ctx: &NativeCallContext<'e>) -> Option<&'e [Expression]> {
+    if ctx.spread.is_some() {
+        return None;
+    }
+    let [argument] = ctx.args else {
+        return None;
+    };
+    let Expression::Literal {
+        literal: Literal::Slice(entries),
+        ..
+    } = argument
+    else {
+        return None;
+    };
+    Some(entries)
+}
+
+fn literal_map_pairs(entries: &[Expression]) -> Option<Vec<(&Expression, &Expression)>> {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            Expression::Tuple { elements, .. } => match elements.as_slice() {
+                [key, value] => Some((key, value)),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+fn array_length_check(
+    slice: GoExpression,
+    length: u64,
+    none_values: Vec<GoExpression>,
+    ok_values: Vec<GoExpression>,
+) -> LoweredBlock {
+    LoweredBlock {
+        statements: vec![
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::binary(
+                    GoExpression::call(GoExpression::external_name("len".to_string()), vec![slice]),
+                    GoBinaryOperator::NotEqual,
+                    GoExpression::token(length.to_string()),
+                ),
+                LoweredBlock {
+                    statements: vec![multi_value_return(none_values)],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+            multi_value_return(ok_values),
+        ],
+    }
+}
+
+fn make_call(arguments: Vec<GoExpression>) -> GoExpression {
+    GoExpression::call(GoExpression::external_name("make".to_string()), arguments)
 }
 
 fn map_entry_types<'a>(facts: &EmitFacts<'a>, function: &Expression) -> (Type, Type) {

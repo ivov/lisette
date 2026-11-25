@@ -168,25 +168,33 @@ impl Planner<'_> {
                 .into(),
         );
 
-        let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
         let source = self
             .facts
             .value_layout(&expression.get_type(), SlotOrigin::Lisette);
+        let payload_layout = source
+            .payload()
+            .expect("propagation requires a payload layout");
+        let ok_access =
+            self.propagated_ok_access(&mut statements, check, &fallible, payload_layout);
+        let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
+        (statements, value)
+    }
+
+    fn propagated_ok_access(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        check: GoExpression,
+        fallible: &Fallible,
+        payload_layout: &ValueLayout,
+    ) -> GoExpression {
+        let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
         let target_layout = self
             .facts
             .value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
-        let coercion = CoercionPlan::change(
-            &self.queries(),
-            source
-                .payload()
-                .expect("propagation requires a payload layout"),
-            &target_layout,
-        );
-
+        let coercion = CoercionPlan::change(&self.queries(), payload_layout, &target_layout);
         let (setup, ok_access) = coercion.lower(self, ok_access);
         statements.extend(setup);
-        let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
-        (statements, value)
+        ok_access
     }
 
     fn declare_zero_for_dead_path(
@@ -320,22 +328,14 @@ impl Planner<'_> {
         fallible: &Fallible,
         target: PropagateTarget<'_>,
     ) -> Option<(Vec<Statement>, Option<GoExpression>)> {
-        let lowered = self.queries().lowered_call(expression)?;
-        let RawPair {
-            has_value_slot,
-            nil_guard,
-            payload_layout_change,
-        } = lowered.raw_pair()?;
-        if !matches!(
-            lowered.shape,
-            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::BareError
-        ) {
-            return None;
-        }
-        let LoweredCall { site, wraps, .. } = lowered;
-        if !self.queries().returns_fallible() {
-            return None;
-        }
+        let (
+            LoweredCall { site, wraps, .. },
+            RawPair {
+                has_value_slot,
+                nil_guard,
+                payload_layout_change,
+            },
+        ) = self.queries().fused_propagate_call(expression)?;
 
         let (mut statements, call) = self
             .plan_call_expression(site, None, ExpressionContext::value())
@@ -349,7 +349,50 @@ impl Planner<'_> {
         let value_var = (has_value_slot && (want_value || nil_guard.is_some()))
             .then(|| named.cloned().unwrap_or_else(|| self.fresh_declared("ret")));
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, ErrorUse::Read);
-        let placement = if value_var.is_none() && message_setup.is_empty() {
+        let value_slot = match (&value_var, has_value_slot) {
+            (Some(value), _) => FusedValueSlot::Bound(value.clone()),
+            (None, true) => FusedValueSlot::Ignored,
+            (None, false) => FusedValueSlot::Absent,
+        };
+        let (check, outcome_var) =
+            self.bind_fused_pair(&mut statements, fallible, call, value_slot, message_setup);
+
+        let error = wrap_error(&wraps, GoExpression::identifier(outcome_var));
+        statements.push(self.propagate_failure_check(expression, fallible, check, error));
+        if let Some(guard) = nil_guard {
+            let guarded_value = GoExpression::identifier(
+                value_var.clone().expect("nil guard requires the value var"),
+            );
+            let error = wrap_error(&wraps, unexpected_nil_error());
+            let check = PairCondition {
+                initializer: None,
+                condition: guard.nil_condition(guarded_value),
+            };
+            statements.push(self.propagate_failure_check(expression, fallible, check, error));
+        }
+
+        let ok_value = match (value_var, &payload_layout_change) {
+            (Some(ok_name), Some(change)) if want_value => {
+                self.plan_layout_change(&mut statements, GoExpression::identifier(ok_name), change)
+            }
+            (Some(ok_name), _) => GoExpression::identifier(ok_name),
+            (None, _) => GoExpression::unit(),
+        };
+        let value = self.propagated_value(&mut statements, target, named, Some(ok_value));
+        Some((statements, value))
+    }
+
+    fn bind_fused_pair(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        fallible: &Fallible,
+        call: GoExpression,
+        value_slot: FusedValueSlot,
+        message_setup: Vec<Statement>,
+    ) -> (PairCondition, GoIdentifier) {
+        let placement = if matches!(value_slot, FusedValueSlot::Ignored | FusedValueSlot::Absent)
+            && message_setup.is_empty()
+        {
             PairPlacement::IfInitializer
         } else {
             PairPlacement::Statement
@@ -360,12 +403,11 @@ impl Planner<'_> {
             ErrorReuse::Forbidden
         };
         let outcome_var = self.propagate_error_status(fallible, placement, reuse);
-        let outcome = || GoExpression::identifier(outcome_var.clone());
         let binding = Definition {
-            names: match &value_var {
-                Some(value) => vec![value.clone(), outcome_var.clone()],
-                None if has_value_slot => vec!["_".to_string().into(), outcome_var.clone()],
-                None => vec![outcome_var.clone()],
+            names: match value_slot {
+                FusedValueSlot::Bound(value) => vec![value, outcome_var.clone()],
+                FusedValueSlot::Ignored => vec!["_".to_string().into(), outcome_var.clone()],
+                FusedValueSlot::Absent => vec![outcome_var.clone()],
             },
             value: call,
         };
@@ -379,45 +421,23 @@ impl Planner<'_> {
         };
 
         statements.extend(message_setup);
-        let guarded_value = || {
-            GoExpression::identifier(value_var.clone().expect("nil guard requires the value var"))
+        let check = PairCondition {
+            initializer,
+            condition: non_nil_condition(GoExpression::identifier(outcome_var.clone())),
         };
+        (check, outcome_var)
+    }
 
-        let error = wrap_error(&wraps, outcome());
-        let (failure_setup, failure_values) =
-            self.propagate_failure_values(expression, fallible, error);
-        statements.push(
-            go_returns::tag_check_with_initializer(
-                initializer,
-                non_nil_condition(outcome()),
-                failure_setup,
-                failure_values,
-            )
-            .into(),
-        );
-        if let Some(guard) = nil_guard {
-            let error = wrap_error(&wraps, unexpected_nil_error());
-            let (nil_setup, nil_failure) =
-                self.propagate_failure_values(expression, fallible, error);
-            statements.push(
-                go_returns::tag_check(guard.nil_condition(guarded_value()), nil_setup, nil_failure)
-                    .into(),
-            );
-        }
-
-        let ok_value = value_var.map(|ok_name| {
-            let ok_expression = GoExpression::identifier(ok_name);
-            match &payload_layout_change {
-                Some(change) if want_value => {
-                    self.plan_layout_change(&mut statements, ok_expression, change)
-                }
-                _ => ok_expression,
-            }
-        });
-
-        let ok_value = ok_value.unwrap_or_else(GoExpression::unit);
-        let value = self.propagated_value(&mut statements, target, named, Some(ok_value));
-        Some((statements, value))
+    fn propagate_failure_check(
+        &mut self,
+        operand: &Expression,
+        fallible: &Fallible,
+        check: PairCondition,
+        error: GoExpression,
+    ) -> Statement {
+        let (setup, values) = self.propagate_failure_values(operand, fallible, error);
+        go_returns::tag_check_with_initializer(check.initializer, check.condition, setup, values)
+            .into()
     }
 
     fn try_plan_fused_option_propagate(
@@ -517,44 +537,7 @@ impl Planner<'_> {
 
     fn bind_mapped_failure(&mut self, mapped: Mapped<'_>, slot: CommaOkValueSlot) -> MappedFailure {
         match mapped {
-            Mapped::MapErr(fuse, mappers) => {
-                let nil_guard = fuse.error_nil_guard();
-                let pair = fuse.bind(self, slot, None);
-                let failure = pair.failure_condition();
-                let status = pair.status_identifier().clone();
-                let mut failure_setup = Vec::new();
-                if nil_guard == ErrorNilGuard::Guarded && mappers[0].reads_error() {
-                    failure_setup.push(
-                        LoweredStatement::If(IfPlan::plain(
-                            nil_condition(GoExpression::identifier(status.clone())),
-                            LoweredBlock {
-                                statements: vec![assign(
-                                    GoExpression::identifier(status.clone()),
-                                    unexpected_nil_error(),
-                                )],
-                            },
-                            ElseArm::None,
-                        ))
-                        .into(),
-                    );
-                }
-                let error = self.apply_error_mappers(
-                    &mut failure_setup,
-                    &mappers,
-                    GoExpression::identifier(status),
-                    Some(Stability::Fixed),
-                );
-
-                let payload = pair.payload();
-                MappedFailure {
-                    statements: pair.statements,
-                    failure,
-                    payload,
-                    late_binding: None,
-                    failure_setup,
-                    error,
-                }
-            }
+            Mapped::MapErr(fuse, mappers) => self.bind_map_err_failure(fuse, &mappers, slot),
             Mapped::OkOr(fuse, error) => {
                 let bound = fuse.bind(self, slot);
                 let failure = bound.failure_condition();
@@ -592,6 +575,50 @@ impl Planner<'_> {
                     error,
                 }
             }
+        }
+    }
+
+    fn bind_map_err_failure(
+        &mut self,
+        fuse: ResultFusePlan<'_>,
+        mappers: &[ErrorMapper<'_>],
+        slot: CommaOkValueSlot,
+    ) -> MappedFailure {
+        let nil_guard = fuse.error_nil_guard();
+        let pair = fuse.bind(self, slot, None);
+        let failure = pair.failure_condition();
+        let status = pair.status_identifier().clone();
+        let mut failure_setup = Vec::new();
+        if nil_guard == ErrorNilGuard::Guarded && mappers[0].reads_error() {
+            failure_setup.push(
+                LoweredStatement::If(IfPlan::plain(
+                    nil_condition(GoExpression::identifier(status.clone())),
+                    LoweredBlock {
+                        statements: vec![assign(
+                            GoExpression::identifier(status.clone()),
+                            unexpected_nil_error(),
+                        )],
+                    },
+                    ElseArm::None,
+                ))
+                .into(),
+            );
+        }
+        let error = self.apply_error_mappers(
+            &mut failure_setup,
+            mappers,
+            GoExpression::identifier(status),
+            Some(Stability::Fixed),
+        );
+
+        let payload = pair.payload();
+        MappedFailure {
+            statements: pair.statements,
+            failure,
+            payload,
+            late_binding: None,
+            failure_setup,
+            error,
         }
     }
 
@@ -694,24 +721,13 @@ impl Planner<'_> {
             return None;
         }
         let (receiver, mappers) = self.queries().error_mapper_chain(expression)?;
-        let receiver_ty = receiver.get_type();
-        let plan = self.plan_operand(receiver, ExpressionContext::value());
-        let local =
-            matches!(receiver, Expression::Identifier { .. }) && plan.effects().can_duplicate();
-        let operand = self.queries().plan_rests_in_stable_name(&plan);
-        let (mut statements, value) = plan.into_parts();
-        let (check, stability) = if operand {
-            (value, Stability::Fixed)
-        } else if local {
-            let stability = self.queries().path_read_stability(&value);
-            (value, stability)
-        } else {
-            let check = self.hoist_temp(&mut statements, "check", value);
-            (GoExpression::identifier(check), Stability::Fixed)
-        };
+        let (mut statements, check, stability) = self.capture_map_err_receiver(receiver);
 
-        let source_layout = self.facts.value_layout(&receiver_ty, SlotOrigin::Lisette);
+        let source_layout = self
+            .facts
+            .value_layout(&receiver.get_type(), SlotOrigin::Lisette);
         let ValueLayout::Fallible {
+            payload: payload_layout,
             error: error_layout,
             ..
         } = source_layout.underlying()
@@ -746,22 +762,33 @@ impl Planner<'_> {
             .into(),
         );
 
-        let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
-        let target_layout = self
-            .facts
-            .value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
-        let coercion = CoercionPlan::change(
-            &self.queries(),
-            source_layout
-                .payload()
-                .expect("propagation requires a payload layout"),
-            &target_layout,
-        );
-
-        let (setup, ok_access) = coercion.lower(self, ok_access);
-        statements.extend(setup);
+        let ok_access = self.propagated_ok_access(&mut statements, check, fallible, payload_layout);
         let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
         Some((statements, value))
+    }
+
+    fn capture_map_err_receiver(
+        &mut self,
+        receiver: &Expression,
+    ) -> (Vec<Statement>, GoExpression, Stability) {
+        let plan = self.plan_operand(receiver, ExpressionContext::value());
+        let local =
+            matches!(receiver, Expression::Identifier { .. }) && plan.effects().can_duplicate();
+        let operand = self.queries().plan_rests_in_stable_name(&plan);
+        let (mut statements, value) = plan.into_parts();
+        if operand {
+            (statements, value, Stability::Fixed)
+        } else if local {
+            let stability = self.queries().path_read_stability(&value);
+            (statements, value, stability)
+        } else {
+            let check = self.hoist_temp(&mut statements, "check", value);
+            (
+                statements,
+                GoExpression::identifier(check),
+                Stability::Fixed,
+            )
+        }
     }
 
     fn declare_propagate_target<'a>(
@@ -805,6 +832,12 @@ impl Planner<'_> {
     }
 }
 
+enum FusedValueSlot {
+    Bound(GoIdentifier),
+    Ignored,
+    Absent,
+}
+
 enum Mapped<'a> {
     MapErr(ResultFusePlan<'a>, Vec<ErrorMapper<'a>>),
     OkOr(OptionFusePlan<'a>, &'a Expression),
@@ -826,6 +859,19 @@ impl PlannerQueries<'_, '_> {
         return_ctx.lowered_shape().is_none()
             && return_ctx.ty().is_some()
             && self.facts.checked(operand).forwards_failure()
+    }
+
+    fn fused_propagate_call<'a>(
+        &self,
+        expression: &'a Expression,
+    ) -> Option<(LoweredCall<'a>, RawPair)> {
+        let lowered = self.lowered_call(expression)?;
+        let raw_pair = lowered.raw_pair()?;
+        let fuses = matches!(
+            lowered.shape,
+            LoweredReturnAbi::Result { .. } | LoweredReturnAbi::BareError
+        ) && self.returns_fallible();
+        fuses.then_some((lowered, raw_pair))
     }
 
     pub(super) fn map_err_call<'a>(

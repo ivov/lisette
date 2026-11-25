@@ -52,8 +52,8 @@ impl Planner<'_> {
         let plan = self.with_loop(None, None, |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range(range) => this.lower_range_for(binding, range, body),
-                ForShape::StoredRange(range_shape) => {
-                    this.lower_stored_range_for(binding, iterable, range_shape, body)
+                ForShape::StoredRange(range_end) => {
+                    this.lower_stored_range_for(binding, iterable, range_end, body)
                 }
                 ForShape::StringView(StringViewKind::Runes, receiver) => {
                     this.lower_runes_for(binding, receiver, body)
@@ -94,7 +94,7 @@ impl Planner<'_> {
         &mut self,
         binding: &Binding,
         iterable: &Expression,
-        range_shape: RangeKind,
+        range_end: StoredRangeEnd,
         body: &Expression,
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
@@ -125,13 +125,10 @@ impl Planner<'_> {
                 )
             };
 
-            let condition = match range_shape {
-                RangeKind::Range => Some(compare(GoBinaryOperator::LessThan)),
-                RangeKind::RangeInclusive => Some(compare(GoBinaryOperator::LessThanOrEqual)),
-                RangeKind::RangeFrom => None,
-                RangeKind::RangeTo | RangeKind::RangeToInclusive => {
-                    unreachable!("RangeTo/RangeToInclusive are not iterable")
-                }
+            let condition = match range_end {
+                StoredRangeEnd::Exclusive => Some(compare(GoBinaryOperator::LessThan)),
+                StoredRangeEnd::Inclusive => Some(compare(GoBinaryOperator::LessThanOrEqual)),
+                StoredRangeEnd::Open => None,
             };
 
             let header = LoopHeader::Counted {
@@ -401,6 +398,53 @@ impl Planner<'_> {
         range: LiteralRange<'_>,
         body: &Expression,
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
+        let RangeBounds {
+            prologue,
+            start: start_expression,
+            end: end_expression,
+            counts_from_zero,
+        } = self.plan_range_bounds(range);
+
+        let (header, lowered_body) = self.with_scope(|this| {
+            let header = match end_expression {
+                Some(end_expression) if counts_from_zero => {
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, None);
+                    range_header(Some(&loop_var), None, end_expression)
+                }
+                Some(end_expression) => {
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
+                    let operator = if range.inclusive {
+                        GoBinaryOperator::LessThanOrEqual
+                    } else {
+                        GoBinaryOperator::LessThan
+                    };
+                    LoopHeader::Counted {
+                        variable: loop_var.clone(),
+                        start: start_expression,
+                        condition: Some(GoExpression::binary(
+                            GoExpression::identifier(loop_var),
+                            operator,
+                            end_expression,
+                        )),
+                    }
+                }
+                None => {
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
+                    LoopHeader::Counted {
+                        variable: loop_var,
+                        start: start_expression,
+                        condition: None,
+                    }
+                }
+            };
+
+            (header, this.lower_block_as_body(body))
+        });
+
+        (prologue, header, lowered_body)
+    }
+
+    fn plan_range_bounds(&mut self, range: LiteralRange<'_>) -> RangeBounds {
         let LiteralRange {
             start,
             end,
@@ -430,48 +474,13 @@ impl Planner<'_> {
             });
         }
         let sequenced = self.sequence_operands(operands, CaptureBoundary::SiblingSequence);
-        let prologue = sequenced.setup;
         let mut values = sequenced.values.into_iter();
-        let start_expression = values.next().expect("range start");
-        let end_expression = values.next();
-
-        let (header, lowered_body) = self.with_scope(|this| {
-            let header = match end_expression {
-                Some(end_expression) if counts_from_zero => {
-                    let loop_var = this.bind_loop_pattern(&binding.pattern, None);
-                    range_header(Some(&loop_var), None, end_expression)
-                }
-                Some(end_expression) => {
-                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
-                    let operator = if inclusive {
-                        GoBinaryOperator::LessThanOrEqual
-                    } else {
-                        GoBinaryOperator::LessThan
-                    };
-                    LoopHeader::Counted {
-                        variable: loop_var.clone(),
-                        start: start_expression,
-                        condition: Some(GoExpression::binary(
-                            GoExpression::identifier(loop_var),
-                            operator,
-                            end_expression,
-                        )),
-                    }
-                }
-                None => {
-                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
-                    LoopHeader::Counted {
-                        variable: loop_var,
-                        start: start_expression,
-                        condition: None,
-                    }
-                }
-            };
-
-            (header, this.lower_block_as_body(body))
-        });
-
-        (prologue, header, lowered_body)
+        RangeBounds {
+            prologue: sequenced.setup,
+            start: values.next().expect("range start"),
+            end: values.next(),
+            counts_from_zero,
+        }
     }
 
     fn bind_loop_pattern(
@@ -614,7 +623,7 @@ struct LiteralRange<'a> {
 
 enum ForShape<'a> {
     Range(LiteralRange<'a>),
-    StoredRange(RangeKind),
+    StoredRange(StoredRangeEnd),
     StringView(StringViewKind, &'a Expression),
     MapTuple {
         first: &'a Pattern,
@@ -624,6 +633,31 @@ enum ForShape<'a> {
         yields: RangeYield,
         simple_pattern: bool,
     },
+}
+
+#[derive(Clone, Copy)]
+enum StoredRangeEnd {
+    Exclusive,
+    Inclusive,
+    Open,
+}
+
+impl StoredRangeEnd {
+    fn of(range: RangeKind) -> Option<Self> {
+        match range {
+            RangeKind::Range => Some(Self::Exclusive),
+            RangeKind::RangeInclusive => Some(Self::Inclusive),
+            RangeKind::RangeFrom => Some(Self::Open),
+            RangeKind::RangeTo | RangeKind::RangeToInclusive => None,
+        }
+    }
+}
+
+struct RangeBounds {
+    prologue: Vec<Statement>,
+    start: GoExpression,
+    end: Option<GoExpression>,
+    counts_from_zero: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -658,9 +692,9 @@ fn classify_for<'a>(
         });
     }
     if let IterableKind::Range(range) = kind
-        && range.has_start()
+        && let Some(range_end) = StoredRangeEnd::of(range)
     {
-        return ForShape::StoredRange(range);
+        return ForShape::StoredRange(range_end);
     }
     if let Some((kind, receiver)) = recognize_string_view_loop(facts, binding, iterable) {
         return ForShape::StringView(kind, receiver);

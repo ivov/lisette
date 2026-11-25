@@ -207,42 +207,7 @@ impl Planner<'_> {
                     )),
                 ]
             }
-            LoweredReturnAbi::Partial { .. } => {
-                let ok_ty = ok_ty();
-                let (ok_setup, ok_payload) = self.lowered_payload_values(
-                    shape,
-                    &ok_ty,
-                    field(p, tags::partial_variant("Ok").fields[0]),
-                );
-                let [both_ok, both_err] = tags::partial_variant("Both").fields else {
-                    unreachable!("Both carries a payload and an error")
-                };
-                let (both_setup, mut both_values) =
-                    self.lowered_payload_values(shape, &ok_ty, field(p, both_ok));
-                both_values.push(field(p, both_err));
-                let mut statements = vec![
-                    tag_check(
-                        tag_condition(p, tags::partial_variant("Ok").tag),
-                        ok_setup,
-                        shape.ok_values(ok_payload),
-                    )
-                    .into(),
-                    tag_check(
-                        tag_condition(p, tags::partial_variant("Err").tag),
-                        Vec::new(),
-                        self.lowered_err_values(
-                            shape,
-                            return_ty,
-                            field(p, tags::partial_variant("Err").fields[0]),
-                        ),
-                    )
-                    .into(),
-                ];
-
-                statements.extend(both_setup);
-                statements.push(multi_value_return(both_values));
-                statements
-            }
+            LoweredReturnAbi::Partial { .. } => self.partial_return_arms(p, return_ty, shape),
             LoweredReturnAbi::Option(_) => {
                 let (some_setup, some_payload) = self.lowered_payload_values(
                     shape,
@@ -263,6 +228,48 @@ impl Planner<'_> {
         };
 
         statements.extend(arms);
+        statements
+    }
+
+    fn partial_return_arms(
+        &mut self,
+        partial: &GoExpression,
+        return_ty: &Type,
+        shape: &LoweredReturnAbi,
+    ) -> Vec<Statement> {
+        let ok_ty = self.facts.ok_payload(return_ty);
+        let (ok_setup, ok_payload) = self.lowered_payload_values(
+            shape,
+            &ok_ty,
+            field(partial, tags::partial_variant("Ok").fields[0]),
+        );
+        let [both_ok, both_err] = tags::partial_variant("Both").fields else {
+            unreachable!("Both carries a payload and an error")
+        };
+        let (both_setup, mut both_values) =
+            self.lowered_payload_values(shape, &ok_ty, field(partial, both_ok));
+        both_values.push(field(partial, both_err));
+        let mut statements = vec![
+            tag_check(
+                tag_condition(partial, tags::partial_variant("Ok").tag),
+                ok_setup,
+                shape.ok_values(ok_payload),
+            )
+            .into(),
+            tag_check(
+                tag_condition(partial, tags::partial_variant("Err").tag),
+                Vec::new(),
+                self.lowered_err_values(
+                    shape,
+                    return_ty,
+                    field(partial, tags::partial_variant("Err").fields[0]),
+                ),
+            )
+            .into(),
+        ];
+
+        statements.extend(both_setup);
+        statements.push(multi_value_return(both_values));
         statements
     }
 

@@ -163,10 +163,14 @@ pub(crate) fn fresh_suffixed(base: &str, taken: impl Fn(&str) -> bool) -> String
     } else {
         ""
     };
-    (2..)
-        .map(|n| format!("{base}{separator}{n}"))
-        .find(|candidate| !taken(candidate))
-        .expect("freshening counter is unbounded")
+    let mut n = 2;
+    loop {
+        let candidate = format!("{base}{separator}{n}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+        n += 1;
+    }
 }
 
 pub(crate) fn is_plain_identifier(value: &str) -> bool {

@@ -3,11 +3,11 @@ use crate::lookup::facts::component_uses::ValueDemand;
 use crate::lookup::state::bindings::{ComponentBinding, ComponentKind};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::go_returns::tag_check_with_initializer;
-use crate::lowering::calls::NativeCallContext;
 use crate::lowering::calls::bound_value::BoundValue;
+use crate::lowering::calls::bounds_checks::IndexSite;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
-use crate::lowering::calls::slice_loop::FoundSink;
+use crate::lowering::calls::slice_loop::{FindLoop, FoundSink};
 use crate::lowering::calls::wrap_err::{ErrorUse, WrapMessage};
 use crate::lowering::control_flow::try_recover_blocks::TryBlockPairPlan;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
@@ -49,7 +49,7 @@ pub(in crate::lowering) enum OptionFusePlan<'a> {
     Bound(ComponentBinding),
     CommaOk {
         subject: CallSite<'a>,
-        source: CommaOkSource,
+        source: CommaOkSource<'a>,
     },
     Nullable {
         subject: NullableSource<'a>,
@@ -57,10 +57,10 @@ pub(in crate::lowering) enum OptionFusePlan<'a> {
     },
 
     Index {
-        call: NativeCallContext<'a>,
+        site: IndexSite<'a>,
     },
     Found {
-        call: NativeCallContext<'a>,
+        search: Box<FindLoop<'a>>,
     },
 }
 
@@ -74,61 +74,17 @@ impl OptionFusePlan<'_> {
             Self::Bound(components) => planner.bind_component_pair(components, slot),
             Self::CommaOk { subject, source } => planner.bind_comma_ok_pair(subject, source, slot),
             Self::Nullable { subject, nil_guard } => {
-                let value = match subject {
-                    NullableSource::Field(field) => planner.plan_raw_nullable_field(field),
-                    NullableSource::Call(site) => {
-                        planner.plan_call_expression(site, None, ExpressionContext::value())
-                    }
-                };
-                let (mut statements, call) = value.into_parts();
-                let (value, opens_if) = match slot {
-                    CommaOkValueSlot::Named(name) => (name, false),
-                    CommaOkValueSlot::Arm(name) => (name, true),
-                    CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
-                        (planner.fresh_declared("ret"), false)
-                    }
-                    CommaOkValueSlot::Unused => (planner.fresh_declared("ret"), true),
-                };
-
-                let initializer_call = if opens_if {
-                    Some(call)
-                } else {
-                    statements.push(define(value.clone(), call));
-                    None
-                };
-
-                BoundValue::nullable(statements, value, nil_guard, initializer_call)
+                planner.bind_nullable_pair(subject, nil_guard, slot)
             }
-            Self::Index { call } => {
-                let (statements, index) = planner.lower_bounds_checked_index(&call);
+            Self::Index { site } => {
+                let (statements, index) = planner.lower_bounds_checked_index(site);
                 let target = match slot {
                     CommaOkValueSlot::Named(name) => Some(name),
                     _ => None,
                 };
                 BoundValue::index(statements, index, target)
             }
-            Self::Found { call } => {
-                let value = match slot {
-                    CommaOkValueSlot::Named(name) => Some(name),
-                    CommaOkValueSlot::Arm(name) => {
-                        let name = planner.declared_arm_value_name(&name);
-                        Some(name)
-                    }
-                    CommaOkValueSlot::Temp => Some(planner.fresh_declared("ret")),
-                    CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
-                };
-
-                let flag = planner.fresh_declared("found");
-                let statements = planner.lower_find_loop(
-                    &call,
-                    FoundSink {
-                        value: value.as_ref(),
-                        flag: &flag,
-                    },
-                );
-
-                BoundValue::found(statements, value, flag)
-            }
+            Self::Found { search } => planner.bind_found_pair(*search, slot),
         }
     }
 }
@@ -336,6 +292,61 @@ impl FallibleProducer<'_> {
 }
 
 impl<'p> Planner<'p> {
+    fn bind_nullable_pair(
+        &mut self,
+        subject: NullableSource<'_>,
+        nil_guard: NilGuard,
+        slot: CommaOkValueSlot,
+    ) -> BoundValue {
+        let value = match subject {
+            NullableSource::Field(field) => self.plan_raw_nullable_field(field),
+            NullableSource::Call(site) => {
+                self.plan_call_expression(site, None, ExpressionContext::value())
+            }
+        };
+        let (mut statements, call) = value.into_parts();
+        let (value, opens_if) = match slot {
+            CommaOkValueSlot::Named(name) => (name, false),
+            CommaOkValueSlot::Arm(name) => (name, true),
+            CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
+                (self.fresh_declared("ret"), false)
+            }
+            CommaOkValueSlot::Unused => (self.fresh_declared("ret"), true),
+        };
+
+        let initializer_call = if opens_if {
+            Some(call)
+        } else {
+            statements.push(define(value.clone(), call));
+            None
+        };
+
+        BoundValue::nullable(statements, value, nil_guard, initializer_call)
+    }
+
+    fn bind_found_pair(&mut self, search: FindLoop<'_>, slot: CommaOkValueSlot) -> BoundValue {
+        let value = match slot {
+            CommaOkValueSlot::Named(name) => Some(name),
+            CommaOkValueSlot::Arm(name) => {
+                let name = self.declared_arm_value_name(&name);
+                Some(name)
+            }
+            CommaOkValueSlot::Temp => Some(self.fresh_declared("ret")),
+            CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
+        };
+
+        let flag = self.fresh_declared("found");
+        let statements = self.lower_find_loop(
+            search,
+            FoundSink {
+                value: value.as_ref(),
+                flag: &flag,
+            },
+        );
+
+        BoundValue::found(statements, value, flag)
+    }
+
     pub(in crate::lowering) fn component_producer<'a>(
         &self,
         subject: &'a Expression,
@@ -463,10 +474,17 @@ impl<'p> PlannerQueries<'_, 'p> {
                 && call.spread.is_none()
                 && self.index_fuses(receiver, &arguments[0]);
             if indexes {
-                return Some(OptionFusePlan::Index { call });
+                return Some(OptionFusePlan::Index {
+                    site: IndexSite {
+                        receiver,
+                        index: &arguments[0],
+                    },
+                });
             }
-            if self.find_loop_fuses(&call) {
-                return Some(OptionFusePlan::Found { call });
+            if let Some(search) = self.find_loop(call) {
+                return Some(OptionFusePlan::Found {
+                    search: Box::new(search),
+                });
             }
         }
 
@@ -479,6 +497,10 @@ impl<'p> PlannerQueries<'_, 'p> {
             });
         }
 
+        self.nullable_call_fuse_plan(subject)
+    }
+
+    fn nullable_call_fuse_plan<'a>(&self, subject: &'a Expression) -> Option<OptionFusePlan<'a>> {
         let lowered = self.lowered_call(subject)?;
         if lowered.changes_layout() {
             return None;

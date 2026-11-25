@@ -1,5 +1,5 @@
 use crate::lowering::calls::arguments::CallArgumentsContext;
-use crate::lowering::calls::regular::receiver_type_binding;
+use crate::lowering::calls::direct_calls::receiver_type_binding;
 use crate::lowering::calls::type_arguments::{CallArgumentShape, CallTypeArgumentsRequest};
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -32,7 +32,6 @@ impl Planner<'_> {
         let spread = call_plan.site.spread;
         let written_type_arguments = call_plan.site.written_type_arguments();
 
-        let mut coercion = self.facts.dot_receiver_coercion(receiver, member);
         let type_args_string = self
             .queries()
             .call_type_arguments(CallTypeArgumentsRequest {
@@ -48,31 +47,7 @@ impl Planner<'_> {
                 receiver_passed: true,
             });
 
-        let mut receiver_operand = self.plan_operand(receiver, ExpressionContext::value());
-        if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
-        {
-            let source = self.facts.dereferenced_layout(&receiver.get_type());
-            let target = self.facts.receiver_layout(&receiver.get_type());
-            let change = CoercionPlan::change(&self.queries(), &source, &target);
-            if change.changes_layout() {
-                receiver_operand = receiver_operand.map_expression(|setup, value| {
-                    let value = if coercion == Some(ReceiverCoercion::AutoDeref) {
-                        GoExpression::dereference(value)
-                    } else {
-                        value
-                    };
-                    let (layout_change_setup, value) = change.lower(self, value);
-                    setup.extend(layout_change_setup);
-                    value
-                });
-                coercion = None;
-            }
-        }
-        if coercion == Some(ReceiverCoercion::AutoAddress) {
-            receiver_operand = self.coerce_receiver_address_operand(receiver, receiver_operand);
-        } else if coercion == Some(ReceiverCoercion::AutoDeref) {
-            receiver_operand = receiver_operand.dereference();
-        }
+        let receiver_operand = self.plan_ufcs_receiver(callee, &call_plan.resolved);
         let args_ctx = CallArgumentsContext {
             plan: call_plan,
             spread,
@@ -103,6 +78,41 @@ impl Planner<'_> {
             ValuePlan::computed(setup, expression)
         } else {
             ValuePlan::plain_call(setup, expression)
+        }
+    }
+
+    fn plan_ufcs_receiver(
+        &mut self,
+        callee: DotAccessSite<'_>,
+        resolved: &ResolvedCallee<'_>,
+    ) -> ValuePlan {
+        let receiver = callee.receiver;
+        let mut coercion = self.facts.dot_receiver_coercion(receiver, callee.member);
+        let mut receiver_operand = self.plan_operand(receiver, ExpressionContext::value());
+        if resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress) {
+            let source = self.facts.dereferenced_layout(&receiver.get_type());
+            let target = self.facts.receiver_layout(&receiver.get_type());
+            let change = CoercionPlan::change(&self.queries(), &source, &target);
+            if change.changes_layout() {
+                receiver_operand = receiver_operand.map_expression(|setup, value| {
+                    let value = if coercion == Some(ReceiverCoercion::AutoDeref) {
+                        GoExpression::dereference(value)
+                    } else {
+                        value
+                    };
+                    let (layout_change_setup, value) = change.lower(self, value);
+                    setup.extend(layout_change_setup);
+                    value
+                });
+                coercion = None;
+            }
+        }
+        match coercion {
+            Some(ReceiverCoercion::AutoAddress) => {
+                self.coerce_receiver_address_operand(receiver, receiver_operand)
+            }
+            Some(ReceiverCoercion::AutoDeref) => receiver_operand.dereference(),
+            None => receiver_operand,
         }
     }
 
@@ -137,7 +147,7 @@ impl Planner<'_> {
                 },
             )
         } else {
-            self.plan_call_args(args, ctx, Some(receiver_operand))
+            self.plan_call_args(ctx, Some(receiver_operand))
         };
 
         let mut all_values = sequenced.values;
@@ -174,14 +184,16 @@ impl Planner<'_> {
 
     pub(super) fn plan_receiver_method_ufcs(
         &mut self,
-        args: &[Expression],
-        go_method: String,
-        spread: Option<&Expression>,
+        export: GoExport,
         call_plan: &CallPlan<'_, '_>,
     ) -> ValuePlan {
+        let args = call_plan.site.args;
+        let go_method =
+            self.queries()
+                .receiver_method_ufcs_go_name(call_plan.site.callee, call_plan, export);
         let args_ctx = CallArgumentsContext {
             plan: call_plan,
-            spread,
+            spread: call_plan.site.spread,
             capture_boundary: CaptureBoundary::SiblingSequence,
             assigned_place: None,
             callee_is_builtin: false,
@@ -189,7 +201,7 @@ impl Planner<'_> {
             receiver_binding: None,
         };
 
-        let sequenced = self.plan_call_args(args, &args_ctx, None);
+        let sequenced = self.plan_call_args(&args_ctx, None);
         let mut emitted_all = sequenced.values;
         let receiver = emitted_all.remove(0);
 

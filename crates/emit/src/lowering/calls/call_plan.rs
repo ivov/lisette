@@ -143,6 +143,19 @@ pub(in crate::lowering) struct ArgumentSlotLayoutChange {
     pub(in crate::lowering) source: ArgumentValueSource,
 }
 
+struct ParamAbiSource<'s> {
+    declared: Option<&'s [FunctionParameter]>,
+    receiver_offset: usize,
+    callee_id: Option<&'s str>,
+    origin: CallableOrigin<'s>,
+}
+
+struct ParamSlot {
+    declared: Option<Type>,
+    origin: SlotOrigin,
+    layout: ValueLayout,
+}
+
 fn callee_return_slot<'r>(
     facts: &'r EmitFacts<'_>,
     origin: &CallableOrigin<'_>,
@@ -242,55 +255,30 @@ impl<'a> PlannerQueries<'_, 'a> {
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
         let declared_params = declared_type.and_then(|ty| ty.unwrap_forall().get_function_params());
         let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
-        let mut params = self.build_param_abi(
-            &instantiated,
-            declared_params,
-            receiver_offset,
-            id.as_deref(),
-            &origin,
-        );
+        let params = match self.go_named_function_type_param(function, declaration, id.as_deref()) {
+            Some(param) => vec![param],
+            None => self.build_param_abi(
+                &instantiated,
+                ParamAbiSource {
+                    declared: declared_params,
+                    receiver_offset,
+                    callee_id: id.as_deref(),
+                    origin,
+                },
+            ),
+        };
 
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
-        let callee_ty = function.get_type();
-        if declaration.is_some_and(CallableDeclaration::is_type_definition)
-            && let Type::Nominal { id: type_id, .. } = callee_ty.unwrap_forall()
-            && id.as_deref() == Some(type_id.as_str())
-            && self.facts.is_go_named_function_type(&callee_ty)
-        {
-            params = vec![CallableParamAbi {
-                instantiated: callee_ty.clone(),
-                declared: None,
-                origin: SlotOrigin::Lisette,
-                layout: self
-                    .facts
-                    .value_layout(&callee_ty, SlotOrigin::Lisette)
-                    .underlying()
-                    .clone(),
-                variadic: None,
-            }];
-        }
-        let result = self.callee_return_abi(CalleeSignature {
-            callee: function,
-            origin: &origin,
-            id: id.as_deref(),
-            declaration,
-            declared_return,
-            return_type,
-        });
-
-        let (return_origin, return_declaration) = callee_return_slot(
-            self.facts,
-            &origin,
-            id.as_deref(),
-            declared_return,
-            return_type,
-        );
-
-        let return_layout = self.facts.callable_result_layout(
-            return_type,
-            return_origin,
-            return_declaration,
-            &result,
+        let abi = self.callable_abi(
+            params,
+            CalleeSignature {
+                callee: function,
+                origin: &origin,
+                id: id.as_deref(),
+                declaration,
+                declared_return,
+                return_type,
+            },
         );
         let is_prelude_dispatch = is_prelude_dispatch(id.as_deref(), &origin);
 
@@ -299,13 +287,67 @@ impl<'a> PlannerQueries<'_, 'a> {
             declaration,
             instantiated,
             receiver_offset,
-            abi: CallableAbi {
-                params,
-                result,
-                return_layout,
-                result_declaration: return_declaration.cloned(),
-            },
+            abi,
             is_prelude_dispatch,
+        }
+    }
+
+    fn go_named_function_type_param(
+        &self,
+        function: &Expression,
+        declaration: Option<CallableDeclaration<'_>>,
+        id: Option<&str>,
+    ) -> Option<CallableParamAbi> {
+        let callee_ty = function.get_type();
+        if !declaration.is_some_and(CallableDeclaration::is_type_definition)
+            || !self.facts.is_go_named_function_type(&callee_ty)
+        {
+            return None;
+        }
+        let Type::Nominal { id: type_id, .. } = callee_ty.unwrap_forall() else {
+            return None;
+        };
+        if id != Some(type_id.as_str()) {
+            return None;
+        }
+        Some(CallableParamAbi {
+            instantiated: callee_ty.clone(),
+            declared: None,
+            origin: SlotOrigin::Lisette,
+            layout: self
+                .facts
+                .value_layout(&callee_ty, SlotOrigin::Lisette)
+                .underlying()
+                .clone(),
+            variadic: None,
+        })
+    }
+
+    fn callable_abi(
+        &self,
+        params: Vec<CallableParamAbi>,
+        signature: CalleeSignature<'_, '_>,
+    ) -> CallableAbi {
+        let (return_origin, return_declaration) = callee_return_slot(
+            self.facts,
+            signature.origin,
+            signature.id,
+            signature.declared_return,
+            signature.return_type,
+        );
+        let return_type = signature.return_type;
+        let result = self.callee_return_abi(signature);
+        let return_layout = self.facts.callable_result_layout(
+            return_type,
+            return_origin,
+            return_declaration,
+            &result,
+        );
+        CallableAbi {
+            params,
+            result,
+            return_layout,
+            result_declaration: return_declaration.cloned(),
         }
     }
 
@@ -375,10 +417,7 @@ impl<'a> PlannerQueries<'_, 'a> {
     fn build_param_abi(
         &self,
         instantiated: &Type,
-        declared: Option<&[FunctionParameter]>,
-        receiver_offset: usize,
-        callee_id: Option<&str>,
-        callable_origin: &CallableOrigin<'_>,
+        source: ParamAbiSource<'_>,
     ) -> Vec<CallableParamAbi> {
         let parameters = instantiated.get_function_params().unwrap_or(&[]);
         let variadic_element = instantiated.is_variadic();
@@ -386,88 +425,101 @@ impl<'a> PlannerQueries<'_, 'a> {
             .iter()
             .enumerate()
             .map(|(index, instantiated)| {
-                let declared = declared
-                    .and_then(|params| params.get(receiver_offset + index))
-                    .map(|param| param.ty.clone());
-                let catalog_slot = if matches!(callable_origin, CallableOrigin::GoInterop) {
-                    callee_id.and_then(|id| {
-                        self.facts
-                            .go_callable_parameter(id, receiver_offset + index)
-                    })
-                } else {
-                    None
-                };
-
-                let origin = catalog_slot.map_or_else(
-                    || {
-                        if matches!(callable_origin, CallableOrigin::GoInterop) {
-                            SlotOrigin::of_go_declaration(
-                                SlotOrigin::GoParameter,
-                                declared.as_ref().unwrap_or(&instantiated.ty),
-                                |id| self.facts.definition(id),
-                            )
-                        } else {
-                            SlotOrigin::Lisette
-                        }
-                    },
-                    |slot| slot.origin,
-                );
-
-                let layout = catalog_slot
-                    .map(|slot| {
-                        self.facts.value_layout_with_declaration(
-                            &instantiated.ty,
-                            origin,
-                            &slot.declared_type,
-                        )
-                    })
-                    .or_else(|| {
-                        declared.as_ref().map(|declared| {
-                            self.facts.value_layout_with_declaration(
-                                &instantiated.ty,
-                                origin,
-                                declared,
-                            )
-                        })
-                    })
-                    .unwrap_or_else(|| self.facts.value_layout(&instantiated.ty, origin));
-
+                let slot = self.param_slot(&source, index, &instantiated.ty);
                 let element = (index + 1 == parameters.len())
                     .then(|| variadic_element.clone())
                     .flatten();
-                let Some(element) = element else {
-                    return CallableParamAbi {
+                match element {
+                    Some(element) => self.variadic_param_abi(slot, element),
+                    None => CallableParamAbi {
                         instantiated: instantiated.ty.clone(),
-                        declared,
-                        origin,
-                        layout,
+                        declared: slot.declared,
+                        origin: slot.origin,
+                        layout: slot.layout,
                         variadic: None,
-                    };
-                };
-
-                let declared_element = declared.map(|declared| {
-                    if declared.is_native(CompoundKind::VarArgs) {
-                        declared.inner().unwrap_or(declared)
-                    } else {
-                        declared
-                    }
-                });
-
-                let element_layout = declared_element.as_ref().map_or_else(
-                    || self.facts.value_layout(&element, origin),
-                    |declared| {
-                        self.facts
-                            .value_layout_with_declaration(&element, origin, declared)
                     },
-                );
-                CallableParamAbi {
-                    instantiated: element,
-                    declared: declared_element,
-                    origin,
-                    layout: element_layout,
-                    variadic: Some(layout),
                 }
             })
             .collect()
+    }
+
+    fn param_slot(
+        &self,
+        source: &ParamAbiSource<'_>,
+        index: usize,
+        instantiated: &Type,
+    ) -> ParamSlot {
+        let position = source.receiver_offset + index;
+        let declared = source
+            .declared
+            .and_then(|params| params.get(position))
+            .map(|param| param.ty.clone());
+        let from_go = matches!(source.origin, CallableOrigin::GoInterop);
+        let catalog_slot = if from_go {
+            source
+                .callee_id
+                .and_then(|id| self.facts.go_callable_parameter(id, position))
+        } else {
+            None
+        };
+
+        let origin = catalog_slot.map_or_else(
+            || {
+                if from_go {
+                    SlotOrigin::of_go_declaration(
+                        SlotOrigin::GoParameter,
+                        declared.as_ref().unwrap_or(instantiated),
+                        |id| self.facts.definition(id),
+                    )
+                } else {
+                    SlotOrigin::Lisette
+                }
+            },
+            |slot| slot.origin,
+        );
+
+        let layout = catalog_slot
+            .map(|slot| {
+                self.facts
+                    .value_layout_with_declaration(instantiated, origin, &slot.declared_type)
+            })
+            .or_else(|| {
+                declared.as_ref().map(|declared| {
+                    self.facts
+                        .value_layout_with_declaration(instantiated, origin, declared)
+                })
+            })
+            .unwrap_or_else(|| self.facts.value_layout(instantiated, origin));
+
+        ParamSlot {
+            declared,
+            origin,
+            layout,
+        }
+    }
+
+    fn variadic_param_abi(&self, slot: ParamSlot, element: Type) -> CallableParamAbi {
+        let declared_element = slot.declared.map(|declared| {
+            if declared.is_native(CompoundKind::VarArgs) {
+                declared.inner().unwrap_or(declared)
+            } else {
+                declared
+            }
+        });
+
+        let element_layout = declared_element.as_ref().map_or_else(
+            || self.facts.value_layout(&element, slot.origin),
+            |declared| {
+                self.facts
+                    .value_layout_with_declaration(&element, slot.origin, declared)
+            },
+        );
+        CallableParamAbi {
+            instantiated: element,
+            declared: declared_element,
+            origin: slot.origin,
+            layout: element_layout,
+            variadic: Some(slot.layout),
+        }
     }
 }

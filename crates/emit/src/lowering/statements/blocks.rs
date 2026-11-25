@@ -114,6 +114,10 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
+        self.return_unit_after_tail(LoweredBlock { statements }, last)
+    }
+
+    fn return_unit_after_tail(&self, mut body: LoweredBlock, last: &Expression) -> LoweredBlock {
         let is_statement_only = matches!(
             last,
             Expression::Assignment { .. } | Expression::Let { .. } | Expression::Const { .. }
@@ -121,7 +125,6 @@ impl Planner<'_> {
         let is_unit_tail = !is_statement_only
             && !matches!(last, Expression::Return { .. })
             && self.facts.resolves_to_unit(&last.get_type());
-        let mut body = LoweredBlock { statements };
         let return_ctx = self.scope.current_return_ctx();
         if (is_statement_only || is_unit_tail)
             && !body.go_terminates()
@@ -215,8 +218,13 @@ impl Planner<'_> {
                 let Some(value) = value.value() else {
                     return LoweredStatement::Block(LoweredBlock { statements: vec![] }).into();
                 };
-                let statement =
-                    self.lower_const(identifier, *binding, value, ty, ConstPlacement::Local);
+                let statement = LoweredStatement::Const(self.lower_const(
+                    identifier,
+                    *binding,
+                    value,
+                    ty,
+                    ConstPlacement::Local,
+                ));
                 directed_at(&self.facts, expression, statement)
             }
             Expression::Struct { .. }
@@ -256,28 +264,7 @@ impl Planner<'_> {
             Expression::Continue { .. } => {
                 LoweredStatement::Continue(self.queries().current_loop_transfer())
             }
-            Expression::Break { value: None, .. } => {
-                let transfer = LoweredStatement::Break(self.queries().current_loop_transfer());
-                let wide_result = self
-                    .scope
-                    .current_loop()
-                    .filter(|loop_context| {
-                        self.queries().widens_unit(loop_context.result_ty.as_ref())
-                    })
-                    .and_then(|loop_context| {
-                        Some((loop_context.result.clone()?, loop_context.result_ty.clone()))
-                    });
-
-                match wide_result {
-                    Some((result, result_ty)) => {
-                        let mut statements =
-                            self.lower_unit_into(expression, None, &result, result_ty.as_ref());
-                        statements.push(transfer.into());
-                        LoweredStatement::Body(LoweredBlock { statements })
-                    }
-                    None => transfer,
-                }
-            }
+            Expression::Break { value: None, .. } => self.lower_bare_break(expression),
             Expression::Break {
                 value: Some(value), ..
             } => LoweredStatement::Body(self.build_break_value_plan(value)),
@@ -331,6 +318,27 @@ impl Planner<'_> {
         };
 
         Some(statement)
+    }
+
+    fn lower_bare_break(&mut self, expression: &Expression) -> LoweredStatement {
+        let transfer = LoweredStatement::Break(self.queries().current_loop_transfer());
+        let wide_result = self
+            .scope
+            .current_loop()
+            .filter(|loop_context| self.queries().widens_unit(loop_context.result_ty.as_ref()))
+            .and_then(|loop_context| {
+                Some((loop_context.result.clone()?, loop_context.result_ty.clone()))
+            });
+
+        match wide_result {
+            Some((result, result_ty)) => {
+                let mut statements =
+                    self.lower_unit_into(expression, None, &result, result_ty.as_ref());
+                statements.push(transfer.into());
+                LoweredStatement::Body(LoweredBlock { statements })
+            }
+            None => transfer,
+        }
     }
 
     fn lower_expression_statement(&mut self, expression: &Expression) -> Statement {

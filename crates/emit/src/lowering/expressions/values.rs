@@ -140,20 +140,7 @@ impl Planner<'_> {
                 ty,
                 resolution,
                 ..
-            } => {
-                let go_expression = self
-                    .queries()
-                    .plan_identifier(expression, value, resolution, ty, ctx);
-                let stability = match self
-                    .scope
-                    .resolve_identifier_with_resolution(value, resolution)
-                {
-                    Some(BindingValue::InlineExpression(inline)) => inline.stability(),
-                    _ => identifier_read_stability(&self.facts, expression),
-                };
-
-                ValuePlan::from_identifier_expression(go_expression, stability)
-            }
+            } => self.plan_identifier_value(expression, value, resolution, ty, ctx),
             Expression::Call {
                 expression: callee,
                 args,
@@ -225,6 +212,28 @@ impl Planner<'_> {
         }
     }
 
+    fn plan_identifier_value(
+        &self,
+        expression: &Expression,
+        value: &str,
+        resolution: &IdentifierResolution,
+        ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        let go_expression = self
+            .queries()
+            .plan_identifier(expression, value, resolution, ty, ctx);
+        let stability = match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+        {
+            Some(BindingValue::InlineExpression(inline)) => inline.stability(),
+            _ => identifier_read_stability(&self.facts, expression),
+        };
+
+        ValuePlan::from_identifier_expression(go_expression, stability)
+    }
+
     pub(in crate::lowering) fn coerce_elements_to_slots(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -275,21 +284,32 @@ impl Planner<'_> {
                 continue;
             };
 
-            let coercion = match placed
+            let placement = placed
                 .as_ref()
-                .and_then(|(adaptations, slots)| adaptations.get(index).zip(slots.get(index)))
-            {
-                Some((adaptation, semantic)) => {
-                    self.adapted_slot_coercion(element, adaptation, semantic, slot)
-                }
-                None => self.value_slot_coercion(element, slot),
-            };
-
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
-            coerced_elements.push(coerced);
+                .and_then(|(adaptations, slots)| adaptations.get(index).zip(slots.get(index)));
+            coerced_elements
+                .push(self.coerce_tuple_element(setup, element, value, slot, placement));
         }
         coerced_elements
+    }
+
+    fn coerce_tuple_element(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        element: &Expression,
+        value: GoExpression,
+        slot: &Type,
+        placement: Option<(&Adaptation, &Type)>,
+    ) -> GoExpression {
+        let coercion = match placement {
+            Some((adaptation, semantic)) => {
+                self.adapted_slot_coercion(element, adaptation, semantic, slot)
+            }
+            None => self.value_slot_coercion(element, slot),
+        };
+        let (coercion_setup, coerced) = coercion.lower(self, value);
+        setup.extend(coercion_setup);
+        coerced
     }
 
     pub(in crate::lowering) fn plan_tuple_value(
@@ -444,42 +464,33 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let type_string = self.queries().go_type(ty);
 
-        let mut operands: Vec<ValuePlan> = Vec::new();
-        let has_start = start.is_some();
-        if let Some(s) = start {
-            operands.push(self.plan_operand(s, ExpressionContext::value()));
-        }
-        if let Some(e) = end {
-            operands.push(self.plan_operand(e, ExpressionContext::value()));
-        }
-
-        if operands.is_empty() {
+        let bounds: Vec<(&str, &Expression)> = start
+            .iter()
+            .map(|bound| (go_name::RANGE_START_FIELD, bound.as_ref()))
+            .chain(
+                end.iter()
+                    .map(|bound| (go_name::RANGE_END_FIELD, bound.as_ref())),
+            )
+            .collect();
+        if bounds.is_empty() {
             return ValuePlan::computed(Vec::new(), self.unit_value(None, None));
         }
 
+        let operands: Vec<ValuePlan> = bounds
+            .iter()
+            .map(|(_, bound)| self.plan_operand(bound, ExpressionContext::value()))
+            .collect();
         let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "range");
-        let mut values = sequenced.values.into_iter();
-        let mut fields = Vec::new();
-        if has_start {
-            fields.push((
-                go_name::RANGE_START_FIELD.to_string(),
-                values.next().expect("range has a start"),
-            ));
-            if let Some(end_value) = values.next() {
-                fields.push((go_name::RANGE_END_FIELD.to_string(), end_value));
-            }
-        } else {
-            fields.push((
-                go_name::RANGE_END_FIELD.to_string(),
-                values.next().expect("range has an end"),
-            ));
-        }
+        let fields: Vec<(String, GoExpression)> = bounds
+            .iter()
+            .zip(sequenced.values)
+            .map(|((field, _), value)| (field.to_string(), value))
+            .collect();
 
-        let bounds: Vec<_> = start.iter().chain(end).collect();
         let value = plan_struct_literal(&type_string, fields).position_elements(|index, _| {
             bounds
                 .get(index)
-                .and_then(|bound| self.facts.source_position(&bound.get_span()))
+                .and_then(|(_, bound)| self.facts.source_position(&bound.get_span()))
         });
         ValuePlan::computed(sequenced.setup, value)
     }
@@ -521,30 +532,35 @@ impl Planner<'_> {
             )
         {
             self.restore_planning(checkpoint);
-            let (mut setup, inner) = self
-                .plan_value(
-                    expression,
-                    ExpressionContext::value().with_capture_boundary(CaptureBoundary::Delayed),
-                )
-                .into_parts();
-
-            let mut body_statements = Vec::new();
-            if !inner.is_empty() {
-                body_statements.push(if self.facts.resolves_to_unit(&expression.get_type()) {
-                    effect_statement(inner)
-                } else {
-                    discard(inner)
-                });
-            }
-            let body = LoweredBlock {
-                statements: body_statements,
-            };
+            let (mut setup, body) = self.plan_delayed_async_body(expression);
             setup.push(async_statement(kind, immediate_call(body)));
             return statement_plan(setup);
         }
         let (mut setup, inner) = plan.into_parts();
         setup.push(async_statement(kind, inner));
         statement_plan(setup)
+    }
+
+    fn plan_delayed_async_body(
+        &mut self,
+        expression: &Expression,
+    ) -> (Vec<Statement>, LoweredBlock) {
+        let (setup, inner) = self
+            .plan_value(
+                expression,
+                ExpressionContext::value().with_capture_boundary(CaptureBoundary::Delayed),
+            )
+            .into_parts();
+
+        let mut statements = Vec::new();
+        if !inner.is_empty() {
+            statements.push(if self.facts.resolves_to_unit(&expression.get_type()) {
+                effect_statement(inner)
+            } else {
+                discard(inner)
+            });
+        }
+        (setup, LoweredBlock { statements })
     }
 
     pub(in crate::lowering) fn plan_operand(
@@ -763,7 +779,10 @@ impl PlannerQueries<'_, '_> {
         context: ExpressionContext<'_>,
     ) -> Option<(FunctionLayout, FunctionLayout)> {
         let slot = context.generic_result_slot()?;
-        if !function_ty.get_function_ret().is_some_and(Type::is_never) {
+        let Type::Function(function) = function_ty else {
+            return None;
+        };
+        if !function.return_type.is_never() {
             return None;
         }
         let return_type = slot
@@ -786,9 +805,8 @@ impl PlannerQueries<'_, '_> {
             ),
         };
 
-        let parameters = function_ty
-            .get_function_params()
-            .expect("a function has parameters")
+        let parameters = function
+            .params
             .iter()
             .map(|parameter| self.facts.value_layout(&parameter.ty, SlotOrigin::Lisette))
             .collect::<Vec<_>>();

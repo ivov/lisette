@@ -23,10 +23,10 @@ struct StructuredTag {
 }
 
 impl TagConfig {
-    fn structured(key: String) -> Self {
+    fn structured(key: String, settings: StructuredTag) -> Self {
         Self {
             key,
-            value: TagValue::Structured(StructuredTag::default()),
+            value: TagValue::Structured(settings),
         }
     }
 
@@ -191,17 +191,17 @@ fn interpret_field_attribute(
         return None;
     }
 
-    let mut config = TagConfig::structured(key.clone());
+    let mut settings = StructuredTag::default();
     if let Some(default) = struct_defaults
         .iter()
         .find(|config| config.key == *key)
         .and_then(TagConfig::settings)
     {
-        let settings = config.settings_mut().expect("structured tag config");
         settings.case_transform = default.case_transform;
         settings.omitempty = default.omitempty;
         settings.omitzero = default.omitzero;
     }
+    let mut config = TagConfig::structured(key.clone(), settings);
 
     for arg in &attribute.args {
         if let AttributeArg::Raw(raw) = arg {
@@ -250,10 +250,9 @@ fn interpret_tag_attribute(attribute: &Attribute) -> Option<TagConfig> {
         }
 
         AttributeArg::String(key) => {
-            let mut config = TagConfig::structured(key.clone());
+            let mut settings = StructuredTag::default();
 
             for (i, arg) in attribute.args.iter().enumerate().skip(1) {
-                let settings = config.settings_mut().expect("structured tag config");
                 if settings.apply_common_arg(arg) {
                     continue;
                 }
@@ -268,7 +267,7 @@ fn interpret_tag_attribute(attribute: &Attribute) -> Option<TagConfig> {
                 }
             }
 
-            Some(config)
+            Some(TagConfig::structured(key.clone(), settings))
         }
 
         _ => None,

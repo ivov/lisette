@@ -26,10 +26,14 @@ pub(crate) fn fresh_receiver_name(type_name: &str, taken: impl Fn(&str) -> bool)
     if !taken(&doubled) {
         return doubled;
     }
-    (2..)
-        .map(|n| format!("{letter}{n}"))
-        .find(|candidate| !taken(candidate))
-        .expect("freshening counter is unbounded")
+    let mut n = 2;
+    loop {
+        let candidate = format!("{letter}{n}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+        n += 1;
+    }
 }
 
 #[derive(Clone, Default)]

@@ -56,39 +56,39 @@ fn binary_constant(
     right: Option<ConstantKind>,
 ) -> Option<ConstantKind> {
     let left = left?;
-    if matches!(
-        operator,
-        GoBinaryOperator::ShiftLeft | GoBinaryOperator::ShiftRight
-    ) {
-        return left.is_numeric().then_some(left);
-    }
-    let right = right?;
-    match operator {
-        GoBinaryOperator::Equal
-        | GoBinaryOperator::NotEqual
-        | GoBinaryOperator::LessThan
-        | GoBinaryOperator::LessThanOrEqual
-        | GoBinaryOperator::GreaterThan
-        | GoBinaryOperator::GreaterThanOrEqual
-        | GoBinaryOperator::And
-        | GoBinaryOperator::Or => Some(ConstantKind::Bool),
-        GoBinaryOperator::Addition
-            if left == ConstantKind::String && right == ConstantKind::String =>
+    match (operator, right) {
+        (GoBinaryOperator::ShiftLeft | GoBinaryOperator::ShiftRight, _) => {
+            left.is_numeric().then_some(left)
+        }
+        (_, None) => None,
+        (
+            GoBinaryOperator::Equal
+            | GoBinaryOperator::NotEqual
+            | GoBinaryOperator::LessThan
+            | GoBinaryOperator::LessThanOrEqual
+            | GoBinaryOperator::GreaterThan
+            | GoBinaryOperator::GreaterThanOrEqual
+            | GoBinaryOperator::And
+            | GoBinaryOperator::Or,
+            Some(_),
+        ) => Some(ConstantKind::Bool),
+        (GoBinaryOperator::Addition, Some(ConstantKind::String))
+            if left == ConstantKind::String =>
         {
             Some(ConstantKind::String)
         }
-        GoBinaryOperator::Addition
-        | GoBinaryOperator::Subtraction
-        | GoBinaryOperator::Multiplication
-        | GoBinaryOperator::Division
-        | GoBinaryOperator::Remainder
-        | GoBinaryOperator::BitwiseAnd
-        | GoBinaryOperator::BitwiseOr
-        | GoBinaryOperator::BitwiseXor
-        | GoBinaryOperator::BitwiseAndNot => left.join(right),
-        GoBinaryOperator::ShiftLeft | GoBinaryOperator::ShiftRight => {
-            unreachable!("shifts return above")
-        }
+        (
+            GoBinaryOperator::Addition
+            | GoBinaryOperator::Subtraction
+            | GoBinaryOperator::Multiplication
+            | GoBinaryOperator::Division
+            | GoBinaryOperator::Remainder
+            | GoBinaryOperator::BitwiseAnd
+            | GoBinaryOperator::BitwiseOr
+            | GoBinaryOperator::BitwiseXor
+            | GoBinaryOperator::BitwiseAndNot,
+            Some(right),
+        ) => left.join(right),
     }
 }
 

@@ -48,17 +48,39 @@ impl CallArgumentsContext<'_, '_> {
     }
 }
 
+fn bound_type_parameters(
+    ctx: &CallArgumentsContext<'_, '_>,
+    operands: &[ValuePlan],
+    slots: &[Option<(&Type, &Type)>],
+) -> FxHashSet<String> {
+    let mut bound = ctx.receiver_bound_parameters();
+    for (operand, slot) in operands.iter().zip(slots) {
+        if operand.expression().constant_kind().is_some() {
+            continue;
+        }
+        if let Some((declared, instantiated)) = slot {
+            let mut mapping: FxHashMap<String, Type> = FxHashMap::default();
+            extract_type_mapping(declared, instantiated, &mut mapping);
+            bound.extend(mapping.into_keys());
+        }
+    }
+    bound
+}
+
 impl Planner<'_> {
     pub(super) fn plan_call_args(
         &mut self,
-        args: &[Expression],
         ctx: &CallArgumentsContext<'_, '_>,
         leading: Option<ValuePlan>,
     ) -> SequencedValues {
-        let operands: Vec<ValuePlan> = args
+        let operands: Vec<ValuePlan> = ctx
+            .plan
+            .site
+            .args
             .iter()
+            .zip(&ctx.plan.arguments)
             .enumerate()
-            .map(|(i, arg)| self.plan_call_arg(arg, i, ctx))
+            .map(|(i, (arg, plan))| self.plan_call_arg(arg, plan, i, ctx))
             .collect();
         let operands = self.queries().type_constant_arguments(operands, ctx);
         let extra_leading = usize::from(leading.is_some());
@@ -86,17 +108,12 @@ impl Planner<'_> {
     fn plan_call_arg(
         &mut self,
         argument: &Expression,
+        plan: &ArgumentPlan,
         index: usize,
         ctx: &CallArgumentsContext<'_, '_>,
     ) -> ValuePlan {
         let param = ctx.plan.resolved.abi.param(index);
         let declared_param_ty = param.and_then(|param| param.declared.as_ref());
-
-        let plan = ctx
-            .plan
-            .arguments
-            .get(index)
-            .expect("CallPlan has one argument plan per argument");
 
         match plan {
             ArgumentPlan::LayoutChange(change) => self.plan_go_slot_layout_change(argument, change),
@@ -295,17 +312,7 @@ impl PlannerQueries<'_, '_> {
             })
             .collect();
 
-        let mut bound = ctx.receiver_bound_parameters();
-        for (operand, slot) in operands.iter().zip(&slots) {
-            if operand.expression().constant_kind().is_some() {
-                continue;
-            }
-            if let Some((declared, instantiated)) = slot {
-                let mut mapping: FxHashMap<String, Type> = FxHashMap::default();
-                extract_type_mapping(declared, instantiated, &mut mapping);
-                bound.extend(mapping.into_keys());
-            }
-        }
+        let bound = bound_type_parameters(ctx, &operands, &slots);
         operands
             .into_iter()
             .zip(&slots)

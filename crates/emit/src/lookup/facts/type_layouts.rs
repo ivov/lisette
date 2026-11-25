@@ -26,28 +26,12 @@ impl EmitFacts<'_> {
     ) -> Option<(FunctionLayout, FunctionLayout)> {
         let (receiver_param, parameters) = declaration.params.split_first()?;
         let receiver_declaration = receiver_param.ty.strip_refs();
+        let type_params = receiver_declaration.get_type_params()?;
         let receiver_layout = self.dereferenced_layout(receiver_ty);
-        let slots = match receiver_layout.underlying() {
-            ValueLayout::TaggedOption { payload, .. } => vec![payload.as_ref()],
-            ValueLayout::Fallible { payload, error, .. } => vec![payload.as_ref(), error.as_ref()],
-            _ => return None,
-        };
-        let bindings: Vec<_> = receiver_declaration
-            .get_type_params()?
-            .iter()
-            .zip(slots)
-            .collect();
+        let bindings = receiver_slot_bindings(type_params, &receiver_layout)?;
         let canonical_receiver = self.receiver_layout(receiver_ty);
-        let canonical_slots = match canonical_receiver.underlying() {
-            ValueLayout::TaggedOption { payload, .. } => vec![payload.as_ref()],
-            ValueLayout::Fallible { payload, error, .. } => vec![payload.as_ref(), error.as_ref()],
-            _ => unreachable!("prelude receiver has the same container after alias expansion"),
-        };
-        let canonical_bindings: Vec<_> = receiver_declaration
-            .get_type_params()?
-            .iter()
-            .zip(canonical_slots)
-            .collect();
+        let canonical_bindings = receiver_slot_bindings(type_params, &canonical_receiver)
+            .expect("prelude receiver has the same container after alias expansion");
         for ((slot, declared), actual) in target
             .parameters
             .iter_mut()
@@ -130,30 +114,36 @@ impl EmitFacts<'_> {
                 let actual = actual
                     .as_function_type()
                     .expect("function slot instantiation");
-                let parameters = actual
-                    .params
-                    .iter()
-                    .zip(&declared.params)
-                    .map(|(actual, declared)| {
-                        self.layout_with_receiver_slots(&actual.ty, &declared.ty, bindings)
-                    })
-                    .collect();
-
-                let result = self.layout_with_receiver_slots(
-                    &actual.return_type,
-                    &declared.return_type,
-                    bindings,
-                );
-                *layout = self.function_layout(
-                    parameters,
-                    &result,
-                    slot_return_abi(self, &declared.return_type, SlotOrigin::Lisette),
-                    Some(&declared.return_type),
-                );
+                *layout = self.function_layout_with_receiver_slots(actual, declared, bindings);
             }
             _ => {}
         }
         layout
+    }
+
+    fn function_layout_with_receiver_slots(
+        &self,
+        actual: &FunctionType,
+        declared: &FunctionType,
+        bindings: &[(&Type, &ValueLayout)],
+    ) -> FunctionLayout {
+        let parameters = actual
+            .params
+            .iter()
+            .zip(&declared.params)
+            .map(|(actual, declared)| {
+                self.layout_with_receiver_slots(&actual.ty, &declared.ty, bindings)
+            })
+            .collect();
+
+        let result =
+            self.layout_with_receiver_slots(&actual.return_type, &declared.return_type, bindings);
+        self.function_layout(
+            parameters,
+            &result,
+            slot_return_abi(self, &declared.return_type, SlotOrigin::Lisette),
+            Some(&declared.return_type),
+        )
     }
 
     pub(crate) fn field_slot_layout(
@@ -288,8 +278,17 @@ impl EmitFacts<'_> {
             return self.value_layout_with_declaration(ty, origin, declaration);
         }
         let mut layout = self.value_layout_with_hint(ty, origin, Some(declaration));
-        let declaration = self.peel_alias(declaration);
-        match &mut layout {
+        self.refine_with_declaration(&mut layout, origin, &self.peel_alias(declaration));
+        layout
+    }
+
+    fn refine_with_declaration(
+        &self,
+        layout: &mut ValueLayout,
+        origin: SlotOrigin,
+        declaration: &Type,
+    ) {
+        match layout {
             ValueLayout::TaggedOption {
                 option_type: ty,
                 payload,
@@ -301,7 +300,7 @@ impl EmitFacts<'_> {
             | ValueLayout::PointerOption {
                 option_type: ty,
                 payload,
-            } if is_prelude_container_type(&declaration) => {
+            } if is_prelude_container_type(declaration) => {
                 **payload = self.value_layout_with_declaration(
                     &ty.ok_type(),
                     origin.nested(),
@@ -312,7 +311,7 @@ impl EmitFacts<'_> {
                 fallible_type: ty,
                 payload,
                 error,
-            } if is_prelude_container_type(&declaration) => {
+            } if is_prelude_container_type(declaration) => {
                 **payload = self.value_layout_with_declaration(
                     &ty.ok_type(),
                     origin.nested(),
@@ -326,7 +325,7 @@ impl EmitFacts<'_> {
             }
             ValueLayout::Tuple { elements, .. } => {
                 for (index, element) in elements.iter_mut().enumerate() {
-                    if let Some(declared) = tuple_hint(Some(&declaration), index) {
+                    if let Some(declared) = tuple_hint(Some(declaration), index) {
                         *element = self.value_layout_with_declaration(
                             element.logical_type(),
                             origin.nested(),
@@ -337,7 +336,6 @@ impl EmitFacts<'_> {
             }
             _ => {}
         }
-        layout
     }
 
     pub(crate) fn function_layout(
@@ -478,26 +476,18 @@ impl EmitFacts<'_> {
         origin: SlotOrigin,
         declaration: Option<&Type>,
     ) -> ValueLayout {
-        let go_target = self.peel_go_alias(ty);
-        if go_target != *ty.unwrap_forall() && go_target != self.peel_alias(ty) {
-            return ValueLayout::Named {
-                named_type: ty.clone(),
-                underlying: Box::new(self.value_layout_with_hint(&go_target, origin, declaration)),
-                go_alias: true,
-            };
+        if let Some(layout) = self.go_alias_layout(ty, origin, declaration) {
+            return layout;
         }
         let alias_declaration = self.function_alias_declaration(ty);
         let resolved_declaration = alias_declaration
             .clone()
             .or_else(|| declaration.map(|ty| self.peel_alias(ty)));
         let alias_return = alias_declaration.as_ref().and_then(Type::get_function_ret);
-        if resolved_declaration.as_ref().is_some_and(|ty| {
-            self.resolves_to_unknown(ty)
-                || matches!(
-                    ty.unwrap_forall(),
-                    Type::Parameter(_) | Type::Var { .. } | Type::ReceiverPlaceholder
-                )
-        }) {
+        if resolved_declaration
+            .as_ref()
+            .is_some_and(|ty| self.declaration_is_open(ty))
+        {
             return self.value_layout_with_hint(ty, SlotOrigin::Lisette, None);
         }
 
@@ -539,6 +529,31 @@ impl EmitFacts<'_> {
             resolved_declaration.as_ref(),
             alias_return,
         )
+    }
+
+    fn go_alias_layout(
+        &self,
+        ty: &Type,
+        origin: SlotOrigin,
+        declaration: Option<&Type>,
+    ) -> Option<ValueLayout> {
+        let go_target = self.peel_go_alias(ty);
+        if go_target == *ty.unwrap_forall() || go_target == self.peel_alias(ty) {
+            return None;
+        }
+        Some(ValueLayout::Named {
+            named_type: ty.clone(),
+            underlying: Box::new(self.value_layout_with_hint(&go_target, origin, declaration)),
+            go_alias: true,
+        })
+    }
+
+    fn declaration_is_open(&self, declaration: &Type) -> bool {
+        self.resolves_to_unknown(declaration)
+            || matches!(
+                declaration.unwrap_forall(),
+                Type::Parameter(_) | Type::Var { .. } | Type::ReceiverPlaceholder
+            )
     }
 
     fn value_layout_resolved(
@@ -588,11 +603,8 @@ impl EmitFacts<'_> {
                 kind: CompoundKind::Map,
                 args,
                 ..
-            } => {
-                let [key, value] = args.as_slice() else {
-                    return ValueLayout::Plain(ty);
-                };
-                ValueLayout::Map {
+            } => match args.as_slice() {
+                [key, value] => ValueLayout::Map {
                     collection_type: ty.clone(),
                     key: Box::new(nested(
                         key,
@@ -602,8 +614,9 @@ impl EmitFacts<'_> {
                         value,
                         compound_hint(declaration, CompoundKind::Map, 1),
                     )),
-                }
-            }
+                },
+                _ => ValueLayout::Plain(ty),
+            },
             Type::Array { length, element } => ValueLayout::Array {
                 array_type: ty.clone(),
                 length: *length,
@@ -617,28 +630,39 @@ impl EmitFacts<'_> {
                     .map(|(index, element)| nested(element, tuple_hint(declaration, index)))
                     .collect(),
             },
-            _ => {
-                if let Some(function_type) = self.resolve_to_function_type(&ty) {
-                    return self.function_value_layout(
-                        ty,
-                        &function_type,
-                        origin,
-                        declaration,
-                        physical_return,
-                    );
-                }
-                if let Some(underlying) = self.newtype_underlying(&ty) {
-                    let declared_underlying =
-                        declaration.and_then(|ty| self.newtype_underlying(ty));
-                    return ValueLayout::Named {
-                        named_type: ty,
-                        underlying: Box::new(nested(&underlying, declared_underlying.as_ref())),
-                        go_alias: false,
-                    };
-                }
-                ValueLayout::Plain(ty)
-            }
+            _ => self.nominal_value_layout(ty, origin, declaration, physical_return),
         }
+    }
+
+    fn nominal_value_layout(
+        &self,
+        ty: Type,
+        origin: SlotOrigin,
+        declaration: Option<&Type>,
+        physical_return: Option<&Type>,
+    ) -> ValueLayout {
+        if let Some(function_type) = self.resolve_to_function_type(&ty) {
+            return self.function_value_layout(
+                ty,
+                &function_type,
+                origin,
+                declaration,
+                physical_return,
+            );
+        }
+        if let Some(underlying) = self.newtype_underlying(&ty) {
+            let declared_underlying = declaration.and_then(|ty| self.newtype_underlying(ty));
+            return ValueLayout::Named {
+                named_type: ty,
+                underlying: Box::new(self.value_layout_with_hint(
+                    &underlying,
+                    origin.nested(),
+                    declared_underlying.as_ref(),
+                )),
+                go_alias: false,
+            };
+        }
+        ValueLayout::Plain(ty)
     }
 
     fn container_value_layout(
@@ -766,4 +790,16 @@ fn tuple_hint(declaration: Option<&Type>, index: usize) -> Option<&Type> {
         return None;
     };
     elements.get(index)
+}
+
+fn receiver_slot_bindings<'a>(
+    type_params: &'a [Type],
+    receiver: &'a ValueLayout,
+) -> Option<Vec<(&'a Type, &'a ValueLayout)>> {
+    let slots = match receiver.underlying() {
+        ValueLayout::TaggedOption { payload, .. } => vec![payload.as_ref()],
+        ValueLayout::Fallible { payload, error, .. } => vec![payload.as_ref(), error.as_ref()],
+        _ => return None,
+    };
+    Some(type_params.iter().zip(slots).collect())
 }

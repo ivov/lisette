@@ -81,18 +81,7 @@ impl Walker {
                 alternative,
                 ..
             } => {
-                if self.names_the_local(scrutinee) {
-                    if !is_component_arm(pattern) {
-                        return None;
-                    }
-                    self.supported = true;
-                    if binds_payload(pattern) {
-                        self.demand.value = self.demand.value.max(ValueDemand::Payload);
-                    }
-                } else {
-                    self.walk(scrutinee)?;
-                }
-                self.walk(consequence)?;
+                self.walk_if_let(pattern, scrutinee, consequence)?;
                 if let Some(alternative) = alternative.expression() {
                     self.walk(alternative)?;
                 }
@@ -118,30 +107,59 @@ impl Walker {
                 expression: callee,
                 args,
                 ..
-            } => {
-                if let Expression::DotAccess {
-                    expression: receiver,
-                    member,
-                    ..
-                } = &**callee
-                    && self.names_the_local(receiver)
-                    && (STATUS_METHODS.contains(&member.as_str())
-                        || PAYLOAD_METHODS.contains(&member.as_str()))
-                {
-                    self.supported = true;
-                    if PAYLOAD_METHODS.contains(&member.as_str()) {
-                        self.demand.value = self.demand.value.max(ValueDemand::Payload);
-                    }
-                    self.demand.defaults += usize::from(member == "unwrap_or");
-                    for argument in args {
-                        self.walk(argument)?;
-                    }
-                    return Some(());
-                }
+            } if let Some(member) = self.local_component_method(callee) => {
+                return self.walk_component_method_call(member, args);
             }
             _ => {}
         }
         self.walk_items(expression.children())
+    }
+
+    fn walk_if_let(
+        &mut self,
+        pattern: &Pattern,
+        scrutinee: &Expression,
+        consequence: &Expression,
+    ) -> Option<()> {
+        if self.names_the_local(scrutinee) {
+            if !is_component_arm(pattern) {
+                return None;
+            }
+            self.supported = true;
+            if binds_payload(pattern) {
+                self.demand.value = self.demand.value.max(ValueDemand::Payload);
+            }
+        } else {
+            self.walk(scrutinee)?;
+        }
+        self.walk(consequence)
+    }
+
+    fn local_component_method<'e>(&self, callee: &'e Expression) -> Option<&'e str> {
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = callee
+        else {
+            return None;
+        };
+        let member = member.as_str();
+        (self.names_the_local(receiver)
+            && (STATUS_METHODS.contains(&member) || PAYLOAD_METHODS.contains(&member)))
+        .then_some(member)
+    }
+
+    fn walk_component_method_call(&mut self, member: &str, args: &[Expression]) -> Option<()> {
+        self.supported = true;
+        if PAYLOAD_METHODS.contains(&member) {
+            self.demand.value = self.demand.value.max(ValueDemand::Payload);
+        }
+        self.demand.defaults += usize::from(member == "unwrap_or");
+        for argument in args {
+            self.walk(argument)?;
+        }
+        Some(())
     }
 
     fn walk_match(&mut self, subject: &Expression, arms: &[MatchArm]) -> Option<()> {

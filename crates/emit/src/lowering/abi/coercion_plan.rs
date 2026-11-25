@@ -4,6 +4,7 @@ use syntax::program::{Adaptation, SlotOrigin};
 use syntax::types::Type;
 
 use crate::Planner;
+use crate::lowering::abi::layout_change::OptionSlot;
 use crate::lowering::definitions::interface_adapter::AdapterPlan;
 use crate::target::ir::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, declare,
@@ -59,10 +60,12 @@ pub(in crate::lowering) enum LayoutChange {
     },
     WrapNullableOption {
         target: Box<ValueLayout>,
+        target_payload: Box<ValueLayout>,
         payload: Box<LayoutChange>,
     },
     WrapPointerOption {
         target: Box<ValueLayout>,
+        target_payload: Box<ValueLayout>,
         payload: Box<LayoutChange>,
     },
     Reference {
@@ -74,13 +77,33 @@ pub(in crate::lowering) enum LayoutChange {
     },
     NilablePayload {
         target: Box<ValueLayout>,
+        slot: OptionSlot,
         payload: Box<LayoutChange>,
     },
     Immutable {
         target: Box<ValueLayout>,
+        container: ImmutableContainer,
         elements: Vec<LayoutChange>,
     },
     Aggregate(AggregateLayoutChange),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::lowering) enum ImmutableContainer {
+    Tuple,
+    Option,
+    Result,
+    Partial,
+}
+
+impl ImmutableContainer {
+    fn of_fallible(fallible_type: &Type) -> Self {
+        if fallible_type.is_partial() {
+            Self::Partial
+        } else {
+            Self::Result
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -149,23 +172,7 @@ impl CoercionPlan {
                     payload
                 }
             }
-            Adaptation::Tuple(elements) => {
-                match (facts.tuple_elements(from), facts.tuple_elements(to)) {
-                    (Some(sources), Some(slots)) => Self::RebuildTuple {
-                        elements: elements
-                            .iter()
-                            .zip(sources.iter().zip(&slots))
-                            .map(|(element, (from, to))| {
-                                Self::adapted_element(planner, element, from, to)
-                            })
-                            .collect(),
-                        slot_types: slots,
-                    },
-                    _ => {
-                        panic!("internal error: a tuple adaptation does not fit `{from}` to `{to}`")
-                    }
-                }
-            }
+            Adaptation::Tuple(elements) => Self::adapted_tuple(planner, elements, from, to),
             Adaptation::Array(element) => match (facts.array_parts(from), facts.array_parts(to)) {
                 (Some((_, source)), Some((_, slot))) => Self::RebuildArray {
                     array_type: to.clone(),
@@ -174,24 +181,53 @@ impl CoercionPlan {
                 _ => panic!("internal error: an array adaptation does not fit `{from}` to `{to}`"),
             },
             Adaptation::DivergingFunction => {
-                let source = planner.facts.value_layout(from, SlotOrigin::Lisette);
-                let target = slot
-                    .cloned()
-                    .unwrap_or_else(|| planner.facts.value_layout(to, SlotOrigin::Lisette));
-                match (source.underlying(), target.underlying()) {
-                    (
-                        ValueLayout::Function { layout: source, .. },
-                        ValueLayout::Function { layout: target, .. },
-                    ) => Self::Layout(LayoutChange::Function {
-                        source: Box::new(source.clone()),
-                        target: Box::new(target.clone()),
-                    }),
-                    _ => panic!(
-                        "internal error: a diverging function adaptation does not fit `{from}` to `{to}`"
-                    ),
-                }
+                Self::adapted_diverging_function(planner, from, to, slot)
             }
             _ => Self::internal(planner, from, to),
+        }
+    }
+
+    fn adapted_tuple(
+        planner: &PlannerQueries<'_, '_>,
+        elements: &[Adaptation],
+        from: &Type,
+        to: &Type,
+    ) -> Self {
+        let facts = &planner.facts;
+        match (facts.tuple_elements(from), facts.tuple_elements(to)) {
+            (Some(sources), Some(slots)) => Self::RebuildTuple {
+                elements: elements
+                    .iter()
+                    .zip(sources.iter().zip(&slots))
+                    .map(|(element, (from, to))| Self::adapted_element(planner, element, from, to))
+                    .collect(),
+                slot_types: slots,
+            },
+            _ => panic!("internal error: a tuple adaptation does not fit `{from}` to `{to}`"),
+        }
+    }
+
+    fn adapted_diverging_function(
+        planner: &PlannerQueries<'_, '_>,
+        from: &Type,
+        to: &Type,
+        slot: Option<&ValueLayout>,
+    ) -> Self {
+        let source = planner.facts.value_layout(from, SlotOrigin::Lisette);
+        let target = slot
+            .cloned()
+            .unwrap_or_else(|| planner.facts.value_layout(to, SlotOrigin::Lisette));
+        match (source.underlying(), target.underlying()) {
+            (
+                ValueLayout::Function { layout: source, .. },
+                ValueLayout::Function { layout: target, .. },
+            ) => Self::Layout(LayoutChange::Function {
+                source: Box::new(source.clone()),
+                target: Box::new(target.clone()),
+            }),
+            _ => panic!(
+                "internal error: a diverging function adaptation does not fit `{from}` to `{to}`"
+            ),
         }
     }
 
@@ -426,12 +462,13 @@ impl PlannerQueries<'_, '_> {
                     ..
                 },
                 Fallible {
+                    fallible_type,
                     payload: target_payload,
                     error: target_error,
-                    ..
                 },
             ) => self.immutable_layout_change(
                 target,
+                ImmutableContainer::of_fallible(fallible_type),
                 [source_payload, source_error]
                     .into_iter()
                     .zip([target_payload, target_error])
@@ -446,14 +483,7 @@ impl PlannerQueries<'_, '_> {
                     elements: target_elements,
                     ..
                 },
-            ) => {
-                assert_eq!(
-                    source_elements.len(),
-                    target_elements.len(),
-                    "tuple layout change preserves arity"
-                );
-                self.immutable_layout_change(target, source_elements.iter().zip(target_elements))
-            }
+            ) => self.tuple_layout_change(target, source_elements, target_elements),
             (Function { layout: source, .. }, Function { layout: target, .. }) => {
                 LayoutChange::Function {
                     source: Box::new(source.clone()),
@@ -556,6 +586,7 @@ impl PlannerQueries<'_, '_> {
                 },
             ) => LayoutChange::WrapNullableOption {
                 target: Box::new(target.clone()),
+                target_payload: target_payload.clone(),
                 payload: Box::new(self.resolve_layout_change(source_payload, target_payload)),
             },
             (
@@ -569,6 +600,7 @@ impl PlannerQueries<'_, '_> {
                 },
             ) => LayoutChange::WrapPointerOption {
                 target: Box::new(target.clone()),
+                target_payload: target_payload.clone(),
                 payload: Box::new(self.resolve_layout_change(source_payload, target_payload)),
             },
             (
@@ -582,6 +614,7 @@ impl PlannerQueries<'_, '_> {
                 },
             ) => LayoutChange::Immutable {
                 target: Box::new(target.clone()),
+                container: ImmutableContainer::Option,
                 elements: vec![self.resolve_layout_change(source_payload, target_payload)],
             },
             (
@@ -593,8 +626,12 @@ impl PlannerQueries<'_, '_> {
                     payload: target_payload,
                     ..
                 },
-            )
-            | (
+            ) => LayoutChange::NilablePayload {
+                target: Box::new(target.clone()),
+                slot: OptionSlot::Value,
+                payload: Box::new(self.resolve_layout_change(source_payload, target_payload)),
+            },
+            (
                 PointerOption {
                     payload: source_payload,
                     ..
@@ -605,19 +642,40 @@ impl PlannerQueries<'_, '_> {
                 },
             ) => LayoutChange::NilablePayload {
                 target: Box::new(target.clone()),
+                slot: OptionSlot::Pointer,
                 payload: Box::new(self.resolve_layout_change(source_payload, target_payload)),
             },
             _ => LayoutChange::Identity,
         }
     }
 
+    fn tuple_layout_change(
+        &self,
+        target: &ValueLayout,
+        source_elements: &[ValueLayout],
+        target_elements: &[ValueLayout],
+    ) -> LayoutChange {
+        assert_eq!(
+            source_elements.len(),
+            target_elements.len(),
+            "tuple layout change preserves arity"
+        );
+        self.immutable_layout_change(
+            target,
+            ImmutableContainer::Tuple,
+            source_elements.iter().zip(target_elements),
+        )
+    }
+
     fn immutable_layout_change<'l>(
         &self,
         target: &ValueLayout,
+        container: ImmutableContainer,
         pairs: impl Iterator<Item = (&'l ValueLayout, &'l ValueLayout)>,
     ) -> LayoutChange {
         LayoutChange::Immutable {
             target: Box::new(target.clone()),
+            container,
             elements: pairs
                 .map(|(source, target)| self.resolve_layout_change(source, target))
                 .collect(),

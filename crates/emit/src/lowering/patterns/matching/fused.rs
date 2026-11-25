@@ -1,13 +1,42 @@
 use super::*;
-use crate::lowering::abi::fallible_producer::ErrorNilGuard;
+use crate::lowering::abi::fallible_producer::{ErrorNilGuard, ResultFusePlan};
+use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::go_result_wrapping::partial_ok_nil_guard;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::PairPlacement;
+use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::calls::wrap_err::wrap_error;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::names::source_name::SourceName;
+
+#[derive(Clone, Copy)]
+enum PartialOkValue {
+    Nilable,
+    NonNil,
+}
+
+struct ErrorPrologue<'w> {
+    nil_guard: ErrorNilGuard,
+    wraps: &'w [WrapMessage],
+}
+
+struct GuardedValue {
+    guard: NilGuard,
+    polarity: Polarity,
+    name: GoIdentifier,
+}
+
+impl GuardedValue {
+    fn condition(&self) -> GoExpression {
+        let value = GoExpression::identifier(self.name.clone());
+        match self.polarity {
+            Polarity::Positive => self.guard.non_nil_condition(value),
+            Polarity::Negated => self.guard.nil_condition(value),
+        }
+    }
+}
 
 fn error_use(uses: &[bool]) -> ErrorUse {
     match uses.first() {
@@ -110,33 +139,10 @@ impl<'p> Planner<'p> {
     ) -> Option<Vec<Statement>> {
         let fuse = self.queries().result_fuse_plan(subject)?;
         let (ok, err) = classify_result_arms(arms)?;
-
-        let ok_name = if ok.is_catch_all {
-            None
-        } else {
-            if simple_payload_binding(ok.arm).is_none()
-                && !ok_arm_payload_is_omitted(ok.arm, fuse.shape())
-            {
-                return None;
-            }
-            simple_payload_binding(ok.arm).flatten()
-        };
-
-        let err_name = if err.is_catch_all {
-            None
-        } else {
-            simple_payload_binding(err.arm)?;
-            simple_payload_binding(err.arm).flatten()
-        };
+        let (ok_name, err_name) = fused_result_names(&ok, &err, fuse.shape())?;
 
         if let Some(name) = destination {
-            let payload = simple_payload_binding(ok.arm).flatten()?;
-            if !fuse.carries_payload()
-                || ok.is_catch_all
-                || err.is_catch_all
-                || !err.arm.expression.get_type().is_never()
-                || arm_body_is_identifier(&ok.arm.expression) != Some(payload.name)
-            {
+            if !fuses_into_destination(&fuse, &ok, &err) {
                 return None;
             }
             self.scope.declare_go_name(name);
@@ -146,30 +152,13 @@ impl<'p> Planner<'p> {
             && arm_body_is_noop(&ok.arm.expression)
             && arm_body_is_noop(&err.arm.expression)
         {
-            if fuse.is_bound() {
-                return Some(Vec::new());
-            }
-            let site = CallSite::of(subject)?;
-            let (mut statements, call) = self
-                .plan_call_expression(site, None, ExpressionContext::value())
-                .into_parts();
-            statements.push(effect_statement(call));
-            return Some(statements);
+            return self.lower_discarded_fused_call(&fuse, subject);
         }
 
         let nil_guard = fuse.error_nil_guard();
         let carries_payload = fuse.carries_payload();
-        let slot = match (destination, ok_name) {
-            (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
-            (None, Some(ok)) => CommaOkValueSlot::Arm(self.arm_value_name(&ok.go_name())),
-            (None, None) => CommaOkValueSlot::Unused,
-        };
-        let err_hint = err_name.map(|err| err.go_name());
-        let hinted_use = err_hint
-            .as_ref()
-            .map_or(ErrorUse::Unread, |_| ErrorUse::Read);
-        let (mut bound, wraps) = fuse.bind_wrapped(self, slot, err_hint.as_ref(), hinted_use);
-        let error = || GoExpression::identifier(bound.status_identifier().clone());
+        let slot = self.fused_value_slot(destination, ok_name);
+        let (mut bound, wraps) = self.bind_fused_result(fuse, slot, err_name);
 
         let unit = self.unit_value(None, None);
         let then_body = destination.is_none().then(|| {
@@ -187,35 +176,57 @@ impl<'p> Planner<'p> {
         } else {
             place
         };
-        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
-        let (mut else_body, err_used) =
-            self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
-
-        let error_use = error_use(&err_used);
-        prepend_error_prologue(&mut else_body, error(), nil_guard, error_use, &wraps);
+        let prologue = ErrorPrologue {
+            nil_guard,
+            wraps: &wraps,
+        };
+        let else_body =
+            self.lower_fused_err_arm(&bound, err_name, &err.arm.expression, arm_place, prologue);
         if matches!(then_body, Some((_, false))) {
             bound.discard_value();
         }
         let then_body = then_body.map(|(body, _)| body);
-        let ok_condition = bound.success_condition();
-        let err_condition = bound.failure_condition();
-        let mut statements = bound.statements;
+        Some(fused_result_statements(bound, then_body, else_body))
+    }
 
-        let Some(then_body) = then_body else {
-            statements.push(
-                LoweredStatement::If(IfPlan::pair_if(
-                    err_condition,
-                    else_body,
-                    ElseArm::None,
-                    IfOrigin::Match { else_label: None },
-                ))
-                .into(),
-            );
-            return Some(statements);
-        };
+    fn bind_fused_result(
+        &mut self,
+        fuse: ResultFusePlan<'_>,
+        slot: CommaOkValueSlot,
+        err_name: Option<FusedName<'_>>,
+    ) -> (BoundValue, Vec<WrapMessage>) {
+        let err_hint = err_name.map(|err| err.go_name());
+        let hinted_use = err_hint
+            .as_ref()
+            .map_or(ErrorUse::Unread, |_| ErrorUse::Read);
+        fuse.bind_wrapped(self, slot, err_hint.as_ref(), hinted_use)
+    }
 
-        let plan = fused_result_if(ok_condition, err_condition, then_body, else_body);
-        statements.push(LoweredStatement::If(plan).into());
+    fn fused_value_slot(
+        &mut self,
+        destination: Option<&GoIdentifier>,
+        ok_name: Option<FusedName<'_>>,
+    ) -> CommaOkValueSlot {
+        match (destination, ok_name) {
+            (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
+            (None, Some(ok)) => CommaOkValueSlot::Arm(self.arm_value_name(&ok.go_name())),
+            (None, None) => CommaOkValueSlot::Unused,
+        }
+    }
+
+    fn lower_discarded_fused_call(
+        &mut self,
+        fuse: &ResultFusePlan<'_>,
+        subject: &Expression,
+    ) -> Option<Vec<Statement>> {
+        if fuse.is_bound() {
+            return Some(Vec::new());
+        }
+        let site = CallSite::of(subject)?;
+        let (mut statements, call) = self
+            .plan_call_expression(site, None, ExpressionContext::value())
+            .into_parts();
+        statements.push(effect_statement(call));
         Some(statements)
     }
 
@@ -233,6 +244,44 @@ impl<'p> Planner<'p> {
             return None;
         }
         let payload_ty = self.facts.ok_payload(&subject.get_type());
+        let (ok_arms, err_arm, err_payload) = self.split_nested_result_arms(arms, &payload_ty)?;
+        let err_name = err_payload.and_then(field_binding).flatten();
+        let nil_guard = fuse.error_nil_guard();
+        let value_name = self.fresh_local("ret");
+        let (mut bound, wraps) =
+            self.bind_fused_result(fuse, CommaOkValueSlot::Arm(value_name), err_name);
+
+        let value = GoExpression::identifier(bound.payload_identifier()?.clone());
+        let then_body =
+            self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
+        let then_body = finish_nested_pair_arm(&mut bound, then_body);
+        let prologue = ErrorPrologue {
+            nil_guard,
+            wraps: &wraps,
+        };
+        let else_body =
+            self.lower_fused_err_arm(&bound, err_name, &err_arm.expression, place, prologue);
+
+        let ok_condition = bound.success_condition();
+        let else_arm = ElseArm::block(else_body);
+        let mut statements = bound.statements;
+        statements.push(
+            LoweredStatement::If(IfPlan::pair_if(
+                ok_condition,
+                then_body,
+                else_arm,
+                IfOrigin::Match { else_label: None },
+            ))
+            .into(),
+        );
+        Some(statements)
+    }
+
+    fn split_nested_result_arms<'m>(
+        &self,
+        arms: &'m [MatchArm],
+        payload_ty: &Type,
+    ) -> Option<(Vec<MatchArm>, &'m MatchArm, Option<&'m Pattern>)> {
         let mut ok_arms = Vec::new();
         let mut err_arm: Option<(&MatchArm, Option<&Pattern>)> = None;
         for arm in arms {
@@ -253,7 +302,7 @@ impl<'p> Planner<'p> {
                             if has_binding_or_pattern(&ok_arm.pattern) {
                                 return false;
                             }
-                            let info = self.collect_pattern_info(&ok_arm.pattern, &payload_ty);
+                            let info = self.collect_pattern_info(&ok_arm.pattern, payload_ty);
                             info.is_irrefutable()
                         }) =>
                 {
@@ -266,52 +315,28 @@ impl<'p> Planner<'p> {
         if ok_arms.is_empty() {
             return None;
         }
-        let err_name = err_payload.and_then(field_binding).flatten();
-        let err_hint = err_name.map(|err| err.go_name());
+        Some((ok_arms, err_arm, err_payload))
+    }
 
-        let nil_guard = fuse.error_nil_guard();
-        let hinted_use = err_hint
-            .as_ref()
-            .map_or(ErrorUse::Unread, |_| ErrorUse::Read);
-        let (mut bound, wraps) = {
-            let value_name = self.fresh_local("ret");
-            fuse.bind_wrapped(
-                self,
-                CommaOkValueSlot::Arm(value_name),
-                err_hint.as_ref(),
-                hinted_use,
-            )
-        };
-
-        let value = GoExpression::identifier(bound.payload_identifier()?.clone());
-        let then_body =
-            self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
-        let then_body = finish_nested_pair_arm(&mut bound, then_body);
+    fn lower_fused_err_arm(
+        &mut self,
+        bound: &BoundValue,
+        err_name: Option<FusedName<'_>>,
+        body: &Expression,
+        place: &PlacePlan,
+        prologue: ErrorPrologue<'_>,
+    ) -> LoweredBlock {
         let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
-        let (mut else_body, err_used) =
-            self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
+        let (mut else_body, err_used) = self.lower_fused_arm(&[err_binding], body, place);
         let error = GoExpression::identifier(bound.status_identifier().clone());
         prepend_error_prologue(
             &mut else_body,
             error,
-            nil_guard,
+            prologue.nil_guard,
             error_use(&err_used),
-            &wraps,
+            prologue.wraps,
         );
-
-        let ok_condition = bound.success_condition();
-        let else_arm = ElseArm::block(else_body);
-        let mut statements = bound.statements;
-        statements.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                ok_condition,
-                then_body,
-                else_arm,
-                IfOrigin::Match { else_label: None },
-            ))
-            .into(),
-        );
-        Some(statements)
+        else_body
     }
 
     pub(super) fn try_lower_fused_partial_match(
@@ -331,17 +356,13 @@ impl<'p> Planner<'p> {
         let (both_value, both_err) = partial_both_bindings(both_arm)?;
 
         let ok_ty = self.facts.ok_payload(&subject.get_type());
-        let nilable = self.facts.partial_ok_is_nilable(&ok_ty);
+        let ok_value = self.partial_ok_value(&ok_ty);
 
         let (mut statements, call) = self
             .plan_call_with_plan(plan, None, ExpressionContext::value())
             .into_parts();
-        let value_var = match ok_name.or(both_value) {
-            Some(value) => Some(self.arm_value_name(&value.go_name())),
-            None => nilable.then(|| self.fresh_local("ret")),
-        };
-        let err_hint = both_err.or(err_name).map(|err| err.go_name());
-        let names = self.partial_pair_names(value_var, err_hint.as_ref());
+        let names =
+            self.partial_value_names(ok_name.or(both_value), both_err.or(err_name), ok_value);
 
         let (ok_body, ok_uses) = self.lower_fused_arm(
             &[ArmBinding::alias_at(ok_name, names.value.as_ref())],
@@ -357,46 +378,63 @@ impl<'p> Planner<'p> {
             place,
         );
 
-        let value_used = nilable || ok_uses[0] || both_uses[0];
+        let value_used = matches!(ok_value, PartialOkValue::Nilable) || ok_uses[0] || both_uses[0];
 
         let nil_check = names.value.as_ref().and_then(|v| {
             self.queries()
                 .partial_ok_nil_check(&ok_ty, GoExpression::identifier(v.clone()))
         });
 
-        let else_arm = match nil_check {
-            Some(check) => {
-                let (err_body, _) = self.lower_fused_arm(
-                    &[ArmBinding::alias_at(err_name, Some(&names.error))],
-                    &err_arm.expression,
-                    place,
-                );
-                ElseArm::ElseIf(Box::new(IfPlan::plain(
-                    check,
-                    err_body,
-                    ElseArm::block(both_body),
-                )))
-            }
-            None => {
-                self.conversions
-                    .record_dropped_code(err_arm.expression.get_span());
-                ElseArm::block(both_body)
-            }
-        };
+        let err_binding = ArmBinding::alias_at(err_name, Some(&names.error));
+        let else_arm = self.partial_else_arm(nil_check, err_binding, err_arm, both_body, place);
 
-        let condition = nil_condition(GoExpression::identifier(names.error.clone()));
-        let test =
-            names.pair_condition(call, names.value.clone().filter(|_| value_used), condition);
-        statements.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                test,
-                ok_body,
-                else_arm,
-                IfOrigin::Match { else_label: None },
-            ))
-            .into(),
-        );
+        let bound_value = names.value.clone().filter(|_| value_used);
+        statements.push(names.error_checked_if(call, bound_value, ok_body, else_arm));
         Some(statements)
+    }
+
+    fn partial_ok_value(&self, ok_ty: &Type) -> PartialOkValue {
+        if self.facts.partial_ok_is_nilable(ok_ty) {
+            PartialOkValue::Nilable
+        } else {
+            PartialOkValue::NonNil
+        }
+    }
+
+    fn partial_value_names(
+        &mut self,
+        value_binding: Option<FusedName<'_>>,
+        error_binding: Option<FusedName<'_>>,
+        ok_value: PartialOkValue,
+    ) -> PartialPairNames {
+        let value = match (value_binding, ok_value) {
+            (Some(value), _) => Some(self.arm_value_name(&value.go_name())),
+            (None, PartialOkValue::Nilable) => Some(self.fresh_local("ret")),
+            (None, PartialOkValue::NonNil) => None,
+        };
+        let error_hint = error_binding.map(|error| error.go_name());
+        self.partial_pair_names(value, error_hint.as_ref())
+    }
+
+    fn partial_else_arm(
+        &mut self,
+        nil_check: Option<GoExpression>,
+        err_binding: Option<ArmBinding<'_>>,
+        err_arm: &MatchArm,
+        both_body: LoweredBlock,
+        place: &PlacePlan,
+    ) -> ElseArm {
+        let Some(check) = nil_check else {
+            self.conversions
+                .record_dropped_code(err_arm.expression.get_span());
+            return ElseArm::block(both_body);
+        };
+        let (err_body, _) = self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
+        ElseArm::ElseIf(Box::new(IfPlan::plain(
+            check,
+            err_body,
+            ElseArm::block(both_body),
+        )))
     }
 
     fn partial_pair_names(
@@ -492,35 +530,25 @@ impl<'p> Planner<'p> {
         let arms = classify_selective_partial_arms(arms)?;
         let ok_ty = self.facts.ok_payload(&subject.get_type());
         let nil_guard = partial_ok_nil_guard(&self.facts, &ok_ty);
-
-        let (value_binding, error_binding) = (arms.value_binding, arms.error_binding);
-
         let (mut statements, call) = self
             .plan_call_with_plan(plan, None, ExpressionContext::value())
             .into_parts();
 
-        if !arms.selects_both && nil_guard.is_none() {
-            self.conversions
-                .record_dropped_code(arms.selected.expression.get_span());
-            statements.push(effect_statement(call));
-            let fallback = self
-                .lower_fused_arm(&[], &arms.fallback.expression, place)
-                .0;
-            statements.extend(fallback.statements);
-            return Some(statements);
-        }
-
-        let condition_needs_value = nil_guard.is_some();
-        let value = match value_binding {
-            Some(value) => Some(self.arm_value_name(&value.go_name())),
-            None => condition_needs_value.then(|| self.fresh_local("ret")),
+        let value_test = match (arms.selects_both, nil_guard) {
+            (true, guard) => guard.map(|guard| (guard, Polarity::Positive)),
+            (false, Some(guard)) => Some((guard, Polarity::Negated)),
+            (false, None) => {
+                statements.extend(self.lower_unselected_partial(call, &arms, place));
+                return Some(statements);
+            }
         };
-        let error_hint = error_binding.map(|error| error.go_name());
-        let names = self.partial_pair_names(value, error_hint.as_ref());
+
+        let (names, guarded_value) =
+            self.selective_pair_names(arms.value_binding, arms.error_binding, value_test);
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(value_binding, names.value.as_ref()),
-                ArmBinding::alias_at(error_binding, Some(&names.error)),
+                ArmBinding::alias_at(arms.value_binding, names.value.as_ref()),
+                ArmBinding::alias_at(arms.error_binding, Some(&names.error)),
             ],
             &arms.selected.expression,
             place,
@@ -535,50 +563,56 @@ impl<'p> Planner<'p> {
             return Some(statements);
         }
 
-        let value_used = condition_needs_value || binding_uses[0];
-        let err = || GoExpression::identifier(names.error.clone());
-        let guarded_value =
-            || GoExpression::identifier(names.value.clone().expect("nil guard captures the value"));
-        let condition = match (arms.selects_both, nil_guard) {
-            (true, Some(guard)) => GoExpression::binary(
-                non_nil_condition(err()),
-                GoBinaryOperator::And,
-                guard.non_nil_condition(guarded_value()),
-            ),
-            (true, None) => non_nil_condition(err()),
-            (false, guard) => {
-                let guard = guard.expect("non-nilable Err returned above");
-                GoExpression::binary(
-                    non_nil_condition(err()),
-                    GoBinaryOperator::And,
-                    guard.nil_condition(guarded_value()),
-                )
+        let value_used = guarded_value.is_some() || binding_uses[0];
+        let error = non_nil_condition(GoExpression::identifier(names.error.clone()));
+        let condition = match guarded_value {
+            Some(guarded) => {
+                GoExpression::binary(error, GoBinaryOperator::And, guarded.condition())
             }
+            None => error,
         };
-
-        let selected_diverges = selected.ends_with_diverge();
-        let bound_value = value_used.then(|| {
-            names
-                .value
-                .clone()
-                .expect("value use allocates a result slot")
-        });
-
+        let bound_value = names.value.clone().filter(|_| value_used);
         let test = names.pair_condition(call, bound_value, condition);
-        statements.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                test,
-                selected,
-                if selected_diverges {
-                    ElseArm::inline(fallback)
-                } else {
-                    ElseArm::block(fallback)
-                },
-                IfOrigin::Match { else_label: None },
-            ))
-            .into(),
-        );
+        statements.push(LoweredStatement::If(selective_if(test, selected, fallback)).into());
         Some(statements)
+    }
+
+    fn lower_unselected_partial(
+        &mut self,
+        call: GoExpression,
+        arms: &SelectivePartialArms<'_>,
+        place: &PlacePlan,
+    ) -> Vec<Statement> {
+        self.conversions
+            .record_dropped_code(arms.selected.expression.get_span());
+        let fallback = self
+            .lower_fused_arm(&[], &arms.fallback.expression, place)
+            .0;
+        let mut statements = vec![effect_statement(call)];
+        statements.extend(fallback.statements);
+        statements
+    }
+
+    fn selective_pair_names(
+        &mut self,
+        value_binding: Option<FusedName<'_>>,
+        error_binding: Option<FusedName<'_>>,
+        value_test: Option<(NilGuard, Polarity)>,
+    ) -> (PartialPairNames, Option<GuardedValue>) {
+        let value = match value_binding {
+            Some(value) => Some(self.arm_value_name(&value.go_name())),
+            None => value_test.is_some().then(|| self.fresh_local("ret")),
+        };
+        let guarded_value = value_test
+            .zip(value.clone())
+            .map(|((guard, polarity), name)| GuardedValue {
+                guard,
+                polarity,
+                name,
+            });
+        let error_hint = error_binding.map(|error| error.go_name());
+        let names = self.partial_pair_names(value, error_hint.as_ref());
+        (names, guarded_value)
     }
 
     pub(super) fn try_lower_fused_option_match(
@@ -719,6 +753,24 @@ impl PartialPairNames {
             }),
             condition,
         }
+    }
+
+    fn error_checked_if(
+        &self,
+        call: GoExpression,
+        bound_value: Option<GoIdentifier>,
+        ok_body: LoweredBlock,
+        else_arm: ElseArm,
+    ) -> Statement {
+        let condition = nil_condition(GoExpression::identifier(self.error.clone()));
+        let test = self.pair_condition(call, bound_value, condition);
+        LoweredStatement::If(IfPlan::pair_if(
+            test,
+            ok_body,
+            else_arm,
+            IfOrigin::Match { else_label: None },
+        ))
+        .into()
     }
 }
 
@@ -991,6 +1043,75 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
         | LoweredReturnAbi::Option(_)
         | LoweredReturnAbi::Tuple { .. } => false,
     }
+}
+
+fn fuses_into_destination(fuse: &ResultFusePlan<'_>, ok: &ResultArm, err: &ResultArm) -> bool {
+    let Some(payload) = simple_payload_binding(ok.arm).flatten() else {
+        return false;
+    };
+    fuse.carries_payload()
+        && !ok.is_catch_all
+        && !err.is_catch_all
+        && err.arm.expression.get_type().is_never()
+        && arm_body_is_identifier(&ok.arm.expression) == Some(payload.name)
+}
+
+fn fused_result_names<'a>(
+    ok: &ResultArm<'a>,
+    err: &ResultArm<'a>,
+    shape: &LoweredReturnAbi,
+) -> Option<(Option<FusedName<'a>>, Option<FusedName<'a>>)> {
+    let ok_name = if ok.is_catch_all {
+        None
+    } else {
+        if simple_payload_binding(ok.arm).is_none() && !ok_arm_payload_is_omitted(ok.arm, shape) {
+            return None;
+        }
+        simple_payload_binding(ok.arm).flatten()
+    };
+
+    let err_name = if err.is_catch_all {
+        None
+    } else {
+        simple_payload_binding(err.arm)?;
+        simple_payload_binding(err.arm).flatten()
+    };
+    Some((ok_name, err_name))
+}
+
+fn selective_if(test: PairCondition, selected: LoweredBlock, fallback: LoweredBlock) -> IfPlan {
+    let else_arm = if selected.ends_with_diverge() {
+        ElseArm::inline(fallback)
+    } else {
+        ElseArm::block(fallback)
+    };
+    IfPlan::pair_if(
+        test,
+        selected,
+        else_arm,
+        IfOrigin::Match { else_label: None },
+    )
+}
+
+fn fused_result_statements(
+    bound: BoundValue,
+    then_body: Option<LoweredBlock>,
+    else_body: LoweredBlock,
+) -> Vec<Statement> {
+    let ok_condition = bound.success_condition();
+    let err_condition = bound.failure_condition();
+    let mut statements = bound.statements;
+    let plan = match then_body {
+        Some(then_body) => fused_result_if(ok_condition, err_condition, then_body, else_body),
+        None => IfPlan::pair_if(
+            err_condition,
+            else_body,
+            ElseArm::None,
+            IfOrigin::Match { else_label: None },
+        ),
+    };
+    statements.push(LoweredStatement::If(plan).into());
+    statements
 }
 
 fn fused_result_if(

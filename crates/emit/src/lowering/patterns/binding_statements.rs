@@ -113,22 +113,10 @@ impl Planner<'_> {
                 };
                 (effective, Some(GoExpression::identifier(ok)))
             }
-            multiple => {
-                let oks = multiple
-                    .iter()
-                    .map(|t| {
-                        let ok = self.fresh_declared("ok");
-                        statements.push(define_many(
-                            vec![GoIdentifier::blank(), ok.clone()],
-                            assertion_of(t),
-                        ));
-                        GoExpression::identifier(ok)
-                    })
-                    .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
-                    .expect("a multi-type assertion names at least one type");
-
-                (subject.clone(), Some(oks))
-            }
+            multiple => (
+                subject.clone(),
+                Some(self.assert_any_root_type(statements, subject, multiple)),
+            ),
         };
 
         AssertedPattern {
@@ -137,6 +125,26 @@ impl Planner<'_> {
             checks,
             bindings,
         }
+    }
+
+    fn assert_any_root_type(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        subject: &GoExpression,
+        go_types: &[GoType],
+    ) -> GoExpression {
+        go_types
+            .iter()
+            .map(|go_type| {
+                let ok = self.fresh_declared("ok");
+                statements.push(define_many(
+                    vec![GoIdentifier::blank(), ok.clone()],
+                    GoExpression::type_assertion(subject.clone(), go_type.clone()),
+                ));
+                GoExpression::identifier(ok)
+            })
+            .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
+            .expect("a multi-type assertion names at least one type")
     }
 
     pub(in crate::lowering) fn tree_binding_statements(

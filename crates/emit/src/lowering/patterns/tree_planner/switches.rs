@@ -12,7 +12,7 @@ use crate::target::ir::bodies::GoUses;
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::lookup::state::bindings::InlineExpression;
 use crate::lowering::patterns::decision_tree::{
-    ArmLeaf, ChainArm, Decision, GuardedLeaf, PatternBinding, SwitchBranch,
+    ArmLeaf, ChainArm, ChainTail, ChainTest, Decision, GuardedLeaf, PatternBinding, SwitchBranch,
     SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch, boolean_literal, render_condition,
 };
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
@@ -73,14 +73,23 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             self.planner.restore_planning(checkpoint);
             return false;
         }
-        let default_at = collected.iter().position(|case| case.conditions.is_empty());
-        let default_case = default_at.map(|at| collected.split_off(at).remove(0));
+        let mut labeled = Vec::new();
+        let mut default_case = None;
+        for case in collected {
+            match join_and(&case.conditions) {
+                Some(label) => labeled.push((label, case)),
+                None => {
+                    default_case = Some(case);
+                    break;
+                }
+            }
+        }
         let has_default = default_case.is_some();
 
-        let cases = collected
+        let cases = labeled
             .into_iter()
-            .map(|case| SwitchCasePlan {
-                labels: vec![join_and(case.conditions.clone())],
+            .map(|(label, case)| SwitchCasePlan {
+                labels: vec![label],
                 body: self.lower_flat_case_body(&case, place),
                 line: self.arm_line(case.body.arm_index()),
             })
@@ -137,78 +146,91 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     || self.collect_flat_cases(&guard.failure, conditions, out, position)
             }
             Decision::Chain { tests, tail } => {
-                let (cased, lifted) = split_chain_with_catchall_lift(tests, tail);
-                for test in cased {
-                    let has_checks = !test.checks.is_empty();
-                    if has_checks {
-                        conditions.push(render_condition(
-                            &mut self.planner.scope,
-                            &test.checks,
-                            self.subject.root(),
-                        ));
-                    }
-                    let flattened = match &test.arm {
-                        ChainArm::Leaf(leaf) => {
-                            out.push(FlatCase {
-                                conditions: conditions.clone(),
-                                body: FlatCaseBody::Leaf(leaf),
-                            });
-                            true
-                        }
-                        ChainArm::Guard(guard) => {
-                            self.collect_guard_case(&guard.leaf, conditions, out)
-                        }
-                    };
+                self.collect_chain_cases(tests, tail, conditions, out)
+            }
+            Decision::TypeSwitch { .. } => false,
+            Decision::Switch(switch) => {
+                self.collect_switch_cases(switch, conditions, out, position)
+            }
+        }
+    }
 
-                    if has_checks {
-                        conditions.pop();
-                    }
-                    if !flattened {
-                        return false;
-                    }
-                }
-                if let Some(leaf) = lifted {
+    fn collect_chain_cases<'d>(
+        &mut self,
+        tests: &'d [ChainTest],
+        tail: &'d ChainTail,
+        conditions: &mut Vec<GoExpression>,
+        out: &mut Vec<FlatCase<'d>>,
+    ) -> bool {
+        let (cased, lifted) = split_chain_with_catchall_lift(tests, tail);
+        for test in cased {
+            let has_checks = !test.checks.is_empty();
+            if has_checks {
+                conditions.push(render_condition(
+                    &mut self.planner.scope,
+                    &test.checks,
+                    self.subject.root(),
+                ));
+            }
+            let flattened = match &test.arm {
+                ChainArm::Leaf(leaf) => {
                     out.push(FlatCase {
                         conditions: conditions.clone(),
                         body: FlatCaseBody::Leaf(leaf),
                     });
+                    true
                 }
-                true
+                ChainArm::Guard(guard) => self.collect_guard_case(&guard.leaf, conditions, out),
+            };
+
+            if has_checks {
+                conditions.pop();
             }
-            Decision::TypeSwitch { .. } => false,
-            Decision::Switch(switch) => {
-                let rendered_path = switch.path.render(self.subject.root());
-                let shape = switch.shape();
-                let (cased, lifted) =
-                    split_with_default_lift(&switch.branches, switch.fallback.as_deref());
-                for branch in cased {
-                    conditions.push(
-                        iter::once(&branch.label)
-                            .chain(&branch.extra_labels)
-                            .map(|label| {
-                                switch_branch_condition(&rendered_path, &switch.kind, &shape, label)
-                            })
-                            .reduce(|left, right| {
-                                GoExpression::binary(left, GoBinaryOperator::Or, right)
-                            })
-                            .expect("a switch branch has a label"),
-                    );
-                    let flattened = self.collect_flat_cases(
-                        &branch.decision,
-                        conditions,
-                        out,
-                        CasePosition::Nested,
-                    );
-                    conditions.pop();
-                    if !flattened {
-                        return false;
-                    }
-                }
-                match lifted {
-                    Some(lifted) => self.collect_flat_cases(lifted, conditions, out, position),
-                    None => true,
-                }
+            if !flattened {
+                return false;
             }
+        }
+        if let Some(leaf) = lifted {
+            out.push(FlatCase {
+                conditions: conditions.clone(),
+                body: FlatCaseBody::Leaf(leaf),
+            });
+        }
+        true
+    }
+
+    fn collect_switch_cases<'d>(
+        &mut self,
+        switch: &'d ValueSwitch,
+        conditions: &mut Vec<GoExpression>,
+        out: &mut Vec<FlatCase<'d>>,
+        position: CasePosition,
+    ) -> bool {
+        let rendered_path = switch.path.render(self.subject.root());
+        let shape = switch.shape();
+        let (cased, lifted) = split_with_default_lift(&switch.branches, switch.fallback.as_deref());
+        for branch in cased {
+            let condition_of =
+                |label| switch_branch_condition(&rendered_path, &switch.kind, shape, label);
+            conditions.push(
+                branch
+                    .extra_labels
+                    .iter()
+                    .map(condition_of)
+                    .fold(condition_of(&branch.label), |left, right| {
+                        GoExpression::binary(left, GoBinaryOperator::Or, right)
+                    }),
+            );
+            let flattened =
+                self.collect_flat_cases(&branch.decision, conditions, out, CasePosition::Nested);
+            conditions.pop();
+            if !flattened {
+                return false;
+            }
+        }
+        match lifted {
+            Some(lifted) => self.collect_flat_cases(lifted, conditions, out, position),
+            None => true,
         }
     }
 
@@ -311,15 +333,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let fallback = fallback.as_deref();
         let rendered_path = path.render(self.subject.root());
         match switch.shape() {
-            SwitchShape::Bool => {
-                let true_branch = branches
-                    .iter()
-                    .find(|branch| boolean_literal(&branch.label) == Some(true))
-                    .expect("Bool shape requires a true-labeled branch");
-                let false_branch = branches
-                    .iter()
-                    .find(|branch| boolean_literal(&branch.label) == Some(false))
-                    .expect("Bool shape requires a false-labeled branch");
+            SwitchShape::Bool {
+                true_branch,
+                false_branch,
+            } => {
                 self.walk_condition_branch(
                     statements,
                     BranchTest {
@@ -331,51 +348,25 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     ctx,
                 );
             }
-            SwitchShape::Binary => {
+            SwitchShape::Binary { first, second } => {
                 let subject = render_switch_expression(rendered_path, kind);
+                let condition =
+                    GoExpression::binary(subject, GoBinaryOperator::Equal, first.label.clone());
                 let test = BranchTest {
-                    condition: GoExpression::binary(
-                        subject,
-                        GoBinaryOperator::Equal,
-                        branches[0].label.clone(),
-                    ),
-                    else_label: Some(branches[1].label.clone()),
+                    condition,
+                    else_label: Some(second.label.clone()),
                 };
-
                 self.walk_condition_branch(
                     statements,
                     test,
-                    &branches[0].decision,
-                    &branches[1].decision,
+                    &first.decision,
+                    &second.decision,
                     ctx,
                 );
             }
-            SwitchShape::SingleArm => {
-                let branch = &branches[0];
-                let Some(fallback) = fallback else {
-                    let inner = WalkContext::switch_case(ctx.arm_place);
-                    let mut branch_statements: Vec<Statement> = Vec::new();
-                    self.walk(&mut branch_statements, &branch.decision, &inner);
-                    let divergence = capture_diverge(branch_statements, statements);
-                    apply_leaf_terminator(statements, ctx, divergence);
-                    return;
-                };
-
-                let condition = GoExpression::binary(
-                    render_switch_expression(rendered_path, kind),
-                    GoBinaryOperator::Equal,
-                    branch.label.clone(),
-                );
-                self.walk_condition_branch(
-                    statements,
-                    BranchTest {
-                        condition,
-                        else_label: None,
-                    },
-                    &branch.decision,
-                    fallback,
-                    ctx,
-                );
+            SwitchShape::SingleArm(branch) => {
+                let subject = render_switch_expression(rendered_path, kind);
+                self.walk_single_arm_switch(statements, subject, branch, fallback, ctx);
             }
             SwitchShape::Multi => {
                 let expression = render_switch_expression(rendered_path, kind);
@@ -384,6 +375,37 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 apply_leaf_terminator(statements, ctx, divergence);
             }
         }
+    }
+
+    fn walk_single_arm_switch(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        subject: GoExpression,
+        branch: &SwitchBranch<GoExpression>,
+        fallback: Option<&Decision>,
+        ctx: &WalkContext,
+    ) {
+        let Some(fallback) = fallback else {
+            let inner = WalkContext::switch_case(ctx.arm_place);
+            let mut branch_statements: Vec<Statement> = Vec::new();
+            self.walk(&mut branch_statements, &branch.decision, &inner);
+            let divergence = capture_diverge(branch_statements, statements);
+            apply_leaf_terminator(statements, ctx, divergence);
+            return;
+        };
+
+        let condition =
+            GoExpression::binary(subject, GoBinaryOperator::Equal, branch.label.clone());
+        self.walk_condition_branch(
+            statements,
+            BranchTest {
+                condition,
+                else_label: None,
+            },
+            &branch.decision,
+            fallback,
+            ctx,
+        );
     }
 
     fn lower_value_switch(
@@ -435,16 +457,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let (regular, default) = (branches, fallback);
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
-        let binding_name = match subject.node() {
-            GoExpressionNode::Identifier(name) => {
-                GoIdentifier::local(name.to_string(), self.planner.scope.new_local_id())
-            }
-            _ => {
-                let name = self.planner.fresh_local("subject");
-                self.planner.scope.declare_go_name(&name);
-                name
-            }
-        };
+        let binding_name = self.type_switch_binding_name(&subject);
 
         let mut nested = TreePlanner::new(
             self.planner,
@@ -486,6 +499,19 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             place,
             default.is_some(),
         )
+    }
+
+    fn type_switch_binding_name(&mut self, subject: &GoExpression) -> GoIdentifier {
+        match subject.node() {
+            GoExpressionNode::Identifier(name) => {
+                GoIdentifier::local(name.to_string(), self.planner.scope.new_local_id())
+            }
+            _ => {
+                let name = self.planner.fresh_local("subject");
+                self.planner.scope.declare_go_name(&name);
+                name
+            }
+        }
     }
 
     fn lower_switch_case(
@@ -564,10 +590,10 @@ fn split_with_default_lift<'t, L>(
 fn switch_branch_condition(
     rendered_path: &GoExpression,
     kind: &PatternSwitchKind,
-    shape: &SwitchShape,
+    shape: SwitchShape<'_>,
     label: &GoExpression,
 ) -> GoExpression {
-    if matches!(shape, SwitchShape::Bool) && boolean_literal(label) == Some(true) {
+    if matches!(shape, SwitchShape::Bool { .. }) && boolean_literal(label) == Some(true) {
         return rendered_path.clone();
     }
     GoExpression::binary(

@@ -7,6 +7,7 @@ use crate::Planner;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
+use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 
@@ -59,14 +60,12 @@ impl Planner<'_> {
                 self.pin_to_temp(&mut base_operand, "base");
             }
             let index_operand = self.plan_or_capture(index, "range");
-            let sequenced = self.sequence_values(
-                vec![base_operand, index_operand],
+            let sequenced = self.sequence_value_array(
+                [base_operand, index_operand],
                 CaptureBoundary::SiblingSequence,
                 "base",
             );
-            let mut values = sequenced.values.into_iter();
-            let base = values.next().expect("range index has a base");
-            let range = values.next().expect("range index has a range");
+            let [base, range] = sequenced.values;
             let value = range_var_slice(base, &range, range_kind, needs_cap);
             return ValuePlan::computed(sequenced.setup, value);
         }
@@ -91,16 +90,13 @@ impl Planner<'_> {
         {
             self.pin_to_temp(&mut base_operand, prefix);
         }
-        let sequenced = self.sequence_values(
-            vec![base_operand, index_operand],
+        let sequenced = self.sequence_value_array(
+            [base_operand, index_operand],
             CaptureBoundary::SiblingSequence,
             prefix,
         );
-        let setup = sequenced.setup;
-        let mut values = sequenced.values.into_iter();
-        let base = values.next().expect("indexed access has a base");
-        let index = values.next().expect("indexed access has an index");
-        ValuePlan::computed(setup, GoExpression::index(base, index))
+        let [base, index] = sequenced.values;
+        ValuePlan::computed(sequenced.setup, GoExpression::index(base, index))
     }
 
     pub(in crate::lowering) fn plan_copied_spread(&mut self, spread: &Expression) -> ValuePlan {
@@ -169,8 +165,8 @@ impl Planner<'_> {
             self.sequence_values(all_operands, CaptureBoundary::SiblingSequence, "base");
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
-        let mut base = values.next().expect("slice access has a base");
-        let mut start_value = start.map(|_| values.next().expect("slice access has a start"));
+        let base = values.next().expect("slice access has a base");
+        let start_value = start.map(|_| values.next().expect("slice access has a start"));
         let mut end_value = end.map(|_| values.next().expect("slice access has an end"));
         if range_end == RangeEnd::Inclusive
             && let Some(end_expression) = end_value.take()
@@ -189,60 +185,80 @@ impl Planner<'_> {
             );
         }
 
-        if end_value
+        let bounds = SliceBounds {
+            base,
+            start: start_value,
+            end: end_value,
+        };
+        let source = SliceSource {
+            expression,
+            start,
+            runs_effectful_code,
+        };
+        let value = self.capacity_clipped_slice(&mut setup, bounds, source);
+        ValuePlan::computed(setup, value)
+    }
+
+    fn capacity_clipped_slice(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        bounds: SliceBounds,
+        source: SliceSource<'_>,
+    ) -> GoExpression {
+        let SliceBounds {
+            mut base,
+            mut start,
+            end,
+        } = bounds;
+        if !end
             .as_ref()
             .is_none_or(|end| end.effects().must_evaluate_once())
         {
-            let base_expression = expression.deref_inner().unwrap_or(expression);
-            if base.effects().must_evaluate_once()
-                || (is_order_sensitive(base_expression) && runs_effectful_code)
-            {
-                base = GoExpression::identifier(self.hoist_temp(&mut setup, "base", base));
-            }
-            let Some(end_expression) = end_value else {
-                let length = GoExpression::identifier(self.hoist_temp(
-                    &mut setup,
-                    "len",
-                    GoExpression::call(
-                        GoExpression::external_name("len".to_string()),
-                        vec![base.clone()],
-                    ),
-                ));
-
-                return ValuePlan::computed(
-                    setup,
-                    GoExpression::slice(base, start_value.as_ref(), Some(&length), Some(&length)),
-                );
-            };
-
-            if start.is_some_and(is_order_sensitive) {
-                start_value = start_value.map(|start_expression| {
-                    GoExpression::identifier(self.hoist_temp(&mut setup, "start", start_expression))
-                });
-            }
-            let end_variable =
-                GoExpression::identifier(self.hoist_temp(&mut setup, "end", end_expression));
-            return ValuePlan::computed(
-                setup,
-                GoExpression::slice(
-                    base,
-                    start_value.as_ref(),
-                    Some(&end_variable),
-                    Some(&end_variable),
-                ),
-            );
+            return GoExpression::slice(base, start.as_ref(), end.as_ref(), end.as_ref());
         }
+        let base_expression = source.expression.deref_inner().unwrap_or(source.expression);
+        if base.effects().must_evaluate_once()
+            || (is_order_sensitive(base_expression) && source.runs_effectful_code)
+        {
+            base = GoExpression::identifier(self.hoist_temp(setup, "base", base));
+        }
+        let Some(end_expression) = end else {
+            let length = GoExpression::identifier(self.hoist_temp(
+                setup,
+                "len",
+                GoExpression::call(
+                    GoExpression::external_name("len".to_string()),
+                    vec![base.clone()],
+                ),
+            ));
+            return GoExpression::slice(base, start.as_ref(), Some(&length), Some(&length));
+        };
 
-        ValuePlan::computed(
-            setup,
-            GoExpression::slice(
-                base,
-                start_value.as_ref(),
-                end_value.as_ref(),
-                end_value.as_ref(),
-            ),
+        if source.start.is_some_and(is_order_sensitive) {
+            start = start.map(|start_expression| {
+                GoExpression::identifier(self.hoist_temp(setup, "start", start_expression))
+            });
+        }
+        let end_variable = GoExpression::identifier(self.hoist_temp(setup, "end", end_expression));
+        GoExpression::slice(
+            base,
+            start.as_ref(),
+            Some(&end_variable),
+            Some(&end_variable),
         )
     }
+}
+
+struct SliceBounds {
+    base: GoExpression,
+    start: Option<GoExpression>,
+    end: Option<GoExpression>,
+}
+
+struct SliceSource<'e> {
+    expression: &'e Expression,
+    start: Option<&'e Expression>,
+    runs_effectful_code: bool,
 }
 
 pub(in crate::lowering) fn range_var_bounds(

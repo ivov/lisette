@@ -3,8 +3,8 @@ use crate::output::render::types::go_type_text;
 use crate::output::render::writer::GoWriter;
 use crate::target::ir::bodies::{LoweredBlock, for_each_statements_mut};
 use crate::target::ir::declarations::{
-    ConstantDeclaration, DeclarationKind, Documentation, FieldDeclaration, GoDeclaration,
-    InterfaceMethod, TypeParameter,
+    ConstantDeclaration, DeclarationKind, Documentation, FieldDeclaration, FunctionSignature,
+    GoDeclaration, InterfaceMethod, TypeParameter,
 };
 use crate::target::ir::go_expression::Position;
 use crate::target::types::go_type::{GoType, GoTypeShape};
@@ -49,6 +49,12 @@ fn generics(output: &mut GoWriter, parameters: &[TypeParameter]) {
     output.push(']');
 }
 
+fn write_type_header(output: &mut GoWriter, name: &str, parameters: &[TypeParameter]) {
+    output.push_str("type ");
+    output.push_str(name);
+    generics(output, parameters);
+}
+
 fn render_positioned_body(output: &mut GoWriter, body: &LoweredBlock, position: Option<&Position>) {
     let Some(position) = position else {
         render_lowered_block(output, body);
@@ -75,8 +81,7 @@ pub(crate) fn render_declaration(declaration: &GoDeclaration) -> String {
             parameters,
             underlying,
         } => {
-            write!(output, "type {name}").unwrap();
-            generics(&mut output, parameters);
+            write_type_header(&mut output, name, parameters);
             output.push_str(" ");
             write_underlying(&mut output, underlying);
         }
@@ -85,8 +90,7 @@ pub(crate) fn render_declaration(declaration: &GoDeclaration) -> String {
             parameters,
             underlying,
         } => {
-            write!(output, "type {name}").unwrap();
-            generics(&mut output, parameters);
+            write_type_header(&mut output, name, parameters);
             output.push_str(" = ");
             write_underlying(&mut output, underlying);
         }
@@ -95,8 +99,7 @@ pub(crate) fn render_declaration(declaration: &GoDeclaration) -> String {
             parameters,
             fields,
         } => {
-            write!(output, "type {name}").unwrap();
-            generics(&mut output, parameters);
+            write_type_header(&mut output, name, parameters);
             write_struct_body(&mut output, fields, declaration.position.as_ref());
         }
         DeclarationKind::Interface {
@@ -105,8 +108,7 @@ pub(crate) fn render_declaration(declaration: &GoDeclaration) -> String {
             parents,
             methods,
         } => {
-            write!(output, "type {name}").unwrap();
-            generics(&mut output, parameters);
+            write_type_header(&mut output, name, parameters);
             write_interface_body(&mut output, parents, methods);
         }
         DeclarationKind::Constants(constants) => write_constants(&mut output, constants),
@@ -117,39 +119,48 @@ pub(crate) fn render_declaration(declaration: &GoDeclaration) -> String {
             },
         ),
         DeclarationKind::Function { signature, body } => {
-            output.push_str("func ");
-            if let Some(receiver) = &signature.receiver {
-                write!(
-                    output,
-                    "({} {}) ",
-                    receiver.name,
-                    go_type_text(&receiver.go_type)
-                )
-                .unwrap();
-            }
-            output.push_str(&signature.name);
-            generics(&mut output, &signature.generics);
-            output.push('(');
-            let parameters = signature
-                .parameters
-                .iter()
-                .map(|parameter| (parameter.name.to_string(), go_type_text(&parameter.go_type)))
-                .collect::<Vec<_>>();
-            output.push_str(&group_params(&parameters));
-            output.push(')');
-            if !signature.result.is_empty() {
-                write!(output, " {}", go_type_text(&signature.result)).unwrap();
-            }
-            if body.renders_empty() {
-                output.push_str(" {}");
-            } else {
-                output.push_str(" {\n");
-                render_positioned_body(&mut output, body, declaration.position.as_ref());
-                output.push('}');
-            }
+            write_function(&mut output, signature, body, declaration.position.as_ref())
         }
     }
     output.into_text()
+}
+
+fn write_function(
+    output: &mut GoWriter,
+    signature: &FunctionSignature,
+    body: &LoweredBlock,
+    position: Option<&Position>,
+) {
+    output.push_str("func ");
+    if let Some(receiver) = &signature.receiver {
+        write!(
+            output,
+            "({} {}) ",
+            receiver.name,
+            go_type_text(&receiver.go_type)
+        )
+        .unwrap();
+    }
+    output.push_str(&signature.name);
+    generics(output, &signature.generics);
+    output.push('(');
+    let parameters = signature
+        .parameters
+        .iter()
+        .map(|parameter| (parameter.name.to_string(), go_type_text(&parameter.go_type)))
+        .collect::<Vec<_>>();
+    output.push_str(&group_params(&parameters));
+    output.push(')');
+    if !signature.result.is_empty() {
+        write!(output, " {}", go_type_text(&signature.result)).unwrap();
+    }
+    if body.renders_empty() {
+        output.push_str(" {}");
+    } else {
+        output.push_str(" {\n");
+        render_positioned_body(output, body, position);
+        output.push('}');
+    }
 }
 
 fn write_struct_body(

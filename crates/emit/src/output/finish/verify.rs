@@ -1,3 +1,4 @@
+use crate::lookup::state::scope_stack::ScopeStack;
 use crate::target::ir::bodies::{
     AssignForm, LoopTransfer, LoweredBlock, LoweredStatement, Statement, for_each_statements_mut,
 };
@@ -132,93 +133,92 @@ fn verify_values(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
     Ok(())
 }
 
+struct LocalScopeCheck {
+    frames: ScopeStack<FxHashMap<String, LocalId>>,
+    spellings: FxHashMap<LocalId, String>,
+    error: Option<BodyErrorKind>,
+}
+
+impl LocalScopeCheck {
+    fn check_spelling(&mut self, name: &GoIdentifier) {
+        let Some(id) = name.id() else {
+            return;
+        };
+        match self.spellings.get(&id) {
+            Some(previous) if previous != name.spelling() => {
+                self.error
+                    .get_or_insert(BodyErrorKind::ConflictingLocalSpelling);
+            }
+            None => {
+                self.spellings.insert(id, name.spelling().to_string());
+            }
+            _ => {}
+        }
+    }
+}
+
+impl VisitorMut for LocalScopeCheck {
+    fn expression(&mut self, node: &mut GoExpressionNode) {
+        let GoExpressionNode::Identifier(name) = node else {
+            return;
+        };
+        if name.is_pending() {
+            self.error.get_or_insert(BodyErrorKind::UnidentifiedLocal);
+            return;
+        }
+        self.check_spelling(name);
+        let active = self
+            .frames
+            .iter()
+            .rev()
+            .find_map(|frame| frame.get(name.spelling()));
+        if let Some(active) = active {
+            if name.id().is_none() {
+                self.error.get_or_insert(BodyErrorKind::UnidentifiedLocal);
+            } else if name.id() != Some(*active) {
+                self.error
+                    .get_or_insert(BodyErrorKind::ShadowedLocalReference);
+            }
+        } else if let Some(id) = name.id()
+            && !self
+                .frames
+                .iter()
+                .any(|frame| frame.values().any(|active| *active == id))
+        {
+            self.error
+                .get_or_insert(BodyErrorKind::UnboundLocalReference);
+        }
+    }
+
+    fn local_binding(&mut self, name: &mut GoIdentifier) {
+        if name.spelling() == "_" {
+            return;
+        }
+        let Some(id) = name.id() else {
+            self.error.get_or_insert(BodyErrorKind::UnidentifiedLocal);
+            return;
+        };
+        self.check_spelling(name);
+        self.frames
+            .innermost_mut()
+            .insert(name.spelling().to_string(), id);
+    }
+
+    fn enter_scope(&mut self) {
+        self.frames.push(FxHashMap::default());
+    }
+
+    fn exit_scope(&mut self) {
+        self.frames.pop().expect("body has a scope");
+    }
+}
+
 pub(crate) fn verify_local_scopes(
     statements: &mut Vec<Statement>,
     bindings: &[GoIdentifier],
 ) -> Result<(), BodyError> {
-    struct Check {
-        frames: Vec<FxHashMap<String, LocalId>>,
-        spellings: FxHashMap<LocalId, String>,
-        error: Option<BodyErrorKind>,
-    }
-
-    impl Check {
-        fn check_spelling(&mut self, name: &GoIdentifier) {
-            let Some(id) = name.id() else {
-                return;
-            };
-            match self.spellings.get(&id) {
-                Some(previous) if previous != name.spelling() => {
-                    self.error
-                        .get_or_insert(BodyErrorKind::ConflictingLocalSpelling);
-                }
-                None => {
-                    self.spellings.insert(id, name.spelling().to_string());
-                }
-                _ => {}
-            }
-        }
-    }
-
-    impl VisitorMut for Check {
-        fn expression(&mut self, node: &mut GoExpressionNode) {
-            let GoExpressionNode::Identifier(name) = node else {
-                return;
-            };
-            if name.is_pending() {
-                self.error.get_or_insert(BodyErrorKind::UnidentifiedLocal);
-                return;
-            }
-            self.check_spelling(name);
-            let active = self
-                .frames
-                .iter()
-                .rev()
-                .find_map(|frame| frame.get(name.spelling()));
-            if let Some(active) = active {
-                if name.id().is_none() {
-                    self.error.get_or_insert(BodyErrorKind::UnidentifiedLocal);
-                } else if name.id() != Some(*active) {
-                    self.error
-                        .get_or_insert(BodyErrorKind::ShadowedLocalReference);
-                }
-            } else if let Some(id) = name.id()
-                && !self
-                    .frames
-                    .iter()
-                    .any(|frame| frame.values().any(|active| *active == id))
-            {
-                self.error
-                    .get_or_insert(BodyErrorKind::UnboundLocalReference);
-            }
-        }
-
-        fn local_binding(&mut self, name: &mut GoIdentifier) {
-            if name.spelling() == "_" {
-                return;
-            }
-            let Some(id) = name.id() else {
-                self.error.get_or_insert(BodyErrorKind::UnidentifiedLocal);
-                return;
-            };
-            self.check_spelling(name);
-            self.frames
-                .last_mut()
-                .expect("body has a scope")
-                .insert(name.spelling().to_string(), id);
-        }
-
-        fn enter_scope(&mut self) {
-            self.frames.push(FxHashMap::default());
-        }
-
-        fn exit_scope(&mut self) {
-            self.frames.pop().expect("body has a scope");
-        }
-    }
-
-    let mut check = Check {
-        frames: vec![FxHashMap::default()],
+    let mut check = LocalScopeCheck {
+        frames: ScopeStack::new(FxHashMap::default()),
         spellings: FxHashMap::default(),
         error: None,
     };

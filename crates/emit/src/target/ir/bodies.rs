@@ -419,6 +419,21 @@ pub(crate) struct SwitchCasePlan {
 }
 
 impl SwitchStatementPlan {
+    fn walk(&self, visit: &mut impl TreeVisitor) {
+        match &self.kind {
+            SwitchKind::Conditional => {}
+            SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
+                subject.node().walk(visit)
+            }
+        }
+        for case in &self.cases {
+            case.walk(visit);
+        }
+        if let Some(default) = &self.default {
+            default.walk(visit);
+        }
+    }
+
     fn flow(&self) -> FlowSummary {
         let mut branches = self
             .cases
@@ -471,6 +486,40 @@ pub(crate) enum SelectArmKind {
 }
 
 impl SelectStatementPlan {
+    fn walk(&self, visit: &mut impl TreeVisitor) {
+        for arm in &self.arms {
+            match &arm.kind {
+                SelectArmKind::Receive { channel, body, .. } => {
+                    channel.node().walk(visit);
+                    body.walk(visit);
+                }
+                SelectArmKind::Send {
+                    channel,
+                    value,
+                    body,
+                } => {
+                    channel.node().walk(visit);
+                    value.node().walk(visit);
+                    body.walk(visit);
+                }
+                SelectArmKind::Default { body } => body.walk(visit),
+            }
+        }
+    }
+
+    fn for_each_operand_mut(&mut self, visit: &mut impl FnMut(&mut GoExpression)) {
+        for arm in &mut self.arms {
+            match &mut arm.kind {
+                SelectArmKind::Receive { channel, .. } => visit(channel),
+                SelectArmKind::Send { channel, value, .. } => {
+                    visit(channel);
+                    visit(value);
+                }
+                SelectArmKind::Default { .. } => {}
+            }
+        }
+    }
+
     fn flow(&self) -> FlowSummary {
         let mut arms = self
             .arms
@@ -521,6 +570,23 @@ pub(crate) struct LoopPlan {
 }
 
 impl LoopPlan {
+    fn walk(&self, visit: &mut impl TreeVisitor) {
+        match &self.header {
+            LoopHeader::Infinite => {}
+            LoopHeader::While(condition) => condition.node().walk(visit),
+            LoopHeader::Range { iterable, .. } => iterable.node().walk(visit),
+            LoopHeader::Counted {
+                start, condition, ..
+            } => {
+                start.node().walk(visit);
+                if let Some(condition) = condition {
+                    condition.node().walk(visit);
+                }
+            }
+        }
+        self.body.walk(visit);
+    }
+
     fn flow(&self) -> FlowSummary {
         let mut body = FlowSummary::statements(&self.body.statements);
         let label = self.kind.label();
@@ -566,6 +632,24 @@ pub(crate) enum LoopHeader {
     },
 }
 
+impl LoopHeader {
+    fn for_each_expression_mut(&mut self, visit: &mut impl FnMut(&mut GoExpression)) {
+        match self {
+            LoopHeader::Infinite => {}
+            LoopHeader::While(condition) => visit(condition),
+            LoopHeader::Range { iterable, .. } => visit(iterable),
+            LoopHeader::Counted {
+                start, condition, ..
+            } => {
+                visit(start);
+                if let Some(condition) = condition {
+                    visit(condition);
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LoopKind {
     Source { label: Option<String> },
@@ -605,6 +689,20 @@ pub(crate) enum IfOrigin {
 }
 
 impl IfPlan {
+    fn for_each_head_expression_mut(&mut self, visit: &mut impl FnMut(&mut GoExpression)) {
+        let mut link = Some(self);
+        while let Some(plan) = link {
+            if let Some(initializer) = &mut plan.initializer {
+                visit(&mut initializer.value);
+            }
+            visit(&mut plan.condition);
+            link = match &mut plan.else_arm {
+                ElseArm::ElseIf(next) => Some(next),
+                ElseArm::None | ElseArm::Else { .. } => None,
+            };
+        }
+    }
+
     pub(crate) fn plain(
         condition: GoExpression,
         then_body: LoweredBlock,
@@ -867,22 +965,7 @@ impl LoweredStatement {
         visit.statement(self);
         match self {
             LoweredStatement::If(plan) => plan.walk(visit),
-            LoweredStatement::Loop(plan) => {
-                match &plan.header {
-                    LoopHeader::Infinite => {}
-                    LoopHeader::While(condition) => condition.node().walk(visit),
-                    LoopHeader::Range { iterable, .. } => iterable.node().walk(visit),
-                    LoopHeader::Counted {
-                        start, condition, ..
-                    } => {
-                        start.node().walk(visit);
-                        if let Some(condition) = condition {
-                            condition.node().walk(visit);
-                        }
-                    }
-                }
-                plan.body.walk(visit);
-            }
+            LoweredStatement::Loop(plan) => plan.walk(visit),
             LoweredStatement::Block(body) | LoweredStatement::Body(body) => body.walk(visit),
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
@@ -906,40 +989,8 @@ impl LoweredStatement {
                 }
             },
             LoweredStatement::Async { call, .. } => call.node().walk(visit),
-            LoweredStatement::Select(plan) => {
-                for arm in &plan.arms {
-                    match &arm.kind {
-                        SelectArmKind::Receive { channel, body, .. } => {
-                            channel.node().walk(visit);
-                            body.walk(visit);
-                        }
-                        SelectArmKind::Send {
-                            channel,
-                            value,
-                            body,
-                        } => {
-                            channel.node().walk(visit);
-                            value.node().walk(visit);
-                            body.walk(visit);
-                        }
-                        SelectArmKind::Default { body } => body.walk(visit),
-                    }
-                }
-            }
-            LoweredStatement::Switch(plan) => {
-                match &plan.kind {
-                    SwitchKind::Conditional => {}
-                    SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
-                        subject.node().walk(visit)
-                    }
-                }
-                for case in &plan.cases {
-                    case.walk(visit);
-                }
-                if let Some(default) = &plan.default {
-                    default.walk(visit);
-                }
-            }
+            LoweredStatement::Select(plan) => plan.walk(visit),
+            LoweredStatement::Switch(plan) => plan.walk(visit),
             LoweredStatement::Define(definition) => definition.value.node().walk(visit),
             LoweredStatement::VarDeclaration { value, .. } => {
                 if let Some(value) = value {
@@ -957,32 +1008,8 @@ impl LoweredStatement {
 
     pub(crate) fn for_each_expression_mut(&mut self, visit: &mut impl FnMut(&mut GoExpression)) {
         match self {
-            LoweredStatement::If(plan) => {
-                let mut link = Some(plan);
-                while let Some(plan) = link {
-                    if let Some(initializer) = &mut plan.initializer {
-                        visit(&mut initializer.value);
-                    }
-                    visit(&mut plan.condition);
-                    link = match &mut plan.else_arm {
-                        ElseArm::ElseIf(next) => Some(next),
-                        ElseArm::None | ElseArm::Else { .. } => None,
-                    };
-                }
-            }
-            LoweredStatement::Loop(plan) => match &mut plan.header {
-                LoopHeader::Infinite => {}
-                LoopHeader::While(condition) => visit(condition),
-                LoopHeader::Range { iterable, .. } => visit(iterable),
-                LoopHeader::Counted {
-                    start, condition, ..
-                } => {
-                    visit(start);
-                    if let Some(condition) = condition {
-                        visit(condition);
-                    }
-                }
-            },
+            LoweredStatement::If(plan) => plan.for_each_head_expression_mut(visit),
+            LoweredStatement::Loop(plan) => plan.header.for_each_expression_mut(visit),
             LoweredStatement::Block(_)
             | LoweredStatement::Body(_)
             | LoweredStatement::Break(_)
@@ -1000,18 +1027,7 @@ impl LoweredStatement {
                 visit(target);
                 visit(value);
             }
-            LoweredStatement::Select(plan) => {
-                for arm in &mut plan.arms {
-                    match &mut arm.kind {
-                        SelectArmKind::Receive { channel, .. } => visit(channel),
-                        SelectArmKind::Send { channel, value, .. } => {
-                            visit(channel);
-                            visit(value);
-                        }
-                        SelectArmKind::Default { .. } => {}
-                    }
-                }
-            }
+            LoweredStatement::Select(plan) => plan.for_each_operand_mut(visit),
             LoweredStatement::Switch(plan) => {
                 match &mut plan.kind {
                     SwitchKind::Conditional => {}

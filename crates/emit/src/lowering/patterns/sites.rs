@@ -20,7 +20,7 @@ use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::patterns::binding_declarations::pattern_binds_name;
 use crate::lowering::patterns::binding_statements::AssertedPattern;
 use crate::lowering::patterns::decision_tree::{
-    self, BindingTarget, PatternBinding, PatternInfo, SubjectRoot, render_condition,
+    self, BindingTarget, Check, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
 use crate::lowering::patterns::matching::{
     ArmBinding, FusedName, field_binding, ok_pattern_field, some_pattern_field,
@@ -164,61 +164,66 @@ impl Planner<'_> {
                 scrutinee,
                 pattern,
                 temp_hint,
-            } => {
-                if let Expression::Identifier {
-                    value, resolution, ..
-                } = scrutinee
-                    && self.queries().can_reuse_subject_identifier(
-                        value,
-                        resolution,
-                        pattern_binds_name(pattern, value),
-                    )
-                {
-                    return ResolvedSubject::Existing(
-                        self.queries().reference_expression(value, resolution),
-                    );
-                }
-                let plan = self.plan_value(scrutinee, ExpressionContext::value());
-                let materialized = plan
-                    .expression()
-                    .as_identifier()
-                    .or_else(|| field_path_go_root(plan.expression()))
-                    .filter(|local| {
-                        plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
-                    })
-                    .cloned();
-
-                let rests_in_own_temp_path =
-                    field_path_go_root(plan.expression()).is_some_and(|root| {
-                        plan.binds_local(root)
-                            && self.scope.lacks_binding_for_local(root)
-                            && !pattern_binds_name(pattern, root)
-                    });
-
-                let rests_in_stable_name =
-                    rests_in_own_temp_path || self.queries().plan_rests_in_stable_name(&plan);
-                let (operator_setup, expression) = plan.into_parts();
-                setup.extend(operator_setup);
-                if rests_in_stable_name
-                    || self
-                        .queries()
-                        .field_path_reads_in_place(scrutinee, &expression, |root| {
-                            pattern_binds_name(pattern, root)
-                        })
-                {
-                    return match materialized {
-                        Some(local) => ResolvedSubject::Materialized {
-                            subject: expression,
-                            local,
-                        },
-                        None => ResolvedSubject::Existing(expression),
-                    };
-                }
-                let name = self.fresh_local(temp_hint);
-                self.scope.declare_go_name(&name);
-                ResolvedSubject::Deferred { name, expression }
-            }
+            } => self.resolve_expression_subject(setup, scrutinee, pattern, temp_hint),
         }
+    }
+
+    fn resolve_expression_subject(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        scrutinee: &Expression,
+        pattern: &Pattern,
+        temp_hint: &'static str,
+    ) -> ResolvedSubject {
+        if let Expression::Identifier {
+            value, resolution, ..
+        } = scrutinee
+            && self.queries().can_reuse_subject_identifier(
+                value,
+                resolution,
+                pattern_binds_name(pattern, value),
+            )
+        {
+            return ResolvedSubject::Existing(
+                self.queries().reference_expression(value, resolution),
+            );
+        }
+        let plan = self.plan_value(scrutinee, ExpressionContext::value());
+        let materialized = plan
+            .expression()
+            .as_identifier()
+            .or_else(|| field_path_go_root(plan.expression()))
+            .filter(|local| plan.binds_local(local) && self.scope.lacks_binding_for_local(local))
+            .cloned();
+
+        let rests_in_own_temp_path = field_path_go_root(plan.expression()).is_some_and(|root| {
+            plan.binds_local(root)
+                && self.scope.lacks_binding_for_local(root)
+                && !pattern_binds_name(pattern, root)
+        });
+
+        let rests_in_stable_name =
+            rests_in_own_temp_path || self.queries().plan_rests_in_stable_name(&plan);
+        let (operator_setup, expression) = plan.into_parts();
+        setup.extend(operator_setup);
+        if rests_in_stable_name
+            || self
+                .queries()
+                .field_path_reads_in_place(scrutinee, &expression, |root| {
+                    pattern_binds_name(pattern, root)
+                })
+        {
+            return match materialized {
+                Some(local) => ResolvedSubject::Materialized {
+                    subject: expression,
+                    local,
+                },
+                None => ResolvedSubject::Existing(expression),
+            };
+        }
+        let name = self.fresh_local(temp_hint);
+        self.scope.declare_go_name(&name);
+        ResolvedSubject::Deferred { name, expression }
     }
 
     pub(in crate::lowering) fn lower_irrefutable_pattern_site(
@@ -635,17 +640,6 @@ impl Planner<'_> {
             });
         }
 
-        if asserted.is_irrefutable() {
-            self.record_dropped_fail(&fail);
-            self.tree_binding_statements(
-                &mut statements,
-                &asserted.bindings,
-                SubjectRoot::Var(&asserted.subject),
-                &[],
-            );
-            return statements;
-        }
-
         let AssertedPattern {
             subject: effective_subject,
             ok_test,
@@ -653,34 +647,15 @@ impl Planner<'_> {
             bindings,
         } = asserted;
 
-        let mut guard_parts: Vec<GoExpression> = Vec::new();
-        if let Some(ok) = ok_test {
-            guard_parts.push(GoExpression::unary(GoUnaryOperator::Not, ok));
+        match self.refutable_failure_guard(ok_test, &checks, &effective_subject) {
+            Some(guard) => {
+                let fail_body = self.lower_refutable_fail(fail, subject_var);
+                statements.push(
+                    LoweredStatement::If(IfPlan::plain(guard, fail_body, ElseArm::None)).into(),
+                );
+            }
+            None => self.record_dropped_fail(&fail),
         }
-        if !checks.is_empty() {
-            let negated = match checks.as_slice() {
-                [check] => {
-                    check.render_negated(&mut self.scope, SubjectRoot::Var(&effective_subject))
-                }
-                _ => GoExpression::unary(
-                    GoUnaryOperator::Not,
-                    render_condition(
-                        &mut self.scope,
-                        &checks,
-                        SubjectRoot::Var(&effective_subject),
-                    ),
-                ),
-            };
-
-            guard_parts.push(negated);
-        }
-        let guard = guard_parts
-            .into_iter()
-            .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
-            .expect("a refutable pattern has a check or a type assertion");
-        let fail_body = self.lower_refutable_fail(fail, subject_var);
-        statements
-            .push(LoweredStatement::If(IfPlan::plain(guard, fail_body, ElseArm::None)).into());
 
         self.tree_binding_statements(
             &mut statements,
@@ -689,6 +664,27 @@ impl Planner<'_> {
             &[],
         );
         statements
+    }
+
+    fn refutable_failure_guard(
+        &mut self,
+        ok_test: Option<GoExpression>,
+        checks: &[Check],
+        subject: &GoExpression,
+    ) -> Option<GoExpression> {
+        let negated_ok = ok_test.map(|ok| GoExpression::unary(GoUnaryOperator::Not, ok));
+        let negated_checks = match checks {
+            [] => None,
+            [check] => Some(check.render_negated(&mut self.scope, SubjectRoot::Var(subject))),
+            _ => Some(GoExpression::unary(
+                GoUnaryOperator::Not,
+                render_condition(&mut self.scope, checks, SubjectRoot::Var(subject)),
+            )),
+        };
+        negated_ok
+            .into_iter()
+            .chain(negated_checks)
+            .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
     }
 
     fn lower_let_else_or_pattern(
@@ -740,18 +736,15 @@ impl Planner<'_> {
                 statements: assigns,
             };
             if alternative.is_irrefutable() {
-                if pieces.is_empty() {
-                    statements.extend(body.statements);
-                } else {
-                    statements.push(assemble_if_else_chain(pieces, body).into());
-                }
+                statements.extend(assemble_if_else_chain(pieces, body));
                 return statements;
             }
             pieces.push((alternative.condition(&mut self.scope), body));
         }
-        statements.push(
-            assemble_if_else_chain(pieces, failure.expect("all alternatives are refutable")).into(),
-        );
+        statements.extend(assemble_if_else_chain(
+            pieces,
+            failure.expect("all alternatives are refutable"),
+        ));
         statements
     }
 
@@ -845,21 +838,25 @@ impl Planner<'_> {
         let terminal = LoweredBlock {
             statements: vec![self.queries().loop_break().into()],
         };
-        statements.push(assemble_if_else_chain(pieces, terminal).into());
+        statements.extend(assemble_if_else_chain(pieces, terminal));
     }
 }
 
 fn assemble_if_else_chain(
-    mut pieces: Vec<(GoExpression, LoweredBlock)>,
+    pieces: Vec<(GoExpression, LoweredBlock)>,
     terminal: LoweredBlock,
-) -> LoweredStatement {
-    let mut else_arm = ElseArm::block(terminal);
-    while pieces.len() > 1 {
-        let (condition, then_body) = pieces.pop().expect("len > 1");
-        else_arm = ElseArm::ElseIf(Box::new(IfPlan::plain(condition, then_body, else_arm)));
-    }
-    let (condition, then_body) = pieces.pop().expect("pieces is non-empty");
-    LoweredStatement::If(IfPlan::plain(condition, then_body, else_arm))
+) -> Vec<Statement> {
+    let mut pieces = pieces.into_iter();
+    let Some((condition, then_body)) = pieces.next() else {
+        return terminal.statements;
+    };
+    let else_arm = pieces.rev().fold(
+        ElseArm::block(terminal),
+        |else_arm, (condition, then_body)| {
+            ElseArm::ElseIf(Box::new(IfPlan::plain(condition, then_body, else_arm)))
+        },
+    );
+    vec![LoweredStatement::If(IfPlan::plain(condition, then_body, else_arm)).into()]
 }
 
 impl PlannerQueries<'_, '_> {

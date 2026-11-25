@@ -69,11 +69,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(in crate::lowering) fn lisette_zero(&mut self, ty: &Type) -> GoExpression {
-        self.lisette_zero_expression(ty, ZeroSpelling::Explicit)
-            .expect("required zero expression")
-    }
-
     pub(in crate::lowering) fn lisette_zero_expression(
         &mut self,
         ty: &Type,
@@ -82,23 +77,23 @@ impl Planner<'_> {
         if spelling == ZeroSpelling::OmitGoZero && self.facts.go_zero_is_lisette_zero(ty) {
             return None;
         }
-        let layout = self.facts.value_layout(ty, SlotOrigin::Lisette);
-        let zero = match (ty, &layout) {
-            (Type::Simple(kind), _) => {
-                let zero = match kind {
-                    SimpleKind::Bool => {
-                        GoExpression::constant(GoLiteral::Bool(false), ConstantKind::Bool)
-                    }
-                    SimpleKind::String => GoExpression::constant(
-                        GoLiteral::Token("\"\"".to_string()),
-                        ConstantKind::String,
-                    ),
-                    SimpleKind::Unit => self.unit_value(None, None),
-                    _ => GoExpression::constant(GoLiteral::Int(0), ConstantKind::Int),
-                };
+        Some(self.lisette_zero(ty))
+    }
 
-                return Some(zero);
-            }
+    pub(in crate::lowering) fn lisette_zero(&mut self, ty: &Type) -> GoExpression {
+        let layout = self.facts.value_layout(ty, SlotOrigin::Lisette);
+        match (ty, &layout) {
+            (Type::Simple(kind), _) => match kind {
+                SimpleKind::Bool => {
+                    GoExpression::constant(GoLiteral::Bool(false), ConstantKind::Bool)
+                }
+                SimpleKind::String => GoExpression::constant(
+                    GoLiteral::Token("\"\"".to_string()),
+                    ConstantKind::String,
+                ),
+                SimpleKind::Unit => self.unit_value(None, None),
+                _ => GoExpression::constant(GoLiteral::Int(0), ConstantKind::Int),
+            },
             (
                 Type::Compound {
                     kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
@@ -122,7 +117,7 @@ impl Planner<'_> {
                 GoExpression::empty_composite(GoType::map_of(&key, &value))
             }
             (Type::Nominal { id, params, .. }, _) => {
-                return self.lisette_zero_nominal(ty, id.as_str(), params, spelling);
+                self.lisette_zero_nominal(ty, id.as_str(), params)
             }
             (Type::Tuple(slots), ValueLayout::Tuple { elements, .. }) => {
                 let parts: Vec<GoExpression> = elements
@@ -143,24 +138,16 @@ impl Planner<'_> {
                 GoExpression::new_zero(GoType::new(go_name.to_string()))
             }
             _ => GoExpression::empty_composite(self.queries().go_type(ty)),
-        };
-
-        Some(zero)
+        }
     }
 
-    fn lisette_zero_nominal(
-        &mut self,
-        ty: &Type,
-        id: &str,
-        params: &[Type],
-        spelling: ZeroSpelling,
-    ) -> Option<GoExpression> {
+    fn lisette_zero_nominal(&mut self, ty: &Type, id: &str, params: &[Type]) -> GoExpression {
         if id == "prelude.Option" {
             let inner = params
                 .first()
                 .map(|a| self.queries().go_type(a))
                 .unwrap_or_else(GoType::any);
-            let zero = GoExpression::call(
+            return GoExpression::call(
                 GoExpression::instantiation(
                     GoExpression::generated(
                         GeneratedPackage::Prelude,
@@ -170,59 +157,64 @@ impl Planner<'_> {
                 ),
                 Vec::new(),
             );
-
-            return Some(zero);
         }
         let go_import = is_go_import(id);
         if go_import
             && (self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some())
         {
-            return Some(self.go_zero(ty));
+            return self.go_zero(ty);
         }
         if let Some(underlying) = self.facts.newtype_underlying(ty) {
             let go_ty = self.queries().go_type(ty);
             if go_import {
-                let zero = self
+                return self
                     .go_newtype_zero(go_ty.clone(), &underlying)
                     .unwrap_or_else(|| GoExpression::new_zero(go_ty));
-                return Some(zero);
             }
             let inner = self.lisette_zero(&underlying);
-            return Some(GoExpression::conversion(go_ty, inner));
+            return GoExpression::conversion(go_ty, inner);
         }
         if go_import {
-            return Some(self.queries().go_imported_zero(ty, id));
+            return self.queries().go_imported_zero(ty, id);
         }
         if let Some(fields) = self.facts.struct_fields(ty) {
-            let is_tuple = self.facts.is_tuple_struct_type(ty);
-            let field_spelling = if is_tuple {
-                ZeroSpelling::Explicit
-            } else {
-                ZeroSpelling::OmitGoZero
-            };
-            let pairs: Vec<(String, GoExpression)> = fields
-                .into_iter()
-                .enumerate()
-                .map(|(index, (name, selection))| (index, name, selection.field_ty()))
-                .filter_map(|(index, name, field_ty)| {
-                    let zero = self.lisette_zero_expression(&field_ty, field_spelling)?;
-                    let go_name = if is_tuple {
-                        go_name::tuple_struct_field(index)
-                    } else {
-                        self.facts
-                            .struct_field_go_name(ty, &name, GoExport::Unexported)
-                    };
-
-                    Some((go_name, zero))
-                })
-                .collect();
-
-            return Some(plan_struct_literal(&self.queries().go_type(ty), pairs));
+            return self.lisette_struct_zero(ty, fields);
         }
         if let Some(underlying) = self.facts.immediate_underlying(ty) {
-            return self.lisette_zero_expression(&underlying, spelling);
+            return self.lisette_zero(&underlying);
         }
-        Some(GoExpression::empty_composite(self.queries().go_type(ty)))
+        GoExpression::empty_composite(self.queries().go_type(ty))
+    }
+
+    fn lisette_struct_zero(
+        &mut self,
+        ty: &Type,
+        fields: Vec<(ecow::EcoString, FieldSelection)>,
+    ) -> GoExpression {
+        let is_tuple = self.facts.is_tuple_struct_type(ty);
+        let field_spelling = if is_tuple {
+            ZeroSpelling::Explicit
+        } else {
+            ZeroSpelling::OmitGoZero
+        };
+        let pairs: Vec<(String, GoExpression)> = fields
+            .into_iter()
+            .enumerate()
+            .map(|(index, (name, selection))| (index, name, selection.field_ty()))
+            .filter_map(|(index, name, field_ty)| {
+                let zero = self.lisette_zero_expression(&field_ty, field_spelling)?;
+                let go_name = if is_tuple {
+                    go_name::tuple_struct_field(index)
+                } else {
+                    self.facts
+                        .struct_field_go_name(ty, &name, GoExport::Unexported)
+                };
+
+                Some((go_name, zero))
+            })
+            .collect();
+
+        plan_struct_literal(&self.queries().go_type(ty), pairs)
     }
 
     fn array_zero(&mut self, len: u64, element: &Type) -> GoExpression {
@@ -288,6 +280,34 @@ impl Planner<'_> {
         self.go_zero_of_layout(&self.facts.value_layout(ty, SlotOrigin::Lisette))
     }
 
+    fn go_simple_zero(&self, kind: SimpleKind, go_ty: GoType) -> GoExpression {
+        let constant = |literal: GoLiteral, kind| GoExpression::constant(literal, kind);
+        match kind {
+            SimpleKind::Int
+            | SimpleKind::Int8
+            | SimpleKind::Int16
+            | SimpleKind::Int32
+            | SimpleKind::Int64
+            | SimpleKind::Uint
+            | SimpleKind::Uint8
+            | SimpleKind::Uint16
+            | SimpleKind::Uint32
+            | SimpleKind::Uint64
+            | SimpleKind::Uintptr
+            | SimpleKind::Byte
+            | SimpleKind::Rune => constant(GoLiteral::Int(0), ConstantKind::Int),
+            SimpleKind::Float32 | SimpleKind::Float64 => {
+                constant(GoLiteral::Token("0.0".to_string()), ConstantKind::Float)
+            }
+            SimpleKind::Bool => constant(GoLiteral::Bool(false), ConstantKind::Bool),
+            SimpleKind::String => {
+                constant(GoLiteral::Token("\"\"".to_string()), ConstantKind::String)
+            }
+            SimpleKind::Unit => self.unit_value(None, None),
+            SimpleKind::Complex64 | SimpleKind::Complex128 => GoExpression::new_zero(go_ty),
+        }
+    }
+
     pub(in crate::lowering) fn go_zero_of_layout(&self, layout: &ValueLayout) -> GoExpression {
         if self.facts.is_interface(layout.logical_type()) {
             return GoExpression::nil();
@@ -295,33 +315,8 @@ impl Planner<'_> {
 
         let go_ty = layout.go_type(&self.queries());
 
-        let constant = |literal: GoLiteral, kind| GoExpression::constant(literal, kind);
-
         match layout {
-            ValueLayout::Plain(Type::Simple(kind)) => match kind {
-                SimpleKind::Int
-                | SimpleKind::Int8
-                | SimpleKind::Int16
-                | SimpleKind::Int32
-                | SimpleKind::Int64
-                | SimpleKind::Uint
-                | SimpleKind::Uint8
-                | SimpleKind::Uint16
-                | SimpleKind::Uint32
-                | SimpleKind::Uint64
-                | SimpleKind::Uintptr
-                | SimpleKind::Byte
-                | SimpleKind::Rune => constant(GoLiteral::Int(0), ConstantKind::Int),
-                SimpleKind::Float32 | SimpleKind::Float64 => {
-                    constant(GoLiteral::Token("0.0".to_string()), ConstantKind::Float)
-                }
-                SimpleKind::Bool => constant(GoLiteral::Bool(false), ConstantKind::Bool),
-                SimpleKind::String => {
-                    constant(GoLiteral::Token("\"\"".to_string()), ConstantKind::String)
-                }
-                SimpleKind::Unit => self.unit_value(None, None),
-                SimpleKind::Complex64 | SimpleKind::Complex128 => GoExpression::new_zero(go_ty),
-            },
+            ValueLayout::Plain(Type::Simple(kind)) => self.go_simple_zero(*kind, go_ty),
             ValueLayout::Array { .. }
             | ValueLayout::Tuple { .. }
             | ValueLayout::TaggedOption { .. }

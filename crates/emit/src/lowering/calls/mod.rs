@@ -6,12 +6,12 @@ pub(in crate::lowering) mod call_plan;
 pub(in crate::lowering) mod call_site;
 mod clone;
 pub(in crate::lowering) mod comma_ok;
+mod direct_calls;
 pub(in crate::lowering) mod dispatch;
 pub(in crate::lowering) mod go_interop;
 mod native_constructors;
 pub(in crate::lowering) mod native_methods;
 pub(in crate::lowering) mod predicates;
-mod regular;
 pub(in crate::lowering) mod slice_loop;
 mod type_arguments;
 mod ufcs;
@@ -21,6 +21,7 @@ pub(in crate::lowering) mod wrap_err;
 use crate::lowering::abi::callable::CallableAbi;
 use crate::lowering::calls::call_plan::CallableOrigin;
 use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::values::CaptureBoundary;
 use syntax::ast::Expression;
 use syntax::program::{CallOperation, NativeTypeKind};
@@ -76,6 +77,36 @@ pub(in crate::lowering) struct NativeCallContext<'a> {
 }
 
 impl<'a> NativeCallContext<'a> {
+    pub(in crate::lowering) fn new(
+        site: CallSite<'a>,
+        abi: CallableAbi,
+        native_type: NativeTypeKind,
+        method: &'a str,
+    ) -> Self {
+        Self {
+            function: site.callee,
+            form: NativeCallForm::method(site.callee),
+            args: site.args,
+            spread: site.spread,
+            written_type_arguments: site.written_type_arguments(),
+            abi,
+            call_ty: None,
+            native_type,
+            method,
+            capture_boundary: CaptureBoundary::SiblingSequence,
+            assigned_place: None,
+        }
+    }
+
+    fn placed(self, call_ty: Option<&'a Type>, ctx: ExpressionContext<'a>) -> Self {
+        Self {
+            call_ty,
+            capture_boundary: ctx.capture_boundary(),
+            assigned_place: ctx.assigned_place(),
+            ..self
+        }
+    }
+
     pub(in crate::lowering) fn receiver_and_arguments(
         &self,
     ) -> Option<(&'a Expression, &'a [Expression])> {
@@ -91,37 +122,17 @@ impl<'p> PlannerQueries<'_, 'p> {
     where
         'p: 'a,
     {
-        let Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            type_arguments,
-            ty,
-            ..
-        } = value
-        else {
-            return None;
-        };
-
-        let plan = self.plan_call(CallSite::of(value)?);
+        let site = CallSite::of(value)?;
+        let plan = self.plan_call(site);
         let CallableOrigin::Source(CallOperation::Native { kind, method }) = plan.resolved.origin
         else {
             return None;
         };
-        let form = NativeCallForm::method(callee);
-        form.split(args)?;
-        Some(NativeCallContext {
-            native_type: *kind,
-            form,
-            method,
-            function: callee,
-            args,
-            spread: spread.as_deref(),
-            written_type_arguments: type_arguments.annotations().len(),
-            abi: plan.resolved.abi,
-            call_ty: Some(ty),
-            capture_boundary: CaptureBoundary::SiblingSequence,
-            assigned_place: None,
-        })
+        let call = NativeCallContext {
+            call_ty: Some(site.ty),
+            ..NativeCallContext::new(site, plan.resolved.abi, *kind, method)
+        };
+        call.receiver_and_arguments()?;
+        Some(call)
     }
 }

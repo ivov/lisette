@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::inline_uses::region_blocks_inline;
 use crate::lowering::calls::call_site::CallSite;
-use crate::lowering::calls::native_methods::{is_clip_safe_path, slice_growth_call};
+use crate::lowering::calls::native_methods::{SliceGrowth, is_clip_safe_path, slice_growth_call};
 use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::expressions::operand_order::{LaterOperands, SpreadSequenceOptions};
 use crate::lowering::expressions::tuple_literal::TupleLiteral;
@@ -23,7 +23,7 @@ use crate::target::ir::bodies::{
 use crate::target::ir::evaluation::Effects;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
-use crate::target::ir::prelude::ConstructorKind;
+use crate::target::ir::prelude::{ConstructorKind, Fallible};
 use crate::target::ir::values::Stability;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::types::go_type::GoType;
@@ -52,6 +52,26 @@ fn calls_a_function(operation: Option<&CallOperation>) -> bool {
                 | CallOperation::ReceiverMethod { .. }
         )
     )
+}
+
+fn fallible_constructor<'e>(
+    fallible: &Fallible,
+    callee: &Expression,
+    args: &'e [Expression],
+) -> Option<(&'static str, Option<(&'e Expression, Type)>)> {
+    match (fallible.classify_constructor(callee), args) {
+        (Some(ConstructorKind::Success), [argument]) => Some((
+            fallible.ok_constructor(),
+            Some((argument, fallible.ok_ty().clone())),
+        )),
+        (Some(ConstructorKind::Failure), [argument]) if let Some(err_ty) = fallible.err_ty() => {
+            Some((fallible.err_constructor(), Some((argument, err_ty.clone()))))
+        }
+        (Some(ConstructorKind::Failure), _) if fallible.err_ty().is_none() => {
+            Some((fallible.err_constructor(), None))
+        }
+        _ => None,
+    }
 }
 
 fn simple_assign(target: &GoExpression, value: ValuePlan) -> LoweredStatement {
@@ -83,9 +103,8 @@ pub(in crate::lowering) fn rebind_updated_temp(
     let Some(start) = statements.iter().rposition(|s| s.kind.binds_local(temp)) else {
         return false;
     };
-    let (copy, writes) = statements[start..]
-        .split_first_mut()
-        .expect("rposition found a statement");
+    let (head, writes) = statements.split_at_mut(start + 1);
+    let copy = &mut head[start];
     let writes_field_of_temp = |statement: &Statement| {
         let LoweredStatement::Assign(AssignForm::Simple { target, value }) = &statement.kind else {
             return false;
@@ -361,19 +380,7 @@ impl<'p> Planner<'p> {
             return vec![self.lower_never_value(value)];
         }
         if self.facts.has_no_go_value(&value_ty) {
-            let operand = self.plan_operand(value, ExpressionContext::value());
-            let (mut statements, value_operand) = operand.into_parts();
-            let effects = value_operand.effects();
-            let reads_or_acts = !effects.can_erase() || effects.reads() != Stability::Fixed;
-            if !value_operand.is_empty() && reads_or_acts {
-                if matches!(value, Expression::Call { .. }) && value_operand.stands_as_a_statement()
-                {
-                    statements.push(effect_statement(value_operand));
-                } else {
-                    statements.push(discard(value_operand));
-                }
-            }
-            return statements;
+            return self.lower_valueless_discard(value);
         }
 
         if let Expression::Call { .. } = value {
@@ -404,6 +411,21 @@ impl<'p> Planner<'p> {
                 None => value_operand,
             };
             statements.push(discard(value_operand));
+        }
+        statements
+    }
+
+    fn lower_valueless_discard(&mut self, value: &Expression) -> Vec<Statement> {
+        let operand = self.plan_operand(value, ExpressionContext::value());
+        let (mut statements, value_operand) = operand.into_parts();
+        let effects = value_operand.effects();
+        let reads_or_acts = !effects.can_erase() || effects.reads() != Stability::Fixed;
+        if !value_operand.is_empty() && reads_or_acts {
+            if matches!(value, Expression::Call { .. }) && value_operand.stands_as_a_statement() {
+                statements.push(effect_statement(value_operand));
+            } else {
+                statements.push(discard(value_operand));
+            }
         }
         statements
     }
@@ -490,53 +512,18 @@ impl<'p> Planner<'p> {
                 args,
                 ..
             } => {
-                let kind = fallible.classify_constructor(callee);
-                let (constructor_name, constructor_arg) = match kind {
-                    Some(ConstructorKind::Success) => (
-                        fallible.ok_constructor(),
-                        Some((
-                            args.first().expect("success constructor has an argument"),
-                            fallible.ok_ty().clone(),
-                        )),
-                    ),
-                    Some(ConstructorKind::Failure) if let Some(err_ty) = fallible.err_ty() => (
-                        fallible.err_constructor(),
-                        Some((
-                            args.first().expect("failure constructor has an argument"),
-                            err_ty.clone(),
-                        )),
-                    ),
-                    Some(ConstructorKind::Failure) => (fallible.err_constructor(), None),
-                    None => {
-                        return directed_first(
-                            line,
-                            self.lower_plain_assign(target, target_ty, expression),
-                        );
-                    }
+                let Some((constructor_name, constructor_arg)) =
+                    fallible_constructor(&fallible, callee, args)
+                else {
+                    return directed_first(
+                        line,
+                        self.lower_plain_assign(target, target_ty, expression),
+                    );
                 };
 
-                if let Some((constructor_arg, payload_ty)) = constructor_arg {
-                    let argument =
-                        self.plan_composite_value(constructor_arg, ExpressionContext::value());
-                    let (mut arg_setup, argument) = argument.into_parts();
-                    let argument = self.apply_type_coercion(
-                        &mut arg_setup,
-                        Some(&payload_ty),
-                        constructor_arg,
-                        argument,
-                    );
-
-                    let call =
-                        self.queries()
-                            .fallible_call(&fallible, constructor_name, vec![argument]);
-                    let value = ValuePlan::plain_call(arg_setup, call);
-                    vec![simple_assign(target, value).into()]
-                } else {
-                    let call =
-                        self.queries()
-                            .fallible_call(&fallible, constructor_name, Vec::new());
-                    vec![simple_assign(target, ValuePlan::computed(Vec::new(), call)).into()]
-                }
+                let value =
+                    self.plan_fallible_constructor(&fallible, constructor_name, constructor_arg);
+                vec![simple_assign(target, value).into()]
             }
             Expression::Identifier { .. } => {
                 if fallible.classify_constructor(actual_expression)
@@ -556,6 +543,29 @@ impl<'p> Planner<'p> {
         };
 
         directed_first(line, statements)
+    }
+
+    fn plan_fallible_constructor(
+        &mut self,
+        fallible: &Fallible,
+        constructor_name: &str,
+        constructor_arg: Option<(&Expression, Type)>,
+    ) -> ValuePlan {
+        let Some((constructor_arg, payload_ty)) = constructor_arg else {
+            let call = self
+                .queries()
+                .fallible_call(fallible, constructor_name, Vec::new());
+            return ValuePlan::computed(Vec::new(), call);
+        };
+        let argument = self.plan_composite_value(constructor_arg, ExpressionContext::value());
+        let (mut arg_setup, argument) = argument.into_parts();
+        let argument =
+            self.apply_type_coercion(&mut arg_setup, Some(&payload_ty), constructor_arg, argument);
+
+        let call = self
+            .queries()
+            .fallible_call(fallible, constructor_name, vec![argument]);
+        ValuePlan::plain_call(arg_setup, call)
     }
 
     pub(in crate::lowering) fn lower_block_to_var(
@@ -700,61 +710,14 @@ impl<'p> Planner<'p> {
         target: &GoExpression,
         last: &Expression,
     ) -> Option<Vec<Statement>> {
-        let Expression::Call {
-            expression: function,
-            args,
-            spread,
-            ..
-        } = last
-        else {
-            return None;
-        };
-
-        let (method, receiver) = slice_growth_method(&self.facts, function)?;
+        let site = CallSite::of(last)?;
+        let (growth, receiver) = slice_growth_method(&self.facts, site.callee)?;
 
         let receiver_is_lvalue =
             is_lvalue_chain(&self.facts, receiver) && !contains_newtype_access(receiver);
 
         let (value, mut statements) = if receiver_is_lvalue {
-            let (arguments, ordering) = self.lower_growth_args(last, args, spread.as_deref());
-            let mut capture: Vec<Statement> = Vec::new();
-            let receiver_place =
-                self.plan_place(&mut capture, receiver, PlaceOrdering::before(&ordering));
-            let target_differs = receiver_place.node() != target.node();
-            let receiver_read = ValuePlan::computed(Vec::new(), receiver_place.clone())
-                .with_stability(self.queries().path_read_stability(&receiver_place));
-            let arguments_effects = arguments
-                .iter()
-                .fold(Effects::default(), |effects, argument| {
-                    effects.union(argument.effects())
-                });
-            let mut later = LaterOperands::sequenced(
-                ordering.setup(),
-                arguments_effects.with_known_reads(arguments_effects.reads()),
-            );
-            let receiver = if target_differs
-                && !arguments.is_empty()
-                && (!is_clip_safe_path(&receiver_place) || later.prepend(&receiver_read))
-            {
-                GoExpression::identifier(self.hoist_temp(&mut capture, "recv", receiver_place))
-            } else {
-                receiver_place
-            };
-
-            capture.extend(ordering.into_parts().0);
-            let value = if target_differs {
-                self.detach_slice_growth(
-                    &mut capture,
-                    method,
-                    receiver,
-                    &arguments,
-                    &last.get_type(),
-                )
-            } else {
-                slice_growth_call(method, receiver, &arguments)
-            };
-
-            (value, capture)
+            self.lower_slice_growth_in_place(target, site, growth, receiver)
         } else {
             let (setup, value) = self
                 .plan_value(last, ExpressionContext::value())
@@ -764,6 +727,48 @@ impl<'p> Planner<'p> {
 
         statements.push(simple_assign(target, ValuePlan::computed(Vec::new(), value)).into());
         Some(statements)
+    }
+
+    fn lower_slice_growth_in_place(
+        &mut self,
+        target: &GoExpression,
+        site: CallSite<'_>,
+        growth: SliceGrowth,
+        receiver: &Expression,
+    ) -> (GoExpression, Vec<Statement>) {
+        let (arguments, ordering) = self.lower_growth_args(site.expression, site.args, site.spread);
+        let mut capture: Vec<Statement> = Vec::new();
+        let receiver_place =
+            self.plan_place(&mut capture, receiver, PlaceOrdering::before(&ordering));
+        let target_differs = receiver_place.node() != target.node();
+        let receiver_read = ValuePlan::computed(Vec::new(), receiver_place.clone())
+            .with_stability(self.queries().path_read_stability(&receiver_place));
+        let arguments_effects = arguments
+            .iter()
+            .fold(Effects::default(), |effects, argument| {
+                effects.union(argument.effects())
+            });
+        let mut later = LaterOperands::sequenced(
+            ordering.setup(),
+            arguments_effects.with_known_reads(arguments_effects.reads()),
+        );
+        let receiver = if target_differs
+            && !arguments.is_empty()
+            && (!is_clip_safe_path(&receiver_place) || later.prepend(&receiver_read))
+        {
+            GoExpression::identifier(self.hoist_temp(&mut capture, "recv", receiver_place))
+        } else {
+            receiver_place
+        };
+
+        capture.extend(ordering.into_parts().0);
+        let value = if target_differs {
+            self.detach_slice_growth(&mut capture, growth, receiver, &arguments, site.ty)
+        } else {
+            slice_growth_call(growth, receiver, &arguments)
+        };
+
+        (value, capture)
     }
 
     fn lower_growth_args(
@@ -897,17 +902,15 @@ impl<'p> Planner<'p> {
     }
 }
 
-fn slice_growth_method<'a, 'e>(
-    facts: &EmitFacts<'a>,
+fn slice_growth_method<'e>(
+    facts: &EmitFacts<'_>,
     function: &'e Expression,
-) -> Option<(&'a str, &'e Expression)> {
+) -> Option<(SliceGrowth, &'e Expression)> {
     let Expression::DotAccess { expression, .. } = function else {
         return None;
     };
-    let operation = facts.checked(function).callee().native()?;
-    operation
-        .grows_slice()
-        .then_some((operation.method, expression))
+    let growth = SliceGrowth::of(facts.checked(function).callee().native()?)?;
+    Some((growth, expression))
 }
 
 fn is_side_effect_free_discard<'a>(facts: &EmitFacts<'a>, expression: &Expression) -> bool {

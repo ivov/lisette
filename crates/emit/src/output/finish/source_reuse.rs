@@ -297,17 +297,26 @@ fn reuse_copy_source(
         return false;
     }
 
+    replace_copy_with_source(flat, index, &copy, &source);
+    true
+}
+
+fn replace_copy_with_source(
+    flat: &mut Vec<Statement>,
+    index: usize,
+    copy: &GoIdentifier,
+    source: &GoIdentifier,
+) {
     let mut rest = flat.split_off(index + 1);
     flat.pop();
     visit_statements_mut(
         &mut rest,
         &mut Rename {
-            from: &copy,
-            to: &source,
+            from: copy,
+            to: source,
         },
     );
     flat.append(&mut rest);
-    true
 }
 
 struct SourceReads<'a> {

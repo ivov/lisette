@@ -1,5 +1,5 @@
 use crate::lowering::abi::go_result_wrapping::WrapperOutcome;
-use crate::lowering::abi::go_result_wrapping::{NilGuard, WrapperTarget};
+use crate::lowering::abi::go_result_wrapping::{GoResultAbi, NilGuard, WrapperTarget};
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -59,27 +59,11 @@ impl Planner<'_> {
         let call_plan = self.plan_call_expression(plan.site, None, ExpressionContext::value());
         let mut wrapped_in_place = false;
         let mut plan = call_plan.map_expression(|setup, call| {
-            let shortcut = match &abi.result {
-                CallableReturnAbi::Lowered(shape @ LoweredReturnAbi::Result { payload })
-                    if !changed =>
-                {
-                    let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                    let nil_guard = self.queries().lowered_payload_nil_guard(
-                        shape,
-                        origin.producer(),
-                        result_ty,
-                    );
-                    self.queries()
-                        .result_from_pair(call, &layout, *payload, None, nil_guard)
-                }
-                CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
-                    OptionReturnAbi::CommaOk { payload },
-                )) if !changed => {
-                    let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                    self.queries()
-                        .option_from_comma_ok(call, &layout, *payload, None)
-                }
-                _ => Err(call),
+            let shortcut = if changed {
+                Err(call)
+            } else {
+                self.queries()
+                    .wrap_go_result_in_place(call, abi, origin, result_ty)
             };
 
             let (wrap, value) = match shortcut {
@@ -116,15 +100,16 @@ impl Planner<'_> {
         change: Option<GoResultLayoutChange>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, Option<GoExpression>) {
-        let (payload_changes, change) = match change {
+        let (changes, change) = match change {
             Some(GoResultLayoutChange::Payload(changes)) => (Some(changes), None),
             change => (None, change),
         };
-        let payload_changes = payload_changes.as_ref();
+        let changes = changes.as_ref();
         let named = |(statements, outcome): (Vec<Statement>, WrapperOutcome)| {
             (statements, outcome.map(GoExpression::identifier))
         };
-        let (mut statements, value) = match (producer.abi.lowered(), change) {
+        let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
+        let (statements, value) = match (producer.abi.lowered(), change) {
             (_, Some(GoResultLayoutChange::Whole(change))) => change.lower(self, call),
             (None, _) => (Vec::new(), call),
             (Some(LoweredReturnAbi::Tuple { arity }), change) => {
@@ -135,79 +120,69 @@ impl Planner<'_> {
                 self.plan_tuple_result(call, *arity, result_ty, slot_layout_changes.as_deref())
             }
             (Some(LoweredReturnAbi::BareError), _) => {
-                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                let fallible = self
-                    .facts
-                    .fallible(layout.underlying().logical_type())
-                    .expect("Result type expected");
-                debug_assert!(fallible.ok_ty().is_unit());
-                return named(self.lower_unit_result_wrapping(
-                    call,
-                    &layout,
-                    payload_changes.map(|changes| &changes.error),
-                    target,
-                ));
+                let error_change = changes.map(|changes| &changes.error);
+                return named(self.lower_bare_error_wrapping(call, &layout, error_change, target));
             }
-            (Some(LoweredReturnAbi::Result { .. }), _) => {
-                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
+            (Some(LoweredReturnAbi::Result { payload }), _) => {
                 return named(self.lower_result_wrapping(
                     call,
                     &layout,
-                    producer,
-                    payload_changes,
+                    GoResultAbi {
+                        payload: *payload,
+                        producer: producer.producer,
+                    },
+                    changes,
                     target,
                 ));
             }
             (Some(LoweredReturnAbi::Partial { payload }), _) => {
-                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                return named(self.lower_partial_wrapping(
-                    call,
-                    &layout,
-                    *payload,
-                    payload_changes,
-                    target,
-                ));
+                return named(
+                    self.lower_partial_wrapping(call, &layout, *payload, changes, target),
+                );
             }
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { payload })), _) => {
-                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                return named(self.lower_comma_ok_wrapping(
-                    call,
-                    &layout,
-                    *payload,
-                    payload_changes,
-                    target,
-                ));
+                let payload = *payload;
+                return named(
+                    self.lower_comma_ok_wrapping(call, &layout, payload, changes, target),
+                );
             }
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)), _) => {
-                let mut statements = Vec::new();
-                let raw_var = self.hoist_temp(&mut statements, "raw", call);
-                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
-                let (wrap, outcome) = self.lower_nil_check_option_wrap(
-                    GoExpression::identifier(raw_var),
-                    &layout,
-                    target,
-                );
-                statements.extend(wrap);
-                return named((statements, outcome));
+                return named(self.lower_nullable_wrapping(call, &layout, target));
             }
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value))), _) => {
                 return named(self.lower_sentinel_wrapping(call, result_ty, *value, target));
             }
         };
 
-        let outcome = match target {
-            WrapperTarget::FreshSlot => Some(value),
-            WrapperTarget::Slot(name) => {
-                let slot = GoExpression::identifier(name.clone());
-                statements.push(assign(slot.clone(), value));
-                Some(slot)
-            }
-            WrapperTarget::Return => {
-                statements.push(plain_return(value));
-                None
-            }
-        };
+        place_wrapped_value(statements, value, target)
+    }
 
+    fn lower_bare_error_wrapping(
+        &mut self,
+        call: GoExpression,
+        layout: &ValueLayout,
+        error_change: Option<&LayoutChange>,
+        target: WrapperTarget<'_>,
+    ) -> (Vec<Statement>, WrapperOutcome) {
+        let fallible = self
+            .facts
+            .fallible(layout.underlying().logical_type())
+            .expect("Result type expected");
+        debug_assert!(fallible.ok_ty().is_unit());
+        self.lower_unit_result_wrapping(call, layout, error_change, target)
+    }
+
+    fn lower_nullable_wrapping(
+        &mut self,
+        call: GoExpression,
+        layout: &ValueLayout,
+        target: WrapperTarget<'_>,
+    ) -> (Vec<Statement>, WrapperOutcome) {
+        let mut statements = Vec::new();
+        let raw_var = self.hoist_temp(&mut statements, "raw", call);
+        let (wrap, outcome) =
+            self.lower_nil_check_option_wrap(GoExpression::identifier(raw_var), layout, target);
+        statements.extend(wrap);
         (statements, outcome)
     }
 
@@ -396,6 +371,29 @@ impl LoweredCall<'_> {
 }
 
 impl PlannerQueries<'_, '_> {
+    fn wrap_go_result_in_place(
+        &self,
+        call: GoExpression,
+        abi: &CallableAbi,
+        origin: CallableOrigin<'_>,
+        result_ty: &Type,
+    ) -> Result<GoExpression, GoExpression> {
+        match &abi.result {
+            CallableReturnAbi::Lowered(shape @ LoweredReturnAbi::Result { payload }) => {
+                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
+                let nil_guard = self.lowered_payload_nil_guard(shape, origin.producer(), result_ty);
+                self.result_from_pair(call, &layout, *payload, None, nil_guard)
+            }
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
+                payload,
+            })) => {
+                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
+                self.option_from_comma_ok(call, &layout, *payload, None)
+            }
+            _ => Err(call),
+        }
+    }
+
     pub(in crate::lowering) fn go_result_layout_change(
         &self,
         abi: &CallableAbi,
@@ -538,4 +536,24 @@ impl PlannerQueries<'_, '_> {
             change,
         })
     }
+}
+
+fn place_wrapped_value(
+    mut statements: Vec<Statement>,
+    value: GoExpression,
+    target: WrapperTarget<'_>,
+) -> (Vec<Statement>, Option<GoExpression>) {
+    let outcome = match target {
+        WrapperTarget::FreshSlot => Some(value),
+        WrapperTarget::Slot(name) => {
+            let slot = GoExpression::identifier(name.clone());
+            statements.push(assign(slot.clone(), value));
+            Some(slot)
+        }
+        WrapperTarget::Return => {
+            statements.push(plain_return(value));
+            None
+        }
+    };
+    (statements, outcome)
 }

@@ -1,10 +1,17 @@
-use super::NativeCallContext;
 use crate::Planner;
 use crate::lowering::calls::predicates::Polarity;
+use crate::lowering::expressions::operand_order::SequencedArray;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
+use syntax::ast::Expression;
+
+#[derive(Clone, Copy)]
+pub(in crate::lowering) struct IndexSite<'a> {
+    pub(in crate::lowering) receiver: &'a Expression,
+    pub(in crate::lowering) index: &'a Expression,
+}
 
 pub(in crate::lowering) struct BoundsCheckedIndex {
     receiver: GoExpression,
@@ -52,28 +59,22 @@ impl BoundsCheckedIndex {
 impl Planner<'_> {
     pub(in crate::lowering) fn lower_bounds_checked_index(
         &mut self,
-        call: &NativeCallContext<'_>,
+        site: IndexSite<'_>,
     ) -> (Vec<Statement>, BoundsCheckedIndex) {
-        let (source, arguments) = call
-            .receiver_and_arguments()
-            .expect("index call has a receiver");
+        let source = site.receiver;
         let mut receiver = self.plan_operand(source, ExpressionContext::value());
         if receiver.effects().must_evaluate_once() {
             self.pin_to_temp(&mut receiver, "recv");
         }
-        let mut index = self.plan_operand(&arguments[0], ExpressionContext::value());
+        let mut index = self.plan_operand(site.index, ExpressionContext::value());
         if index.effects().must_evaluate_once() {
             self.pin_to_temp(&mut index, "idx");
         }
-        let sequenced = self.sequence_values(
-            vec![receiver, index],
-            CaptureBoundary::SiblingSequence,
-            "arg",
-        );
-        let setup = sequenced.setup;
-        let mut values = sequenced.values;
-        let index = values.pop().expect("index operand");
-        let mut receiver = values.pop().expect("receiver operand");
+        let SequencedArray {
+            setup,
+            values: [mut receiver, index],
+            ..
+        } = self.sequence_value_array([receiver, index], CaptureBoundary::SiblingSequence, "arg");
         if self.facts.is_reference(&source.get_type()) {
             receiver = GoExpression::dereference(receiver);
         }

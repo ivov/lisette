@@ -11,8 +11,8 @@ use syntax::program::ReceiverCoercion;
 
 use crate::Planner;
 use crate::lowering::calls::call_plan::{CallPlan, ResolvedCallee};
-use crate::lowering::expressions::operand_order::LaterOperands;
 use crate::lowering::expressions::operand_order::SpreadSequenceOptions;
+use crate::lowering::expressions::operand_order::{LaterOperands, SequencedArray};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::{SequencedValues, ValuePlan};
 use crate::target::ir::bodies::Statement;
@@ -89,6 +89,15 @@ fn find_go_string_literal_close(s: &str) -> Option<usize> {
     None
 }
 
+struct RegularCallParts {
+    setup: Vec<Statement>,
+    callee: GoExpression,
+    type_args: GoType,
+    arguments: Vec<GoExpression>,
+    builtin_conversion: Option<GoType>,
+    constant_result: Option<ConstantKind>,
+}
+
 enum FmtArgument {
     Sprintf,
     Sprint,
@@ -123,7 +132,7 @@ fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Opti
 }
 
 impl<'a> Planner<'a> {
-    pub(super) fn plan_regular_call(
+    pub(super) fn plan_direct_call(
         &mut self,
         call_plan: &CallPlan<'a, '_>,
         call_ty: Option<&Type>,
@@ -131,63 +140,41 @@ impl<'a> Planner<'a> {
     ) -> ValuePlan {
         let function = call_plan.site.callee;
         let args = call_plan.site.args;
-        let type_arguments = call_plan.site.type_arguments;
         let spread = call_plan.site.spread;
 
-        if let Some(plan) =
-            self.collapse_errors_new_format_arg(function, args, spread, expression_ctx)
+        if let Some(plan) = self
+            .collapse_errors_new_format_arg(function, args, spread, expression_ctx)
+            .or_else(|| {
+                self.try_plan_go_named_call(function, args, spread, call_plan, expression_ctx)
+            })
         {
             return plan;
         }
 
-        if let Some(plan) =
-            self.try_plan_go_named_call(function, args, spread, call_plan, expression_ctx)
-        {
-            return plan;
-        }
+        let parts = self.plan_direct_call_parts(call_plan, call_ty, expression_ctx);
+        self.queries().assemble_direct_call(function, args, parts)
+    }
 
+    fn plan_direct_call_parts(
+        &mut self,
+        call_plan: &CallPlan<'a, '_>,
+        call_ty: Option<&Type>,
+        expression_ctx: ExpressionContext<'_>,
+    ) -> RegularCallParts {
+        let function = call_plan.site.callee;
         let callee_operand = self.plan_operand(function, expression_ctx.callee());
         let (mut setup, mut callee) = callee_operand.into_parts();
 
-        let mut type_args_string = self
-            .queries()
-            .call_type_arguments(CallTypeArgumentsRequest {
-                function,
-                callee: &call_plan.resolved,
-                written_type_arguments: type_arguments.annotations().len(),
-                call_ty,
-                arg_shape: CallArgumentShape {
-                    value_count: args.len(),
-                    has_spread: spread.is_some(),
-                },
-                slot: expression_ctx.expected_slot_type(),
-                receiver_passed: false,
-            });
-
-        let builtin_conversion = callee_is_go_builtin(&self.facts, function)
-            .then(|| go_builtin_conversion(&type_args_string))
-            .flatten();
-        if builtin_conversion.is_some() {
-            type_args_string = GoType::default();
-        }
+        let (type_args_string, builtin_conversion) =
+            self.queries()
+                .direct_call_type_arguments(call_plan, call_ty, expression_ctx);
         if !type_args_string.is_empty() {
             callee = callee.without_instantiation();
         }
 
-        let args_ctx = CallArgumentsContext {
-            plan: call_plan,
-            spread,
-            capture_boundary: expression_ctx.capture_boundary(),
-            assigned_place: (args.len() == 1
-                && self.queries().callee_lowers_to_type_construction(function))
-            .then(|| expression_ctx.assigned_place())
-            .flatten(),
-            callee_is_builtin: callee_is_go_builtin(&self.facts, function),
-            callee_pins_type_args: !type_args_string.is_empty(),
-            receiver_binding: receiver_type_binding(&self.facts, function, &call_plan.resolved),
-        };
-
-        let sequenced_args = self.plan_call_args(args, &args_ctx, None);
+        let args_ctx =
+            self.direct_call_arguments_context(call_plan, expression_ctx, &type_args_string);
+        let sequenced_args = self.plan_call_args(&args_ctx, None);
         let constant_result = go_builtin_name(&self.facts, function)
             .filter(|_| builtin_conversion.is_none())
             .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
@@ -208,28 +195,36 @@ impl<'a> Planner<'a> {
             let pinned = self.hoist_temp(&mut setup, "callee", callee);
             callee = GoExpression::identifier(pinned);
         }
-
-        let call = match self.queries().collapse_fmt_print(&callee, args, &arguments) {
-            Some(collapsed) => collapsed,
-            None => self.queries().call_of(
-                function,
-                GoExpression::instantiation(callee, type_args_string),
-                arguments,
-            ),
-        };
-
-        let call = match builtin_conversion {
-            Some(go_type) => GoExpression::conversion(go_type, call),
-            None => call,
-        };
-
         setup.extend(args_setup);
 
-        let expression = call.with_constant(constant_result);
-        if self.queries().callee_lowers_to_type_construction(function) {
-            ValuePlan::computed(setup, expression)
-        } else {
-            ValuePlan::plain_call(setup, expression)
+        RegularCallParts {
+            setup,
+            callee,
+            type_args: type_args_string,
+            arguments,
+            builtin_conversion,
+            constant_result,
+        }
+    }
+
+    fn direct_call_arguments_context<'p>(
+        &self,
+        call_plan: &'p CallPlan<'a, 'p>,
+        expression_ctx: ExpressionContext<'p>,
+        type_args: &GoType,
+    ) -> CallArgumentsContext<'p, 'a> {
+        let function = call_plan.site.callee;
+        CallArgumentsContext {
+            plan: call_plan,
+            spread: call_plan.site.spread,
+            capture_boundary: expression_ctx.capture_boundary(),
+            assigned_place: (call_plan.site.args.len() == 1
+                && self.queries().callee_lowers_to_type_construction(function))
+            .then(|| expression_ctx.assigned_place())
+            .flatten(),
+            callee_is_builtin: callee_is_go_builtin(&self.facts, function),
+            callee_pins_type_args: !type_args.is_empty(),
+            receiver_binding: receiver_type_binding(&self.facts, function, &call_plan.resolved),
         }
     }
 
@@ -303,12 +298,11 @@ impl<'a> Planner<'a> {
             return None;
         }
         let operand = self.plan_operand(argument, ExpressionContext::value());
-        let mut sequenced =
-            self.sequence_values(vec![operand], expression_ctx.capture_boundary(), "arg");
-        let value = sequenced
-            .values
-            .pop()
-            .expect("sequenced exactly one argument");
+        let SequencedArray {
+            setup,
+            values: [value],
+            ..
+        } = self.sequence_value_array([operand], expression_ctx.capture_boundary(), "arg");
         let call = match call_arguments_of(value.node(), "Sprintf") {
             Some(arguments) => GoExpression::call(
                 GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
@@ -324,7 +318,7 @@ impl<'a> Planner<'a> {
             ),
         };
 
-        Some(ValuePlan::plain_call(sequenced.setup, call))
+        Some(ValuePlan::plain_call(setup, call))
     }
 }
 
@@ -359,6 +353,71 @@ fn pointer_receiver_on_value_local(
 }
 
 impl<'a> PlannerQueries<'_, 'a> {
+    fn direct_call_type_arguments(
+        &self,
+        call_plan: &CallPlan<'_, '_>,
+        call_ty: Option<&Type>,
+        expression_ctx: ExpressionContext<'_>,
+    ) -> (GoType, Option<GoType>) {
+        let function = call_plan.site.callee;
+        let type_args = self.call_type_arguments(CallTypeArgumentsRequest {
+            function,
+            callee: &call_plan.resolved,
+            written_type_arguments: call_plan.site.written_type_arguments(),
+            call_ty,
+            arg_shape: CallArgumentShape {
+                value_count: call_plan.site.args.len(),
+                has_spread: call_plan.site.spread.is_some(),
+            },
+            slot: expression_ctx.expected_slot_type(),
+            receiver_passed: false,
+        });
+
+        let builtin_conversion = callee_is_go_builtin(self.facts, function)
+            .then(|| go_builtin_conversion(&type_args))
+            .flatten();
+        match builtin_conversion {
+            Some(_) => (GoType::default(), builtin_conversion),
+            None => (type_args, None),
+        }
+    }
+
+    fn assemble_direct_call(
+        &self,
+        function: &Expression,
+        args: &[Expression],
+        parts: RegularCallParts,
+    ) -> ValuePlan {
+        let RegularCallParts {
+            setup,
+            callee,
+            type_args,
+            arguments,
+            builtin_conversion,
+            constant_result,
+        } = parts;
+        let call = match self.collapse_fmt_print(&callee, args, &arguments) {
+            Some(collapsed) => collapsed,
+            None => self.call_of(
+                function,
+                GoExpression::instantiation(callee, type_args),
+                arguments,
+            ),
+        };
+
+        let call = match builtin_conversion {
+            Some(go_type) => GoExpression::conversion(go_type, call),
+            None => call,
+        };
+
+        let expression = call.with_constant(constant_result);
+        if self.callee_lowers_to_type_construction(function) {
+            ValuePlan::computed(setup, expression)
+        } else {
+            ValuePlan::plain_call(setup, expression)
+        }
+    }
+
     fn call_of(
         &self,
         function: &Expression,

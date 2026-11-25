@@ -17,17 +17,17 @@ use syntax::program::CallOperation;
 use syntax::program::NativeOperation;
 use syntax::program::NativeTypeKind;
 
-pub(in crate::lowering) enum CommaOkSource {
+pub(in crate::lowering) enum CommaOkSource<'a> {
     LoweredCall { nil_guard: Option<NilGuard> },
-    MapIndex,
+    MapIndex { receiver: &'a Expression },
     TypeAssert,
 }
 
-impl CommaOkSource {
+impl<'a> CommaOkSource<'a> {
     fn nil_guard(&self) -> Option<NilGuard> {
         match self {
             Self::LoweredCall { nil_guard } => *nil_guard,
-            Self::MapIndex | Self::TypeAssert => None,
+            Self::MapIndex { .. } | Self::TypeAssert => None,
         }
     }
 
@@ -35,8 +35,11 @@ impl CommaOkSource {
         self.nil_guard().is_some()
     }
 
-    pub(in crate::lowering) fn is_map_index(&self) -> bool {
-        matches!(self, Self::MapIndex)
+    pub(in crate::lowering) fn map_index_receiver(&self) -> Option<&'a Expression> {
+        match self {
+            Self::MapIndex { receiver } => Some(receiver),
+            Self::LoweredCall { .. } | Self::TypeAssert => None,
+        }
     }
 }
 
@@ -96,7 +99,7 @@ impl Planner<'_> {
     pub(in crate::lowering) fn bind_comma_ok_pair(
         &mut self,
         site: CallSite<'_>,
-        source: CommaOkSource,
+        source: CommaOkSource<'_>,
         slot: CommaOkValueSlot,
     ) -> BoundValue {
         let (statements, pair) = self.plan_comma_ok_pair(site, &source);
@@ -224,13 +227,13 @@ impl Planner<'_> {
     fn plan_comma_ok_pair(
         &mut self,
         site: CallSite<'_>,
-        source: &CommaOkSource,
+        source: &CommaOkSource<'_>,
     ) -> (Vec<Statement>, GoExpression) {
         match source {
             CommaOkSource::LoweredCall { .. } => self
                 .plan_call_expression(site, None, ExpressionContext::value())
                 .into_parts(),
-            CommaOkSource::MapIndex => self.plan_map_index_pair(site),
+            CommaOkSource::MapIndex { receiver } => self.plan_map_index_pair(site, receiver),
             CommaOkSource::TypeAssert => {
                 let args = site.args;
                 let expression = site.expression;
@@ -265,7 +268,10 @@ impl PlannerQueries<'_, '_> {
         }
     }
 
-    pub(in crate::lowering) fn comma_ok_source(&self, site: CallSite<'_>) -> Option<CommaOkSource> {
+    pub(in crate::lowering) fn comma_ok_source<'s>(
+        &self,
+        site: CallSite<'s>,
+    ) -> Option<CommaOkSource<'s>> {
         let plan = self.plan_call(site);
         let expression = site.expression;
         let function = site.callee;
@@ -289,11 +295,14 @@ impl PlannerQueries<'_, '_> {
                 kind: kind @ NativeTypeKind::Map,
                 method,
             }) if NativeOperation::new(*kind, method).indexes_receiver()
-                && matches!(function, Expression::DotAccess { .. })
                 && args.len() == 1
-                && spread.is_none() =>
+                && spread.is_none()
+                && let Expression::DotAccess {
+                    expression: receiver,
+                    ..
+                } = function =>
             {
-                Some(CommaOkSource::MapIndex)
+                Some(CommaOkSource::MapIndex { receiver })
             }
             _ => {
                 let lowered = self.lowered_call_of(Vec::new(), &plan)?;

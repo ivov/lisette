@@ -81,6 +81,59 @@ impl LaterOperands {
     }
 }
 
+pub(in crate::lowering) struct SequencedArray<const N: usize> {
+    pub(in crate::lowering) setup: Vec<Statement>,
+    pub(in crate::lowering) values: [GoExpression; N],
+    pub(in crate::lowering) stability: Stability,
+}
+
+struct OperandPlacement {
+    setup: Vec<Statement>,
+    stability: Stability,
+    eager: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OperandPin {
+    Inline,
+    Pinned,
+}
+
+impl OperandPlacement {
+    fn new(boundary: CaptureBoundary) -> Self {
+        Self {
+            setup: Vec::new(),
+            stability: Stability::Fixed,
+            eager: boundary.delays_reads(),
+        }
+    }
+}
+
+fn mark_pins<'a>(
+    operands: impl DoubleEndedIterator<Item = &'a mut (OrderedOperand, OperandPin)>,
+    boundary: CaptureBoundary,
+) {
+    let eager = boundary.delays_reads();
+    let mut later = LaterOperands::default();
+    for (operand, pin) in operands.rev() {
+        let pinned = if operand.capture || (eager && operand.plan.must_evaluate_now()) {
+            later.prepend_pinned(&operand.plan);
+            true
+        } else {
+            later.prepend(&operand.plan)
+        };
+        if pinned {
+            *pin = OperandPin::Pinned;
+        }
+    }
+}
+
+fn check_operand_order(values: &[GoExpression]) {
+    if cfg!(debug_assertions) {
+        verify_operand_order(values).unwrap_or_else(|error| panic!("{error}"));
+    }
+}
+
 fn setup_effects(setup: &[Statement]) -> Effects {
     setup
         .iter()
@@ -242,60 +295,82 @@ impl Planner<'_> {
         )
     }
 
+    pub(in crate::lowering) fn sequence_value_array<const N: usize>(
+        &mut self,
+        operands: [ValuePlan; N],
+        boundary: CaptureBoundary,
+        prefix: &'static str,
+    ) -> SequencedArray<N> {
+        let mut marked = operands.map(|plan| {
+            let operand = OrderedOperand {
+                plan,
+                prefix,
+                capture: false,
+                line: None,
+            };
+            (operand, OperandPin::Inline)
+        });
+        mark_pins(marked.iter_mut(), boundary);
+        let mut placement = OperandPlacement::new(boundary);
+        let values =
+            marked.map(|(operand, pin)| self.sequence_operand(&mut placement, operand, pin));
+        check_operand_order(&values);
+        SequencedArray {
+            setup: placement.setup,
+            values,
+            stability: placement.stability,
+        }
+    }
+
     pub(in crate::lowering) fn sequence_operands(
         &mut self,
         operands: Vec<OrderedOperand>,
         boundary: CaptureBoundary,
     ) -> SequencedValues {
-        let eager = boundary.delays_reads();
-        let mut later = LaterOperands::default();
-        let operands: Vec<_> = operands
+        let mut marked: Vec<(OrderedOperand, OperandPin)> = operands
             .into_iter()
-            .rev()
-            .map(|operand| {
-                let pin = if operand.capture || (eager && operand.plan.must_evaluate_now()) {
-                    later.prepend_pinned(&operand.plan);
-                    true
-                } else {
-                    later.prepend(&operand.plan)
-                };
-
-                (operand, pin)
-            })
+            .map(|operand| (operand, OperandPin::Inline))
             .collect();
-
-        let mut setup = Vec::new();
-        let mut results = Vec::with_capacity(operands.len());
-        let mut stability = Stability::Fixed;
-        for (operand, pin) in operands.into_iter().rev() {
-            let OrderedOperand {
-                plan,
-                prefix,
-                capture: _,
-                line,
-            } = operand;
-
-            let start = setup.len();
-            let can_delay = plan.can_delay();
-            let (operand_setup, expression, operand_stability) = plan.into_parts_with_stability();
-            setup.extend(operand_setup);
-            if pin || (eager && !can_delay) {
-                let temp = self.hoist_temp(&mut setup, prefix, expression);
-                results.push(GoExpression::identifier(temp));
-            } else {
-                stability = stability.max(operand_stability);
-                results.push(expression);
-            }
-            direct_first(&mut setup[start..], line);
-        }
-        if cfg!(debug_assertions) {
-            verify_operand_order(&results).unwrap_or_else(|error| panic!("{error}"));
-        }
+        mark_pins(marked.iter_mut(), boundary);
+        let mut placement = OperandPlacement::new(boundary);
+        let values: Vec<GoExpression> = marked
+            .into_iter()
+            .map(|(operand, pin)| self.sequence_operand(&mut placement, operand, pin))
+            .collect();
+        check_operand_order(&values);
         SequencedValues {
-            setup,
-            values: results,
-            stability,
+            setup: placement.setup,
+            values,
+            stability: placement.stability,
         }
+    }
+
+    fn sequence_operand(
+        &mut self,
+        placement: &mut OperandPlacement,
+        operand: OrderedOperand,
+        pin: OperandPin,
+    ) -> GoExpression {
+        let OrderedOperand {
+            plan,
+            prefix,
+            capture: _,
+            line,
+        } = operand;
+
+        let setup = &mut placement.setup;
+        let start = setup.len();
+        let can_delay = plan.can_delay();
+        let (operand_setup, expression, operand_stability) = plan.into_parts_with_stability();
+        setup.extend(operand_setup);
+        let value = if pin == OperandPin::Pinned || (placement.eager && !can_delay) {
+            GoExpression::identifier(self.hoist_temp(setup, prefix, expression))
+        } else {
+            placement.stability = placement.stability.max(operand_stability);
+            expression
+        };
+        direct_first(&mut placement.setup[start..], line);
+        value
     }
 
     pub(in crate::lowering) fn sequence_with_spread_values(

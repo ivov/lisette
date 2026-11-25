@@ -3,8 +3,8 @@ use std::mem;
 use super::name_uses::NameUses;
 
 use crate::target::ir::bodies::{
-    AssignForm, CompoundKind, Definition, LoweredStatement, SelectArmKind, Statement, SwitchKind,
-    for_each_statements_mut,
+    AssignForm, CompoundKind, Definition, LoweredStatement, SelectArmKind, SelectStatementPlan,
+    Statement, SwitchKind, for_each_statements_mut,
 };
 use crate::target::ir::evaluation::Effects;
 use crate::target::ir::go_expression::GoExpressionNode;
@@ -144,23 +144,22 @@ fn replace_only_read(
             }
             SwitchKind::Conditional => false,
         },
-        LoweredStatement::Select(plan) => {
-            let siblings = plan
-                .arms
-                .iter_mut()
-                .flat_map(|arm| match &mut arm.kind {
-                    SelectArmKind::Receive { channel, .. } => vec![channel.node_mut()],
-                    SelectArmKind::Send { channel, value, .. } => {
-                        vec![channel.node_mut(), value.node_mut()]
-                    }
-                    SelectArmKind::Default { .. } => Vec::new(),
-                })
-                .collect();
-
-            rename_in(siblings, None, temp, source)
-        }
+        LoweredStatement::Select(plan) => rename_in(select_operands(plan), None, temp, source),
         _ => false,
     }
+}
+
+fn select_operands(plan: &mut SelectStatementPlan) -> Vec<&mut GoExpressionNode> {
+    plan.arms
+        .iter_mut()
+        .flat_map(|arm| match &mut arm.kind {
+            SelectArmKind::Receive { channel, .. } => vec![channel.node_mut()],
+            SelectArmKind::Send { channel, value, .. } => {
+                vec![channel.node_mut(), value.node_mut()]
+            }
+            SelectArmKind::Default { .. } => Vec::new(),
+        })
+        .collect()
 }
 
 fn rename_in(

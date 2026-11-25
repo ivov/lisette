@@ -47,33 +47,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             ChainTail::Catchall(_) | ChainTail::Open => tests.len(),
         };
 
-        let guard_ctx = WalkContext::switch_case(place);
         let chain_ctx = WalkContext::chain_test(place);
-
-        let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular_len);
-        let mut all_diverge = regular_len > 0;
-        for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
-            let condition = condition
-                .clone()
-                .unwrap_or_else(|| GoExpression::boolean(true));
-            let body = self.with_scope(|this| {
-                let mut body: Vec<Statement> = Vec::new();
-                match &test.arm {
-                    ChainArm::Leaf(leaf) => this.walk_leaf(&mut body, leaf, &chain_ctx),
-                    ChainArm::Guard(guard) => this.walk_guard(&mut body, guard, &guard_ctx),
-                }
-                body
-            });
-
-            let body = LoweredBlock { statements: body };
-            all_diverge &= body.ends_with_diverge();
-            let line = self.arm_line(test.arm.leaf().arm_index);
-            branches.push(ChainBranch {
-                condition,
-                body,
-                line,
-            });
-        }
+        let branches = self.lower_chain_branches(&tests[..regular_len], &conditions, place);
+        let all_diverge = !branches.is_empty()
+            && branches
+                .iter()
+                .all(|branch| branch.body.ends_with_diverge());
 
         let all_divergence = if all_diverge {
             Divergence::Diverges
@@ -106,6 +85,38 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return;
         }
         statements.push(LoweredStatement::If(build_chain_plan(branches, trailing)).into());
+    }
+
+    fn lower_chain_branches(
+        &mut self,
+        tests: &[ChainTest],
+        conditions: &[Option<GoExpression>],
+        place: &PlacePlan,
+    ) -> Vec<ChainBranch> {
+        let guard_ctx = WalkContext::switch_case(place);
+        let chain_ctx = WalkContext::chain_test(place);
+        let mut branches: Vec<ChainBranch> = Vec::with_capacity(tests.len());
+        for (test, condition) in tests.iter().zip(conditions) {
+            let condition = condition
+                .clone()
+                .unwrap_or_else(|| GoExpression::boolean(true));
+            let body = self.with_scope(|this| {
+                let mut body: Vec<Statement> = Vec::new();
+                match &test.arm {
+                    ChainArm::Leaf(leaf) => this.walk_leaf(&mut body, leaf, &chain_ctx),
+                    ChainArm::Guard(guard) => this.walk_guard(&mut body, guard, &guard_ctx),
+                }
+                body
+            });
+
+            let line = self.arm_line(test.arm.leaf().arm_index);
+            branches.push(ChainBranch {
+                condition,
+                body: LoweredBlock { statements: body },
+                line,
+            });
+        }
+        branches
     }
 
     pub(super) fn lower_chain_grouped(

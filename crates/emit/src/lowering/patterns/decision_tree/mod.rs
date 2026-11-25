@@ -227,13 +227,6 @@ impl Check {
         polarity: CheckPolarity,
     ) -> GoExpression {
         let negative = matches!(polarity, CheckPolarity::Negative);
-        let length_of = |path: &AccessPath| {
-            GoExpression::call(
-                GoExpression::external_name("len".to_string()),
-                vec![path.render(subject)],
-            )
-        };
-
         match self {
             Check::Nilable { path, guard, some } => {
                 let value = path.render(subject);
@@ -257,36 +250,14 @@ impl Check {
             }
             Check::Literal {
                 path, go_literal, ..
-            } => {
-                let rendered_path = path.render(subject);
-                match (boolean_literal(go_literal), negative) {
-                    (Some(true), false) | (Some(false), true) => rendered_path,
-                    (Some(true), true) | (Some(false), false) => {
-                        GoExpression::unary(GoUnaryOperator::Not, rendered_path)
-                    }
-                    (None, false) => GoExpression::binary(
-                        rendered_path,
-                        GoBinaryOperator::Equal,
-                        go_literal.clone(),
-                    ),
-                    (None, true) => GoExpression::binary(
-                        rendered_path,
-                        GoBinaryOperator::NotEqual,
-                        go_literal.clone(),
-                    ),
-                }
-            }
+            } => render_literal_check(path.render(subject), go_literal, polarity),
             Check::SliceLengthEqual { path, length } => {
                 let operator = if negative {
                     GoBinaryOperator::NotEqual
                 } else {
                     GoBinaryOperator::Equal
                 };
-                GoExpression::binary(
-                    length_of(path),
-                    operator,
-                    GoExpression::integer(*length as i128),
-                )
+                render_length_check(path.render(subject), operator, *length)
             }
             Check::SliceLengthAtLeast { path, min_length } => {
                 let operator = if negative {
@@ -294,37 +265,32 @@ impl Check {
                 } else {
                     GoBinaryOperator::GreaterThanOrEqual
                 };
-                GoExpression::binary(
-                    length_of(path),
-                    operator,
-                    GoExpression::integer(*min_length as i128),
-                )
+                render_length_check(path.render(subject), operator, *min_length)
             }
             Check::Or { alternatives } if !negative => alternatives
                 .iter()
-                .map(|checks| join_conditions(scope, checks, subject))
+                .map(|checks| render_condition(scope, checks, subject))
                 .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::Or, right))
                 .expect("an or-check has at least one alternative"),
             Check::TypeAssert { path, go_type } if !negative => {
-                let ok = scope.new_local_identifier("ok");
-                immediate_call(
-                    GoType::new("bool"),
-                    LoweredBlock {
-                        statements: vec![
-                            define_many(
-                                vec![GoIdentifier::blank(), ok.clone()],
-                                GoExpression::type_assertion(path.render(subject), go_type.clone()),
-                            ),
-                            plain_return(GoExpression::identifier(ok)),
-                        ],
-                    },
-                    FunctionLiteralLayout::Inline,
-                )
+                render_type_assert_check(scope, path.render(subject), go_type)
             }
             Check::Or { .. } | Check::TypeAssert { .. } => GoExpression::unary(
                 GoUnaryOperator::Not,
                 self.render_with_polarity(scope, subject, CheckPolarity::Positive),
             ),
+        }
+    }
+
+    fn target(&self) -> CheckTarget<'_> {
+        match self {
+            Check::Nilable { path, .. }
+            | Check::EnumTag { path, .. }
+            | Check::Literal { path, .. }
+            | Check::SliceLengthEqual { path, .. }
+            | Check::SliceLengthAtLeast { path, .. }
+            | Check::TypeAssert { path, .. } => CheckTarget::Path(path),
+            Check::Or { alternatives } => CheckTarget::Alternatives(alternatives),
         }
     }
 
@@ -345,14 +311,9 @@ impl Check {
     }
 
     fn path(&self) -> Option<&AccessPath> {
-        match self {
-            Check::Nilable { path, .. }
-            | Check::EnumTag { path, .. }
-            | Check::Literal { path, .. }
-            | Check::SliceLengthEqual { path, .. }
-            | Check::SliceLengthAtLeast { path, .. }
-            | Check::TypeAssert { path, .. } => Some(path),
-            Check::Or { .. } => None,
+        match self.target() {
+            CheckTarget::Path(path) => Some(path),
+            CheckTarget::Alternatives(_) => None,
         }
     }
 
@@ -422,6 +383,69 @@ impl Check {
     }
 }
 
+enum CheckTarget<'a> {
+    Path(&'a AccessPath),
+    Alternatives(&'a [Vec<Check>]),
+}
+
+fn render_literal_check(
+    rendered_path: GoExpression,
+    go_literal: &GoExpression,
+    polarity: CheckPolarity,
+) -> GoExpression {
+    let negative = matches!(polarity, CheckPolarity::Negative);
+    match (boolean_literal(go_literal), negative) {
+        (Some(true), false) | (Some(false), true) => rendered_path,
+        (Some(true), true) | (Some(false), false) => {
+            GoExpression::unary(GoUnaryOperator::Not, rendered_path)
+        }
+        (None, false) => {
+            GoExpression::binary(rendered_path, GoBinaryOperator::Equal, go_literal.clone())
+        }
+        (None, true) => GoExpression::binary(
+            rendered_path,
+            GoBinaryOperator::NotEqual,
+            go_literal.clone(),
+        ),
+    }
+}
+
+fn render_length_check(
+    rendered_path: GoExpression,
+    operator: GoBinaryOperator,
+    length: usize,
+) -> GoExpression {
+    GoExpression::binary(
+        GoExpression::call(
+            GoExpression::external_name("len".to_string()),
+            vec![rendered_path],
+        ),
+        operator,
+        GoExpression::integer(length as i128),
+    )
+}
+
+fn render_type_assert_check(
+    scope: &mut ScopeState,
+    rendered_path: GoExpression,
+    go_type: &GoType,
+) -> GoExpression {
+    let ok = scope.new_local_identifier("ok");
+    immediate_call(
+        GoType::new("bool"),
+        LoweredBlock {
+            statements: vec![
+                define_many(
+                    vec![GoIdentifier::blank(), ok.clone()],
+                    GoExpression::type_assertion(rendered_path, go_type.clone()),
+                ),
+                plain_return(GoExpression::identifier(ok)),
+            ],
+        },
+        FunctionLiteralLayout::Inline,
+    )
+}
+
 #[derive(PartialEq)]
 enum LabelValue<'a> {
     Integer(u64),
@@ -435,12 +459,12 @@ pub(in crate::lowering) fn tested_tuple_elements(
 ) -> Option<Vec<bool>> {
     let mut tested = vec![false; arity];
     for check in checks {
-        if let Some(path) = check.path() {
-            tested[path.checked_tuple_element(arity)?] = true;
-            continue;
-        }
-        let Check::Or { alternatives } = check else {
-            unreachable!("only Or checks lack a path")
+        let alternatives = match check.target() {
+            CheckTarget::Path(path) => {
+                tested[path.checked_tuple_element(arity)?] = true;
+                continue;
+            }
+            CheckTarget::Alternatives(alternatives) => alternatives,
         };
         let mut alternatives = alternatives
             .iter()
@@ -611,18 +635,26 @@ pub(in crate::lowering) struct ValueSwitch {
 }
 
 impl ValueSwitch {
-    pub(in crate::lowering) fn shape(&self) -> SwitchShape {
+    pub(in crate::lowering) fn shape(&self) -> SwitchShape<'_> {
         match (&self.kind, self.branches.as_slice(), &self.fallback) {
-            (SwitchKind::Value, [left, right], None)
-                if matches!(
-                    (boolean_literal(&left.label), boolean_literal(&right.label)),
-                    (Some(true), Some(false)) | (Some(false), Some(true))
-                ) =>
-            {
-                SwitchShape::Bool
+            (SwitchKind::Value, [left, right], None) => {
+                match (boolean_literal(&left.label), boolean_literal(&right.label)) {
+                    (Some(true), Some(false)) => SwitchShape::Bool {
+                        true_branch: left,
+                        false_branch: right,
+                    },
+                    (Some(false), Some(true)) => SwitchShape::Bool {
+                        true_branch: right,
+                        false_branch: left,
+                    },
+                    _ => SwitchShape::Binary {
+                        first: left,
+                        second: right,
+                    },
+                }
             }
-            (_, [_, _], None) => SwitchShape::Binary,
-            (_, [_], _) => SwitchShape::SingleArm,
+            (_, [first, second], None) => SwitchShape::Binary { first, second },
+            (_, [branch], _) => SwitchShape::SingleArm(branch),
             _ => SwitchShape::Multi,
         }
     }
@@ -634,11 +666,17 @@ pub(in crate::lowering) enum SwitchKind {
     Value,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::lowering) enum SwitchShape {
-    Bool,
-    Binary,
-    SingleArm,
+#[derive(Clone, Copy)]
+pub(in crate::lowering) enum SwitchShape<'s> {
+    Bool {
+        true_branch: &'s SwitchBranch<GoExpression>,
+        false_branch: &'s SwitchBranch<GoExpression>,
+    },
+    Binary {
+        first: &'s SwitchBranch<GoExpression>,
+        second: &'s SwitchBranch<GoExpression>,
+    },
+    SingleArm(&'s SwitchBranch<GoExpression>),
     Multi,
 }
 
@@ -693,17 +731,15 @@ impl ArmInfo {
         root_assertion_position(&self.checks).is_some()
     }
 
-    fn is_interface_or_with_extras(&self) -> bool {
-        if self.checks.len() != 1 {
-            return false;
-        }
-        let Check::Or { alternatives } = &self.checks[0] else {
-            return false;
+    fn interface_or_with_extras(&self) -> Option<&[Vec<Check>]> {
+        let [Check::Or { alternatives }] = self.checks.as_slice() else {
+            return None;
         };
-        alternatives
+        let with_extras = alternatives
             .iter()
             .all(|alternative| matches!(alternative.first(), Some(Check::TypeAssert { .. })))
-            && alternatives.iter().any(|alternative| alternative.len() > 1)
+            && alternatives.iter().any(|alternative| alternative.len() > 1);
+        with_extras.then_some(alternatives.as_slice())
     }
 }
 
@@ -747,18 +783,25 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         .unwrap_or(arms.len());
     let (cases, fallback_arms) = arms.split_at(split);
     if first_relevant.has_root_assertion() {
-        if !arms
+        if !fallback_arms
             .iter()
             .all(|a| a.is_catchall() || a.has_root_assertion())
         {
             return None;
         }
-        let (branches, fallback) = build_switch_branches(cases, fallback_arms, |arm| {
-            (
-                lift_root_assertion(&mut arm.checks, &mut arm.bindings).unwrap(),
-                Vec::new(),
-            )
-        });
+        let cases = cases
+            .iter()
+            .map(|arm| {
+                let mut arm = arm.clone();
+                let label = lift_root_assertion(&mut arm.checks, &mut arm.bindings)?;
+                Some(LabeledCase {
+                    label,
+                    extra_labels: Vec::new(),
+                    arm,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let (branches, fallback) = build_switch_branches(cases, fallback_arms);
 
         return Some(Decision::TypeSwitch { branches, fallback });
     }
@@ -773,11 +816,11 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
 
     validate_value_switch_arms(arms, &kind, &path)?;
 
-    let (branches, fallback) = build_switch_branches(cases, fallback_arms, |arm| {
-        let first = arm.checks.remove(0);
-        let mut labels = first.switch_labels(&kind).unwrap().1.into_iter().cloned();
-        (labels.next().unwrap(), labels.collect())
-    });
+    let cases = cases
+        .iter()
+        .map(|arm| value_switch_case(arm, &kind))
+        .collect::<Option<Vec<_>>>()?;
+    let (branches, fallback) = build_switch_branches(cases, fallback_arms);
     if branches
         .iter()
         .any(|branch| !branch.extra_labels.is_empty())
@@ -846,16 +889,40 @@ fn validate_value_switch_arms(
     (!shared).then_some(())
 }
 
+struct LabeledCase<L> {
+    label: L,
+    extra_labels: Vec<L>,
+    arm: ArmInfo,
+}
+
+fn value_switch_case(arm: &ArmInfo, kind: &SwitchKind) -> Option<LabeledCase<GoExpression>> {
+    let (first, rest) = arm.checks.split_first()?;
+    let (_, labels) = first.switch_labels(kind)?;
+    let (label, extra_labels) = labels
+        .split_first()
+        .expect("an or-check has at least one alternative");
+    Some(LabeledCase {
+        label: (*label).clone(),
+        extra_labels: extra_labels.iter().map(|label| (*label).clone()).collect(),
+        arm: ArmInfo {
+            checks: rest.to_vec(),
+            ..arm.clone()
+        },
+    })
+}
+
 fn build_switch_branches<L: PartialEq>(
-    cases: &[ArmInfo],
+    cases: Vec<LabeledCase<L>>,
     fallback_arms: &[ArmInfo],
-    take_label: impl Fn(&mut ArmInfo) -> (L, Vec<L>),
 ) -> (Vec<SwitchBranch<L>>, Option<Box<Decision>>) {
     let mut grouped: Vec<(L, Vec<L>, Vec<ArmInfo>)> = Vec::new();
 
-    for arm in cases {
-        let mut inner_arm = arm.clone();
-        let (case_label, extra_labels) = take_label(&mut inner_arm);
+    for case in cases {
+        let LabeledCase {
+            label: case_label,
+            extra_labels,
+            arm: inner_arm,
+        } = case;
 
         if let Some((_, _, arms)) = grouped
             .iter_mut()
@@ -945,25 +1012,26 @@ fn build_chain(arms: Vec<ArmInfo>) -> Decision {
 }
 
 fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
-    if !arm_infos.iter().any(ArmInfo::is_interface_or_with_extras) {
+    if !arm_infos
+        .iter()
+        .any(|arm| arm.interface_or_with_extras().is_some())
+    {
         return arm_infos;
     }
     let mut result = Vec::with_capacity(arm_infos.len());
     for arm in arm_infos {
-        if arm.is_interface_or_with_extras() {
-            let Check::Or { alternatives } = &arm.checks[0] else {
-                unreachable!()
-            };
-            for alternative in alternatives {
-                result.push(ArmInfo {
-                    arm_index: arm.arm_index,
-                    checks: alternative.clone(),
-                    bindings: arm.bindings.clone(),
-                    has_guard: arm.has_guard,
-                });
+        match arm.interface_or_with_extras() {
+            Some(alternatives) => {
+                for alternative in alternatives {
+                    result.push(ArmInfo {
+                        arm_index: arm.arm_index,
+                        checks: alternative.clone(),
+                        bindings: arm.bindings.clone(),
+                        has_guard: arm.has_guard,
+                    });
+                }
             }
-        } else {
-            result.push(arm);
+            None => result.push(arm),
         }
     }
     result
@@ -996,46 +1064,66 @@ pub(super) fn share_alternative_bindings(alternatives: &mut [&mut Vec<PatternBin
     }
 }
 
+enum RootAssertion<'a> {
+    Single(&'a GoType),
+    Alternatives(Vec<&'a GoType>),
+}
+
+fn root_asserted_type(check: &Check) -> Option<&GoType> {
+    match check {
+        Check::TypeAssert { path, go_type } if path.is_root() => Some(go_type),
+        _ => None,
+    }
+}
+
+fn root_assertion(check: &Check) -> Option<RootAssertion<'_>> {
+    match check {
+        Check::Or { alternatives } => alternatives
+            .iter()
+            .map(|alternative| match alternative.as_slice() {
+                [check] => root_asserted_type(check),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()
+            .map(RootAssertion::Alternatives),
+        _ => root_asserted_type(check).map(RootAssertion::Single),
+    }
+}
+
 fn root_assertion_position(checks: &[Check]) -> Option<usize> {
-    checks.iter().position(|c| match c {
-        Check::TypeAssert { path, .. } => path.is_root(),
-        Check::Or { alternatives } => alternatives.iter().all(
-            |alternative| matches!(alternative.as_slice(), [Check::TypeAssert { path, .. }] if path.is_root()),
-        ),
-        _ => false,
-    })
+    checks
+        .iter()
+        .position(|check| root_assertion(check).is_some())
 }
 
 pub(super) fn lift_root_assertion(
     checks: &mut Vec<Check>,
     bindings: &mut [PatternBinding],
 ) -> Option<Vec<GoType>> {
-    let position = root_assertion_position(checks)?;
-    match checks.remove(position) {
-        Check::TypeAssert { go_type, .. } => {
-            let asserted = PathSegment::AssertedAs(go_type.clone());
-            for check in checks.iter_mut() {
-                check.rebase_past(&asserted);
-            }
-            for binding in bindings {
-                binding.path.rebase_past(&asserted);
-            }
-            Some(vec![go_type])
-        }
-        Check::Or { alternatives } => {
-            let go_types: Vec<GoType> = alternatives
-                .into_iter()
-                .map(|alternative| match <[Check; 1]>::try_from(alternative) {
-                    Ok([Check::TypeAssert { go_type, .. }]) => go_type,
-                    _ => unreachable!("predicate above confirmed shape"),
-                })
-                .collect();
-
+    let (position, assertion) = checks
+        .iter()
+        .enumerate()
+        .find_map(|(position, check)| Some((position, root_assertion(check)?)))?;
+    let (go_types, asserted) = match assertion {
+        RootAssertion::Single(go_type) => (
+            vec![go_type.clone()],
+            Some(PathSegment::AssertedAs(go_type.clone())),
+        ),
+        RootAssertion::Alternatives(go_types) => {
             debug_assert!(!go_types.is_empty(), "at least one alternative");
-            Some(go_types)
+            (go_types.into_iter().cloned().collect(), None)
         }
-        _ => unreachable!(),
+    };
+    checks.remove(position);
+    if let Some(asserted) = asserted {
+        for check in checks.iter_mut() {
+            check.rebase_past(&asserted);
+        }
+        for binding in bindings {
+            binding.path.rebase_past(&asserted);
+        }
     }
+    Some(go_types)
 }
 
 pub(super) fn render_condition(
@@ -1043,22 +1131,11 @@ pub(super) fn render_condition(
     checks: &[Check],
     subject_var: SubjectRoot<'_>,
 ) -> GoExpression {
-    if checks.is_empty() {
-        return GoExpression::boolean(true);
-    }
-    join_conditions(scope, checks, subject_var)
-}
-
-fn join_conditions(
-    scope: &mut ScopeState,
-    checks: &[Check],
-    subject: SubjectRoot<'_>,
-) -> GoExpression {
     checks
         .iter()
-        .map(|check| check.render(scope, subject))
+        .map(|check| check.render(scope, subject_var))
         .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
-        .expect("join_conditions requires at least one check")
+        .unwrap_or_else(|| GoExpression::boolean(true))
 }
 
 impl Planner<'_> {

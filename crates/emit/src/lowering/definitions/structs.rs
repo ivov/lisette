@@ -32,11 +32,11 @@ impl Planner<'_> {
         let parameters = self
             .queries()
             .plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
-        let StructFields::Record(fields) = fields else {
-            let StructFields::Tuple(fields) = fields else {
-                unreachable!();
-            };
-            return self.emit_tuple_struct(name, parameters, fields, generics, attributes);
+        let fields = match fields {
+            StructFields::Record(fields) => fields,
+            StructFields::Tuple(fields) => {
+                return self.emit_tuple_struct(name, parameters, fields, generics, attributes);
+            }
         };
 
         let qualified = self.facts.qualified_current(name);
@@ -103,16 +103,7 @@ impl Planner<'_> {
             None => DeclarationKind::Struct {
                 name: go_name,
                 parameters,
-                fields: fields
-                    .iter()
-                    .enumerate()
-                    .map(|(index, field)| FieldDeclaration {
-                        documentation: Default::default(),
-                        name: Some(go_name::tuple_struct_field(index)),
-                        ty: self.queries().go_type(&field.ty),
-                        tag: None,
-                    })
-                    .collect(),
+                fields: self.tuple_struct_fields(fields),
             },
         };
 
@@ -143,6 +134,19 @@ impl Planner<'_> {
             });
         }
         result
+    }
+
+    fn tuple_struct_fields(&self, fields: &[StructFieldDefinition]) -> Vec<FieldDeclaration> {
+        fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| FieldDeclaration {
+                documentation: Default::default(),
+                name: Some(go_name::tuple_struct_field(index)),
+                ty: self.queries().go_type(&field.ty),
+                tag: None,
+            })
+            .collect()
     }
 
     fn struct_equals_method(

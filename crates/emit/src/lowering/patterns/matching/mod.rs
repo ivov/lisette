@@ -30,7 +30,7 @@ use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::source_name::SourceName;
 use syntax::EcoString;
-use syntax::ast::{BindingId, Expression, MatchArm, Pattern};
+use syntax::ast::{BindingId, Expression, IdentifierResolution, MatchArm, Pattern};
 use syntax::types::Type;
 
 mod fused;
@@ -146,43 +146,7 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.try_lower_fused_lowered_match(subject, arms, place, None) {
-            statements.extend(fused);
-            return LoweredBlock { statements };
-        }
-
-        if let Some(fused) = self.try_lower_fused_partial_match(subject, arms, place) {
-            statements.extend(fused);
-            return LoweredBlock { statements };
-        }
-
-        if let Some(fused) = self.try_lower_fused_partial_outcome_match(subject, arms, place) {
-            statements.extend(fused);
-            return LoweredBlock { statements };
-        }
-
-        if let Some(fused) = self.try_lower_fused_selective_partial_match(subject, arms, place) {
-            statements.extend(fused);
-            return LoweredBlock { statements };
-        }
-
-        if let Some(fused) = self.try_lower_fused_option_match(subject, arms, place) {
-            statements.extend(fused);
-            return LoweredBlock { statements };
-        }
-
-        if let Some(fused) = self.try_lower_nested_option_pair_match(subject, arms, place) {
-            statements.extend(fused);
-            return LoweredBlock { statements };
-        }
-
-        if let Some(fused) = self.try_lower_nested_result_pair_match(subject, arms, place) {
-            statements.extend(fused);
-            return LoweredBlock { statements };
-        }
-
-        if let Some(elementwise) = self.try_lower_tuple_subject_match(subject, arms, place) {
-            statements.extend(elementwise);
+        if let Some(statements) = self.try_lower_specialized_match(subject, arms, place) {
             return LoweredBlock { statements };
         }
 
@@ -201,6 +165,22 @@ impl Planner<'_> {
         statements.extend(block.statements);
 
         LoweredBlock { statements }
+    }
+
+    fn try_lower_specialized_match(
+        &mut self,
+        subject: &Expression,
+        arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> Option<Vec<Statement>> {
+        self.try_lower_fused_lowered_match(subject, arms, place, None)
+            .or_else(|| self.try_lower_fused_partial_match(subject, arms, place))
+            .or_else(|| self.try_lower_fused_partial_outcome_match(subject, arms, place))
+            .or_else(|| self.try_lower_fused_selective_partial_match(subject, arms, place))
+            .or_else(|| self.try_lower_fused_option_match(subject, arms, place))
+            .or_else(|| self.try_lower_nested_option_pair_match(subject, arms, place))
+            .or_else(|| self.try_lower_nested_result_pair_match(subject, arms, place))
+            .or_else(|| self.try_lower_tuple_subject_match(subject, arms, place))
     }
 
     fn try_lower_nested_option_pair_match(
@@ -329,6 +309,34 @@ impl Planner<'_> {
         tree_planner.lower(place)
     }
 
+    fn reused_subject_identifier(
+        &self,
+        value: &str,
+        resolution: &IdentifierResolution,
+        arms: &[MatchArm],
+    ) -> Option<ResolvedSubject> {
+        let has_collision = arms
+            .iter()
+            .any(|arm| pattern_binds_name(&arm.pattern, value));
+        if !self
+            .queries()
+            .can_reuse_subject_identifier(value, resolution, has_collision)
+        {
+            return None;
+        }
+        let subject = self.queries().reference_expression(value, resolution);
+        Some(
+            match subject
+                .as_identifier()
+                .filter(|identifier| identifier.id().is_some())
+                .cloned()
+            {
+                Some(local) => ResolvedSubject::Materialized { subject, local },
+                None => ResolvedSubject::Existing(subject),
+            },
+        )
+    }
+
     fn lower_match_subject_var(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -340,25 +348,9 @@ impl Planner<'_> {
             value, resolution, ..
         } = subject
             && !any_guard
+            && let Some(reused) = self.reused_subject_identifier(value, resolution, arms)
         {
-            let name = value.to_string();
-            let has_collision = arms
-                .iter()
-                .any(|arm| pattern_binds_name(&arm.pattern, &name));
-            if self
-                .queries()
-                .can_reuse_subject_identifier(&name, resolution, has_collision)
-            {
-                let subject = self.queries().reference_expression(&name, resolution);
-                return match subject
-                    .as_identifier()
-                    .filter(|identifier| identifier.id().is_some())
-                    .cloned()
-                {
-                    Some(local) => ResolvedSubject::Materialized { subject, local },
-                    None => ResolvedSubject::Existing(subject),
-                };
-            }
+            return reused;
         }
         if matches!(subject, Expression::Literal { .. }) {
             let operand = self.plan_operand(subject, ExpressionContext::value());

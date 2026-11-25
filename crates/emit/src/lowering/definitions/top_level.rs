@@ -27,7 +27,7 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
         placement: ConstPlacement,
-    ) -> LoweredStatement {
+    ) -> ConstPlan {
         let name = SourceName::constant(identifier);
         let preferred = name.preferred();
         let hides_package_name =
@@ -51,13 +51,13 @@ impl Planner<'_> {
         } else {
             raw_value.into_parts().1
         };
-        LoweredStatement::Const(ConstPlan {
+        ConstPlan {
             name: self
                 .scope
                 .bind_new_const(identifier, binding.as_slice(), go_name),
             go_type,
             value,
-        })
+        }
     }
 
     pub(in crate::lowering) fn emit_const(
@@ -67,13 +67,12 @@ impl Planner<'_> {
         ty: &Type,
         doc: &Option<String>,
     ) -> GoDeclaration {
-        let binding = self.lower_const(identifier, None, expression, ty, ConstPlacement::Package);
-        let mut declaration = GoDeclaration::new(DeclarationKind::Binding(binding));
-        let go_name = self
-            .scope
-            .bound_go_identifier(identifier)
-            .expect("`lower_const` binds the identifier");
-        declaration.documentation = item_documentation(doc, identifier, go_name.spelling());
+        let plan = self.lower_const(identifier, None, expression, ty, ConstPlacement::Package);
+        let documentation = item_documentation(doc, identifier, plan.name.spelling());
+        let mut declaration =
+            GoDeclaration::new(DeclarationKind::Binding(LoweredStatement::Const(plan)));
+        declaration.documentation = documentation;
+
         declaration
     }
 }

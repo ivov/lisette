@@ -33,6 +33,28 @@ pub(in crate::lowering) fn build_package_plan<'f>(
         })
         .collect();
 
+    let (names, collision_diagnostics) = resolve_package_names(facts, files, &file_plans);
+
+    let package_id = facts.current_package();
+    let package_name = if facts.is_entry_package(package_id) {
+        facts.entry_package_name().to_string()
+    } else {
+        go_name::sanitize_package_name(go_name::go_package_name(package_id)).into_owned()
+    };
+
+    PackagePlan {
+        package_name,
+        names,
+        collision_diagnostics,
+        files: file_plans,
+    }
+}
+
+fn resolve_package_names(
+    facts: &EmitFacts<'_>,
+    files: &[&File],
+    file_plans: &[FilePlan<'_>],
+) -> (PackageNames, Vec<LisetteDiagnostic>) {
     let import_qualifiers: Vec<(String, Span)> = file_plans
         .iter()
         .flat_map(|plan| {
@@ -72,17 +94,5 @@ pub(in crate::lowering) fn build_package_plan<'f>(
     }
     .name_collision_diagnostics(files, collected, &import_qualifiers);
 
-    let package_id = facts.current_package();
-    let package_name = if facts.is_entry_package(package_id) {
-        facts.entry_package_name().to_string()
-    } else {
-        go_name::sanitize_package_name(go_name::go_package_name(package_id)).into_owned()
-    };
-
-    PackagePlan {
-        package_name,
-        names,
-        collision_diagnostics,
-        files: file_plans,
-    }
+    (names, collision_diagnostics)
 }

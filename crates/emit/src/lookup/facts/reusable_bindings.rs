@@ -17,16 +17,15 @@ impl ReusableBindings {
         body: &Expression,
         facts: &EmitFacts<'_>,
     ) -> Self {
-        let mut hidden = FxHashMap::default();
-        let mut shared = FxHashSet::default();
-        collect(
-            body,
-            params,
-            CaptureContext::Function,
+        let mut collector = Collector {
             facts,
-            &mut hidden,
-            &mut shared,
-        );
+            hidden: FxHashMap::default(),
+            shared: FxHashSet::default(),
+        };
+        collector.collect(body, params, CaptureContext::Function);
+        let Collector {
+            mut hidden, shared, ..
+        } = collector;
         hidden.retain(|_, id| !shared.contains(id));
         Self { hidden }
     }
@@ -59,85 +58,98 @@ fn record(bindings: &mut BlockBindings, binding: &Binding) {
     }
 }
 
-fn collect(
-    expression: &Expression,
-    params: &[Binding],
-    context: CaptureContext,
-    facts: &EmitFacts<'_>,
-    hidden: &mut FxHashMap<BindingId, BindingId>,
-    shared: &mut FxHashSet<BindingId>,
-) {
-    let context = match expression {
-        Expression::Block { items, .. } => {
-            let mut bindings = BlockBindings::default();
-            for param in params {
-                record(&mut bindings, param);
+struct Collector<'f, 'a> {
+    facts: &'f EmitFacts<'a>,
+    hidden: FxHashMap<BindingId, BindingId>,
+    shared: FxHashSet<BindingId>,
+}
+
+impl Collector<'_, '_> {
+    fn collect(&mut self, expression: &Expression, params: &[Binding], context: CaptureContext) {
+        let context = match expression {
+            Expression::Block { items, .. } => {
+                self.pair_block_bindings(params, items);
+                context
             }
-            for item in items {
-                if let Expression::Let {
+            Expression::Lambda { params, body, .. } => {
+                self.collect(body, params, CaptureContext::Closure);
+                return;
+            }
+            Expression::Task { .. } | Expression::Defer { .. } => CaptureContext::Closure,
+            Expression::Identifier { resolution, .. } => {
+                if context == CaptureContext::Closure
+                    && let Some(id) = resolution.binding_id()
+                {
+                    self.shared.insert(id);
+                }
+                context
+            }
+            Expression::Reference { expression, .. }
+            | Expression::DotAccess {
+                expression,
+                resolution:
+                    DotAccessResolution::InstanceMethod { .. }
+                    | DotAccessResolution::InstanceMethodValue { .. },
+                ..
+            } => {
+                self.shared.extend(expression.root_binding_id());
+                context
+            }
+            Expression::Call {
+                expression: callee,
+                args,
+                spread,
+                ..
+            } if let Expression::DotAccess {
+                expression: receiver,
+                member,
+                ..
+            } = &**callee =>
+            {
+                if self.facts.dot_receiver_coercion(receiver, member)
+                    == Some(ReceiverCoercion::AutoAddress)
+                {
+                    self.shared.extend(receiver.root_binding_id());
+                }
+                for child in iter::once(receiver.as_ref())
+                    .chain(args)
+                    .chain(spread.as_deref())
+                {
+                    self.collect(child, &[], context);
+                }
+                return;
+            }
+            _ => context,
+        };
+
+        for child in expression.children() {
+            self.collect(child, &[], context);
+        }
+    }
+
+    fn pair_block_bindings(&mut self, params: &[Binding], items: &[Expression]) {
+        let mut bindings = BlockBindings::default();
+        for param in params {
+            record(&mut bindings, param);
+        }
+        for item in items {
+            if let Expression::Let {
+                binding,
+                value,
+                mode,
+                ..
+            } = item
+            {
+                pair_let(
+                    &mut bindings,
                     binding,
                     value,
                     mode,
-                    ..
-                } = item
-                {
-                    pair_let(&mut bindings, binding, value, mode, hidden, facts);
-                }
+                    &mut self.hidden,
+                    self.facts,
+                );
             }
-            context
         }
-        Expression::Lambda { params, body, .. } => {
-            collect(body, params, CaptureContext::Closure, facts, hidden, shared);
-            return;
-        }
-        Expression::Task { .. } | Expression::Defer { .. } => CaptureContext::Closure,
-        Expression::Identifier { resolution, .. } => {
-            if context == CaptureContext::Closure
-                && let Some(id) = resolution.binding_id()
-            {
-                shared.insert(id);
-            }
-            context
-        }
-        Expression::Reference { expression, .. }
-        | Expression::DotAccess {
-            expression,
-            resolution:
-                DotAccessResolution::InstanceMethod { .. }
-                | DotAccessResolution::InstanceMethodValue { .. },
-            ..
-        } => {
-            shared.extend(expression.root_binding_id());
-            context
-        }
-        Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            ..
-        } if let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = &**callee =>
-        {
-            if facts.dot_receiver_coercion(receiver, member) == Some(ReceiverCoercion::AutoAddress)
-            {
-                shared.extend(receiver.root_binding_id());
-            }
-            for child in iter::once(receiver.as_ref())
-                .chain(args)
-                .chain(spread.as_deref())
-            {
-                collect(child, &[], context, facts, hidden, shared);
-            }
-            return;
-        }
-        _ => context,
-    };
-
-    for child in expression.children() {
-        collect(child, &[], context, facts, hidden, shared);
     }
 }
 

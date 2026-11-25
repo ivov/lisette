@@ -29,6 +29,7 @@ use crate::target::ir::prelude::Fallible;
 use crate::target::ir::values::{ConstantKind, GoExpression};
 use crate::target::names::go_name::escape_local;
 use crate::target::names::source_name::SourceName;
+use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::LoweredReturnAbi;
 use syntax::EcoString;
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
@@ -44,6 +45,13 @@ pub(in crate::lowering) struct LetSpec<'a> {
     value: &'a Expression,
     binding_ty: &'a Type,
     mutable: bool,
+}
+
+struct DirectLetValue {
+    statements: Vec<Statement>,
+    value: GoExpression,
+    coercion_is_identity: bool,
+    typed: bool,
 }
 
 impl<'a> Planner<'a> {
@@ -92,37 +100,10 @@ impl<'a> Planner<'a> {
         };
 
         let go_identifier = self.scope.new_local_identifier(raw_go_name);
-        if !self.queries().shadows_declaration(&go_identifier)
-            && !self.scope.is_active_assign_target(&go_identifier)
-            && !self.scope.has_binding_for_go_name(&go_identifier)
-            && self
-                .facts
-                .same_type(&value.get_type().demoted(), &binding_ty.demoted())
+        if let Some(statements) =
+            self.try_lower_let_into_name(let_spec, raw_go_name, &go_identifier, demand)
         {
-            let local = go_identifier.clone();
-            let into = self
-                .try_lower_fused_result_match_into(value, &local)
-                .or_else(|| self.try_lower_fused_option_match_into(value, &local))
-                .or_else(|| self.try_lower_fused_partial_match_into(value, &local))
-                .or_else(|| self.try_lower_defaulted_call_into(value, &local))
-                .or_else(|| self.try_lower_slice_loop_into(value, &local));
-
-            if let Some(statements) = into {
-                self.scope.bind_existing_identifier(identifier, ids, local);
-                return statements;
-            }
-            if let Some(demand) = demand
-                && let Some(statements) =
-                    self.try_lower_let_as_components(let_spec, &go_identifier, demand)
-            {
-                return statements;
-            }
-            if !let_spec.mutable
-                && let Some(statements) =
-                    self.try_lower_let_into_wrapper_slot(let_spec, raw_go_name)
-            {
-                return statements;
-            }
+            return statements;
         }
         if needs_temp {
             if self.queries().shadows_declaration(&go_identifier)
@@ -138,6 +119,54 @@ impl<'a> Planner<'a> {
             return self.lower_let_temp(&bound, value, binding_ty);
         }
         self.lower_let_direct(let_spec, raw_go_name)
+    }
+
+    fn try_lower_let_into_name(
+        &mut self,
+        let_spec: LetSpec,
+        raw_go_name: &GoIdentifier,
+        go_identifier: &GoIdentifier,
+        demand: Option<ComponentDemand>,
+    ) -> Option<Vec<Statement>> {
+        let LetSpec {
+            identifier,
+            binding_id,
+            value,
+            binding_ty,
+            ..
+        } = let_spec;
+        if self.queries().shadows_declaration(go_identifier)
+            || self.scope.is_active_assign_target(go_identifier)
+            || self.scope.has_binding_for_go_name(go_identifier)
+            || !self
+                .facts
+                .same_type(&value.get_type().demoted(), &binding_ty.demoted())
+        {
+            return None;
+        }
+        let local = go_identifier.clone();
+        let into = self
+            .try_lower_fused_result_match_into(value, &local)
+            .or_else(|| self.try_lower_fused_option_match_into(value, &local))
+            .or_else(|| self.try_lower_fused_partial_match_into(value, &local))
+            .or_else(|| self.try_lower_defaulted_call_into(value, &local))
+            .or_else(|| self.try_lower_slice_loop_into(value, &local));
+
+        if let Some(statements) = into {
+            self.scope
+                .bind_existing_identifier(identifier, binding_id.as_slice(), local);
+            return Some(statements);
+        }
+        if let Some(demand) = demand
+            && let Some(statements) =
+                self.try_lower_let_as_components(let_spec, go_identifier, demand)
+        {
+            return Some(statements);
+        }
+        if !let_spec.mutable {
+            return self.try_lower_let_into_wrapper_slot(let_spec, raw_go_name);
+        }
+        None
     }
 
     fn lower_let_reassign(&mut self, let_spec: LetSpec, target: GoIdentifier) -> Vec<Statement> {
@@ -369,22 +398,12 @@ impl<'a> Planner<'a> {
         } = let_spec;
 
         let ids = binding_id.as_slice();
-        let origin = self
-            .facts
-            .function_type_origin(binding_ty, SlotOrigin::Lisette);
-        let plan = self.plan_value(
-            value,
-            ExpressionContext::value().with_function_slot_origin(origin),
-        );
-        let constant = plan.expression().constant_kind();
-        let (mut statements, plan_value) = plan.into_parts();
-        let coercion = self.value_slot_coercion(value, binding_ty);
-        let coercion_is_identity = coercion.is_identity();
-        let typed = self
-            .queries()
-            .declaration_needs_go_type(value, constant, &coercion, binding_ty);
-        let (coercion_setup, value_expression) = coercion.lower(self, plan_value);
-        statements.extend(coercion_setup);
+        let DirectLetValue {
+            mut statements,
+            value: value_expression,
+            coercion_is_identity,
+            typed,
+        } = self.plan_direct_let_value(value, binding_ty);
 
         let go_identifier = self.claim_block_binding_as(
             identifier,
@@ -425,6 +444,31 @@ impl<'a> Planner<'a> {
         }
         statements.push(define(go_identifier, value_expression));
         statements
+    }
+
+    fn plan_direct_let_value(&mut self, value: &Expression, binding_ty: &Type) -> DirectLetValue {
+        let origin = self
+            .facts
+            .function_type_origin(binding_ty, SlotOrigin::Lisette);
+        let plan = self.plan_value(
+            value,
+            ExpressionContext::value().with_function_slot_origin(origin),
+        );
+        let constant = plan.expression().constant_kind();
+        let (mut statements, plan_value) = plan.into_parts();
+        let coercion = self.value_slot_coercion(value, binding_ty);
+        let coercion_is_identity = coercion.is_identity();
+        let typed = self
+            .queries()
+            .declaration_needs_go_type(value, constant, &coercion, binding_ty);
+        let (coercion_setup, value_expression) = coercion.lower(self, plan_value);
+        statements.extend(coercion_setup);
+        DirectLetValue {
+            statements,
+            value: value_expression,
+            coercion_is_identity,
+            typed,
+        }
     }
 
     fn try_lower_let_into_wrapper_slot(
@@ -537,35 +581,8 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             };
         }
 
-        let pattern = &self.binding.pattern;
-        match self.mode {
-            LetMode::Plain => {}
-            LetMode::Assert | LetMode::InvalidAssertElse { .. } => {
-                return LoweredBlock {
-                    statements: self.planner.lower_let_assert_pattern_site(
-                        pattern,
-                        self.value,
-                        self.binding.pattern.get_span(),
-                    ),
-                };
-            }
-            LetMode::Else { block, .. }
-                if self.planner.facts.resolves_to_unit(&self.value.get_type()) =>
-            {
-                self.planner
-                    .conversions
-                    .record_dropped_code(block.get_span());
-                if !pattern_has_bindings(pattern) {
-                    return self.lower_discard();
-                }
-            }
-            LetMode::Else { block, .. } => {
-                return LoweredBlock {
-                    statements: self
-                        .planner
-                        .lower_let_else_pattern_site(pattern, self.value, block),
-                };
-            }
+        if let Some(block) = self.try_lower_let_mode() {
+            return block;
         }
 
         match &self.binding.pattern {
@@ -579,23 +596,8 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             Pattern::WildCard { .. } => return self.lower_discard(),
             _ if let Some(block) = self.try_lower_converted_destructuring() => return block,
             Pattern::Tuple { elements, .. } => {
-                let all_unused = elements
-                    .iter()
-                    .all(|element| matches!(element, Pattern::WildCard { .. }));
-                if all_unused {
-                    return self.lower_discard();
-                }
-                if let Some(block) = self.try_lower_channel_split(elements) {
+                if let Some(block) = self.try_lower_tuple_let(elements) {
                     return block;
-                }
-                if elements.iter().all(|element| {
-                    matches!(
-                        element,
-                        Pattern::Identifier { .. } | Pattern::WildCard { .. }
-                    )
-                }) && let Some(plan) = self.multi_value_call_plan()
-                {
-                    return self.lower_multi_value_call(elements, plan);
                 }
             }
             _ => {}
@@ -608,6 +610,55 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 &value_ty,
             ),
         }
+    }
+
+    fn try_lower_let_mode(&mut self) -> Option<LoweredBlock> {
+        let pattern = &self.binding.pattern;
+        match self.mode {
+            LetMode::Plain => None,
+            LetMode::Assert | LetMode::InvalidAssertElse { .. } => Some(LoweredBlock {
+                statements: self.planner.lower_let_assert_pattern_site(
+                    pattern,
+                    self.value,
+                    self.binding.pattern.get_span(),
+                ),
+            }),
+            LetMode::Else { block, .. }
+                if self.planner.facts.resolves_to_unit(&self.value.get_type()) =>
+            {
+                self.planner
+                    .conversions
+                    .record_dropped_code(block.get_span());
+                (!pattern_has_bindings(pattern)).then(|| self.lower_discard())
+            }
+            LetMode::Else { block, .. } => Some(LoweredBlock {
+                statements: self
+                    .planner
+                    .lower_let_else_pattern_site(pattern, self.value, block),
+            }),
+        }
+    }
+
+    fn try_lower_tuple_let(&mut self, elements: &[Pattern]) -> Option<LoweredBlock> {
+        let all_unused = elements
+            .iter()
+            .all(|element| matches!(element, Pattern::WildCard { .. }));
+        if all_unused {
+            return Some(self.lower_discard());
+        }
+        if let Some(block) = self.try_lower_channel_split(elements) {
+            return Some(block);
+        }
+        if elements.iter().all(|element| {
+            matches!(
+                element,
+                Pattern::Identifier { .. } | Pattern::WildCard { .. }
+            )
+        }) && let Some(plan) = self.multi_value_call_plan()
+        {
+            return Some(self.lower_multi_value_call(elements, plan));
+        }
+        None
     }
 
     fn try_lower_converted_destructuring(&mut self) -> Option<LoweredBlock> {
@@ -657,32 +708,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         let planned: Vec<_> = elements
             .iter()
             .zip(slot_types)
-            .filter_map(|(pattern, slot_ty)| {
-                let Pattern::Identifier {
-                    identifier,
-                    binding,
-                    ..
-                } = pattern
-                else {
-                    return None;
-                };
-
-                let raw_go_name = GoIdentifier::from(go_name_for_binding(pattern)?);
-                let go_name = if self.planner.scope.has_binding_for_go_name(&raw_go_name) {
-                    self.planner.fresh_local(&SourceName::new(identifier))
-                } else {
-                    self.planner
-                        .choose_let_go_name(identifier, binding.as_slice(), &raw_go_name)
-                };
-
-                self.planner.scope.declare_go_name(&go_name);
-                Some((
-                    identifier,
-                    *binding,
-                    go_name,
-                    self.planner.queries().go_type(&slot_ty),
-                ))
-            })
+            .filter_map(|(pattern, slot_ty)| self.plan_channel_split_name(pattern, &slot_ty))
             .collect();
 
         for (identifier, id, go_name, go_type) in planned {
@@ -808,35 +834,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     ) -> LoweredBlock {
         let planned: Vec<Option<(&str, Option<BindingId>, GoIdentifier)>> = elements
             .iter()
-            .map(|pattern| {
-                let Pattern::Identifier {
-                    identifier,
-                    binding,
-                    ..
-                } = pattern
-                else {
-                    return None;
-                };
-
-                if identifier == "_" {
-                    return None;
-                }
-                let go_name = go_name_for_binding(pattern)?;
-                let preferred = go_name.preferred();
-                let name = if self.planner.queries().shadows_declaration(&preferred)
-                    || self
-                        .planner
-                        .scope
-                        .go_name_bound_outside_ids(&preferred, binding.as_slice())
-                {
-                    self.planner.fresh_local(&go_name)
-                } else {
-                    self.planner.scope.new_local_identifier(preferred)
-                };
-
-                self.planner.scope.declare_go_name(&name);
-                Some((identifier.as_str(), *binding, name))
-            })
+            .map(|pattern| self.plan_multi_value_name(pattern))
             .collect();
 
         let (mut statements, call) = self
@@ -866,6 +864,70 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .into()
         });
         LoweredBlock { statements }
+    }
+
+    fn plan_multi_value_name<'p>(
+        &mut self,
+        pattern: &'p Pattern,
+    ) -> Option<(&'p str, Option<BindingId>, GoIdentifier)> {
+        let Pattern::Identifier {
+            identifier,
+            binding,
+            ..
+        } = pattern
+        else {
+            return None;
+        };
+
+        if identifier == "_" {
+            return None;
+        }
+        let go_name = go_name_for_binding(pattern)?;
+        let preferred = go_name.preferred();
+        let name = if self.planner.queries().shadows_declaration(&preferred)
+            || self
+                .planner
+                .scope
+                .go_name_bound_outside_ids(&preferred, binding.as_slice())
+        {
+            self.planner.fresh_local(&go_name)
+        } else {
+            self.planner.scope.new_local_identifier(preferred)
+        };
+
+        self.planner.scope.declare_go_name(&name);
+        Some((identifier.as_str(), *binding, name))
+    }
+
+    fn plan_channel_split_name<'p>(
+        &mut self,
+        pattern: &'p Pattern,
+        slot_ty: &Type,
+    ) -> Option<(&'p EcoString, Option<BindingId>, GoIdentifier, GoType)> {
+        let Pattern::Identifier {
+            identifier,
+            binding,
+            ..
+        } = pattern
+        else {
+            return None;
+        };
+
+        let raw_go_name = GoIdentifier::from(go_name_for_binding(pattern)?);
+        let go_name = if self.planner.scope.has_binding_for_go_name(&raw_go_name) {
+            self.planner.fresh_local(&SourceName::new(identifier))
+        } else {
+            self.planner
+                .choose_let_go_name(identifier, binding.as_slice(), &raw_go_name)
+        };
+
+        self.planner.scope.declare_go_name(&go_name);
+        Some((
+            identifier,
+            *binding,
+            go_name,
+            self.planner.queries().go_type(slot_ty),
+        ))
     }
 }
 

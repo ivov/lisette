@@ -13,6 +13,7 @@ use crate::target::ir::bodies::Statement;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{GoExpression, Stability};
 use crate::target::names::go_name::{self, GoExport, MemberSpelling};
+use crate::target::names::packages::PackageUse;
 use crate::target::types::return_abi::CallableReturnAbi;
 use syntax::ast::Expression;
 use syntax::constant;
@@ -51,50 +52,20 @@ impl Planner<'_> {
         let dot_access = site.expression;
         let expression = site.receiver;
         let member = site.member;
-        let result_ty = site.ty;
         let resolution = site.resolution;
 
-        let receiver_coercion = self.facts.dot_receiver_coercion(expression, member);
         let spelling = self.queries().member_spelling(dot_access);
 
-        if let Some(expression) = self
-            .queries()
-            .try_plan_pre_receiver_dot(dot_access, spelling, ctx)
-        {
-            let plan = ValuePlan::computed(Vec::new(), expression);
-            if matches!(resolution, DotAccessResolution::EnumVariant { .. }) {
-                return plan.with_stability(Stability::Fixed);
-            }
+        if let Some(plan) = self.plan_pre_receiver_dot(site, spelling, ctx) {
             return plan;
         }
 
         let expression_ty = expression.get_type();
         if let Some(component) = self.queries().tuple_component_read(expression, member) {
-            let mut setup = Vec::new();
-            if nullable == NullableField::WrapInOption
-                && let Some(wrapped) = self.try_plan_nullable_field_access(
-                    &mut setup,
-                    site,
-                    GoExpression::identifier(component.clone()),
-                    ctx,
-                )
-            {
-                return ValuePlan::computed(setup, wrapped);
-            }
-            return ValuePlan::captured(Vec::new(), component);
+            return self.plan_tuple_component_read(site, component, nullable, ctx);
         }
 
-        let package = expression_ty
-            .as_import_namespace()
-            .map(|package| self.queries().package_use_for_package(package));
-        let base_plan = match &package {
-            Some(package) => ValuePlan::captured(
-                Vec::new(),
-                GoIdentifier::external(package.qualifier().to_string()),
-            ),
-            None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
-        };
-
+        let (package, base_plan) = self.plan_member_base(site, &expression_ty, ctx);
         let stability =
             dot_member_stability(&self.facts, site, &expression_ty, base_plan.stability());
 
@@ -104,60 +75,143 @@ impl Planner<'_> {
             self.queries()
                 .try_plan_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
-            if nullable == NullableField::WrapInOption
-                && let Some(wrapped) = self.try_plan_nullable_field_access(
-                    &mut setup,
-                    site,
-                    member_access.clone(),
-                    ctx,
-                )
-            {
+            if let Some(wrapped) = self.try_plan_nullable_field_access(
+                &mut setup,
+                site,
+                member_access.clone(),
+                nullable,
+                ctx,
+            ) {
                 return ValuePlan::computed(setup, wrapped);
             }
             return ValuePlan::computed(setup, member_access).with_stability(stability);
         }
 
-        let field =
-            self.facts
-                .dot_member_go_name(expression, &expression_ty, member, resolution, spelling);
+        let selector = self.member_selector(site, package, base, &expression_ty, spelling);
 
-        let selector = match package {
-            Some(package) => GoExpression::qualified(package, field),
-            None if resolution.is_field_read() => {
-                self.facts.field_access(base, &expression_ty, field)
-            }
-            None => GoExpression::selector(base, field),
-        };
-
-        if nullable == NullableField::WrapInOption
-            && let Some(wrapped) =
-                self.try_plan_nullable_field_access(&mut setup, site, selector.clone(), ctx)
+        if let Some(wrapped) =
+            self.try_plan_nullable_field_access(&mut setup, site, selector.clone(), nullable, ctx)
         {
             return ValuePlan::computed(setup, wrapped);
         }
+        let expression =
+            self.finish_member_selector(&mut setup, site, &expression_ty, selector, ctx);
+        ValuePlan::computed(setup, expression).with_stability(stability)
+    }
+
+    fn finish_member_selector(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        site: DotAccessSite<'_>,
+        expression_ty: &Type,
+        selector: GoExpression,
+        ctx: ExpressionContext<'_>,
+    ) -> GoExpression {
         let expression = self.queries().append_cross_package_type_args(
             selector,
-            dot_access,
-            &expression_ty,
+            site.expression,
+            expression_ty,
             ctx,
         );
         let expression = if let Some(package) = expression_ty.as_import_namespace()
-            && go_constant_exceeds_int(&self.facts, package, member, result_ty)
+            && go_constant_exceeds_int(&self.facts, package, site.member, site.ty)
         {
-            GoExpression::conversion(self.queries().go_type(result_ty), expression)
+            GoExpression::conversion(self.queries().go_type(site.ty), expression)
         } else {
             expression
         };
 
-        let expression = if let Some((source, target)) =
-            self.queries().prelude_receiver_method_layouts(dot_access)
+        match self
+            .queries()
+            .prelude_receiver_method_layouts(site.expression)
         {
-            self.plan_function_layout_change(&mut setup, expression, &source, &target)
-        } else {
-            expression
-        };
+            Some((source, target)) => {
+                self.plan_function_layout_change(setup, expression, &source, &target)
+            }
+            None => expression,
+        }
+    }
 
-        ValuePlan::computed(setup, expression).with_stability(stability)
+    fn member_selector(
+        &self,
+        site: DotAccessSite<'_>,
+        package: Option<PackageUse>,
+        base: GoExpression,
+        expression_ty: &Type,
+        spelling: MemberSpelling,
+    ) -> GoExpression {
+        let field = self.facts.dot_member_go_name(
+            site.receiver,
+            expression_ty,
+            site.member,
+            site.resolution,
+            spelling,
+        );
+        match package {
+            Some(package) => GoExpression::qualified(package, field),
+            None if site.resolution.is_field_read() => {
+                self.facts.field_access(base, expression_ty, field)
+            }
+            None => GoExpression::selector(base, field),
+        }
+    }
+
+    fn plan_pre_receiver_dot(
+        &self,
+        site: DotAccessSite<'_>,
+        spelling: MemberSpelling,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<ValuePlan> {
+        let expression =
+            self.queries()
+                .try_plan_pre_receiver_dot(site.expression, spelling, ctx)?;
+        let plan = ValuePlan::computed(Vec::new(), expression);
+        if matches!(site.resolution, DotAccessResolution::EnumVariant { .. }) {
+            return Some(plan.with_stability(Stability::Fixed));
+        }
+        Some(plan)
+    }
+
+    fn plan_member_base(
+        &mut self,
+        site: DotAccessSite<'_>,
+        expression_ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> (Option<PackageUse>, ValuePlan) {
+        let package = expression_ty
+            .as_import_namespace()
+            .map(|package| self.queries().package_use_for_package(package));
+        let base_plan = match &package {
+            Some(package) => ValuePlan::captured(
+                Vec::new(),
+                GoIdentifier::external(package.qualifier().to_string()),
+            ),
+            None => {
+                let coercion = self.facts.dot_receiver_coercion(site.receiver, site.member);
+                self.plan_coerced_expression(site.receiver, coercion, ctx)
+            }
+        };
+        (package, base_plan)
+    }
+
+    fn plan_tuple_component_read(
+        &mut self,
+        site: DotAccessSite<'_>,
+        component: GoIdentifier,
+        nullable: NullableField,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        let mut setup = Vec::new();
+        if let Some(wrapped) = self.try_plan_nullable_field_access(
+            &mut setup,
+            site,
+            GoExpression::identifier(component.clone()),
+            nullable,
+            ctx,
+        ) {
+            return ValuePlan::computed(setup, wrapped);
+        }
+        ValuePlan::captured(Vec::new(), component)
     }
 
     fn plan_bound_dispatch_receiver(
@@ -187,8 +241,12 @@ impl Planner<'_> {
         setup: &mut Vec<Statement>,
         site: DotAccessSite<'_>,
         value: GoExpression,
+        nullable: NullableField,
         ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
+        if nullable == NullableField::Raw {
+            return None;
+        }
         let dot_access = site.expression;
         let expression = site.receiver;
         let member = site.member;

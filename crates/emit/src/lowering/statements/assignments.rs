@@ -3,6 +3,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::BindingValue;
+use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::operand_order::LaterOperands;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -14,6 +15,7 @@ use crate::target::ir::bodies::{
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::MemberSpelling;
+use syntax::EcoString;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::NativeTypeKind;
@@ -83,6 +85,14 @@ impl Planner<'_> {
             return LoweredStatement::Body(raw_body(self.lower_discard_value(value)));
         }
 
+        self.build_simple_assignment(target, value)
+    }
+
+    fn build_simple_assignment(
+        &mut self,
+        target: &Expression,
+        value: &Expression,
+    ) -> LoweredStatement {
         let go_field_slot = self
             .queries()
             .go_place_layout(target)
@@ -232,71 +242,22 @@ impl Planner<'_> {
         match expression {
             Expression::Identifier {
                 value, resolution, ..
-            } => match self
-                .scope
-                .resolve_identifier_with_resolution(value, resolution)
-                .and_then(BindingValue::as_go_identifier)
-            {
-                Some(identifier) => GoExpression::identifier(identifier.clone()),
-                None => {
-                    assert!(
-                        resolution.binding_id().is_none(),
-                        "assignment target has no local identity: {value}"
-                    );
-                    GoExpression::external_name(value.to_string())
-                }
-            },
+            } => self.plan_identifier_place(value, resolution),
             Expression::DotAccess {
-                expression: base,
+                expression: receiver,
                 member,
+                ty,
                 resolution,
                 ..
             } => {
-                let expression_ty = base.get_type();
-                if let Some(package) = expression_ty.as_import_namespace() {
-                    let field = self.facts.dot_member_go_name(
-                        base,
-                        &expression_ty,
-                        member,
-                        resolution,
-                        MemberSpelling::Plain,
-                    );
-
-                    return GoExpression::qualified(
-                        self.queries().package_use_for_package(package),
-                        field,
-                    );
-                }
-                let elided_deref = base
-                    .deref_inner()
-                    .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
-                let base_value = if let Some(inner) = elided_deref {
-                    self.place_operand(setup, inner, "ref", ordering)
-                } else if reads_through_reference(&self.facts, base)
-                    || !is_place_expression(&self.facts, base)
-                {
-                    self.place_operand(setup, base, "ref", ordering)
-                } else {
-                    self.plan_place(setup, base, ordering)
+                let site = DotAccessSite {
+                    expression,
+                    receiver,
+                    member,
+                    ty,
+                    resolution,
                 };
-
-                if let Some(access) = self.queries().try_plan_tuple_member_dot(
-                    &base_value,
-                    &expression_ty,
-                    member,
-                    resolution,
-                ) {
-                    return access;
-                }
-                let field = self.facts.dot_member_go_name(
-                    base,
-                    &expression_ty,
-                    member,
-                    resolution,
-                    MemberSpelling::Plain,
-                );
-
-                self.facts.field_access(base_value, &expression_ty, field)
+                self.plan_dot_place(setup, site, ordering)
             }
             Expression::IndexedAccess {
                 expression: base,
@@ -317,6 +278,83 @@ impl Planner<'_> {
                 expression
             ),
         }
+    }
+
+    fn plan_identifier_place(
+        &self,
+        value: &EcoString,
+        resolution: &IdentifierResolution,
+    ) -> GoExpression {
+        match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+            .and_then(BindingValue::as_go_identifier)
+        {
+            Some(identifier) => GoExpression::identifier(identifier.clone()),
+            None => {
+                assert!(
+                    resolution.binding_id().is_none(),
+                    "assignment target has no local identity: {value}"
+                );
+                GoExpression::external_name(value.to_string())
+            }
+        }
+    }
+
+    fn plan_dot_place(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        site: DotAccessSite<'_>,
+        ordering: PlaceOrdering,
+    ) -> GoExpression {
+        let DotAccessSite {
+            receiver: base,
+            member,
+            resolution,
+            ..
+        } = site;
+        let expression_ty = base.get_type();
+        if let Some(package) = expression_ty.as_import_namespace() {
+            let field = self.facts.dot_member_go_name(
+                base,
+                &expression_ty,
+                member,
+                resolution,
+                MemberSpelling::Plain,
+            );
+
+            return GoExpression::qualified(self.queries().package_use_for_package(package), field);
+        }
+        let elided_deref = base
+            .deref_inner()
+            .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
+        let base_value = if let Some(inner) = elided_deref {
+            self.place_operand(setup, inner, "ref", ordering)
+        } else if reads_through_reference(&self.facts, base)
+            || !is_place_expression(&self.facts, base)
+        {
+            self.place_operand(setup, base, "ref", ordering)
+        } else {
+            self.plan_place(setup, base, ordering)
+        };
+
+        if let Some(access) = self.queries().try_plan_tuple_member_dot(
+            &base_value,
+            &expression_ty,
+            member,
+            resolution,
+        ) {
+            return access;
+        }
+        let field = self.facts.dot_member_go_name(
+            base,
+            &expression_ty,
+            member,
+            resolution,
+            MemberSpelling::Plain,
+        );
+
+        self.facts.field_access(base_value, &expression_ty, field)
     }
 
     fn plan_indexed_place(

@@ -68,45 +68,53 @@ fn write_go_type(text: &mut String, go_type: &GoType) {
             write_go_type(text, element);
         }
         GoTypeShape::Function(parameters, result) => {
-            text.push_str("func");
+            write_function_type(text, parameters, result.as_deref())
+        }
+        GoTypeShape::Struct(fields) if fields.is_empty() => text.push_str("struct{}"),
+        GoTypeShape::Struct(fields) => write_struct_type(text, fields),
+        GoTypeShape::Interface(methods) => write_interface_type(text, methods),
+        GoTypeShape::EmptyInterface => text.push_str("any"),
+    }
+}
+
+fn write_function_type(text: &mut String, parameters: &[GoType], result: Option<&GoType>) {
+    text.push_str("func");
+    write_list(text, '(', parameters, ')');
+    if let Some(result) = result {
+        text.push(' ');
+        write_go_type(text, result);
+    }
+}
+
+fn write_struct_type(text: &mut String, fields: &[(String, GoType)]) {
+    text.push_str("struct { ");
+    for (index, (name, ty)) in fields.iter().enumerate() {
+        if index > 0 {
+            text.push_str("; ");
+        }
+        text.push_str(name);
+        text.push(' ');
+        write_go_type(text, ty);
+    }
+    text.push_str(" }");
+}
+
+fn write_interface_type(text: &mut String, methods: &[(String, GoType)]) {
+    text.push_str("interface { ");
+    for (index, (name, signature)) in methods.iter().enumerate() {
+        if index > 0 {
+            text.push_str("; ");
+        }
+        text.push_str(name);
+        if let GoTypeShape::Function(parameters, result) = signature.shape.as_ref() {
             write_list(text, '(', parameters, ')');
+            text.push(' ');
             if let Some(result) = result {
-                text.push(' ');
                 write_go_type(text, result);
             }
         }
-        GoTypeShape::Struct(fields) if fields.is_empty() => text.push_str("struct{}"),
-        GoTypeShape::Struct(fields) => {
-            text.push_str("struct { ");
-            for (index, (name, ty)) in fields.iter().enumerate() {
-                if index > 0 {
-                    text.push_str("; ");
-                }
-                text.push_str(name);
-                text.push(' ');
-                write_go_type(text, ty);
-            }
-            text.push_str(" }");
-        }
-        GoTypeShape::Interface(methods) => {
-            text.push_str("interface { ");
-            for (index, (name, signature)) in methods.iter().enumerate() {
-                if index > 0 {
-                    text.push_str("; ");
-                }
-                text.push_str(name);
-                if let GoTypeShape::Function(parameters, result) = signature.shape.as_ref() {
-                    write_list(text, '(', parameters, ')');
-                    text.push(' ');
-                    if let Some(result) = result {
-                        write_go_type(text, result);
-                    }
-                }
-            }
-            text.push_str(" }");
-        }
-        GoTypeShape::EmptyInterface => text.push_str("any"),
     }
+    text.push_str(" }");
 }
 
 fn write_list(text: &mut String, open: char, types: &[GoType], close: char) {

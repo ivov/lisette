@@ -4,6 +4,7 @@ use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::output::render::expressions::rendered;
+use crate::target::ir::bodies::Statement;
 use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::go_expression::{CompositeLayout, GoBinaryOperator};
 use crate::target::ir::values::{CaptureBoundary, ConstantKind, GoExpression, Stability};
@@ -122,11 +123,11 @@ impl Planner<'_> {
     }
 
     fn plan_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {
-        let has_interpolation = parts
-            .iter()
-            .any(|p| matches!(p, FormatStringPart::Expression(_)));
-
-        let mut operands: Vec<ValuePlan> = parts
+        let concatenates = format_string_concatenates(&self.facts, parts);
+        if concatenates && let [FormatStringPart::Expression(expression)] = parts {
+            return self.plan_format_operand(expression);
+        }
+        let operands: Vec<ValuePlan> = parts
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
@@ -137,86 +138,13 @@ impl Planner<'_> {
             })
             .collect();
 
-        let concatenates = format_string_concatenates(&self.facts, parts);
-        if concatenates && operands.len() == 1 && parts.len() == 1 {
-            return operands.pop().expect("one operand");
-        }
         let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "fmtarg");
-        let stability = sequenced.stability;
-        let setup = sequenced.setup;
-        let mut values = sequenced.values.into_iter();
-
+        let values = sequenced.values.into_iter();
         if concatenates {
-            let mut pieces: Vec<GoExpression> = Vec::with_capacity(parts.len());
-            let mut text = String::new();
-            for part in parts {
-                match part {
-                    FormatStringPart::Text(part_text) => {
-                        let unescaped = part_text.replace("{{", "{").replace("}}", "}");
-                        text.push_str(&convert_escape_sequences(&unescaped));
-                    }
-                    FormatStringPart::Expression(expression) => {
-                        let value = values
-                            .next()
-                            .expect("sequenced count matches expression parts");
-                        if display_form(&self.facts, expression) == DisplayForm::Unit {
-                            text.push_str(UNIT_DISPLAY);
-                            continue;
-                        }
-                        if !text.is_empty() {
-                            pieces.push(string_constant(take(&mut text)));
-                        }
-                        pieces.push(value);
-                    }
-                }
-            }
-            if !text.is_empty() {
-                pieces.push(string_constant(text));
-            }
-            let mut pieces = pieces.into_iter();
-            let first = pieces.next().expect("an interpolated f-string has a piece");
-            let concatenation = pieces.fold(first, |left, right| {
-                GoExpression::binary(left, GoBinaryOperator::Addition, right)
-            });
-            return ValuePlan::new(setup, concatenation, stability);
+            let concatenation = concatenated_format_string(&self.facts, parts, values);
+            return ValuePlan::new(sequenced.setup, concatenation, sequenced.stability);
         }
-
-        let (format_string, args) = sprintf_pieces(
-            &self.facts,
-            parts,
-            values,
-            if has_interpolation {
-                PercentSigns::Escape
-            } else {
-                PercentSigns::Literal
-            },
-        );
-
-        if args.is_empty() {
-            return ValuePlan::computed(
-                setup,
-                GoExpression::token(format!("\"{}\"", format_string)),
-            );
-        }
-
-        if !format_string_lowers_to_sprintf(&self.facts, parts) {
-            return ValuePlan::plain_call(
-                setup,
-                GoExpression::call(
-                    GoExpression::generated(GeneratedPackage::Fmt, "Sprint"),
-                    args,
-                ),
-            );
-        }
-        let mut arguments = vec![GoExpression::token(format!("\"{}\"", format_string))];
-        arguments.extend(args);
-        ValuePlan::plain_call(
-            setup,
-            GoExpression::call(
-                GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
-                arguments,
-            ),
-        )
+        sprint_value(&self.facts, parts, values, sequenced.setup)
     }
 
     pub(in crate::lowering) fn plan_format_operand(&mut self, operand: &Expression) -> ValuePlan {
@@ -246,6 +174,88 @@ impl Planner<'_> {
         }
         GoExpression::unit()
     }
+}
+
+fn concatenated_format_string(
+    facts: &EmitFacts<'_>,
+    parts: &[FormatStringPart],
+    mut values: impl Iterator<Item = GoExpression>,
+) -> GoExpression {
+    let mut pieces: Vec<GoExpression> = Vec::with_capacity(parts.len());
+    let mut text = String::new();
+    for part in parts {
+        match part {
+            FormatStringPart::Text(part_text) => {
+                let unescaped = part_text.replace("{{", "{").replace("}}", "}");
+                text.push_str(&convert_escape_sequences(&unescaped));
+            }
+            FormatStringPart::Expression(expression) => {
+                let value = values
+                    .next()
+                    .expect("sequenced count matches expression parts");
+                if display_form(facts, expression) == DisplayForm::Unit {
+                    text.push_str(UNIT_DISPLAY);
+                    continue;
+                }
+                if !text.is_empty() {
+                    pieces.push(string_constant(take(&mut text)));
+                }
+                pieces.push(value);
+            }
+        }
+    }
+    if !text.is_empty() {
+        pieces.push(string_constant(text));
+    }
+    let mut pieces = pieces.into_iter();
+    let first = pieces.next().expect("an interpolated f-string has a piece");
+    pieces.fold(first, |left, right| {
+        GoExpression::binary(left, GoBinaryOperator::Addition, right)
+    })
+}
+
+fn sprint_value(
+    facts: &EmitFacts<'_>,
+    parts: &[FormatStringPart],
+    values: impl Iterator<Item = GoExpression>,
+    setup: Vec<Statement>,
+) -> ValuePlan {
+    let has_interpolation = parts
+        .iter()
+        .any(|p| matches!(p, FormatStringPart::Expression(_)));
+    let (format_string, args) = sprintf_pieces(
+        facts,
+        parts,
+        values,
+        if has_interpolation {
+            PercentSigns::Escape
+        } else {
+            PercentSigns::Literal
+        },
+    );
+
+    if args.is_empty() {
+        return ValuePlan::computed(setup, GoExpression::token(format!("\"{}\"", format_string)));
+    }
+
+    if !format_string_lowers_to_sprintf(facts, parts) {
+        return ValuePlan::plain_call(
+            setup,
+            GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Fmt, "Sprint"),
+                args,
+            ),
+        );
+    }
+    let mut arguments = vec![GoExpression::token(format!("\"{}\"", format_string))];
+    arguments.extend(args);
+    ValuePlan::plain_call(
+        setup,
+        GoExpression::call(
+            GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
+            arguments,
+        ),
+    )
 }
 
 fn string_constant(text: String) -> GoExpression {

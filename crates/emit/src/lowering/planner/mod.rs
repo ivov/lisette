@@ -14,7 +14,7 @@ use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::{LoopTransfer, LoweredBlock, LoweredStatement, Statement, define};
-use crate::target::ir::declarations::{DeclarationKind, GoDeclaration};
+use crate::target::ir::declarations::{DeclarationKind, GoDeclaration, TypeParameter};
 use crate::target::ir::go_expression::{GoExpressionNode, TreeVisitor};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -96,74 +96,24 @@ impl<'a> Planner<'a> {
     }
 
     pub(in crate::lowering) fn collect_declaration_imports(&mut self, declaration: &GoDeclaration) {
-        let mut types: Vec<&GoType> = Vec::new();
-        let generics = match &declaration.kind {
-            DeclarationKind::Type {
-                parameters,
-                underlying,
-                ..
-            }
-            | DeclarationKind::Alias {
-                parameters,
-                underlying,
-                ..
-            } => {
-                types.push(underlying);
-                parameters.as_slice()
-            }
-            DeclarationKind::Struct {
-                parameters, fields, ..
-            } => {
-                types.extend(fields.iter().map(|field| &field.ty));
-                parameters.as_slice()
-            }
-            DeclarationKind::Interface {
-                parameters,
-                parents,
-                methods,
-                ..
-            } => {
-                types.extend(parents);
-                for method in methods {
-                    types.extend(&method.parameters);
-                    types.push(&method.result);
-                }
-                parameters.as_slice()
-            }
+        match &declaration.kind {
             DeclarationKind::Constants(constants) => {
-                for constant in constants {
-                    types.extend(constant.ty.as_ref());
-                    if let Some(value) = &constant.value {
-                        value.node().walk(&mut ImportCollector(self.namespace));
-                    }
+                for value in constants
+                    .iter()
+                    .filter_map(|constant| constant.value.as_ref())
+                {
+                    value.node().walk(&mut ImportCollector(self.namespace));
                 }
-                &[]
             }
-            DeclarationKind::Binding(binding) => {
-                self.collect_imports(&[binding.clone().into()]);
-                &[]
-            }
-            DeclarationKind::Function { signature, body } => {
-                types.extend(
-                    signature
-                        .receiver
-                        .iter()
-                        .map(|parameter| &parameter.go_type),
-                );
-                types.extend(
-                    signature
-                        .parameters
-                        .iter()
-                        .map(|parameter| &parameter.go_type),
-                );
-                types.push(&signature.result);
-                self.collect_imports(&body.statements);
-                signature.generics.as_slice()
-            }
-        };
+            DeclarationKind::Binding(binding) => self.collect_imports(&[binding.clone().into()]),
+            DeclarationKind::Function { body, .. } => self.collect_imports(&body.statements),
+            DeclarationKind::Type { .. }
+            | DeclarationKind::Alias { .. }
+            | DeclarationKind::Struct { .. }
+            | DeclarationKind::Interface { .. } => {}
+        }
 
-        types.extend(generics.iter().flat_map(|parameter| &parameter.bounds));
-        for ty in types {
+        for ty in declaration_types(&declaration.kind) {
             self.require_packages(ty.requirements());
         }
     }
@@ -478,4 +428,59 @@ impl<'a> PlannerQueries<'_, 'a> {
     pub(in crate::lowering) fn shadows_declaration(&self, go_name: &str) -> bool {
         self.scope.is_go_name_declared(go_name) || self.names.is_package_block_name(go_name)
     }
+}
+
+fn declaration_types(kind: &DeclarationKind) -> Vec<&GoType> {
+    let mut types: Vec<&GoType> = Vec::new();
+    let generics: &[TypeParameter] = match kind {
+        DeclarationKind::Type {
+            parameters,
+            underlying,
+            ..
+        }
+        | DeclarationKind::Alias {
+            parameters,
+            underlying,
+            ..
+        } => {
+            types.push(underlying);
+            parameters
+        }
+        DeclarationKind::Struct {
+            parameters, fields, ..
+        } => {
+            types.extend(fields.iter().map(|field| &field.ty));
+            parameters
+        }
+        DeclarationKind::Interface {
+            parameters,
+            parents,
+            methods,
+            ..
+        } => {
+            types.extend(parents);
+            for method in methods {
+                types.extend(&method.parameters);
+                types.push(&method.result);
+            }
+            parameters
+        }
+        DeclarationKind::Constants(constants) => {
+            types.extend(constants.iter().filter_map(|constant| constant.ty.as_ref()));
+            &[]
+        }
+        DeclarationKind::Binding(_) => &[],
+        DeclarationKind::Function { signature, .. } => {
+            let receiver = signature.receiver.iter();
+            types.extend(
+                receiver
+                    .chain(&signature.parameters)
+                    .map(|parameter| &parameter.go_type),
+            );
+            types.push(&signature.result);
+            &signature.generics
+        }
+    };
+    types.extend(generics.iter().flat_map(|parameter| &parameter.bounds));
+    types
 }

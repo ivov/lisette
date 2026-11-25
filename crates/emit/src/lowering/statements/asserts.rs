@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lowering::expressions::operand_order::SequencedArray;
 use crate::lowering::expressions::operators::flip_preserves_nan;
 use crate::lowering::expressions::{BinaryOperand, flip_comparison};
 use crate::lowering::planner::queries::PlannerQueries;
@@ -53,23 +54,7 @@ impl Planner<'_> {
         self.require_testkit();
 
         let mut statements = Vec::new();
-        let shape = if let Expression::Binary {
-            operator,
-            left,
-            right,
-            ..
-        } = operand
-            && is_assert_relation(operator)
-        {
-            let conversion = self.facts.checked(operand).operand_conversion();
-            self.lower_relation_assert(operator, left, right, conversion, &mut statements)
-        } else if let Some(recipe) = self.facts.checked(expression).equality()
-            && let Some((recv, arg)) = equals_decomposition(operand)
-        {
-            self.lower_labeled_assert(recv, arg, recipe, &mut statements)
-        } else {
-            self.lower_bare_assert(operand, &mut statements)
-        };
+        let shape = self.plan_assert_shape(expression, operand, &mut statements);
 
         let AssertShape {
             failure_condition,
@@ -112,6 +97,31 @@ impl Planner<'_> {
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
+    fn plan_assert_shape(
+        &mut self,
+        expression: &Expression,
+        operand: &Expression,
+        statements: &mut Vec<Statement>,
+    ) -> AssertShape {
+        if let Expression::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } = operand
+            && is_assert_relation(operator)
+        {
+            let conversion = self.facts.checked(operand).operand_conversion();
+            return self.lower_relation_assert(operator, left, right, conversion, statements);
+        }
+        if let Some(recipe) = self.facts.checked(expression).equality()
+            && let Some((recv, arg)) = equals_decomposition(operand)
+        {
+            return self.lower_labeled_assert(recv, arg, recipe, statements);
+        }
+        self.lower_bare_assert(operand, statements)
+    }
+
     pub(in crate::lowering) fn lower_test_log_statement(
         &mut self,
         call: TestLogCall<'_>,
@@ -130,13 +140,11 @@ impl Planner<'_> {
         let logged = value;
         let value = self.plan_value(logged, ExpressionContext::value());
         let value = self.convert_to_recorded_slot(logged, value);
-        let sequenced =
-            self.sequence_values(vec![handle, value], CaptureBoundary::SiblingSequence, "log");
-        let statements = sequenced.setup;
-        let [handle, value]: [GoExpression; 2] = sequenced
-            .values
-            .try_into()
-            .expect("handle and logged value");
+        let SequencedArray {
+            setup: statements,
+            values: [handle, value],
+            ..
+        } = self.sequence_value_array([handle, value], CaptureBoundary::SiblingSequence, "log");
 
         let span = logged.get_span();
         let call = test_context_call(

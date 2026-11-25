@@ -129,14 +129,10 @@ impl Planner<'_> {
         casts: Option<NumericBinaryEmitInfo>,
     ) -> ValuePlan {
         let sequenced =
-            self.sequence_values(vec![left, right], CaptureBoundary::SiblingSequence, "left");
+            self.sequence_value_array([left, right], CaptureBoundary::SiblingSequence, "left");
         let stability = sequenced.stability;
         let setup = sequenced.setup;
-        let mut values = sequenced.values.into_iter();
-        let mut left = values.next().expect("binary expression has a left operand");
-        let mut right = values
-            .next()
-            .expect("binary expression has a right operand");
+        let [mut left, mut right] = sequenced.values;
         if let Some(left_ty) = typed_left {
             left = GoExpression::conversion(self.queries().go_type(left_ty), left);
         }
@@ -217,16 +213,15 @@ impl Planner<'_> {
             return ValuePlan::constant(GoLiteral::Int(i128::from(i64::MIN)), ConstantKind::Int);
         }
 
-        if matches!(operator, UnaryOperator::Not) {
-            return self.plan_unary_not(expression, ctx);
-        }
-
-        let operand = self.plan_operand(expression, ctx);
         match operator {
-            UnaryOperator::Negative => operand.unary(GoUnaryOperator::Negate),
-            UnaryOperator::BitwiseNot => operand.unary(GoUnaryOperator::Complement),
-            UnaryOperator::Deref => operand.dereference(),
-            UnaryOperator::Not => unreachable!("Not handled above"),
+            UnaryOperator::Not => self.plan_unary_not(expression, ctx),
+            UnaryOperator::Negative => self
+                .plan_operand(expression, ctx)
+                .unary(GoUnaryOperator::Negate),
+            UnaryOperator::BitwiseNot => self
+                .plan_operand(expression, ctx)
+                .unary(GoUnaryOperator::Complement),
+            UnaryOperator::Deref => self.plan_operand(expression, ctx).dereference(),
         }
     }
 

@@ -5,7 +5,7 @@ use crate::lowering::abi::return_abi;
 use crate::target::ir::bodies::async_statement;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::ir::bodies::{
-    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement,
+    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement,
 };
 use crate::target::ir::declarations::Documentation;
 use crate::target::ir::declarations::GoDeclaration;
@@ -17,7 +17,7 @@ use crate::target::names::go_name::{GeneratedPackage, GoExport};
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
-use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern};
+use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Span};
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -179,59 +179,22 @@ impl Planner<'_> {
         handle: GoIdentifier,
     ) -> GoDeclaration {
         let handle_value = GoExpression::identifier(handle.clone());
-        let span = function.name_span;
-        let location = || {
-            [
-                span.file_id,
-                span.byte_offset,
-                span.byte_offset + span.byte_length,
-            ]
-            .map(|value| GoExpression::integer(i128::from(value)))
-        };
-
-        let testkit = |name, arguments| {
-            GoExpression::call(
-                GoExpression::generated(GeneratedPackage::TestKit, name),
-                arguments,
-            )
-        };
-
+        let location = span_location(function.name_span);
         let mut recover_args = vec![handle_value.clone()];
-        recover_args.extend(location());
+        recover_args.extend(location.clone());
         let mut statements = vec![async_statement(
             AsyncKind::Defer,
-            testkit("Recover", recover_args),
+            testkit_call("Recover", recover_args),
         )];
         let call = GoExpression::call(
             GoExpression::external_name(callee),
-            vec![testkit("New", vec![handle_value.clone()])],
+            vec![testkit_call("New", vec![handle_value.clone()])],
         );
         if matches!(
             return_abi(&self.facts, function.return_type, ReturnSlot::Function),
             CallableReturnAbi::Lowered(LoweredReturnAbi::BareError)
         ) {
-            let error_name = self.scope.new_local_identifier("err".to_string());
-            let error = GoExpression::identifier(error_name.clone());
-            let mut arguments = vec![handle_value];
-            arguments.extend(location());
-            arguments.extend([
-                GoExpression::token("\"result_err\"".to_string()),
-                GoExpression::token("\"test returned Err\"".to_string()),
-                testkit("ErrOperand", vec![error.clone()]),
-            ]);
-            let mut check = IfPlan::plain(
-                GoExpression::binary(error, GoBinaryOperator::NotEqual, GoExpression::nil()),
-                LoweredBlock {
-                    statements: vec![effect_statement(testkit("Fail", arguments))],
-                },
-                ElseArm::None,
-            );
-
-            check.initializer = Some(Definition {
-                names: vec![error_name],
-                value: call,
-            });
-            statements.push(LoweredStatement::If(check).into());
+            statements.push(self.test_error_check(handle_value, location, call));
         } else {
             statements.push(effect_statement(call));
         }
@@ -251,6 +214,52 @@ impl Planner<'_> {
             LoweredBlock { statements },
         )
     }
+
+    fn test_error_check(
+        &mut self,
+        handle_value: GoExpression,
+        location: [GoExpression; 3],
+        call: GoExpression,
+    ) -> Statement {
+        let error_name = self.scope.new_local_identifier("err".to_string());
+        let error = GoExpression::identifier(error_name.clone());
+        let mut arguments = vec![handle_value];
+        arguments.extend(location);
+        arguments.extend([
+            GoExpression::token("\"result_err\"".to_string()),
+            GoExpression::token("\"test returned Err\"".to_string()),
+            testkit_call("ErrOperand", vec![error.clone()]),
+        ]);
+        let mut check = IfPlan::plain(
+            GoExpression::binary(error, GoBinaryOperator::NotEqual, GoExpression::nil()),
+            LoweredBlock {
+                statements: vec![effect_statement(testkit_call("Fail", arguments))],
+            },
+            ElseArm::None,
+        );
+
+        check.initializer = Some(Definition {
+            names: vec![error_name],
+            value: call,
+        });
+        LoweredStatement::If(check).into()
+    }
+}
+
+fn span_location(span: Span) -> [GoExpression; 3] {
+    [
+        span.file_id,
+        span.byte_offset,
+        span.byte_offset + span.byte_length,
+    ]
+    .map(|value| GoExpression::integer(i128::from(value)))
+}
+
+fn testkit_call(name: &str, arguments: Vec<GoExpression>) -> GoExpression {
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::TestKit, name),
+        arguments,
+    )
 }
 
 fn type_documentation(doc: &Option<String>, name: &str) -> Documentation {

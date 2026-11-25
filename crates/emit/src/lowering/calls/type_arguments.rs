@@ -86,10 +86,10 @@ impl PlannerQueries<'_, '_> {
             function,
             callee,
             written_type_arguments,
-            call_ty,
             arg_shape,
             slot,
             receiver_passed,
+            ..
         } = request;
 
         if !receiver_passed && callee_curries_receiver(callee) {
@@ -104,36 +104,11 @@ impl PlannerQueries<'_, '_> {
             .declaration
             .and_then(|declaration| declaration.go_type_param_recipe())
         {
-            let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
-            if has_value_args
-                && generic_function(callee.declared_type()).is_some_and(|(vars, f)| {
-                    all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
-                })
-            {
-                return GoType::default();
-            }
-            let type_arguments = &self.facts.checked(function).callee().type_arguments;
-            return self
-                .reconstruct_collapsed_type_args(recipe, type_arguments)
-                .unwrap_or_default();
+            return self.recipe_type_arguments(&request, recipe, receiver_count);
         }
 
         if written_type_arguments > 0 {
-            if receiver_passed {
-                let type_arguments = &self.facts.checked(function).callee().type_arguments;
-                return callee
-                    .declared_type()
-                    .and_then(|declared| {
-                        self.format_generic_instantiation(declared, type_arguments)
-                    })
-                    .unwrap_or_default();
-            }
-            let written = self
-                .facts
-                .checked(function)
-                .callee()
-                .written_type_arguments(written_type_arguments);
-            return self.format_type_arg_iter(written);
+            return self.written_call_type_arguments(&request);
         }
 
         if let Some(inferred) = self.uninferable_type_args(
@@ -149,8 +124,49 @@ impl PlannerQueries<'_, '_> {
             };
         }
 
-        if matches!(
-            prelude_constructor(function),
+        self.prelude_constructor_type_arguments(&request)
+    }
+
+    fn recipe_type_arguments(
+        &self,
+        request: &CallTypeArgumentsRequest<'_, '_>,
+        recipe: &[GoTypeRecipe],
+        receiver_count: usize,
+    ) -> GoType {
+        let arg_shape = request.arg_shape;
+        let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
+        if has_value_args
+            && generic_function(request.callee.declared_type()).is_some_and(|(vars, f)| {
+                all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
+            })
+        {
+            return GoType::default();
+        }
+        let type_arguments = &self.facts.checked(request.function).callee().type_arguments;
+        self.reconstruct_collapsed_type_args(recipe, type_arguments)
+            .unwrap_or_default()
+    }
+
+    fn written_call_type_arguments(&self, request: &CallTypeArgumentsRequest<'_, '_>) -> GoType {
+        let callee = self.facts.checked(request.function).callee();
+        if request.receiver_passed {
+            return request
+                .callee
+                .declared_type()
+                .and_then(|declared| {
+                    self.format_generic_instantiation(declared, &callee.type_arguments)
+                })
+                .unwrap_or_default();
+        }
+        self.format_type_arg_iter(callee.written_type_arguments(request.written_type_arguments))
+    }
+
+    fn prelude_constructor_type_arguments(
+        &self,
+        request: &CallTypeArgumentsRequest<'_, '_>,
+    ) -> GoType {
+        if !matches!(
+            prelude_constructor(request.function),
             Some(
                 PreludeVariant::Some
                     | PreludeVariant::Ok
@@ -158,12 +174,17 @@ impl PlannerQueries<'_, '_> {
                     | PreludeVariant::Partial(_)
             )
         ) {
-            return call_ty
-                .and_then(|ty| self.prelude_container_type_args(ty))
-                .or_else(|| slot.and_then(|ty| self.prelude_container_type_args(ty)))
-                .unwrap_or_default();
+            return GoType::default();
         }
-        GoType::default()
+        request
+            .call_ty
+            .and_then(|ty| self.prelude_container_type_args(ty))
+            .or_else(|| {
+                request
+                    .slot
+                    .and_then(|ty| self.prelude_container_type_args(ty))
+            })
+            .unwrap_or_default()
     }
 
     pub(in crate::lowering) fn constructor_reference_type_arguments(

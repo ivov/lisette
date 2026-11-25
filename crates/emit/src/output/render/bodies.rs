@@ -10,7 +10,10 @@ use crate::target::ir::go_expression::Position;
 use crate::target::ir::go_expression::{
     CompositeLayout, FunctionLiteralLayout, GoExpressionNode, TreeVisitor,
 };
+use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
+use crate::target::types::go_type::GoType;
+use std::fmt::Write;
 
 macro_rules! write_line {
     ($dst:expr, $($arg:tt)*) => {
@@ -124,7 +127,7 @@ fn render_definition(output: &mut GoWriter, definition: &Definition) {
     definition.value.write(output);
 }
 
-fn render_statement(output: &mut GoWriter, statement: &Statement) {
+fn write_statement_line(output: &mut GoWriter, statement: &Statement) {
     if let Some(line) = &statement.line
         && statement.kind.emits_output()
         && !matches!(&statement.kind, LoweredStatement::Body(body)
@@ -132,6 +135,10 @@ fn render_statement(output: &mut GoWriter, statement: &Statement) {
     {
         output.push_line_directive(line);
     }
+}
+
+fn render_statement(output: &mut GoWriter, statement: &Statement) {
+    write_statement_line(output, statement);
     match &statement.kind {
         LoweredStatement::If(plan) => render_if(output, plan),
         LoweredStatement::Loop(plan) => render_loop(output, plan, statement.line.as_ref()),
@@ -173,14 +180,7 @@ fn render_statement(output: &mut GoWriter, statement: &Statement) {
             name,
             go_type,
             value,
-        } => match value {
-            Some(value) => {
-                output.push_str(&format!("var {} {} = ", name, go_type_text(go_type)));
-                value.write(output);
-                output.push('\n');
-            }
-            None => write_line!(output, "var {} {}", name, go_type_text(go_type)),
-        },
+        } => render_var_declaration(output, name, go_type, value.as_ref()),
         LoweredStatement::Discard { arity, value } => {
             output.push_str(&vec!["_"; *arity].join(", "));
             output.push_str(" = ");
@@ -197,6 +197,22 @@ fn render_statement(output: &mut GoWriter, statement: &Statement) {
     }
 }
 
+fn render_var_declaration(
+    output: &mut GoWriter,
+    name: &GoIdentifier,
+    go_type: &GoType,
+    value: Option<&GoExpression>,
+) {
+    match value {
+        Some(value) => {
+            write!(output, "var {} {} = ", name, go_type_text(go_type)).unwrap();
+            value.write(output);
+            output.push('\n');
+        }
+        None => write_line!(output, "var {} {}", name, go_type_text(go_type)),
+    }
+}
+
 fn render_assign_statement(output: &mut GoWriter, plan: &AssignForm) {
     match plan {
         AssignForm::Compound { target, kind } => {
@@ -205,7 +221,7 @@ fn render_assign_statement(output: &mut GoWriter, plan: &AssignForm) {
                 CompoundKind::Increment => output.push_str("++"),
                 CompoundKind::Decrement => output.push_str("--"),
                 CompoundKind::OperatorAssign { operator, rhs } => {
-                    output.push_str(&format!(" {}= ", operator.symbol()));
+                    write!(output, " {}= ", operator.symbol()).unwrap();
                     rhs.write(output);
                 }
             }

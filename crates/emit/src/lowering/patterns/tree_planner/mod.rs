@@ -92,11 +92,11 @@ fn contains_call(expression: &Expression) -> bool {
         || expression.children().into_iter().any(contains_call)
 }
 
-fn join_and(conditions: Vec<GoExpression>) -> GoExpression {
+fn join_and(conditions: &[GoExpression]) -> Option<GoExpression> {
     conditions
-        .into_iter()
+        .iter()
+        .cloned()
         .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
-        .expect("join_and requires at least one condition")
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -452,59 +452,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         guard: &GuardedLeaf,
         ctx: &WalkContext,
     ) {
-        let GuardedLeaf {
-            leaf: ArmLeaf {
-                arm_index,
-                bindings,
-            },
-            failure,
-        } = guard;
-
-        let arm_index = *arm_index;
-        let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
-        let arm = &self.arms[arm_index];
-        let arm_body = &*arm.expression;
-        let mut guard_consumers: Vec<&Expression> = Vec::with_capacity(2);
-        if let Some(guard) = arm.guard.as_deref() {
-            guard_consumers.push(guard);
-        }
-        guard_consumers.push(arm_body);
-
-        let guard_statements = self.with_optional_scope(needs_pre_scope, |this| {
-            let mut guard_statements: Vec<Statement> = Vec::new();
-            let guarded = this.with_bindings(
-                &mut guard_statements,
-                bindings,
-                &guard_consumers,
-                |this, _| {
-                    let (condition_setup, condition) = this.try_plan_guard_condition(arm_index)?;
-                    let then_body = this.with_scope(|this| {
-                        let mut then_statements: Vec<Statement> = Vec::new();
-                        this.lower_arm_leaf(&mut then_statements, arm_index, &ctx.nested());
-                        LoweredBlock {
-                            statements: then_statements,
-                        }
-                    });
-
-                    Some((condition_setup, condition, then_body))
-                },
-            );
-
-            if let Some((condition_setup, condition, then_body)) = guarded {
-                let success_divergence = Divergence::of(&then_body);
-                let else_arm = if ctx.role == WalkRole::SwitchCase {
-                    this.lower_else_or_flat(failure, ctx, success_divergence)
-                } else {
-                    ElseArm::None
-                };
-                let mut guarded = condition_setup;
-                guarded.push(
-                    LoweredStatement::If(IfPlan::for_match(condition, then_body, else_arm)).into(),
-                );
-                guard_statements.extend(directed_first(this.arm_line(arm_index), guarded));
-            }
-            guard_statements
-        });
+        let needs_pre_scope = ctx.leaf_scope_explicit() && !guard.leaf.bindings.is_empty();
+        let guard_statements =
+            self.with_optional_scope(needs_pre_scope, |this| this.lower_guarded_leaf(guard, ctx));
 
         if needs_pre_scope {
             statements.push(
@@ -517,8 +467,61 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             statements.extend(guard_statements);
         }
         if ctx.leaf_scope_explicit() {
-            self.walk(statements, failure, ctx);
+            self.walk(statements, &guard.failure, ctx);
         }
+    }
+
+    fn lower_guarded_leaf(&mut self, guard: &GuardedLeaf, ctx: &WalkContext) -> Vec<Statement> {
+        let GuardedLeaf {
+            leaf: ArmLeaf {
+                arm_index,
+                bindings,
+            },
+            failure,
+        } = guard;
+
+        let arm_index = *arm_index;
+        let arm = &self.arms[arm_index];
+        let arm_body = &*arm.expression;
+        let mut guard_consumers: Vec<&Expression> = Vec::with_capacity(2);
+        if let Some(guard) = arm.guard.as_deref() {
+            guard_consumers.push(guard);
+        }
+        guard_consumers.push(arm_body);
+
+        let mut guard_statements: Vec<Statement> = Vec::new();
+        let guarded = self.with_bindings(
+            &mut guard_statements,
+            bindings,
+            &guard_consumers,
+            |this, _| {
+                let (condition_setup, condition) = this.try_plan_guard_condition(arm_index)?;
+                let then_body = this.with_scope(|this| {
+                    let mut then_statements: Vec<Statement> = Vec::new();
+                    this.lower_arm_leaf(&mut then_statements, arm_index, &ctx.nested());
+                    LoweredBlock {
+                        statements: then_statements,
+                    }
+                });
+
+                Some((condition_setup, condition, then_body))
+            },
+        );
+
+        if let Some((condition_setup, condition, then_body)) = guarded {
+            let success_divergence = Divergence::of(&then_body);
+            let else_arm = if ctx.role == WalkRole::SwitchCase {
+                self.lower_else_or_flat(failure, ctx, success_divergence)
+            } else {
+                ElseArm::None
+            };
+            let mut guarded = condition_setup;
+            guarded.push(
+                LoweredStatement::If(IfPlan::for_match(condition, then_body, else_arm)).into(),
+            );
+            guard_statements.extend(directed_first(self.arm_line(arm_index), guarded));
+        }
+        guard_statements
     }
 
     fn lower_else_or_flat(

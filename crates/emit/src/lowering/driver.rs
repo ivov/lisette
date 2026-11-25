@@ -31,58 +31,17 @@ impl<'a> Planner<'a> {
         entry_package_name: &'a str,
         options: EmitOptions,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let cached_packages = &analysis.cached_packages;
-        for file in analysis.files.values_mut() {
-            if !is_emitted(file, cached_packages) {
-                continue;
-            }
-            for item in &mut file.items {
-                item.strip_wrappers();
-            }
-            debug_assert!(
-                !file.items.iter().any(Expression::contains_wrapper),
-                "internal error: a parenthesized expression, a single-expression block or a reference read once reached emit"
-            );
-        }
+        strip_emitted_wrappers(analysis);
         let analysis: &'a EmitInput = analysis;
-
-        let line_indexes = options.sourcemap.then(|| {
-            analysis
-                .files
-                .iter()
-                .filter(|(_, file)| !file.is_d_lis())
-                .map(|(file_id, file)| {
-                    let path = match &options.sourcemap_base {
-                        Some(base) => base.join(&file.display_path).display().to_string(),
-                        None => file.display_path.clone(),
-                    };
-                    (*file_id, LineIndex::from_source(path, &file.source))
-                })
-                .collect()
-        });
 
         let shared = SharedEmitContext {
             go_module,
             entry_package_name,
             emit_tests: options.emit_tests,
-            line_indexes,
+            line_indexes: source_line_indexes(analysis, &options),
             globals: GlobalEmitData::compute(&analysis.definitions),
         };
-
-        let mut files_by_package: FxHashMap<&str, Vec<&File>> = FxHashMap::default();
-        for file in analysis.files.values() {
-            if is_emitted(file, &analysis.cached_packages) {
-                files_by_package
-                    .entry(file.package_id.as_str())
-                    .or_default()
-                    .push(file);
-            }
-        }
-        for files in files_by_package.values_mut() {
-            files.sort_unstable_by_key(|file| file.id);
-        }
-        let mut work: Vec<_> = files_by_package.into_iter().collect();
-        work.sort_unstable_by_key(|(package_id, _)| *package_id);
+        let work = package_work(analysis);
 
         const PARALLEL_THRESHOLD: usize = 4;
 
@@ -98,22 +57,7 @@ impl<'a> Planner<'a> {
                 work.par_iter().map(emit_one).collect()
             };
 
-        let mut output = Vec::new();
-        let mut diagnostics = Vec::new();
-        for package_output in package_outputs {
-            match package_output {
-                Ok(mut files) => output.append(&mut files),
-                Err(mut errors) => diagnostics.append(&mut errors),
-            }
-        }
-
-        if diagnostics.is_empty() {
-            output.sort_by(|a, b| a.name.cmp(&b.name));
-            Ok(output)
-        } else {
-            diagnostics.sort_by(LisetteDiagnostic::sort_key);
-            Err(diagnostics)
-        }
+        merge_package_outputs(package_outputs)
     }
 
     fn emit_files_with_facts(
@@ -193,6 +137,81 @@ impl<'a> Planner<'a> {
             source.collect_with_blank(render_declaration(declaration));
         }
         source
+    }
+}
+
+fn strip_emitted_wrappers(analysis: &mut EmitInput) {
+    let cached_packages = &analysis.cached_packages;
+    for file in analysis.files.values_mut() {
+        if !is_emitted(file, cached_packages) {
+            continue;
+        }
+        for item in &mut file.items {
+            item.strip_wrappers();
+        }
+        debug_assert!(
+            !file.items.iter().any(Expression::contains_wrapper),
+            "internal error: a parenthesized expression, a single-expression block or a reference read once reached emit"
+        );
+    }
+}
+
+fn source_line_indexes(
+    analysis: &EmitInput,
+    options: &EmitOptions,
+) -> Option<FxHashMap<u32, LineIndex>> {
+    options.sourcemap.then(|| {
+        analysis
+            .files
+            .iter()
+            .filter(|(_, file)| !file.is_d_lis())
+            .map(|(file_id, file)| {
+                let path = match &options.sourcemap_base {
+                    Some(base) => base.join(&file.display_path).display().to_string(),
+                    None => file.display_path.clone(),
+                };
+                (*file_id, LineIndex::from_source(path, &file.source))
+            })
+            .collect()
+    })
+}
+
+fn package_work(analysis: &EmitInput) -> Vec<(&str, Vec<&File>)> {
+    let mut files_by_package: FxHashMap<&str, Vec<&File>> = FxHashMap::default();
+    for file in analysis.files.values() {
+        if is_emitted(file, &analysis.cached_packages) {
+            files_by_package
+                .entry(file.package_id.as_str())
+                .or_default()
+                .push(file);
+        }
+    }
+    for files in files_by_package.values_mut() {
+        files.sort_unstable_by_key(|file| file.id);
+    }
+    let mut work: Vec<_> = files_by_package.into_iter().collect();
+    work.sort_unstable_by_key(|(package_id, _)| *package_id);
+    work
+}
+
+fn merge_package_outputs(
+    package_outputs: Vec<Result<Vec<OutputFile>, Vec<LisetteDiagnostic>>>,
+) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
+    let mut output = Vec::new();
+    let mut diagnostics = Vec::new();
+    for package_output in package_outputs {
+        match package_output {
+            Ok(mut files) => output.append(&mut files),
+            Err(mut errors) => diagnostics.append(&mut errors),
+        }
+    }
+
+    if diagnostics.is_empty() {
+        output.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(output)
+    } else {
+        diagnostics.sort_by(LisetteDiagnostic::sort_key);
+        Err(diagnostics)
     }
 }
 

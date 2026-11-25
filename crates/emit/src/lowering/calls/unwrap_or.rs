@@ -1,6 +1,6 @@
-use super::NativeCallContext;
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
+use crate::lowering::calls::bounds_checks::IndexSite;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::patterns::matching::{FusedName, OptionArms, field_binding};
@@ -19,9 +19,16 @@ use syntax::program::{SlotOrigin, strip_prelude_prefix};
 use syntax::types::{SimpleKind, Type};
 
 struct DefaultedCall<'a> {
-    producer: FallibleProducer<'a>,
-    map: Option<MapLambda<'a>>,
+    producer: DefaultedProducer<'a>,
     default: &'a Expression,
+}
+
+enum DefaultedProducer<'a> {
+    Plain(FallibleProducer<'a>),
+    Mapped {
+        producer: OptionFusePlan<'a>,
+        map: MapLambda<'a>,
+    },
 }
 
 pub(in crate::lowering) struct MapLambda<'a> {
@@ -111,20 +118,22 @@ impl<'p> Planner<'p> {
         call: &DefaultedCall<'_>,
         ty: &Type,
     ) -> Option<(Vec<Statement>, GoExpression)> {
-        let FallibleProducer::Option(OptionFusePlan::CommaOk { subject, source }) = &call.producer
+        let DefaultedProducer::Plain(FallibleProducer::Option(OptionFusePlan::CommaOk {
+            subject,
+            source,
+        })) = &call.producer
         else {
             return None;
         };
-        if call.map.is_some()
-            || !source.is_map_index()
-            || !self
-                .facts
-                .simple_kind(ty)
-                .is_some_and(|kind| is_go_zero_literal(call.default, kind))
+        let receiver = source.map_index_receiver()?;
+        if !self
+            .facts
+            .simple_kind(ty)
+            .is_some_and(|kind| is_go_zero_literal(call.default, kind))
         {
             return None;
         }
-        Some(self.plan_map_index_pair(*subject))
+        Some(self.plan_map_index_pair(*subject, receiver))
     }
 
     fn plan_default_into_slot(
@@ -135,8 +144,8 @@ impl<'p> Planner<'p> {
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, GoIdentifier) {
         let (bound, value) = match producer {
-            FallibleProducer::Option(OptionFusePlan::Index { call }) => {
-                return self.plan_defaulted_index_into_slot(&call, default, ty, slot);
+            FallibleProducer::Option(OptionFusePlan::Index { site }) => {
+                return self.plan_defaulted_index_into_slot(site, default, ty, slot);
             }
             producer => producer.payload(self, slot),
         };
@@ -179,12 +188,12 @@ impl<'p> Planner<'p> {
 
     fn plan_defaulted_index_into_slot(
         &mut self,
-        call: &NativeCallContext<'_>,
+        site: IndexSite<'_>,
         default: &Expression,
         ty: &Type,
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, GoIdentifier) {
-        let (mut statements, index) = self.lower_bounds_checked_index(call);
+        let (mut statements, index) = self.lower_bounds_checked_index(site);
         let value = match slot {
             CommaOkValueSlot::Named(name) => name,
             _ => self.fresh_declared("ret"),
@@ -273,17 +282,17 @@ impl<'p> Planner<'p> {
         }
         self.scope.declare_go_name(go_name.spelling());
         let ty = value.get_type();
-        let Some(map) = call.map else {
-            let slot = CommaOkValueSlot::Named(go_name.clone());
-            return Some(
-                self.plan_default_into_slot(call.producer, call.default, &ty, slot)
-                    .0,
-            );
+        let (producer, map) = match call.producer {
+            DefaultedProducer::Plain(producer) => {
+                let slot = CommaOkValueSlot::Named(go_name.clone());
+                return Some(
+                    self.plan_default_into_slot(producer, call.default, &ty, slot)
+                        .0,
+                );
+            }
+            DefaultedProducer::Mapped { producer, map } => (producer, map),
         };
 
-        let FallibleProducer::Option(producer) = call.producer else {
-            unreachable!("a mapped chain is recognized on Option receivers only");
-        };
         let mut statements = vec![declare(go_name.clone(), self.queries().go_type(&ty))];
         statements.extend(self.lower_mapped_default_into(
             producer,
@@ -304,20 +313,20 @@ impl<'p> Planner<'p> {
             return Some(ValuePlan::computed(setup, read));
         }
         let ty = expression.get_type();
-        let Some(map) = call.map else {
-            let (statements, value) = self.plan_default_into_slot(
-                call.producer,
-                call.default,
-                &ty,
-                CommaOkValueSlot::Temp,
-            );
+        let (producer, map) = match call.producer {
+            DefaultedProducer::Plain(producer) => {
+                let (statements, value) = self.plan_default_into_slot(
+                    producer,
+                    call.default,
+                    &ty,
+                    CommaOkValueSlot::Temp,
+                );
 
-            return Some(ValuePlan::captured(statements, value));
+                return Some(ValuePlan::captured(statements, value));
+            }
+            DefaultedProducer::Mapped { producer, map } => (producer, map),
         };
 
-        let FallibleProducer::Option(producer) = call.producer else {
-            unreachable!("a mapped chain is recognized on Option receivers only");
-        };
         let (result_var, declaration) = self.operand_temp_declaration(&ty);
         let mut statements = vec![declaration];
         statements.extend(self.lower_mapped_default_into(
@@ -414,29 +423,28 @@ impl<'p> PlannerQueries<'_, 'p> {
         {
             return None;
         }
-        let producer = if owner == "Option" {
-            let producer = self.option_fuse_plan(receiver)?;
-            if matches!(producer, OptionFusePlan::Index { .. })
-                && map.is_none()
-                && !runs_no_code(default)
-            {
-                return None;
+        let producer = match (owner, map) {
+            ("Option", Some(map)) => DefaultedProducer::Mapped {
+                producer: self.option_fuse_plan(receiver)?,
+                map,
+            },
+            ("Option", None) => {
+                let producer = self.option_fuse_plan(receiver)?;
+                if matches!(producer, OptionFusePlan::Index { .. }) && !runs_no_code(default) {
+                    return None;
+                }
+                DefaultedProducer::Plain(FallibleProducer::Option(producer))
             }
-            FallibleProducer::Option(producer)
-        } else if map.is_none() {
-            let producer = self.result_fuse_plan(receiver)?;
-            if !producer.carries_payload() {
-                return None;
+            (_, None) => {
+                let producer = self.result_fuse_plan(receiver)?;
+                if !producer.carries_payload() {
+                    return None;
+                }
+                DefaultedProducer::Plain(FallibleProducer::Result(producer))
             }
-            FallibleProducer::Result(producer)
-        } else {
-            return None;
+            (_, Some(_)) => return None,
         };
 
-        Some(DefaultedCall {
-            producer,
-            map,
-            default,
-        })
+        Some(DefaultedCall { producer, default })
     }
 }

@@ -63,6 +63,55 @@ enum PreparedSelectArm<'a> {
     },
 }
 
+fn prepare_select_arm<'a>(
+    arm: &'a SelectArm,
+    operation: Option<ChannelOperationKind>,
+    values: &mut impl Iterator<Item = GoExpression>,
+) -> PreparedSelectArm<'a> {
+    match arm {
+        SelectArm::Send {
+            send_expression,
+            body,
+        } => {
+            let channel = values.next().expect("one channel per select operation");
+            let operation = if matches!(operation, Some(ChannelOperationKind::Send)) {
+                PreparedChannelOperation::Send(channel, values.next().expect("send value"))
+            } else {
+                PreparedChannelOperation::Receive(channel)
+            };
+
+            PreparedSelectArm::Send {
+                body,
+                operation,
+                span: send_expression.get_span(),
+            }
+        }
+        SelectArm::Receive {
+            receive_expression,
+            binding,
+            body,
+        } => {
+            let channel = values.next().expect("receive channel");
+            PreparedSelectArm::Receive {
+                binding,
+                body,
+                channel,
+                element_ty: receive_expression.get_type().ok_type(),
+            }
+        }
+        SelectArm::MatchReceive {
+            receive_expression,
+            arms,
+        } => PreparedSelectArm::MatchReceive {
+            arms,
+            channel: values.next().expect("match receive channel"),
+            element_ty: receive_expression.get_type().ok_type(),
+            span: receive_expression.get_span(),
+        },
+        SelectArm::WildCard { span, body } => PreparedSelectArm::Default { body, span: *span },
+    }
+}
+
 impl PreparedSelectArm<'_> {
     fn span(&self) -> Span {
         match self {
@@ -199,50 +248,7 @@ impl Planner<'_> {
         let mut values = sequenced.values.into_iter();
         arms.iter()
             .zip(operations)
-            .map(|(arm, operation)| match arm {
-                SelectArm::Send {
-                    send_expression,
-                    body,
-                } => {
-                    let channel = values.next().expect("one channel per select operation");
-                    let operation = if matches!(operation, Some(ChannelOperationKind::Send)) {
-                        PreparedChannelOperation::Send(channel, values.next().expect("send value"))
-                    } else {
-                        PreparedChannelOperation::Receive(channel)
-                    };
-
-                    PreparedSelectArm::Send {
-                        body,
-                        operation,
-                        span: send_expression.get_span(),
-                    }
-                }
-                SelectArm::Receive {
-                    receive_expression,
-                    binding,
-                    body,
-                } => {
-                    let channel = values.next().expect("receive channel");
-                    PreparedSelectArm::Receive {
-                        binding,
-                        body,
-                        channel,
-                        element_ty: receive_expression.get_type().ok_type(),
-                    }
-                }
-                SelectArm::MatchReceive {
-                    receive_expression,
-                    arms,
-                } => PreparedSelectArm::MatchReceive {
-                    arms,
-                    channel: values.next().expect("match receive channel"),
-                    element_ty: receive_expression.get_type().ok_type(),
-                    span: receive_expression.get_span(),
-                },
-                SelectArm::WildCard { span, body } => {
-                    PreparedSelectArm::Default { body, span: *span }
-                }
-            })
+            .map(|(arm, operation)| prepare_select_arm(arm, operation, &mut values))
             .collect()
     }
 
@@ -255,23 +261,7 @@ impl Planner<'_> {
             SelectArm::Send {
                 send_expression, ..
             } => {
-                let operation = channel_operation(send_expression);
-                let plan = if let Some(operation) = &operation {
-                    let channel = operation.channel();
-                    let plan = self.plan_value(channel, ExpressionContext::value());
-                    if self.facts.is_reference(&channel.get_type()) {
-                        plan.map_expression(|_, value| cancel_deref_of_address(value))
-                    } else {
-                        plan
-                    }
-                } else {
-                    self.plan_channel_operand(send_expression)
-                };
-
-                let send_value = match operation {
-                    Some(ChannelOperation::Send { value, .. }) => Some(value),
-                    _ => None,
-                };
+                let (plan, send_value) = self.plan_send_operand(send_expression);
                 (plan, send_expression.get_span(), false, send_value)
             }
             SelectArm::Receive {
@@ -312,6 +302,30 @@ impl Planner<'_> {
         } else {
             ChannelOperationKind::Receive
         })
+    }
+
+    fn plan_send_operand<'e>(
+        &mut self,
+        send_expression: &'e Expression,
+    ) -> (ValuePlan, Option<&'e Expression>) {
+        let operation = channel_operation(send_expression);
+        let plan = if let Some(operation) = &operation {
+            let channel = operation.channel();
+            let plan = self.plan_value(channel, ExpressionContext::value());
+            if self.facts.is_reference(&channel.get_type()) {
+                plan.map_expression(|_, value| cancel_deref_of_address(value))
+            } else {
+                plan
+            }
+        } else {
+            self.plan_channel_operand(send_expression)
+        };
+
+        let send_value = match operation {
+            Some(ChannelOperation::Send { value, .. }) => Some(value),
+            _ => None,
+        };
+        (plan, send_value)
     }
 
     fn plan_channel_operand(&mut self, receive_expression: &Expression) -> ValuePlan {
