@@ -587,8 +587,8 @@ impl Planner<'_> {
 
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
         if requires_temp_var(last) {
-            let staged = self.plan_operand(last, ExpressionContext::value());
-            let (mut statements, value) = staged.into_parts();
+            let operand = self.plan_operand(last, ExpressionContext::value());
+            let (mut statements, value) = operand.into_parts();
             if !value.is_empty() {
                 statements.push(plain_return(value));
             }

@@ -452,7 +452,7 @@ impl Planner<'_> {
             return statements;
         }
         if let Some(name) = value_expression.as_identifier()
-            && !self.scope.has_binding_for_local(name)
+            && self.scope.lacks_binding_for_local(name)
             && (rebind_trailing_temp(&mut statements, &go_identifier, name)
                 || rebind_updated_temp(&mut statements, &go_identifier, name))
         {
@@ -785,7 +785,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .collect_pattern_info(&self.binding.pattern, &value_ty)
             .bindings
             .iter()
-            .any(|binding| !binding.coercion.is_identity())
+            .any(|binding| binding.coercion.changes_layout())
         {
             return false;
         }

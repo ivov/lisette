@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::lowering::expressions::staging::SequenceStage;
+use crate::lowering::expressions::operand_order::OrderedOperand;
 use crate::lowering::patterns::sites::TypedSubject;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::PlacePlan;
@@ -183,19 +183,19 @@ impl Planner<'_> {
         arms: &'a [SelectArm],
         needs_retry_loop: bool,
     ) -> Vec<PreparedSelectArm<'a>> {
-        let mut stages = Vec::new();
+        let mut operands = Vec::new();
         let operations: Vec<_> = arms
             .iter()
-            .map(|arm| self.stage_select_operation(arm, &mut stages))
+            .map(|arm| self.plan_select_operation(arm, &mut operands))
             .collect();
         let boundary = if needs_retry_loop {
             CaptureBoundary::Delayed
         } else {
             CaptureBoundary::SiblingSequence
         };
-        let sequenced = self.sequence_stages(stages, boundary);
+        let sequenced = self.sequence_operands(operands, boundary);
         setup.extend(sequenced.setup);
-        let mut operands = sequenced.values.into_iter();
+        let mut values = sequenced.values.into_iter();
         arms.iter()
             .zip(operations)
             .map(|(arm, operation)| match arm {
@@ -203,12 +203,9 @@ impl Planner<'_> {
                     send_expression,
                     body,
                 } => {
-                    let channel = operands.next().expect("one channel per select operation");
+                    let channel = values.next().expect("one channel per select operation");
                     let operation = if matches!(operation, Some(ChannelOperationKind::Send)) {
-                        PreparedChannelOperation::Send(
-                            channel,
-                            operands.next().expect("send value"),
-                        )
+                        PreparedChannelOperation::Send(channel, values.next().expect("send value"))
                     } else {
                         PreparedChannelOperation::Receive(channel)
                     };
@@ -224,7 +221,7 @@ impl Planner<'_> {
                     binding,
                     body,
                 } => {
-                    let channel = operands.next().expect("receive channel");
+                    let channel = values.next().expect("receive channel");
                     PreparedSelectArm::Receive {
                         binding,
                         body,
@@ -237,7 +234,7 @@ impl Planner<'_> {
                     arms,
                 } => PreparedSelectArm::MatchReceive {
                     arms,
-                    channel: operands.next().expect("match receive channel"),
+                    channel: values.next().expect("match receive channel"),
                     element_ty: receive_expression.get_type().ok_type(),
                     span: receive_expression.get_span(),
                 },
@@ -248,10 +245,10 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn stage_select_operation(
+    fn plan_select_operation(
         &mut self,
         arm: &SelectArm,
-        stages: &mut Vec<SequenceStage>,
+        operands: &mut Vec<OrderedOperand>,
     ) -> Option<ChannelOperationKind> {
         let (plan, span, capture, send_value) = match arm {
             SelectArm::Send {
@@ -297,14 +294,14 @@ impl Planner<'_> {
         };
 
         let line = self.facts.source_position(&span);
-        stages.push(SequenceStage {
+        operands.push(OrderedOperand {
             plan,
             prefix: "ch",
             capture,
             line: line.clone(),
         });
         Some(if let Some(value) = send_value {
-            stages.push(SequenceStage {
+            operands.push(OrderedOperand {
                 plan: self.plan_composite_value(value, ExpressionContext::value()),
                 prefix: "sendVal",
                 capture: false,

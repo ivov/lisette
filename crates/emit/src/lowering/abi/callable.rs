@@ -6,7 +6,7 @@ use syntax::types::Type;
 use crate::lookup::facts::emit_facts::EmitFacts;
 
 use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
-use crate::lowering::expressions::staging::VariadicCombine;
+use crate::lowering::expressions::operand_order::VariadicCombine;
 use syntax::program::SlotOrigin;
 
 impl CallableReturnAbi {

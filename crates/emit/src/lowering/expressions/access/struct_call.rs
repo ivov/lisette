@@ -22,7 +22,7 @@ use syntax::program::{CheckedExpression, CheckedStructLiteral};
 
 struct SpreadInput<'a> {
     base: &'a Expression,
-    base_staged: ValuePlan,
+    base_operand: ValuePlan,
     field_pairs: Vec<(String, GoExpression)>,
 }
 
@@ -145,7 +145,7 @@ impl Planner<'_> {
                 .collect();
 
         let mut literal_slots = vec![false; kept_fields.len()];
-        let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = kept_fields
+        let (operands, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = kept_fields
             .iter()
             .zip(&mut literal_slots)
             .map(|((f, field_ty, layout), literal_slot)| {
@@ -167,8 +167,11 @@ impl Planner<'_> {
             })
             .unzip();
 
-        let field_evaluations: Vec<bool> = stages.iter().map(|value| !value.can_delay()).collect();
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
+        let field_evaluations: Vec<bool> = operands
+            .iter()
+            .map(|value| value.must_evaluate_now())
+            .collect();
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "field");
         let sequenced_stability = sequenced.stability;
         let mut setup = sequenced.setup;
         let emitted_values = sequenced.values;
@@ -228,24 +231,24 @@ impl Planner<'_> {
         fields: Vec<StructCallField>,
         ctx: &StructCallContext<'_>,
     ) -> GoExpression {
-        let base_staged = self.plan_operand(base, ExpressionContext::value());
+        let base_operand = self.plan_operand(base, ExpressionContext::value());
         let (spread_setup, value) = if ctx.enum_ctx.is_some() {
             let field_pairs = self.hoist_observable_fields(setup, fields);
             self.plan_enum_variant_spread(
                 SpreadInput {
                     base,
-                    base_staged,
+                    base_operand,
                     field_pairs,
                 },
                 ctx,
             )
         } else {
-            let field_pairs = if base_staged.setup().is_empty() && base_staged.can_delay() {
+            let field_pairs = if base_operand.setup().is_empty() && base_operand.can_delay() {
                 fields.into_iter().map(StructCallField::into_pair).collect()
             } else {
                 self.hoist_observable_fields(setup, fields)
             };
-            self.plan_struct_update(base_staged, &field_pairs)
+            self.plan_struct_update(base_operand, &field_pairs)
         };
 
         setup.extend(spread_setup);
@@ -435,14 +438,14 @@ impl Planner<'_> {
 
     fn plan_struct_update(
         &mut self,
-        base_staged: ValuePlan,
+        base_operand: ValuePlan,
         fields: &[(String, GoExpression)],
     ) -> (Vec<Statement>, GoExpression) {
         if fields.is_empty() {
-            return base_staged.into_parts();
+            return base_operand.into_parts();
         }
 
-        let (mut statements, base_value) = base_staged.into_parts();
+        let (mut statements, base_value) = base_operand.into_parts();
         let tmp = self.hoist_temp(&mut statements, "copy", base_value);
         if let Some(id) = tmp.id() {
             self.scope.mark_struct_update_copy(id);
@@ -465,12 +468,12 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, GoExpression) {
         let SpreadInput {
             base,
-            base_staged,
+            base_operand,
             mut field_pairs,
         } = input;
         let carried = &ctx.checked.struct_literal().unset_fields;
 
-        let (mut statements, base_value) = base_staged.into_parts();
+        let (mut statements, base_value) = base_operand.into_parts();
 
         if carried.is_empty() {
             statements.push(discard(base_value));

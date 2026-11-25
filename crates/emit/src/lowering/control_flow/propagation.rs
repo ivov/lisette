@@ -215,8 +215,8 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> (Vec<Statement>, GoExpression) {
         let plan = self.plan_operand(expression, ExpressionContext::value());
-        let requires_capture =
-            !matches!(expression, Expression::Identifier { .. }) || !plan.effects().can_duplicate();
+        let requires_capture = !matches!(expression, Expression::Identifier { .. })
+            || plan.effects().must_evaluate_once();
         let (mut setup, value) = plan.into_parts();
         if requires_capture {
             let check = self.hoist_temp(&mut setup, "check", value);
@@ -745,9 +745,9 @@ impl Planner<'_> {
         let plan = self.plan_operand(receiver, ExpressionContext::value());
         let local =
             matches!(receiver, Expression::Identifier { .. }) && plan.effects().can_duplicate();
-        let staged = self.plan_rests_in_stable_name(&plan);
+        let operand = self.plan_rests_in_stable_name(&plan);
         let (mut statements, value) = plan.into_parts();
-        let (check, stability) = if staged {
+        let (check, stability) = if operand {
             (value, Stability::Fixed)
         } else if local {
             let stability = self.path_read_stability(&value);

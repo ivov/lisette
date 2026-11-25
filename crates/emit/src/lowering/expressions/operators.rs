@@ -90,8 +90,8 @@ impl Planner<'_> {
                 ScaledImaginary::FloatLeft(coefficient) => (left_expression, coefficient),
                 ScaledImaginary::FloatRight(coefficient) => (right_expression, coefficient),
             };
-            let staged = self.plan_operand(operand, ctx);
-            return staged.map_expression(|_, value| imaginary_product(value, coefficient));
+            let plan = self.plan_operand(operand, ctx);
+            return plan.map_expression(|_, value| imaginary_product(value, coefficient));
         }
 
         if matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
@@ -162,10 +162,10 @@ impl Planner<'_> {
         right_expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let left_staged = self.plan_composite_value(left_expression, ctx);
-        let right_staged = self.plan_composite_value(right_expression, ctx);
-        let (mut setup, left_value) = left_staged.into_parts();
-        let (mut statements, mut right_value) = right_staged.into_parts();
+        let left_operand = self.plan_composite_value(left_expression, ctx);
+        let right_operand = self.plan_composite_value(right_expression, ctx);
+        let (mut setup, left_value) = left_operand.into_parts();
+        let (mut statements, mut right_value) = right_operand.into_parts();
         if let Some(inlined) = inline_single_read(&statements, &right_value) {
             statements.clear();
             right_value = inlined;
@@ -258,8 +258,8 @@ impl Planner<'_> {
             }
         }
 
-        let staged = self.plan_operand(expression, ctx);
-        staged.unary(UnaryOp::Not)
+        let operand = self.plan_operand(expression, ctx);
+        operand.unary(UnaryOp::Not)
     }
 
     pub(in crate::lowering) fn is_go_constant_expression(&self, expression: &Expression) -> bool {

@@ -99,7 +99,7 @@ impl Planner<'_> {
             return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }
 
-        let stages: Vec<ValuePlan> = elements
+        let operands: Vec<ValuePlan> = elements
             .iter()
             .map(|e| {
                 let origin = self
@@ -112,7 +112,7 @@ impl Planner<'_> {
             })
             .collect();
 
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "v");
         let stability = sequenced.stability;
         let mut setup = sequenced.setup;
 
@@ -145,7 +145,7 @@ impl Planner<'_> {
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
 
-        let mut stages: Vec<ValuePlan> = parts
+        let mut operands: Vec<ValuePlan> = parts
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
@@ -157,10 +157,10 @@ impl Planner<'_> {
             .collect();
 
         let concatenates = format_string_concatenates(&self.facts, parts);
-        if concatenates && stages.len() == 1 && parts.len() == 1 {
-            return stages.pop().expect("one staged operand");
+        if concatenates && operands.len() == 1 && parts.len() == 1 {
+            return operands.pop().expect("one operand");
         }
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "fmtarg");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "fmtarg");
         let stability = sequenced.stability;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();

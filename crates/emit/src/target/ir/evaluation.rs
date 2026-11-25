@@ -119,6 +119,10 @@ impl Effects {
             && !self.creates_identity
     }
 
+    pub(crate) fn must_evaluate_once(self) -> bool {
+        !self.can_duplicate()
+    }
+
     pub(crate) fn can_move_across(self, between: Self) -> bool {
         let orders = |first: Self, second: Self| {
             first.runs_effectful_code() && (second.runs_code() || second.panics_or_blocks())

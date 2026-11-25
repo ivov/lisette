@@ -3,7 +3,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::BindingValue;
-use crate::lowering::expressions::staging::LaterStages;
+use crate::lowering::expressions::operand_order::LaterOperands;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::with_setup;
@@ -46,15 +46,15 @@ impl<'a> PlaceOrdering<'a> {
         }
     }
 
-    fn later(self) -> LaterStages {
+    fn later(self) -> LaterOperands {
         self.right_hand_side
-            .map_or_else(LaterStages::default, |value| {
-                LaterStages::sequenced(value.setup(), value.effects())
+            .map_or_else(LaterOperands::default, |value| {
+                LaterOperands::sequenced(value.setup(), value.effects())
             })
     }
 
     fn pins(self, plan: &ValuePlan) -> bool {
-        self.later().prepend(plan) || (self.read_twice && !plan.effects().can_duplicate())
+        self.later().prepend(plan) || (self.read_twice && plan.effects().must_evaluate_once())
     }
 }
 

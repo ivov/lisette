@@ -14,7 +14,7 @@ use crate::lowering::calls::call_plan::{
     ArgumentPlan, ArgumentSlotLayoutChange, ArgumentValueSource, CallPlan, CallableOrigin,
     FunctionLayoutChange, ResolvedCallee,
 };
-use crate::lowering::expressions::staging::{SpreadSequenceOptions, takes_prelude_callback};
+use crate::lowering::expressions::operand_order::{SpreadSequenceOptions, takes_prelude_callback};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::{SequencedValues, ValuePlan};
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
@@ -52,22 +52,22 @@ impl Planner<'_> {
         ctx: &CallArgsContext<'_, '_>,
         leading: Option<ValuePlan>,
     ) -> SequencedValues {
-        let stages: Vec<ValuePlan> = args
+        let operands: Vec<ValuePlan> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| self.plan_call_arg(arg, i, ctx))
             .collect();
-        let stages = self.type_constant_arguments(stages, ctx);
+        let operands = self.type_constant_arguments(operands, ctx);
         let extra_leading = usize::from(leading.is_some());
-        let stages: Vec<ValuePlan> = leading.into_iter().chain(stages).collect();
+        let operands: Vec<ValuePlan> = leading.into_iter().chain(operands).collect();
         let variadic = ctx.plan.resolved.abi.variadic_param();
-        let spread_stage = ctx.spread.map(|spread| {
+        let spread_operand = ctx.spread.map(|spread| {
             self.try_plan_variadic_spread_slot_layout_change(spread, variadic)
                 .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()))
         });
         self.sequence_with_spread_values(
-            stages,
-            spread_stage,
+            operands,
+            spread_operand,
             SpreadSequenceOptions {
                 wrap_to_any: ctx
                     .plan
@@ -132,18 +132,18 @@ impl Planner<'_> {
 
     fn type_constant_arguments(
         &mut self,
-        stages: Vec<ValuePlan>,
+        operands: Vec<ValuePlan>,
         ctx: &CallArgsContext<'_, '_>,
     ) -> Vec<ValuePlan> {
         if ctx.callee_is_builtin || ctx.callee_pins_type_args {
-            return stages;
+            return operands;
         }
         let abi = &ctx.plan.resolved.abi;
         let vars: Vec<EcoString> = match ctx.plan.resolved.declared_type() {
             Some(Type::Forall { vars, .. }) => vars.clone(),
             _ => Vec::new(),
         };
-        let slots: Vec<Option<(&Type, &Type)>> = (0..stages.len())
+        let slots: Vec<Option<(&Type, &Type)>> = (0..operands.len())
             .map(|index| {
                 abi.param(index).and_then(|param| {
                     param
@@ -155,8 +155,8 @@ impl Planner<'_> {
             .collect();
 
         let mut bound = ctx.receiver_bound_parameters();
-        for (stage, slot) in stages.iter().zip(&slots) {
-            if stage.expression().constant_kind().is_some() {
+        for (operand, slot) in operands.iter().zip(&slots) {
+            if operand.expression().constant_kind().is_some() {
                 continue;
             }
             if let Some((declared, instantiated)) = slot {
@@ -165,18 +165,18 @@ impl Planner<'_> {
                 bound.extend(mapping.into_keys());
             }
         }
-        stages
+        operands
             .into_iter()
             .zip(&slots)
             .enumerate()
-            .map(|(index, (stage, slot))| {
+            .map(|(index, (operand, slot))| {
                 let Some((declared, instantiated)) = slot else {
-                    return stage;
+                    return operand;
                 };
-                let constant = stage.expression().constant_kind();
+                let constant = operand.expression().constant_kind();
                 let direct = matches!(ctx.plan.arguments.get(index), Some(ArgumentPlan::Direct));
                 if !direct || constant.is_none() {
-                    return stage;
+                    return operand;
                 }
                 let mut mapping: FxHashMap<String, Type> = FxHashMap::default();
                 extract_type_mapping(declared, instantiated, &mut mapping);
@@ -184,11 +184,11 @@ impl Planner<'_> {
                     (vars.is_empty() || vars.iter().any(|var| var == name)) && !bound.contains(name)
                 });
                 if !inferred {
-                    return stage;
+                    return operand;
                 }
                 match self.constant_needs_go_type(constant, instantiated) {
-                    Some(go_type) => stage.conversion(go_type),
-                    None => stage,
+                    Some(go_type) => operand.conversion(go_type),
+                    None => operand,
                 }
             })
             .collect()
@@ -338,7 +338,7 @@ impl Planner<'_> {
             .unwrap_or_else(|| self.emitted_value_layout(argument, ExpressionContext::value()));
         let target = parameter.layout.clone();
         let change = self.resolve_layout_change(&source, &target);
-        (physical_source.is_some() || !change.is_identity()).then_some(ArgumentSlotLayoutChange {
+        (physical_source.is_some() || change.changes_layout()).then_some(ArgumentSlotLayoutChange {
             target,
             change,
             source: if physical_source.is_some() {

@@ -135,12 +135,12 @@ impl Planner<'_> {
         } else {
             self.function_slot_layout_change(value, layout)
         };
-        if !change.is_identity() {
+        if change.changes_layout() {
             return change;
         }
         if !delegated {
             let internal = CoercionPlan::adapted(self, adaptation, &source_ty, slot, None);
-            if !internal.is_identity() {
+            if internal.changes_layout() {
                 return internal;
             }
         }
@@ -155,7 +155,7 @@ impl Planner<'_> {
             let source = self.facts.value_layout(&source_ty, SlotOrigin::Lisette);
             let change = CoercionPlan::change(self, &source, &target);
             let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
-            if !change.is_identity()
+            if change.changes_layout()
                 && (!reference
                     || matches!(
                         change,

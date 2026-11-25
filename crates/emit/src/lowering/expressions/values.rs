@@ -5,7 +5,7 @@ use crate::lowering::abi::is_closure_literal;
 use crate::lowering::abi::return_abi;
 use crate::lowering::calls::split_native_receiver;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
-use crate::lowering::expressions::staging::identifier_read_stability;
+use crate::lowering::expressions::operand_order::identifier_read_stability;
 use crate::lowering::statements::testing::is_test_log_call;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::AsyncKind;
@@ -432,7 +432,7 @@ impl Planner<'_> {
         };
         let slot_types = tail_slots.unwrap_or(inferred_slot_types);
 
-        let stages: Vec<ValuePlan> = elements
+        let operands: Vec<ValuePlan> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| {
@@ -447,7 +447,7 @@ impl Planner<'_> {
             })
             .collect();
 
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "v");
         let mut setup = sequenced.setup;
 
         let element_expressions = self.coerce_elements_to_slots(
@@ -489,7 +489,7 @@ impl Planner<'_> {
         let go_type = self.go_type(ty);
 
         let function_layout_change = self.function_slot_layout_change(expression, ty);
-        if !function_layout_change.is_identity() {
+        if function_layout_change.changes_layout() {
             return inner
                 .map_expression(|setup, value| {
                     let (layout_change_setup, changed) = function_layout_change.lower(self, value);
@@ -526,10 +526,10 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn plan_reference(&mut self, inner: &Expression) -> ValuePlan {
         if self.is_unit_call(inner) {
-            let staged = self.plan_operand(inner, ExpressionContext::value());
-            return staged.map_observable_expression(|setup, staged_value| {
-                if !staged_value.is_empty() {
-                    setup.push(effect_statement(staged_value));
+            let operand = self.plan_operand(inner, ExpressionContext::value());
+            return operand.map_observable_expression(|setup, value_operand| {
+                if !value_operand.is_empty() {
+                    setup.push(effect_statement(value_operand));
                 }
                 let unit = self.unit_value(Some(inner), None);
                 let tmp = self.hoist_temp(setup, "ref", unit);
@@ -577,20 +577,20 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let type_string = self.go_type(ty);
 
-        let mut stages: Vec<ValuePlan> = Vec::new();
+        let mut operands: Vec<ValuePlan> = Vec::new();
         let has_start = start.is_some();
         if let Some(s) = start {
-            stages.push(self.plan_operand(s, ExpressionContext::value()));
+            operands.push(self.plan_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            stages.push(self.plan_operand(e, ExpressionContext::value()));
+            operands.push(self.plan_operand(e, ExpressionContext::value()));
         }
 
-        if stages.is_empty() {
+        if operands.is_empty() {
             return ValuePlan::computed(Vec::new(), self.unit_value(None, None));
         }
 
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "range");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "range");
         let mut values = sequenced.values.into_iter();
         let mut fields = Vec::new();
         if has_start {

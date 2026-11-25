@@ -219,7 +219,7 @@ impl Planner<'_> {
             return false;
         }
         let (declared, instantiated) = callback_param(ctx);
-        self.prelude_callback_stages_as_is(callee, declared, instantiated)
+        self.prelude_callback_operands_as_is(callee, declared, instantiated)
     }
 
     pub(in crate::lowering) fn try_lower_slice_loop_into(
@@ -269,14 +269,14 @@ impl Planner<'_> {
             return None;
         }
 
-        let mut source_staged = self.plan_operand(receiver, ExpressionContext::value());
+        let mut source_operand = self.plan_operand(receiver, ExpressionContext::value());
         if self.facts.checked(receiver).receiver_change() == Some(ReceiverCoercion::AutoDeref) {
-            source_staged = source_staged.dereference();
+            source_operand = source_operand.dereference();
         }
-        if kind == SliceLoop::Map && !source_staged.effects().can_duplicate() {
-            self.pin_staged(&mut source_staged, "src");
+        if kind == SliceLoop::Map && source_operand.effects().must_evaluate_once() {
+            self.pin_to_temp(&mut source_operand, "src");
         }
-        let mut stages = vec![source_staged];
+        let mut operands = vec![source_operand];
         if kind == SliceLoop::Fold {
             let origin = self
                 .facts
@@ -285,33 +285,33 @@ impl Planner<'_> {
                 &args[0],
                 ExpressionContext::value().with_function_slot_origin(origin),
             );
-            if !init.effects().can_move_across(stages[0].effects()) {
-                self.pin_staged(&mut stages[0], "src");
+            if !init.effects().can_move_across(operands[0].effects()) {
+                self.pin_to_temp(&mut operands[0], "src");
             }
-            stages.push(init);
+            operands.push(init);
         }
         if let LoopCallback::Value(callee) = &callback {
-            stages.push(self.stage_loop_callee(ctx, callee));
+            operands.push(self.plan_loop_callee(ctx, callee));
         }
-        let sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
+        let sequenced = self.sequence_values(operands, ctx.capture_boundary, "arg");
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
-        let source = values.next().expect("the source is staged first");
+        let source = values.next().expect("the source comes first");
         let init = (kind == SliceLoop::Fold).then(|| {
-            let value = values.next().expect("fold stages its initial value");
+            let value = values.next().expect("fold has an initial value");
             self.accumulator_init(&mut setup, &args[0], value, &result_ty)
         });
         let callee = matches!(callback, LoopCallback::Value(_))
-            .then(|| values.next().expect("a function value stages its callee"));
+            .then(|| values.next().expect("a function value has a callee"));
 
         let planned = self.planned_loop(target, kind, &callback, receiver, init);
         self.push_slice_loop_declaration(&mut setup, &planned, &result_ty, &element_ty, &source);
 
         let lowered_callback = match &callback {
             LoopCallback::Lambda { body, .. } => LoweredCallback::Body(body),
-            LoopCallback::Value(_) => LoweredCallback::Callee(
-                callee.as_ref().expect("a function value stages its callee"),
-            ),
+            LoopCallback::Value(_) => {
+                LoweredCallback::Callee(callee.as_ref().expect("a function value has a callee"))
+            }
         };
 
         let lower_body = |planner: &mut Self| {
@@ -382,7 +382,7 @@ impl Planner<'_> {
                     }
                     SliceLoop::Filter => PlannedLoop::Filter { result },
                     SliceLoop::Fold => {
-                        let (init, go_type) = init.expect("fold stages its initial value");
+                        let (init, go_type) = init.expect("fold has an initial value");
                         PlannedLoop::Fold {
                             result,
                             init,
@@ -411,16 +411,16 @@ impl Planner<'_> {
         (value, typed.then(|| self.go_type(result_ty)))
     }
 
-    fn stage_loop_callee(&mut self, ctx: &NativeCallContext<'_>, callee: &Expression) -> ValuePlan {
+    fn plan_loop_callee(&mut self, ctx: &NativeCallContext<'_>, callee: &Expression) -> ValuePlan {
         let (declared, instantiated) = callback_param(ctx);
-        let mut staged = self.stage_prelude_arg(callee, declared, instantiated);
-        if !staged.effects().can_duplicate()
+        let mut operand = self.plan_prelude_arg(callee, declared, instantiated);
+        if operand.effects().must_evaluate_once()
             || self.place_read_stability(callee) == Stability::Observable
-            || staged.expression().syntax_form() != OperandForm::Name
+            || operand.expression().syntax_form() != OperandForm::Name
         {
-            self.pin_staged(&mut staged, "callee");
+            self.pin_to_temp(&mut operand, "callee");
         }
-        staged
+        operand
     }
 
     fn accumulator_slot_name(&mut self, pattern: &Pattern, receiver: &Expression) -> GoIdentifier {

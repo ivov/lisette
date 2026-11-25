@@ -294,19 +294,19 @@ impl Planner<'_> {
         }
 
         let mut statements: Vec<Statement> = Vec::new();
-        let mut stages: Vec<ValuePlan> = elements
+        let mut operands: Vec<ValuePlan> = elements
             .iter()
             .map(|element| self.plan_composite_value(element, ExpressionContext::value()))
             .collect();
-        for ((stage, tested), element) in stages.iter_mut().zip(&tested).zip(elements) {
-            let rereadable = is_inert_value(element, stage.expression())
-                || stage.rests_in_fixed_name()
-                || self.plan_rests_in_stable_name(stage);
+        for ((operand, tested), element) in operands.iter_mut().zip(&tested).zip(elements) {
+            let rereadable = is_inert_value(element, operand.expression())
+                || operand.rests_in_fixed_name()
+                || self.plan_rests_in_stable_name(operand);
             if *tested && !rereadable {
-                self.pin_staged(stage, "arg");
+                self.pin_to_temp(operand, "arg");
             }
         }
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "arg");
         statements.extend(sequenced.setup);
 
         let mut roots = Vec::with_capacity(elements.len());
@@ -362,14 +362,14 @@ impl Planner<'_> {
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
-            let staged = self.plan_operand(subject, ExpressionContext::value());
-            let (subject_setup, value) = staged.into_parts();
+            let operand = self.plan_operand(subject, ExpressionContext::value());
+            let (subject_setup, value) = operand.into_parts();
             setup.extend(subject_setup);
             return ResolvedSubject::Existing(value);
         }
-        let staged = self.plan_composite_value(subject, ExpressionContext::value());
-        let rests_in_stable_name = self.plan_rests_in_stable_name(&staged);
-        let (subject_setup, value) = staged.into_parts();
+        let operand = self.plan_composite_value(subject, ExpressionContext::value());
+        let rests_in_stable_name = self.plan_rests_in_stable_name(&operand);
+        let (subject_setup, value) = operand.into_parts();
         setup.extend(subject_setup);
         let reads_in_place = matches!(value.node(), GoExpressionNode::Identifier(_))
             || self.field_path_reads_in_place(subject, &value, |root| {

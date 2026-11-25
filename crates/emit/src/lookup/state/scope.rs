@@ -354,15 +354,15 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn has_binding_for_local(&self, local: &GoIdentifier) -> bool {
+    pub(crate) fn lacks_binding_for_local(&self, local: &GoIdentifier) -> bool {
         let Some(id) = local.id() else {
-            return false;
+            return true;
         };
         self.active_assign_targets()
-            .any(|target| target.id() == Some(id))
-            || self
+            .all(|target| target.id() != Some(id))
+            && self
                 .bindings()
-                .any(|binding| binding.value.mentions_local(local) && self.is_reachable(binding))
+                .all(|binding| !binding.value.mentions_local(local) || !self.is_reachable(binding))
     }
 
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {

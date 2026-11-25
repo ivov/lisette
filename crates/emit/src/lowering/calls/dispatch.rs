@@ -1,6 +1,6 @@
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
-use crate::lowering::expressions::staging::is_unmutated_identifier;
+use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::lowering::expressions::values::with_source_positions;
 
 use super::{NativeCallContext, NativeCallForm};
@@ -310,7 +310,7 @@ impl<'a> Planner<'a> {
             })
             .collect();
 
-        let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = args
+        let (operands, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = args
             .iter()
             .zip(&target.field_tys)
             .map(|(a, slot)| {
@@ -321,7 +321,7 @@ impl<'a> Planner<'a> {
             })
             .unzip();
 
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "arg");
         let mut setup = sequenced.setup;
 
         let mut field_pairs = Vec::with_capacity(target.field_tys.len());

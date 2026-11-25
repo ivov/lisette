@@ -773,7 +773,7 @@ impl Planner<'_> {
         };
 
         let change = GoResultLayoutChange::Payload(PayloadLayoutChanges { value, error });
-        (!change.is_identity()).then_some(change)
+        change.changes_layout().then_some(change)
     }
 
     pub(in crate::lowering) fn plan_function_result_layout_change(
@@ -1097,6 +1097,10 @@ impl GoResultLayoutChange {
             Self::Whole(change) => change.is_identity(),
             Self::Payload(changes) => changes.value.is_identity() && changes.error.is_identity(),
         }
+    }
+
+    pub(in crate::lowering) fn changes_layout(&self) -> bool {
+        !self.is_identity()
     }
 }
 

@@ -58,12 +58,12 @@ impl Planner<'_> {
             .receiver_and_arguments()
             .expect("index call has a receiver");
         let mut receiver = self.plan_operand(source, ExpressionContext::value());
-        if !receiver.effects().can_duplicate() {
-            self.pin_staged(&mut receiver, "recv");
+        if receiver.effects().must_evaluate_once() {
+            self.pin_to_temp(&mut receiver, "recv");
         }
         let mut index = self.plan_operand(&arguments[0], ExpressionContext::value());
-        if !index.effects().can_duplicate() {
-            self.pin_staged(&mut index, "idx");
+        if index.effects().must_evaluate_once() {
+            self.pin_to_temp(&mut index, "idx");
         }
         let sequenced = self.sequence_values(
             vec![receiver, index],

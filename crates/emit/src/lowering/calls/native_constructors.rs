@@ -51,7 +51,7 @@ impl Planner<'_> {
         self.go_type(element)
     }
 
-    fn stage_size_argument(&mut self, ctx: &NativeCallContext) -> (Vec<Statement>, GoExpression) {
+    fn plan_size_argument(&mut self, ctx: &NativeCallContext) -> (Vec<Statement>, GoExpression) {
         match ctx.args.first() {
             Some(a) => self
                 .plan_operand(a, ExpressionContext::value())
@@ -80,7 +80,7 @@ impl Planner<'_> {
             }
             (NativeTypeKind::Channel, "buffered") => {
                 let element = self.native_element_type(ctx.function);
-                let (setup, capacity) = self.stage_size_argument(ctx);
+                let (setup, capacity) = self.plan_size_argument(ctx);
                 Some(ValuePlan::computed(
                     setup,
                     GoExpression::call(
@@ -135,7 +135,7 @@ impl Planner<'_> {
             .clone();
 
         let element = self.go_type(&element_ty);
-        let (setup, length) = self.stage_size_argument(ctx);
+        let (setup, length) = self.plan_size_argument(ctx);
         let value = if self.facts.go_zero_is_lisette_zero(&element_ty) {
             GoExpression::call(
                 GoExpression::external_name("make".to_string()),
@@ -175,8 +175,8 @@ impl Planner<'_> {
         let element_go = self.go_type(&element);
         let array_go = GoType::array_of(length, &element_go);
 
-        let staged = self.plan_operand(argument, ExpressionContext::value());
-        let (setup, source) = staged.into_parts();
+        let operand = self.plan_operand(argument, ExpressionContext::value());
+        let (setup, source) = operand.into_parts();
 
         let slice_name = self.scope.helper_local("s", self.names);
         let slice = || GoExpression::identifier(slice_name.clone());
@@ -259,7 +259,7 @@ impl Planner<'_> {
             ));
         }
 
-        let stages: Vec<ValuePlan> = pairs
+        let operands: Vec<ValuePlan> = pairs
             .iter()
             .flat_map(|(key, value)| [(*key, &key_ty), (*value, &value_ty)])
             .map(|(e, slot)| {
@@ -271,22 +271,22 @@ impl Planner<'_> {
             })
             .collect();
 
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "entry");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "entry");
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
 
         let mut lowered = Vec::with_capacity(pairs.len());
         let mut widest = 0;
         for (entry, (key, value)) in entries.iter().zip(&pairs) {
-            let staged_key = values.next().expect("each pair stages a key");
-            let staged_value = values.next().expect("each pair stages a value");
+            let key_operand = values.next().expect("each pair has a key");
+            let value_operand = values.next().expect("each pair has a value");
             let [key_coercion, value_coercion] =
                 self.pair_slot_coercions(entry, [key, value], [&key_ty, &value_ty]);
-            let (key_setup, coerced_key) = key_coercion.lower(self, staged_key);
+            let (key_setup, coerced_key) = key_coercion.lower(self, key_operand);
             setup.extend(key_setup);
             let is_whole_literal =
-                value_coercion.is_identity() && staged_value.is_composite_literal();
-            let (value_setup, coerced_value) = value_coercion.lower(self, staged_value);
+                value_coercion.is_identity() && value_operand.is_composite_literal();
+            let (value_setup, coerced_value) = value_coercion.lower(self, value_operand);
             setup.extend(value_setup);
             widest = widest
                 .max(rendered(&coerced_key).len() + rendered(&coerced_value).len() + ": ".len());

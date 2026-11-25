@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::inline_uses::region_blocks_inline;
 use crate::lowering::calls::native::{is_clip_safe_path, slice_growth_call};
-use crate::lowering::expressions::staging::{LaterStages, SpreadSequenceOptions};
+use crate::lowering::expressions::operand_order::{LaterOperands, SpreadSequenceOptions};
 use crate::lowering::expressions::values::TuplePosition;
 use crate::lowering::expressions::values::contains_newtype_access;
 use crate::lowering::patterns::binding_decls::pattern_binds_name;
@@ -363,16 +363,16 @@ impl<'p> Planner<'p> {
             return vec![self.lower_never_value(value)];
         }
         if self.facts.has_no_go_value(&value_ty) {
-            let staged = self.plan_operand(value, ExpressionContext::value());
-            let (mut statements, staged_value) = staged.into_parts();
-            let effects = staged_value.effects();
+            let operand = self.plan_operand(value, ExpressionContext::value());
+            let (mut statements, value_operand) = operand.into_parts();
+            let effects = value_operand.effects();
             let reads_or_acts = !effects.can_erase() || effects.reads() != Stability::Fixed;
-            if !staged_value.is_empty() && reads_or_acts {
-                if matches!(value, Expression::Call { .. }) && staged_value.stands_as_a_statement()
+            if !value_operand.is_empty() && reads_or_acts {
+                if matches!(value, Expression::Call { .. }) && value_operand.stands_as_a_statement()
                 {
-                    statements.push(effect_statement(staged_value));
+                    statements.push(effect_statement(value_operand));
                 } else {
-                    statements.push(discard(staged_value));
+                    statements.push(discard(value_operand));
                 }
             }
             return statements;
@@ -386,24 +386,24 @@ impl<'p> Planner<'p> {
             }
         }
 
-        let staged = self.plan_operand(value, ExpressionContext::value());
-        let (mut statements, staged_value) = staged.into_parts();
-        if statements.is_empty() && staged_value.constant_kind().is_some() {
+        let operand = self.plan_operand(value, ExpressionContext::value());
+        let (mut statements, value_operand) = operand.into_parts();
+        if statements.is_empty() && value_operand.constant_kind().is_some() {
             self.conversions.record_dropped_code(value.get_span());
             return statements;
         }
         if calls_a_function(self.facts.call_operation(value))
             && matches!(value, Expression::Call { .. })
-            && staged_value.stands_as_a_statement()
+            && value_operand.stands_as_a_statement()
         {
-            statements.push(effect_statement(staged_value));
+            statements.push(effect_statement(value_operand));
         } else {
-            let staged_value =
-                match self.constant_needs_go_type(staged_value.constant_kind(), &value_ty) {
-                    Some(go_type) => GoExpression::conversion(go_type, staged_value),
-                    None => staged_value,
+            let value_operand =
+                match self.constant_needs_go_type(value_operand.constant_kind(), &value_ty) {
+                    Some(go_type) => GoExpression::conversion(go_type, value_operand),
+                    None => value_operand,
                 };
-            statements.push(discard(staged_value));
+            statements.push(discard(value_operand));
         }
         statements
     }
@@ -731,7 +731,7 @@ impl<'p> Planner<'p> {
                 .fold(Effects::default(), |effects, argument| {
                     effects.union(argument.effects())
                 });
-            let mut later = LaterStages::sequenced(
+            let mut later = LaterOperands::sequenced(
                 ordering.setup(),
                 arguments_effects.with_known_reads(arguments_effects.reads()),
             );
@@ -775,7 +775,7 @@ impl<'p> Planner<'p> {
         args: &[Expression],
         spread: Option<&Expression>,
     ) -> (Vec<GoExpression>, ValuePlan) {
-        let stages: Vec<ValuePlan> = args
+        let operands: Vec<ValuePlan> = args
             .iter()
             .map(|argument| {
                 let plan = self.plan_composite_value(argument, ExpressionContext::value());
@@ -783,15 +783,15 @@ impl<'p> Planner<'p> {
             })
             .collect();
 
-        let spread_stage = spread.map(|spread| self.plan_copied_spread(spread));
+        let spread_operand = spread.map(|spread| self.plan_copied_spread(spread));
         let plan = spread.and_then(|_| self.plan_call(call));
         let wrap_to_any = plan
             .as_ref()
             .is_some_and(|plan| plan.resolved.abi.spread_wraps_to_any(&self.facts, spread));
         let combine = plan.and_then(|plan| plan.resolved.abi.variadic_combine(0));
         let sequenced = self.sequence_with_spread_values(
-            stages,
-            spread_stage,
+            operands,
+            spread_operand,
             SpreadSequenceOptions {
                 wrap_to_any,
                 combine,

@@ -339,7 +339,7 @@ impl Planner<'_> {
             Adaptation::Tuple(adaptations) => adaptations.clone(),
             _ => Vec::new(),
         };
-        let stages: Vec<ValuePlan> = elements
+        let operands: Vec<ValuePlan> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| match slot_tys.get(i) {
@@ -364,7 +364,7 @@ impl Planner<'_> {
             })
             .collect();
 
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
+        let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "ret");
         let mut statements = sequenced.setup;
         let parts = self.coerce_elements_to_slots(
             &mut statements,
@@ -429,7 +429,7 @@ impl Planner<'_> {
             );
 
             let coercion = CoercionPlan::change(self, &source, &target);
-            if !coercion.is_identity() {
+            if coercion.changes_layout() {
                 self.record_converted_value(expression);
                 let (mut statements, value) = self
                     .plan_value(expression, ExpressionContext::value())
@@ -532,12 +532,12 @@ impl Planner<'_> {
                     multi_value_return(vec![self.go_zero(&ok_ty), e])
                 }
                 PartialVariant::Both => {
-                    let stages = args
+                    let operands = args
                         .iter()
                         .map(|arg| self.plan_composite_value(arg, ExpressionContext::value()))
                         .collect();
                     let sequenced =
-                        self.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
+                        self.sequence_values(operands, CaptureBoundary::SiblingSequence, "ret");
                     statements.extend(sequenced.setup);
                     multi_value_return(sequenced.values)
                 }

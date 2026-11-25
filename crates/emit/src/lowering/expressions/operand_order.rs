@@ -32,19 +32,19 @@ pub(in crate::lowering) struct SpreadSequenceOptions {
 }
 
 #[derive(Default)]
-pub(in crate::lowering) struct LaterStages {
+pub(in crate::lowering) struct LaterOperands {
     before: Effects,
     inline: Effects,
 }
 
-pub(in crate::lowering) struct SequenceStage {
+pub(in crate::lowering) struct OrderedOperand {
     pub(in crate::lowering) plan: ValuePlan,
     pub(in crate::lowering) prefix: &'static str,
     pub(in crate::lowering) capture: bool,
     pub(in crate::lowering) line: Option<Position>,
 }
 
-impl LaterStages {
+impl LaterOperands {
     pub(in crate::lowering) fn sequenced(setup: &[Statement], inline: Effects) -> Self {
         Self {
             before: setup_effects(setup),
@@ -61,22 +61,22 @@ impl LaterStages {
             && effects.without_go_order().can_move_across(self.inline)
     }
 
-    pub(in crate::lowering) fn prepend(&mut self, stage: &ValuePlan) -> bool {
-        let effects = stage.effects();
+    pub(in crate::lowering) fn prepend(&mut self, operand: &ValuePlan) -> bool {
+        let effects = operand.effects();
         if !self.can_follow(effects) {
-            self.prepend_pinned(stage);
+            self.prepend_pinned(operand);
             return true;
         }
-        self.before = self.before.union(setup_effects(stage.setup()));
+        self.before = self.before.union(setup_effects(operand.setup()));
         self.inline = self.inline.union(effects);
         false
     }
 
-    pub(in crate::lowering) fn prepend_pinned(&mut self, stage: &ValuePlan) {
+    pub(in crate::lowering) fn prepend_pinned(&mut self, operand: &ValuePlan) {
         self.before = self
             .before
-            .union(setup_effects(stage.setup()))
-            .union(stage.effects());
+            .union(setup_effects(operand.setup()))
+            .union(operand.effects());
     }
 }
 
@@ -121,7 +121,7 @@ fn prelude_arg_context<'a>(
 }
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn stage_or_capture(
+    pub(in crate::lowering) fn plan_or_capture(
         &mut self,
         expression: &Expression,
         prefix: &'static str,
@@ -133,14 +133,18 @@ impl Planner<'_> {
             return self.plan_operand(expression, ExpressionContext::value());
         }
 
-        let staged = self.plan_operand(expression, ExpressionContext::value());
-        let (mut setup, value) = staged.into_parts();
+        let operand = self.plan_operand(expression, ExpressionContext::value());
+        let (mut setup, value) = operand.into_parts();
         let temp_var = self.hoist_temp(&mut setup, prefix, value);
         ValuePlan::captured(setup, temp_var)
     }
 
-    pub(in crate::lowering) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &'static str) {
-        staged.pin(|setup, value| self.hoist_temp(setup, prefix, value));
+    pub(in crate::lowering) fn pin_to_temp(
+        &mut self,
+        operand: &mut ValuePlan,
+        prefix: &'static str,
+    ) {
+        operand.pin(|setup, value| self.hoist_temp(setup, prefix, value));
     }
 
     pub(in crate::lowering) fn eager_operand(
@@ -148,11 +152,11 @@ impl Planner<'_> {
         mut value: ValuePlan,
         prefix: &'static str,
     ) -> ValuePlan {
-        if !value.can_delay()
+        if value.must_evaluate_now()
             && value.expression().constant_kind().is_none()
             && !self.plan_rests_in_stable_name(&value)
         {
-            self.pin_staged(&mut value, prefix);
+            self.pin_to_temp(&mut value, prefix);
         }
         value
     }
@@ -165,7 +169,7 @@ impl Planner<'_> {
         boundary: CaptureBoundary,
     ) -> GoExpression {
         let plan = self.plan_composite_value(expression, ExpressionContext::value());
-        let requires_capture = boundary.delays_reads() && !plan.can_delay();
+        let requires_capture = boundary.delays_reads() && plan.must_evaluate_now();
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if requires_capture {
@@ -193,7 +197,7 @@ impl Planner<'_> {
             return true;
         }
         plan.expression().as_identifier().is_some_and(|local| {
-            plan.binds_local(local) && !self.scope.has_binding_for_local(local)
+            plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
         })
     }
 
@@ -240,25 +244,25 @@ impl Planner<'_> {
         }
     }
 
-    pub(in crate::lowering) fn stage_prelude_arg(
+    pub(in crate::lowering) fn plan_prelude_arg(
         &mut self,
         expression: &Expression,
         declared_param: Option<&Type>,
         param_ty: Option<&Type>,
     ) -> ValuePlan {
         let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
-        let staged = self.plan_composite_value(expression, arg_ctx);
+        let operand = self.plan_composite_value(expression, arg_ctx);
 
         if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
-            return staged.map_expression(|setup, value| {
+            return operand.map_expression(|setup, value| {
                 self.plan_function_layout_change(setup, value, &adapter.source, &adapter.target)
             });
         }
 
-        self.convert_to_recorded_slot(expression, staged)
+        self.convert_to_recorded_slot(expression, operand)
     }
 
-    pub(in crate::lowering) fn prelude_callback_stages_as_is(
+    pub(in crate::lowering) fn prelude_callback_operands_as_is(
         &self,
         callback: &Expression,
         declared_param: Option<&Type>,
@@ -301,7 +305,7 @@ impl Planner<'_> {
         )
     }
 
-    pub(in crate::lowering) fn stage_native_method_args_from(
+    pub(in crate::lowering) fn plan_native_method_args_from(
         &mut self,
         abi: &CallableAbi,
         args: &[Expression],
@@ -312,7 +316,7 @@ impl Planner<'_> {
             .skip(start_index)
             .map(|(i, arg)| {
                 let param = abi.param(i);
-                self.stage_prelude_arg(
+                self.plan_prelude_arg(
                     arg,
                     param.and_then(|param| param.declared.as_ref()),
                     param.map(|param| &param.instantiated),
@@ -321,7 +325,7 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn finalize_spread_stage(
+    fn finalize_spread_operand(
         &mut self,
         values: &mut Vec<GoExpression>,
         wrap_to_any: bool,
@@ -357,14 +361,14 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn sequence_values(
         &mut self,
-        stages: Vec<ValuePlan>,
+        operands: Vec<ValuePlan>,
         boundary: CaptureBoundary,
         prefix: &'static str,
     ) -> SequencedValues {
-        self.sequence_stages(
-            stages
+        self.sequence_operands(
+            operands
                 .into_iter()
-                .map(|plan| SequenceStage {
+                .map(|plan| OrderedOperand {
                     plan,
                     prefix,
                     capture: false,
@@ -375,48 +379,48 @@ impl Planner<'_> {
         )
     }
 
-    pub(in crate::lowering) fn sequence_stages(
+    pub(in crate::lowering) fn sequence_operands(
         &mut self,
-        stages: Vec<SequenceStage>,
+        operands: Vec<OrderedOperand>,
         boundary: CaptureBoundary,
     ) -> SequencedValues {
         let eager = boundary.delays_reads();
-        let mut later = LaterStages::default();
-        let stages: Vec<_> = stages
+        let mut later = LaterOperands::default();
+        let operands: Vec<_> = operands
             .into_iter()
             .rev()
-            .map(|stage| {
-                let pin = if stage.capture || (eager && !stage.plan.can_delay()) {
-                    later.prepend_pinned(&stage.plan);
+            .map(|operand| {
+                let pin = if operand.capture || (eager && operand.plan.must_evaluate_now()) {
+                    later.prepend_pinned(&operand.plan);
                     true
                 } else {
-                    later.prepend(&stage.plan)
+                    later.prepend(&operand.plan)
                 };
 
-                (stage, pin)
+                (operand, pin)
             })
             .collect();
 
         let mut setup = Vec::new();
-        let mut results = Vec::with_capacity(stages.len());
+        let mut results = Vec::with_capacity(operands.len());
         let mut stability = Stability::Fixed;
-        for (stage, pin) in stages.into_iter().rev() {
-            let SequenceStage {
+        for (operand, pin) in operands.into_iter().rev() {
+            let OrderedOperand {
                 plan,
                 prefix,
                 capture: _,
                 line,
-            } = stage;
+            } = operand;
 
             let start = setup.len();
             let can_delay = plan.can_delay();
-            let (stage_setup, expression, stage_stability) = plan.into_parts_with_stability();
-            setup.extend(stage_setup);
+            let (operand_setup, expression, operand_stability) = plan.into_parts_with_stability();
+            setup.extend(operand_setup);
             if pin || (eager && !can_delay) {
                 let tmp = self.hoist_temp(&mut setup, prefix, expression);
                 results.push(GoExpression::identifier(tmp));
             } else {
-                stability = stability.max(stage_stability);
+                stability = stability.max(operand_stability);
                 results.push(expression);
             }
             direct_first(&mut setup[start..], line);
@@ -433,15 +437,19 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn sequence_with_spread_values(
         &mut self,
-        mut stages: Vec<ValuePlan>,
-        spread_stage: Option<ValuePlan>,
+        mut operands: Vec<ValuePlan>,
+        spread_operand: Option<ValuePlan>,
         options: SpreadSequenceOptions,
     ) -> SequencedValues {
-        let has_spread = spread_stage.is_some();
-        stages.extend(spread_stage);
-        let mut sequenced = self.sequence_values(stages, options.boundary, "arg");
+        let has_spread = spread_operand.is_some();
+        operands.extend(spread_operand);
+        let mut sequenced = self.sequence_values(operands, options.boundary, "arg");
         if has_spread {
-            self.finalize_spread_stage(&mut sequenced.values, options.wrap_to_any, options.combine);
+            self.finalize_spread_operand(
+                &mut sequenced.values,
+                options.wrap_to_any,
+                options.combine,
+            );
         }
         sequenced
     }

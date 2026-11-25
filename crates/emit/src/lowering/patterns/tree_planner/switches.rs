@@ -231,7 +231,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) -> Option<GoExpression> {
         if bindings
             .iter()
-            .any(|binding| !binding.coercion.is_identity())
+            .any(|binding| binding.coercion.changes_layout())
         {
             return None;
         }

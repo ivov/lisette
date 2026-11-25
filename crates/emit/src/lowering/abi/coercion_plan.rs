@@ -92,6 +92,10 @@ impl LayoutChange {
         matches!(self, Self::Identity)
     }
 
+    pub(in crate::lowering) fn changes_layout(&self) -> bool {
+        !self.is_identity()
+    }
+
     pub(in crate::lowering) fn direction(&self) -> Option<LayoutChangeDirection> {
         match self {
             Self::Identity | Self::Conversion { .. } => None,
@@ -231,6 +235,10 @@ impl CoercionPlan {
 
     pub(in crate::lowering) fn is_identity(&self) -> bool {
         matches!(self, Self::Identity)
+    }
+
+    pub(in crate::lowering) fn changes_layout(&self) -> bool {
+        !self.is_identity()
     }
 
     pub(in crate::lowering) fn lower(
@@ -701,6 +709,6 @@ impl Planner<'_> {
         } else {
             change
         };
-        (from != to && !plan.is_identity()).then_some(plan)
+        (from != to && plan.changes_layout()).then_some(plan)
     }
 }

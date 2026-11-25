@@ -6,7 +6,7 @@ use crate::target::names::go_name::GoExport;
 use crate::Planner;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::calls::call_plan::{CallPlan, ResolvedCallee};
-use crate::lowering::expressions::staging::SpreadSequenceOptions;
+use crate::lowering::expressions::operand_order::SpreadSequenceOptions;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::Statement;
@@ -49,14 +49,14 @@ impl Planner<'_> {
             receiver_passed: true,
         });
 
-        let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
+        let mut receiver_operand = self.plan_operand(receiver, ExpressionContext::value());
         if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
         {
             let source = self.facts.dereferenced_layout(&receiver.get_type());
             let target = self.facts.receiver_layout(&receiver.get_type());
             let change = CoercionPlan::change(self, &source, &target);
-            if !change.is_identity() {
-                receiver_stage = receiver_stage.map_expression(|setup, value| {
+            if change.changes_layout() {
+                receiver_operand = receiver_operand.map_expression(|setup, value| {
                     let value = if coercion == Some(ReceiverCoercion::AutoDeref) {
                         GoExpression::dereference(value)
                     } else {
@@ -70,9 +70,9 @@ impl Planner<'_> {
             }
         }
         if coercion == Some(ReceiverCoercion::AutoAddress) {
-            receiver_stage = self.coerce_receiver_address_stage(receiver, receiver_stage);
+            receiver_operand = self.coerce_receiver_address_operand(receiver, receiver_operand);
         } else if coercion == Some(ReceiverCoercion::AutoDeref) {
-            receiver_stage = receiver_stage.dereference();
+            receiver_operand = receiver_operand.dereference();
         }
         let args_ctx = CallArgsContext {
             plan: call_plan,
@@ -87,7 +87,7 @@ impl Planner<'_> {
         };
 
         let (setup, receiver_arg, emitted_args) =
-            self.lower_ufcs_call_args(&args_ctx, receiver_stage, args);
+            self.lower_ufcs_call_args(&args_ctx, receiver_operand, args);
 
         let mut new_args = vec![receiver_arg];
         new_args.extend(emitted_args);
@@ -110,27 +110,27 @@ impl Planner<'_> {
     fn lower_ufcs_call_args(
         &mut self,
         ctx: &CallArgsContext<'_, '_>,
-        receiver_stage: ValuePlan,
+        receiver_operand: ValuePlan,
         args: &[Expression],
     ) -> (Vec<Statement>, GoExpression, Vec<GoExpression>) {
         let callee = &ctx.plan.resolved;
         let spread = ctx.spread;
         let sequenced = if callee.is_prelude_dispatch {
-            let mut stages = Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
-            stages.push(receiver_stage);
+            let mut operands = Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
+            operands.push(receiver_operand);
             for (i, arg) in args.iter().enumerate() {
                 let param = callee.abi.param(i);
-                stages.push(self.stage_prelude_arg(
+                operands.push(self.plan_prelude_arg(
                     arg,
                     param.and_then(|param| param.declared.as_ref()),
                     param.map(|param| &param.instantiated),
                 ));
             }
-            let spread_stage =
+            let spread_operand =
                 spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
             self.sequence_with_spread_values(
-                stages,
-                spread_stage,
+                operands,
+                spread_operand,
                 SpreadSequenceOptions {
                     wrap_to_any: callee.abi.spread_wraps_to_any(&self.facts, spread),
                     combine: callee.abi.variadic_combine(1),
@@ -138,7 +138,7 @@ impl Planner<'_> {
                 },
             )
         } else {
-            self.plan_call_args(args, ctx, Some(receiver_stage))
+            self.plan_call_args(args, ctx, Some(receiver_operand))
         };
 
         let mut all_values = sequenced.values;
@@ -166,26 +166,26 @@ impl Planner<'_> {
         GoExpression::instantiation(qualified_method_name, type_args_string)
     }
 
-    fn coerce_receiver_address_stage(
+    fn coerce_receiver_address_operand(
         &mut self,
         receiver: &Expression,
-        stage: ValuePlan,
+        operand: ValuePlan,
     ) -> ValuePlan {
         match receiver {
-            Expression::Call { .. } => stage
+            Expression::Call { .. } => operand
                 .map_expression(|setup, value| {
                     let temp = self.hoist_temp(setup, "ref", value);
                     GoExpression::address_of(GoExpression::identifier(temp))
                 })
                 .with_stability(Stability::StableAcrossCalls),
-            Expression::Identifier { .. } => stage
+            Expression::Identifier { .. } => operand
                 .map_expression(|_, value| GoExpression::address_of(value))
                 .with_stability(Stability::StableAcrossCalls),
-            _ if stage.setup().is_empty() => {
-                stage.map_observable_expression(|_, value| GoExpression::address_of(value))
+            _ if operand.setup().is_empty() => {
+                operand.map_observable_expression(|_, value| GoExpression::address_of(value))
             }
             _ => {
-                let (mut setup, value) = stage.into_parts();
+                let (mut setup, value) = operand.into_parts();
                 let addressed = GoExpression::address_of(value);
                 let temp = self.hoist_temp(&mut setup, "ref", addressed);
                 ValuePlan::captured(setup, temp)

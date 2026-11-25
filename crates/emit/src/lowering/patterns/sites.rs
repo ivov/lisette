@@ -1,5 +1,5 @@
 use crate::lowering::abi::fallible_producer::ResultFusePlan;
-use crate::lowering::expressions::staging::is_unmutated_identifier;
+use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::target::ir::bodies::effect_statement;
 use std::borrow::Cow;
 use std::slice;
@@ -208,14 +208,14 @@ impl Planner<'_> {
                     .as_identifier()
                     .or_else(|| field_path_go_root(plan.expression()))
                     .filter(|local| {
-                        plan.binds_local(local) && !self.scope.has_binding_for_local(local)
+                        plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
                     })
                     .cloned();
 
                 let rests_in_own_temp_path =
                     field_path_go_root(plan.expression()).is_some_and(|root| {
                         plan.binds_local(root)
-                            && !self.scope.has_binding_for_local(root)
+                            && self.scope.lacks_binding_for_local(root)
                             && !pattern_binds_name(pattern, root)
                     });
 
@@ -479,8 +479,8 @@ impl Planner<'_> {
                 );
             }
         }
-        let staged = self.plan_operand(scrutinee, ExpressionContext::value());
-        let (mut setup, value) = staged.into_parts();
+        let operand = self.plan_operand(scrutinee, ExpressionContext::value());
+        let (mut setup, value) = operand.into_parts();
         if self
             .field_path_reads_in_place(scrutinee, &value, |root| pattern_binds_name(pattern, root))
         {

@@ -49,18 +49,18 @@ impl Planner<'_> {
             );
         }
 
-        let mut base_staged = self.stage_base_with_deref(expression);
+        let mut base_operand = self.plan_base_with_deref(expression);
 
         if let Some(range_kind) = self.facts.checked(index).range_kind() {
             let needs_cap = self
                 .facts
                 .is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
-            if !base_staged.effects().can_duplicate() {
-                self.pin_staged(&mut base_staged, "base");
+            if base_operand.effects().must_evaluate_once() {
+                self.pin_to_temp(&mut base_operand, "base");
             }
-            let index_staged = self.stage_or_capture(index, "range");
+            let index_operand = self.plan_or_capture(index, "range");
             let sequenced = self.sequence_values(
-                vec![base_staged, index_staged],
+                vec![base_operand, index_operand],
                 CaptureBoundary::SiblingSequence,
                 "base",
             );
@@ -71,28 +71,28 @@ impl Planner<'_> {
             return ValuePlan::computed(sequenced.setup, value);
         }
 
-        self.sequence_indexed_access(expression, base_staged, index, "base")
+        self.sequence_indexed_access(expression, base_operand, index, "base")
     }
 
     fn sequence_indexed_access(
         &mut self,
         base: &Expression,
-        mut base_staged: ValuePlan,
+        mut base_operand: ValuePlan,
         index: &Expression,
         prefix: &'static str,
     ) -> ValuePlan {
-        let index_staged = self.plan_composite_value(index, ExpressionContext::value());
-        let index_effects = index_staged.effects();
-        let index_is_fixed = index_staged.can_delay() && !index_effects.runs_code();
-        if base_staged.setup().is_empty()
+        let index_operand = self.plan_composite_value(index, ExpressionContext::value());
+        let index_effects = index_operand.effects();
+        let index_is_fixed = index_operand.can_delay() && !index_effects.runs_code();
+        if base_operand.setup().is_empty()
             && is_order_sensitive(base)
-            && ((base_staged.effects().runs_effectful_code() && !index_is_fixed)
+            && ((base_operand.effects().runs_effectful_code() && !index_is_fixed)
                 || index_effects.runs_effectful_code())
         {
-            self.pin_staged(&mut base_staged, prefix);
+            self.pin_to_temp(&mut base_operand, prefix);
         }
         let sequenced = self.sequence_values(
-            vec![base_staged, index_staged],
+            vec![base_operand, index_operand],
             CaptureBoundary::SiblingSequence,
             prefix,
         );
@@ -130,15 +130,15 @@ impl Planner<'_> {
         self.plan_operand(spread, ExpressionContext::value())
     }
 
-    fn stage_base_with_deref(&mut self, expression: &Expression) -> ValuePlan {
+    fn plan_base_with_deref(&mut self, expression: &Expression) -> ValuePlan {
         let Some(inner) = expression.deref_inner() else {
             return self.plan_operand(expression, ExpressionContext::value());
         };
-        let mut staged = self
+        let mut operand = self
             .plan_operand(inner, ExpressionContext::value())
             .dereference();
-        staged.make_observable();
-        staged
+        operand.make_observable();
+        operand
     }
 
     fn plan_range_slice(
@@ -153,19 +153,20 @@ impl Planner<'_> {
             && self
                 .facts
                 .is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
-        let base_staged = self.stage_base_with_deref(expression);
+        let base_operand = self.plan_base_with_deref(expression);
 
-        let mut all_stages = vec![base_staged];
+        let mut all_operands = vec![base_operand];
         if let Some(s) = start {
-            all_stages.push(self.plan_operand(s, ExpressionContext::value()));
+            all_operands.push(self.plan_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            all_stages.push(self.plan_operand(e, ExpressionContext::value()));
+            all_operands.push(self.plan_operand(e, ExpressionContext::value()));
         }
-        let runs_effectful_code = all_stages
+        let runs_effectful_code = all_operands
             .iter()
-            .any(|stage| stage.effects().runs_effectful_code());
-        let sequenced = self.sequence_values(all_stages, CaptureBoundary::SiblingSequence, "base");
+            .any(|operand| operand.effects().runs_effectful_code());
+        let sequenced =
+            self.sequence_values(all_operands, CaptureBoundary::SiblingSequence, "base");
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
         let mut base = values.next().expect("slice access has a base");
@@ -190,10 +191,10 @@ impl Planner<'_> {
 
         if end_value
             .as_ref()
-            .is_none_or(|end| !end.effects().can_duplicate())
+            .is_none_or(|end| end.effects().must_evaluate_once())
         {
             let base_expr = expression.deref_inner().unwrap_or(expression);
-            if !base.effects().can_duplicate()
+            if base.effects().must_evaluate_once()
                 || (is_order_sensitive(base_expr) && runs_effectful_code)
             {
                 base = GoExpression::identifier(self.hoist_temp(&mut setup, "base", base));

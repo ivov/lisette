@@ -51,7 +51,9 @@ impl Planner<'_> {
         result_ty: &Type,
     ) -> ValuePlan {
         let change = self.go_result_layout_change(abi, result_ty);
-        let changed = change.as_ref().is_some_and(|change| !change.is_identity());
+        let changed = change
+            .as_ref()
+            .is_some_and(|change| change.changes_layout());
         let call_plan =
             self.plan_call_expression(call_expression, None, ExpressionContext::value());
         let mut wrapped_in_place = false;
@@ -151,12 +153,12 @@ impl Planner<'_> {
                     payload: Box::new(source_payload.clone()),
                 };
                 let change = CoercionPlan::change(self, &source, &target);
-                return (!change.is_identity()).then_some(change);
+                return change.changes_layout().then_some(change);
             }
             _ => return None,
         }
         let change = CoercionPlan::change(self, &abi.return_layout, &target);
-        (!change.is_identity()).then_some(change)
+        change.changes_layout().then_some(change)
     }
 
     fn tuple_result_layout_changes(
@@ -493,9 +495,10 @@ impl LoweredCall<'_> {
             return None;
         }
         let payload_layout_change = match &self.change {
-            Some(GoResultLayoutChange::Payload(changes)) if changes.error.is_identity() => {
-                (!changes.value.is_identity()).then(|| changes.value.clone())
-            }
+            Some(GoResultLayoutChange::Payload(changes)) if changes.error.is_identity() => changes
+                .value
+                .changes_layout()
+                .then(|| changes.value.clone()),
             Some(GoResultLayoutChange::Payload(_)) => return None,
             _ => None,
         };
@@ -517,7 +520,7 @@ impl LoweredCall<'_> {
     pub(in crate::lowering) fn changes_layout(&self) -> bool {
         self.change
             .as_ref()
-            .is_some_and(|change| !change.is_identity())
+            .is_some_and(|change| change.changes_layout())
     }
 
     pub(in crate::lowering) fn has_tuple_payload(&self, planner: &Planner<'_>) -> bool {

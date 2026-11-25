@@ -2,8 +2,8 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::calls::predicates::strip_negations;
 use crate::lowering::control_flow::targets::legalize_source_loop;
-use crate::lowering::expressions::staging::SequenceStage;
-use crate::lowering::expressions::staging::is_unmutated_identifier;
+use crate::lowering::expressions::operand_order::OrderedOperand;
+use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::lowering::patterns::binding_decls::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
 use crate::lowering::plan::context::ExpressionContext;
@@ -424,7 +424,7 @@ impl Planner<'_> {
             |start| self.plan_operand(start, ExpressionContext::value()),
         );
         let counts_from_zero = !*inclusive && start_plan.expression().as_literal() == Some("0");
-        let mut stages = vec![SequenceStage {
+        let mut operands = vec![OrderedOperand {
             plan: start_plan,
             prefix: "start",
             capture: false,
@@ -433,19 +433,19 @@ impl Planner<'_> {
 
         if let Some(end) = end {
             let plan = self.plan_operand(end, ExpressionContext::value());
-            let capture = !counts_from_zero && !plan.can_delay();
-            stages.push(SequenceStage {
+            let capture = !counts_from_zero && plan.must_evaluate_now();
+            operands.push(OrderedOperand {
                 plan,
                 prefix: "bound",
                 capture,
                 line: None,
             });
         }
-        let sequenced = self.sequence_stages(stages, CaptureBoundary::SiblingSequence);
+        let sequenced = self.sequence_operands(operands, CaptureBoundary::SiblingSequence);
         let prologue = sequenced.setup;
-        let mut operands = sequenced.values.into_iter();
-        let start_expression = operands.next().expect("range start");
-        let end_expression = operands.next();
+        let mut values = sequenced.values.into_iter();
+        let start_expression = values.next().expect("range start");
+        let end_expression = values.next();
 
         let (header, lowered_body) = self.with_scope(|this| {
             let header = match end_expression {

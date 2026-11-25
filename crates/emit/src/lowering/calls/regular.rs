@@ -9,8 +9,8 @@ use syntax::program::ReceiverCoercion;
 
 use crate::Planner;
 use crate::lowering::calls::call_plan::{CallPlan, ResolvedCallee};
-use crate::lowering::expressions::staging::LaterStages;
-use crate::lowering::expressions::staging::SpreadSequenceOptions;
+use crate::lowering::expressions::operand_order::LaterOperands;
+use crate::lowering::expressions::operand_order::SpreadSequenceOptions;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::{SequencedValues, ValuePlan};
 use crate::target::ir::bodies::Statement;
@@ -168,8 +168,8 @@ impl<'a> Planner<'a> {
             return plan;
         }
 
-        let callee_staged = self.plan_operand(function, expression_ctx.callee());
-        let (mut setup, mut callee) = callee_staged.into_parts();
+        let callee_operand = self.plan_operand(function, expression_ctx.callee());
+        let (mut setup, mut callee) = callee_operand.into_parts();
 
         let mut type_args_string = self.call_type_arguments(CallTypeArgsRequest {
             function,
@@ -261,7 +261,7 @@ impl<'a> Planner<'a> {
                 effects.union(argument.effects())
             });
         !pointer_receiver_on_value_local(&self.facts, function, resolved)
-            && LaterStages::sequenced(
+            && LaterOperands::sequenced(
                 args_setup,
                 arguments_effects.with_known_reads(arguments_effects.reads()),
             )
@@ -284,12 +284,12 @@ impl<'a> Planner<'a> {
             _ => ExpressionContext::value(),
         };
 
-        let stages: Vec<ValuePlan> = args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
-        let spread_stage =
+        let operands: Vec<ValuePlan> = args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
+        let spread_operand =
             spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
         let sequenced = self.sequence_with_spread_values(
-            stages,
-            spread_stage,
+            operands,
+            spread_operand,
             SpreadSequenceOptions {
                 wrap_to_any: call_plan
                     .resolved
@@ -335,9 +335,9 @@ impl<'a> Planner<'a> {
         if !format_string_lowers_to_sprintf(&self.facts, parts) {
             return None;
         }
-        let staged = self.plan_operand(argument, ExpressionContext::value());
+        let operand = self.plan_operand(argument, ExpressionContext::value());
         let mut sequenced =
-            self.sequence_values(vec![staged], expression_ctx.capture_boundary(), "arg");
+            self.sequence_values(vec![operand], expression_ctx.capture_boundary(), "arg");
         let value = sequenced
             .values
             .pop()

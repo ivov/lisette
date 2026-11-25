@@ -182,7 +182,7 @@ impl Planner<'_> {
         statements: &mut Vec<Statement>,
     ) -> AssertShape {
         let (lhs, rhs) =
-            self.stage_assert_operands(left, right, LiteralInlining::Allowed, statements);
+            self.plan_assert_operands(left, right, LiteralInlining::Allowed, statements);
         let flipped = flip_comparison(operator)
             .filter(|_| flip_preserves_nan(&self.facts, operator, left, right));
         let operands = paired_operands(lhs.value.expression(), rhs.value.expression());
@@ -214,7 +214,7 @@ impl Planner<'_> {
         recipe: &EqualityRecipe,
         statements: &mut Vec<Statement>,
     ) -> AssertShape {
-        let (lhs, rhs) = self.stage_assert_operands(recv, arg, LiteralInlining::Denied, statements);
+        let (lhs, rhs) = self.plan_assert_operands(recv, arg, LiteralInlining::Denied, statements);
         let (lhs, rhs) = (lhs.value.expression(), rhs.value.expression());
         let failure_condition = self.equality_test(lhs.clone(), rhs.clone(), recipe, BinaryOp::Ne);
         AssertShape {
@@ -258,7 +258,7 @@ impl Planner<'_> {
         }
     }
 
-    fn stage_assert_operands(
+    fn plan_assert_operands(
         &mut self,
         left: &Expression,
         right: &Expression,

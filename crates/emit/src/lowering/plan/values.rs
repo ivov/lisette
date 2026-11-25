@@ -189,6 +189,10 @@ impl ValuePlan {
         self.stability.is_fixed() && !self.effects().panics_or_blocks()
     }
 
+    pub(in crate::lowering) fn must_evaluate_now(&self) -> bool {
+        !self.can_delay()
+    }
+
     pub(in crate::lowering) fn rests_in_fixed_name(&self) -> bool {
         matches!(self.expression.syntax_form(), OperandForm::Name) && self.stability.is_fixed()
     }

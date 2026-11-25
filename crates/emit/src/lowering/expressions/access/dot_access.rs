@@ -310,7 +310,7 @@ impl Planner<'_> {
         else {
             return None;
         };
-        if !payload.is_identity() {
+        if payload.changes_layout() {
             return None;
         }
         self.layout_nil_guard(&source_layout)
@@ -404,14 +404,14 @@ impl Planner<'_> {
         let elided_deref = expression
             .deref_inner()
             .filter(|inner| !self.facts.points_to_ref(&inner.get_type()));
-        let (staged, had_explicit_deref) = if let Some(inner) = elided_deref {
+        let (operand, had_explicit_deref) = if let Some(inner) = elided_deref {
             (self.plan_operand(inner, ctx), true)
         } else {
             (self.plan_operand(expression, ctx), false)
         };
         let receiver = elided_deref.unwrap_or(expression);
         let needs_deref = self.facts.is_ref_to_type_parameter(&receiver.get_type());
-        staged.map_expression(|setup, base| {
+        operand.map_expression(|setup, base| {
             if needs_deref {
                 return GoExpression::dereference(base);
             }
