@@ -263,7 +263,7 @@ impl Planner<'_> {
             .iter()
             .flat_map(|(key, value)| [(*key, &key_ty), (*value, &value_ty)])
             .map(|(e, slot)| {
-                let origin = self.function_type_origin(slot, SlotOrigin::Lisette);
+                let origin = self.facts.function_type_origin(slot, SlotOrigin::Lisette);
                 self.plan_composite_value(
                     e,
                     ExpressionContext::value().with_function_slot_origin(origin),

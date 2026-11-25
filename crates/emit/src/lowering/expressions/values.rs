@@ -1,7 +1,7 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::is_closure_literal;
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::abi::return_abi;
 use crate::lowering::calls::split_native_receiver;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
@@ -14,10 +14,10 @@ use syntax::program::Adaptation;
 use syntax::program::NativeOperation;
 
 use crate::Planner;
+use crate::lookup::facts::value_layout::FunctionLayout;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
-use crate::lowering::abi::layout::FunctionLayout;
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin, FunctionLayoutChange};
 use crate::lowering::expressions::never::runs_as_never_statement;
@@ -104,7 +104,7 @@ impl Planner<'_> {
         } else {
             None
         };
-        let source = callee.function_layout(self);
+        let source = callee.function_layout(&self.facts);
         self.callable_slot_layout_change(source, &expression.get_type(), return_abi, origin)
     }
 
@@ -143,8 +143,8 @@ impl Planner<'_> {
             .filter(|return_type| !self.facts.returns_go_void(return_type));
         let (source_result, target_result, return_abi) = match return_type {
             Some(return_type) => (
-                self.value_layout(&Type::Never, SlotOrigin::Lisette),
-                self.value_layout(return_type, SlotOrigin::Lisette),
+                self.facts.value_layout(&Type::Never, SlotOrigin::Lisette),
+                self.facts.value_layout(return_type, SlotOrigin::Lisette),
                 return_abi(
                     &self.facts,
                     return_type,
@@ -152,8 +152,8 @@ impl Planner<'_> {
                 ),
             ),
             None => (
-                self.value_layout(&Type::unit(), SlotOrigin::Lisette),
-                self.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                self.facts.value_layout(&Type::unit(), SlotOrigin::Lisette),
+                self.facts.value_layout(&Type::unit(), SlotOrigin::Lisette),
                 CallableReturnAbi::Value,
             ),
         };
@@ -162,17 +162,19 @@ impl Planner<'_> {
             .get_function_params()
             .expect("a function has parameters")
             .iter()
-            .map(|parameter| self.value_layout(&parameter.ty, SlotOrigin::Lisette))
+            .map(|parameter| self.facts.value_layout(&parameter.ty, SlotOrigin::Lisette))
             .collect::<Vec<_>>();
 
-        let source = self.function_layout(
+        let source = self.facts.function_layout(
             parameters.clone(),
             &source_result,
             CallableReturnAbi::Void,
             None,
         );
 
-        let target = self.function_layout(parameters, &target_result, return_abi, None);
+        let target = self
+            .facts
+            .function_layout(parameters, &target_result, return_abi, None);
         Some((source, target))
     }
 
@@ -227,7 +229,9 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> Option<CallableReturnAbi> {
         let expression_ty = expression.get_type();
-        let origin = self.function_type_origin(&expression_ty, ctx.function_slot_origin());
+        let origin = self
+            .facts
+            .function_type_origin(&expression_ty, ctx.function_slot_origin());
         let fn_ty = self.facts.resolve_to_function_type(&expression_ty)?;
         let f = fn_ty.as_function_type()?;
         Some(return_abi(
@@ -342,9 +346,9 @@ impl Planner<'_> {
             self.record_converted_value(tuple);
         }
         let slot_layouts = match target {
-            ElementTarget::LoweredReturn => {
-                self.lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec()))
-            }
+            ElementTarget::LoweredReturn => self
+                .facts
+                .lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec())),
             ElementTarget::Value => Vec::new(),
         };
 
@@ -434,7 +438,7 @@ impl Planner<'_> {
             .map(|(i, e)| {
                 let slot = slot_types.get(i);
                 let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
-                    self.function_type_origin(ty, SlotOrigin::Lisette)
+                    self.facts.function_type_origin(ty, SlotOrigin::Lisette)
                 });
                 let element_ctx = ExpressionContext::value()
                     .with_expected_slot_type(slot)
@@ -465,7 +469,7 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let slot_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
+        let slot_origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
         let ctx = ctx.with_function_slot_origin(slot_origin);
 
         if let Some(coercion) = self.cast_operand_coercion(cast, &expression.get_type(), ty) {
@@ -534,12 +538,15 @@ impl Planner<'_> {
         }
 
         let unaddressable = self.is_go_unaddressable(inner);
+        let reads_field = match inner {
+            Expression::DotAccess { resolution, .. } => resolution.is_field_read(),
+            _ => false,
+        };
         let inner_plan = if self
             .facts
             .resolve_to_function_type(&inner.get_type())
             .is_some()
-            && (!unaddressable
-                || matches!(inner, Expression::DotAccess { resolution, .. } if resolution.is_field_read()))
+            && (!unaddressable || reads_field)
         {
             if matches!(inner, Expression::Identifier { .. }) {
                 self.plan_operand(inner, ExpressionContext::value())

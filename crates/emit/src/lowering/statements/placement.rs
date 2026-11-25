@@ -686,7 +686,7 @@ impl<'p> Planner<'p> {
             return self.lower_branching_to_block(last, &place).statements;
         }
         let origin = target_ty.map_or(SlotOrigin::Lisette, |ty| {
-            self.function_type_origin(ty, SlotOrigin::Lisette)
+            self.facts.function_type_origin(ty, SlotOrigin::Lisette)
         });
         let value = self.plan_value(
             last,

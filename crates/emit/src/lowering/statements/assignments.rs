@@ -1,8 +1,8 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::queries::is_order_sensitive;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::BindingValue;
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::expressions::staging::LaterStages;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
@@ -92,7 +92,8 @@ impl Planner<'_> {
         let origin = if go_field_slot.is_some() {
             SlotOrigin::Lisette
         } else {
-            self.function_type_origin(&target.get_type(), SlotOrigin::Lisette)
+            self.facts
+                .function_type_origin(&target.get_type(), SlotOrigin::Lisette)
         };
         let value_context = ExpressionContext::value()
             .with_function_slot_origin(origin)
@@ -134,7 +135,7 @@ impl Planner<'_> {
                 member,
                 ty,
                 ..
-            } => self.field_slot_layout(
+            } => self.facts.field_slot_layout(
                 &expression.get_type(),
                 self.facts.checked(target).field_selection(),
                 member,
@@ -281,7 +282,7 @@ impl Planner<'_> {
             } => {
                 let expression_ty = base.get_type();
                 if let Some(package) = expression_ty.as_import_namespace() {
-                    let field = self.dot_member_go_name(
+                    let field = self.facts.dot_member_go_name(
                         base,
                         &expression_ty,
                         member,
@@ -309,7 +310,7 @@ impl Planner<'_> {
                 {
                     return access;
                 }
-                let field = self.dot_member_go_name(
+                let field = self.facts.dot_member_go_name(
                     base,
                     &expression_ty,
                     member,

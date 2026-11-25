@@ -15,9 +15,9 @@ use syntax::lex::{rune_codepoint, string_bytes};
 use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::patterns::binding_decls::pattern_literal_text;
 use crate::target::ir::bodies::{LoweredBlock, define_many};
@@ -1081,7 +1081,7 @@ impl Planner<'_> {
             &AccessPath::root(),
             pattern,
             subject_ty,
-            Some(&self.value_layout(subject_ty, SlotOrigin::Lisette)),
+            Some(&self.facts.value_layout(subject_ty, SlotOrigin::Lisette)),
             &mut info,
         );
         info

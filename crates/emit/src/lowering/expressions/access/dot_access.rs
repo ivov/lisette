@@ -1,9 +1,9 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::Statement;
@@ -114,7 +114,8 @@ impl Planner<'_> {
         }
 
         let field =
-            self.dot_member_go_name(expression, &expression_ty, member, resolution, spelling);
+            self.facts
+                .dot_member_go_name(expression, &expression_ty, member, resolution, spelling);
 
         let selector = match package {
             Some(package) => GoExpression::qualified(package, field),
@@ -148,6 +149,31 @@ impl Planner<'_> {
             };
 
         ValuePlan::computed(setup, expression).with_stability(stability)
+    }
+
+    fn prelude_receiver_method_layouts(
+        &self,
+        expression: &Expression,
+    ) -> Option<(FunctionLayout, FunctionLayout)> {
+        let Expression::DotAccess {
+            expression: receiver,
+            resolution: DotAccessResolution::InstanceMethod { .. },
+            ..
+        } = expression
+        else {
+            return None;
+        };
+
+        let callee = self.resolve_callable_value(expression)?;
+        if !callee.is_prelude_dispatch {
+            return None;
+        }
+        self.facts.prelude_receiver_method_layouts(
+            &receiver.get_type(),
+            callee.declared_type()?.as_function_type()?,
+            callee.instantiated.as_function_type()?,
+            callee.function_layout(&self.facts),
+        )
     }
 
     fn plan_bound_dispatch_receiver(
@@ -227,50 +253,6 @@ impl Planner<'_> {
         tuple.names.get(index).cloned()
     }
 
-    pub(in crate::lowering) fn dot_member_go_name(
-        &self,
-        expression: &Expression,
-        expression_ty: &Type,
-        member: &str,
-        resolution: &DotAccessResolution,
-        spelling: MemberSpelling,
-    ) -> String {
-        if let Some(package) = expression_ty.as_import_namespace() {
-            return self.facts.package_member_go_name(package, member);
-        }
-        let canonical_ty = self.facts.member_owner_type(expression_ty);
-        match resolution {
-            DotAccessResolution::StructField { is_exported, .. } => {
-                let export = if *is_exported {
-                    GoExport::Exported
-                } else {
-                    GoExport::Unexported
-                };
-                return self
-                    .facts
-                    .struct_field_go_name(&canonical_ty, member, export);
-            }
-            DotAccessResolution::InstanceMethod { is_exported, .. } => {
-                let export = if *is_exported {
-                    GoExport::Exported
-                } else {
-                    GoExport::Unexported
-                };
-                return self.facts.method_selector_go_name(
-                    canonical_ty.get_qualified_id(),
-                    member,
-                    export,
-                    spelling,
-                );
-            }
-            _ => {}
-        }
-        let export = self
-            .facts
-            .resolve_go_export(expression, &canonical_ty, member);
-        self.facts.member_go_name(&canonical_ty, member, export)
-    }
-
     pub(in crate::lowering) fn try_plan_tuple_member_dot(
         &mut self,
         base: &GoExpression,
@@ -315,14 +297,14 @@ impl Planner<'_> {
         };
 
         let expression_ty = expression.get_type();
-        let source_layout = self.field_slot_layout(
+        let source_layout = self.facts.field_slot_layout(
             &expression_ty,
             self.facts.checked(subject).field_selection(),
             member,
             result_ty,
         )?;
 
-        let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+        let target_layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
         let CoercionPlan::Layout(LayoutChange::WrapNullableOption { payload, .. }) =
             CoercionPlan::change(self, &source_layout, &target_layout)
         else {
@@ -353,14 +335,14 @@ impl Planner<'_> {
 
         let expression_ty = &expression.get_type();
         let callee = ctx.is_callee();
-        let source_layout = self.field_slot_layout(
+        let source_layout = self.facts.field_slot_layout(
             expression_ty,
             self.facts.checked(dot_access).field_selection(),
             member,
             result_ty,
         )?;
 
-        let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+        let target_layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
         if callee
             && let (
                 ValueLayout::Function { layout: source, .. },

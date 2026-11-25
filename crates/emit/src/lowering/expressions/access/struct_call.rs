@@ -1,5 +1,4 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lowering::abi::layout::is_go_abi_type;
 use crate::lowering::expressions::zero_values::ZeroSpelling;
 use crate::target::names::go_name::GoExport;
 use rustc_hash::FxHashSet;
@@ -9,7 +8,7 @@ use syntax::types::{Type, unqualified_name};
 
 use crate::Planner;
 use crate::lookup::facts::queries::is_order_sensitive;
-use crate::lowering::abi::layout::ValueLayout;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
 use crate::target::ir::bodies::{Statement, assign, discard};
@@ -76,7 +75,7 @@ impl Planner<'_> {
         let checked = self.facts.checked(expression);
         let ctx = self.analyze_struct_call(name, ty, checked);
 
-        let is_go_struct = is_go_abi_type(&self.facts, ty);
+        let is_go_struct = self.facts.is_go_abi_type(ty);
         let PlannedStructFields {
             mut setup,
             fields,
@@ -124,7 +123,7 @@ impl Planner<'_> {
         ty: &Type,
         ctx: &StructCallContext<'_>,
     ) -> PlannedStructFields {
-        let is_go_struct = is_go_abi_type(&self.facts, ty);
+        let is_go_struct = self.facts.is_go_abi_type(ty);
 
         let kept_fields: Vec<(&StructFieldAssignment, Type, Option<ValueLayout>)> =
             field_assignments
@@ -134,7 +133,7 @@ impl Planner<'_> {
                     if omits_none_field(&self.facts, f, &field_ty, ctx, spread, is_go_struct) {
                         return None;
                     }
-                    let layout = self.field_slot_layout(
+                    let layout = self.facts.field_slot_layout(
                         ty,
                         Some(ctx.checked.literal_field(&f.name)),
                         &f.name,

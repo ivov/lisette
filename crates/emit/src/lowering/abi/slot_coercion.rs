@@ -10,7 +10,7 @@ use crate::target::ir::bodies::Statement;
 use crate::target::ir::values::GoExpression;
 
 use super::coercion_plan::{self, CoercionPlan};
-use super::layout::ValueLayout;
+use crate::lookup::facts::value_layout::ValueLayout;
 
 impl Planner<'_> {
     pub(in crate::lowering) fn cast_operand_coercion(
@@ -144,7 +144,7 @@ impl Planner<'_> {
                 return internal;
             }
         }
-        let target = self.value_layout(layout, SlotOrigin::Lisette);
+        let target = self.facts.value_layout(layout, SlotOrigin::Lisette);
         if matches!(
             target.underlying(),
             ValueLayout::TaggedOption { .. }
@@ -152,7 +152,7 @@ impl Planner<'_> {
                 | ValueLayout::Tuple { .. }
                 | ValueLayout::Reference { .. }
         ) {
-            let source = self.value_layout(&source_ty, SlotOrigin::Lisette);
+            let source = self.facts.value_layout(&source_ty, SlotOrigin::Lisette);
             let change = CoercionPlan::change(self, &source, &target);
             let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
             if !change.is_identity()

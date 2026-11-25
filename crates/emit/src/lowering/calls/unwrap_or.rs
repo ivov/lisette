@@ -246,7 +246,7 @@ impl<'p> Planner<'p> {
         let failure = bound.failure_condition();
         let mut statements = bound.statements;
         let literal_default = is_literal_default(default);
-        let origin = self.function_type_origin(ty, SlotOrigin::Lisette);
+        let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
         let value_plan = self.plan_value(
             default,
             ExpressionContext::value().with_function_slot_origin(origin),
@@ -291,7 +291,7 @@ impl<'p> Planner<'p> {
             CommaOkValueSlot::Named(name) => name,
             _ => self.fresh_declared("ret"),
         };
-        let origin = self.function_type_origin(ty, SlotOrigin::Lisette);
+        let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
         let plan = self.plan_value(
             default,
             ExpressionContext::value().with_function_slot_origin(origin),

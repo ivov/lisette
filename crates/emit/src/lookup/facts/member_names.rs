@@ -26,17 +26,6 @@ impl EmitFacts<'_> {
         go_name::member_go_name(owner, member, export, self.embedded_field(owner, member))
     }
 
-    pub(crate) fn receiver_method_go_name(
-        &self,
-        receiver: &Type,
-        method: &str,
-        export: GoExport,
-        spelling: MemberSpelling,
-    ) -> String {
-        let owner = self.strip_refs(receiver);
-        self.method_selector_go_name(owner.get_qualified_id(), method, export, spelling)
-    }
-
     pub(crate) fn method_selector_go_name(
         &self,
         owner_id: Option<&str>,

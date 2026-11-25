@@ -408,14 +408,16 @@ pub(crate) fn verbatim_identifiers(source: &str) -> impl Iterator<Item = &str> {
 
 impl GoExpressionNode {
     pub(super) fn is_unit_struct_literal(&self) -> bool {
-        matches!(
-            self,
-            Self::CompositeLiteral {
-                go_type: Some(go_type),
-                elements,
-                ..
-            } if matches!(go_type.shape.as_ref(), GoTypeShape::Struct(fields) if fields.is_empty()) && elements.is_empty()
-        )
+        let Self::CompositeLiteral {
+            go_type: Some(go_type),
+            elements,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        elements.is_empty()
+            && matches!(go_type.shape.as_ref(), GoTypeShape::Struct(fields) if fields.is_empty())
     }
 
     pub(crate) fn mentions_local(&self, name: &GoIdentifier) -> bool {

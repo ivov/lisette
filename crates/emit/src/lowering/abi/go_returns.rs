@@ -1,4 +1,4 @@
-use crate::lowering::abi::layout::{FunctionLayout, ValueLayout};
+use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::target::ir::prelude as tags;
 use crate::target::names::go_name;
 use syntax::go_names::ENUM_TAG_FIELD;
@@ -164,7 +164,8 @@ impl Planner<'_> {
         payload_ty: &Type,
     ) -> Vec<GoExpression> {
         if shape.has_flattened_payload() {
-            self.lowered_tuple_slot_layouts(payload_ty)
+            self.facts
+                .lowered_tuple_slot_layouts(payload_ty)
                 .iter()
                 .map(|slot| self.go_zero_of_layout(slot))
                 .collect()
@@ -281,7 +282,7 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, Vec<GoExpression>) {
         let slot_tys = self.facts.tuple_or_type_arguments(tuple_ty);
         let source_tys = adapted.map(|(source, _)| self.facts.tuple_or_type_arguments(source));
-        let slot_layouts = self.lowered_tuple_slot_layouts(tuple_ty);
+        let slot_layouts = self.facts.lowered_tuple_slot_layouts(tuple_ty);
         let mut statements = Vec::new();
         let fields = slot_tys
             .iter()
@@ -333,7 +334,7 @@ impl Planner<'_> {
             unreachable!("only a tuple literal lowers into return slots")
         };
         let slot_tys = self.facts.tuple_or_type_arguments(tuple_ty);
-        let slot_layouts = self.lowered_tuple_slot_layouts(tuple_ty);
+        let slot_layouts = self.facts.lowered_tuple_slot_layouts(tuple_ty);
         let adaptations = match &self.facts.checked(tuple).value_use().adaptation {
             Adaptation::Tuple(adaptations) => adaptations.clone(),
             _ => Vec::new(),
@@ -353,7 +354,7 @@ impl Planner<'_> {
                 }
                 slot => {
                     let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
-                        self.function_type_origin(ty, SlotOrigin::Lisette)
+                        self.facts.function_type_origin(ty, SlotOrigin::Lisette)
                     });
                     self.plan_composite_value(
                         e,
@@ -420,7 +421,7 @@ impl Planner<'_> {
                 CallableReturnAbi::Lowered,
             );
             let source = self.emitted_value_layout(expression, ExpressionContext::value());
-            let target = self.callable_result_layout(
+            let target = self.facts.callable_result_layout(
                 &return_ty,
                 SlotOrigin::Lisette,
                 Some(&return_ty),
@@ -469,10 +470,10 @@ impl Planner<'_> {
             && plan
                 .resolved
                 .abi
-                .function_layout(self)
-                .same_result_representation(&self.function_layout(
+                .function_layout(&self.facts)
+                .same_result_representation(&self.facts.function_layout(
                     Vec::new(),
-                    &self.value_layout(&return_ty, SlotOrigin::Lisette),
+                    &self.facts.value_layout(&return_ty, SlotOrigin::Lisette),
                     CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }),
                     Some(&return_ty),
                 ))

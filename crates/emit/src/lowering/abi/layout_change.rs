@@ -1,9 +1,9 @@
 use crate::Planner;
+use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange, LayoutChangeDirection};
 use crate::lowering::abi::go_result_wrapping::option_nil_guard;
 use crate::lowering::abi::go_result_wrapping::{WrapperTarget, non_nil_condition};
 use crate::lowering::abi::go_returns::{multi_value_return, tag_condition};
-use crate::lowering::abi::layout::{FunctionLayout, ValueLayout};
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::plan::context::ExpressionContext;
@@ -52,7 +52,9 @@ impl Planner<'_> {
         expression: &Expression,
         target: &ValueLayout,
     ) -> Option<ValuePlan> {
-        let source = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
+        let source = self
+            .facts
+            .value_layout(&expression.get_type(), SlotOrigin::Lisette);
         let CoercionPlan::Layout(change) = CoercionPlan::change(self, &source, target) else {
             return None;
         };
@@ -135,7 +137,9 @@ impl Planner<'_> {
         payload_ty: &Type,
         conversion: CoercionPlan,
     ) -> ValuePlan {
-        let origin = self.function_type_origin(payload_ty, SlotOrigin::Lisette);
+        let origin = self
+            .facts
+            .function_type_origin(payload_ty, SlotOrigin::Lisette);
         let context = ExpressionContext::value().with_function_slot_origin(origin);
         self.plan_composite_value(payload, context)
             .map_expression(|setup, value| {
@@ -862,10 +866,12 @@ impl Planner<'_> {
         target: &FunctionLayout,
     ) {
         if target.return_abi.is_lowered() {
-            let tagged =
-                self.value_layout(source.result_layout.logical_type(), SlotOrigin::Lisette);
+            let tagged = self
+                .facts
+                .value_layout(source.result_layout.logical_type(), SlotOrigin::Lisette);
             let intermediate =
-                self.function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
+                self.facts
+                    .function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
             if !intermediate.same_result_representation(target) {
                 let body = self.reencode_return(call, source, &intermediate.return_abi);
                 let result = intermediate

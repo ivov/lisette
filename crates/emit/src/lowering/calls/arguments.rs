@@ -7,9 +7,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::EcoString;
 
 use crate::Planner;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::callable::CallableParamAbi;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::calls::call_plan::{
     ArgumentPlan, ArgumentSlotLayoutChange, ArgumentValueSource, CallPlan, CallableOrigin,
     FunctionLayoutChange, ResolvedCallee,
@@ -238,7 +238,8 @@ impl Planner<'_> {
         spelling: MemberSpelling,
     ) -> ExpressionContext<'b> {
         let origin = param.map_or(SlotOrigin::Lisette, |param| {
-            self.function_type_origin(&param.instantiated, param.origin)
+            self.facts
+                .function_type_origin(&param.instantiated, param.origin)
         });
         ExpressionContext::value()
             .with_function_slot_origin(origin)
@@ -276,18 +277,21 @@ impl Planner<'_> {
         let source = self
             .resolve_callable_value(argument)?
             .abi
-            .function_layout(self);
+            .function_layout(&self.facts);
         if !source.return_abi.is_lowered()
             || source.return_abi == CallableReturnAbi::Lowered(target.clone())
         {
             return None;
         }
-        let layout = self.value_layout(&param_fn_ty, SlotOrigin::Lisette);
+        let layout = self.facts.value_layout(&param_fn_ty, SlotOrigin::Lisette);
         let ValueLayout::Function { layout, .. } = layout.underlying() else {
             return None;
         };
-        let target =
-            layout.with_return_abi(self, CallableReturnAbi::Lowered(target), parameter.origin);
+        let target = layout.with_return_abi(
+            &self.facts,
+            CallableReturnAbi::Lowered(target),
+            parameter.origin,
+        );
         Some(FunctionLayoutChange { source, target })
     }
 
@@ -396,7 +400,7 @@ impl Planner<'_> {
             return None;
         };
 
-        let raw = self.field_slot_layout(
+        let raw = self.facts.field_slot_layout(
             &base.get_type(),
             self.facts.checked(expression).field_selection(),
             member,
@@ -408,6 +412,7 @@ impl Planner<'_> {
         };
         let passes_unchanged = !matches!(self.layout_nil_guard(&raw), Some(NilGuard::Interface))
             && self
+                .facts
                 .value_layout(ty, SlotOrigin::Lisette)
                 .payload()
                 .is_some_and(|lisette| lisette.same_representation(payload));
@@ -430,7 +435,7 @@ impl Planner<'_> {
         let callable = self.resolve_callable_value(expression)?;
         matches!(callable.origin, CallableOrigin::GoInterop).then(|| ValueLayout::Function {
             function_type: expression.get_type(),
-            layout: callable.function_layout(self),
+            layout: callable.function_layout(&self.facts),
         })
     }
 
@@ -443,9 +448,10 @@ impl Planner<'_> {
         parameter.variadic.as_ref()?;
 
         let raw_source = self.go_physical_expression_layout(spread);
-        let source = raw_source
-            .clone()
-            .unwrap_or_else(|| self.value_layout(&spread.get_type(), SlotOrigin::Lisette));
+        let source = raw_source.clone().unwrap_or_else(|| {
+            self.facts
+                .value_layout(&spread.get_type(), SlotOrigin::Lisette)
+        });
         let target = ValueLayout::Slice {
             collection_type: spread.get_type(),
             element: Box::new(parameter.layout.clone()),

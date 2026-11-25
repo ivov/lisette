@@ -54,7 +54,7 @@ impl Planner<'_> {
                         CoercionPlan::change(
                             self,
                             source,
-                            &self.value_layout(path_ty, SlotOrigin::Lisette),
+                            &self.facts.value_layout(path_ty, SlotOrigin::Lisette),
                         )
                     }),
                 });
@@ -116,7 +116,7 @@ impl Planner<'_> {
                         CoercionPlan::change(
                             self,
                             source,
-                            &self.value_layout(path_ty, SlotOrigin::Lisette),
+                            &self.facts.value_layout(path_ty, SlotOrigin::Lisette),
                         )
                     }),
                 });
@@ -256,7 +256,7 @@ impl Planner<'_> {
                     CoercionPlan::change(
                         self,
                         &source,
-                        &self.value_layout(&rest_ty, SlotOrigin::Lisette),
+                        &self.facts.value_layout(&rest_ty, SlotOrigin::Lisette),
                     )
                 }),
             });
@@ -512,7 +512,7 @@ impl Planner<'_> {
                 let inherited = path_layout
                     .and_then(|layout| layout.variant_field(unqualified_name(variant_name), index));
                 inherited.cloned().unwrap_or_else(|| {
-                    self.value_layout_with_declaration(
+                    self.facts.value_layout_with_declaration(
                         ty,
                         SlotOrigin::Lisette,
                         &selection.declared_ty,
@@ -684,7 +684,9 @@ impl Planner<'_> {
                 self.compute_struct_field_path(&child_path, field, ty, enum_info.as_ref());
             let selection = self.facts.pattern_field(field.name_span);
             let field_ty = selection.field_ty();
-            let layout = self.field_slot_layout(ty, Some(selection), &field.name, &field_ty);
+            let layout = self
+                .facts
+                .field_slot_layout(ty, Some(selection), &field.name, &field_ty);
             self.collect_checks_and_bindings(
                 &field_path,
                 &field.value,

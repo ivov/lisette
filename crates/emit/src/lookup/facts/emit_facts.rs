@@ -269,10 +269,6 @@ impl<'a> EmitFacts<'a> {
         types::simple_kind(ty, |id| self.definition(id))
     }
 
-    pub(crate) fn strip_refs(&self, ty: &Type) -> Type {
-        ty.strip_refs()
-    }
-
     pub(crate) fn compound_parts(&self, ty: &Type) -> Option<(CompoundKind, Vec<Type>)> {
         match self.peel_alias(ty) {
             Type::Compound { kind, args, .. } => Some((kind, args)),

@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::lowering::abi::layout::ValueLayout;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::output::finish::function_literals::immediate_call;
@@ -31,7 +31,9 @@ impl Planner<'_> {
         field: &str,
         field_ty: &Type,
     ) -> Option<GoExpression> {
-        let layout = self.field_slot_layout(owner, Some(selection), field, field_ty)?;
+        let layout = self
+            .facts
+            .field_slot_layout(owner, Some(selection), field, field_ty)?;
         if !layout_is_map(&layout) {
             return None;
         }
@@ -54,7 +56,7 @@ impl Planner<'_> {
     }
 
     fn go_newtype_zero(&mut self, go_ty: GoType, underlying: &Type) -> Option<GoExpression> {
-        let layout = self.value_layout(underlying, SlotOrigin::Lisette);
+        let layout = self.facts.value_layout(underlying, SlotOrigin::Lisette);
         match layout.underlying() {
             ValueLayout::Map { .. } | ValueLayout::Array { .. } => {
                 Some(GoExpression::empty_composite(go_ty))
@@ -129,7 +131,7 @@ impl Planner<'_> {
         if spelling == ZeroSpelling::OmitGoZero && self.facts.go_zero_is_lisette_zero(ty) {
             return None;
         }
-        let layout = self.value_layout(ty, SlotOrigin::Lisette);
+        let layout = self.facts.value_layout(ty, SlotOrigin::Lisette);
         let zero = match (ty, &layout) {
             (Type::Simple(kind), _) => {
                 let zero = match kind {
@@ -332,7 +334,7 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn go_zero(&self, ty: &Type) -> GoExpression {
-        self.go_zero_of_layout(&self.value_layout(ty, SlotOrigin::Lisette))
+        self.go_zero_of_layout(&self.facts.value_layout(ty, SlotOrigin::Lisette))
     }
 
     pub(in crate::lowering) fn go_zero_of_layout(&self, layout: &ValueLayout) -> GoExpression {

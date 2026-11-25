@@ -1,3 +1,4 @@
+use crate::target::types::go_type::returns_go_void;
 use syntax::program::{Definition, GoHint, GoReturnContract, go_return_contract};
 use syntax::types::{self, Type};
 
@@ -25,6 +26,40 @@ pub(crate) enum CallableReturnAbi {
     Void,
     Value,
     Lowered(LoweredReturnAbi),
+}
+
+impl CallableReturnAbi {
+    pub(crate) fn unlowered(return_type: &Type) -> Self {
+        if returns_go_void(return_type) {
+            Self::Void
+        } else {
+            Self::Value
+        }
+    }
+
+    pub(crate) fn lowered(&self) -> Option<&LoweredReturnAbi> {
+        match self {
+            Self::Lowered(lowered) => Some(lowered),
+            Self::Void | Self::Value => None,
+        }
+    }
+
+    pub(crate) fn is_lowered(&self) -> bool {
+        matches!(self, Self::Lowered(_))
+    }
+
+    pub(crate) fn has_flattened_payload(&self) -> bool {
+        self.lowered()
+            .is_some_and(LoweredReturnAbi::has_flattened_payload)
+    }
+
+    pub(crate) fn same_logical_contract(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Lowered(left), Self::Lowered(right)) => left.same_logical_contract(right),
+            (Self::Void | Self::Value, Self::Void | Self::Value) => true,
+            _ => self == other,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

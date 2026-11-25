@@ -12,7 +12,7 @@ use crate::target::ir::prelude::{option_variant, prelude_call};
 use crate::target::ir::values::GoExpression;
 use crate::target::types::go_type::GoType;
 
-use super::layout::{FunctionLayout, ValueLayout};
+use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 
 #[derive(Debug, Clone)]
 pub(in crate::lowering) enum CoercionPlan {
@@ -132,7 +132,7 @@ impl CoercionPlan {
                 let payload = Self::adapted(planner, payload, from, &payload_type, None);
                 let layout = slot
                     .cloned()
-                    .unwrap_or_else(|| planner.value_layout(to, SlotOrigin::Lisette));
+                    .unwrap_or_else(|| planner.facts.value_layout(to, SlotOrigin::Lisette));
                 if matches!(layout.underlying(), ValueLayout::TaggedOption { .. }) {
                     Self::WrapSome {
                         payload_type,
@@ -167,10 +167,10 @@ impl CoercionPlan {
                 _ => panic!("internal error: an array adaptation does not fit `{from}` to `{to}`"),
             },
             Adaptation::DivergingFunction => {
-                let source = planner.value_layout(from, SlotOrigin::Lisette);
+                let source = planner.facts.value_layout(from, SlotOrigin::Lisette);
                 let target = slot
                     .cloned()
-                    .unwrap_or_else(|| planner.value_layout(to, SlotOrigin::Lisette));
+                    .unwrap_or_else(|| planner.facts.value_layout(to, SlotOrigin::Lisette));
                 match (source.underlying(), target.underlying()) {
                     (
                         ValueLayout::Function { layout: source, .. },

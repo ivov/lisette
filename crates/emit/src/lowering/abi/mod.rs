@@ -1,25 +1,22 @@
-use crate::lowering::abi::layout::is_nullable_option;
 use crate::lowering::calls::call_plan::is_prelude_dispatch;
 use crate::lowering::definitions::interface_adapter::requirement_go_return_abi;
 use crate::target::names::go_name::MemberSpelling;
-use crate::target::types::return_abi::{
-    CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout, go_payload_layout,
-    go_return_abi,
-};
+use crate::target::types::return_abi::{CallableReturnAbi, go_return_abi};
 pub(in crate::lowering) mod callable;
 pub(in crate::lowering) mod coercion_plan;
 pub(in crate::lowering) mod fallible_producer;
 pub(in crate::lowering) mod go_result_wrapping;
 pub(in crate::lowering) mod go_returns;
-#[allow(clippy::disallowed_methods)]
 pub(in crate::lowering) mod go_types;
-#[allow(clippy::disallowed_methods)]
-pub(in crate::lowering) mod layout;
 pub(in crate::lowering) mod layout_change;
 pub(in crate::lowering) mod slot_coercion;
 
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::return_abis::{
+    function_return_abi, interface_method_return_abi, method_return_abi, slot_return_abi,
+};
+use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::calls::call_plan::{
     CallableDeclaration, CallableOrigin, FunctionLayoutChange,
@@ -27,7 +24,6 @@ use crate::lowering::calls::call_plan::{
 use crate::lowering::plan::context::ExpressionContext;
 use crate::target::ir::prelude::prelude_constructor;
 use coercion_plan::CoercionPlan;
-use layout::{FunctionLayout, ValueLayout};
 use syntax::ast::Expression;
 use syntax::program::{
     CallOperation, CheckedCallee, Definition, GoHint, Method, NativeTypeKind, SlotOrigin,
@@ -205,27 +201,12 @@ impl Planner<'_> {
             }
             Some(declaration) if !declaration.is_type_definition() => ReturnSlot::Function,
             _ => ReturnSlot::FunctionValue(
-                self.function_type_origin(&callee_ty, SlotOrigin::Lisette),
+                self.facts
+                    .function_type_origin(&callee_ty, SlotOrigin::Lisette),
             ),
         };
 
         Some(return_abi(&self.facts, return_ty, slot))
-    }
-
-    pub(in crate::lowering) fn function_type_origin(
-        &self,
-        fn_ty: &Type,
-        origin: SlotOrigin,
-    ) -> SlotOrigin {
-        if origin.declared_by_go() {
-            origin
-        } else if self.facts.is_go_named_function_type(fn_ty) {
-            SlotOrigin::GoParameter
-        } else if let Some(target) = self.facts.alias_declaration(fn_ty) {
-            self.function_type_origin(target, origin)
-        } else {
-            origin
-        }
     }
 
     pub(in crate::lowering) fn emitted_value_layout(
@@ -249,7 +230,7 @@ impl Planner<'_> {
                 SlotOrigin::Lisette
             };
 
-        let layout = self.value_layout(&ty, origin);
+        let layout = self.facts.value_layout(&ty, origin);
         let closure = is_closure_literal(value);
         if !closure && !ctx.result_fills_type_parameter() {
             return layout;
@@ -270,7 +251,7 @@ impl Planner<'_> {
         );
         ValueLayout::Function {
             function_type,
-            layout: layout.with_return_abi(self, return_abi, SlotOrigin::Lisette),
+            layout: layout.with_return_abi(&self.facts, return_abi, SlotOrigin::Lisette),
         }
     }
 
@@ -292,7 +273,7 @@ impl Planner<'_> {
         if callee.is_prelude_dispatch || matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
         }
-        Some(callee.function_layout(self))
+        Some(callee.function_layout(&self.facts))
     }
 
     pub(in crate::lowering) fn peel_go_slot_alias_cast<'e>(
@@ -330,13 +311,13 @@ impl Planner<'_> {
         return_abi: Option<CallableReturnAbi>,
         origin: SlotOrigin,
     ) -> Option<FunctionLayoutChange> {
-        let slot = self.value_layout(slot_function, origin);
+        let slot = self.facts.value_layout(slot_function, origin);
         let ValueLayout::Function { layout, .. } = slot.underlying() else {
             return None;
         };
         let target = match return_abi {
             Some(return_abi) if layout.return_abi != return_abi => {
-                layout.with_return_abi(self, return_abi, SlotOrigin::Lisette)
+                layout.with_return_abi(&self.facts, return_abi, SlotOrigin::Lisette)
             }
             _ => layout.clone(),
         };
@@ -356,7 +337,7 @@ impl Planner<'_> {
             value,
             ExpressionContext::value().with_function_slot_origin(slot_origin),
         );
-        let target = self.value_layout(target_ty, slot_origin);
+        let target = self.facts.value_layout(target_ty, slot_origin);
         CoercionPlan::change(self, &source, &target)
     }
 
@@ -368,8 +349,8 @@ impl Planner<'_> {
         let Some(slot_origin) = self.go_function_slot_origin(value_ty, target_ty) else {
             return CoercionPlan::Identity;
         };
-        let source = self.value_layout(value_ty, SlotOrigin::Lisette);
-        let target = self.value_layout(target_ty, slot_origin);
+        let source = self.facts.value_layout(value_ty, SlotOrigin::Lisette);
+        let target = self.facts.value_layout(target_ty, slot_origin);
         CoercionPlan::change(self, &source, &target)
     }
 
@@ -378,13 +359,15 @@ impl Planner<'_> {
         ty: &Type,
     ) -> Option<(ValueLayout, ValueLayout)> {
         self.facts.resolve_to_function_type(ty)?;
-        let stored = self.value_layout(ty, SlotOrigin::GoAny);
-        let lisette = self.value_layout(ty, SlotOrigin::Lisette);
+        let stored = self.facts.value_layout(ty, SlotOrigin::GoAny);
+        let lisette = self.facts.value_layout(ty, SlotOrigin::Lisette);
         (!stored.same_representation(&lisette)).then_some((stored, lisette))
     }
 
     fn go_function_slot_origin(&self, value_ty: &Type, target_ty: &Type) -> Option<SlotOrigin> {
-        let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
+        let slot_origin = self
+            .facts
+            .function_type_origin(target_ty, SlotOrigin::Lisette);
         ((slot_origin.declared_by_go()
             || self.facts.mentions_function_alias(value_ty)
             || self.facts.mentions_function_alias(target_ty))
@@ -418,126 +401,6 @@ pub(in crate::lowering) fn go_callable_return_abi(
             || CallableReturnAbi::unlowered(declared_return),
             CallableReturnAbi::Lowered,
         )
-}
-
-fn err_slot_is_nilable(facts: &EmitFacts<'_>, fallible_ty: &Type) -> bool {
-    let err = facts.err_payload(fallible_ty);
-    facts.is_prelude_error(&err) || facts.is_nilable_go_type(&err)
-}
-
-fn lowered_partial(
-    facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    payload: impl FnOnce(&Type) -> PayloadLayout,
-) -> Option<LoweredReturnAbi> {
-    (facts.is_partial(return_ty) && err_slot_is_nilable(facts, return_ty)).then(|| {
-        LoweredReturnAbi::Partial {
-            payload: payload(&facts.ok_payload(return_ty)),
-        }
-    })
-}
-
-fn classify_direct_emission(facts: &EmitFacts<'_>, return_ty: &Type) -> Option<LoweredReturnAbi> {
-    if facts.is_result(return_ty) && err_slot_is_nilable(facts, return_ty) {
-        return Some(if facts.ok_payload(return_ty).is_unit() {
-            LoweredReturnAbi::BareError
-        } else {
-            LoweredReturnAbi::Result {
-                payload: PayloadLayout::Packed,
-            }
-        });
-    }
-    if facts.is_option(return_ty) {
-        let encoding = if is_nullable_option(facts, return_ty) {
-            OptionReturnAbi::Nullable
-        } else {
-            OptionReturnAbi::CommaOk {
-                payload: PayloadLayout::Packed,
-            }
-        };
-
-        return Some(LoweredReturnAbi::Option(encoding));
-    }
-    if let Some(elements) = facts.tuple_elements(return_ty)
-        && elements.len() >= 2
-    {
-        return Some(LoweredReturnAbi::Tuple {
-            arity: elements.len(),
-        });
-    }
-    None
-}
-
-fn function_return_abi(facts: &EmitFacts<'_>, return_ty: &Type) -> CallableReturnAbi {
-    classify_direct_emission(facts, return_ty).map_or_else(
-        || CallableReturnAbi::unlowered(return_ty),
-        CallableReturnAbi::Lowered,
-    )
-}
-
-fn classify_slot_emission(
-    facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    origin: SlotOrigin,
-) -> Option<LoweredReturnAbi> {
-    if origin.declared_by_go()
-        && let Some(abi) = lowered_partial(facts, return_ty, go_payload_layout)
-    {
-        return Some(abi);
-    }
-    let abi = classify_direct_emission(facts, return_ty)?;
-    Some(if origin.declared_by_go() && abi.payload().is_some() {
-        abi.with_payload(go_payload_layout(&facts.ok_payload(return_ty)))
-    } else {
-        abi
-    })
-}
-
-fn method_return_abi(facts: &EmitFacts<'_>, return_ty: &Type) -> CallableReturnAbi {
-    match lowered_partial(facts, return_ty, |_| PayloadLayout::Packed) {
-        Some(abi) => CallableReturnAbi::Lowered(abi),
-        None => function_return_abi(facts, return_ty),
-    }
-}
-
-fn slot_return_abi(
-    facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    origin: SlotOrigin,
-) -> CallableReturnAbi {
-    if matches!(origin, SlotOrigin::GoAny) {
-        return function_return_abi(facts, return_ty);
-    }
-    if !origin.declared_by_go() {
-        return CallableReturnAbi::Value;
-    }
-    classify_slot_emission(facts, return_ty, origin).map_or_else(
-        || CallableReturnAbi::unlowered(return_ty),
-        CallableReturnAbi::Lowered,
-    )
-}
-
-fn interface_method_return_abi(
-    facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    name: &str,
-    method: &Method,
-) -> CallableReturnAbi {
-    if facts.method_uses_tagged_return(name) {
-        return CallableReturnAbi::Value;
-    }
-    let abi = match method_return_abi(facts, return_ty) {
-        CallableReturnAbi::Value if facts.returns_go_void(return_ty) => CallableReturnAbi::Void,
-        abi => abi,
-    };
-    if abi == CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
-        && method.go_hints.contains(&GoHint::CommaOk)
-    {
-        return CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
-            payload: PayloadLayout::Packed,
-        }));
-    }
-    abi
 }
 
 pub(in crate::lowering) fn return_abi(

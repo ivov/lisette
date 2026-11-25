@@ -1,39 +1,45 @@
 use crate::Planner;
-use crate::lowering::abi::layout::{FunctionLayout, ValueLayout};
+use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::target::names::go_name;
 use crate::target::names::packages::PackageUse;
-use crate::target::types::go_type::{ChannelDirection, GoType, GoTypeKind, is_prelude_type};
+use crate::target::types::go_type::{ChannelDirection, GoType, is_prelude_type};
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
+use syntax::program::DefinitionBody;
 use syntax::program::SlotOrigin;
-use syntax::program::{Definition, DefinitionBody};
 use syntax::program::{GO_IMPORT_PREFIX, NativeTypeKind, strip_go_prefix, strip_prelude_prefix};
-use syntax::types::{CompoundKind, SimpleKind, Type, peel_underlying, unqualified_name};
+use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 impl Planner<'_> {
     pub(in crate::lowering) fn plain_literal_go_type(&self, ty: &Type) -> Option<GoType> {
-        let peeled = self.facts.peel_alias(ty);
-        match &peeled {
+        let layout = self.facts.target_value_layout(ty);
+        match layout.logical_type() {
             Type::Simple(_) => {}
             Type::Nominal { params, .. } if params.is_empty() => {}
             _ => return None,
         }
-        Some(self.go_type(&peeled))
+        Some(self.layout_go_type(&layout))
     }
 
     pub(in crate::lowering) fn target_go_type(&self, ty: &Type) -> GoType {
-        self.go_type(&self.facts.peel_alias(ty))
+        self.layout_go_type(&self.facts.target_value_layout(ty))
     }
 
     pub(in crate::lowering) fn go_type(&self, ty: &Type) -> GoType {
+        self.layout_go_type(&self.facts.value_layout(ty, SlotOrigin::Lisette))
+    }
+
+    pub(in crate::lowering) fn layout_go_type(&self, layout: &ValueLayout) -> GoType {
         assert!(
-            !self.facts.is_never(ty),
+            !self.facts.is_never(layout.logical_type()),
             "internal error: a `Never` value has no Go type, emit writes it as a statement"
         );
-        self.component_go_type(ty)
+        layout.go_type(self)
     }
 
     pub(in crate::lowering) fn component_go_type(&self, ty: &Type) -> GoType {
-        self.value_layout(ty, SlotOrigin::Lisette).go_type(self)
+        self.facts
+            .value_layout(ty, SlotOrigin::Lisette)
+            .go_type(self)
     }
 
     fn leaf_go_type(&self, ty: &Type) -> GoType {
@@ -73,7 +79,7 @@ impl Planner<'_> {
             _ => {
                 let native = NativeTypeKind::from_type(ty)
                     .expect("every other compound type is a native Go type");
-                self.native_go_type(native, ty)
+                self.native_go_type(native, arguments)
             }
         }
     }
@@ -91,7 +97,7 @@ impl Planner<'_> {
 
         let (name, package) = self.unqualify_name(qualified_name);
 
-        let kind = physical_type_kind(ty, |id| self.facts.definition(id));
+        let kind = self.facts.physical_go_kind(ty);
         let param_types: Vec<GoType> = parameters
             .iter()
             .map(|parameter| self.component_go_type(parameter))
@@ -108,12 +114,8 @@ impl Planner<'_> {
         GoType::named(&name, &param_types, None).with_physical_kind(kind)
     }
 
-    fn native_go_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
-        let argument = |index| {
-            let stripped = ty.strip_refs();
-            let arguments = stripped.get_type_params().expect("native type arguments");
-            self.component_go_type(&arguments[index])
-        };
+    fn native_go_type(&self, kind: NativeTypeKind, arguments: &[Type]) -> GoType {
+        let argument = |index: usize| self.component_go_type(&arguments[index]);
         match kind {
             NativeTypeKind::String => GoType::new("string"),
             NativeTypeKind::Slice | NativeTypeKind::EnumeratedSlice => {
@@ -180,13 +182,9 @@ impl Planner<'_> {
         abi: &CallableReturnAbi,
         return_ty: &Type,
     ) -> GoType {
-        let result_ty = if abi.is_lowered() {
-            self.facts.peel_alias(return_ty)
-        } else {
-            return_ty.clone()
-        };
-        let result = self.value_layout(&result_ty, SlotOrigin::Lisette);
-        self.function_layout(Vec::new(), &result, abi.clone(), None)
+        let result = self.facts.return_value_layout(abi, return_ty);
+        self.facts
+            .function_layout(Vec::new(), &result, abi.clone(), None)
             .result_go_type(self)
             .unwrap_or_default()
     }
@@ -234,7 +232,9 @@ impl ValueLayout {
             } => {
                 if self.function_name().is_some()
                     && self.same_representation(
-                        &planner.value_layout(function_type, SlotOrigin::Lisette),
+                        &planner
+                            .facts
+                            .value_layout(function_type, SlotOrigin::Lisette),
                     )
                 {
                     planner.leaf_go_type(function_type)
@@ -321,37 +321,5 @@ impl FunctionLayout {
             }
             Some(LoweredReturnAbi::Tuple { .. }) => GoType::result_list(&slots),
         })
-    }
-}
-
-fn physical_type_kind<'argument>(
-    ty: &Type,
-    lookup: impl Fn(&str) -> Option<&'argument Definition>,
-) -> GoTypeKind {
-    match peel_underlying(ty, &lookup) {
-        Type::Compound {
-            kind: CompoundKind::Slice,
-            ..
-        } => GoTypeKind::Slice,
-        Type::Compound {
-            kind: CompoundKind::Map,
-            ..
-        } => GoTypeKind::Map,
-        Type::Compound {
-            kind: CompoundKind::Channel | CompoundKind::Sender | CompoundKind::Receiver,
-            ..
-        } => GoTypeKind::Channel,
-        Type::Compound {
-            kind: CompoundKind::Ref,
-            args: arguments,
-            ..
-        } if arguments
-            .first()
-            .is_some_and(|inner| matches!(peel_underlying(inner, &lookup), Type::Array { .. })) =>
-        {
-            GoTypeKind::PointerToArray
-        }
-        Type::Array { .. } => GoTypeKind::Array,
-        _ => GoTypeKind::Value,
     }
 }

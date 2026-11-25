@@ -112,8 +112,8 @@ impl Planner<'_> {
 
         self.scope.declare_go_name(result_var.spelling());
         let full_ty = self.go_type(ty);
-        let source = self.value_layout(ty, SlotOrigin::Lisette);
-        let target = self.value_layout(target_ty, SlotOrigin::Lisette);
+        let source = self.facts.value_layout(ty, SlotOrigin::Lisette);
+        let target = self.facts.value_layout(target_ty, SlotOrigin::Lisette);
         let coercion = CoercionPlan::change(self, &source, &target);
 
         let body_ctx = ReturnContext::Tagged(ty.clone());

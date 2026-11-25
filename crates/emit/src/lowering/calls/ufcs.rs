@@ -15,7 +15,6 @@ use crate::target::ir::values::{CaptureBoundary, GoExpression, Stability};
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
 use syntax::program::ReceiverCoercion;
-use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -53,11 +52,8 @@ impl Planner<'_> {
         let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
         if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
         {
-            let source = self.value_layout(
-                &self.facts.strip_refs(&receiver.get_type()),
-                SlotOrigin::Lisette,
-            );
-            let target = self.receiver_layout(&receiver.get_type());
+            let source = self.facts.dereferenced_layout(&receiver.get_type());
+            let target = self.facts.receiver_layout(&receiver.get_type());
             let change = CoercionPlan::change(self, &source, &target);
             if !change.is_identity() {
                 receiver_stage = receiver_stage.map_expression(|setup, value| {

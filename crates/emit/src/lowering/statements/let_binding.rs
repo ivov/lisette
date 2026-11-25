@@ -2,10 +2,10 @@ use crate::Planner;
 use crate::lookup::facts::component_uses::ComponentDemand;
 use crate::lookup::facts::component_uses::ValueDemand;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::{ComponentKind, TupleBinding};
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::WrapperTarget;
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::patterns::binding_decls::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
@@ -406,7 +406,9 @@ impl Planner<'_> {
         } = let_spec;
 
         let ids = binding_id.as_slice();
-        let origin = self.function_type_origin(binding_ty, SlotOrigin::Lisette);
+        let origin = self
+            .facts
+            .function_type_origin(binding_ty, SlotOrigin::Lisette);
         let plan = self.plan_value(
             value,
             ExpressionContext::value().with_function_slot_origin(origin),
@@ -789,6 +791,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
         let slots_read_in_place = self
             .planner
+            .facts
             .lowered_tuple_slot_layouts(&value_ty)
             .iter()
             .all(|layout| !matches!(layout, ValueLayout::NullableOption { .. }));

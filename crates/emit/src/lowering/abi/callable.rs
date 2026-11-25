@@ -5,10 +5,7 @@ use syntax::types::Type;
 
 use crate::lookup::facts::emit_facts::EmitFacts;
 
-use crate::Planner;
-use crate::target::types::go_type::returns_go_void;
-
-use crate::lowering::abi::layout::{FunctionLayout, ValueLayout};
+use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lowering::expressions::staging::VariadicCombine;
 use syntax::program::SlotOrigin;
 
@@ -24,38 +21,6 @@ impl CallableReturnAbi {
             Some(LoweredReturnAbi::Tuple { .. }) => facts
                 .tuple_elements(ty)
                 .is_some_and(|elements| elements.len() >= 2),
-        }
-    }
-
-    pub(super) fn unlowered(return_type: &Type) -> Self {
-        if returns_go_void(return_type) {
-            Self::Void
-        } else {
-            Self::Value
-        }
-    }
-
-    pub(in crate::lowering) fn lowered(&self) -> Option<&LoweredReturnAbi> {
-        match self {
-            Self::Lowered(lowered) => Some(lowered),
-            Self::Void | Self::Value => None,
-        }
-    }
-
-    pub(in crate::lowering) fn is_lowered(&self) -> bool {
-        matches!(self, Self::Lowered(_))
-    }
-
-    pub(in crate::lowering) fn has_flattened_payload(&self) -> bool {
-        self.lowered()
-            .is_some_and(LoweredReturnAbi::has_flattened_payload)
-    }
-
-    pub(in crate::lowering) fn same_logical_contract(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Lowered(left), Self::Lowered(right)) => left.same_logical_contract(right),
-            (Self::Void | Self::Value, Self::Void | Self::Value) => true,
-            _ => self == other,
         }
     }
 }
@@ -137,8 +102,8 @@ impl CallableAbi {
         })
     }
 
-    pub(in crate::lowering) fn function_layout(&self, planner: &Planner<'_>) -> FunctionLayout {
-        planner.function_layout(
+    pub(in crate::lowering) fn function_layout(&self, facts: &EmitFacts<'_>) -> FunctionLayout {
+        facts.function_layout(
             self.params
                 .iter()
                 .map(|param| param.variadic.as_ref().unwrap_or(&param.layout).clone())

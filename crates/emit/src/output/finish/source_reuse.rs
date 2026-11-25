@@ -361,7 +361,10 @@ impl<'a> SourceReads<'a> {
     }
 
     fn is_source(&self, node: &GoExpressionNode) -> bool {
-        matches!(node, GoExpressionNode::Identifier(name) if name.spelling() == self.source.spelling())
+        match node {
+            GoExpressionNode::Identifier(name) => name.spelling() == self.source.spelling(),
+            _ => false,
+        }
     }
 }
 
@@ -390,7 +393,9 @@ impl TreeVisitor for SourceReads<'_> {
             {
                 self.escapes = true;
             }
-            GoExpressionNode::Call { callee, .. } if matches!(callee.as_ref(), GoExpressionNode::Selector { base, .. } if base.mentions(spelling)) =>
+            GoExpressionNode::Call { callee, .. }
+                if let GoExpressionNode::Selector { base, .. } = callee.as_ref()
+                    && base.mentions(spelling) =>
             {
                 self.escapes = true;
             }
@@ -435,8 +440,9 @@ fn binds_spelling(statement: &LoweredStatement, spelling: &str) -> bool {
             LoopHeader::Counted { variable, .. } => named(variable),
             LoopHeader::Infinite | LoopHeader::While(_) => false,
         },
-        LoweredStatement::Select(plan) => plan.arms.iter().any(|arm| {
-            matches!(&arm.kind, SelectArmKind::Receive { receive_vars, .. } if receive_vars.iter().any(named))
+        LoweredStatement::Select(plan) => plan.arms.iter().any(|arm| match &arm.kind {
+            SelectArmKind::Receive { receive_vars, .. } => receive_vars.iter().any(named),
+            _ => false,
         }),
         LoweredStatement::Switch(plan) => {
             matches!(&plan.kind, SwitchKind::Type { binding: Some(name), .. } if named(name))

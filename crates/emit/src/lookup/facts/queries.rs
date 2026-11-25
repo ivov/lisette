@@ -2,7 +2,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::prelude as fallible;
 use crate::target::ir::prelude::Fallible;
 use crate::target::ir::values::GoExpression;
-use crate::target::names::go_name::{self, GoExport};
+use crate::target::names::go_name::{self, GoExport, MemberSpelling};
 use crate::target::names::source_name::SourceName;
 use crate::target::types::enum_layout::VariantLayout;
 use std::borrow::Cow;
@@ -281,8 +281,64 @@ impl<'a> EmitFacts<'a> {
                 && self.underlying_simple_kind(&peeled).is_some())
     }
 
-    pub(crate) fn member_owner_type(&self, ty: &Type) -> Type {
-        self.receiver_shape(ty)
+    pub(crate) fn dot_member_go_name(
+        &self,
+        expression: &Expression,
+        expression_ty: &Type,
+        member: &str,
+        resolution: &DotAccessResolution,
+        spelling: MemberSpelling,
+    ) -> String {
+        if let Some(package) = expression_ty.as_import_namespace() {
+            return self.package_member_go_name(package, member);
+        }
+        let canonical_ty = self.receiver_shape(expression_ty);
+        match resolution {
+            DotAccessResolution::StructField { is_exported, .. } => {
+                let export = if *is_exported {
+                    GoExport::Exported
+                } else {
+                    GoExport::Unexported
+                };
+                return self.struct_field_go_name(&canonical_ty, member, export);
+            }
+            DotAccessResolution::InstanceMethod { is_exported, .. } => {
+                let export = if *is_exported {
+                    GoExport::Exported
+                } else {
+                    GoExport::Unexported
+                };
+                return self.method_selector_go_name(
+                    canonical_ty.get_qualified_id(),
+                    member,
+                    export,
+                    spelling,
+                );
+            }
+            _ => {}
+        }
+        let export = self.resolve_go_export(expression, &canonical_ty, member);
+        self.member_go_name(&canonical_ty, member, export)
+    }
+
+    pub(crate) fn receiver_method_go_name(
+        &self,
+        receiver: &Type,
+        method: &str,
+        export: GoExport,
+        spelling: MemberSpelling,
+    ) -> String {
+        let owner = receiver.strip_refs();
+        self.method_selector_go_name(owner.get_qualified_id(), method, export, spelling)
+    }
+
+    pub(crate) fn receiver_go_target(&self, ty: &Type) -> Type {
+        self.peel_go_alias(&ty.strip_refs())
+    }
+
+    pub(crate) fn is_go_abi_type(&self, ty: &Type) -> bool {
+        self.resolve_nominal(ty)
+            .is_some_and(|resolved| self.is_go_imported_type(resolved.id.as_str()))
     }
 
     fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {

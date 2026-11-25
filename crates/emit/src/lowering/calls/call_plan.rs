@@ -1,9 +1,9 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::CalleeSignature;
 use crate::lowering::abi::callable::{CallableAbi, CallableParamAbi};
 use crate::lowering::abi::coercion_plan::LayoutChange;
-use crate::lowering::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use syntax::ast::Expression;
 use syntax::program::SlotOrigin;
 use syntax::program::{
@@ -39,10 +39,10 @@ impl ResolvedCallee<'_> {
         self.declaration.map(CallableDeclaration::ty)
     }
 
-    pub(in crate::lowering) fn function_layout(&self, planner: &Planner<'_>) -> FunctionLayout {
+    pub(in crate::lowering) fn function_layout(&self, facts: &EmitFacts<'_>) -> FunctionLayout {
         FunctionLayout {
             producer: self.origin.producer(),
-            ..self.abi.function_layout(planner)
+            ..self.abi.function_layout(facts)
         }
     }
 }
@@ -207,7 +207,8 @@ impl<'a> Planner<'a> {
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
         let callee_ty = function.get_type();
         if declaration.is_some_and(CallableDeclaration::is_type_definition)
-            && matches!(callee_ty.unwrap_forall(), Type::Nominal { id: type_id, .. } if id.as_deref() == Some(type_id.as_str()))
+            && let Type::Nominal { id: type_id, .. } = callee_ty.unwrap_forall()
+            && id.as_deref() == Some(type_id.as_str())
             && self.facts.is_go_named_function_type(&callee_ty)
         {
             params = vec![CallableParamAbi {
@@ -215,6 +216,7 @@ impl<'a> Planner<'a> {
                 declared: None,
                 origin: SlotOrigin::Lisette,
                 layout: self
+                    .facts
                     .value_layout(&callee_ty, SlotOrigin::Lisette)
                     .underlying()
                     .clone(),
@@ -238,8 +240,12 @@ impl<'a> Planner<'a> {
             return_type,
         );
 
-        let return_layout =
-            self.callable_result_layout(return_type, return_origin, return_declaration, &result);
+        let return_layout = self.facts.callable_result_layout(
+            return_type,
+            return_origin,
+            return_declaration,
+            &result,
+        );
         let is_prelude_dispatch = is_prelude_dispatch(id.as_deref(), &origin);
 
         ResolvedCallee {
@@ -307,6 +313,7 @@ impl<'a> Planner<'a> {
         resolved_definition(expression).is_some_and(is_go_import)
             || self.go_bound_requirement(expression).is_some()
             || self
+                .facts
                 .function_type_origin(&expression.get_type(), SlotOrigin::Lisette)
                 .declared_by_go()
     }
@@ -362,7 +369,7 @@ impl<'a> Planner<'a> {
 
                 let layout = catalog_slot
                     .map(|slot| {
-                        self.value_layout_with_declaration(
+                        self.facts.value_layout_with_declaration(
                             &instantiated.ty,
                             origin,
                             &slot.declared_type,
@@ -370,10 +377,14 @@ impl<'a> Planner<'a> {
                     })
                     .or_else(|| {
                         declared.as_ref().map(|declared| {
-                            self.value_layout_with_declaration(&instantiated.ty, origin, declared)
+                            self.facts.value_layout_with_declaration(
+                                &instantiated.ty,
+                                origin,
+                                declared,
+                            )
                         })
                     })
-                    .unwrap_or_else(|| self.value_layout(&instantiated.ty, origin));
+                    .unwrap_or_else(|| self.facts.value_layout(&instantiated.ty, origin));
 
                 let element = (index + 1 == parameters.len())
                     .then(|| variadic_element.clone())
@@ -397,8 +408,11 @@ impl<'a> Planner<'a> {
                 });
 
                 let element_layout = declared_element.as_ref().map_or_else(
-                    || self.value_layout(&element, origin),
-                    |declared| self.value_layout_with_declaration(&element, origin, declared),
+                    || self.facts.value_layout(&element, origin),
+                    |declared| {
+                        self.facts
+                            .value_layout_with_declaration(&element, origin, declared)
+                    },
                 );
                 CallableParamAbi {
                     instantiated: element,

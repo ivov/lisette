@@ -234,9 +234,10 @@ fn analyze(node: &GoExpressionNode, temp: &GoIdentifier) -> Analysis {
         GoExpressionNode::AddressOf(operand) | GoExpressionNode::Slice { base: operand, .. } => {
             operand.mentions_local(temp)
         }
-        GoExpressionNode::Call { callee, .. } => {
-            matches!(callee.as_ref(), GoExpressionNode::Selector { base, .. } if base.mentions_local(temp))
-        }
+        GoExpressionNode::Call { callee, .. } => match callee.as_ref() {
+            GoExpressionNode::Selector { base, .. } => base.mentions_local(temp),
+            _ => false,
+        },
         _ => false,
     };
 

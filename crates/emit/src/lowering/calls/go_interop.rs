@@ -3,9 +3,9 @@ use crate::lowering::abi::go_result_wrapping::{NilGuard, WrapperTarget};
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
 
 use crate::Planner;
+use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::callable::CallableAbi;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
-use crate::lowering::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::plan::context::ExpressionContext;
@@ -60,7 +60,7 @@ impl Planner<'_> {
                 CallableReturnAbi::Lowered(shape @ LoweredReturnAbi::Result { payload })
                     if !changed =>
                 {
-                    let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                    let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
                     let nil_guard =
                         self.lowered_payload_nil_guard(shape, origin.producer(), result_ty);
                     self.result_from_pair(call, &layout, *payload, None, nil_guard)
@@ -68,7 +68,7 @@ impl Planner<'_> {
                 CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
                     OptionReturnAbi::CommaOk { payload },
                 )) if !changed => {
-                    let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                    let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
                     self.option_from_comma_ok(call, &layout, *payload, None)
                 }
                 _ => Err(call),
@@ -124,7 +124,7 @@ impl Planner<'_> {
             | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => self
                 .payload_result_layout_change(
                     &abi.return_layout,
-                    &self.value_layout(result_ty, SlotOrigin::Lisette),
+                    &self.facts.value_layout(result_ty, SlotOrigin::Lisette),
                 ),
         }
     }
@@ -134,7 +134,7 @@ impl Planner<'_> {
         abi: &CallableAbi,
         result_ty: &Type,
     ) -> Option<CoercionPlan> {
-        let target = self.value_layout(result_ty, SlotOrigin::Lisette);
+        let target = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
         match abi.result {
             CallableReturnAbi::Value => {}
             CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
@@ -164,8 +164,8 @@ impl Planner<'_> {
         abi: &CallableAbi,
         result_ty: &Type,
     ) -> Vec<LayoutChange> {
-        let source = abi.function_layout(self).results;
-        let target = self.value_layout(result_ty, SlotOrigin::Lisette);
+        let source = abi.function_layout(&self.facts).results;
+        let target = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
         let target = target
             .tuple_elements()
             .expect("a tuple result ABI has a tuple value layout");
@@ -208,7 +208,7 @@ impl Planner<'_> {
                 self.plan_tuple_result(call, *arity, result_ty, slot_layout_changes.as_deref())
             }
             (Some(LoweredReturnAbi::BareError), _) => {
-                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
                 let fallible = self
                     .facts
                     .fallible(layout.underlying().logical_type())
@@ -222,7 +222,7 @@ impl Planner<'_> {
                 ));
             }
             (Some(LoweredReturnAbi::Result { .. }), _) => {
-                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
                 return named(self.lower_result_wrapping(
                     call,
                     &layout,
@@ -232,7 +232,7 @@ impl Planner<'_> {
                 ));
             }
             (Some(LoweredReturnAbi::Partial { payload }), _) => {
-                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
                 return named(self.lower_partial_wrapping(
                     call,
                     &layout,
@@ -242,7 +242,7 @@ impl Planner<'_> {
                 ));
             }
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { payload })), _) => {
-                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
                 return named(self.lower_comma_ok_wrapping(
                     call,
                     &layout,
@@ -254,7 +254,7 @@ impl Planner<'_> {
             (Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)), _) => {
                 let mut statements = Vec::new();
                 let raw_var = self.hoist_temp(&mut statements, "raw", call);
-                let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                let layout = self.facts.value_layout(result_ty, SlotOrigin::Lisette);
                 let (wrap, outcome) = self.lower_nil_check_option_wrap(
                     GoExpression::identifier(raw_var),
                     &layout,
@@ -295,7 +295,7 @@ impl Planner<'_> {
         let temps = self.create_temp_vars("ret", arity);
         statements.push(define_many(temps.clone(), call));
         let slot_tys = self.facts.tuple_or_type_arguments(result_ty);
-        let slot_layouts = self.lowered_tuple_slot_layouts(result_ty);
+        let slot_layouts = self.facts.lowered_tuple_slot_layouts(result_ty);
         let values: Vec<GoExpression> = temps
             .into_iter()
             .enumerate()
@@ -311,7 +311,7 @@ impl Planner<'_> {
                     )
                 }) {
                     Some(slot_ty) => {
-                        let layout = self.value_layout(slot_ty, SlotOrigin::Lisette);
+                        let layout = self.facts.value_layout(slot_ty, SlotOrigin::Lisette);
                         let (wrapping, outcome) = self.lower_nil_check_option_wrap(
                             value,
                             &layout,

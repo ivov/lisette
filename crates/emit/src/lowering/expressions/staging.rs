@@ -294,7 +294,7 @@ impl Planner<'_> {
             return None;
         }
         self.callable_slot_layout_change(
-            callee.function_layout(self),
+            callee.function_layout(&self.facts),
             param_ty?.unwrap_forall(),
             None,
             SlotOrigin::Lisette,

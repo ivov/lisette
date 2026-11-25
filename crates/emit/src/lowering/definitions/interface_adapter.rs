@@ -1,8 +1,8 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_callable_return_abi;
-use crate::lowering::abi::layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::functions::BodyOrigin;
@@ -102,12 +102,12 @@ impl Planner<'_> {
         let return_ty = method.return_type;
         let parameters: Vec<ValueLayout> = params
             .iter()
-            .map(|param| self.value_layout(&param.ty, SlotOrigin::Lisette))
+            .map(|param| self.facts.value_layout(&param.ty, SlotOrigin::Lisette))
             .collect();
-        let result = self.value_layout(return_ty, SlotOrigin::Lisette);
+        let result = self.facts.value_layout(return_ty, SlotOrigin::Lisette);
         let source = FunctionLayout {
             producer: ResultProducer::Lisette,
-            ..self.function_layout(
+            ..self.facts.function_layout(
                 parameters.clone(),
                 &result,
                 return_abi(&self.facts, return_ty, ReturnSlot::Method),
@@ -115,7 +115,7 @@ impl Planner<'_> {
             )
         };
 
-        let target = self.function_layout(
+        let target = self.facts.function_layout(
             parameters,
             &result,
             CallableReturnAbi::Value,
@@ -179,7 +179,7 @@ impl Planner<'_> {
         requirement: &InterfaceRequirement,
     ) -> Option<FunctionLayout> {
         let layout = self.requirement_layout(requirement, RequirementAbi::Lisette)?;
-        Some(layout.with_return_abi(self, CallableReturnAbi::Value, SlotOrigin::Lisette))
+        Some(layout.with_return_abi(&self.facts, CallableReturnAbi::Value, SlotOrigin::Lisette))
     }
 
     fn requirement_layout(
@@ -209,7 +209,8 @@ impl Planner<'_> {
                     RequirementAbi::Lisette => SlotOrigin::Lisette,
                 };
 
-                self.value_layout_with_declaration(&parameter.ty, origin, &declared.ty)
+                self.facts
+                    .value_layout_with_declaration(&parameter.ty, origin, &declared.ty)
             })
             .collect();
 
@@ -222,7 +223,7 @@ impl Planner<'_> {
             RequirementAbi::Lisette => SlotOrigin::Lisette,
         };
 
-        let result = self.target_layout_with_declaration(
+        let result = self.facts.target_layout_with_declaration(
             &function.return_type,
             origin,
             &declared.return_type,
@@ -234,7 +235,12 @@ impl Planner<'_> {
             RequirementAbi::Lisette => requirement_return_abi(&self.facts, requirement),
         };
 
-        Some(self.function_layout(parameters, &result, return_abi, Some(&declared.return_type)))
+        Some(self.facts.function_layout(
+            parameters,
+            &result,
+            return_abi,
+            Some(&declared.return_type),
+        ))
     }
 
     pub(in crate::lowering) fn dynamic_interface_adapter(
@@ -523,7 +529,9 @@ impl Planner<'_> {
             return_abi(&self.facts, &function.return_type, ReturnSlot::Method)
         };
 
-        let user_result = self.interface_result_layout(source_go_method.as_deref(), &return_type);
+        let user_result = self
+            .facts
+            .interface_result_layout(source_go_method.as_deref(), &return_type);
         let producer = if source_go_method.is_none() && source_requirement.is_none() {
             ResultProducer::Lisette
         } else {
@@ -531,7 +539,7 @@ impl Planner<'_> {
         };
         let source = FunctionLayout {
             producer,
-            ..self.function_layout(
+            ..self.facts.function_layout(
                 self.interface_parameter_layouts(
                     source_go_method.as_deref(),
                     &param_types,
@@ -556,10 +564,13 @@ impl Planner<'_> {
         };
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
         let target = if interface_abi.fits_return_type(&self.facts, &return_type) {
-            let result = self.interface_result_layout(go_method.as_deref(), &return_type);
-            self.function_layout(parameters, &result, interface_abi, Some(interface_return))
+            let result = self
+                .facts
+                .interface_result_layout(go_method.as_deref(), &return_type);
+            self.facts
+                .function_layout(parameters, &result, interface_abi, Some(interface_return))
         } else {
-            self.function_layout(
+            self.facts.function_layout(
                 parameters,
                 &user_result,
                 source.return_abi.clone(),
@@ -595,10 +606,12 @@ impl Planner<'_> {
             .map(|(index, ty)| {
                 match go_method.and_then(|id| self.facts.go_callable_parameter(id, index + offset))
                 {
-                    Some(slot) => {
-                        self.value_layout_with_declaration(ty, slot.origin, &slot.declared_type)
-                    }
-                    None => self.value_layout(ty, SlotOrigin::Lisette),
+                    Some(slot) => self.facts.value_layout_with_declaration(
+                        ty,
+                        slot.origin,
+                        &slot.declared_type,
+                    ),
+                    None => self.facts.value_layout(ty, SlotOrigin::Lisette),
                 }
             })
             .collect()

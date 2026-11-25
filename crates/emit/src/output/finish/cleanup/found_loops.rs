@@ -175,12 +175,17 @@ fn flag_guarded_return(
     if !matches!(plan.else_arm, ElseArm::None) || plan.initializer.is_some() {
         return None;
     }
-    let GoExpressionNode::Unary { operator, operand } = plan.condition.node() else {
+    let GoExpressionNode::Unary {
+        operator: UnaryOp::Not,
+        operand,
+    } = plan.condition.node()
+    else {
         return None;
     };
-    if *operator != UnaryOp::Not
-        || !matches!(operand.as_ref(), GoExpressionNode::Identifier(name) if name.refers_to_same(flag))
-    {
+    let GoExpressionNode::Identifier(name) = operand.as_ref() else {
+        return None;
+    };
+    if !name.refers_to_same(flag) {
         return None;
     }
     match plan.then_body.statements.as_slice() {

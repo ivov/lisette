@@ -278,7 +278,9 @@ impl Planner<'_> {
         }
         let mut stages = vec![source_staged];
         if kind == SliceLoop::Fold {
-            let origin = self.function_type_origin(&result_ty, SlotOrigin::Lisette);
+            let origin = self
+                .facts
+                .function_type_origin(&result_ty, SlotOrigin::Lisette);
             let init = self.plan_composite_value(
                 &args[0],
                 ExpressionContext::value().with_function_slot_origin(origin),

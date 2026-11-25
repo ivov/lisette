@@ -68,10 +68,7 @@ pub(super) fn receiver_type_binding(
         .ty
         .clone();
 
-    Some((
-        declared,
-        facts.peel_go_alias(&facts.strip_refs(&receiver.get_type())),
-    ))
+    Some((declared, facts.receiver_go_target(&receiver.get_type())))
 }
 
 fn find_go_string_literal_close(s: &str) -> Option<usize> {

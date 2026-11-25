@@ -1,6 +1,7 @@
 use crate::Planner;
 
 use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::InlineExpr;
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
@@ -10,7 +11,6 @@ use crate::lowering::abi::go_result_wrapping::{
     nil_condition, non_nil_condition, unexpected_nil_error,
 };
 use crate::lowering::abi::go_returns;
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PairPlacement};
 use crate::lowering::calls::go_interop::{LoweredCall, RawPair};
 use crate::lowering::calls::unwrap_or::{MapLambda, map_lambda};
@@ -166,8 +166,12 @@ impl Planner<'_> {
         );
 
         let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
-        let source = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
-        let target_layout = self.value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
+        let source = self
+            .facts
+            .value_layout(&expression.get_type(), SlotOrigin::Lisette);
+        let target_layout = self
+            .facts
+            .value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
         let coercion = CoercionPlan::change(
             self,
             source
@@ -229,11 +233,11 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> LoweredStatement {
         let expression_ty = &expression.get_type();
-        let return_layout = self.value_layout(
+        let return_layout = self.facts.value_layout(
             &self.scope.current_return_ctx().expect_ty(),
             SlotOrigin::Lisette,
         );
-        let source_layout = self.value_layout(expression_ty, SlotOrigin::Lisette);
+        let source_layout = self.facts.value_layout(expression_ty, SlotOrigin::Lisette);
         let (setup, values) = if self.returns_tagged_type(expression)
             && source_layout
                 .underlying()
@@ -250,7 +254,9 @@ impl Planner<'_> {
                 let ValueLayout::Fallible { error: source, .. } = source_layout.underlying() else {
                     unreachable!("Result propagation requires an error layout")
                 };
-                let target = self.value_layout(source.logical_type(), SlotOrigin::Lisette);
+                let target = self
+                    .facts
+                    .value_layout(source.logical_type(), SlotOrigin::Lisette);
                 let (error_setup, error) =
                     CoercionPlan::change(self, source, &target).lower(self, error);
                 setup.extend(error_setup);
@@ -751,7 +757,7 @@ impl Planner<'_> {
             (GoExpression::identifier(check), Stability::Fixed)
         };
 
-        let source_layout = self.value_layout(&receiver_ty, SlotOrigin::Lisette);
+        let source_layout = self.facts.value_layout(&receiver_ty, SlotOrigin::Lisette);
         let ValueLayout::Fallible {
             error: error_layout,
             ..
@@ -761,7 +767,9 @@ impl Planner<'_> {
         };
 
         let mut failure_setup = Vec::new();
-        let error_target = self.value_layout(error_layout.logical_type(), SlotOrigin::Lisette);
+        let error_target = self
+            .facts
+            .value_layout(error_layout.logical_type(), SlotOrigin::Lisette);
         let (error_setup, error) = CoercionPlan::change(self, error_layout, &error_target).lower(
             self,
             GoExpression::value_field(
@@ -785,7 +793,9 @@ impl Planner<'_> {
         );
 
         let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
-        let target_layout = self.value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
+        let target_layout = self
+            .facts
+            .value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
         let coercion = CoercionPlan::change(
             self,
             source_layout

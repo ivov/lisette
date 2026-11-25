@@ -102,7 +102,9 @@ impl Planner<'_> {
         let stages: Vec<ValuePlan> = elements
             .iter()
             .map(|e| {
-                let origin = self.function_type_origin(&element_lisette_ty, SlotOrigin::Lisette);
+                let origin = self
+                    .facts
+                    .function_type_origin(&element_lisette_ty, SlotOrigin::Lisette);
                 self.plan_composite_value(
                     e,
                     ExpressionContext::value().with_function_slot_origin(origin),

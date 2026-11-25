@@ -6,8 +6,8 @@ use crate::lowering::expressions::values::with_source_positions;
 use super::{NativeCallContext, NativeCallForm};
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
-use crate::lowering::abi::layout::ValueLayout;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
 use crate::lowering::plan::context::ExpressionContext;
 use crate::lowering::plan::values::ValuePlan;
@@ -301,7 +301,12 @@ impl<'a> Planner<'a> {
             .zip(&target.selections)
             .enumerate()
             .map(|(index, (ty, selection))| {
-                self.field_slot_layout(&target.owner_type, Some(selection), &index.to_string(), ty)
+                self.facts.field_slot_layout(
+                    &target.owner_type,
+                    Some(selection),
+                    &index.to_string(),
+                    ty,
+                )
             })
             .collect();
 
@@ -309,7 +314,7 @@ impl<'a> Planner<'a> {
             .iter()
             .zip(&target.field_tys)
             .map(|(a, slot)| {
-                let origin = self.function_type_origin(slot, SlotOrigin::Lisette);
+                let origin = self.facts.function_type_origin(slot, SlotOrigin::Lisette);
                 let ctx = arg_ctx.with_function_slot_origin(origin);
                 let source = self.emitted_value_layout(a, ctx);
                 (self.plan_composite_value(a, ctx), source)

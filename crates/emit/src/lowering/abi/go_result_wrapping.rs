@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::value_layout::{ResultProducer, ValueLayout};
 use crate::lowering::abi::coercion_plan::LayoutChange;
-use crate::lowering::abi::layout::{ResultProducer, ValueLayout};
 use crate::lowering::abi::layout_change::PayloadLayoutChanges;
 use crate::lowering::calls::go_interop::{LoweredProducer, build_tuple_literal};
 use crate::lowering::control_flow::propagation::plain_return;
@@ -529,7 +529,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let raw = self.hoist_temp(&mut statements, "ret", call);
         let raw = || GoExpression::identifier(raw.clone());
-        let option_layout = self.value_layout(option_ty, SlotOrigin::Lisette);
+        let option_layout = self.facts.value_layout(option_ty, SlotOrigin::Lisette);
         let inner_ty_str = option_layout
             .payload()
             .expect("a sentinel Option has a payload")
@@ -564,7 +564,7 @@ impl Planner<'_> {
             .expect("Option wrapping requires a payload layout");
         if payload_changes.is_some()
             || matches!(
-                self.value_layout(option_ty, SlotOrigin::GoReturn),
+                self.facts.value_layout(option_ty, SlotOrigin::GoReturn),
                 ValueLayout::NullableOption { .. }
             )
             || (layout.is_flattened() && payload.logical_type().tuple_arity().is_some())
