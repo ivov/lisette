@@ -33,7 +33,6 @@ pub(crate) enum ChannelDirection {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GoTypeShape {
-    Empty,
     Name(String),
     Qualified {
         package: String,
@@ -82,12 +81,6 @@ impl PartialEq for GoType {
 }
 
 impl Eq for GoType {}
-
-impl Default for GoType {
-    fn default() -> Self {
-        Self::of_shape(GoTypeShape::Empty)
-    }
-}
 
 impl GoType {
     pub(crate) fn new(name: impl Into<String>) -> Self {
@@ -164,10 +157,6 @@ impl GoType {
         &self.requirements
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        matches!(self.shape.as_ref(), GoTypeShape::Empty)
-    }
-
     pub(crate) fn compared_as(self, target: GoType) -> Self {
         let mut compared = self.clone();
         compared.shape = target.shape;
@@ -191,10 +180,7 @@ impl GoType {
             GoTypeShape::Struct(_) => "struct",
             GoTypeShape::Interface(_) => "interface",
             GoTypeShape::EmptyInterface => "any",
-            GoTypeShape::Empty
-            | GoTypeShape::Arguments(_)
-            | GoTypeShape::Slice(_)
-            | GoTypeShape::Array(..) => "",
+            GoTypeShape::Arguments(_) | GoTypeShape::Slice(_) | GoTypeShape::Array(..) => "",
         }
     }
 
@@ -216,7 +202,17 @@ impl GoType {
                     GoTypeKind::PointerToArray
                 }
                 GoTypeShape::Channel(..) => GoTypeKind::Channel,
-                _ => GoTypeKind::Value,
+                GoTypeShape::Name(_)
+                | GoTypeShape::Qualified { .. }
+                | GoTypeShape::Instantiated { .. }
+                | GoTypeShape::Arguments(_)
+                | GoTypeShape::Results(_)
+                | GoTypeShape::Pointer(_)
+                | GoTypeShape::Variadic(_)
+                | GoTypeShape::Function(..)
+                | GoTypeShape::Struct(_)
+                | GoTypeShape::Interface(_)
+                | GoTypeShape::EmptyInterface => GoTypeKind::Value,
             })
     }
 
@@ -228,19 +224,35 @@ impl GoType {
     pub(crate) fn arguments(&self) -> &[GoType] {
         match self.shape.as_ref() {
             GoTypeShape::Arguments(arguments) => arguments,
-            _ => &[],
+            shape @ GoTypeShape::Name(_)
+            | shape @ GoTypeShape::Qualified { .. }
+            | shape @ GoTypeShape::Instantiated { .. }
+            | shape @ GoTypeShape::Results(_)
+            | shape @ GoTypeShape::Slice(_)
+            | shape @ GoTypeShape::Map(..)
+            | shape @ GoTypeShape::Pointer(_)
+            | shape @ GoTypeShape::Array(..)
+            | shape @ GoTypeShape::Channel(..)
+            | shape @ GoTypeShape::Variadic(_)
+            | shape @ GoTypeShape::Function(..)
+            | shape @ GoTypeShape::Struct(_)
+            | shape @ GoTypeShape::Interface(_)
+            | shape @ GoTypeShape::EmptyInterface => {
+                panic!("internal error: {shape:?} is not a type argument list")
+            }
         }
     }
 
-    pub(crate) fn type_arguments(arguments: &[GoType]) -> Self {
-        if arguments.is_empty() {
-            return Self::default();
-        }
-        Self::structured(GoTypeShape::Arguments(arguments.to_vec()), arguments)
+    pub(crate) fn type_arguments(arguments: &[GoType]) -> Option<Self> {
+        (!arguments.is_empty())
+            .then(|| Self::structured(GoTypeShape::Arguments(arguments.to_vec()), arguments))
     }
 
     pub(crate) fn type_argument(argument: &GoType) -> Self {
-        Self::type_arguments(slice::from_ref(argument))
+        Self::structured(
+            GoTypeShape::Arguments(vec![argument.clone()]),
+            slice::from_ref(argument),
+        )
     }
 
     pub(crate) fn result_list(results: &[GoType]) -> Self {
@@ -294,8 +306,12 @@ impl GoType {
         )
     }
 
-    pub(crate) fn method_interface(name: &str, parameters: &[GoType], result: &GoType) -> Self {
-        let signature = Self::function(parameters, (!result.is_empty()).then_some(result));
+    pub(crate) fn method_interface(
+        name: &str,
+        parameters: &[GoType],
+        result: Option<&GoType>,
+    ) -> Self {
+        let signature = Self::function(parameters, result);
         Self::structured(
             GoTypeShape::Interface(vec![(name.to_string(), signature.clone())]),
             [&signature],

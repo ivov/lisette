@@ -41,6 +41,7 @@ pub(in crate::lowering) enum Branching<'e> {
 }
 
 impl<'e> Branching<'e> {
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn of(expression: &'e Expression) -> Option<Self> {
         match expression {
             Expression::If {
@@ -207,16 +208,18 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         branching: Branching<'_>,
-        ty: &Type,
     ) -> ValuePlan {
-        let ty = self.facts.value_use_slot(expression).unwrap_or(ty);
+        let ty = self
+            .facts
+            .value_use_slot(expression)
+            .expect("a branching value has a slot type");
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let target = GoExpression::identifier(result_var.clone());
         let block = self.lower_branching_to_block(
             branching,
             &PlacePlan::Assign {
                 local: &target,
-                target_ty: Some(ty),
+                target_ty: ty,
             },
         );
 
@@ -340,21 +343,20 @@ impl Planner<'_> {
         alternative: Option<&Expression>,
         place: &PlacePlan,
     ) -> LoweredStatement {
-        if alternative.is_none() && is_conjunction(condition) {
-            return self
-                .lower_conjunction_guard(condition, |this| {
-                    this.with_scope(|this| this.lower_block_to_place(consequence, place))
-                })
-                .into_statement();
-        }
-
-        let (condition_setup, condition) = self.lower_if_condition(condition);
-
         let then_place = if alternative.is_none() {
             &PlacePlan::Statement
         } else {
             place
         };
+        if alternative.is_none() && is_conjunction(condition) {
+            return self
+                .lower_conjunction_guard(condition, |this| {
+                    this.with_scope(|this| this.lower_block_to_place(consequence, then_place))
+                })
+                .into_statement();
+        }
+
+        let (condition_setup, condition) = self.lower_if_condition(condition);
         let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, then_place));
 
         let preceding = Divergence::of(&then_body);

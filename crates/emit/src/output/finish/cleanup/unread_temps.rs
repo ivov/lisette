@@ -6,6 +6,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::target::ir::bodies::{
     Definition, LoweredStatement, Statement, direct_first, for_each_statements_mut,
+    scope_statements,
 };
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::{GoIdentifier, LocalId};
@@ -86,13 +87,33 @@ fn remove_temp(statements: &mut Vec<Statement>, name: &GoIdentifier) {
             match statement.kind {
                 LoweredStatement::Block(mut body)
                     if body.statements.iter().any(defines)
-                        && body.statements.iter().filter(|s| declares(s)).count() == 1 =>
+                        && scope_statements(&body.statements)
+                            .into_iter()
+                            .filter(|statement| declares(statement))
+                            .count()
+                            == 1 =>
                 {
                     body.statements.retain(|statement| !defines(statement));
                     direct_first(&mut body.statements, statement.line);
                     list.extend(body.statements);
                 }
-                kind => list.push(Statement {
+                kind @ LoweredStatement::If(_)
+                | kind @ LoweredStatement::Loop(_)
+                | kind @ LoweredStatement::Block(_)
+                | kind @ LoweredStatement::Body(_)
+                | kind @ LoweredStatement::Break(_)
+                | kind @ LoweredStatement::Continue(_)
+                | kind @ LoweredStatement::Const(_)
+                | kind @ LoweredStatement::Return(_)
+                | kind @ LoweredStatement::Assign(_)
+                | kind @ LoweredStatement::Async { .. }
+                | kind @ LoweredStatement::Select(_)
+                | kind @ LoweredStatement::Switch(_)
+                | kind @ LoweredStatement::Define(_)
+                | kind @ LoweredStatement::VarDeclaration { .. }
+                | kind @ LoweredStatement::Discard { .. }
+                | kind @ LoweredStatement::ExpressionStatement { .. }
+                | kind @ LoweredStatement::UnreachablePanic => list.push(Statement {
                     line: statement.line,
                     kind,
                 }),
@@ -115,9 +136,9 @@ fn remove_temp(statements: &mut Vec<Statement>, name: &GoIdentifier) {
     });
 }
 
-fn declares(statement: &Statement) -> bool {
+fn declares(statement: &LoweredStatement) -> bool {
     matches!(
-        statement.kind,
+        statement,
         LoweredStatement::Define(_)
             | LoweredStatement::VarDeclaration { .. }
             | LoweredStatement::Const(_)
@@ -125,24 +146,22 @@ fn declares(statement: &Statement) -> bool {
 }
 
 fn pure_define(statement: &LoweredStatement) -> Option<(&GoIdentifier, &GoExpression)> {
-    match statement {
-        LoweredStatement::Define(Definition { names, value }) => match names.as_slice() {
-            [name] if value.effects().can_erase() => Some((name, value)),
-            _ => None,
-        },
-        _ => None,
-    }
+    let LoweredStatement::Define(Definition { names, value }) = statement else {
+        return None;
+    };
+    let [name] = names.as_slice() else {
+        return None;
+    };
+    value.effects().can_erase().then_some((name, value))
 }
 
 fn discarded_name(statement: &LoweredStatement) -> Option<&GoIdentifier> {
-    match statement {
-        LoweredStatement::Discard {
-            arity: 1,
-            value: expression,
-        } => match expression.node() {
-            GoExpressionNode::Identifier(name) => Some(name),
-            _ => None,
-        },
-        _ => None,
-    }
+    let LoweredStatement::Discard {
+        arity: 1,
+        value: expression,
+    } = statement
+    else {
+        return None;
+    };
+    expression.as_identifier()
 }

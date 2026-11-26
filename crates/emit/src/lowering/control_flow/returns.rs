@@ -6,20 +6,19 @@ use crate::lowering::calls::call_plan::CallPlan;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::calls::go_interop::LoweredProducer;
-use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::calls::wrap_err::wrap_error;
 use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::control_flow::propagation::plain_return;
-use crate::lowering::definitions::functions::is_go_never;
 use crate::lowering::expressions::tuple_literal::TupleLiteral;
 use crate::lowering::planner::queries::PlannerQueries;
-use crate::lowering::statements::blocks::{BlockTail, TailTarget};
+use crate::lowering::statements::blocks::{BlockTail, TailKind, TailTarget};
+use crate::lowering::statements::placement::ElidableTail;
 use crate::lowering::statements::placement::try_elide_tail_let;
-use crate::lowering::statements::placement::{ElidableTail, requires_temp_var};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
-use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement, diverging_statement};
+use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement};
 use crate::target::ir::prelude::{ConstructorKind, Fallible, prelude_call};
+use crate::target::ir::termination::list_terminates;
 use crate::target::ir::values::GoExpression;
 use crate::target::types::return_abi::{
     LoweredFailure, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
@@ -29,54 +28,31 @@ use syntax::ast::Expression;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn build_return_plan(
-        &mut self,
-        expression: &Expression,
-    ) -> LoweredBlock {
+    pub(in crate::lowering) fn lower_return(&mut self, expression: &Expression) -> Vec<Statement> {
+        let expression = if let Expression::Return { expression, .. } = expression {
+            expression.as_ref()
+        } else {
+            expression
+        };
+        match self.queries().tail_kind(expression) {
+            TailKind::Diverges => self.lower_never_value(expression),
+            TailKind::Unit => self.lower_unit_value_return(expression),
+            TailKind::Value => self.lower_return_value_tail(expression),
+        }
+    }
+
+    fn lower_unit_value_return(&mut self, expression: &Expression) -> Vec<Statement> {
+        let mut statements = self.lower_unit_effect(expression);
+        if list_terminates(&statements) {
+            return statements;
+        }
         let return_ctx = self.scope.current_return_ctx();
-        if self.facts.is_never(&expression.get_type()) {
-            return LoweredBlock {
-                statements: self.lower_never_value(expression),
-            };
-        }
-        let is_unit = return_ctx
-            .ty()
-            .is_some_and(|ty| self.facts.resolves_to_unit(ty))
-            || self.facts.resolves_to_unit(&expression.get_type());
-        if is_unit {
-            let is_pure = matches!(
-                expression,
-                Expression::Unit { .. }
-                    | Expression::Identifier { .. }
-                    | Expression::Literal { .. }
-            );
-
-            let mut statements = Vec::new();
-            if !is_pure {
-                statements.push(self.lower_statement(expression));
-            }
-            statements.push(if matches!(return_ctx, ReturnContext::Void(_)) {
-                LoweredStatement::Return(Vec::new()).into()
-            } else {
-                plain_return(self.unit_value(Some(expression), return_ctx.ty()))
-            });
-            return LoweredBlock { statements };
-        }
-
-        if let Some(statements) = self.try_lower_layout_return(expression) {
-            return LoweredBlock { statements };
-        }
-
-        if let Some(statements) = self.try_lower_wrapped_return(expression) {
-            return LoweredBlock { statements };
-        }
-
-        let (mut statements, value) = self
-            .plan_value(expression, ExpressionContext::value())
-            .into_parts();
-        let value = self.apply_type_coercion(&mut statements, return_ctx.ty(), expression, value);
-        statements.push(plain_return(value));
-        LoweredBlock { statements }
+        statements.push(if matches!(return_ctx, ReturnContext::Void(_)) {
+            LoweredStatement::Return(Vec::new()).into()
+        } else {
+            plain_return(self.unit_value(Some(expression), return_ctx.ty()))
+        });
+        statements
     }
 
     pub(in crate::lowering) fn try_lower_wrapped_return(
@@ -89,16 +65,6 @@ impl Planner<'_> {
             None => expression.get_type(),
         };
         let fallible = self.facts.fallible(&written_ty)?;
-
-        if let Some(site) = CallSite::of(expression)
-            && is_go_never(&self.facts, expression)
-        {
-            let (mut statements, call) = self
-                .plan_call_expression(site, None, ExpressionContext::value())
-                .into_parts();
-            statements.push(diverging_statement(call));
-            return Some(statements);
-        }
 
         if fallible.classify_constructor(expression) == Some(ConstructorKind::Failure) {
             return Some(self.lower_failure_constructor_return(&[], &fallible, &[]));
@@ -120,13 +86,15 @@ impl Planner<'_> {
             return Some(self.lower_wrapped_call_return(site, &fallible, &written_ty));
         }
 
-        let (mut statements, value) = match expression {
-            Expression::Propagate {
-                expression: inner, ..
-            } if coercion.is_identity() => self.plan_propagate(inner),
-            _ => self
-                .plan_value(expression, ExpressionContext::value())
-                .into_parts(),
+        let (mut statements, value) = if let Expression::Propagate {
+            expression: inner, ..
+        } = expression
+            && coercion.is_identity()
+        {
+            self.plan_propagate(inner)
+        } else {
+            self.plan_value(expression, ExpressionContext::value())
+                .into_parts()
         };
 
         let (coercion_setup, value) = coercion.lower(self, value);
@@ -227,7 +195,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let error = fallible.err_ty().zip(args.first()).map(|(err_ty, arg)| {
             let error = self.plan_composite_value(arg, ExpressionContext::value());
-            let (message_setup, wraps) = self.prepare_wrap_messages(wraps, ErrorUse::Read);
+            let (message_setup, wraps) = self.prepare_wrap_messages(wraps);
             let error = if message_setup.is_empty() {
                 error
             } else {
@@ -452,6 +420,7 @@ impl Planner<'_> {
         }
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn lower_return_value_tail(
         &mut self,
         last: &Expression,
@@ -484,25 +453,15 @@ impl Planner<'_> {
     }
 
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
-        if requires_temp_var(last) {
-            let operand = self.plan_operand(last, ExpressionContext::value());
-            let (mut statements, value) = operand.into_parts();
-            if !value.is_empty() {
-                statements.push(plain_return(value));
-            }
-            statements
+        let (mut statements, expression) = self.plan_tail_value(last);
+        let expression = if self.queries().tail_tuple_return_slots(last).is_some() {
+            expression
         } else {
-            let (mut statements, expression) = self.plan_tail_value(last);
-            let expression = if self.queries().tail_tuple_return_slots(last).is_some() {
-                expression
-            } else {
-                let return_ctx = self.scope.current_return_ctx();
-                self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression)
-            };
-
-            statements.push(plain_return(expression));
-            statements
-        }
+            let return_ctx = self.scope.current_return_ctx();
+            self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression)
+        };
+        statements.push(plain_return(expression));
+        statements
     }
 }
 

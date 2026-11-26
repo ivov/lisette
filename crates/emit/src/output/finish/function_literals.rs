@@ -7,20 +7,19 @@ use crate::target::types::go_type::GoType;
 
 pub(crate) fn function_literal(
     parameters: Vec<GoParameter>,
-    result: impl Into<GoType>,
+    result: Option<GoType>,
     mut body: LoweredBlock,
     layout: FunctionLiteralLayout,
 ) -> GoExpression {
-    let result = result.into();
     drop_unreachable_statements(&mut body.statements);
-    if !result.is_empty() {
+    if result.is_some() {
         body.ensure_go_termination();
     }
     if cfg!(debug_assertions) {
-        let body_result = if result.is_empty() {
-            BodyResult::Void
-        } else {
+        let body_result = if result.is_some() {
             BodyResult::Value
+        } else {
+            BodyResult::Void
         };
         verify_final_function_body(&mut body, body_result)
             .unwrap_or_else(|error| panic!("{error}"));
@@ -29,7 +28,7 @@ pub(crate) fn function_literal(
 }
 
 pub(crate) fn immediate_call(
-    result: impl Into<GoType>,
+    result: Option<GoType>,
     body: LoweredBlock,
     layout: FunctionLiteralLayout,
 ) -> GoExpression {

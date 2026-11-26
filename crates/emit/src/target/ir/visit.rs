@@ -259,9 +259,11 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
             }
             AssignForm::Simple { target, value } => {
                 visitor.assignment_target(target.node());
-                match target.node_mut() {
-                    node @ GoExpressionNode::Identifier(_) => visitor.assigned_identifier(node),
-                    node => visit_expression(node, visitor),
+                let node = target.node_mut();
+                if matches!(node, GoExpressionNode::Identifier(_)) {
+                    visitor.assigned_identifier(node);
+                } else {
+                    visit_expression(node, visitor);
                 }
                 visit_expression(value.node_mut(), visitor);
             }

@@ -1,13 +1,11 @@
-use crate::lowering::abi::ReturnSlot;
-use crate::lowering::abi::return_abi;
+use crate::lookup::facts::return_abi_rules::interface_method_return_abi;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
 use crate::target::names::generics::generic_bounds;
 use crate::target::names::go_name::{self, GoExport};
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, Generic, ParentInterface};
-use syntax::program::{Definition, PRELUDE_PACKAGE_ID};
-use syntax::types::Type;
+use syntax::program::PRELUDE_PACKAGE_ID;
 
 impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn emit_interface(
@@ -61,23 +59,21 @@ impl PlannerQueries<'_, '_> {
     ) -> InterfaceMethod {
         let function = item.function_definition_view();
         let ty = item.get_type();
-        let all_args = ty
-            .get_function_params()
+        let signature = ty
+            .as_function_type()
             .expect("interface method must have function type");
 
-        let arguments: Vec<GoType> = all_args
+        let arguments: Vec<GoType> = signature
+            .params
             .iter()
             .map(|parameter| self.go_type(&parameter.ty))
             .collect();
-        let raw_return_ty = ty
-            .get_function_ret()
-            .expect("interface method must have return type")
-            .clone();
+        let raw_return_ty = signature.return_type.as_ref().clone();
         let qualified_id = self.facts.qualified_current(interface_name);
         let method = self
             .facts
             .definition(&qualified_id)
-            .and_then(Definition::methods)
+            .methods()
             .and_then(|methods| {
                 methods
                     .values()
@@ -85,14 +81,7 @@ impl PlannerQueries<'_, '_> {
             })
             .expect("interface method must be registered");
 
-        let return_abi = return_abi(
-            self.facts,
-            method.ty.get_function_ret().unwrap_or(&Type::Never),
-            ReturnSlot::InterfaceMethod {
-                name: function.name,
-                method,
-            },
-        );
+        let return_abi = interface_method_return_abi(self.facts, method);
 
         let method_name = self.facts.interface_method_go_name(function.name, export);
 

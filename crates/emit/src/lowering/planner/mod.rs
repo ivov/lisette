@@ -9,7 +9,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::package_names::PackageNames;
 use crate::lookup::state::adapter_registry::AdapterRegistry;
 use crate::lookup::state::conversion_record::ConversionRecord;
-use crate::lookup::state::enclosing::ReturnContext;
+use crate::lookup::state::enclosing::{LoopSlot, ReturnContext};
 use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -23,7 +23,6 @@ use crate::target::names::packages::{PackageRequirements, PackageUse};
 use crate::target::names::source_name::SourceName;
 use crate::target::types::go_type::GoType;
 use syntax::ast::{BindingId, Expression, Span};
-use syntax::types::Type;
 
 pub struct Planner<'a> {
     pub(in crate::lowering) facts: EmitFacts<'a>,
@@ -144,83 +143,30 @@ impl<'a> Planner<'a> {
 
     pub(in crate::lowering) fn with_loop<R>(
         &mut self,
-        result: Option<GoExpression>,
-        result_ty: Option<Type>,
+        result: Option<LoopSlot>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.scope.push_loop(result, result_ty);
+        self.scope.push_loop(result);
         let result = f(self);
         self.scope.pop_loop();
         result
     }
 
-    pub(in crate::lowering) fn claim_declared_binding(
+    pub(in crate::lowering) fn claim_binding(
         &mut self,
         lisette_name: &str,
         ids: &[BindingId],
-        preferred: &SourceName,
+        preferred: impl Into<GoIdentifier>,
     ) -> GoIdentifier {
-        let go_name = self.claim_declared_go_name(ids, preferred);
+        let go_name = self.claim_go_name(preferred);
         self.scope.bind_new_local(lisette_name, ids, go_name)
     }
 
-    pub(in crate::lowering) fn claim_block_binding(
+    pub(in crate::lowering) fn claim_go_name(
         &mut self,
-        lisette_name: &str,
-        ids: &[BindingId],
-        preferred: &SourceName,
-        outer: OuterBindings,
-    ) -> GoIdentifier {
-        self.claim_block_binding_as(lisette_name, ids, preferred.into(), preferred, outer)
-    }
-
-    pub(in crate::lowering) fn claim_block_binding_as(
-        &mut self,
-        lisette_name: &str,
-        ids: &[BindingId],
-        preferred: GoIdentifier,
-        source: &SourceName,
-        outer: OuterBindings,
+        preferred: impl Into<GoIdentifier>,
     ) -> GoIdentifier {
         let go_name = self.scope.new_local_identifier(preferred);
-        let hides = self.names.is_package_block_name(&go_name)
-            || self.scope.current_block_declares(&go_name)
-            || match outer {
-                OuterBindings::MayShadow => {
-                    self.scope.is_active_assign_target(&go_name)
-                        || self
-                            .scope
-                            .go_name_bound_by_other_lisette_name(&go_name, lisette_name)
-                }
-                OuterBindings::StayVisible => self.scope.has_binding_for_go_name(&go_name),
-            };
-
-        let go_name = if hides {
-            self.fresh_local(source)
-        } else {
-            go_name
-        };
-        self.scope.declare_go_name(&go_name);
-        self.scope.bind_new_local(lisette_name, ids, go_name)
-    }
-
-    pub(in crate::lowering) fn claim_declared_go_name(
-        &mut self,
-        ids: &[BindingId],
-        preferred: &SourceName,
-    ) -> GoIdentifier {
-        let go_name = self.scope.new_local_identifier(preferred);
-        let go_name = if self.queries().shadows_declaration(&go_name)
-            || self.scope.go_name_bound_outside_ids(&go_name, ids)
-        {
-            let fresh = self
-                .scope
-                .fresh_binding_go_name(preferred.base(), self.names);
-            self.scope.new_local_identifier(fresh)
-        } else {
-            go_name
-        };
-
         self.scope.declare_go_name(&go_name);
         go_name
     }
@@ -396,12 +342,6 @@ impl TreeVisitor for ImportCollector<'_> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(in crate::lowering) enum OuterBindings {
-    MayShadow,
-    StayVisible,
-}
-
 pub(in crate::lowering) fn written_span(expression: &Expression) -> Span {
     let span = expression.get_span();
     if let Expression::Call { expression, .. } = expression {
@@ -461,7 +401,7 @@ fn declaration_types(kind: &DeclarationKind) -> Vec<&GoType> {
             types.extend(parents);
             for method in methods {
                 types.extend(&method.parameters);
-                types.push(&method.result);
+                types.extend(&method.result);
             }
             parameters
         }
@@ -477,7 +417,7 @@ fn declaration_types(kind: &DeclarationKind) -> Vec<&GoType> {
                     .chain(&signature.parameters)
                     .map(|parameter| &parameter.go_type),
             );
-            types.push(&signature.result);
+            types.extend(&signature.result);
             &signature.generics
         }
     };

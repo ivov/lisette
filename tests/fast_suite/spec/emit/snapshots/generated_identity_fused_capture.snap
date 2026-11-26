@@ -30,18 +30,18 @@ func main() {
 	ret := 2
 	f := func() int {
 		found2 := lisette.MakeOptionNone[int]()
-		for _, found3 := range []int{ret, found} {
-			if found3 > 3 {
-				found2 = lisette.MakeOptionSome[int](found3)
+		for _, found := range []int{ret, found} {
+			if found > 3 {
+				found2 = lisette.MakeOptionSome[int](found)
 				break
 			}
 		}
 		if found2.Tag != lisette.OptionSome {
 			panic("find lost payload")
 		}
-		ret2 := found2.SomeVal
+		ret := found2.SomeVal
 		read := func() int {
-			return ret2
+			return ret
 		}
 		return read()
 	}

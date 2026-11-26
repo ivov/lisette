@@ -355,7 +355,12 @@ impl PlannerQueries<'_, '_> {
             GoResultForm::CommaOk { parts, encoding } => {
                 self.option_from_comma_ok(call, &parts, encoding, None)
             }
-            _ => Err(call),
+            GoResultForm::Unwrapped
+            | GoResultForm::Tuple { .. }
+            | GoResultForm::BareError(_)
+            | GoResultForm::Partial { .. }
+            | GoResultForm::Nullable(_)
+            | GoResultForm::Sentinel { .. } => Err(call),
         }
     }
 
@@ -397,8 +402,14 @@ impl PlannerQueries<'_, '_> {
         match abi.result {
             CallableReturnAbi::Value => {}
             CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
-                let source_payload = abi.return_layout.payload()?;
-                let target_payload = target.payload()?;
+                let (Some(source_payload), Some(target_payload)) =
+                    (abi.return_layout.payload(), target.payload())
+                else {
+                    panic!(
+                        "internal error: a nullable Option result {:?} into {target:?} has no payload",
+                        abi.return_layout
+                    );
+                };
                 if self
                     .resolve_layout_change(source_payload, target_payload)
                     .is_identity()
@@ -412,7 +423,7 @@ impl PlannerQueries<'_, '_> {
                 let change = CoercionPlan::change(self, &source, &target);
                 return change.changes_layout().then_some(change);
             }
-            _ => return None,
+            CallableReturnAbi::Void | CallableReturnAbi::Lowered(_) => return None,
         }
         let change = CoercionPlan::change(self, &abi.return_layout, &target);
         change.changes_layout().then_some(change)

@@ -59,8 +59,9 @@ impl Planner<'_> {
 
         let plan = self.plan_call_value(site, site.ty, ExpressionContext::value());
         let (mut statements, call) =
-            with_source_positions(&self.facts, &written_span(expression), plan).into_parts();
-        if !call.is_empty() {
+            with_source_positions(&self.facts, &written_span(expression), plan)
+                .into_setup_and_value();
+        if let Some(call) = call {
             statements.push(diverging_statement(call));
         }
         directed_at(
@@ -84,6 +85,6 @@ impl PlannerQueries<'_, '_> {
             .value_use_slot(expression)
             .and_then(|slot| self.facts.peeled_option_or_result(slot))
             .filter(|slot| slot.is_option() == ty.is_option())
-            .unwrap_or_else(|| ty.clone())
+            .expect("a fallible block with a never payload has a fallible slot")
     }
 }

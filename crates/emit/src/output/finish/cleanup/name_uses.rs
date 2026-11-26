@@ -1,3 +1,4 @@
+use crate::target::ir::go_expression::NameRead;
 use rustc_hash::FxHashMap;
 
 use crate::target::ir::bodies::Statement;
@@ -78,14 +79,14 @@ impl NameUses {
 
 impl VisitorMut for NameUses {
     fn expression(&mut self, node: &mut GoExpressionNode) {
-        match node {
-            GoExpressionNode::Identifier(name) => self.reads.add(name),
-            GoExpressionNode::Verbatim(text) => {
+        match node.name_read() {
+            NameRead::Local(name) => self.reads.add(name),
+            NameRead::Verbatim(text) => {
                 for token in verbatim_identifiers(text) {
                     *self.opaque_reads.entry(token.to_string()).or_default() += 1;
                 }
             }
-            _ => {}
+            NameRead::NoName => {}
         }
     }
 

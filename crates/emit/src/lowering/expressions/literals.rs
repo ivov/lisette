@@ -67,12 +67,12 @@ impl Planner<'_> {
     }
 
     fn plan_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
-        let element_lisette_ty = match ty {
-            Type::Array { element, .. } => element.as_ref().clone(),
-            _ => self
-                .facts
+        let element_lisette_ty = if let Type::Array { element, .. } = ty {
+            element.as_ref().clone()
+        } else {
+            self.facts
                 .first_type_argument(ty)
-                .expect("Slice type must have element type"),
+                .expect("Slice type must have element type")
         };
 
         let element_ty = self.queries().go_type(&element_lisette_ty);
@@ -326,7 +326,9 @@ fn write_unicode_escape(chars: &mut Peekable<Chars<'_>>, result: &mut String) {
     chars.next();
     chars.next();
     let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
-    let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
+    let codepoint = u32::from_str_radix(&hex, 16).unwrap_or_else(|error| {
+        panic!("internal error: `\\u{{{hex}}}` is not a code point: {error}")
+    });
     if codepoint <= 0xFFFF {
         write!(result, "\\u{:04X}", codepoint).unwrap();
     } else {
@@ -342,7 +344,7 @@ pub(in crate::lowering) fn integer_literal(value: u64, text: &Option<String>) ->
 }
 
 fn display_form(facts: &EmitFacts<'_>, expression: &Expression) -> DisplayForm {
-    DisplayForm::of(&expression.get_type(), |id| facts.definition(id))
+    DisplayForm::of(&expression.get_type(), |id| Some(facts.definition(id)))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

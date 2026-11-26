@@ -3,7 +3,7 @@ use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::wrap_err::wrap_error;
 use crate::lowering::planner::queries::PlannerQueries;
 
-use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
+use crate::lookup::facts::inline_uses::is_inline_candidate;
 use crate::lookup::facts::value_layout::{FallibleLayout, ValueLayout};
 use crate::lookup::state::bindings::InlineExpression;
 use crate::lookup::state::scope::PairStatusKind;
@@ -17,9 +17,9 @@ use crate::lowering::abi::go_returns;
 use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PairPlacement};
 use crate::lowering::calls::go_interop::{LoweredCall, RawPair};
 use crate::lowering::calls::unwrap_or::{MapLambda, map_lambda};
-use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::patterns::matching::FusedName;
 use crate::lowering::value_plans::context::ExpressionContext;
+use crate::output::finish::cleanup::name_uses::NameUses;
 use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
@@ -51,15 +51,6 @@ pub(in crate::lowering) enum ErrorMapper<'a> {
     Function(&'a Expression),
 }
 
-impl ErrorMapper<'_> {
-    fn reads_error(&self) -> bool {
-        match self {
-            ErrorMapper::Lambda(lambda) => lambda.param.is_some(),
-            ErrorMapper::Function(_) => true,
-        }
-    }
-}
-
 fn names_function(node: &GoExpressionNode) -> bool {
     match node {
         GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => true,
@@ -67,7 +58,22 @@ fn names_function(node: &GoExpressionNode) -> bool {
         GoExpressionNode::Selector { base, .. } => {
             matches!(base.as_ref(), GoExpressionNode::Type(_)) || names_function(base)
         }
-        _ => false,
+        GoExpressionNode::Literal(_)
+        | GoExpressionNode::Type(_)
+        | GoExpressionNode::CompositeLiteral { .. }
+        | GoExpressionNode::Call { .. }
+        | GoExpressionNode::Index { .. }
+        | GoExpressionNode::Slice { .. }
+        | GoExpressionNode::TypeAssertion { .. }
+        | GoExpressionNode::Unary { .. }
+        | GoExpressionNode::AddressOf(_)
+        | GoExpressionNode::Dereference(_)
+        | GoExpressionNode::Binary { .. }
+        | GoExpressionNode::Conversion { .. }
+        | GoExpressionNode::Spread(_)
+        | GoExpressionNode::FunctionLiteral { .. }
+        | GoExpressionNode::Verbatim(_)
+        | GoExpressionNode::Unreachable => false,
     }
 }
 
@@ -323,7 +329,7 @@ impl Planner<'_> {
                 let name = named.cloned().unwrap_or_else(|| self.fresh_declared("ret"));
                 (name, slot.nil_guard)
             });
-        let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, ErrorUse::Read);
+        let (message_setup, wraps) = self.prepare_wrap_messages(&wraps);
         let value_slot = match (&bound, value) {
             (Some((name, _)), _) => FusedValueSlot::Bound(name.clone()),
             (None, Some(_)) => FusedValueSlot::Ignored,
@@ -556,13 +562,25 @@ impl Planner<'_> {
         let failure = pair.failure_condition();
         let status = pair.status_identifier().clone();
         let mut failure_setup = Vec::new();
-        if nil_guard == ErrorNilGuard::Guarded && mappers[0].reads_error() {
-            failure_setup.push(
+        let error = self.apply_error_mappers(
+            &mut failure_setup,
+            mappers,
+            GoExpression::identifier(status.clone()),
+            Some(Stability::Fixed),
+        );
+        if nil_guard == ErrorNilGuard::Guarded
+            && (error
+                .node()
+                .mentions_local(status.id().expect("a status local has an id"))
+                || NameUses::of(&mut failure_setup).references(&status) > 0)
+        {
+            failure_setup.insert(
+                0,
                 LoweredStatement::If(IfPlan::plain(
                     nil_condition(GoExpression::identifier(status.clone())),
                     LoweredBlock {
                         statements: vec![assign(
-                            GoExpression::identifier(status.clone()),
+                            GoExpression::identifier(status),
                             unexpected_nil_error(),
                         )],
                     },
@@ -571,12 +589,6 @@ impl Planner<'_> {
                 .into(),
             );
         }
-        let error = self.apply_error_mappers(
-            &mut failure_setup,
-            mappers,
-            GoExpression::identifier(status),
-            Some(Stability::Fixed),
-        );
 
         let payload = pair.payload();
         MappedFailure {
@@ -651,20 +663,14 @@ impl Planner<'_> {
         stability: Option<Stability>,
     ) {
         let ids = param.binding.as_slice();
-        let uses = analyze_inline_candidate_ids(ids, &[body]);
-        if uses == InlineDecision::Unused {
-            run_unread_error(setup, error);
-            return;
-        }
         if let (Some(name), Some(Stability::Fixed)) = (error.as_identifier(), stability) {
             self.scope
                 .bind_existing_identifier(param.name, ids, name.clone());
             return;
         }
-        let read_once = uses != InlineDecision::Keep;
         if let Some(stability) = stability
-            && read_once
             && stability.is_fixed()
+            && is_inline_candidate(ids, &[body])
             && error.effects().can_duplicate()
         {
             self.scope.bind_inline_expression(
@@ -875,17 +881,17 @@ impl PlannerQueries<'_, '_> {
         if let Some(lambda) = map_lambda(function) {
             return Some(ErrorMapper::Lambda(lambda));
         }
-        let named = match function {
-            Expression::Identifier { .. } => true,
-            Expression::DotAccess { resolution, .. } => matches!(
-                resolution,
-                DotAccessResolution::PackageMember { .. }
-                    | DotAccessResolution::EnumVariant { .. }
-                    | DotAccessResolution::StaticMethod { .. }
-                    | DotAccessResolution::InstanceMethodValue { .. }
-            ),
-            _ => false,
-        };
+        let named = matches!(
+            function,
+            Expression::Identifier { .. }
+                | Expression::DotAccess {
+                    resolution: DotAccessResolution::PackageMember { .. }
+                        | DotAccessResolution::EnumVariant { .. }
+                        | DotAccessResolution::StaticMethod { .. }
+                        | DotAccessResolution::InstanceMethodValue { .. },
+                    ..
+                }
+        );
 
         (named && !self.callee_lowers_to_type_construction(function))
             .then_some(ErrorMapper::Function(function))

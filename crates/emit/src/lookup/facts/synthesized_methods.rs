@@ -67,7 +67,7 @@ impl<'a> StringFormat<'a> {
             StringFormat::Display {
                 qualified: true, ..
             } => format!("{type_name}."),
-            _ => String::new(),
+            StringFormat::Display { .. } | StringFormat::Debug => String::new(),
         }
     }
 
@@ -105,16 +105,12 @@ impl EmitFacts<'_> {
         struct_id: &str,
         field: &StructFieldDefinition,
     ) -> String {
-        let forces_export = self
-            .definition(struct_id)
-            .is_some_and(|definition| definition.is_serialized());
+        let forces_export = self.definition(struct_id).is_serialized();
         go_names::struct_field_go_name(field, forces_export).into_owned()
     }
 
     fn declares_string_selector(&self, id: &str) -> bool {
-        let Some(definition) = self.definition(id) else {
-            return false;
-        };
+        let definition = self.definition(id);
         if matches!(definition.body, DefinitionBody::Interface { .. }) {
             return self.interface_has_string_selector(id);
         }
@@ -129,7 +125,7 @@ impl EmitFacts<'_> {
             params: vec![],
             writable: false,
         };
-        interface_requirements(&interface_ty, |id| self.definition(id))
+        interface_requirements(&interface_ty, |id| Some(self.definition(id)))
             .iter()
             .any(|requirement| STRINGER_METHODS.contains(&requirement.name.as_str()))
     }
@@ -147,16 +143,13 @@ impl EmitFacts<'_> {
 
     pub(crate) fn is_newtype_definition(&self, name: &str) -> bool {
         let qualified = self.qualified_current(name);
-        self.definition(qualified.as_str())
-            .is_some_and(Definition::is_newtype)
+        self.definition(qualified.as_str()).is_newtype()
     }
 
     fn is_pointer_backed_newtype(&self, name: &str) -> bool {
         let qualified = self.qualified_current(name);
         self.definition(qualified.as_str())
-            .is_some_and(|definition| {
-                definition.is_pointer_backed_newtype(|id| self.definition(id))
-            })
+            .is_pointer_backed_newtype(|id| Some(self.definition(id)))
     }
 
     fn stringer_overrides(&self, name: &str) -> (bool, bool) {
@@ -250,9 +243,7 @@ impl EmitFacts<'_> {
 
     pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
         let id = self.qualified_current(name);
-        let Some(definition) = self.definition(&id) else {
-            return false;
-        };
+        let definition = self.definition(&id);
         !definition.is_display()
             && self.stringer_kind_of(&id, &mut FxHashSet::default())
                 == Some(StringerKind::Synthesized)
@@ -269,7 +260,7 @@ impl EmitFacts<'_> {
     }
 
     fn stringer_kind_of(&self, id: &str, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
-        let definition = self.definition(id)?;
+        let definition = self.definition(id);
         if self.declares_string_selector(id) {
             return Some(StringerKind::Foreign);
         }

@@ -44,9 +44,9 @@ func main() {
 	f := func() int {
 		switch subject2 := value(effects).(type) {
 		case time.Duration:
-			subject3 := int64(subject2)
+			subject := int64(subject2)
 			read := func() int {
-				return int(subject3)
+				return int(subject)
 			}
 			ch2 := ch
 			for {

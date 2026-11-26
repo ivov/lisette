@@ -20,6 +20,7 @@ enum PlannedValue {
         expression: GoExpression,
         stability: Stability,
     },
+    Absent,
     Diverges,
 }
 
@@ -32,6 +33,12 @@ pub(in crate::lowering) struct SequencedValues {
 
 impl ValuePlan {
     pub(in crate::lowering) fn diverging(setup: Vec<Statement>) -> Self {
+        debug_assert!(
+            setup
+                .last()
+                .is_some_and(|statement| statement.kind.blocks_fallthrough()),
+            "a diverging plan ends its setup with a statement that does not fall through"
+        );
         Self {
             setup,
             value: PlannedValue::Diverges,
@@ -49,14 +56,14 @@ impl ValuePlan {
     pub(in crate::lowering) fn expression(&self) -> Option<&GoExpression> {
         match &self.value {
             PlannedValue::Go { expression, .. } => Some(expression),
-            PlannedValue::Diverges => None,
+            PlannedValue::Absent | PlannedValue::Diverges => None,
         }
     }
 
     pub(in crate::lowering) fn stability(&self) -> Stability {
         match &self.value {
             PlannedValue::Go { stability, .. } => *stability,
-            PlannedValue::Diverges => Stability::Observable,
+            PlannedValue::Absent | PlannedValue::Diverges => Stability::Observable,
         }
     }
 
@@ -90,6 +97,13 @@ impl ValuePlan {
                 expression,
                 stability,
             },
+        }
+    }
+
+    pub(in crate::lowering) fn without_value(setup: Vec<Statement>) -> Self {
+        Self {
+            setup,
+            value: PlannedValue::Absent,
         }
     }
 
@@ -148,6 +162,7 @@ impl ValuePlan {
                 expression: transform(&mut setup, expression),
                 stability,
             },
+            PlannedValue::Absent => PlannedValue::Absent,
             PlannedValue::Diverges => PlannedValue::Diverges,
         };
         Self { setup, value }
@@ -160,6 +175,19 @@ impl ValuePlan {
         let mut plan = self.map_expression(transform);
         plan.make_observable();
         plan
+    }
+
+    pub(in crate::lowering) fn settle_observable_value(
+        self,
+        settle: impl FnOnce(&mut Vec<Statement>, Option<GoExpression>) -> GoExpression,
+    ) -> Self {
+        let Self { mut setup, value } = self;
+        let expression = match value {
+            PlannedValue::Go { expression, .. } => settle(&mut setup, Some(expression)),
+            PlannedValue::Absent => settle(&mut setup, None),
+            PlannedValue::Diverges => return Self::diverging(setup),
+        };
+        Self::computed(setup, expression)
     }
 
     pub(in crate::lowering) fn make_observable(&mut self) {
@@ -179,10 +207,17 @@ impl ValuePlan {
         &mut self,
         bind: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoIdentifier,
     ) {
-        if let PlannedValue::Go { expression, .. } = &mut self.value {
-            let value = mem::replace(expression, GoExpression::empty());
-            *expression = GoExpression::identifier(bind(&mut self.setup, value));
-        }
+        self.value = match mem::replace(&mut self.value, PlannedValue::Absent) {
+            PlannedValue::Go {
+                expression,
+                stability,
+            } => PlannedValue::Go {
+                expression: GoExpression::identifier(bind(&mut self.setup, expression)),
+                stability,
+            },
+            PlannedValue::Absent => PlannedValue::Absent,
+            PlannedValue::Diverges => PlannedValue::Diverges,
+        };
     }
 
     pub(in crate::lowering) fn with_constructor_stability(mut self) -> Self {
@@ -244,14 +279,32 @@ impl ValuePlan {
             && self.stability().is_fixed()
     }
 
-    pub(in crate::lowering) fn is_empty(&self) -> bool {
-        self.expression().is_none_or(GoExpression::is_empty)
-    }
-
+    #[allow(clippy::disallowed_methods)]
     pub(in crate::lowering) fn into_parts(self) -> (Vec<Statement>, GoExpression) {
         match self.value {
             PlannedValue::Go { expression, .. } => (self.setup, expression),
-            PlannedValue::Diverges => (self.setup, GoExpression::empty()),
+            PlannedValue::Absent => {
+                panic!("internal error: a plan with no value has no Go expression")
+            }
+            PlannedValue::Diverges => (self.setup, GoExpression::unreachable()),
+        }
+    }
+
+    pub(in crate::lowering) fn into_statements(self) -> Vec<Statement> {
+        match self.value {
+            PlannedValue::Go { .. } => {
+                panic!("internal error: a plan that keeps only statements has a Go value")
+            }
+            PlannedValue::Absent | PlannedValue::Diverges => self.setup,
+        }
+    }
+
+    pub(in crate::lowering) fn into_setup_and_value(
+        self,
+    ) -> (Vec<Statement>, Option<GoExpression>) {
+        match self.value {
+            PlannedValue::Go { expression, .. } => (self.setup, Some(expression)),
+            PlannedValue::Absent | PlannedValue::Diverges => (self.setup, None),
         }
     }
 
@@ -279,7 +332,7 @@ pub(in crate::lowering) enum PlacePlan<'a> {
     Return,
     Assign {
         local: &'a GoExpression,
-        target_ty: Option<&'a Type>,
+        target_ty: &'a Type,
     },
 }
 

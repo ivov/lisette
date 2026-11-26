@@ -111,7 +111,7 @@ impl Planner<'_> {
         let receiver_generics = self.names.receiver_generics(generics);
         let formats = fields
             .iter()
-            .map(|field| DisplayForm::of(&field.ty, |id| self.facts.definition(id)))
+            .map(|field| DisplayForm::of(&field.ty, |id| Some(self.facts.definition(id))))
             .collect::<Vec<_>>();
         for method in self
             .facts
@@ -130,7 +130,11 @@ impl Planner<'_> {
                     &receiver_generics,
                     &self.facts.to_string_method_go_name(),
                 ),
-                _ => unreachable!("tuple structs synthesize only formatting methods"),
+                SynthesizedMethod::StringerShadow
+                | SynthesizedMethod::Json
+                | SynthesizedMethod::Equals => {
+                    unreachable!("tuple structs synthesize only formatting methods")
+                }
             });
         }
         result
@@ -194,7 +198,7 @@ impl Planner<'_> {
             self.facts.equals_method_go_name(),
             Vec::new(),
             vec![GoParameter::new(other, receiver_type)],
-            GoType::new("bool"),
+            Some(GoType::new("bool")),
             LoweredBlock {
                 statements: vec![plain_return(body)],
             },
@@ -356,7 +360,7 @@ fn string_method(
         method.to_string(),
         Vec::new(),
         Vec::new(),
-        GoType::new("string"),
+        Some(GoType::new("string")),
         LoweredBlock {
             statements: vec![plain_return(value)],
         },
@@ -405,7 +409,7 @@ impl PlannerQueries<'_, '_> {
             StringerField {
                 source_name: field.name.to_string(),
                 go_name: name,
-                format: DisplayForm::of(&field.ty, |id| self.facts.definition(id)),
+                format: DisplayForm::of(&field.ty, |id| Some(self.facts.definition(id))),
             },
         )
     }

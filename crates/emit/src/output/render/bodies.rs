@@ -188,10 +188,8 @@ fn render_statement(output: &mut GoWriter, statement: &Statement) {
             output.push('\n');
         }
         LoweredStatement::ExpressionStatement { expression, .. } => {
-            if !expression.is_empty() {
-                expression.write(output);
-                output.push('\n');
-            }
+            expression.write(output);
+            output.push('\n');
         }
         LoweredStatement::UnreachablePanic => output.push_str("panic(\"unreachable\")\n"),
     }
@@ -307,7 +305,6 @@ fn render_loop(output: &mut GoWriter, plan: &LoopPlan, line: Option<&Position>) 
 }
 
 fn render_if_header(output: &mut GoWriter, plan: &IfPlan) {
-    debug_assert!(!plan.condition.is_empty(), "if condition must not be empty");
     output.push_str("if ");
     if let Some(initializer) = &plan.initializer {
         output.push_str(&names(&initializer.names));
@@ -366,7 +363,18 @@ pub(crate) fn can_inline_block(block: &LoweredBlock) -> bool {
                 | LoweredStatement::Select(_)
                 | LoweredStatement::Switch(_) => self.inline = false,
                 LoweredStatement::Body(body) if body.statements.len() > 1 => self.inline = false,
-                _ => {}
+                LoweredStatement::Body(_)
+                | LoweredStatement::Break(_)
+                | LoweredStatement::Continue(_)
+                | LoweredStatement::Const(_)
+                | LoweredStatement::Return(_)
+                | LoweredStatement::Assign(_)
+                | LoweredStatement::Async { .. }
+                | LoweredStatement::Define(_)
+                | LoweredStatement::VarDeclaration { .. }
+                | LoweredStatement::Discard { .. }
+                | LoweredStatement::ExpressionStatement { .. }
+                | LoweredStatement::UnreachablePanic => {}
             }
         }
 
@@ -386,7 +394,26 @@ pub(crate) fn can_inline_block(block: &LoweredBlock) -> bool {
                 {
                     self.inline = false
                 }
-                _ => {}
+                GoExpressionNode::Identifier(_)
+                | GoExpressionNode::Qualified { .. }
+                | GoExpressionNode::Literal(_)
+                | GoExpressionNode::Type(_)
+                | GoExpressionNode::CompositeLiteral { .. }
+                | GoExpressionNode::Call { .. }
+                | GoExpressionNode::Instantiation { .. }
+                | GoExpressionNode::Selector { .. }
+                | GoExpressionNode::Index { .. }
+                | GoExpressionNode::Slice { .. }
+                | GoExpressionNode::TypeAssertion { .. }
+                | GoExpressionNode::Unary { .. }
+                | GoExpressionNode::AddressOf(_)
+                | GoExpressionNode::Dereference(_)
+                | GoExpressionNode::Binary { .. }
+                | GoExpressionNode::Conversion { .. }
+                | GoExpressionNode::Spread(_)
+                | GoExpressionNode::FunctionLiteral { .. }
+                | GoExpressionNode::Verbatim(_)
+                | GoExpressionNode::Unreachable => {}
             }
         }
     }

@@ -79,10 +79,6 @@ impl PackageNames {
         self.declared_names.contains(go_name) || self.import_qualifiers.contains(go_name)
     }
 
-    pub(crate) fn is_import_qualifier(&self, go_name: &str) -> bool {
-        self.import_qualifiers.contains(go_name)
-    }
-
     pub(crate) fn fresh_package_name(
         &self,
         base: &str,

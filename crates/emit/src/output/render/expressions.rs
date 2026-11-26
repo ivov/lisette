@@ -55,7 +55,11 @@ impl GoExpressionNode {
         match self {
             Self::Literal(GoLiteral::Int(value)) if *value < 0 => Binding::Prefix('-'),
             Self::Literal(GoLiteral::Token(text)) if text.starts_with(['-', '+']) => {
-                Binding::Prefix(text.chars().next().unwrap_or(' '))
+                Binding::Prefix(
+                    text.chars()
+                        .next()
+                        .expect("a signed token starts with its sign"),
+                )
             }
             Self::Identifier(_)
             | Self::Qualified { .. }
@@ -71,7 +75,7 @@ impl GoExpressionNode {
             | Self::Conversion { .. }
             | Self::Spread(_)
             | Self::FunctionLiteral { .. }
-            | Self::Empty => Binding::Primary,
+            | Self::Unreachable => Binding::Primary,
             Self::Unary { operator, .. } => Binding::Prefix(operator.sign()),
             Self::AddressOf(_) => Binding::Prefix('&'),
             Self::Dereference(_) => Binding::Prefix('*'),
@@ -149,13 +153,15 @@ impl GoExpressionNode {
             Self::Literal(GoLiteral::Int(value)) => output.push_str(&value.to_string()),
             Self::Literal(GoLiteral::Token(text)) => output.push_str(text),
             Self::Verbatim(text) => output.push_foreign(text),
+            Self::Unreachable => {
+                panic!("internal error: an unreachable value reaches the Go output")
+            }
             Self::Type(go_type) => output.push_str(&go_type_text(go_type)),
             Self::Qualified { package, name } => {
                 output.push_str(package.qualifier());
                 output.push('.');
                 output.push_str(name);
             }
-            Self::Empty => {}
             Self::CompositeLiteral {
                 go_type,
                 elements,
@@ -338,7 +344,7 @@ impl GoExpressionNode {
     fn write_function_literal(
         output: &mut GoWriter,
         parameters: &[GoParameter],
-        result: &GoType,
+        result: &Option<Box<GoType>>,
         body: &LoweredBlock,
         layout: &FunctionLiteralLayout,
         end: &SourcePosition,
@@ -347,7 +353,7 @@ impl GoExpressionNode {
         let pairs: Vec<(String, String)> = parameters.iter().map(GoParameter::pair).collect();
         output.push_str(&group_params(&pairs));
         output.push(')');
-        if !result.is_empty() {
+        if let Some(result) = result {
             output.push(' ');
             output.push_str(&go_type_text(result));
         }

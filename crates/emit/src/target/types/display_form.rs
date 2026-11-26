@@ -51,6 +51,18 @@ pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
     match ty {
         Type::Function(_) => true,
         Type::Forall { body, .. } => is_raw_function_type(body),
-        _ => false,
+        Type::Simple(_)
+        | Type::Compound { .. }
+        | Type::Nominal { .. }
+        | Type::ImportNamespace(_)
+        | Type::Var { .. }
+        | Type::Uninferred
+        | Type::Ignored
+        | Type::Parameter(_)
+        | Type::Never
+        | Type::Tuple(_)
+        | Type::Array { .. }
+        | Type::Error
+        | Type::ReceiverPlaceholder => false,
     }
 }

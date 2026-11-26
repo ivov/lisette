@@ -45,13 +45,17 @@ impl ScopeState {
         candidate
     }
 
-    pub(crate) fn helper_local(&mut self, hint: &str, package: &PackageNames) -> GoIdentifier {
-        let name = go_name::fresh_suffixed(hint, |name| {
-            is_go_reserved_word(name)
-                || self.declares_type_param(name)
-                || package.is_package_block_name(name)
+    pub(crate) fn new_unreserved_local(
+        &mut self,
+        hint: impl Into<GoIdentifier>,
+        package: &PackageNames,
+    ) -> GoIdentifier {
+        let mut name = self.new_local_identifier(hint);
+        let free = go_name::fresh_suffixed(name.spelling(), |candidate| {
+            self.is_reserved_spelling(candidate, package)
         });
-        self.new_local_identifier(name)
+        *name.spelling_mut() = free;
+        name
     }
 
     pub(crate) fn reserve_go_name(&mut self, go_name: &str) {
@@ -81,13 +85,7 @@ impl ScopeState {
             if pinned.contains(current) {
                 continue;
             }
-            let name = go_name::fresh_suffixed(base, |candidate| {
-                taken.contains(candidate)
-                    || is_go_reserved_word(candidate)
-                    || self.has_binding_for_go_name(candidate)
-                    || self.declares_type_param(candidate)
-                    || package.is_import_qualifier(candidate)
-            });
+            let name = self.fresh_spelling(base, &taken, package);
 
             if name != *base || name == *current {
                 taken.insert(current.clone());
@@ -124,9 +122,7 @@ impl ScopeState {
             };
             if pinned.contains(spelling)
                 || taken.contains(builtin)
-                || self.declares_type_param(builtin)
-                || package.is_package_block_name(builtin)
-                || package.is_import_qualifier(builtin)
+                || self.is_declared_outside_body(builtin, package)
             {
                 continue;
             }
@@ -135,38 +131,63 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn avoid_qualifier_capture(
+    pub(crate) fn respell_locals(
         &self,
+        respelled: &[LocalId],
         present: &FxHashMap<LocalId, String>,
-        pinned: &FxHashSet<String>,
-        qualifiers: &FxHashSet<String>,
-        settled: &mut FxHashMap<LocalId, String>,
-    ) {
-        let mut locals: Vec<_> = present.iter().collect();
-        locals.sort_by_key(|(id, _)| id.0);
-        for (id, spelling) in locals {
-            let current = settled.get(id).unwrap_or(spelling).clone();
-            if !qualifiers.contains(&current) {
-                continue;
-            }
-            let name = go_name::fresh_suffixed(&current, |candidate| {
-                qualifiers.contains(candidate)
-                    || pinned.contains(candidate)
-                    || present.values().any(|name| name == candidate)
-                    || settled.values().any(|name| name == candidate)
-                    || is_go_reserved_word(candidate)
-                    || self.declares_type_param(candidate)
-            });
-
+        mut taken: FxHashSet<String>,
+        package: &PackageNames,
+    ) -> FxHashMap<LocalId, String> {
+        taken.extend(present.values().cloned());
+        let mut settled = FxHashMap::default();
+        for id in respelled {
+            let current = present.get(id).expect("respelled local is present");
+            let base = self.generated_base(*id).unwrap_or(current);
+            let name = self.fresh_spelling(base, &taken, package);
+            taken.insert(name.clone());
             settled.insert(*id, name);
         }
+        settled
+    }
+
+    pub(crate) fn locals_named_outside_body(
+        &self,
+        present: &FxHashMap<LocalId, String>,
+        qualifiers: &FxHashSet<String>,
+        package: &PackageNames,
+    ) -> Vec<LocalId> {
+        present
+            .iter()
+            .filter(|(_, spelling)| {
+                qualifiers.contains(*spelling) || self.is_declared_outside_body(spelling, package)
+            })
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
+    fn fresh_spelling(
+        &self,
+        base: &str,
+        taken: &FxHashSet<String>,
+        package: &PackageNames,
+    ) -> String {
+        go_name::fresh_suffixed(base, |candidate| {
+            taken.contains(candidate) || self.is_reserved_spelling(candidate, package)
+        })
+    }
+
+    fn is_reserved_spelling(&self, spelling: &str, package: &PackageNames) -> bool {
+        is_go_reserved_word(spelling) || self.is_declared_outside_body(spelling, package)
+    }
+
+    fn is_declared_outside_body(&self, spelling: &str, package: &PackageNames) -> bool {
+        self.declares_type_param(spelling) || package.is_package_block_name(spelling)
     }
 
     fn is_go_name_taken(&self, go_name: &str, package: &PackageNames) -> bool {
-        is_go_reserved_word(go_name)
+        self.is_reserved_spelling(go_name, package)
             || self.names.issued.contains(go_name)
             || self.has_binding_for_go_name(go_name)
             || self.is_go_name_declared(go_name)
-            || package.is_package_block_name(go_name)
     }
 }

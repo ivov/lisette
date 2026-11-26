@@ -40,10 +40,10 @@ pub(in crate::lowering) fn is_catchall_pattern(pattern: &Pattern) -> bool {
 }
 
 pub(in crate::lowering) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
-    match pattern {
-        Pattern::Or { patterns, .. } => patterns.iter().all(is_catchall_pattern),
-        other => is_catchall_pattern(other),
-    }
+    let Pattern::Or { patterns, .. } = pattern else {
+        return is_catchall_pattern(pattern);
+    };
+    patterns.iter().all(is_catchall_pattern)
 }
 
 pub(in crate::lowering) fn pattern_binds_name(pattern: &Pattern, name: &str) -> bool {

@@ -12,7 +12,6 @@ use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
-use crate::lowering::planner::OuterBindings;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::placement::is_zero_call;
 use crate::lowering::statements::placement::{
@@ -405,13 +404,7 @@ impl<'a> Planner<'a> {
             typed,
         } = self.plan_direct_let_value(value, binding_ty);
 
-        let go_identifier = self.claim_block_binding_as(
-            identifier,
-            ids,
-            raw_go_name.clone(),
-            &SourceName::new(identifier),
-            OuterBindings::MayShadow,
-        );
+        let go_identifier = self.claim_binding(identifier, ids, raw_go_name.clone());
 
         if is_zero_call(&self.facts, value)
             && statements.is_empty()
@@ -436,7 +429,8 @@ impl<'a> Planner<'a> {
             return statements;
         }
         if let Some(name) = value_expression.as_identifier()
-            && self.scope.lacks_binding_for_local(name)
+            && let Some(id) = name.id()
+            && self.scope.lacks_binding_for_local(id)
             && (rebind_trailing_temp(&mut statements, &go_identifier, name)
                 || rebind_updated_temp(&mut statements, &go_identifier, name))
         {
@@ -537,7 +531,7 @@ impl<'a> Planner<'a> {
         statements.extend(self.lower_assign(
             value,
             &GoExpression::identifier(identifier.clone()),
-            Some(binding_ty),
+            binding_ty,
         ));
         collapse_declared_temp(
             &mut statements,
@@ -574,6 +568,7 @@ struct LetPlanner<'a, 'e> {
 }
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn build(mut self) -> LoweredBlock {
         if self.planner.facts.is_never(&self.value.get_type()) {
             return LoweredBlock {

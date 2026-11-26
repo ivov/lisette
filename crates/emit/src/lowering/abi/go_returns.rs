@@ -279,7 +279,12 @@ impl Planner<'_> {
         adapted: Option<(&Type, &[Adaptation])>,
     ) -> (Vec<Statement>, Vec<GoExpression>) {
         let slot_tys = self.facts.tuple_or_type_arguments(tuple_ty);
-        let source_tys = adapted.map(|(source, _)| self.facts.tuple_or_type_arguments(source));
+        let source_ty = adapted.map_or(tuple_ty, |(source, _)| source);
+        let source_tys = self.facts.tuple_or_type_arguments(source_ty);
+        let source_layout = self.facts.value_layout(source_ty, SlotOrigin::Lisette);
+        let source_layouts = source_layout
+            .tuple_elements()
+            .expect("a tuple type has a tuple layout");
         let slot_layouts = self.facts.lowered_tuple_slot_layouts(tuple_ty);
         let mut statements = Vec::new();
         let fields = slot_tys
@@ -287,36 +292,17 @@ impl Planner<'_> {
             .enumerate()
             .map(|(i, slot_ty)| {
                 let raw = field(tuple_value, go_name::tuple_field(i));
-                let adaptation = adapted.and_then(|(_, adaptations)| adaptations.get(i));
-                if let (Some(adaptation), Some(source_tys)) = (adaptation, &source_tys) {
-                    let slot_layout = slot_layouts.get(i);
-                    let coercion = CoercionPlan::adapted(
-                        &self.queries(),
-                        adaptation,
-                        &source_tys[i],
-                        slot_ty,
-                        slot_layout,
-                    );
-
-                    let (setup, raw) = coercion.lower(self, raw);
-                    statements.extend(setup);
-                    return raw;
-                }
-                if matches!(
-                    slot_layouts.get(i),
-                    Some(ValueLayout::NullableOption { .. })
-                ) {
-                    let inner = self.queries().go_type(&slot_ty.ok_type());
-                    self.plan_option_payload_wrap(
-                        &mut statements,
-                        raw,
-                        &inner,
-                        &LayoutChange::Identity,
-                        OptionSlot::Value,
-                    )
-                } else {
-                    raw
-                }
+                let adaptation =
+                    adapted.map_or(&Adaptation::Identity, |(_, adaptations)| &adaptations[i]);
+                let coercion = CoercionPlan::into_go_slot(
+                    &self.queries(),
+                    adaptation,
+                    (&source_tys[i], slot_ty),
+                    (&source_layouts[i], &slot_layouts[i]),
+                );
+                let (setup, raw) = coercion.lower(self, raw);
+                statements.extend(setup);
+                raw
             })
             .collect();
 
@@ -332,9 +318,19 @@ impl Planner<'_> {
         let elements = literal.elements;
         let slot_tys = self.facts.tuple_or_type_arguments(tuple_ty);
         let slot_layouts = self.facts.lowered_tuple_slot_layouts(tuple_ty);
-        let adaptations = match &self.facts.checked(tuple).value_use().adaptation {
-            Adaptation::Tuple(adaptations) => adaptations.clone(),
-            _ => Vec::new(),
+        let adaptation = self.facts.checked(tuple).value_use().adaptation.clone();
+        let element_adaptation = |index: usize| match &adaptation {
+            Adaptation::Tuple(elements) => elements[index].clone(),
+            Adaptation::Identity => Adaptation::Identity,
+            other @ Adaptation::Delegated { .. }
+            | other @ Adaptation::Interface(_)
+            | other @ Adaptation::ImplicitSome { .. }
+            | other @ Adaptation::Newtype
+            | other @ Adaptation::Array(_)
+            | other @ Adaptation::DivergingFunction
+            | other @ Adaptation::Receiver(_) => {
+                panic!("internal error: a tuple literal has the adaptation {other:?}")
+            }
         };
         let operands: Vec<ValuePlan> = elements
             .iter()
@@ -346,8 +342,7 @@ impl Planner<'_> {
                         Some(ValueLayout::NullableOption { .. })
                     ) =>
                 {
-                    let adaptation = adaptations.get(i).unwrap_or(&Adaptation::Identity);
-                    self.plan_nullable_slot_value(e, adaptation, slot_ty)
+                    self.plan_nullable_slot_value(e, &element_adaptation(i), slot_ty)
                 }
                 slot => {
                     let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
@@ -431,7 +426,7 @@ impl Planner<'_> {
                 &abi,
             );
 
-            let coercion = CoercionPlan::change(&self.queries(), &source, &target);
+            let coercion = self.value_layout_change(expression, &source, &target);
             if coercion.changes_layout() {
                 self.record_converted_value(expression);
                 let (mut statements, value) = self
@@ -452,7 +447,10 @@ impl Planner<'_> {
                 payload: PayloadLayout::Packed,
             } => Some(self.lower_partial_tail(expression)),
             LoweredReturnAbi::Tuple { arity, .. } => Some(self.lower_tuple_tail(expression, arity)),
-            _ => None,
+            LoweredReturnAbi::BareError
+            | LoweredReturnAbi::Result { .. }
+            | LoweredReturnAbi::Partial { .. }
+            | LoweredReturnAbi::Option(_) => None,
         }
     }
 

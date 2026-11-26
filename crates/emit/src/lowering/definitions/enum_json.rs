@@ -141,7 +141,7 @@ impl EnumLayout {
             format.method(),
             Vec::new(),
             Vec::new(),
-            GoType::new("string"),
+            Some(GoType::new("string")),
             LoweredBlock {
                 statements: vec![switch(subject, cases, default)],
             },
@@ -175,7 +175,7 @@ impl EnumLayout {
                 name: name.to_string(),
                 generics: Vec::new(),
                 parameters: Vec::new(),
-                result: GoType::slice_of(&ty),
+                result: Some(GoType::slice_of(&ty)),
             },
             body: LoweredBlock {
                 statements: vec![plain_return(GoExpression::composite(
@@ -264,7 +264,10 @@ impl EnumLayout {
             "MarshalJSON",
             Vec::new(),
             Vec::new(),
-            GoType::result_list(&[GoType::slice_of(&GoType::new("byte")), GoType::new("error")]),
+            Some(GoType::result_list(&[
+                GoType::slice_of(&GoType::new("byte")),
+                GoType::new("error"),
+            ])),
             LoweredBlock {
                 statements: vec![switch(member(receiver, ENUM_TAG_FIELD), cases, default)],
             },
@@ -308,7 +311,7 @@ impl EnumLayout {
                 names.data,
                 GoType::slice_of(&GoType::new("byte")),
             )],
-            GoType::new("error"),
+            Some(GoType::new("error")),
             LoweredBlock { statements: body },
         )
     }

@@ -1,5 +1,6 @@
 use crate::lookup::facts::catalog::GoAbiCatalog;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::emit_facts::known_definition;
 use crate::target::ir::go_expression::Position;
 use crate::target::types::enum_layout::EnumLayout;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -18,7 +19,9 @@ pub(crate) struct GlobalEmitData {
 
 impl GlobalEmitData {
     pub(crate) fn compute(definitions: &FxHashMap<Symbol, Definition>) -> Self {
-        let policy = GoMethodPolicy::compute(definitions.iter(), |id| definitions.get(id));
+        let policy = GoMethodPolicy::compute(definitions.iter(), |id| {
+            Some(known_definition(definitions, id))
+        });
         let mut globals = GlobalEmitData {
             go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
             tagged_method_names: policy.tagged_method_names.iter().cloned().collect(),
@@ -53,7 +56,7 @@ impl GlobalEmitData {
             return;
         }
         let layout = EnumLayout::new(key, generics, variants, *default_variant, |id| {
-            definitions.get(id)
+            Some(known_definition(definitions, id))
         });
         self.enum_layouts.insert(key.clone(), layout);
     }

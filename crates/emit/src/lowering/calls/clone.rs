@@ -55,7 +55,7 @@ impl Planner<'_> {
                 statements.push(plain_return(element));
                 Some(function_literal(
                     parameters,
-                    go_ty,
+                    Some(go_ty),
                     LoweredBlock { statements },
                     FunctionLiteralLayout::MultiLine,
                 ))
@@ -64,7 +64,7 @@ impl Planner<'_> {
                 let body = self.clone_expression(element, ty);
                 Some(function_literal(
                     parameters,
-                    go_ty,
+                    Some(go_ty),
                     LoweredBlock {
                         statements: vec![plain_return(body)],
                     },

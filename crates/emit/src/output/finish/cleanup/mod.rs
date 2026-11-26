@@ -87,7 +87,20 @@ pub(crate) fn declare_zero_values(
                 LoweredStatement::Return(values) => values.iter_mut().collect(),
                 LoweredStatement::Define(definition) => vec![&mut definition.value],
                 LoweredStatement::If(plan) => if_initializer_values(plan),
-                _ => Vec::new(),
+                LoweredStatement::Loop(_)
+                | LoweredStatement::Block(_)
+                | LoweredStatement::Body(_)
+                | LoweredStatement::Break(_)
+                | LoweredStatement::Continue(_)
+                | LoweredStatement::Const(_)
+                | LoweredStatement::Assign(_)
+                | LoweredStatement::Async { .. }
+                | LoweredStatement::Select(_)
+                | LoweredStatement::Switch(_)
+                | LoweredStatement::VarDeclaration { .. }
+                | LoweredStatement::Discard { .. }
+                | LoweredStatement::ExpressionStatement { .. }
+                | LoweredStatement::UnreachablePanic => Vec::new(),
             };
 
             let mut zeros: Vec<(GoType, GoIdentifier)> = Vec::new();
@@ -123,7 +136,7 @@ fn if_initializer_values(plan: &mut IfPlan) -> Vec<&mut GoExpression> {
         }
         link = match else_arm {
             ElseArm::ElseIf(next) => Some(next.as_mut()),
-            _ => None,
+            ElseArm::None | ElseArm::Else { .. } => None,
         };
     }
     values

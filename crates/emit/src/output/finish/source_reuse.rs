@@ -47,7 +47,20 @@ fn reuse_in_statement(statement: &mut LoweredStatement, scope: &ScopeState) {
                 reuse_in_statement(&mut statement.kind, scope);
             }
         }
-        statement => {
+        statement @ LoweredStatement::Block(_)
+        | statement @ LoweredStatement::Break(_)
+        | statement @ LoweredStatement::Continue(_)
+        | statement @ LoweredStatement::Const(_)
+        | statement @ LoweredStatement::Return(_)
+        | statement @ LoweredStatement::Assign(_)
+        | statement @ LoweredStatement::Async { .. }
+        | statement @ LoweredStatement::Select(_)
+        | statement @ LoweredStatement::Switch(_)
+        | statement @ LoweredStatement::Define(_)
+        | statement @ LoweredStatement::VarDeclaration { .. }
+        | statement @ LoweredStatement::Discard { .. }
+        | statement @ LoweredStatement::ExpressionStatement { .. }
+        | statement @ LoweredStatement::UnreachablePanic => {
             statement
                 .for_each_expression_mut(&mut |value| reuse_in_expression(value.node_mut(), scope));
             statement
@@ -129,7 +142,20 @@ fn has_copy_candidate(list: &[Statement]) -> bool {
         LoweredStatement::If(plan) => {
             inline_else(plan).is_some_and(|body| has_copy_candidate(&body.statements))
         }
-        _ => false,
+        LoweredStatement::Loop(_)
+        | LoweredStatement::Block(_)
+        | LoweredStatement::Break(_)
+        | LoweredStatement::Continue(_)
+        | LoweredStatement::Const(_)
+        | LoweredStatement::Return(_)
+        | LoweredStatement::Assign(_)
+        | LoweredStatement::Async { .. }
+        | LoweredStatement::Select(_)
+        | LoweredStatement::Switch(_)
+        | LoweredStatement::VarDeclaration { .. }
+        | LoweredStatement::Discard { .. }
+        | LoweredStatement::ExpressionStatement { .. }
+        | LoweredStatement::UnreachablePanic => false,
     })
 }
 
@@ -188,7 +214,22 @@ fn flattened(list: Vec<Statement>) -> Vec<Statement> {
                     flat.extend(flattened(body.statements));
                 }
             }
-            kind => flat.push(Statement {
+            kind @ LoweredStatement::Loop(_)
+            | kind @ LoweredStatement::Block(_)
+            | kind @ LoweredStatement::Body(_)
+            | kind @ LoweredStatement::Break(_)
+            | kind @ LoweredStatement::Continue(_)
+            | kind @ LoweredStatement::Const(_)
+            | kind @ LoweredStatement::Return(_)
+            | kind @ LoweredStatement::Assign(_)
+            | kind @ LoweredStatement::Async { .. }
+            | kind @ LoweredStatement::Select(_)
+            | kind @ LoweredStatement::Switch(_)
+            | kind @ LoweredStatement::Define(_)
+            | kind @ LoweredStatement::VarDeclaration { .. }
+            | kind @ LoweredStatement::Discard { .. }
+            | kind @ LoweredStatement::ExpressionStatement { .. }
+            | kind @ LoweredStatement::UnreachablePanic => flat.push(Statement {
                 line: statement.line,
                 kind,
             }),
@@ -371,9 +412,10 @@ impl<'a> SourceReads<'a> {
     }
 
     fn is_source(&self, node: &GoExpressionNode) -> bool {
-        match node {
-            GoExpressionNode::Identifier(name) => name.spelling() == self.source.spelling(),
-            _ => false,
+        if let GoExpressionNode::Identifier(name) = node {
+            name.spelling() == self.source.spelling()
+        } else {
+            false
         }
     }
 }
@@ -424,7 +466,25 @@ impl TreeVisitor for SourceReads<'_> {
                     self.escapes = true;
                 }
             }
-            _ => {}
+            GoExpressionNode::Identifier(_)
+            | GoExpressionNode::Qualified { .. }
+            | GoExpressionNode::Literal(_)
+            | GoExpressionNode::Type(_)
+            | GoExpressionNode::CompositeLiteral { .. }
+            | GoExpressionNode::Call { .. }
+            | GoExpressionNode::Instantiation { .. }
+            | GoExpressionNode::Selector { .. }
+            | GoExpressionNode::Index { .. }
+            | GoExpressionNode::Slice { .. }
+            | GoExpressionNode::TypeAssertion { .. }
+            | GoExpressionNode::Unary { .. }
+            | GoExpressionNode::AddressOf(_)
+            | GoExpressionNode::Dereference(_)
+            | GoExpressionNode::Binary { .. }
+            | GoExpressionNode::Conversion { .. }
+            | GoExpressionNode::Spread(_)
+            | GoExpressionNode::Verbatim(_)
+            | GoExpressionNode::Unreachable => {}
         }
     }
 
@@ -452,12 +512,21 @@ fn binds_spelling(statement: &LoweredStatement, spelling: &str) -> bool {
         },
         LoweredStatement::Select(plan) => plan.arms.iter().any(|arm| match &arm.kind {
             SelectArmKind::Receive { receive_vars, .. } => receive_vars.iter().any(named),
-            _ => false,
+            SelectArmKind::Send { .. } | SelectArmKind::Default { .. } => false,
         }),
         LoweredStatement::Switch(plan) => {
             matches!(&plan.kind, SwitchKind::Type { binding: Some(name), .. } if named(name))
         }
-        _ => false,
+        LoweredStatement::Block(_)
+        | LoweredStatement::Body(_)
+        | LoweredStatement::Break(_)
+        | LoweredStatement::Continue(_)
+        | LoweredStatement::Return(_)
+        | LoweredStatement::Assign(_)
+        | LoweredStatement::Async { .. }
+        | LoweredStatement::Discard { .. }
+        | LoweredStatement::ExpressionStatement { .. }
+        | LoweredStatement::UnreachablePanic => false,
     }
 }
 

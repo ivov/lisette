@@ -1,5 +1,5 @@
 use crate::target::ir::bodies::{LoweredBlock, LoweredStatement};
-use crate::target::ir::local::GoIdentifier;
+use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::GoType;
 use crate::target::types::go_type::GoTypeShape;
@@ -227,13 +227,13 @@ pub(crate) enum GoExpressionNode {
     Spread(Operand),
     FunctionLiteral {
         parameters: Vec<GoParameter>,
-        result: Box<GoType>,
+        result: Option<Box<GoType>>,
         body: LoweredBlock,
         layout: FunctionLiteralLayout,
         end: SourcePosition,
     },
-    Empty,
     Verbatim(String),
+    Unreachable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -409,7 +409,38 @@ pub(crate) fn verbatim_identifiers(source: &str) -> impl Iterator<Item = &str> {
         })
 }
 
+pub(crate) enum NameRead<'n> {
+    Local(&'n GoIdentifier),
+    Verbatim(&'n str),
+    NoName,
+}
+
 impl GoExpressionNode {
+    pub(crate) fn name_read(&self) -> NameRead<'_> {
+        match self {
+            Self::Identifier(name) => NameRead::Local(name),
+            Self::Verbatim(text) => NameRead::Verbatim(text),
+            Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::CompositeLiteral { .. }
+            | Self::Call { .. }
+            | Self::Instantiation { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::TypeAssertion { .. }
+            | Self::Unary { .. }
+            | Self::AddressOf(_)
+            | Self::Dereference(_)
+            | Self::Binary { .. }
+            | Self::Conversion { .. }
+            | Self::Spread(_)
+            | Self::FunctionLiteral { .. }
+            | Self::Unreachable => NameRead::NoName,
+        }
+    }
+
     pub(super) fn is_unit_struct_literal(&self) -> bool {
         let Self::CompositeLiteral {
             go_type: Some(go_type),
@@ -423,10 +454,7 @@ impl GoExpressionNode {
             && matches!(go_type.shape.as_ref(), GoTypeShape::Struct(fields) if fields.is_empty())
     }
 
-    pub(crate) fn mentions_local(&self, name: &GoIdentifier) -> bool {
-        let Some(id) = name.id() else {
-            return false;
-        };
+    pub(crate) fn mentions_local(&self, id: LocalId) -> bool {
         let mut found = false;
         self.visit(&mut |inner| {
             if let Self::Identifier(read) = inner
@@ -472,7 +500,24 @@ impl GoExpressionNode {
                 layout: CompositeLayout::MultiLine { .. },
                 ..
             } => slot.fill(Some(end.clone())),
-            _ => {}
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::CompositeLiteral { .. }
+            | Self::Instantiation { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::TypeAssertion { .. }
+            | Self::Unary { .. }
+            | Self::AddressOf(_)
+            | Self::Dereference(_)
+            | Self::Binary { .. }
+            | Self::Conversion { .. }
+            | Self::Spread(_)
+            | Self::Verbatim(_)
+            | Self::Unreachable => {}
         }
     }
 
@@ -506,9 +551,25 @@ impl GoExpressionNode {
                 for parameter in parameters {
                     visit(&parameter.go_type);
                 }
-                visit(result);
+                if let Some(result) = result {
+                    visit(result);
+                }
             }
-            _ => {}
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::CompositeLiteral { .. }
+            | Self::Call { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::Unary { .. }
+            | Self::AddressOf(_)
+            | Self::Dereference(_)
+            | Self::Binary { .. }
+            | Self::Spread(_)
+            | Self::Verbatim(_)
+            | Self::Unreachable => {}
         }
     }
 
@@ -535,8 +596,8 @@ impl GoExpressionNode {
             | Self::Qualified { .. }
             | Self::Literal(_)
             | Self::Type(_)
-            | Self::Empty
             | Self::Verbatim(_)
+            | Self::Unreachable
             | Self::FunctionLiteral { .. } => {}
             Self::CompositeLiteral { elements, .. } => {
                 for element in elements {
@@ -591,8 +652,8 @@ impl GoExpressionNode {
             | Self::Qualified { .. }
             | Self::Literal(_)
             | Self::Type(_)
-            | Self::Empty
             | Self::Verbatim(_)
+            | Self::Unreachable
             | Self::FunctionLiteral { .. } => {}
             Self::CompositeLiteral { elements, .. } => {
                 for element in elements {

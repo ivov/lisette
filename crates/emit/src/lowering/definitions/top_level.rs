@@ -45,12 +45,10 @@ impl Planner<'_> {
         {
             self.scope.record_local_constant(binding, constant);
         }
-        let raw_value = self.plan_value(expression, ExpressionContext::value());
-        let value = if raw_value.is_empty() {
-            self.unit_value(Some(expression), Some(ty))
-        } else {
-            raw_value.into_parts().1
-        };
+        let (_, raw_value) = self
+            .plan_value(expression, ExpressionContext::value())
+            .into_setup_and_value();
+        let value = raw_value.unwrap_or_else(|| self.unit_value(Some(expression), Some(ty)));
         ConstPlan {
             name: self
                 .scope
@@ -91,7 +89,7 @@ impl PlannerQueries<'_, '_> {
         let declared_target = self
             .facts
             .definition(&self.facts.qualified_current(name))
-            .and_then(|definition| definition.instantiate_alias_target(&params, false));
+            .instantiate_alias_target(&params, false);
         let underlying_type = self.go_type(declared_target.as_ref().unwrap_or(ty));
 
         let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());

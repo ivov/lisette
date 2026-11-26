@@ -24,16 +24,16 @@ use syntax::program::{Definition, DefinitionBody, EqualityRecipe};
 use syntax::types::{Symbol, Type};
 
 impl Planner<'_> {
-    pub(in crate::lowering) fn try_emit_enum(
+    pub(in crate::lowering) fn emit_enum(
         &mut self,
         name: &str,
         generics: &[Generic],
         attributes: &[Attribute],
         documentation: Documentation,
-    ) -> Option<Vec<GoDeclaration>> {
+    ) -> Vec<GoDeclaration> {
         let enum_id = self.facts.qualified_current(name);
 
-        let layout = self.facts.enum_layout(&enum_id)?;
+        let layout = self.facts.enum_layout(&enum_id);
 
         let receiver_generics = self.names.receiver_generics(generics);
         let generics = self
@@ -67,18 +67,14 @@ impl Planner<'_> {
             }
         }
         if has_iterate {
-            let export = self
-                .facts
-                .definition(enum_id.as_str())
-                .map_or(GoExport::Unexported, |definition| {
-                    GoExport::from_visibility(definition.visibility)
-                });
+            let definition = self.facts.definition(enum_id.as_str());
+            let export = GoExport::from_visibility(definition.visibility);
 
             let fn_name = go_name::associated_function_go_name(name, "variants", export);
             result.push(layout.variants_declaration(&fn_name));
         }
 
-        Some(result)
+        result
     }
 
     fn enum_equals_method(
@@ -88,16 +84,16 @@ impl Planner<'_> {
         layout: &EnumLayout,
         receiver_generics: &ReceiverGenerics,
     ) -> Option<GoDeclaration> {
-        let Some(Definition {
+        let Definition {
             body:
                 DefinitionBody::Enum {
                     variants: source_variants,
                     ..
                 },
             ..
-        }) = self.facts.definition(enum_id)
+        } = self.facts.definition(enum_id)
         else {
-            return None;
+            panic!("internal error: `{enum_id}` is not an enum");
         };
 
         let source_variants = source_variants.clone();
@@ -136,7 +132,7 @@ impl Planner<'_> {
             go_method,
             Vec::new(),
             vec![GoParameter::new(other, receiver_type)],
-            GoType::new("bool"),
+            Some(GoType::new("bool")),
             LoweredBlock { statements },
         );
 
@@ -186,10 +182,8 @@ impl Planner<'_> {
         enum_id: &str,
         variant_name: &str,
     ) -> GoDeclaration {
-        let layout = self.facts.enum_layout(enum_id).expect("enum layout exists");
-        let variant = layout
-            .variant(variant_name)
-            .expect("variant exists in layout");
+        let layout = self.facts.enum_layout(enum_id);
+        let variant = layout.variant(variant_name);
         let mut fields = vec![(
             ENUM_TAG_FIELD.to_string(),
             GoExpression::external_name(variant.tag_constant.clone()),
@@ -212,7 +206,7 @@ impl Planner<'_> {
             ));
         }
         let result = self.queries().go_type(&Type::Nominal {
-            id: Symbol::from_raw(layout.enum_name.clone()),
+            id: Symbol::from_raw(enum_id),
             writable: false,
             params: layout
                 .generics
@@ -232,7 +226,7 @@ impl Planner<'_> {
                     .collect::<Vec<_>>(),
             ),
             parameters,
-            result.clone(),
+            Some(result.clone()),
             LoweredBlock {
                 statements: vec![plain_return(GoExpression::struct_literal(
                     result,

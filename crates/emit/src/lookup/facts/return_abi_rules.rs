@@ -104,16 +104,21 @@ pub(crate) fn slot_return_abi(
 
 pub(crate) fn interface_method_return_abi(
     facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    name: &str,
     method: &Method,
 ) -> CallableReturnAbi {
-    if facts.method_uses_tagged_return(name) {
+    let return_ty = &method
+        .ty
+        .as_function_type()
+        .expect("an interface method must have a function type")
+        .return_type;
+    if facts.method_uses_tagged_return(&method.source_name) {
         return CallableReturnAbi::Value;
     }
     let abi = match method_return_abi(facts, return_ty) {
         CallableReturnAbi::Value if facts.returns_go_void(return_ty) => CallableReturnAbi::Void,
-        abi => abi,
+        abi @ CallableReturnAbi::Void
+        | abi @ CallableReturnAbi::Value
+        | abi @ CallableReturnAbi::Lowered(_) => abi,
     };
     if abi == CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
         && method.go_hints.contains(&GoHint::CommaOk)

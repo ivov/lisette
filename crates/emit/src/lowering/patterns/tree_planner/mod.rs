@@ -1,9 +1,10 @@
 mod chains;
 mod switches;
 
+use crate::lookup::facts::queries::is_scalar_literal;
 use crate::target::ir::go_expression::Position;
 
-use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression, MatchArm, UnaryOperator};
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
@@ -23,18 +24,11 @@ use crate::target::ir::bodies::{
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::GoExpression;
 
+#[allow(clippy::wildcard_enum_match_arm)]
 fn guard_renders_inline(facts: &EmitFacts<'_>, guard: &Expression) -> bool {
     match guard {
-        Expression::Literal { literal, ty, .. } => {
-            matches!(
-                literal,
-                Literal::Integer { .. }
-                    | Literal::Float { .. }
-                    | Literal::Imaginary(_)
-                    | Literal::Boolean(_)
-                    | Literal::String { .. }
-                    | Literal::Char(_)
-            ) && facts.simple_kind(ty).is_some()
+        Expression::Literal { ty, .. } => {
+            is_scalar_literal(guard) && facts.simple_kind(ty).is_some()
         }
         Expression::Identifier { ty, .. } => facts.simple_kind(ty).is_some(),
         Expression::Unary {
@@ -72,6 +66,7 @@ fn guard_renders_inline(facts: &EmitFacts<'_>, guard: &Expression) -> bool {
     }
 }
 
+#[allow(clippy::wildcard_enum_match_arm)]
 fn callee_renders_inline(facts: &EmitFacts<'_>, callee: &Expression) -> bool {
     match callee {
         Expression::Identifier { .. } => true,
@@ -532,9 +527,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) -> ElseArm {
         match decision {
             Decision::Success(leaf) => self.lower_leaf_else_or_flat(leaf, ctx, preceding),
-            _ => self.lower_else_body(preceding, decision.first_arm(), |this, body| {
-                this.walk(body, decision, ctx)
-            }),
+            Decision::Guard(_)
+            | Decision::Switch(_)
+            | Decision::TypeSwitch { .. }
+            | Decision::Chain { .. }
+            | Decision::Unreachable => {
+                self.lower_else_body(preceding, decision.first_arm(), |this, body| {
+                    this.walk(body, decision, ctx)
+                })
+            }
         }
     }
 
@@ -544,10 +545,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         ctx: &WalkContext,
         preceding: Divergence,
     ) -> ElseArm {
-        if leaf.bindings.is_empty() && body_is_unit_or_empty(&self.arms[leaf.arm_index].expression)
-        {
-            return ElseArm::None;
-        }
         self.lower_else_body(preceding, Some(leaf.arm_index), |this, body| {
             this.walk_leaf(body, leaf, ctx)
         })
@@ -624,19 +621,17 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 }
 
-fn body_is_unit_or_empty(expression: &Expression) -> bool {
-    matches!(expression, Expression::Unit { .. })
-        || matches!(expression, Expression::Block { items, .. } if items.is_empty())
-}
-
 fn merge_binding_ids(bindings: &mut [PatternBinding], alternatives: &[PatternBinding]) {
     for alternative in alternatives {
-        let Some(binding) = bindings
+        let binding = bindings
             .iter_mut()
             .find(|binding| binding.lisette_name == alternative.lisette_name)
-        else {
-            continue;
-        };
+            .unwrap_or_else(|| {
+                panic!(
+                    "internal error: an or-pattern alternative binds `{}` and the first does not",
+                    alternative.lisette_name
+                )
+            });
 
         for id in &alternative.binding_ids {
             if !binding.binding_ids.contains(id) {

@@ -28,14 +28,14 @@ impl ReturnContext {
     pub(crate) fn lowered(&self) -> Option<(&Type, &LoweredReturnAbi)> {
         match self {
             ReturnContext::Lowered { return_ty, shape } => Some((return_ty, shape)),
-            _ => None,
+            ReturnContext::None | ReturnContext::Void(_) | ReturnContext::Tagged(_) => None,
         }
     }
 
     pub(crate) fn lowered_shape(&self) -> Option<LoweredReturnAbi> {
         match self {
             ReturnContext::Lowered { shape, .. } => Some(shape.clone()),
-            _ => None,
+            ReturnContext::None | ReturnContext::Void(_) | ReturnContext::Tagged(_) => None,
         }
     }
 
@@ -47,8 +47,13 @@ impl ReturnContext {
 }
 
 #[derive(Clone)]
+pub(crate) struct LoopSlot {
+    pub(crate) target: GoExpression,
+    pub(crate) ty: Type,
+}
+
+#[derive(Clone)]
 pub(crate) struct LoopContext {
     pub(crate) id: LoopId,
-    pub(crate) result: Option<GoExpression>,
-    pub(crate) result_ty: Option<Type>,
+    pub(crate) result: Option<LoopSlot>,
 }

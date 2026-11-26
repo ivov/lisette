@@ -44,12 +44,13 @@ enum CaptureContext {
 type BlockBindings = FxHashMap<BindingId, Type>;
 
 fn simple_binding(binding: &Binding) -> Option<BindingId> {
-    match &binding.pattern {
-        Pattern::Identifier {
-            binding: Some(id), ..
-        } => Some(*id),
-        _ => None,
-    }
+    let Pattern::Identifier {
+        binding: Some(id), ..
+    } = &binding.pattern
+    else {
+        return None;
+    };
+    Some(*id)
 }
 
 fn record(bindings: &mut BlockBindings, binding: &Binding) {
@@ -65,6 +66,7 @@ struct Collector<'f, 'a> {
 }
 
 impl Collector<'_, '_> {
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn collect(&mut self, expression: &Expression, params: &[Binding], context: CaptureContext) {
         let context = match expression {
             Expression::Block { items, .. } => {

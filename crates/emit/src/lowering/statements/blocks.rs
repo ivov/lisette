@@ -16,7 +16,6 @@ use crate::target::ir::bodies::{
 };
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::Fallible;
-use crate::target::ir::termination::list_terminates;
 use crate::target::ir::values::GoExpression;
 use std::{iter, slice};
 use syntax::ast::{Expression, Pattern};
@@ -44,7 +43,7 @@ impl Planner<'_> {
             BlockTail::Value(TailTarget::Return) => rest.split_last().and_then(|(check, rest)| {
                 Some((check, rest, self.queries().forwarded_tail(check, last)?))
             }),
-            _ => None,
+            BlockTail::Statement | BlockTail::Value(_) => None,
         };
         let lowered = forwarded.map_or(rest, |(_, rest, _)| rest);
         for (index, item) in lowered.iter().enumerate() {
@@ -90,59 +89,28 @@ impl Planner<'_> {
 
     fn lower_block_tail(&mut self, last: &Expression, target: &TailTarget<'_>) -> Vec<Statement> {
         let line = self.facts.source_position(&last.get_span());
-        let tail = match (target, last) {
-            (TailTarget::Return, Expression::Return { expression, .. }) => expression.as_ref(),
-            _ => last,
-        };
-        let statements = match self.queries().tail_kind(tail) {
-            TailKind::Diverges => self.lower_never_value(tail),
-            TailKind::Unit => self.lower_unit_tail(tail, target),
-            TailKind::Value => match target {
-                TailTarget::Return => self.lower_return_value_tail(tail),
-                TailTarget::Assign { target, target_ty } => {
-                    self.lower_assign_value_tail(tail, target, *target_ty)
-                }
-                TailTarget::Try(fallible) => self.lower_try_value_tail(tail, fallible),
-                TailTarget::Recover(fallible) => self.lower_recover_value_tail(tail, fallible),
-            },
+        let statements = match (target, self.queries().tail_kind(last)) {
+            (TailTarget::Return, _) => self.lower_return(last),
+            (_, TailKind::Diverges) => self.lower_never_value(last),
+            (TailTarget::Assign { target, target_ty }, TailKind::Unit) => {
+                self.lower_assign_unit_tail(last, target, target_ty)
+            }
+            (TailTarget::Assign { target, target_ty }, TailKind::Value) => {
+                self.lower_assign_value_tail(last, target, target_ty)
+            }
+            (TailTarget::Try(fallible), TailKind::Unit) => {
+                let mut statements = self.lower_unit_effect(last);
+                statements.extend(self.lower_try_unit_return(fallible));
+                statements
+            }
+            (TailTarget::Try(fallible), TailKind::Value) => {
+                self.lower_try_value_tail(last, fallible)
+            }
         };
         directed_first(line, statements)
     }
 
-    fn lower_unit_tail(&mut self, tail: &Expression, target: &TailTarget<'_>) -> Vec<Statement> {
-        match target {
-            TailTarget::Assign { target, target_ty } => {
-                self.lower_assign_unit_tail(tail, target, *target_ty)
-            }
-            TailTarget::Return => {
-                let mut statements = self.lower_unit_effect(tail);
-                let return_ty = self
-                    .scope
-                    .current_return_ctx()
-                    .ty()
-                    .filter(|ty| !self.facts.resolves_to_unit(ty))
-                    .cloned();
-                if let Some(return_ty) = return_ty
-                    && !list_terminates(&statements)
-                {
-                    statements.push(plain_return(self.unit_value(Some(tail), Some(&return_ty))));
-                }
-                statements
-            }
-            TailTarget::Try(fallible) => {
-                let mut statements = self.lower_unit_effect(tail);
-                statements.extend(self.lower_try_unit_return(fallible));
-                statements
-            }
-            TailTarget::Recover(fallible) => {
-                let mut statements = self.lower_unit_effect(tail);
-                statements.extend(self.lower_unit_return(fallible.ok_ty()));
-                statements
-            }
-        }
-    }
-
-    fn lower_unit_effect(&mut self, tail: &Expression) -> Vec<Statement> {
+    pub(in crate::lowering) fn lower_unit_effect(&mut self, tail: &Expression) -> Vec<Statement> {
         if let Expression::Unit { .. } = tail {
             return Vec::new();
         }
@@ -215,13 +183,15 @@ impl Planner<'_> {
             return self.lower_statement(item);
         };
 
-        let demand = match &binding.pattern {
-            Pattern::Identifier {
-                binding: Some(id), ..
-            } if mode.else_block().is_none() && !binding.is_mutable() => {
-                component_demand(region, *id)
-            }
-            _ => None,
+        let demand = if let Pattern::Identifier {
+            binding: Some(id), ..
+        } = &binding.pattern
+            && mode.else_block().is_none()
+            && !binding.is_mutable()
+        {
+            component_demand(region, *id)
+        } else {
+            None
         };
 
         let plan = self.build_let_plan(binding, value, mode, demand);
@@ -234,6 +204,7 @@ impl Planner<'_> {
         })
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn lower_statement_within_span(&mut self, expression: &Expression) -> Statement {
         match expression {
             Expression::Block { items, .. } if items.is_empty() => {
@@ -291,6 +262,7 @@ impl Planner<'_> {
         }
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn try_lower_directed_statement(
         &mut self,
         expression: &Expression,
@@ -320,7 +292,9 @@ impl Planner<'_> {
             } => LoweredStatement::Body(self.build_break_value_plan(value)),
             Expression::Return {
                 expression: value, ..
-            } => LoweredStatement::Body(self.build_return_plan(value)),
+            } => LoweredStatement::Body(LoweredBlock {
+                statements: self.lower_return(value),
+            }),
             Expression::Let {
                 binding,
                 value,
@@ -375,15 +349,12 @@ impl Planner<'_> {
         let wide_result = self
             .scope
             .current_loop()
-            .filter(|loop_context| self.queries().widens_unit(loop_context.result_ty.as_ref()))
-            .and_then(|loop_context| {
-                Some((loop_context.result.clone()?, loop_context.result_ty.clone()))
-            });
+            .and_then(|loop_context| loop_context.result.clone())
+            .filter(|slot| !self.facts.resolves_to_unit(&slot.ty));
 
         match wide_result {
-            Some((result, result_ty)) => {
-                let mut statements =
-                    self.lower_unit_into(expression, None, &result, result_ty.as_ref());
+            Some(slot) => {
+                let mut statements = self.lower_unit_into(expression, None, &slot.target, &slot.ty);
                 statements.push(transfer.into());
                 LoweredStatement::Body(LoweredBlock { statements })
             }
@@ -398,7 +369,7 @@ impl Planner<'_> {
         ) {
             let value = self.plan_operand(expression, ExpressionContext::value());
             LoweredStatement::Body(LoweredBlock {
-                statements: value.into_parts().0,
+                statements: value.into_statements(),
             })
         } else if let Expression::Propagate {
             expression: inner, ..
@@ -441,7 +412,7 @@ impl Planner<'_> {
             PlacePlan::Statement => self.lower_block_as_body(expression),
             PlacePlan::Return => self.lower_block_to_return(expression),
             PlacePlan::Assign { local, target_ty } => {
-                self.lower_block_to_assign(expression, local, *target_ty)
+                self.lower_block_to_assign(expression, local, target_ty)
             }
         }
     }
@@ -450,7 +421,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         local: &GoExpression,
-        target_ty: Option<&Type>,
+        target_ty: &Type,
     ) -> LoweredBlock {
         if self.facts.is_option_or_result(&expression.get_type()) {
             return LoweredBlock {
@@ -472,24 +443,23 @@ pub(in crate::lowering) enum TailTarget<'a> {
     Return,
     Assign {
         target: &'a GoExpression,
-        target_ty: Option<&'a Type>,
+        target_ty: &'a Type,
     },
     Try(&'a Fallible),
-    Recover(&'a Fallible),
 }
 
-enum TailKind {
+pub(in crate::lowering) enum TailKind {
     Value,
     Unit,
     Diverges,
 }
 
 impl PlannerQueries<'_, '_> {
-    fn tail_kind(&self, tail: &Expression) -> TailKind {
+    pub(in crate::lowering) fn tail_kind(&self, tail: &Expression) -> TailKind {
         let ty = tail.get_type();
         if self.facts.is_never(&ty) {
             TailKind::Diverges
-        } else if self.facts.has_no_go_value(&ty) {
+        } else if self.facts.produces_no_go_value(tail) {
             TailKind::Unit
         } else {
             TailKind::Value

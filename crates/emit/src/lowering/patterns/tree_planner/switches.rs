@@ -7,11 +7,10 @@ use crate::lowering::patterns::tree_planner::guard_renders_inline;
 use std::iter;
 use syntax::go_names::ENUM_TAG_FIELD;
 
-use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::lookup::state::bindings::InlineExpression;
 use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, ChainTail, ChainTest, Decision, GuardedLeaf, PatternBinding, SwitchBranch,
-    SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch, boolean_literal, render_condition,
+    SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch, render_condition,
 };
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
 use crate::lowering::value_plans::value_plan::PlacePlan;
@@ -296,17 +295,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 FlatCaseBody::Leaf(leaf) => this.walk_leaf(&mut body, leaf, &ctx),
                 FlatCaseBody::Guard(leaf) => {
                     let arm_body = &*this.arms[leaf.arm_index].expression;
-                    let bindings: Vec<PatternBinding> = leaf
-                        .bindings
-                        .iter()
-                        .filter(|binding| {
-                            analyze_inline_candidate_ids(&binding.binding_ids, &[arm_body])
-                                != InlineDecision::Unused
-                        })
-                        .cloned()
-                        .collect();
-
-                    this.with_bindings(&mut body, &bindings, &[arm_body], |this, body| {
+                    this.with_bindings(&mut body, &leaf.bindings, &[arm_body], |this, body| {
                         this.lower_arm_leaf(body, leaf.arm_index, &ctx);
                     });
                 }
@@ -494,15 +483,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 
     fn type_switch_binding_name(&mut self, subject: &GoExpression) -> GoIdentifier {
-        match subject.node() {
-            GoExpressionNode::Identifier(name) => {
-                GoIdentifier::local(name.to_string(), self.planner.scope.new_local_id())
-            }
-            _ => {
-                let name = self.planner.fresh_local("subject");
-                self.planner.scope.declare_go_name(&name);
-                name
-            }
+        if let GoExpressionNode::Identifier(name) = subject.node() {
+            GoIdentifier::local(name.to_string(), self.planner.scope.new_local_id())
+        } else {
+            let name = self.planner.fresh_local("subject");
+            self.planner.scope.declare_go_name(&name);
+            name
         }
     }
 
@@ -585,7 +571,7 @@ fn switch_branch_condition(
     shape: SwitchShape<'_>,
     label: &GoExpression,
 ) -> GoExpression {
-    if matches!(shape, SwitchShape::Bool { .. }) && boolean_literal(label) == Some(true) {
+    if matches!(shape, SwitchShape::Bool { .. }) && label.as_boolean() == Some(true) {
         return rendered_path.clone();
     }
     GoExpression::binary(

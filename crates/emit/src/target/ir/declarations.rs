@@ -28,7 +28,7 @@ pub(crate) struct FunctionSignature {
     pub(crate) name: String,
     pub(crate) generics: Vec<TypeParameter>,
     pub(crate) parameters: Vec<GoParameter>,
-    pub(crate) result: GoType,
+    pub(crate) result: Option<GoType>,
 }
 
 #[derive(Clone)]
@@ -43,7 +43,7 @@ pub(crate) struct FieldDeclaration {
 pub(crate) struct InterfaceMethod {
     pub(crate) name: String,
     pub(crate) parameters: Vec<GoType>,
-    pub(crate) result: GoType,
+    pub(crate) result: Option<GoType>,
 }
 
 #[derive(Clone)]
@@ -98,7 +98,7 @@ impl GoDeclaration {
         name: impl Into<String>,
         generics: Vec<TypeParameter>,
         parameters: Vec<GoParameter>,
-        result: GoType,
+        result: Option<GoType>,
         body: LoweredBlock,
     ) -> Self {
         Self::new(DeclarationKind::Function {

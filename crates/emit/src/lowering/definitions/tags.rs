@@ -106,7 +106,9 @@ impl StructuredTag {
             AttributeArg::NegatedFlag(flag) if flag == "omitzero" => {
                 self.omitzero = Some(false);
             }
-            _ => return false,
+            AttributeArg::NegatedFlag(_) | AttributeArg::String(_) | AttributeArg::Raw(_) => {
+                return false;
+            }
         }
         true
     }
@@ -263,14 +265,17 @@ fn interpret_tag_attribute(attribute: &Attribute) -> Option<TagConfig> {
                     AttributeArg::Flag(flag) if flag == "skip" => {
                         settings.skip = true;
                     }
-                    _ => {}
+                    AttributeArg::Flag(_)
+                    | AttributeArg::NegatedFlag(_)
+                    | AttributeArg::String(_)
+                    | AttributeArg::Raw(_) => {}
                 }
             }
 
             Some(TagConfig::structured(key.clone(), settings))
         }
 
-        _ => None,
+        AttributeArg::Flag(_) | AttributeArg::NegatedFlag(_) => None,
     }
 }
 

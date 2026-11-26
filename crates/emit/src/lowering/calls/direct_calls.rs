@@ -39,8 +39,8 @@ fn builtin_constant(builtin: &str, values: &[GoExpression]) -> Option<ConstantKi
     }
 }
 
-fn go_builtin_conversion(type_args: &GoType) -> Option<GoType> {
-    let [argument] = type_args.arguments() else {
+fn go_builtin_conversion(type_args: Option<&GoType>) -> Option<GoType> {
+    let [argument] = type_args?.arguments() else {
         return None;
     };
     Some(argument.clone())
@@ -64,8 +64,8 @@ pub(super) fn receiver_type_binding(
 
     let declared = callee
         .declared_type()?
-        .unwrap_forall()
-        .get_function_params()?
+        .as_function_type()?
+        .params
         .first()?
         .ty
         .clone();
@@ -92,7 +92,7 @@ fn find_go_string_literal_close(s: &str) -> Option<usize> {
 struct RegularCallParts {
     setup: Vec<Statement>,
     callee: GoExpression,
-    type_args: GoType,
+    type_args: Option<GoType>,
     arguments: Vec<GoExpression>,
     builtin_conversion: Option<GoType>,
     constant_result: Option<ConstantKind>,
@@ -168,12 +168,15 @@ impl<'a> Planner<'a> {
         let (type_args_string, builtin_conversion) =
             self.queries()
                 .direct_call_type_arguments(call_plan, call_ty, expression_ctx);
-        if !type_args_string.is_empty() {
+        if type_args_string.is_some() {
             callee = callee.without_instantiation();
         }
 
-        let args_ctx =
-            self.direct_call_arguments_context(call_plan, expression_ctx, &type_args_string);
+        let args_ctx = self.direct_call_arguments_context(
+            call_plan,
+            expression_ctx,
+            type_args_string.as_ref(),
+        );
         let sequenced_args = self.plan_call_args(&args_ctx, None);
         let constant_result = go_builtin_name(&self.facts, function)
             .filter(|_| builtin_conversion.is_none())
@@ -184,7 +187,7 @@ impl<'a> Planner<'a> {
             ..
         } = sequenced_args;
 
-        if type_args_string.is_empty()
+        if type_args_string.is_none()
             && self.queries().callee_needs_pin(
                 function,
                 &call_plan.resolved,
@@ -211,7 +214,7 @@ impl<'a> Planner<'a> {
         &self,
         call_plan: &'p CallPlan<'a, 'p>,
         expression_ctx: ExpressionContext<'p>,
-        type_args: &GoType,
+        type_args: Option<&GoType>,
     ) -> CallArgumentsContext<'p, 'a> {
         let function = call_plan.site.callee;
         CallArgumentsContext {
@@ -223,7 +226,7 @@ impl<'a> Planner<'a> {
             .then(|| expression_ctx.assigned_place())
             .flatten(),
             callee_is_builtin: callee_is_go_builtin(&self.facts, function),
-            callee_pins_type_args: !type_args.is_empty(),
+            callee_pins_type_args: type_args.is_some(),
             receiver_binding: receiver_type_binding(&self.facts, function, &call_plan.resolved),
         }
     }
@@ -323,12 +326,10 @@ impl<'a> Planner<'a> {
 }
 
 fn fmt_member(node: &GoExpressionNode) -> Option<&str> {
-    match node {
-        GoExpressionNode::Qualified { package, name } if package.package().path() == "fmt" => {
-            Some(name)
-        }
-        _ => None,
-    }
+    let GoExpressionNode::Qualified { package, name } = node else {
+        return None;
+    };
+    (package.package().path() == "fmt").then_some(name)
 }
 
 fn pointer_receiver_on_value_local(
@@ -358,7 +359,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         call_plan: &CallPlan<'_, '_>,
         call_ty: Option<&Type>,
         expression_ctx: ExpressionContext<'_>,
-    ) -> (GoType, Option<GoType>) {
+    ) -> (Option<GoType>, Option<GoType>) {
         let function = call_plan.site.callee;
         let type_args = self.call_type_arguments(CallTypeArgumentsRequest {
             function,
@@ -374,10 +375,10 @@ impl<'a> PlannerQueries<'_, 'a> {
         });
 
         let builtin_conversion = callee_is_go_builtin(self.facts, function)
-            .then(|| go_builtin_conversion(&type_args))
+            .then(|| go_builtin_conversion(type_args.as_ref()))
             .flatten();
         match builtin_conversion {
-            Some(_) => (GoType::default(), builtin_conversion),
+            Some(_) => (None, builtin_conversion),
             None => (type_args, None),
         }
     }
@@ -454,25 +455,30 @@ impl<'a> PlannerQueries<'_, 'a> {
     }
 
     fn classify_fmt_argument(&self, expression: &Expression) -> Option<FmtArgument> {
-        match expression {
-            Expression::Literal {
-                literal: Literal::FormatString(parts),
-                ..
-            } => format_string_lowers_to_sprintf(self.facts, parts).then_some(FmtArgument::Sprintf),
-            Expression::Call {
-                expression: callee,
-                args: arguments,
-                spread,
-                ..
-            } => match (
-                self.facts.checked(callee).callee().definition.as_deref(),
-                arguments.as_slice(),
-                spread,
-            ) {
-                (Some("go:fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
-                (Some("go:fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
-                _ => None,
-            },
+        if let Expression::Literal {
+            literal: Literal::FormatString(parts),
+            ..
+        } = expression
+        {
+            return format_string_lowers_to_sprintf(self.facts, parts)
+                .then_some(FmtArgument::Sprintf);
+        }
+        let Expression::Call {
+            expression: callee,
+            args: arguments,
+            spread,
+            ..
+        } = expression
+        else {
+            return None;
+        };
+        match (
+            self.facts.checked(callee).callee().definition.as_deref(),
+            arguments.as_slice(),
+            spread,
+        ) {
+            (Some("go:fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
+            (Some("go:fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
             _ => None,
         }
     }

@@ -139,7 +139,23 @@ pub(in crate::lowering) fn is_clip_safe_path(value: &GoExpression) -> bool {
         match node {
             GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => true,
             GoExpressionNode::Selector { base, .. } => is_path(base),
-            _ => false,
+            GoExpressionNode::Literal(_)
+            | GoExpressionNode::Type(_)
+            | GoExpressionNode::CompositeLiteral { .. }
+            | GoExpressionNode::Call { .. }
+            | GoExpressionNode::Instantiation { .. }
+            | GoExpressionNode::Index { .. }
+            | GoExpressionNode::Slice { .. }
+            | GoExpressionNode::TypeAssertion { .. }
+            | GoExpressionNode::Unary { .. }
+            | GoExpressionNode::AddressOf(_)
+            | GoExpressionNode::Dereference(_)
+            | GoExpressionNode::Binary { .. }
+            | GoExpressionNode::Conversion { .. }
+            | GoExpressionNode::Spread(_)
+            | GoExpressionNode::FunctionLiteral { .. }
+            | GoExpressionNode::Verbatim(_)
+            | GoExpressionNode::Unreachable => false,
         }
     }
     is_path(value.node())
@@ -171,10 +187,10 @@ fn assigned_place_covers_receiver(target: &Expression, receiver: &Expression) ->
         if lvalues_match(target, current) {
             return true;
         }
-        match current {
-            Expression::DotAccess { expression, .. } => current = expression,
-            _ => return false,
-        }
+        let Expression::DotAccess { expression, .. } = current else {
+            return false;
+        };
+        current = expression;
     }
 }
 
@@ -383,7 +399,7 @@ impl Planner<'_> {
         let shared = self.stable_source(setup, "added", shared);
         self.with_scope(|this| {
             immediate_call(
-                this.queries().go_type(result_ty),
+                Some(this.queries().go_type(result_ty)),
                 guarded_growth_body(growth, shared, receiver, clipped),
                 FunctionLiteralLayout::MultiLine,
             )
@@ -732,31 +748,27 @@ impl Planner<'_> {
         range: &Expression,
         capture_boundary: CaptureBoundary,
     ) -> NativeCallResult {
-        let operands = match range {
-            Expression::Range {
-                start,
-                end,
-                inclusive,
-                ..
-            } => {
-                let mut operands = self.sequence_range_literal_substring(
-                    receiver_expression,
-                    start.as_deref(),
-                    end.as_deref(),
-                    capture_boundary,
-                );
-                if *inclusive {
-                    operands.end = operands.end.map(|end| {
-                        GoExpression::binary(
-                            end,
-                            GoBinaryOperator::Addition,
-                            GoExpression::integer(1),
-                        )
-                    });
-                }
-                operands
+        let operands = if let Expression::Range {
+            start,
+            end,
+            inclusive,
+            ..
+        } = range
+        {
+            let mut operands = self.sequence_range_literal_substring(
+                receiver_expression,
+                start.as_deref(),
+                end.as_deref(),
+                capture_boundary,
+            );
+            if *inclusive {
+                operands.end = operands.end.map(|end| {
+                    GoExpression::binary(end, GoBinaryOperator::Addition, GoExpression::integer(1))
+                });
             }
-            _ => self.sequence_range_value_substring(receiver_expression, range, capture_boundary),
+            operands
+        } else {
+            self.sequence_range_value_substring(receiver_expression, range, capture_boundary)
         };
 
         let receiver = if self.facts.is_reference(&receiver_expression.get_type()) {
@@ -915,7 +927,7 @@ impl Planner<'_> {
 fn predicate_literal(parameters: Vec<GoParameter>, body: GoExpression) -> GoExpression {
     function_literal(
         parameters,
-        GoType::new("bool"),
+        Some(GoType::new("bool")),
         LoweredBlock {
             statements: vec![plain_return(body)],
         },
@@ -946,7 +958,13 @@ fn substring_call(
 fn method_prefix(kind: NativeTypeKind) -> &'static str {
     match kind {
         NativeTypeKind::String => "String",
-        _ => kind.name(),
+        NativeTypeKind::Slice
+        | NativeTypeKind::EnumeratedSlice
+        | NativeTypeKind::Map
+        | NativeTypeKind::Channel
+        | NativeTypeKind::Sender
+        | NativeTypeKind::Receiver
+        | NativeTypeKind::Array => kind.name(),
     }
 }
 
@@ -1009,7 +1027,7 @@ impl PlannerQueries<'_, '_> {
             match argument_expressions.get(index).zip(parameter) {
                 Some((argument, parameter))
                     if converts_for_inference(self.facts, argument, parameter, |_| {
-                        !type_args.is_empty()
+                        type_args.is_some()
                     }) =>
                 {
                     GoExpression::conversion(self.go_type(&parameter.instantiated), value.clone())
@@ -1023,6 +1041,7 @@ impl PlannerQueries<'_, '_> {
         ))
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn receiver_is_addressable(&self, expression: &Expression) -> bool {
         if self.facts.is_reference(&expression.get_type()) {
             return true;
@@ -1054,7 +1073,15 @@ impl PlannerQueries<'_, '_> {
             } => match self.facts.native_kind(&base.get_type()) {
                 Some(NativeTypeKind::Map) => false,
                 Some(NativeTypeKind::Slice) => true,
-                _ => self.receiver_is_addressable(base),
+                Some(
+                    NativeTypeKind::EnumeratedSlice
+                    | NativeTypeKind::Channel
+                    | NativeTypeKind::Sender
+                    | NativeTypeKind::Receiver
+                    | NativeTypeKind::String
+                    | NativeTypeKind::Array,
+                )
+                | None => self.receiver_is_addressable(base),
             },
             _ => false,
         }

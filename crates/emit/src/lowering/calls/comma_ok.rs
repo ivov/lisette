@@ -75,7 +75,13 @@ impl Planner<'_> {
                 let copy = define(name.clone(), GoExpression::identifier(components.value));
                 (vec![copy], name, false)
             }
-            _ => (Vec::new(), components.value, components.shared_payload),
+            CommaOkValueSlot::Named(_)
+            | CommaOkValueSlot::Temp
+            | CommaOkValueSlot::Arm(_)
+            | CommaOkValueSlot::Unused
+            | CommaOkValueSlot::Discarded => {
+                (Vec::new(), components.value, components.shared_payload)
+            }
         };
 
         let status_kind = match components.kind {
@@ -173,29 +179,14 @@ impl Planner<'_> {
     }
 
     pub(in crate::lowering) fn arm_value_name(&mut self, name: &SourceName) -> GoIdentifier {
-        let candidate = name.preferred();
-        if self.scope.has_binding_for_go_name(&candidate)
-            || self.names.is_package_block_name(&candidate)
-            || self.scope.declares_type_param(&candidate)
-        {
-            self.fresh_local(name)
-        } else {
-            self.scope.new_local_identifier(candidate)
-        }
+        self.scope.new_unreserved_local(name, self.names)
     }
 
     pub(in crate::lowering) fn declared_arm_value_name(
         &mut self,
         name: &GoIdentifier,
     ) -> GoIdentifier {
-        let candidate = name.clone();
-        let name = if self.scope.is_go_name_declared(&candidate) {
-            self.fresh_local(&candidate)
-        } else {
-            candidate
-        };
-        self.scope.declare_go_name(&name);
-        name
+        self.claim_go_name(name)
     }
 
     pub(in crate::lowering) fn pair_status(
@@ -209,15 +200,7 @@ impl Planner<'_> {
             PairStatusKind::Ok => "ok",
         };
         let candidate = hint.map_or_else(|| default.to_string(), SourceName::preferred);
-        let taken = (placement == PairPlacement::Statement
-            && self.scope.current_block_declares(&candidate))
-            || self.scope.has_binding_for_go_name(&candidate)
-            || self.names.is_package_block_name(&candidate);
-        let name = match hint {
-            Some(hint) if taken => self.fresh_local(hint),
-            None if taken => self.fresh_local(default),
-            _ => self.scope.new_local_identifier(candidate),
-        };
+        let name = self.scope.new_unreserved_local(candidate, self.names);
         if placement == PairPlacement::Statement {
             self.scope.declare_go_name(&name);
         }
@@ -304,7 +287,7 @@ impl PlannerQueries<'_, '_> {
             {
                 Some(CommaOkSource::MapIndex { receiver })
             }
-            _ => {
+            CallableOrigin::GoInterop | CallableOrigin::Source(_) => {
                 let lowered = self.lowered_call_of(Vec::new(), &plan)?;
                 let pair = lowered.raw_pair()?;
                 if !matches!(

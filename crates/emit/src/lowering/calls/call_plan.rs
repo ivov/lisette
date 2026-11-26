@@ -1,3 +1,4 @@
+use crate::lookup::facts::callables::CallableDeclaration;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::CalleeSignature;
@@ -7,10 +8,8 @@ use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::planner::queries::PlannerQueries;
 use syntax::ast::Expression;
 use syntax::program::SlotOrigin;
-use syntax::program::{
-    CallOperation, CheckedCallee, Definition, Method, Visibility, resolved_definition,
-};
-use syntax::program::{GoTypeRecipe, is_go_import, is_prelude_symbol};
+use syntax::program::{CallOperation, CheckedCallee, resolved_definition};
+use syntax::program::{is_go_import, is_prelude_symbol};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
@@ -45,39 +44,6 @@ impl ResolvedCallee<'_> {
         FunctionLayout {
             producer: self.origin.producer(),
             ..self.abi.function_layout(facts)
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(in crate::lowering) enum CallableDeclaration<'a> {
-    Definition(&'a Definition),
-    Method(&'a Method),
-}
-
-impl<'a> CallableDeclaration<'a> {
-    pub(in crate::lowering) fn ty(self) -> &'a Type {
-        match self {
-            Self::Definition(definition) => &definition.ty,
-            Self::Method(method) => &method.ty,
-        }
-    }
-
-    pub(in crate::lowering) fn visibility(self) -> &'a Visibility {
-        match self {
-            Self::Definition(definition) => &definition.visibility,
-            Self::Method(method) => &method.visibility,
-        }
-    }
-
-    pub(in crate::lowering) fn is_type_definition(self) -> bool {
-        matches!(self, Self::Definition(definition) if definition.is_type_definition())
-    }
-
-    pub(in crate::lowering) fn go_type_param_recipe(self) -> Option<&'a [GoTypeRecipe]> {
-        match self {
-            Self::Definition(definition) => definition.go_type_param_recipe(),
-            Self::Method(_) => None,
         }
     }
 }
@@ -172,7 +138,7 @@ fn callee_return_slot<'r>(
             SlotOrigin::of_go_declaration(
                 SlotOrigin::GoReturn,
                 declared_return.unwrap_or(return_type),
-                |id| facts.definition(id),
+                |id| Some(facts.definition(id)),
             ),
             declared_return,
         ),
@@ -190,19 +156,6 @@ pub(in crate::lowering) fn is_prelude_dispatch(
                 CallOperation::NativeConstructor { .. } | CallOperation::Native { .. }
             )
         )
-}
-
-pub(in crate::lowering) fn callable_declaration<'a>(
-    facts: &EmitFacts<'a>,
-    id: &str,
-) -> Option<CallableDeclaration<'a>> {
-    facts
-        .definition(id)
-        .map(CallableDeclaration::Definition)
-        .or_else(|| {
-            let (owner, name) = id.rsplit_once('.')?;
-            facts.method(owner, name).map(CallableDeclaration::Method)
-        })
 }
 
 impl<'a> PlannerQueries<'_, 'a> {
@@ -242,40 +195,47 @@ impl<'a> PlannerQueries<'_, 'a> {
         id: Option<String>,
         receiver_offset: usize,
     ) -> ResolvedCallee<'a> {
-        let declaration = id
-            .as_deref()
-            .and_then(|id| callable_declaration(self.facts, id));
-        let alias_declaration = self.facts.function_alias_declaration(&function.get_type());
+        let callee_ty = function
+            .type_ref()
+            .expect("internal error: a callee has a type");
+        let declaration = id.as_deref().map(|id| self.facts.callable(id));
+        let alias_declaration = self.facts.function_alias_declaration(callee_ty);
         let declared_type = declaration
             .map(CallableDeclaration::ty)
             .or(alias_declaration.as_ref());
         let instantiated = self
             .facts
-            .resolve_to_function_type(function.get_type().unwrap_forall())
-            .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
-        let declared_params = declared_type.and_then(|ty| ty.unwrap_forall().get_function_params());
-        let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
-        let params = match self.go_named_function_type_param(function, declaration, id.as_deref()) {
-            Some(param) => vec![param],
-            None => self.build_param_abi(
-                &instantiated,
-                ParamAbiSource {
-                    declared: declared_params,
-                    receiver_offset,
-                    callee_id: id.as_deref(),
-                    origin,
-                },
-            ),
-        };
-
-        let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
+            .resolve_to_function_type(callee_ty.unwrap_forall())
+            .expect("a callee must have a function type");
+        let instantiated_function = instantiated
+            .as_function_type()
+            .expect("a callee must have a function type");
+        let declared_function = declared_type.and_then(Type::as_function_type);
+        let declared_params = declared_function.map(|function| function.params.as_slice());
+        let declared_return = declared_function.map(|function| function.return_type.as_ref());
+        let (params, return_type) =
+            match self.go_named_function_type_param(callee_ty, declaration, id.as_deref()) {
+                Some(param) => (vec![param], callee_ty),
+                None => (
+                    self.build_param_abi(
+                        &instantiated,
+                        ParamAbiSource {
+                            declared: declared_params,
+                            receiver_offset,
+                            callee_id: id.as_deref(),
+                            origin,
+                        },
+                    ),
+                    instantiated_function.return_type.as_ref(),
+                ),
+            };
         let abi = self.callable_abi(
             params,
             CalleeSignature {
                 callee: function,
                 origin: &origin,
-                id: id.as_deref(),
-                declaration,
+                named: id.as_deref().zip(declaration),
+                function: instantiated_function,
                 declared_return,
                 return_type,
             },
@@ -294,13 +254,12 @@ impl<'a> PlannerQueries<'_, 'a> {
 
     fn go_named_function_type_param(
         &self,
-        function: &Expression,
+        callee_ty: &Type,
         declaration: Option<CallableDeclaration<'_>>,
         id: Option<&str>,
     ) -> Option<CallableParamAbi> {
-        let callee_ty = function.get_type();
         if !declaration.is_some_and(CallableDeclaration::is_type_definition)
-            || !self.facts.is_go_named_function_type(&callee_ty)
+            || !self.facts.is_go_named_function_type(callee_ty)
         {
             return None;
         }
@@ -316,7 +275,7 @@ impl<'a> PlannerQueries<'_, 'a> {
             origin: SlotOrigin::Lisette,
             layout: self
                 .facts
-                .value_layout(&callee_ty, SlotOrigin::Lisette)
+                .value_layout(callee_ty, SlotOrigin::Lisette)
                 .underlying()
                 .clone(),
             variadic: None,
@@ -331,7 +290,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         let (return_origin, return_declaration) = callee_return_slot(
             self.facts,
             signature.origin,
-            signature.id,
+            signature.named.map(|(id, _)| id),
             signature.declared_return,
             signature.return_type,
         );
@@ -355,10 +314,8 @@ impl<'a> PlannerQueries<'_, 'a> {
         &self,
         expression: &Expression,
     ) -> Option<ResolvedCallee<'a>> {
-        let instantiated = self
-            .facts
+        self.facts
             .resolve_to_function_type(expression.get_type().unwrap_forall())?;
-        instantiated.get_function_ret()?;
         let origin = if self.is_go_callable(expression) {
             CallableOrigin::GoInterop
         } else {
@@ -377,20 +334,15 @@ impl<'a> PlannerQueries<'_, 'a> {
         &self,
         function: &Expression,
     ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
-        let id = match function {
-            Expression::Identifier { .. } | Expression::DotAccess { .. } => self
-                .facts
-                .checked(function)
-                .callee()
-                .definition
-                .as_ref()
-                .map(ToString::to_string),
-            _ => None,
-        };
+        let id = matches!(
+            function,
+            Expression::Identifier { .. } | Expression::DotAccess { .. }
+        )
+        .then(|| self.facts.checked(function).callee().definition.as_ref())
+        .flatten()
+        .map(ToString::to_string);
 
-        let declaration = id
-            .as_deref()
-            .and_then(|id| callable_declaration(self.facts, id));
+        let declaration = id.as_deref().map(|id| self.facts.callable(id));
         (id, declaration)
     }
 
@@ -419,7 +371,10 @@ impl<'a> PlannerQueries<'_, 'a> {
         instantiated: &Type,
         source: ParamAbiSource<'_>,
     ) -> Vec<CallableParamAbi> {
-        let parameters = instantiated.get_function_params().unwrap_or(&[]);
+        let parameters = &instantiated
+            .as_function_type()
+            .expect("a callee must have a function type")
+            .params;
         let variadic_element = instantiated.is_variadic();
         parameters
             .iter()
@@ -469,7 +424,7 @@ impl<'a> PlannerQueries<'_, 'a> {
                     SlotOrigin::of_go_declaration(
                         SlotOrigin::GoParameter,
                         declared.as_ref().unwrap_or(instantiated),
-                        |id| self.facts.definition(id),
+                        |id| Some(self.facts.definition(id)),
                     )
                 } else {
                     SlotOrigin::Lisette
@@ -501,7 +456,9 @@ impl<'a> PlannerQueries<'_, 'a> {
     fn variadic_param_abi(&self, slot: ParamSlot, element: Type) -> CallableParamAbi {
         let declared_element = slot.declared.map(|declared| {
             if declared.is_native(CompoundKind::VarArgs) {
-                declared.inner().unwrap_or(declared)
+                declared
+                    .inner()
+                    .expect("a variadic parameter has an element type")
             } else {
                 declared
             }

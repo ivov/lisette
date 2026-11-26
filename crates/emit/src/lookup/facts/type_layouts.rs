@@ -9,7 +9,7 @@ use crate::target::types::return_abi::{
     CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
 };
 use syntax::program::{
-    FieldSelection, GoOptionRepresentation, SlotOrigin, go_option_representation,
+    FieldSelection, GoOptionRepresentation, SlotOrigin, go_option_representation, is_go_import,
 };
 use syntax::types::{CompoundKind, FunctionType, Symbol, Type};
 
@@ -121,7 +121,17 @@ impl EmitFacts<'_> {
                     .expect("function slot instantiation");
                 *layout = self.function_layout_with_receiver_slots(actual, declared, bindings);
             }
-            _ => {}
+            ValueLayout::Plain(_)
+            | ValueLayout::Fallible { .. }
+            | ValueLayout::TaggedOption { .. }
+            | ValueLayout::NullableOption { .. }
+            | ValueLayout::PointerOption { .. }
+            | ValueLayout::Reference { .. }
+            | ValueLayout::Slice { .. }
+            | ValueLayout::Map { .. }
+            | ValueLayout::Array { .. }
+            | ValueLayout::Tuple { .. }
+            | ValueLayout::Named { .. } => {}
         }
         layout
     }
@@ -171,7 +181,15 @@ impl EmitFacts<'_> {
             return Some(layout);
         }
         let selection = selection?;
-        if let Some(slot) = self.go_field(selection.owner.as_str(), field) {
+        if is_go_import(&selection.owner) {
+            let slot = self
+                .go_field(selection.owner.as_str(), field)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "internal error: `{}.{field}` has no Go slot",
+                        selection.owner
+                    )
+                });
             return Some(self.value_layout_with_declaration(
                 value_type,
                 slot.origin,
@@ -274,7 +292,9 @@ impl EmitFacts<'_> {
                 ty.clone(),
                 origin,
                 Some(&declaration),
-                declaration.get_function_ret(),
+                declaration
+                    .as_function_type()
+                    .map(|function| function.return_type.as_ref()),
             );
         }
         if self.resolve_to_function_type(declaration).is_none()
@@ -340,7 +360,17 @@ impl EmitFacts<'_> {
                     }
                 }
             }
-            _ => {}
+            ValueLayout::Plain(_)
+            | ValueLayout::Fallible { .. }
+            | ValueLayout::TaggedOption { .. }
+            | ValueLayout::NullableOption { .. }
+            | ValueLayout::PointerOption { .. }
+            | ValueLayout::Reference { .. }
+            | ValueLayout::Slice { .. }
+            | ValueLayout::Map { .. }
+            | ValueLayout::Array { .. }
+            | ValueLayout::Function { .. }
+            | ValueLayout::Named { .. } => {}
         }
     }
 
@@ -462,7 +492,20 @@ impl EmitFacts<'_> {
                 GoTypeKind::PointerToArray
             }
             Type::Array { .. } => GoTypeKind::Array,
-            _ => GoTypeKind::Value,
+            Type::Simple(_)
+            | Type::Compound { .. }
+            | Type::Nominal { .. }
+            | Type::ImportNamespace(_)
+            | Type::Function(_)
+            | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Forall { .. }
+            | Type::Parameter(_)
+            | Type::Never
+            | Type::Tuple(_)
+            | Type::Error
+            | Type::ReceiverPlaceholder => GoTypeKind::Value,
         }
     }
 
@@ -471,9 +514,7 @@ impl EmitFacts<'_> {
         elements: &[ValueLayout],
         declaration: Option<&Type>,
     ) -> Vec<ValueLayout> {
-        let declared = declaration
-            .map(|ty| self.tuple_or_type_arguments(ty))
-            .unwrap_or_default();
+        let declared = declaration.map(|ty| self.tuple_or_type_arguments(ty));
         elements
             .iter()
             .enumerate()
@@ -481,13 +522,29 @@ impl EmitFacts<'_> {
                 ValueLayout::TaggedOption {
                     option_type,
                     payload,
-                } if self.is_nullable_option(declared.get(index).unwrap_or(option_type)) => {
+                } if self.is_nullable_option(
+                    declared
+                        .as_ref()
+                        .map_or(option_type, |declared| &declared[index]),
+                ) =>
+                {
                     ValueLayout::NullableOption {
                         option_type: option_type.clone(),
                         payload: payload.clone(),
                     }
                 }
-                element => element.clone(),
+                element @ ValueLayout::Plain(_)
+                | element @ ValueLayout::Fallible { .. }
+                | element @ ValueLayout::TaggedOption { .. }
+                | element @ ValueLayout::NullableOption { .. }
+                | element @ ValueLayout::PointerOption { .. }
+                | element @ ValueLayout::Reference { .. }
+                | element @ ValueLayout::Slice { .. }
+                | element @ ValueLayout::Map { .. }
+                | element @ ValueLayout::Array { .. }
+                | element @ ValueLayout::Function { .. }
+                | element @ ValueLayout::Tuple { .. }
+                | element @ ValueLayout::Named { .. } => element.clone(),
             })
             .collect()
     }
@@ -505,7 +562,10 @@ impl EmitFacts<'_> {
         let resolved_declaration = alias_declaration
             .clone()
             .or_else(|| declaration.map(|ty| self.peel_alias(ty)));
-        let alias_return = alias_declaration.as_ref().and_then(Type::get_function_ret);
+        let alias_return = alias_declaration
+            .as_ref()
+            .and_then(Type::as_function_type)
+            .map(|function| function.return_type.as_ref());
         if resolved_declaration
             .as_ref()
             .is_some_and(|ty| self.declaration_is_open(ty))
@@ -652,7 +712,20 @@ impl EmitFacts<'_> {
                     .map(|(index, element)| nested(element, tuple_hint(declaration, index)))
                     .collect(),
             },
-            _ => self.nominal_value_layout(ty, origin, declaration, physical_return),
+            Type::Error => ValueLayout::Plain(ty),
+            Type::Uninferred | Type::ReceiverPlaceholder => {
+                panic!("internal error: {ty:?} has no value layout")
+            }
+            Type::Simple(_)
+            | Type::Compound { .. }
+            | Type::Nominal { .. }
+            | Type::ImportNamespace(_)
+            | Type::Function(_)
+            | Type::Var { .. }
+            | Type::Ignored
+            | Type::Forall { .. }
+            | Type::Parameter(_)
+            | Type::Never => self.nominal_value_layout(ty, origin, declaration, physical_return),
         }
     }
 
@@ -663,7 +736,7 @@ impl EmitFacts<'_> {
         declaration: Option<&Type>,
         physical_return: Option<&Type>,
     ) -> ValueLayout {
-        if let Some(function_type) = self.resolve_to_function_type(&ty) {
+        if let Some(Type::Function(function_type)) = self.resolve_to_function_type(&ty) {
             return self.function_value_layout(
                 ty,
                 &function_type,
@@ -723,7 +796,7 @@ impl EmitFacts<'_> {
             };
         }
 
-        match go_option_representation(&ty, origin, |id| self.definition(id)) {
+        match go_option_representation(&ty, origin, |id| Some(self.definition(id))) {
             GoOptionRepresentation::Tagged => ValueLayout::TaggedOption {
                 option_type: ty,
                 payload,
@@ -742,7 +815,7 @@ impl EmitFacts<'_> {
     fn function_value_layout(
         &self,
         ty: Type,
-        function_type: &Type,
+        function_type: &FunctionType,
         origin: SlotOrigin,
         declaration: Option<&Type>,
         physical_return: Option<&Type>,
@@ -758,13 +831,10 @@ impl EmitFacts<'_> {
         };
 
         let declared_function = declaration.and_then(|ty| self.resolve_to_function_type(ty));
-        let declared_parameters = declared_function
-            .as_ref()
-            .and_then(Type::get_function_params)
-            .unwrap_or_default();
+        let declared_function = declared_function.as_ref().and_then(Type::as_function_type);
+        let declared_parameters = declared_function.map_or(&[][..], |function| &function.params);
         let parameters = function_type
-            .get_function_params()
-            .unwrap_or_default()
+            .params
             .iter()
             .enumerate()
             .map(|(index, parameter)| {
@@ -775,14 +845,11 @@ impl EmitFacts<'_> {
             })
             .collect();
 
-        let result_type = function_type
-            .get_function_ret()
-            .cloned()
-            .unwrap_or(Type::Never);
-        let declared_result = declared_function.as_ref().and_then(Type::get_function_ret);
-        let return_abi = slot_return_abi(self, physical_return.unwrap_or(&result_type), origin);
+        let result_type = function_type.return_type.as_ref();
+        let declared_result = declared_function.map(|function| function.return_type.as_ref());
+        let return_abi = slot_return_abi(self, physical_return.unwrap_or(result_type), origin);
         let result = self.callable_result_layout(
-            &result_type,
+            result_type,
             origin.nested(),
             physical_return.and(declared_result),
             &return_abi,
@@ -827,7 +894,16 @@ fn receiver_slot_bindings<'a>(
     let slots = match receiver.underlying() {
         ValueLayout::TaggedOption { payload, .. } => vec![payload.as_ref()],
         ValueLayout::Fallible { payload, error, .. } => vec![payload.as_ref(), error.as_ref()],
-        _ => return None,
+        ValueLayout::Plain(_)
+        | ValueLayout::NullableOption { .. }
+        | ValueLayout::PointerOption { .. }
+        | ValueLayout::Reference { .. }
+        | ValueLayout::Slice { .. }
+        | ValueLayout::Map { .. }
+        | ValueLayout::Array { .. }
+        | ValueLayout::Function { .. }
+        | ValueLayout::Tuple { .. }
+        | ValueLayout::Named { .. } => return None,
     };
     Some(type_params.iter().zip(slots).collect())
 }

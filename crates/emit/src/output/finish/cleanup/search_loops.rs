@@ -160,10 +160,7 @@ fn assigned_name(statement: &LoweredStatement, target: &GoIdentifier) -> Option<
     if !matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target)) {
         return None;
     }
-    match value.node() {
-        GoExpressionNode::Identifier(element) => Some(element.clone()),
-        _ => None,
-    }
+    value.as_identifier().cloned()
 }
 
 fn assigns_true(statement: &LoweredStatement, target: &GoIdentifier) -> bool {

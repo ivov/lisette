@@ -9,7 +9,7 @@ use rustc_hash::FxHashSet;
 
 struct LocalResolver<'a> {
     scope: &'a mut ScopeState,
-    frames: ScopeStack<FxHashMap<String, LocalId>>,
+    frames: ScopeStack<FxHashMap<LocalId, String>>,
     shadowing: FxHashSet<LocalId>,
 }
 
@@ -20,9 +20,7 @@ impl VisitorMut for LocalResolver<'_> {
         };
         if let Some(id) = name.id() {
             assert!(
-                self.frames
-                    .iter()
-                    .any(|frame| frame.values().any(|local| *local == id)),
+                self.frames.iter().any(|frame| frame.contains_key(&id)),
                 "identified read of `{}` has no visible declaration",
                 name.spelling()
             );
@@ -40,20 +38,26 @@ impl VisitorMut for LocalResolver<'_> {
             name.finish();
             return;
         }
-        let current = self.frames.innermost().get(name.spelling()).copied();
-
-        let id = current.unwrap_or_else(|| name.id().unwrap_or_else(|| self.scope.new_local_id()));
+        let id = name
+            .id()
+            .or_else(|| {
+                self.frames
+                    .innermost()
+                    .iter()
+                    .find_map(|(id, spelling)| (spelling == name.spelling()).then_some(*id))
+            })
+            .unwrap_or_else(|| self.scope.new_local_id());
         name.identify(id);
-        if self
-            .frames
-            .enclosing()
-            .any(|frame| frame.get(name.spelling()).is_some_and(|outer| *outer != id))
-        {
+        if self.frames.enclosing().any(|frame| {
+            frame
+                .iter()
+                .any(|(outer, spelling)| *outer != id && spelling == name.spelling())
+        }) {
             self.shadowing.insert(id);
         }
         self.frames
             .innermost_mut()
-            .insert(name.spelling().to_string(), id);
+            .insert(id, name.spelling().to_string());
     }
 
     fn enter_scope(&mut self) {

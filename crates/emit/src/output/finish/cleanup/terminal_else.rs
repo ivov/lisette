@@ -1,4 +1,5 @@
 use crate::lookup::state::scope_stack::ScopeStack;
+use crate::target::ir::go_expression::NameRead;
 use std::mem;
 
 use rustc_hash::FxHashMap;
@@ -6,7 +7,7 @@ use rustc_hash::FxHashMap;
 use crate::lookup::state::scope::{ScopeState, ScopedTypeParameter};
 use crate::target::ir::bodies::{
     ElseArm, ElseLayout, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
-    for_each_statements_mut,
+    for_each_statements_mut, scope_statements,
 };
 use crate::target::ir::go_expression::{
     GoBinaryOperator, GoExpressionNode, GoUnaryOperator, Operand, verbatim_identifiers,
@@ -23,9 +24,10 @@ pub(super) fn unwrap_terminal_else(statements: &mut Vec<Statement>) {
 }
 
 fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
-    let mut plan = match statement {
-        LoweredStatement::If(plan) => plan,
-        _ => return,
+    let mut plan = if let LoweredStatement::If(plan) = statement {
+        plan
+    } else {
+        return;
     };
     let mut then_diverges = true;
     let mut keeps_scope = true;
@@ -46,18 +48,20 @@ fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
 }
 
 fn declares_no_names(body: &LoweredBlock) -> bool {
-    body.statements.iter().all(|statement| {
-        !matches!(
-            statement.kind,
-            LoweredStatement::Define(_)
-                | LoweredStatement::VarDeclaration { .. }
-                | LoweredStatement::Const(_)
-                | LoweredStatement::Select(_)
-                | LoweredStatement::Switch(_)
-                | LoweredStatement::Loop(_)
-                | LoweredStatement::If(_)
-        )
-    })
+    scope_statements(&body.statements)
+        .into_iter()
+        .all(|statement| {
+            !matches!(
+                statement,
+                LoweredStatement::Define(_)
+                    | LoweredStatement::VarDeclaration { .. }
+                    | LoweredStatement::Const(_)
+                    | LoweredStatement::Select(_)
+                    | LoweredStatement::Switch(_)
+                    | LoweredStatement::Loop(_)
+                    | LoweredStatement::If(_)
+            )
+        })
 }
 
 pub(super) fn unwrap_scoped_terminal_else(
@@ -261,7 +265,21 @@ fn negated(node: &GoExpressionNode) -> Option<Operand> {
                     negated_in_place(left)?,
                     negated_in_place(right)?,
                 ),
-                _ => return None,
+                GoBinaryOperator::Addition
+                | GoBinaryOperator::Subtraction
+                | GoBinaryOperator::Multiplication
+                | GoBinaryOperator::Division
+                | GoBinaryOperator::Remainder
+                | GoBinaryOperator::BitwiseAnd
+                | GoBinaryOperator::BitwiseOr
+                | GoBinaryOperator::BitwiseXor
+                | GoBinaryOperator::BitwiseAndNot
+                | GoBinaryOperator::ShiftLeft
+                | GoBinaryOperator::ShiftRight
+                | GoBinaryOperator::LessThan
+                | GoBinaryOperator::LessThanOrEqual
+                | GoBinaryOperator::GreaterThan
+                | GoBinaryOperator::GreaterThanOrEqual => return None,
             };
 
             GoExpressionNode::Binary {
@@ -280,7 +298,23 @@ fn negated(node: &GoExpressionNode) -> Option<Operand> {
                 operand: node.clone().into(),
             }
         }
-        _ => return None,
+        GoExpressionNode::Qualified { .. }
+        | GoExpressionNode::Literal(_)
+        | GoExpressionNode::Type(_)
+        | GoExpressionNode::CompositeLiteral { .. }
+        | GoExpressionNode::Instantiation { .. }
+        | GoExpressionNode::Selector { .. }
+        | GoExpressionNode::Index { .. }
+        | GoExpressionNode::Slice { .. }
+        | GoExpressionNode::TypeAssertion { .. }
+        | GoExpressionNode::Unary { .. }
+        | GoExpressionNode::AddressOf(_)
+        | GoExpressionNode::Dereference(_)
+        | GoExpressionNode::Conversion { .. }
+        | GoExpressionNode::Spread(_)
+        | GoExpressionNode::FunctionLiteral { .. }
+        | GoExpressionNode::Verbatim(_)
+        | GoExpressionNode::Unreachable => return None,
     };
 
     Some(negation.into())
@@ -365,15 +399,15 @@ impl Resolve {
 
 impl VisitorMut for Resolve {
     fn expression(&mut self, node: &mut GoExpressionNode) {
-        match node {
-            GoExpressionNode::Identifier(name) => self.read(name.spelling()),
-            GoExpressionNode::Verbatim(source) => {
+        match node.name_read() {
+            NameRead::Local(name) => self.read(name.spelling()),
+            NameRead::Verbatim(source) => {
                 for spelling in verbatim_identifiers(source) {
                     self.read(spelling);
                     self.bind(spelling);
                 }
             }
-            _ => {}
+            NameRead::NoName => {}
         }
     }
 
@@ -394,6 +428,6 @@ pub(crate) fn drop_empty_else(plan: &mut IfPlan) {
     match &mut plan.else_arm {
         ElseArm::Else { body, .. } if body.renders_empty() => plan.else_arm = ElseArm::None,
         ElseArm::ElseIf(next) => drop_empty_else(next),
-        _ => {}
+        ElseArm::None | ElseArm::Else { .. } => {}
     }
 }

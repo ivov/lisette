@@ -8,7 +8,7 @@ use crate::lowering::calls::bounds_checks::IndexSite;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
 use crate::lowering::calls::slice_loop::{FindLoop, FoundSink};
-use crate::lowering::calls::wrap_err::{ErrorUse, WrapMessage};
+use crate::lowering::calls::wrap_err::WrapMessage;
 use crate::lowering::control_flow::try_recover_blocks::TryBlockPairPlan;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -80,7 +80,10 @@ impl OptionFusePlan<'_> {
                 let (statements, index) = planner.lower_bounds_checked_index(site);
                 let target = match slot {
                     CommaOkValueSlot::Named(name) => Some(name),
-                    _ => None,
+                    CommaOkValueSlot::Temp
+                    | CommaOkValueSlot::Arm(_)
+                    | CommaOkValueSlot::Unused
+                    | CommaOkValueSlot::Discarded => None,
                 };
                 BoundValue::index(statements, index, target)
             }
@@ -130,8 +133,7 @@ impl ResultFusePlan<'_> {
         slot: CommaOkValueSlot,
         error_name: Option<&SourceName>,
     ) -> BoundValue {
-        self.bind_wrapped(planner, slot, error_name, ErrorUse::Unread)
-            .0
+        self.bind_wrapped(planner, slot, error_name).0
     }
 
     pub(in crate::lowering) fn bind_wrapped(
@@ -139,7 +141,6 @@ impl ResultFusePlan<'_> {
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
         error_name: Option<&SourceName>,
-        error_use: ErrorUse,
     ) -> (BoundValue, Vec<WrapMessage>) {
         let carries_value = self.carries_payload();
         let (site, nil_guard, wraps) = match self.source {
@@ -155,7 +156,7 @@ impl ResultFusePlan<'_> {
         let (setup, call) = planner
             .plan_call_expression(site, None, ExpressionContext::value())
             .into_parts();
-        let (message_setup, messages) = planner.prepare_wrap_messages(&wraps, error_use);
+        let (message_setup, messages) = planner.prepare_wrap_messages(&wraps);
 
         let slot = if message_setup.is_empty() {
             slot
@@ -166,7 +167,9 @@ impl ResultFusePlan<'_> {
                     CommaOkValueSlot::Named(name)
                 }
                 CommaOkValueSlot::Unused => CommaOkValueSlot::Discarded,
-                slot => slot,
+                slot @ CommaOkValueSlot::Named(_)
+                | slot @ CommaOkValueSlot::Temp
+                | slot @ CommaOkValueSlot::Discarded => slot,
             }
         };
 
@@ -380,7 +383,7 @@ impl<'p> PlannerQueries<'_, 'p> {
         let payload_go_type = self.go_type(&components.payload_type);
         prelude_call(
             constructor,
-            GoType::type_argument(&payload_go_type),
+            Some(GoType::type_argument(&payload_go_type)),
             vec![
                 GoExpression::identifier(components.value.clone()),
                 GoExpression::identifier(components.status.clone()),
@@ -435,16 +438,16 @@ impl<'p> PlannerQueries<'_, 'p> {
     }
 
     fn index_fuses(&self, receiver: &Expression, index: &Expression) -> bool {
-        match index {
-            Expression::Literal {
-                literal: Literal::Integer { value, .. },
-                ..
-            } => self
-                .facts
-                .receiver_array_length(&receiver.get_type())
-                .is_none_or(|length| *value < length),
-            other => !self.is_go_constant_expression(other),
-        }
+        let Expression::Literal {
+            literal: Literal::Integer { value, .. },
+            ..
+        } = index
+        else {
+            return !self.is_go_constant_expression(index);
+        };
+        self.facts
+            .receiver_array_length(&receiver.get_type())
+            .is_none_or(|length| *value < length)
     }
 
     pub(in crate::lowering) fn option_fuse_plan<'a>(

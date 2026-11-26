@@ -178,8 +178,8 @@ impl GoExpression {
         Self::literal(GoLiteral::Nil)
     }
 
-    pub(crate) fn empty() -> Self {
-        Self::new(GoExpressionNode::Empty)
+    pub(crate) fn unreachable() -> Self {
+        Self::new(GoExpressionNode::Unreachable)
     }
 
     pub(crate) fn verbatim(source: String) -> Self {
@@ -263,10 +263,10 @@ impl GoExpression {
     }
 
     pub(crate) fn without_instantiation(self) -> Self {
-        match &self.node {
-            GoExpressionNode::Instantiation { base, .. } => self.peeled(base),
-            _ => self,
+        if let GoExpressionNode::Instantiation { base, .. } = &self.node {
+            return self.peeled(base);
         }
+        self
     }
 
     pub(crate) fn elide_composite_type(mut self, element_type: &GoType) -> Self {
@@ -278,11 +278,10 @@ impl GoExpression {
         self
     }
 
-    pub(crate) fn instantiation(base: GoExpression, type_arguments: impl Into<GoType>) -> Self {
-        let type_arguments = type_arguments.into();
-        if type_arguments.is_empty() {
+    pub(crate) fn instantiation(base: GoExpression, type_arguments: Option<GoType>) -> Self {
+        let Some(type_arguments) = type_arguments else {
             return base;
-        }
+        };
         let node = GoExpressionNode::Instantiation {
             base: base.into_operand(),
             type_arguments,
@@ -319,13 +318,13 @@ impl GoExpression {
 
     pub(crate) fn unchecked_function_literal(
         parameters: Vec<GoParameter>,
-        result: GoType,
+        result: Option<GoType>,
         body: LoweredBlock,
         layout: FunctionLiteralLayout,
     ) -> Self {
         Self::new(GoExpressionNode::FunctionLiteral {
             parameters,
-            result: Box::new(result),
+            result: result.map(Box::new),
             body,
             layout,
             end: SourcePosition::default(),
@@ -499,9 +498,7 @@ impl GoExpression {
     }
 
     pub(crate) fn positioned(mut self, position: Position) -> Self {
-        if !self.is_empty() {
-            self.position.fill(Some(position));
-        }
+        self.position.fill(Some(position));
         self
     }
 
@@ -510,24 +507,24 @@ impl GoExpression {
     }
 
     pub(crate) fn as_identifier(&self) -> Option<&GoIdentifier> {
-        match &self.node {
-            GoExpressionNode::Identifier(name) => Some(name),
-            _ => None,
-        }
+        let GoExpressionNode::Identifier(name) = &self.node else {
+            return None;
+        };
+        Some(name)
     }
 
     pub(crate) fn as_boolean(&self) -> Option<bool> {
-        match &self.node {
-            GoExpressionNode::Literal(GoLiteral::Bool(value)) => Some(*value),
-            _ => None,
-        }
+        let GoExpressionNode::Literal(GoLiteral::Bool(value)) = &self.node else {
+            return None;
+        };
+        Some(*value)
     }
 
     pub(crate) fn as_integer(&self) -> Option<i128> {
-        match &self.node {
-            GoExpressionNode::Literal(GoLiteral::Int(value)) => Some(*value),
-            _ => None,
-        }
+        let GoExpressionNode::Literal(GoLiteral::Int(value)) = &self.node else {
+            return None;
+        };
+        Some(*value)
     }
 
     pub(crate) fn is_composite_literal(&self) -> bool {
@@ -542,21 +539,30 @@ impl GoExpression {
         syntax_form(&self.node)
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        match &self.node {
-            GoExpressionNode::Empty => true,
-            GoExpressionNode::Verbatim(source) => source.is_empty(),
-            _ => false,
-        }
-    }
-
     pub(crate) fn stands_as_a_statement(&self) -> bool {
         match &self.node {
             GoExpressionNode::Verbatim(_) => true,
             GoExpressionNode::Call { callee, purity, .. } => {
                 *purity != CallPurity::Conversion && !is_value_only_callee(callee)
             }
-            _ => false,
+            GoExpressionNode::Identifier(_)
+            | GoExpressionNode::Qualified { .. }
+            | GoExpressionNode::Literal(_)
+            | GoExpressionNode::Type(_)
+            | GoExpressionNode::CompositeLiteral { .. }
+            | GoExpressionNode::Instantiation { .. }
+            | GoExpressionNode::Selector { .. }
+            | GoExpressionNode::Index { .. }
+            | GoExpressionNode::Slice { .. }
+            | GoExpressionNode::TypeAssertion { .. }
+            | GoExpressionNode::Unary { .. }
+            | GoExpressionNode::AddressOf(_)
+            | GoExpressionNode::Dereference(_)
+            | GoExpressionNode::Binary { .. }
+            | GoExpressionNode::Conversion { .. }
+            | GoExpressionNode::Spread(_)
+            | GoExpressionNode::FunctionLiteral { .. }
+            | GoExpressionNode::Unreachable => false,
         }
     }
 
@@ -573,7 +579,20 @@ fn syntax_form(node: &GoExpressionNode) -> OperandForm {
         }
         GoExpressionNode::Call { .. } => OperandForm::Call,
         GoExpressionNode::Instantiation { base, .. } => syntax_form(base),
-        _ => OperandForm::Other,
+        GoExpressionNode::Type(_)
+        | GoExpressionNode::Selector { .. }
+        | GoExpressionNode::Index { .. }
+        | GoExpressionNode::Slice { .. }
+        | GoExpressionNode::TypeAssertion { .. }
+        | GoExpressionNode::Unary { .. }
+        | GoExpressionNode::AddressOf(_)
+        | GoExpressionNode::Dereference(_)
+        | GoExpressionNode::Binary { .. }
+        | GoExpressionNode::Conversion { .. }
+        | GoExpressionNode::Spread(_)
+        | GoExpressionNode::FunctionLiteral { .. }
+        | GoExpressionNode::Verbatim(_)
+        | GoExpressionNode::Unreachable => OperandForm::Other,
     }
 }
 
@@ -621,7 +640,23 @@ fn is_value_only_callee(callee: &GoExpressionNode) -> bool {
         GoExpressionNode::Identifier(name) => name.id().is_none() && is_value_only_builtin(name),
         GoExpressionNode::Type(_) => true,
         GoExpressionNode::Instantiation { base, .. } => matches!(**base, GoExpressionNode::Type(_)),
-        _ => false,
+        GoExpressionNode::Qualified { .. }
+        | GoExpressionNode::Literal(_)
+        | GoExpressionNode::CompositeLiteral { .. }
+        | GoExpressionNode::Call { .. }
+        | GoExpressionNode::Selector { .. }
+        | GoExpressionNode::Index { .. }
+        | GoExpressionNode::Slice { .. }
+        | GoExpressionNode::TypeAssertion { .. }
+        | GoExpressionNode::Unary { .. }
+        | GoExpressionNode::AddressOf(_)
+        | GoExpressionNode::Dereference(_)
+        | GoExpressionNode::Binary { .. }
+        | GoExpressionNode::Conversion { .. }
+        | GoExpressionNode::Spread(_)
+        | GoExpressionNode::FunctionLiteral { .. }
+        | GoExpressionNode::Verbatim(_)
+        | GoExpressionNode::Unreachable => false,
     }
 }
 

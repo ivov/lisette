@@ -190,7 +190,8 @@ impl Planner<'_> {
             ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
         };
 
-        let coercion = self.coercion_after_layout_change(argument, &plan.target);
+        let slot = &self.facts.checked(argument).value_use().slot;
+        let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
         value.map_expression(|setup, value| {
             let mut coercion_setup = Vec::new();
             let changed = self.plan_layout_change(&mut coercion_setup, value, &plan.change);
@@ -254,9 +255,10 @@ pub(in crate::lowering) fn converts_for_inference(
         return false;
     }
     let checked = facts.checked(argument);
-    let value_use = match argument {
-        Expression::Cast { .. } => checked.cast_operand(),
-        _ => checked.value_use(),
+    let value_use = if matches!(argument, Expression::Cast { .. }) {
+        checked.cast_operand()
+    } else {
+        checked.value_use()
     };
     matches!(value_use.adaptation, Adaptation::Interface(_))
 }

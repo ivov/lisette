@@ -1,7 +1,6 @@
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
-use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::lowering::expressions::values::with_source_positions;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::go_expression::GoLiteral;
@@ -56,17 +55,7 @@ impl<'a> Planner<'a> {
         setup: &mut Vec<Statement>,
         call_expression: &Expression,
     ) -> Option<GoExpression> {
-        let site = CallSite::of(call_expression)?;
-        let callee = site.callee;
-        if self.queries().is_local_binding(callee) {
-            return None;
-        }
-        let CallOperation::Native { kind, method } = &self.facts.checked(callee).callee().operation
-        else {
-            return None;
-        };
-        let plan = self.queries().plan_call(site);
-        let native_ctx = NativeCallContext::new(site, plan.resolved.abi, *kind, method);
+        let native_ctx = self.queries().native_method_call(call_expression)?;
         self.try_plan_negated_native_method(setup, &native_ctx)
     }
 
@@ -205,7 +194,7 @@ impl<'a> Planner<'a> {
                 context.native_type,
                 NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver
             )
-            && is_unmutated_identifier(&self.facts, receiver)
+            && self.queries().place_read_stability(receiver).is_fixed()
             && !self.facts.is_reference(&receiver.get_type());
 
         if let GoExpressionNode::Identifier(name) = result.value.node()
@@ -336,21 +325,12 @@ impl<'a> Planner<'a> {
     }
 }
 
-fn extract_receiver_ufcs_method(function: &Expression) -> String {
-    if let Expression::Identifier { value, .. } = function
-        && let Some(last_dot) = value.rfind('.')
-    {
-        return value[last_dot + 1..].to_string();
-    }
-    String::new()
-}
-
 pub(super) fn callee_go_name<'f>(
     facts: &'f EmitFacts<'_>,
     function: &Expression,
 ) -> Option<&'f str> {
     let symbol = facts.checked(function).callee().definition.as_ref()?;
-    facts.definition(symbol)?.go_name()
+    facts.callable(symbol).go_name()
 }
 
 pub(super) fn callee_is_go_builtin<'a>(facts: &EmitFacts<'a>, callee: &Expression) -> bool {
@@ -382,16 +362,24 @@ impl<'a> PlannerQueries<'_, 'a> {
         plan: &CallPlan<'_, '_>,
         export: GoExport,
     ) -> String {
-        let method = extract_receiver_ufcs_method(callee);
+        let (_, method) = self
+            .facts
+            .checked(callee)
+            .callee()
+            .definition
+            .as_deref()
+            .and_then(|symbol| symbol.rsplit_once('.'))
+            .expect("receiver method callee must name its method");
         let receiver = plan
             .resolved
             .instantiated
             .as_function_type()
             .and_then(|f| f.params.first())
-            .map_or(&Type::Never, |receiver| &receiver.ty);
+            .map(|receiver| &receiver.ty)
+            .expect("a receiver method must take a receiver");
 
         self.facts
-            .receiver_method_go_name(receiver, &method, export, self.member_spelling(callee))
+            .receiver_method_go_name(receiver, method, export, self.member_spelling(callee))
     }
 
     fn resolve_tuple_struct_target(
@@ -428,18 +416,5 @@ impl<'a> PlannerQueries<'_, 'a> {
             selections,
             owner_type: return_ty,
         })
-    }
-
-    fn is_local_binding(&self, function: &Expression) -> bool {
-        if let Expression::Identifier {
-            value, resolution, ..
-        } = function
-        {
-            self.scope
-                .resolve_identifier_with_resolution(value, resolution)
-                .is_some()
-        } else {
-            false
-        }
     }
 }

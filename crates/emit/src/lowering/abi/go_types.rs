@@ -120,7 +120,20 @@ impl PlannerQueries<'_, '_> {
         match layout.logical_type() {
             Type::Simple(_) => {}
             Type::Nominal { params, .. } if params.is_empty() => {}
-            _ => return None,
+            Type::Compound { .. }
+            | Type::Nominal { .. }
+            | Type::ImportNamespace(_)
+            | Type::Function(_)
+            | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Forall { .. }
+            | Type::Parameter(_)
+            | Type::Never
+            | Type::Tuple(_)
+            | Type::Array { .. }
+            | Type::Error
+            | Type::ReceiverPlaceholder => return None,
         }
         Some(layout.go_type(self))
     }
@@ -135,16 +148,15 @@ impl PlannerQueries<'_, '_> {
         &self,
         abi: &CallableReturnAbi,
         return_ty: &Type,
-    ) -> GoType {
+    ) -> Option<GoType> {
         let result = self.facts.return_value_layout(abi, return_ty);
         self.facts
             .function_layout(Vec::new(), &result, abi.clone(), None)
             .result_go_type(self)
-            .unwrap_or_default()
     }
 
     fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {
-        let definition = self.facts.definition(id)?;
+        let definition = self.facts.definition(id);
         if !definition.is_anon_struct() {
             return None;
         }
@@ -224,11 +236,10 @@ impl PlannerQueries<'_, '_> {
                 args: arguments,
                 ..
             } => self.compound_go_type(*kind, arguments, ty),
-            Type::Var { .. }
-            | Type::Uninferred
-            | Type::Ignored
-            | Type::Forall { .. }
-            | Type::ReceiverPlaceholder => GoType::any(),
+            Type::Var { .. } => GoType::any(),
+            Type::Uninferred | Type::Ignored | Type::Forall { .. } | Type::ReceiverPlaceholder => {
+                panic!("internal error: {ty:?} has no Go type")
+            }
             Type::Parameter(name) => GoType::new(self.names.generic_go_name(name).into_owned()),
             Type::Error => self.reject_untyped_position("an error type"),
             Type::ImportNamespace(_) => self.reject_untyped_position("a package name"),
@@ -246,7 +257,12 @@ impl PlannerQueries<'_, '_> {
                     self.go_type(arguments.first().expect("varargs have an element type"));
                 GoType::variadic(&element)
             }
-            _ => {
+            CompoundKind::Slice
+            | CompoundKind::EnumeratedSlice
+            | CompoundKind::Map
+            | CompoundKind::Channel
+            | CompoundKind::Sender
+            | CompoundKind::Receiver => {
                 let native = NativeTypeKind::from_type(ty)
                     .expect("every other compound type is a native Go type");
                 self.native_go_type(native, arguments)

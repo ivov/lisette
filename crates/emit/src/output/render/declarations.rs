@@ -151,8 +151,8 @@ fn write_function(
         .collect::<Vec<_>>();
     output.push_str(&group_params(&parameters));
     output.push(')');
-    if !signature.result.is_empty() {
-        write!(output, " {}", go_type_text(&signature.result)).unwrap();
+    if let Some(result) = &signature.result {
+        write!(output, " {}", go_type_text(result)).unwrap();
     }
     if body.renders_empty() {
         output.push_str(" {}");
@@ -205,8 +205,8 @@ fn write_interface_body(output: &mut GoWriter, parents: &[GoType], methods: &[In
             output.push_str(&go_type_text(parameter));
         }
         output.push(')');
-        if !method.result.is_empty() {
-            write!(output, " {}", go_type_text(&method.result)).unwrap();
+        if let Some(result) = &method.result {
+            write!(output, " {}", go_type_text(result)).unwrap();
         }
         output.push('\n');
     }

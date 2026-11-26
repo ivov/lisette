@@ -19,7 +19,7 @@ pub(crate) struct ResolvedNominal<'a> {
     pub(crate) definition: &'a Definition,
 }
 
-fn is_scalar_literal(expression: &Expression) -> bool {
+pub(crate) fn is_scalar_literal(expression: &Expression) -> bool {
     matches!(
         expression,
         Expression::Literal {
@@ -43,16 +43,6 @@ impl<'a> EmitFacts<'a> {
         !self.is_nilable_go_type(ty) && !ty.is_variable() && !ty.is_placeholder()
     }
 
-    pub(crate) fn enum_struct_field_name(
-        &self,
-        enum_id: &str,
-        variant_name: &str,
-        field_name: &str,
-    ) -> Option<String> {
-        self.enum_layout(enum_id)?
-            .struct_field_name(variant_name, field_name)
-    }
-
     pub(crate) fn is_enum_field_recursive(&self, ty: &Type, variant: &str, index: usize) -> bool {
         self.enum_variant_layout(ty, variant)
             .and_then(|variant_layout| variant_layout.fields.get(index))
@@ -63,7 +53,10 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
             return None;
         };
-        self.enum_layout(&id)?.variant(variant)
+        if is_prelude_symbol(&id) {
+            return None;
+        }
+        Some(self.enum_layout(&id).variant(variant))
     }
 
     pub(crate) fn enum_struct_field_index(
@@ -75,17 +68,24 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id, .. } = ty else {
             return None;
         };
-        constructor_fields(id, Some(variant), ty, |id| self.definition(id))?
+        let index = constructor_fields(id, Some(variant), ty, |id| Some(self.definition(id)))
+            .unwrap_or_else(|| panic!("internal error: `{id}` has no variant `{variant}`"))
             .fields
             .iter()
             .position(|field| field.name == field_name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "internal error: the variant `{variant}` of `{id}` has no field `{field_name}`"
+                )
+            });
+        Some(index)
     }
 
     pub(crate) fn resolve_nominal(&self, ty: &Type) -> Option<ResolvedNominal<'a>> {
         let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
             return None;
         };
-        let definition = self.definition(id.as_str())?;
+        let definition = self.definition(id.as_str());
         Some(ResolvedNominal { id, definition })
     }
 
@@ -148,7 +148,10 @@ impl<'a> EmitFacts<'a> {
                 .iter()
                 .find(|tagged| tagged.name == variant)
                 .and_then(|tagged| tagged.fields.get(index))
-                .map_or_else(|| variant.to_string(), |field| field.to_string());
+                .unwrap_or_else(|| {
+                    panic!("internal error: `{variant}` of `{ty:?}` has no field {index}")
+                })
+                .to_string();
         }
 
         if let Some(field) = self
@@ -236,7 +239,7 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id, .. } = &stripped else {
             return None;
         };
-        let constructor = constructor_fields(id, None, &stripped, |id| self.definition(id))?;
+        let constructor = constructor_fields(id, None, &stripped, |id| Some(self.definition(id)))?;
         let Type::Nominal { id: owner, .. } = self.peel_alias(&stripped) else {
             return None;
         };
@@ -299,7 +302,13 @@ impl<'a> EmitFacts<'a> {
                     spelling,
                 );
             }
-            _ => {}
+            DotAccessResolution::Unresolved
+            | DotAccessResolution::TupleStructField { .. }
+            | DotAccessResolution::TupleElement
+            | DotAccessResolution::PackageMember { .. }
+            | DotAccessResolution::EnumVariant { .. }
+            | DotAccessResolution::InstanceMethodValue { .. }
+            | DotAccessResolution::StaticMethod { .. } => {}
         }
         let export = self.resolve_go_export(expression, &canonical_ty, member);
         self.member_go_name(&canonical_ty, member, export)
@@ -326,29 +335,37 @@ impl<'a> EmitFacts<'a> {
     }
 
     fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let Some(resolved) = self.resolve_nominal(struct_ty) else {
-            return false;
-        };
-        let id = resolved.id.as_str();
+        let resolved = self
+            .resolve_nominal(struct_ty)
+            .unwrap_or_else(|| panic!("internal error: `{struct_ty:?}` is not a named type"));
+        self.member_is_public(&resolved, field_name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "internal error: `{}` has no member `{field_name}`",
+                    resolved.id
+                )
+            })
+    }
 
-        match &resolved.definition.body {
-            DefinitionBody::Struct { fields, .. } => {
-                if let Some(field) = fields.iter().find(|f| f.name == field_name) {
-                    return go_names::struct_field_is_exported(
-                        field,
-                        resolved.definition.is_serialized(),
-                    );
-                }
-                self.method(id, field_name)
-                    .map(|method| method.visibility.is_public())
-                    .unwrap_or(false)
+    fn member_is_public(&self, resolved: &ResolvedNominal<'_>, name: &str) -> Option<bool> {
+        if let DefinitionBody::Struct { fields, .. } = &resolved.definition.body {
+            if let Some(field) = fields.iter().find(|field| field.name == name) {
+                return Some(go_names::struct_field_is_exported(
+                    field,
+                    resolved.definition.is_serialized(),
+                ));
             }
-            DefinitionBody::Enum { .. } => self
-                .method(id, field_name)
-                .map(|method| method.visibility.is_public())
-                .unwrap_or(false),
-            _ => false,
+            if let Some(method) = self.method(resolved.id.as_str(), name) {
+                return Some(method.visibility.is_public());
+            }
+            return fields
+                .iter()
+                .filter(|field| field.is_embedded())
+                .filter_map(|field| self.resolve_nominal(&field.ty))
+                .find_map(|embedded| self.member_is_public(&embedded, name));
         }
+        self.method(resolved.id.as_str(), name)
+            .map(|method| method.visibility.is_public())
     }
 
     pub(crate) fn resolve_go_export(
@@ -414,16 +431,23 @@ pub(crate) fn go_name_for_binding(pattern: &Pattern) -> Option<SourceName> {
     let name = match pattern {
         Pattern::Identifier { identifier, .. } => identifier,
         Pattern::AsBinding { name, .. } => name,
-        _ => return None,
+        Pattern::Literal { .. }
+        | Pattern::Unit { .. }
+        | Pattern::EnumVariant { .. }
+        | Pattern::Struct { .. }
+        | Pattern::Tuple { .. }
+        | Pattern::WildCard { .. }
+        | Pattern::Slice { .. }
+        | Pattern::Or { .. } => return None,
     };
     Some(SourceName::new(name))
 }
 
 pub(crate) fn go_name_for_rest_binding(rest: &RestPattern) -> Option<SourceName> {
-    match rest {
-        RestPattern::Bind { name, .. } => Some(SourceName::new(name)),
-        _ => None,
-    }
+    let RestPattern::Bind { name, .. } = rest else {
+        return None;
+    };
+    Some(SourceName::new(name))
 }
 
 fn type_uses_exported_members(ty: &Type) -> bool {

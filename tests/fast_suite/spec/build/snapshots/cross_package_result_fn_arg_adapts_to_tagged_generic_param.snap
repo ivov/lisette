@@ -10,18 +10,13 @@ import (
 )
 
 func main() {
-	cb := resolver.Resultant
-	var adapted func(int) lisette.Result[int, resolver.Face]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Result[int, resolver.Face] {
-			ret, ret2 := cb(arg0)
-			if ret2 != nil {
-				return lisette.MakeResultErr[int, resolver.Face](ret2)
-			}
-			return lisette.MakeResultOk[int, resolver.Face](ret)
+	rez := resolver.Resolve(42, func(arg0 int) lisette.Result[int, resolver.Face] {
+		ret, ret2 := resolver.Resultant(arg0)
+		if ret2 != nil {
+			return lisette.MakeResultErr[int, resolver.Face](ret2)
 		}
-	}
-	rez := resolver.Resolve(42, adapted)
+		return lisette.MakeResultOk[int, resolver.Face](ret)
+	})
 	_ = rez
 }
 

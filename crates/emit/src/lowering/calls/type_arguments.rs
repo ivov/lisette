@@ -1,4 +1,4 @@
-use crate::lowering::calls::call_plan::{ResolvedCallee, callable_declaration};
+use crate::lowering::calls::call_plan::ResolvedCallee;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
@@ -49,6 +49,9 @@ fn generic_function(declared: Option<&Type>) -> Option<(&[EcoString], &FunctionT
     let Type::Forall { vars, body } = declared? else {
         return None;
     };
+    if vars.is_empty() {
+        return None;
+    }
     let Type::Function(f) = body.as_ref() else {
         return None;
     };
@@ -59,29 +62,25 @@ fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
     let Some(Type::Forall { body, .. }) = callee.declared_type() else {
         return false;
     };
-    matches!(body.as_ref(), Type::Function(_))
-        && callee.instantiated.as_function_type().is_some()
-        && callee.receiver_offset > 0
+    matches!(body.as_ref(), Type::Function(_)) && callee.receiver_offset > 0
 }
 
 impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn prelude_container_type_args(&self, ty: &Type) -> Option<GoType> {
         let params = self.facts.prelude_container_arguments(ty)?;
-        if params.is_empty() {
-            return None;
-        }
         params
             .iter()
             .any(|p| {
                 self.facts.is_interface_or_unknown(p) || self.facts.is_go_named_function_type(p)
             })
             .then(|| self.format_type_args(&params))
+            .flatten()
     }
 
     pub(in crate::lowering) fn call_type_arguments(
         &self,
         request: CallTypeArgumentsRequest<'_, '_>,
-    ) -> GoType {
+    ) -> Option<GoType> {
         let CallTypeArgumentsRequest {
             function,
             callee,
@@ -93,7 +92,7 @@ impl PlannerQueries<'_, '_> {
         } = request;
 
         if !receiver_passed && callee_curries_receiver(callee) {
-            return GoType::default();
+            return None;
         }
         let receiver_count = if receiver_passed {
             callee.receiver_offset.min(1)
@@ -111,17 +110,17 @@ impl PlannerQueries<'_, '_> {
             return self.written_call_type_arguments(&request);
         }
 
-        if let Some(inferred) = self.uninferable_type_args(
+        if let Some(pinned) = self.uninferable_type_args(
             function,
             callee.declared_type(),
             receiver_count,
             arg_shape,
             !receiver_passed,
         ) {
-            return match slot.filter(|_| !receiver_passed) {
-                Some(slot) => self.prelude_container_type_args(slot).unwrap_or(inferred),
-                None => inferred,
-            };
+            return slot
+                .filter(|_| !receiver_passed)
+                .and_then(|slot| self.prelude_container_type_args(slot))
+                .or(Some(pinned));
         }
 
         self.prelude_constructor_type_arguments(&request)
@@ -132,7 +131,7 @@ impl PlannerQueries<'_, '_> {
         request: &CallTypeArgumentsRequest<'_, '_>,
         recipe: &[GoTypeRecipe],
         receiver_count: usize,
-    ) -> GoType {
+    ) -> Option<GoType> {
         let arg_shape = request.arg_shape;
         let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
         if has_value_args
@@ -140,23 +139,21 @@ impl PlannerQueries<'_, '_> {
                 all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
             })
         {
-            return GoType::default();
+            return None;
         }
         let type_arguments = &self.facts.checked(request.function).callee().type_arguments;
         self.reconstruct_collapsed_type_args(recipe, type_arguments)
-            .unwrap_or_default()
     }
 
-    fn written_call_type_arguments(&self, request: &CallTypeArgumentsRequest<'_, '_>) -> GoType {
+    fn written_call_type_arguments(
+        &self,
+        request: &CallTypeArgumentsRequest<'_, '_>,
+    ) -> Option<GoType> {
         let callee = self.facts.checked(request.function).callee();
         if request.receiver_passed {
-            return request
-                .callee
-                .declared_type()
-                .and_then(|declared| {
-                    self.format_generic_instantiation(declared, &callee.type_arguments)
-                })
-                .unwrap_or_default();
+            return request.callee.declared_type().and_then(|declared| {
+                self.format_generic_instantiation(declared, &callee.type_arguments)
+            });
         }
         self.format_type_arg_iter(callee.written_type_arguments(request.written_type_arguments))
     }
@@ -164,7 +161,7 @@ impl PlannerQueries<'_, '_> {
     fn prelude_constructor_type_arguments(
         &self,
         request: &CallTypeArgumentsRequest<'_, '_>,
-    ) -> GoType {
+    ) -> Option<GoType> {
         if !matches!(
             prelude_constructor(request.function),
             Some(
@@ -174,7 +171,7 @@ impl PlannerQueries<'_, '_> {
                     | PreludeVariant::Partial(_)
             )
         ) {
-            return GoType::default();
+            return None;
         }
         request
             .call_ty
@@ -184,7 +181,6 @@ impl PlannerQueries<'_, '_> {
                     .slot
                     .and_then(|ty| self.prelude_container_type_args(ty))
             })
-            .unwrap_or_default()
     }
 
     pub(in crate::lowering) fn constructor_reference_type_arguments(
@@ -192,7 +188,7 @@ impl PlannerQueries<'_, '_> {
         fn_params: &[FunctionParameter],
         return_type_arguments: &[Type],
         ctx: ExpressionContext<'_>,
-    ) -> GoType {
+    ) -> Option<GoType> {
         let return_params_are_inferrable = return_type_arguments.len() <= fn_params.len()
             && return_type_arguments.iter().all(|argument| {
                 fn_params
@@ -203,7 +199,7 @@ impl PlannerQueries<'_, '_> {
             .iter()
             .all(|param| !self.facts.is_go_named_function_type(&param.ty));
         if ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference {
-            GoType::default()
+            None
         } else {
             self.format_type_args(return_type_arguments)
         }
@@ -222,14 +218,16 @@ impl PlannerQueries<'_, '_> {
         if all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
             && !(function_alias_pins
                 && vars.iter().any(|var| {
-                    mapping
-                        .get(var)
-                        .is_some_and(|ty| self.facts.is_go_named_function_type(ty))
+                    self.facts
+                        .is_go_named_function_type(checked_type_argument(mapping, var))
                 }))
         {
             return None;
         }
-        self.instantiated_type_args(vars, mapping)
+        Some(
+            self.instantiated_type_args(vars, mapping)
+                .expect("a generic function has type parameters"),
+        )
     }
 
     pub(in crate::lowering) fn format_value_type_args(
@@ -237,7 +235,7 @@ impl PlannerQueries<'_, '_> {
         expression: &Expression,
     ) -> Option<GoType> {
         let recorded = self.facts.checked(expression).function_value()?;
-        let declaration = callable_declaration(self.facts, recorded.definition.as_deref()?)?;
+        let declaration = self.facts.callable(recorded.definition.as_deref()?);
         let instantiation = &recorded.type_arguments;
         match declaration.go_type_param_recipe() {
             Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),
@@ -264,21 +262,17 @@ impl PlannerQueries<'_, '_> {
         vars: &[EcoString],
         mapping: &SubstitutionMap,
     ) -> Option<GoType> {
-        let resolved = vars
-            .iter()
-            .map(|var| mapping.get(var.as_str()))
-            .collect::<Option<Vec<_>>>()?;
-        Some(self.format_type_arg_iter(resolved))
+        self.format_type_arg_iter(vars.iter().map(|var| checked_type_argument(mapping, var)))
     }
 
-    pub(in crate::lowering) fn format_type_args(&self, parameters: &[Type]) -> GoType {
+    pub(in crate::lowering) fn format_type_args(&self, parameters: &[Type]) -> Option<GoType> {
         self.format_type_arg_iter(parameters)
     }
 
     pub(in crate::lowering) fn format_type_arg_iter<'t>(
         &self,
         parameters: impl IntoIterator<Item = &'t Type>,
-    ) -> GoType {
+    ) -> Option<GoType> {
         let arguments: Vec<GoType> = parameters
             .into_iter()
             .map(|param| self.go_type(param))
@@ -291,39 +285,35 @@ impl PlannerQueries<'_, '_> {
         recipe: &[GoTypeRecipe],
         mapping: &SubstitutionMap,
     ) -> Option<GoType> {
-        let parts = recipe
+        let parts: Vec<GoType> = recipe
             .iter()
             .map(|entry| self.render_recipe_entry(entry, mapping))
-            .collect::<Option<Vec<_>>>()?;
-        (!parts.is_empty()).then(|| GoType::type_arguments(&parts))
+            .collect();
+        GoType::type_arguments(&parts)
     }
 
-    fn render_recipe_entry(
-        &self,
-        entry: &GoTypeRecipe,
-        mapping: &SubstitutionMap,
-    ) -> Option<GoType> {
-        Some(match entry {
-            GoTypeRecipe::Parameter(name) => self.go_type(mapping.get(name)?),
+    fn render_recipe_entry(&self, entry: &GoTypeRecipe, mapping: &SubstitutionMap) -> GoType {
+        match entry {
+            GoTypeRecipe::Parameter(name) => self.go_type(checked_type_argument(mapping, name)),
             GoTypeRecipe::Slice(element) => {
-                GoType::slice_of(&self.render_recipe_entry(element, mapping)?)
+                GoType::slice_of(&self.render_recipe_entry(element, mapping))
             }
             GoTypeRecipe::Map(key, value) => GoType::map_of(
-                &self.render_recipe_entry(key, mapping)?,
-                &self.render_recipe_entry(value, mapping)?,
+                &self.render_recipe_entry(key, mapping),
+                &self.render_recipe_entry(value, mapping),
             ),
             GoTypeRecipe::Array(element, length) => GoType::array_of(
                 length.to_string(),
-                &self.render_recipe_entry(element, mapping)?,
+                &self.render_recipe_entry(element, mapping),
             ),
-        })
+        }
     }
 
     pub(in crate::lowering) fn format_type_args_with_receiver<'t>(
         &self,
         receiver_ty: &Type,
         type_args: impl Iterator<Item = &'t Type>,
-    ) -> GoType {
+    ) -> Option<GoType> {
         let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
         let arguments: Vec<GoType> = receiver_params
             .iter()
@@ -332,4 +322,10 @@ impl PlannerQueries<'_, '_> {
             .collect();
         GoType::type_arguments(&arguments)
     }
+}
+
+fn checked_type_argument<'m>(mapping: &'m SubstitutionMap, var: &str) -> &'m Type {
+    mapping
+        .get(var)
+        .unwrap_or_else(|| panic!("the checker records the type argument `{var}`"))
 }

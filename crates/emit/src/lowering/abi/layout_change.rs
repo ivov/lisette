@@ -27,7 +27,7 @@ use crate::target::ir::prelude::{PreludeVariant, prelude_constructor};
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
-use crate::target::names::packages::PackageUse;
+use crate::target::names::packages::PackageOrigin;
 use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use syntax::ast::Expression;
@@ -79,6 +79,10 @@ impl Planner<'_> {
         expression: &Expression,
         target: &ValueLayout,
     ) -> Option<ValuePlan> {
+        let is_none_literal = prelude_constructor(expression) == Some(PreludeVariant::None);
+        if !is_none_literal && some_literal_argument(expression).is_none() {
+            return None;
+        }
         let source = self
             .facts
             .value_layout(&expression.get_type(), SlotOrigin::Lisette);
@@ -93,10 +97,18 @@ impl Planner<'_> {
                 target_payload,
                 ..
             } => (payload, Some(target_payload)),
-            _ => return None,
+            LayoutChange::Identity
+            | LayoutChange::Conversion { .. }
+            | LayoutChange::WrapNullableOption { .. }
+            | LayoutChange::WrapPointerOption { .. }
+            | LayoutChange::Reference { .. }
+            | LayoutChange::Function { .. }
+            | LayoutChange::NilablePayload { .. }
+            | LayoutChange::Immutable { .. }
+            | LayoutChange::Aggregate(_) => return None,
         };
 
-        if prelude_constructor(expression) == Some(PreludeVariant::None) {
+        if is_none_literal {
             return Some(ValuePlan::nil());
         }
         let inner = some_literal_argument(expression)?;
@@ -225,7 +237,7 @@ impl Planner<'_> {
         wrap: NilableOptionWrap<'_>,
     ) -> LoweredStatement {
         let payload_type = wrap.target_payload.go_type(&self.queries());
-        let type_args = GoType::type_argument(&payload_type);
+        let type_args = Some(GoType::type_argument(&payload_type));
         let raw_payload = match wrap.slot {
             OptionSlot::Pointer => GoExpression::dereference(raw.clone()),
             OptionSlot::Value => raw.clone(),
@@ -469,7 +481,9 @@ impl Planner<'_> {
                 ),
                 OptionSlot::Pointer => prelude_call(
                     "OptionFromPointer",
-                    GoType::type_argument(&wrap.target_payload.go_type(&self.queries())),
+                    Some(GoType::type_argument(
+                        &wrap.target_payload.go_type(&self.queries()),
+                    )),
                     vec![raw_value],
                 ),
             };
@@ -691,7 +705,7 @@ impl Planner<'_> {
         let arguments = self.plan_layout_changed_arguments(&mut body, names, source, target);
         let call = GoExpression::call(callee.clone(), arguments);
         self.plan_function_result_layout_change(&mut body, call, source, target);
-        let result = target.result_go_type(&self.queries()).unwrap_or_default();
+        let result = target.result_go_type(&self.queries());
         let callback = function_literal(
             parameters,
             result,
@@ -708,22 +722,36 @@ impl Planner<'_> {
     fn names_package_function(&self, value: &GoExpression) -> bool {
         let is_declaration = |node: &GoExpressionNode| match node {
             GoExpressionNode::Identifier(name) => name.is_external(),
-            GoExpressionNode::Qualified { package, name } => {
-                *package == PackageUse::generated(GeneratedPackage::Prelude)
-                    || self
-                        .facts
-                        .definition(&format!(
-                            "{GO_IMPORT_PREFIX}{}.{}",
-                            package.package().path(),
-                            name
-                        ))
-                        .is_some_and(|definition| !definition.is_variable())
-            }
-            _ => false,
+            GoExpressionNode::Qualified { package, name } => match package.origin() {
+                PackageOrigin::Generated | PackageOrigin::Lisette => true,
+                PackageOrigin::GoImport => {
+                    let id = format!("{GO_IMPORT_PREFIX}{}.{name}", package.package().path());
+                    !self.facts.definition(&id).is_variable()
+                }
+            },
+            GoExpressionNode::Literal(_)
+            | GoExpressionNode::Type(_)
+            | GoExpressionNode::CompositeLiteral { .. }
+            | GoExpressionNode::Call { .. }
+            | GoExpressionNode::Instantiation { .. }
+            | GoExpressionNode::Selector { .. }
+            | GoExpressionNode::Index { .. }
+            | GoExpressionNode::Slice { .. }
+            | GoExpressionNode::TypeAssertion { .. }
+            | GoExpressionNode::Unary { .. }
+            | GoExpressionNode::AddressOf(_)
+            | GoExpressionNode::Dereference(_)
+            | GoExpressionNode::Binary { .. }
+            | GoExpressionNode::Conversion { .. }
+            | GoExpressionNode::Spread(_)
+            | GoExpressionNode::FunctionLiteral { .. }
+            | GoExpressionNode::Verbatim(_)
+            | GoExpressionNode::Unreachable => false,
         };
-        match value.node() {
-            GoExpressionNode::Instantiation { base, .. } => is_declaration(base),
-            node => is_declaration(node),
+        if let GoExpressionNode::Instantiation { base, .. } = value.node() {
+            is_declaration(base)
+        } else {
+            is_declaration(value.node())
         }
     }
 
@@ -734,7 +762,9 @@ impl Planner<'_> {
         let mut parameters = Vec::new();
         let mut names = Vec::new();
         for (index, target) in target.parameters.iter().enumerate() {
-            let name = self.scope.helper_local(&format!("arg{index}"), self.names);
+            let name = self
+                .scope
+                .new_unreserved_local(format!("arg{index}"), self.names);
             let target_type = target.go_type(&self.queries());
             parameters.push(GoParameter::new(name.clone(), target_type));
             names.push(GoExpression::identifier(name));
@@ -882,7 +912,17 @@ impl Planner<'_> {
                 self.queries()
                     .option_from_nilable(raw, target.logical_type(), target_payload)
             }
-            _ => self.plan_layout_change(statements, raw, &change),
+            LayoutChange::Identity
+            | LayoutChange::Conversion { .. }
+            | LayoutChange::UnwrapNullableOption { .. }
+            | LayoutChange::UnwrapPointerOption { .. }
+            | LayoutChange::WrapNullableOption { .. }
+            | LayoutChange::WrapPointerOption { .. }
+            | LayoutChange::Reference { .. }
+            | LayoutChange::Function { .. }
+            | LayoutChange::NilablePayload { .. }
+            | LayoutChange::Immutable { .. }
+            | LayoutChange::Aggregate(_) => self.plan_layout_change(statements, raw, &change),
         };
         statements.push(plain_return(value));
     }
@@ -909,7 +949,7 @@ impl Planner<'_> {
                 let call = GoExpression::call(
                     function_literal(
                         Vec::new(),
-                        result,
+                        Some(result),
                         LoweredBlock { statements: body },
                         FunctionLiteralLayout::MultiLine,
                     ),
@@ -1254,13 +1294,27 @@ impl PlannerQueries<'_, '_> {
         source: &ValueLayout,
         target: &ValueLayout,
     ) -> Option<GoResultLayoutChange> {
-        let value = self.resolve_layout_change(source.payload()?, target.payload()?);
+        let (Some(source_payload), Some(target_payload)) = (source.payload(), target.payload())
+        else {
+            panic!("internal error: a payload result {source:?} into {target:?} has no payload");
+        };
+        let value = self.resolve_layout_change(source_payload, target_payload);
         let error = match (source.underlying(), target.underlying()) {
             (
                 ValueLayout::Fallible { error: source, .. },
                 ValueLayout::Fallible { error: target, .. },
             ) => self.resolve_layout_change(source, target),
-            _ => LayoutChange::Identity,
+            (
+                ValueLayout::TaggedOption { .. }
+                | ValueLayout::NullableOption { .. }
+                | ValueLayout::PointerOption { .. },
+                ValueLayout::TaggedOption { .. }
+                | ValueLayout::NullableOption { .. }
+                | ValueLayout::PointerOption { .. },
+            ) => LayoutChange::Identity,
+            (source, target) => {
+                panic!("internal error: no error layout rule changes {source:?} into {target:?}")
+            }
         };
 
         let change = GoResultLayoutChange::Payload(PayloadLayoutChanges { value, error });

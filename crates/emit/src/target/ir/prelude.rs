@@ -192,7 +192,7 @@ impl Fallible {
 
 pub(crate) fn prelude_call(
     callee: &str,
-    type_arguments: GoType,
+    type_arguments: Option<GoType>,
     arguments: Vec<GoExpression>,
 ) -> GoExpression {
     GoExpression::call(

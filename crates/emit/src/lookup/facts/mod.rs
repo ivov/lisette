@@ -1,3 +1,4 @@
+pub(crate) mod callables;
 pub(crate) mod catalog;
 pub(crate) mod component_uses;
 pub(crate) mod context;

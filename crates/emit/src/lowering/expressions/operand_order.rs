@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::callable::CallableAbi;
 use crate::lowering::calls::call_plan::{CallableOrigin, FunctionLayoutChange};
 use crate::lowering::planner::queries::PlannerQueries;
@@ -16,7 +15,7 @@ use crate::target::ir::prelude::prelude_constructor;
 use crate::target::ir::values::{CaptureBoundary, GoExpression, Stability};
 use crate::target::names::go_name::{GeneratedPackage, MemberSpelling};
 use crate::target::types::go_type::GoType;
-use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
+use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::SlotOrigin;
 use syntax::types::Type;
 
@@ -148,7 +147,22 @@ fn setup_effects(setup: &[Statement]) -> Effects {
                     };
                     Some(effects.union(value).union(Effects::read_of(reads)))
                 }
-                _ => None,
+                LoweredStatement::If(_)
+                | LoweredStatement::Loop(_)
+                | LoweredStatement::Block(_)
+                | LoweredStatement::Body(_)
+                | LoweredStatement::Break(_)
+                | LoweredStatement::Continue(_)
+                | LoweredStatement::Const(_)
+                | LoweredStatement::Return(_)
+                | LoweredStatement::Assign(_)
+                | LoweredStatement::Async { .. }
+                | LoweredStatement::Select(_)
+                | LoweredStatement::Switch(_)
+                | LoweredStatement::VarDeclaration { .. }
+                | LoweredStatement::Discard { .. }
+                | LoweredStatement::ExpressionStatement { .. }
+                | LoweredStatement::UnreachablePanic => None,
             }
         })
         .unwrap_or_else(Effects::anything)
@@ -396,54 +410,6 @@ impl Planner<'_> {
     }
 }
 
-pub(in crate::lowering) fn is_unmutated_identifier(
-    facts: &EmitFacts<'_>,
-    expression: &Expression,
-) -> bool {
-    match expression {
-        Expression::Identifier {
-            resolution: IdentifierResolution::Binding(id),
-            ..
-        } => !facts.is_mutated(*id),
-        Expression::Identifier { .. } => true,
-        _ => false,
-    }
-}
-
-fn binding_read_stability(facts: &EmitFacts<'_>, id: BindingId) -> Stability {
-    if !facts.is_mutated(id) {
-        Stability::Fixed
-    } else if !facts.is_alias_mutated(id) {
-        Stability::StableAcrossCalls
-    } else {
-        Stability::Observable
-    }
-}
-
-fn identifier_immune_to_calls(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    match expression {
-        Expression::Identifier {
-            resolution: IdentifierResolution::Binding(id),
-            ..
-        } => !facts.is_alias_mutated(*id),
-        Expression::Identifier { .. } => true,
-        _ => false,
-    }
-}
-
-pub(in crate::lowering) fn identifier_read_stability(
-    facts: &EmitFacts<'_>,
-    expression: &Expression,
-) -> Stability {
-    if is_unmutated_identifier(facts, expression) {
-        Stability::Fixed
-    } else if identifier_immune_to_calls(facts, expression) {
-        Stability::StableAcrossCalls
-    } else {
-        Stability::Observable
-    }
-}
-
 impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn callee_lowers_to_type_construction(
         &self,
@@ -465,7 +431,10 @@ impl PlannerQueries<'_, '_> {
         plan.expression()
             .and_then(GoExpression::as_identifier)
             .is_some_and(|local| {
-                plan.binds_local(local) && self.scope.lacks_binding_for_local(local)
+                plan.binds_local(local)
+                    && local
+                        .id()
+                        .is_some_and(|id| self.scope.lacks_binding_for_local(id))
             })
     }
 
@@ -476,10 +445,7 @@ impl PlannerQueries<'_, '_> {
         let mut stability = Stability::Fixed;
         path.node().visit(&mut |node| {
             if let GoExpressionNode::Identifier(name) = node {
-                stability = stability.max(match self.scope.source_binding_for_local(name) {
-                    Some(id) => binding_read_stability(self.facts, id),
-                    None => Stability::StableAcrossCalls,
-                });
+                stability = stability.max(self.scope.local_read_stability(self.facts, name));
             }
         });
         stability
@@ -487,7 +453,11 @@ impl PlannerQueries<'_, '_> {
 
     pub(in crate::lowering) fn place_read_stability(&self, place: &Expression) -> Stability {
         match place {
-            Expression::Identifier { .. } => identifier_read_stability(self.facts, place),
+            Expression::Identifier {
+                value, resolution, ..
+            } => self
+                .scope
+                .identifier_read_stability(self.facts, value, resolution),
             Expression::DotAccess {
                 expression,
                 resolution,
@@ -507,7 +477,40 @@ impl PlannerQueries<'_, '_> {
                 operator: UnaryOperator::Deref,
                 ..
             } => Stability::Observable,
-            _ => Stability::StableAcrossCalls,
+            Expression::Literal { .. }
+            | Expression::Lambda { .. }
+            | Expression::Block { .. }
+            | Expression::Let { .. }
+            | Expression::Call { .. }
+            | Expression::If { .. }
+            | Expression::IfLet { .. }
+            | Expression::Match { .. }
+            | Expression::Tuple { .. }
+            | Expression::StructCall { .. }
+            | Expression::Assignment { .. }
+            | Expression::Return { .. }
+            | Expression::Propagate { .. }
+            | Expression::TryBlock { .. }
+            | Expression::RecoverBlock { .. }
+            | Expression::Binary { .. }
+            | Expression::Unary { .. }
+            | Expression::Paren { .. }
+            | Expression::RawGo { .. }
+            | Expression::Loop { .. }
+            | Expression::While { .. }
+            | Expression::WhileLet { .. }
+            | Expression::For { .. }
+            | Expression::Break { .. }
+            | Expression::Continue { .. }
+            | Expression::Reference { .. }
+            | Expression::Task { .. }
+            | Expression::Defer { .. }
+            | Expression::Assert { .. }
+            | Expression::Select { .. }
+            | Expression::Unit { .. }
+            | Expression::Range { .. }
+            | Expression::Cast { .. }
+            | declaration_expression!() => Stability::StableAcrossCalls,
         }
     }
 

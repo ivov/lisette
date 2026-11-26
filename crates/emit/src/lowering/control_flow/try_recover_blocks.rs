@@ -86,7 +86,11 @@ impl Planner<'_> {
             LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
                 payload: PayloadLayout::Packed,
             }) => PairKind::CommaOk { nil_guard: None },
-            _ => return None,
+            LoweredReturnAbi::BareError
+            | LoweredReturnAbi::Result { .. }
+            | LoweredReturnAbi::Partial { .. }
+            | LoweredReturnAbi::Option(_)
+            | LoweredReturnAbi::Tuple { .. } => return None,
         };
 
         Some(TryBlockPairPlan {
@@ -121,7 +125,7 @@ impl Planner<'_> {
         let body = self
             .with_isolated_function(body_ctx, |planner| planner.lower_try_body(items, &fallible));
 
-        let value = immediate_call(full_ty, body, FunctionLiteralLayout::MultiLine);
+        let value = immediate_call(Some(full_ty), body, FunctionLiteralLayout::MultiLine);
         let (mut setup, value) = coercion.lower(self, value);
         setup.push(define(result_var.clone(), value));
         ValuePlan::captured(setup, result_var)
@@ -182,6 +186,7 @@ impl Planner<'_> {
         statements
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(super) fn try_lower_error_constructor(
         &mut self,
         expression: &Expression,
@@ -252,7 +257,7 @@ impl Planner<'_> {
                 GoExpression::generated(GeneratedPackage::Prelude, "RecoverBlock"),
                 vec![function_literal(
                     Vec::new(),
-                    inner_ty_str,
+                    Some(inner_ty_str),
                     body,
                     FunctionLiteralLayout::MultiLine,
                 )],
@@ -273,26 +278,8 @@ impl Planner<'_> {
             };
         };
         LoweredBlock {
-            statements: self.lower_block_items(
-                rest,
-                last,
-                BlockTail::Value(TailTarget::Recover(fallible)),
-            ),
+            statements: self.lower_block_items(rest, last, BlockTail::Value(TailTarget::Return)),
         }
-    }
-
-    pub(in crate::lowering) fn lower_recover_value_tail(
-        &mut self,
-        last: &Expression,
-        fallible: &Fallible,
-    ) -> Vec<Statement> {
-        let (mut statements, expression) = self
-            .plan_value(last, ExpressionContext::value())
-            .into_parts();
-        let expression =
-            self.apply_type_coercion(&mut statements, Some(fallible.ok_ty()), last, expression);
-        statements.push(plain_return(expression));
-        statements
     }
 
     pub(in crate::lowering) fn lower_unit_return(&self, ok_ty: &Type) -> Vec<Statement> {

@@ -487,7 +487,16 @@ impl Planner<'_> {
                 payload,
                 path.clone(),
             ),
-            _ => return None,
+            ValueLayout::Plain(_)
+            | ValueLayout::Fallible { .. }
+            | ValueLayout::TaggedOption { .. }
+            | ValueLayout::Reference { .. }
+            | ValueLayout::Slice { .. }
+            | ValueLayout::Map { .. }
+            | ValueLayout::Array { .. }
+            | ValueLayout::Function { .. }
+            | ValueLayout::Tuple { .. }
+            | ValueLayout::Named { .. } => return None,
         };
         Some(NilableOption {
             guard,
@@ -754,13 +763,8 @@ impl PlannerQueries<'_, '_> {
     ) -> AccessPath {
         let go_field_name = if let Some((enum_id, variant_name)) = enum_info {
             self.facts
-                .enum_struct_field_name(enum_id, variant_name, &field.name)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "enum layout not found: {}.{}.{}",
-                        enum_id, variant_name, field.name
-                    )
-                })
+                .enum_layout(enum_id)
+                .struct_field_name(variant_name, &field.name)
         } else {
             self.facts
                 .struct_field_go_name(ty, &field.name, GoExport::Unexported)

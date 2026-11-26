@@ -26,10 +26,10 @@ impl PlannerQueries<'_, '_> {
         &self,
         params: &[Type],
         ctx: ExpressionContext<'_>,
-    ) -> GoType {
+    ) -> Option<GoType> {
         ctx.expected_slot_type()
             .and_then(|t| self.prelude_container_type_args(t))
-            .unwrap_or_else(|| self.format_type_args(params))
+            .or_else(|| self.format_type_args(params))
     }
 
     fn try_plan_method_expression(
@@ -150,7 +150,19 @@ impl PlannerQueries<'_, '_> {
                         return GoExpression::instantiation(make_function, type_args);
                     }
                 }
-                _ => {}
+                Type::Simple(_)
+                | Type::Compound { .. }
+                | Type::ImportNamespace(_)
+                | Type::Var { .. }
+                | Type::Uninferred
+                | Type::Ignored
+                | Type::Forall { .. }
+                | Type::Parameter(_)
+                | Type::Never
+                | Type::Tuple(_)
+                | Type::Array { .. }
+                | Type::Error
+                | Type::ReceiverPlaceholder => {}
             }
         }
 
@@ -161,9 +173,6 @@ impl PlannerQueries<'_, '_> {
         if ctx.is_callee() {
             return function;
         }
-        match self.format_value_type_args(identifier) {
-            Some(type_args) => GoExpression::instantiation(function, type_args),
-            None => function,
-        }
+        GoExpression::instantiation(function, self.format_value_type_args(identifier))
     }
 }

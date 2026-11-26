@@ -1,14 +1,14 @@
 use super::*;
-use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::fallible_producer::{ErrorNilGuard, ResultFusePlan};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::go_result_wrapping::partial_ok_nil_guard;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::PairPlacement;
 use crate::lowering::calls::predicates::Polarity;
-use crate::lowering::calls::wrap_err::ErrorUse;
 use crate::lowering::calls::wrap_err::wrap_error;
 use crate::lowering::planner::queries::PlannerQueries;
+use crate::output::finish::cleanup::name_uses::NameUses;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::names::source_name::SourceName;
 
@@ -39,17 +39,6 @@ impl GuardedValue {
     }
 }
 
-fn error_use(err_name: Option<FusedName<'_>>, body: &Expression) -> ErrorUse {
-    let reads = err_name.and_then(|err| err.binding).is_some_and(|binding| {
-        analyze_inline_candidate_ids(&[binding], &[body]) != InlineDecision::Unused
-    });
-    if reads {
-        ErrorUse::Read
-    } else {
-        ErrorUse::Unread
-    }
-}
-
 impl<'p> Planner<'p> {
     pub(in crate::lowering) fn try_lower_fused_result_match_into(
         &mut self,
@@ -74,8 +63,7 @@ impl<'p> Planner<'p> {
         let arms = classify_option_arms(arms)?;
         let payload = arms.some_binding?;
         if !arms.none_body.get_type().is_never()
-            || arm_body_is_identifier(arms.some_body) != Some(payload.name)
-            || self.facts.converts(arms.some_body)
+            || !forwards_payload(&self.facts, arms.some_body, payload)
         {
             return None;
         }
@@ -110,8 +98,7 @@ impl<'p> Planner<'p> {
         let (plan, arms) = self.queries().partial_outcome_arms(subject, arms)?;
         let ok_value = arms.value_binding?;
         if !arms.failure.expression.get_type().is_never()
-            || arm_body_is_identifier(&arms.ok.expression) != Some(ok_value.name)
-            || self.facts.converts(&arms.ok.expression)
+            || !forwards_payload(&self.facts, &arms.ok.expression, ok_value)
         {
             return None;
         }
@@ -147,7 +134,7 @@ impl<'p> Planner<'p> {
         let (ok_name, err_name) = fused_result_names(&ok, &err, fuse.shape())?;
 
         if let Some(name) = destination {
-            if !fuses_into_destination(&fuse, &ok, &err) {
+            if !fuses_into_destination(&self.facts, &fuse, &ok, &err) {
                 return None;
             }
             self.scope.declare_go_name(name);
@@ -196,10 +183,7 @@ impl<'p> Planner<'p> {
         err_name: Option<FusedName<'_>>,
     ) -> (BoundValue, Vec<WrapMessage>) {
         let err_hint = err_name.map(|err| err.go_name());
-        let hinted_use = err_hint
-            .as_ref()
-            .map_or(ErrorUse::Unread, |_| ErrorUse::Read);
-        fuse.bind_wrapped(self, slot, err_hint.as_ref(), hinted_use)
+        fuse.bind_wrapped(self, slot, err_hint.as_ref())
     }
 
     fn fused_value_slot(
@@ -328,12 +312,10 @@ impl<'p> Planner<'p> {
     ) -> LoweredBlock {
         let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
         let mut else_body = self.lower_fused_arm(&[err_binding], body, place);
-        let error = GoExpression::identifier(bound.status_identifier().clone());
         prepend_error_prologue(
             &mut else_body,
-            error,
+            bound.status_identifier(),
             prologue.nil_guard,
-            error_use(err_name, body),
             prologue.wraps,
         );
         else_body
@@ -849,7 +831,14 @@ fn classify_partial_outcome_arms(arms: &[MatchArm]) -> Option<PartialOutcomeArms
     let error_binding = match &failure.pattern {
         Pattern::WildCard { .. } => None,
         Pattern::Or { patterns, .. } => partial_failure_error_binding(patterns)?,
-        _ => return None,
+        Pattern::Literal { .. }
+        | Pattern::Unit { .. }
+        | Pattern::EnumVariant { .. }
+        | Pattern::Struct { .. }
+        | Pattern::Tuple { .. }
+        | Pattern::Identifier { .. }
+        | Pattern::Slice { .. }
+        | Pattern::AsBinding { .. } => return None,
     };
     Some(PartialOutcomeArms {
         ok,
@@ -940,18 +929,12 @@ fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
 }
 
 fn arm_body_is_noop(body: &Expression) -> bool {
-    match body {
-        Expression::Unit { .. } => true,
-        Expression::Block { items, .. } => items.is_empty(),
-        _ => false,
-    }
+    matches!(body, Expression::Unit { .. })
+        || matches!(body, Expression::Block { items, .. } if items.is_empty())
 }
 
-fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
-    match body {
-        Expression::Identifier { value, .. } => Some(value.as_str()),
-        _ => None,
-    }
+fn forwards_payload(facts: &EmitFacts<'_>, body: &Expression, payload: FusedName<'_>) -> bool {
+    payload.binding.is_some() && body.binding_id() == payload.binding && !facts.converts(body)
 }
 
 pub(in crate::lowering::patterns) fn ok_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
@@ -981,7 +964,14 @@ pub(in crate::lowering) fn field_binding(pattern: &Pattern) -> Option<Option<Fus
             binding: *binding,
         })),
         Pattern::WildCard { .. } => Some(None),
-        _ => None,
+        Pattern::Literal { .. }
+        | Pattern::Unit { .. }
+        | Pattern::EnumVariant { .. }
+        | Pattern::Struct { .. }
+        | Pattern::Tuple { .. }
+        | Pattern::Slice { .. }
+        | Pattern::Or { .. }
+        | Pattern::AsBinding { .. } => None,
     }
 }
 
@@ -1020,7 +1010,12 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
     }
 }
 
-fn fuses_into_destination(fuse: &ResultFusePlan<'_>, ok: &ResultArm, err: &ResultArm) -> bool {
+fn fuses_into_destination(
+    facts: &EmitFacts<'_>,
+    fuse: &ResultFusePlan<'_>,
+    ok: &ResultArm,
+    err: &ResultArm,
+) -> bool {
     let Some(payload) = simple_payload_binding(ok.arm).flatten() else {
         return false;
     };
@@ -1028,7 +1023,7 @@ fn fuses_into_destination(fuse: &ResultFusePlan<'_>, ok: &ResultArm, err: &Resul
         && !ok.is_catch_all
         && !err.is_catch_all
         && err.arm.expression.get_type().is_never()
-        && arm_body_is_identifier(&ok.arm.expression) == Some(payload.name)
+        && forwards_payload(facts, &ok.arm.expression, payload)
 }
 
 fn fused_result_names<'a>(
@@ -1121,13 +1116,15 @@ fn fused_result_if(
 
 fn prepend_error_prologue(
     else_body: &mut LoweredBlock,
-    error: GoExpression,
+    status: &GoIdentifier,
     nil_guard: ErrorNilGuard,
-    error_use: ErrorUse,
     wraps: &[WrapMessage],
 ) {
-    let err_read = error_use == ErrorUse::Read || !wraps.is_empty();
-    if nil_guard == ErrorNilGuard::Guarded && err_read {
+    if NameUses::of(&mut else_body.statements).references(status) == 0 {
+        return;
+    }
+    let error = GoExpression::identifier(status.clone());
+    if nil_guard == ErrorNilGuard::Guarded {
         else_body.statements.insert(
             0,
             LoweredStatement::If(IfPlan::plain(

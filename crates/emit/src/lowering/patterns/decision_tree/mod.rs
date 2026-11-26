@@ -2,7 +2,6 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::output::finish::function_literals::immediate_call;
-use crate::target::ir::go_expression::GoLiteral;
 use crate::target::ir::local::GoIdentifier;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
@@ -22,9 +21,7 @@ use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::patterns::binding_declarations::pattern_literal;
 use crate::target::ir::bodies::{LoweredBlock, define_many};
-use crate::target::ir::go_expression::{
-    FunctionLiteralLayout, GoBinaryOperator, GoExpressionNode, GoUnaryOperator,
-};
+use crate::target::ir::go_expression::{FunctionLiteralLayout, GoBinaryOperator, GoUnaryOperator};
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name;
 use crate::target::names::source_name::SourceName;
@@ -318,16 +315,18 @@ impl Check {
     }
 
     fn as_enum_tag(&self) -> Option<&GoExpression> {
-        match self {
-            Check::EnumTag { tag_constant, .. } => Some(tag_constant),
-            _ => None,
+        if let Check::EnumTag { tag_constant, .. } = self {
+            Some(tag_constant)
+        } else {
+            None
         }
     }
 
     fn as_literal(&self) -> Option<&GoExpression> {
-        match self {
-            Check::Literal { go_literal, .. } => Some(go_literal),
-            _ => None,
+        if let Check::Literal { go_literal, .. } = self {
+            Some(go_literal)
+        } else {
+            None
         }
     }
 
@@ -378,7 +377,10 @@ impl Check {
             }
             Literal::Boolean(value) => Some(LabelValue::Boolean(*value)),
             Literal::String { value, raw } => string_bytes(value, *raw).map(LabelValue::Bytes),
-            _ => None,
+            Literal::Float { .. }
+            | Literal::Imaginary(_)
+            | Literal::FormatString(_)
+            | Literal::Slice(_) => None,
         }
     }
 }
@@ -394,7 +396,7 @@ fn render_literal_check(
     polarity: CheckPolarity,
 ) -> GoExpression {
     let negative = matches!(polarity, CheckPolarity::Negative);
-    match (boolean_literal(go_literal), negative) {
+    match (go_literal.as_boolean(), negative) {
         (Some(true), false) | (Some(false), true) => rendered_path,
         (Some(true), true) | (Some(false), false) => {
             GoExpression::unary(GoUnaryOperator::Not, rendered_path)
@@ -432,7 +434,7 @@ fn render_type_assert_check(
 ) -> GoExpression {
     let ok = scope.new_local_identifier("ok");
     immediate_call(
-        GoType::new("bool"),
+        Some(GoType::new("bool")),
         LoweredBlock {
             statements: vec![
                 define_many(
@@ -638,7 +640,7 @@ impl ValueSwitch {
     pub(in crate::lowering) fn shape(&self) -> SwitchShape<'_> {
         match (&self.kind, self.branches.as_slice(), &self.fallback) {
             (SwitchKind::Value, [left, right], None) => {
-                match (boolean_literal(&left.label), boolean_literal(&right.label)) {
+                match (left.label.as_boolean(), right.label.as_boolean()) {
                     (Some(true), Some(false)) => SwitchShape::Bool {
                         true_branch: left,
                         false_branch: right,
@@ -678,13 +680,6 @@ pub(in crate::lowering) enum SwitchShape<'s> {
     },
     SingleArm(&'s SwitchBranch<GoExpression>),
     Multi,
-}
-
-pub(in crate::lowering) fn boolean_literal(expression: &GoExpression) -> Option<bool> {
-    match expression.node() {
-        GoExpressionNode::Literal(GoLiteral::Bool(value)) => Some(*value),
-        _ => None,
-    }
 }
 
 #[derive(Debug)]
@@ -1070,23 +1065,27 @@ enum RootAssertion<'a> {
 }
 
 fn root_asserted_type(check: &Check) -> Option<&GoType> {
-    match check {
-        Check::TypeAssert { path, go_type } if path.is_root() => Some(go_type),
-        _ => None,
+    if let Check::TypeAssert { path, go_type } = check
+        && path.is_root()
+    {
+        Some(go_type)
+    } else {
+        None
     }
 }
 
 fn root_assertion(check: &Check) -> Option<RootAssertion<'_>> {
-    match check {
-        Check::Or { alternatives } => alternatives
+    if let Check::Or { alternatives } = check {
+        alternatives
             .iter()
             .map(|alternative| match alternative.as_slice() {
                 [check] => root_asserted_type(check),
                 _ => None,
             })
             .collect::<Option<Vec<_>>>()
-            .map(RootAssertion::Alternatives),
-        _ => root_asserted_type(check).map(RootAssertion::Single),
+            .map(RootAssertion::Alternatives)
+    } else {
+        root_asserted_type(check).map(RootAssertion::Single)
     }
 }
 

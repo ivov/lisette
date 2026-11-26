@@ -6,7 +6,6 @@ use std::process::Command;
 use diagnostics::LisetteDiagnostic;
 use emit::{EmitOptions, OutputFile, Planner};
 use passes::analyze;
-use rustc_hash::FxHashMap;
 use semantics::loader::Loader;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget};
 use stdlib::PRELUDE_GO_MODULE;
@@ -91,7 +90,11 @@ pub fn compile_go_test(input: &str, package_name: &str) -> Result<EmittedTest, C
 
     let mut input = EmitInput {
         checked_bodies: result.checked_bodies,
-        files: FxHashMap::from_iter([(0, file)]),
+        files: result
+            .typedef_files
+            .into_iter()
+            .chain([(0, file)])
+            .collect(),
         definitions: result.definitions,
         entry_package_id: result.package_id,
         unused_imports: result.unused_imports,

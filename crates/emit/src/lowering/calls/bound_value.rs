@@ -98,7 +98,7 @@ impl LoweredPair {
                 };
                 GoExpression::binary(status, operator, nil_condition)
             }
-            _ => status,
+            PairValue::Absent | PairValue::Discarded | PairValue::Named { .. } => status,
         };
 
         PairCondition {
@@ -157,7 +157,7 @@ impl BoundValue {
     pub(in crate::lowering) fn payload(&self) -> Option<GoExpression> {
         match &self.source {
             BoundSource::Index { index, .. } => Some(index.element()),
-            _ => self
+            BoundSource::Pair(_) | BoundSource::Nullable { .. } | BoundSource::Found { .. } => self
                 .payload_identifier()
                 .cloned()
                 .map(GoExpression::identifier),
@@ -199,7 +199,9 @@ impl BoundValue {
     pub(in crate::lowering) fn status_identifier(&self) -> &GoIdentifier {
         match &self.source {
             BoundSource::Pair(pair) => &pair.status,
-            _ => unreachable!("only a pair has a status local"),
+            BoundSource::Nullable { .. }
+            | BoundSource::Index { .. }
+            | BoundSource::Found { .. } => unreachable!("only a pair has a status local"),
         }
     }
 

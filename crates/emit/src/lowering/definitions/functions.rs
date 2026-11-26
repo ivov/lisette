@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lookup::facts::reusable_bindings::ReusableBindings;
 use crate::lookup::state::enclosing::ReturnContext;
@@ -17,8 +16,8 @@ use crate::output::finish::hygiene::{
     apply_go_hygiene, blank_unused_parameters, drop_unused_locals,
 };
 use crate::output::finish::locals::identify_body_locals;
-use crate::output::finish::verify::verify_local_scopes;
 use crate::output::finish::verify::{BodyResult, verify_final_function_body, verify_go_names};
+use crate::output::finish::verify::{hiding_locals, verify_local_scopes};
 use crate::target::ir::bodies::AsyncKind;
 use crate::target::ir::bodies::async_statement;
 use crate::target::ir::bodies::{
@@ -71,8 +70,8 @@ impl LambdaReturnInfo {
         }
     }
 
-    pub(in crate::lowering) fn signature(&self) -> GoType {
-        self.signature.clone().unwrap_or_default()
+    pub(in crate::lowering) fn signature(&self) -> Option<GoType> {
+        self.signature.clone()
     }
 }
 
@@ -161,12 +160,13 @@ impl Planner<'_> {
                 statements.insert(0, recover);
             }
             let mut body = LoweredBlock { statements };
+            let return_ty = ty
+                .as_function_type()
+                .map(|function| function.return_type.as_ref());
             let unit_result = return_info.body_result() == BodyResult::Value
-                && ty
-                    .get_function_ret()
-                    .is_some_and(|return_ty| this.facts.resolves_to_unit(return_ty));
+                && return_ty.is_some_and(|return_ty| this.facts.resolves_to_unit(return_ty));
             if unit_result && !body.go_terminates() {
-                let unit = this.unit_value(None, ty.get_function_ret());
+                let unit = this.unit_value(None, return_ty);
                 body.statements.push(plain_return(unit));
             }
 
@@ -381,7 +381,9 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let result = match self.scope.current_return_ctx() {
             ReturnContext::Void(_) => BodyResult::Void,
-            _ => BodyResult::Value,
+            ReturnContext::None | ReturnContext::Tagged(_) | ReturnContext::Lowered { .. } => {
+                BodyResult::Value
+            }
         };
         let prefix = self.lower_param_destructures(deferred_patterns);
         self.lower_function_body_inner(body, result, prefix, parameters)
@@ -418,6 +420,7 @@ impl Planner<'_> {
         GoParameter::new(receiver, go_type)
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn lower_parameters<'a>(&mut self, params: &'a [Binding]) -> LoweredParams<'a> {
         let mut lowered = LoweredParams {
             pairs: Vec::with_capacity(params.len()),
@@ -444,7 +447,7 @@ impl Planner<'_> {
                     ..
                 } => {
                     if let Some(go_name) = go_name_for_binding(&param.pattern) {
-                        let name = self.claim_declared_binding(identifier, id.as_slice(), &go_name);
+                        let name = self.claim_binding(identifier, id.as_slice(), &go_name);
                         lowered.test_handle = lowered
                             .test_handle
                             .take()
@@ -519,7 +522,36 @@ fn collect_binder_names(expression: &Expression, out: &mut Vec<SourceName>) {
         Expression::Let { binding, .. } | Expression::For { binding, .. } => {
             push_binder_names(&binding.pattern, out)
         }
-        _ => {}
+        Expression::Literal { .. }
+        | Expression::Block { .. }
+        | Expression::Identifier { .. }
+        | Expression::Call { .. }
+        | Expression::If { .. }
+        | Expression::Tuple { .. }
+        | Expression::StructCall { .. }
+        | Expression::DotAccess { .. }
+        | Expression::Assignment { .. }
+        | Expression::Return { .. }
+        | Expression::Propagate { .. }
+        | Expression::TryBlock { .. }
+        | Expression::RecoverBlock { .. }
+        | Expression::Binary { .. }
+        | Expression::Unary { .. }
+        | Expression::Paren { .. }
+        | Expression::RawGo { .. }
+        | Expression::Loop { .. }
+        | Expression::While { .. }
+        | Expression::Break { .. }
+        | Expression::Continue { .. }
+        | Expression::Reference { .. }
+        | Expression::IndexedAccess { .. }
+        | Expression::Task { .. }
+        | Expression::Defer { .. }
+        | Expression::Assert { .. }
+        | Expression::Unit { .. }
+        | Expression::Range { .. }
+        | Expression::Cast { .. }
+        | declaration_expression!() => {}
     }
     for child in expression.children() {
         collect_binder_names(child, out);
@@ -532,16 +564,6 @@ fn push_binder_names(pattern: &Pattern, out: &mut Vec<SourceName>) {
             .into_iter()
             .map(|(name, _)| SourceName::new(&name.into())),
     );
-}
-
-pub(in crate::lowering) fn is_go_never(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    match expression {
-        Expression::Return { .. } => true,
-        Expression::Call { expression, .. } => {
-            facts.checked(expression).callee().definition.as_deref() == Some("prelude.panic")
-        }
-        _ => false,
-    }
 }
 
 #[derive(Default)]
@@ -585,6 +607,22 @@ impl VisitorMut for BodyNames {
     }
 }
 
+fn rename_body_locals(
+    statements: &mut Vec<Statement>,
+    parameters: &mut [GoIdentifier],
+    by_id: &FxHashMap<LocalId, String>,
+) {
+    if by_id.is_empty() {
+        return;
+    }
+    rename_generated_locals(statements, by_id);
+    for parameter in parameters {
+        if let Some(name) = parameter.id().and_then(|id| by_id.get(&id)) {
+            parameter.spelling_mut().clone_from(name);
+        }
+    }
+}
+
 impl PlannerQueries<'_, '_> {
     fn settle_generated_names(
         &self,
@@ -599,20 +637,29 @@ impl PlannerQueries<'_, '_> {
                 .settle_generated_names(&names.present, &names.pinned, self.names);
         self.scope
             .restore_builtin_names(&names.present, &names.pinned, &mut by_id, self.names);
-        self.scope.avoid_qualifier_capture(
-            &names.present,
-            &names.pinned,
-            &names.qualifiers,
-            &mut by_id,
-        );
-        if by_id.is_empty() {
-            return;
-        }
-        rename_generated_locals(statements, &by_id);
-        for parameter in parameters {
-            if let Some(name) = parameter.id().and_then(|id| by_id.get(&id)) {
-                parameter.spelling_mut().clone_from(name);
+        rename_body_locals(statements, parameters, &by_id);
+        loop {
+            let mut names = BodyNames::default();
+            for parameter in parameters.iter_mut() {
+                names.local_binding(parameter, BindingSite::Parameter);
             }
+            visit_statements_mut(statements, &mut names);
+            let mut respelled = hiding_locals(statements, parameters);
+            respelled.extend(self.scope.locals_named_outside_body(
+                &names.present,
+                &names.qualifiers,
+                self.names,
+            ));
+            if respelled.is_empty() {
+                return;
+            }
+            respelled.sort_by_key(|id| id.0);
+            respelled.dedup();
+            let taken = names.pinned.union(&names.qualifiers).cloned().collect();
+            let by_id = self
+                .scope
+                .respell_locals(&respelled, &names.present, taken, self.names);
+            rename_body_locals(statements, parameters, &by_id);
         }
     }
 
@@ -626,8 +673,9 @@ impl PlannerQueries<'_, '_> {
 
         let return_ty = function.return_type.as_ref();
         let abi = return_abi(self.facts, return_ty, ReturnSlot::FunctionExpression(ctx));
-        let signature =
-            (abi != CallableReturnAbi::Void).then(|| self.return_go_type(&abi, return_ty));
+        let signature = (abi != CallableReturnAbi::Void)
+            .then(|| self.return_go_type(&abi, return_ty))
+            .flatten();
         let return_ctx = match abi {
             CallableReturnAbi::Void => ReturnContext::Void(return_ty.clone()),
             CallableReturnAbi::Value => ReturnContext::Tagged(return_ty.clone()),
@@ -647,7 +695,7 @@ impl PlannerQueries<'_, '_> {
         &self,
         function_definition: FunctionDefinitionView<'_>,
         return_shape: Option<&LoweredReturnAbi>,
-    ) -> GoType {
+    ) -> Option<GoType> {
         let abi = match (self.scope.current_return_ctx(), return_shape) {
             (ReturnContext::Void(_), _) => CallableReturnAbi::Void,
             (_, Some(shape)) => CallableReturnAbi::Lowered(shape.clone()),

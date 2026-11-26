@@ -222,7 +222,7 @@ impl GoExpressionNode {
             }
             Self::Literal(_)
             | Self::Type(_)
-            | Self::Empty
+            | Self::Unreachable
             | Self::Instantiation { .. }
             | Self::Spread(_)
             | Self::FunctionLiteral { .. }

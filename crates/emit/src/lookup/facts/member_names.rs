@@ -7,7 +7,7 @@ impl EmitFacts<'_> {
     pub(crate) fn package_member_go_name(&self, package: &str, member: &str) -> String {
         if is_go_import(package) {
             member.to_string()
-        } else if self.is_const(&format!("{package}.{member}")) {
+        } else if self.definition(&format!("{package}.{member}")).is_const() {
             go_name::screaming_snake_to_camel(member)
         } else {
             go_name::snake_to_camel(member)

@@ -106,30 +106,20 @@ impl Planner<'_> {
         self.record_converted_value(value);
         match &value_use.adaptation {
             Adaptation::Delegated { .. } => CoercionPlan::Identity,
-            adaptation => CoercionPlan::adapted(
+            adaptation @ Adaptation::Identity
+            | adaptation @ Adaptation::Interface(_)
+            | adaptation @ Adaptation::ImplicitSome { .. }
+            | adaptation @ Adaptation::Newtype
+            | adaptation @ Adaptation::Tuple(_)
+            | adaptation @ Adaptation::Array(_)
+            | adaptation @ Adaptation::DivergingFunction
+            | adaptation @ Adaptation::Receiver(_) => CoercionPlan::adapted(
                 &self.queries(),
                 adaptation,
                 &value.get_type(),
                 &value_use.slot,
                 Some(go_layout),
             ),
-        }
-    }
-
-    pub(in crate::lowering) fn coercion_after_layout_change(
-        &self,
-        value: &Expression,
-        go_layout: &ValueLayout,
-    ) -> CoercionPlan {
-        let value_use = self.facts.checked(value).value_use();
-        match &value_use.adaptation {
-            Adaptation::Interface(conversion) => {
-                self.record_converted_value(value);
-                self.queries()
-                    .interface_adapter(conversion)
-                    .map_or(CoercionPlan::Identity, CoercionPlan::WrapAsInterface)
-            }
-            _ => self.slot_coercion(value, &value_use.slot, Some(go_layout)),
         }
     }
 
@@ -199,9 +189,32 @@ impl Planner<'_> {
         };
         self.record_converted_value(pair);
         [0, 1].map(|index| {
-            let adaptation = adaptations.get(index).unwrap_or(&Adaptation::Identity);
-            self.adapted_slot_coercion(elements[index], adaptation, layouts[index], layouts[index])
+            self.adapted_slot_coercion(
+                elements[index],
+                &adaptations[index],
+                layouts[index],
+                layouts[index],
+            )
         })
+    }
+
+    pub(in crate::lowering) fn value_layout_change(
+        &self,
+        value: &Expression,
+        source: &ValueLayout,
+        target: &ValueLayout,
+    ) -> CoercionPlan {
+        match self.facts.checked(value).value_use().adaptation {
+            Adaptation::ImplicitSome { .. } => CoercionPlan::Identity,
+            Adaptation::Identity
+            | Adaptation::Delegated { .. }
+            | Adaptation::Interface(_)
+            | Adaptation::Newtype
+            | Adaptation::Tuple(_)
+            | Adaptation::Array(_)
+            | Adaptation::DivergingFunction
+            | Adaptation::Receiver(_) => CoercionPlan::change(&self.queries(), source, target),
+        }
     }
 
     pub(in crate::lowering) fn coerce_into_slot(
@@ -212,14 +225,12 @@ impl Planner<'_> {
         go_slot: Option<(&ValueLayout, &ValueLayout)>,
     ) -> GoExpression {
         let layout_change = go_slot.map_or(CoercionPlan::Identity, |(source, target)| {
-            CoercionPlan::change(&self.queries(), source, target)
+            self.value_layout_change(value_expression, source, target)
         });
         let (layout_change_setup, value) = layout_change.lower(self, value);
         statements.extend(layout_change_setup);
-        let coercion = match go_slot {
-            Some((_, target)) => self.coercion_after_layout_change(value_expression, target),
-            None => self.slot_coercion(value_expression, slot_ty, None),
-        };
+        let coercion =
+            self.slot_coercion(value_expression, slot_ty, go_slot.map(|(_, target)| target));
         let (coercion_setup, coerced) = coercion.lower(self, value);
         statements.extend(coercion_setup);
         coerced

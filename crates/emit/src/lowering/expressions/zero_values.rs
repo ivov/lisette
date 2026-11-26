@@ -53,19 +53,24 @@ impl Planner<'_> {
                 Some(GoExpression::conversion(go_ty, inner))
             }
             ValueLayout::Plain(nominal @ Type::Nominal { id, .. })
-                if is_go_import(id.as_str())
-                    && self
-                        .facts
-                        .definition(id.as_str())
-                        .is_some_and(|definition| {
-                            definition.is_newtype()
-                                || matches!(definition.body, DefinitionBody::Struct { .. })
-                        }) =>
+                if is_go_import(id.as_str()) && {
+                    let definition = self.facts.definition(id.as_str());
+                    definition.is_newtype()
+                        || matches!(definition.body, DefinitionBody::Struct { .. })
+                } =>
             {
                 let inner = self.lisette_zero(nominal);
                 Some(GoExpression::conversion(go_ty, inner))
             }
-            _ => None,
+            ValueLayout::Plain(_)
+            | ValueLayout::Fallible { .. }
+            | ValueLayout::TaggedOption { .. }
+            | ValueLayout::NullableOption { .. }
+            | ValueLayout::PointerOption { .. }
+            | ValueLayout::Reference { .. }
+            | ValueLayout::Function { .. }
+            | ValueLayout::Tuple { .. }
+            | ValueLayout::Named { .. } => None,
         }
     }
 
@@ -92,7 +97,23 @@ impl Planner<'_> {
                     ConstantKind::String,
                 ),
                 SimpleKind::Unit => self.unit_value(None, None),
-                _ => GoExpression::constant(GoLiteral::Int(0), ConstantKind::Int),
+                SimpleKind::Int
+                | SimpleKind::Int8
+                | SimpleKind::Int16
+                | SimpleKind::Int32
+                | SimpleKind::Int64
+                | SimpleKind::Uint
+                | SimpleKind::Uint8
+                | SimpleKind::Uint16
+                | SimpleKind::Uint32
+                | SimpleKind::Uint64
+                | SimpleKind::Uintptr
+                | SimpleKind::Byte
+                | SimpleKind::Float32
+                | SimpleKind::Float64
+                | SimpleKind::Complex64
+                | SimpleKind::Complex128
+                | SimpleKind::Rune => GoExpression::constant(GoLiteral::Int(0), ConstantKind::Int),
             },
             (
                 Type::Compound {
@@ -143,17 +164,20 @@ impl Planner<'_> {
 
     fn lisette_zero_nominal(&mut self, ty: &Type, id: &str, params: &[Type]) -> GoExpression {
         if id == "prelude.Option" {
-            let inner = params
-                .first()
-                .map(|a| self.queries().go_type(a))
-                .unwrap_or_else(GoType::any);
+            let [payload] = params else {
+                panic!(
+                    "internal error: an Option has {} type arguments",
+                    params.len()
+                );
+            };
+            let inner = self.queries().go_type(payload);
             return GoExpression::call(
                 GoExpression::instantiation(
                     GoExpression::generated(
                         GeneratedPackage::Prelude,
                         option_variant("None").constructor,
                     ),
-                    GoType::type_arguments(&[inner]),
+                    Some(GoType::type_argument(&inner)),
                 ),
                 Vec::new(),
             );
@@ -234,8 +258,8 @@ impl Planner<'_> {
     ) -> GoExpression {
         let zero = self.lisette_zero(element);
         let hint = if make_length.is_some() { "s" } else { "arr" };
-        let container_name = self.scope.helper_local(hint, self.names);
-        let index_name = self.scope.helper_local("i", self.names);
+        let container_name = self.scope.new_unreserved_local(hint, self.names);
+        let index_name = self.scope.new_unreserved_local("i", self.names);
         let container = || GoExpression::identifier(container_name.clone());
         let index = || GoExpression::identifier(index_name.clone());
         let initial = match make_length {
@@ -250,7 +274,7 @@ impl Planner<'_> {
         };
 
         immediate_call(
-            container_type,
+            Some(container_type),
             LoweredBlock {
                 statements: vec![
                     initial,
@@ -336,28 +360,15 @@ impl Planner<'_> {
                 ..
             }) => GoExpression::nil(),
             ValueLayout::Plain(Type::Nominal { id, .. })
-                if self
-                    .facts
-                    .definition(id.as_str())
-                    .is_some_and(|definition| {
-                        matches!(
-                            definition.body,
-                            DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }
-                        )
-                    }) =>
+                if matches!(
+                    self.facts.definition(id.as_str()).body,
+                    DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }
+                ) =>
             {
                 GoExpression::empty_composite(go_ty)
             }
-            _ => GoExpression::new_zero(go_ty),
+            ValueLayout::Plain(_) | ValueLayout::Named { .. } => GoExpression::new_zero(go_ty),
         }
-    }
-}
-
-fn layout_is_map(layout: &ValueLayout) -> bool {
-    match layout {
-        ValueLayout::Map { .. } => true,
-        ValueLayout::Named { underlying, .. } => layout_is_map(underlying),
-        _ => false,
     }
 }
 
@@ -372,7 +383,7 @@ impl PlannerQueries<'_, '_> {
         let layout = self
             .facts
             .field_slot_layout(owner, Some(selection), field, field_ty)?;
-        if !layout_is_map(&layout) {
+        if !matches!(layout.underlying(), ValueLayout::Map { .. }) {
             return None;
         }
         Some(GoExpression::empty_composite(layout.go_type(self)))
@@ -381,15 +392,15 @@ impl PlannerQueries<'_, '_> {
     fn go_imported_zero(&self, ty: &Type, id: &str) -> GoExpression {
         let go_ty = self.go_type(ty);
         let is_struct = matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::Struct { .. })
+            self.facts.definition(id).body,
+            DefinitionBody::Struct { .. }
         );
         let is_opaque = matches!(
-            self.facts.definition(id).map(|d| &d.body),
-            Some(DefinitionBody::TypeAlias {
+            self.facts.definition(id).body,
+            DefinitionBody::TypeAlias {
                 alias: AliasKind::Opaque(_),
                 ..
-            })
+            }
         );
 
         if !is_struct && !is_opaque {

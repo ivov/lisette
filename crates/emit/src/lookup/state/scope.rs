@@ -5,15 +5,16 @@ use std::ptr;
 use super::local_names::LocalNames;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::reusable_bindings::ReusableBindings;
 use crate::lookup::state::bindings::{
     BindingValue, ComponentBinding, InlineExpression, TupleBinding,
 };
-use crate::lookup::state::enclosing::LoopContext;
 use crate::lookup::state::enclosing::ReturnContext;
+use crate::lookup::state::enclosing::{LoopContext, LoopSlot};
 use crate::target::ir::bodies::LoopId;
 use crate::target::ir::local::{GoIdentifier, LocalId};
-use crate::target::ir::values::GoExpression;
+use crate::target::ir::values::{GoExpression, Stability};
 use syntax::EcoString;
 use syntax::ast::{BindingId, Expression, IdentifierResolution};
 use syntax::constant::Constant;
@@ -358,15 +359,37 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn lacks_binding_for_local(&self, local: &GoIdentifier) -> bool {
-        let Some(id) = local.id() else {
-            return true;
-        };
+    pub(crate) fn identifier_read_stability(
+        &self,
+        facts: &EmitFacts<'_>,
+        value: &str,
+        resolution: &IdentifierResolution,
+    ) -> Stability {
+        match self.resolve_identifier_with_resolution(value, resolution) {
+            Some(BindingValue::InlineExpression(inline)) => inline.stability(),
+            _ => resolution
+                .binding_id()
+                .map_or(Stability::Fixed, |id| facts.binding_read_stability(id)),
+        }
+    }
+
+    pub(crate) fn local_read_stability(
+        &self,
+        facts: &EmitFacts<'_>,
+        local: &GoIdentifier,
+    ) -> Stability {
+        self.source_binding_for_local(local)
+            .map_or(Stability::StableAcrossCalls, |id| {
+                facts.binding_read_stability(id)
+            })
+    }
+
+    pub(crate) fn lacks_binding_for_local(&self, id: LocalId) -> bool {
         self.active_assign_targets()
             .all(|target| target.id() != Some(id))
             && self
                 .bindings()
-                .all(|binding| !binding.value.mentions_local(local) || !self.is_reachable(binding))
+                .all(|binding| !binding.value.mentions_local(id) || !self.is_reachable(binding))
     }
 
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {
@@ -376,6 +399,7 @@ impl ScopeState {
                 .any(|binding| binding.value.mentions(go_name))
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(crate) fn expression_reads_go_name(&self, expression: &Expression, go_name: &str) -> bool {
         match expression {
             Expression::Identifier {
@@ -427,10 +451,6 @@ impl ScopeState {
 
     pub(crate) fn try_declare_go_name(&mut self, go_name: &str) -> bool {
         !self.declares_type_param(go_name) && self.current_declarations_mut().insert(go_name)
-    }
-
-    pub(crate) fn current_block_declares(&self, go_name: &str) -> bool {
-        self.declares_type_param(go_name) || self.current_declarations().contains(go_name)
     }
 
     pub(crate) fn is_go_name_declared(&self, go_name: &str) -> bool {
@@ -512,14 +532,12 @@ impl ScopeState {
         self.pop_frame();
     }
 
-    pub(crate) fn push_loop(&mut self, result: Option<GoExpression>, result_ty: Option<Type>) {
+    pub(crate) fn push_loop(&mut self, result: Option<LoopSlot>) {
         let id = LoopId(self.next_loop_id);
         self.next_loop_id += 1;
-        self.current_function_mut().loops.push(LoopContext {
-            id,
-            result,
-            result_ty,
-        });
+        self.current_function_mut()
+            .loops
+            .push(LoopContext { id, result });
     }
 
     pub(crate) fn pop_loop(&mut self) {
@@ -539,7 +557,7 @@ impl ScopeState {
             .rev()
             .find_map(|frame| match &frame.declarations {
                 DeclarationScope::Function(function) => function.test_handle.as_ref(),
-                _ => None,
+                DeclarationScope::Transparent | DeclarationScope::Block(_) => None,
             })
     }
 
@@ -580,7 +598,7 @@ impl ScopeState {
             function
                 .loops
                 .iter()
-                .filter_map(|context| context.result.as_ref()?.as_identifier())
+                .filter_map(|context| context.result.as_ref()?.target.as_identifier())
                 .filter(|name| name.spelling() != "_"),
         )
     }
@@ -591,7 +609,7 @@ impl ScopeState {
             .rev()
             .find_map(|frame| match &frame.declarations {
                 DeclarationScope::Function(function) => Some(function),
-                _ => None,
+                DeclarationScope::Transparent | DeclarationScope::Block(_) => None,
             })
             .expect("scope state always retains a function scope")
     }
@@ -602,7 +620,7 @@ impl ScopeState {
             .rev()
             .find_map(|frame| match &mut frame.declarations {
                 DeclarationScope::Function(function) => Some(function),
-                _ => None,
+                DeclarationScope::Transparent | DeclarationScope::Block(_) => None,
             })
             .expect("scope state always retains a function scope")
     }

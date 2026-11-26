@@ -9,7 +9,7 @@ use crate::output::finish::verify::BodyResult;
 use crate::target::ir::bodies::{
     AssignForm, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan, LoweredBlock, LoweredStatement,
     SelectArmKind, Statement, SwitchKind, SwitchStatementPlan, direct_first, effect_statement,
-    for_each_statements_mut,
+    for_each_statements_mut, scope_statements,
 };
 use crate::target::ir::go_expression::{CallPurity, GoExpressionNode, Position};
 use crate::target::ir::local::{GoIdentifier, LocalId};
@@ -31,8 +31,11 @@ fn terminate_function_literals(statements: &mut Vec<Statement>) {
 
     impl VisitorMut for Literals {
         fn expression(&mut self, node: &mut GoExpressionNode) {
-            if let GoExpressionNode::FunctionLiteral { result, body, .. } = node
-                && !result.is_empty()
+            if let GoExpressionNode::FunctionLiteral {
+                result: Some(_),
+                body,
+                ..
+            } = node
             {
                 body.ensure_go_termination();
             }
@@ -80,7 +83,7 @@ fn is_unreferenced(name: &GoIdentifier, uses: &NameUses) -> bool {
 fn keep_effects(value: GoExpression, line: Option<Position>) -> Option<Statement> {
     let empty_literal = matches!(value.node(),
         GoExpressionNode::CompositeLiteral { elements, .. } if elements.is_empty());
-    if value.is_empty() || empty_literal || value.effects().can_erase() {
+    if empty_literal || value.effects().can_erase() {
         return None;
     }
     if let GoExpressionNode::Call {
@@ -171,7 +174,23 @@ fn unscoped(statement: Statement, liveness: &Liveness) -> Vec<Statement> {
             direct_first(&mut statements, statement.line);
             statements
         }
-        kind => vec![Statement {
+        kind @ LoweredStatement::If(_)
+        | kind @ LoweredStatement::Loop(_)
+        | kind @ LoweredStatement::Block(_)
+        | kind @ LoweredStatement::Body(_)
+        | kind @ LoweredStatement::Break(_)
+        | kind @ LoweredStatement::Continue(_)
+        | kind @ LoweredStatement::Const(_)
+        | kind @ LoweredStatement::Return(_)
+        | kind @ LoweredStatement::Assign(_)
+        | kind @ LoweredStatement::Async { .. }
+        | kind @ LoweredStatement::Select(_)
+        | kind @ LoweredStatement::Switch(_)
+        | kind @ LoweredStatement::Define(_)
+        | kind @ LoweredStatement::VarDeclaration { .. }
+        | kind @ LoweredStatement::Discard { .. }
+        | kind @ LoweredStatement::ExpressionStatement { .. }
+        | kind @ LoweredStatement::UnreachablePanic => vec![Statement {
             line: statement.line,
             kind,
         }],
@@ -180,16 +199,25 @@ fn unscoped(statement: Statement, liveness: &Liveness) -> Vec<Statement> {
 
 fn unused_declarations(statements: &[Statement], liveness: &Liveness) -> Option<usize> {
     let mut count = 0;
-    for statement in statements {
-        let names: &[GoIdentifier] = match &statement.kind {
+    for statement in scope_statements(statements) {
+        let names: &[GoIdentifier] = match statement {
             LoweredStatement::Define(Definition { names, .. }) => names,
             LoweredStatement::VarDeclaration { name, .. } => slice::from_ref(name),
             LoweredStatement::Const(_) => return None,
-            LoweredStatement::Body(body) => {
-                count += unused_declarations(&body.statements, liveness)?;
-                continue;
-            }
-            _ => continue,
+            LoweredStatement::If(_)
+            | LoweredStatement::Loop(_)
+            | LoweredStatement::Block(_)
+            | LoweredStatement::Body(_)
+            | LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Assign(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Select(_)
+            | LoweredStatement::Switch(_)
+            | LoweredStatement::Discard { .. }
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => continue,
         };
 
         if !names.iter().all(|name| liveness.unused(name)) {
@@ -230,7 +258,7 @@ fn hoist_blank_initializers(plan: &mut IfPlan, line: Option<Position>) -> Vec<St
                 ElseArm::block(LoweredBlock { statements })
             }
         }
-        other => other,
+        other @ ElseArm::None | other @ ElseArm::Else { .. } => other,
     };
     match plan
         .initializer
@@ -263,7 +291,23 @@ fn settle_blank_bindings(statements: &mut Vec<Statement>) {
                         kind: LoweredStatement::If(plan),
                     });
                 }
-                mut kind => {
+                kind @ LoweredStatement::Loop(_)
+                | kind @ LoweredStatement::Block(_)
+                | kind @ LoweredStatement::Body(_)
+                | kind @ LoweredStatement::Break(_)
+                | kind @ LoweredStatement::Continue(_)
+                | kind @ LoweredStatement::Const(_)
+                | kind @ LoweredStatement::Return(_)
+                | kind @ LoweredStatement::Assign(_)
+                | kind @ LoweredStatement::Async { .. }
+                | kind @ LoweredStatement::Select(_)
+                | kind @ LoweredStatement::Switch(_)
+                | kind @ LoweredStatement::Define(_)
+                | kind @ LoweredStatement::VarDeclaration { .. }
+                | kind @ LoweredStatement::Discard { .. }
+                | kind @ LoweredStatement::ExpressionStatement { .. }
+                | kind @ LoweredStatement::UnreachablePanic => {
+                    let mut kind = kind;
                     settle_blank_header(&mut kind);
                     list.push(Statement { line, kind });
                 }
@@ -297,7 +341,22 @@ fn settle_blank_header(statement: &mut LoweredStatement) {
                 }
             }
         }
-        _ => {}
+        LoweredStatement::If(_)
+        | LoweredStatement::Loop(_)
+        | LoweredStatement::Block(_)
+        | LoweredStatement::Body(_)
+        | LoweredStatement::Break(_)
+        | LoweredStatement::Continue(_)
+        | LoweredStatement::Const(_)
+        | LoweredStatement::Return(_)
+        | LoweredStatement::Assign(_)
+        | LoweredStatement::Async { .. }
+        | LoweredStatement::Switch(_)
+        | LoweredStatement::Define(_)
+        | LoweredStatement::VarDeclaration { .. }
+        | LoweredStatement::Discard { .. }
+        | LoweredStatement::ExpressionStatement { .. }
+        | LoweredStatement::UnreachablePanic => {}
     }
 }
 
@@ -330,7 +389,23 @@ fn drop_writes_to(statements: &mut Vec<Statement>, names: &[GoIdentifier]) {
                 {
                     list.extend(keep_effects(value, line));
                 }
-                kind => list.push(Statement { line, kind }),
+                kind @ LoweredStatement::If(_)
+                | kind @ LoweredStatement::Loop(_)
+                | kind @ LoweredStatement::Block(_)
+                | kind @ LoweredStatement::Body(_)
+                | kind @ LoweredStatement::Break(_)
+                | kind @ LoweredStatement::Continue(_)
+                | kind @ LoweredStatement::Const(_)
+                | kind @ LoweredStatement::Return(_)
+                | kind @ LoweredStatement::Assign(_)
+                | kind @ LoweredStatement::Async { .. }
+                | kind @ LoweredStatement::Select(_)
+                | kind @ LoweredStatement::Switch(_)
+                | kind @ LoweredStatement::Define(_)
+                | kind @ LoweredStatement::VarDeclaration { .. }
+                | kind @ LoweredStatement::Discard { .. }
+                | kind @ LoweredStatement::ExpressionStatement { .. }
+                | kind @ LoweredStatement::UnreachablePanic => list.push(Statement { line, kind }),
             }
         }
     });
@@ -356,7 +431,23 @@ fn drop_empty_ifs(statements: &mut Vec<Statement>) -> bool {
                         });
                     }
                 }
-                kind => list.push(Statement { line, kind }),
+                kind @ LoweredStatement::If(_)
+                | kind @ LoweredStatement::Loop(_)
+                | kind @ LoweredStatement::Block(_)
+                | kind @ LoweredStatement::Body(_)
+                | kind @ LoweredStatement::Break(_)
+                | kind @ LoweredStatement::Continue(_)
+                | kind @ LoweredStatement::Const(_)
+                | kind @ LoweredStatement::Return(_)
+                | kind @ LoweredStatement::Assign(_)
+                | kind @ LoweredStatement::Async { .. }
+                | kind @ LoweredStatement::Select(_)
+                | kind @ LoweredStatement::Switch(_)
+                | kind @ LoweredStatement::Define(_)
+                | kind @ LoweredStatement::VarDeclaration { .. }
+                | kind @ LoweredStatement::Discard { .. }
+                | kind @ LoweredStatement::ExpressionStatement { .. }
+                | kind @ LoweredStatement::UnreachablePanic => list.push(Statement { line, kind }),
             }
         }
     });

@@ -42,8 +42,8 @@ func main() {
 		return read2()
 	}
 	total := 0
-	for _, out3 := range []int{1, 2} {
-		total += f() + out3
+	for _, out := range []int{1, 2} {
+		total += f() + out
 	}
 	if total != 25 || read() != 7 {
 		panic("updated temp identity")

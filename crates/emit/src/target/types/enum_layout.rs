@@ -1,9 +1,8 @@
 use crate::target::names::go_name;
 use crate::target::types::display_form::DisplayForm;
-use syntax::ast::{EnumVariant, Generic};
+use syntax::ast::{EnumVariant, Generic, VariantFields};
 use syntax::containment::enum_payload_pointer_wrapped;
 use syntax::go_names;
-use syntax::go_names::EnumFieldShape;
 use syntax::program::Definition;
 use syntax::types::Type;
 
@@ -137,15 +136,14 @@ impl EnumLayout {
         let enum_name = go_name::unqualified_name(enum_id);
         let tag_constant = go_name::enum_tag_constant(enum_name, &variant.name);
 
-        let field_shape =
-            go_names::enum_field_shape(&variant.fields).unwrap_or(EnumFieldShape::TupleMultiple);
+        let is_struct_variant = matches!(variant.fields, VariantFields::Struct(_));
 
         let fields: Vec<_> = variant
             .fields
             .iter()
             .enumerate()
             .map(|(field_index, field)| {
-                let source_name = if field_shape == EnumFieldShape::Struct {
+                let source_name = if is_struct_variant {
                     field.name.to_string()
                 } else {
                     field_index.to_string()
@@ -177,22 +175,27 @@ impl EnumLayout {
         VariantLayout {
             name: variant.name.to_string(),
             tag_constant,
-            is_struct_variant: field_shape == EnumFieldShape::Struct,
+            is_struct_variant,
             fields,
             doc: variant.doc.clone(),
         }
     }
 
-    pub(crate) fn variant(&self, name: &str) -> Option<&VariantLayout> {
-        self.variants.iter().find(|variant| variant.name == name)
+    pub(crate) fn variant(&self, name: &str) -> &VariantLayout {
+        self.variants
+            .iter()
+            .find(|variant| variant.name == name)
+            .unwrap_or_else(|| panic!("internal error: the enum layout has no variant `{name}`"))
     }
 
-    pub(crate) fn struct_field_name(&self, variant_name: &str, field_name: &str) -> Option<String> {
-        let variant = self.variant(variant_name)?;
-        variant
+    pub(crate) fn struct_field_name(&self, variant_name: &str, field_name: &str) -> String {
+        self.variant(variant_name)
             .fields
             .iter()
             .find(|field| field.source_name == field_name)
             .map(|field| field.go_name.clone())
+            .unwrap_or_else(|| {
+                panic!("internal error: the variant `{variant_name}` has no field `{field_name}`")
+            })
     }
 }

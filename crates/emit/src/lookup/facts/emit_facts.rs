@@ -1,9 +1,11 @@
+use crate::lookup::facts::callables::CallableDeclaration;
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::program::{
     CallOperation, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection,
-    PRELUDE_PACKAGE_ID, ValueUseKey, is_go_import, is_prelude_symbol, strip_prelude_prefix,
+    PRELUDE_PACKAGE_ID, ValueUseKey, is_go_import, is_prelude_symbol,
 };
 
+use crate::target::ir::values::Stability;
 use ecow::EcoString;
 use syntax::ast::{BindingId, Expression, Span};
 use syntax::program::{
@@ -48,8 +50,18 @@ impl<'a> EmitFacts<'a> {
         types::package_for_qualified_name(id, |package| self.input.go_package_ids.contains(package))
     }
 
-    pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {
-        self.input.definitions.get(id)
+    pub(crate) fn callable(&self, id: &str) -> CallableDeclaration<'a> {
+        if let Some(definition) = self.input.definitions.get(id) {
+            return CallableDeclaration::Definition(definition);
+        }
+        id.rsplit_once('.')
+            .and_then(|(owner, name)| self.method(owner, name))
+            .map(CallableDeclaration::Method)
+            .unwrap_or_else(|| panic!("internal error: `{id}` names no definition and no method"))
+    }
+
+    pub(crate) fn definition(&self, id: &str) -> &'a Definition {
+        known_definition(&self.input.definitions, id)
     }
 
     pub(crate) fn call_operation(&self, expression: &Expression) -> Option<&'a CallOperation> {
@@ -68,11 +80,13 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn value_use_slot(&self, expression: &Expression) -> Option<&'a Type> {
-        self.input
+        let slot = &self
+            .input
             .checked_bodies
             .value_use(&ValueUseKey::value(expression))
-            .map(|value_use| &value_use.slot)
-            .filter(|slot| !slot.is_ignored())
+            .expect("the checker records the use of every value")
+            .slot;
+        (!slot.is_ignored()).then_some(slot)
     }
 
     pub(crate) fn value_uses(
@@ -92,15 +106,15 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
-        self.definition(owner)?.methods()?.get(name)
+        self.definition(owner).methods()?.get(name)
     }
 
-    pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
-        self.definition(qualified_name)
-            .is_some_and(Definition::is_const)
+    pub(crate) fn known_method(&self, owner: &str, name: &str) -> &'a Method {
+        self.method(owner, name)
+            .unwrap_or_else(|| panic!("internal error: `{owner}` has no method `{name}`"))
     }
 
-    pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
+    pub(in crate::lookup::facts) fn peel_alias(&self, ty: &Type) -> Type {
         peel_alias(&self.input.definitions, ty)
     }
 
@@ -122,7 +136,7 @@ impl<'a> EmitFacts<'a> {
             generics,
             alias: AliasKind::Transparent { target, .. },
             ..
-        } = &self.definition(id)?.body
+        } = &self.definition(id).body
         else {
             return None;
         };
@@ -143,31 +157,41 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn immediate_underlying(&self, ty: &Type) -> Option<Type> {
-        types::underlying_type(ty, |id| self.definition(id))
+        types::underlying_type(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
-        types::underlying_simple_kind(ty, |id| self.definition(id))
+        types::underlying_simple_kind(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn resolves_to_unknown(&self, ty: &Type) -> bool {
-        types::resolves_to_unknown(ty, |id| self.definition(id))
+        types::resolves_to_unknown(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn resolves_to_unit(&self, ty: &Type) -> bool {
-        types::resolves_to_unit(ty, |id| self.definition(id))
+        types::resolves_to_unit(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn is_prelude_error(&self, ty: &Type) -> bool {
-        types::is_prelude_error(ty, |id| self.definition(id))
+        types::is_prelude_error(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn has_no_go_value(&self, ty: &Type) -> bool {
-        self.resolves_to_unit(ty) || ty.is_variable() || ty.is_placeholder()
+        assert!(
+            !ty.is_variable() && !ty.is_placeholder(),
+            "a value type is unresolved: {ty:?}"
+        );
+        self.resolves_to_unit(ty)
+    }
+
+    pub(crate) fn produces_no_go_value(&self, expression: &Expression) -> bool {
+        expression
+            .type_ref()
+            .is_none_or(|ty| self.has_no_go_value(ty))
     }
 
     pub(crate) fn is_lisette_enum(&self, ty: &Type) -> bool {
-        types::is_lisette_enum(ty, |id| self.definition(id))
+        types::is_lisette_enum(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn go_zero_is_lisette_zero(&self, ty: &Type) -> bool {
@@ -193,8 +217,8 @@ impl<'a> EmitFacts<'a> {
                     return self.go_zero_is_lisette_zero(&underlying);
                 }
                 if matches!(
-                    self.definition(id.as_str()).map(|d| &d.body),
-                    Some(DefinitionBody::Struct { .. })
+                    self.definition(id.as_str()).body,
+                    DefinitionBody::Struct { .. }
                 ) && let Some(fields) = self.struct_fields(&ty)
                 {
                     return fields
@@ -204,7 +228,15 @@ impl<'a> EmitFacts<'a> {
                 self.immediate_underlying(&ty)
                     .is_some_and(|underlying| self.go_zero_is_lisette_zero(&underlying))
             }
-            _ => false,
+            Type::ImportNamespace(_)
+            | Type::Function(_)
+            | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Forall { .. }
+            | Type::Never
+            | Type::Error
+            | Type::ReceiverPlaceholder => false,
         }
     }
 
@@ -213,31 +245,31 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_reference(&self, ty: &Type) -> bool {
-        types::is_reference(ty, |id| self.definition(id))
+        types::is_reference(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
-        types::points_to_ref(ty, |id| self.definition(id))
+        types::points_to_ref(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn is_option(&self, ty: &Type) -> bool {
-        types::is_option(ty, |id| self.definition(id))
+        types::is_option(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn is_partial(&self, ty: &Type) -> bool {
-        types::is_partial(ty, |id| self.definition(id))
+        types::is_partial(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn is_tuple(&self, ty: &Type) -> bool {
-        types::is_tuple(ty, |id| self.definition(id))
+        types::is_tuple(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn ok_payload(&self, ty: &Type) -> Type {
-        types::ok_payload(ty, |id| self.definition(id))
+        types::ok_payload(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn err_payload(&self, ty: &Type) -> Type {
-        types::err_payload(ty, |id| self.definition(id))
+        types::err_payload(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn is_never(&self, ty: &Type) -> bool {
@@ -259,21 +291,20 @@ impl<'a> EmitFacts<'a> {
             Type::Parameter(_)
                 | Type::Var { .. }
                 | Type::Uninferred
-                | Type::Ignored
                 | Type::Error
                 | Type::ReceiverPlaceholder
         )
     }
 
     pub(crate) fn simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
-        types::simple_kind(ty, |id| self.definition(id))
+        types::simple_kind(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn compound_parts(&self, ty: &Type) -> Option<(CompoundKind, Vec<Type>)> {
-        match self.peel_alias(ty) {
-            Type::Compound { kind, args, .. } => Some((kind, args)),
-            _ => None,
-        }
+        let Type::Compound { kind, args, .. } = self.peel_alias(ty) else {
+            return None;
+        };
+        Some((kind, args))
     }
 
     pub(crate) fn peel_go_alias(&self, ty: &Type) -> Type {
@@ -290,7 +321,7 @@ impl<'a> EmitFacts<'a> {
             }
             let Some(target) = self
                 .definition(id)
-                .and_then(|definition| definition.instantiate_alias_target(params, *writable))
+                .instantiate_alias_target(params, *writable)
             else {
                 break;
             };
@@ -343,17 +374,17 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn receiver_array_length(&self, ty: &Type) -> Option<u64> {
-        match self.receiver_shape(ty) {
-            Type::Array { length, .. } => Some(length),
-            _ => None,
-        }
+        let Type::Array { length, .. } = self.receiver_shape(ty) else {
+            return None;
+        };
+        Some(length)
     }
 
     pub(crate) fn tuple_elements(&self, ty: &Type) -> Option<Vec<Type>> {
-        match self.peel_alias(ty) {
-            Type::Tuple(elements) => Some(elements),
-            _ => None,
-        }
+        let Type::Tuple(elements) = self.peel_alias(ty) else {
+            return None;
+        };
+        Some(elements)
     }
 
     pub(crate) fn clone_container(&self, ty: &Type) -> Option<Type> {
@@ -362,19 +393,18 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn array_parts(&self, ty: &Type) -> Option<(u64, Type)> {
-        match self.peel_alias(ty) {
-            Type::Array { length, element } => Some((length, *element)),
-            _ => None,
-        }
+        let Type::Array { length, element } = self.peel_alias(ty) else {
+            return None;
+        };
+        Some((length, *element))
     }
 
     pub(crate) fn prelude_container_arguments(&self, ty: &Type) -> Option<Vec<Type>> {
-        match self.peel_alias(ty) {
-            peeled @ Type::Nominal { .. } if is_prelude_container_type(&peeled) => {
-                peeled.get_type_params().map(<[Type]>::to_vec)
-            }
-            _ => None,
+        let peeled = self.peel_alias(ty);
+        if !matches!(peeled, Type::Nominal { .. }) || !is_prelude_container_type(&peeled) {
+            return None;
         }
+        peeled.get_type_params().map(<[Type]>::to_vec)
     }
 
     pub(crate) fn is_lowered_result_type(&self, ty: &Type) -> bool {
@@ -385,17 +415,17 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn receiver_tuple_elements(&self, ty: &Type) -> Option<Vec<Type>> {
-        match self.receiver_shape(ty) {
-            Type::Tuple(elements) => Some(elements),
-            _ => None,
-        }
+        let Type::Tuple(elements) = self.receiver_shape(ty) else {
+            return None;
+        };
+        Some(elements)
     }
 
     pub(crate) fn receiver_nominal_id(&self, ty: &Type) -> Option<Symbol> {
-        match self.receiver_shape(ty) {
-            Type::Nominal { id, .. } => Some(id),
-            _ => None,
-        }
+        let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
+            return None;
+        };
+        Some(id)
     }
 
     pub(crate) fn is_ref_to_type_parameter(&self, ty: &Type) -> bool {
@@ -407,7 +437,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_option_or_result(&self, ty: &Type) -> bool {
-        types::is_option_or_result(ty, |id| self.definition(id))
+        types::is_option_or_result(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn has_tuple_payload(&self, ty: &Type) -> bool {
@@ -418,19 +448,19 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn tuple_or_type_arguments(&self, ty: &Type) -> Vec<Type> {
-        types::tuple_element_types(ty, |id| self.definition(id))
+        types::tuple_element_types(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn is_prelude_nominal(&self, ty: &Type) -> bool {
         matches!(self.receiver_shape(ty), Type::Nominal { id, .. } if is_prelude_symbol(&id))
     }
 
-    pub(crate) fn receiver_shape(&self, ty: &Type) -> Type {
-        types::receiver_shape(ty, |id| self.definition(id))
+    pub(in crate::lookup::facts) fn receiver_shape(&self, ty: &Type) -> Type {
+        types::receiver_shape(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        types::as_interface(ty, |id| self.definition(id)).map(|id| id.to_string())
+        types::as_interface(ty, |id| Some(self.definition(id))).map(|id| id.to_string())
     }
 
     pub(crate) fn is_interface(&self, ty: &Type) -> bool {
@@ -446,19 +476,19 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn go_nil_form(&self, ty: &Type) -> types::GoNilForm {
-        types::go_nil_form(ty, |id| self.input.definitions.get(id))
+        types::go_nil_form(ty, |id| Some(self.definition(id)))
     }
 
-    pub(crate) fn peel_underlying(&self, ty: &Type) -> Type {
-        types::peel_underlying(ty, |id| self.input.definitions.get(id))
+    pub(in crate::lookup::facts) fn peel_underlying(&self, ty: &Type) -> Type {
+        types::peel_underlying(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn partial_ok_is_nilable(&self, ty: &Type) -> bool {
-        types::partial_ok_is_nilable(ty, |id| self.input.definitions.get(id))
+        types::partial_ok_is_nilable(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        types::resolve_to_function_type(ty, |id| self.definition(id))
+        types::resolve_to_function_type(ty, |id| Some(self.definition(id)))
     }
 
     pub(crate) fn function_alias_declaration(&self, ty: &Type) -> Option<Type> {
@@ -486,7 +516,7 @@ impl<'a> EmitFacts<'a> {
         let DefinitionBody::TypeAlias {
             alias: AliasKind::Transparent { target, .. },
             ..
-        } = &self.definition(id)?.body
+        } = &self.definition(id).body
         else {
             return None;
         };
@@ -498,26 +528,23 @@ impl<'a> EmitFacts<'a> {
         self.input.unused_imports.is_unused_import(key)
     }
 
-    pub(crate) fn is_mutated(&self, id: BindingId) -> bool {
-        self.input.bindings.is_mutated(id)
-    }
-
-    pub(crate) fn is_alias_mutated(&self, id: BindingId) -> bool {
-        self.input.bindings.is_alias_mutated(id)
+    pub(in crate::lookup) fn binding_read_stability(&self, id: BindingId) -> Stability {
+        if !self.input.bindings.is_mutated(id) {
+            Stability::Fixed
+        } else if !self.input.bindings.is_alias_mutated(id) {
+            Stability::StableAcrossCalls
+        } else {
+            Stability::Observable
+        }
     }
 
     pub(crate) fn hidden_binding(&self, id: BindingId) -> Option<BindingId> {
         self.input.bindings.hidden_binding(id)
     }
 
-    fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
-        self.definition(qualified_type)
-            .is_some_and(|definition| definition.is_ufcs_method(method))
-    }
-
     pub(crate) fn emits_go_method(&self, qualified_type: &str, method: &str) -> bool {
         self.method(qualified_type, method).is_some()
-            && !self.is_ufcs_method(qualified_type, method)
+            && !self.definition(qualified_type).is_ufcs_method(method)
     }
 
     pub(crate) fn synthesized_field_equalities(&self, id: &str) -> &'a [EqualityRecipe] {
@@ -585,8 +612,12 @@ impl<'a> EmitFacts<'a> {
             .contains(&go_name::snake_to_camel(method))
     }
 
-    pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<&'a EnumLayout> {
-        self.shared.globals.enum_layouts.get(enum_id)
+    pub(crate) fn enum_layout(&self, enum_id: &str) -> &'a EnumLayout {
+        self.shared
+            .globals
+            .enum_layouts
+            .get(enum_id)
+            .unwrap_or_else(|| panic!("internal error: `{enum_id}` has no enum layout"))
     }
 
     fn make_function_name<'e>(
@@ -594,7 +625,7 @@ impl<'a> EmitFacts<'a> {
         enum_id: &'e str,
         variant_name: &str,
     ) -> Option<(&'e str, String)> {
-        let definition = self.definition(enum_id)?;
+        let definition = self.definition(enum_id);
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;
         };
@@ -614,20 +645,25 @@ impl<'a> EmitFacts<'a> {
     where
         'a: 'e,
     {
-        if let Some((enum_id, variant)) = symbol.rsplit_once('.')
-            && let Some(make_function) = self.make_function_name(enum_id, variant)
-        {
-            return Some(make_function);
+        let package = self
+            .package_for_qualified_name(symbol)
+            .unwrap_or_else(|| panic!("internal error: `{symbol}` names no package"));
+        let member = &symbol[package.len() + 1..];
+        if let Some((owner, variant)) = member.rsplit_once('.') {
+            let enum_id = &symbol[..symbol.len() - variant.len() - 1];
+            debug_assert!(!owner.is_empty());
+            return self.make_function_name(enum_id, variant);
         }
-        let variant = strip_prelude_prefix(symbol)?;
-        if variant.contains('.') {
+        if package != PRELUDE_PACKAGE_ID {
             return None;
         }
-        let constructor_ty = &self.definition(symbol)?.ty;
-        let enum_ty = match constructor_ty.unwrap_forall() {
-            Type::Function(function) => function.return_type.as_ref(),
-            ty => ty,
-        };
+        let variant = member;
+        let constructor_ty = &self.definition(symbol).ty;
+        let enum_ty = constructor_ty
+            .as_function_type()
+            .map_or(constructor_ty.unwrap_forall(), |function| {
+                function.return_type.as_ref()
+            });
         let Type::Nominal { id: enum_id, .. } = enum_ty else {
             return None;
         };
@@ -683,21 +719,43 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {
-        self.shared.line_indexes.as_ref()?.get(&file_id)
+        let index = self.shared.line_indexes.as_ref()?.get(&file_id);
+        if index.is_none() {
+            let file = self
+                .input
+                .files
+                .get(&file_id)
+                .unwrap_or_else(|| panic!("internal error: no file has the id {file_id}"));
+            assert!(
+                file.is_d_lis(),
+                "internal error: `{}` has no line index",
+                file.display_path
+            );
+        }
+        index
     }
+}
+
+pub(crate) fn known_definition<'d>(
+    definitions: &'d FxHashMap<Symbol, Definition>,
+    id: &str,
+) -> &'d Definition {
+    definitions
+        .get(id)
+        .unwrap_or_else(|| panic!("internal error: `{id}` has no definition"))
 }
 
 fn is_nilable_go_type(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> bool {
-    types::is_nilable_go_type(ty, |id| definitions.get(id))
+    types::is_nilable_go_type(ty, |id| Some(known_definition(definitions, id)))
 }
 
 fn peel_alias(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> Type {
-    types::peel_alias(ty, |id| definitions.get(id))
+    types::peel_alias(ty, |id| Some(known_definition(definitions, id)))
 }
 
 pub(crate) fn ref_stripped_type_parameter(ty: &Type) -> Option<EcoString> {
-    match ty.strip_refs() {
-        Type::Parameter(name) => Some(name),
-        _ => None,
-    }
+    let Type::Parameter(name) = ty.strip_refs() else {
+        return None;
+    };
+    Some(name)
 }

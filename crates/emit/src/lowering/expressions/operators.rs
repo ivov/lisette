@@ -177,9 +177,10 @@ impl Planner<'_> {
 
         let result = self.fresh_declared("cond");
         let read = GoExpression::identifier(result.clone());
-        let reaches_right = match operator {
-            BinaryOperator::And => read.clone(),
-            _ => GoExpression::unary(GoUnaryOperator::Not, read.clone()),
+        let reaches_right = if *operator == BinaryOperator::And {
+            read.clone()
+        } else {
+            GoExpression::unary(GoUnaryOperator::Not, read.clone())
         };
         statements.push(assign(read, right_value));
         setup.push(define(result.clone(), left_value));
@@ -268,20 +269,33 @@ pub(in crate::lowering) fn flip_comparison(operator: &BinaryOperator) -> Option<
         BinaryOperator::LessThanOrEqual => Some(BinaryOperator::GreaterThan),
         BinaryOperator::GreaterThan => Some(BinaryOperator::LessThanOrEqual),
         BinaryOperator::GreaterThanOrEqual => Some(BinaryOperator::LessThan),
-        _ => None,
+        BinaryOperator::Addition
+        | BinaryOperator::Subtraction
+        | BinaryOperator::Multiplication
+        | BinaryOperator::Division
+        | BinaryOperator::BitwiseAnd
+        | BinaryOperator::BitwiseOr
+        | BinaryOperator::BitwiseXor
+        | BinaryOperator::BitwiseAndNot
+        | BinaryOperator::ShiftLeft
+        | BinaryOperator::ShiftRight
+        | BinaryOperator::Remainder
+        | BinaryOperator::And
+        | BinaryOperator::Or
+        | BinaryOperator::Pipeline => None,
     }
 }
 
 fn is_literal_expression(expression: &Expression) -> bool {
-    match expression {
-        Expression::Literal { .. } => true,
-        Expression::Unary {
-            operator: UnaryOperator::Negative,
-            expression,
-            ..
-        } => is_literal_expression(expression),
-        _ => false,
+    if let Expression::Unary {
+        operator: UnaryOperator::Negative,
+        expression,
+        ..
+    } = expression
+    {
+        return is_literal_expression(expression);
     }
+    matches!(expression, Expression::Literal { .. })
 }
 
 fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
@@ -349,7 +363,22 @@ fn fold_read(
                 && fold_read(left, name, value, reads)
                 && fold_read(right, name, value, reads)
         }
-        _ => false,
+        GoExpressionNode::Identifier(_)
+        | GoExpressionNode::Qualified { .. }
+        | GoExpressionNode::Type(_)
+        | GoExpressionNode::CompositeLiteral { .. }
+        | GoExpressionNode::Call { .. }
+        | GoExpressionNode::Instantiation { .. }
+        | GoExpressionNode::Index { .. }
+        | GoExpressionNode::Slice { .. }
+        | GoExpressionNode::TypeAssertion { .. }
+        | GoExpressionNode::AddressOf(_)
+        | GoExpressionNode::Dereference(_)
+        | GoExpressionNode::Conversion { .. }
+        | GoExpressionNode::Spread(_)
+        | GoExpressionNode::FunctionLiteral { .. }
+        | GoExpressionNode::Verbatim(_)
+        | GoExpressionNode::Unreachable => false,
     }
 }
 
@@ -371,7 +400,7 @@ fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
 
 impl ConstantSource for PlannerQueries<'_, '_> {
     fn definition(&self, qualified_name: &str) -> Option<&program::Definition> {
-        self.facts.definition(qualified_name)
+        Some(self.facts.definition(qualified_name))
     }
 
     fn local_constant(&self, binding: BindingId) -> Option<Constant> {

@@ -118,7 +118,8 @@ fn free_function_type_parameters<'c>(
 fn impl_generics_match_receiver(facts: &EmitFacts<'_>, ctx: &ImplContext<'_>) -> bool {
     facts
         .definition(&ctx.qualified_type)
-        .and_then(|definition| definition.body.generics())
+        .body
+        .generics()
         .is_some_and(|receiver_generics| receiver_generics.len() == ctx.generics.len())
         && type_args_match_params(
             ctx.ty.get_type_params().unwrap_or_default(),

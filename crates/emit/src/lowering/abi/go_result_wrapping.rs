@@ -214,7 +214,7 @@ impl<'l> GoResultForm<'l> {
 
 struct PairBranches<'a> {
     sink: ResolvedSink,
-    type_params: GoType,
+    type_params: Option<GoType>,
     error: GoExpression,
     payload: GoExpression,
     changes: Option<&'a PayloadLayoutChanges>,
@@ -522,7 +522,7 @@ impl Planner<'_> {
         &mut self,
         sink: &ResolvedSink,
         constructor: &str,
-        type_params: GoType,
+        type_params: Option<GoType>,
         values: Vec<(GoExpression, Option<&LayoutChange>)>,
     ) -> LoweredBlock {
         let mut statements = Vec::new();
@@ -601,7 +601,7 @@ impl Planner<'_> {
         let inner_ty_str = payload.go_type(&self.queries());
         let value = prelude_call(
             "OptionFromCommaOk",
-            GoType::type_argument(&inner_ty_str),
+            Some(GoType::type_argument(&inner_ty_str)),
             vec![
                 raw(),
                 GoExpression::binary(
@@ -651,7 +651,7 @@ impl Planner<'_> {
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &option_ty_str, "option");
 
-        let type_params = GoType::type_argument(&inner_ty_str);
+        let type_params = Some(GoType::type_argument(&inner_ty_str));
         let some_wrapper = prelude_call(
             fallible.ok_constructor(),
             type_params.clone(),
@@ -782,7 +782,7 @@ fn nullable_option_nil_guard(facts: &EmitFacts<'_>, option_ty: &Type) -> Option<
 }
 
 pub(in crate::lowering) fn option_nil_guard(facts: &EmitFacts<'_>, option_ty: &Type) -> NilGuard {
-    nullable_option_nil_guard(facts, option_ty).unwrap_or(NilGuard::Pointer)
+    nullable_option_nil_guard(facts, option_ty).expect("a nullable Option has a nil guard")
 }
 
 impl PlannerQueries<'_, '_> {
@@ -801,7 +801,16 @@ impl PlannerQueries<'_, '_> {
             ValueLayout::NullableOption { option_type, .. } => {
                 Some(option_nil_guard(self.facts, option_type))
             }
-            _ => None,
+            ValueLayout::Plain(_)
+            | ValueLayout::Fallible { .. }
+            | ValueLayout::TaggedOption { .. }
+            | ValueLayout::Reference { .. }
+            | ValueLayout::Slice { .. }
+            | ValueLayout::Map { .. }
+            | ValueLayout::Array { .. }
+            | ValueLayout::Function { .. }
+            | ValueLayout::Tuple { .. }
+            | ValueLayout::Named { .. } => None,
         }
     }
 
@@ -817,7 +826,9 @@ impl PlannerQueries<'_, '_> {
                 Some(NilGuard::Sentinel(*value))
             }
             LoweredReturnAbi::Option(_) => nullable_option_nil_guard(self.facts, result_ty),
-            _ => None,
+            LoweredReturnAbi::BareError
+            | LoweredReturnAbi::Partial { .. }
+            | LoweredReturnAbi::Tuple { .. } => None,
         }
     }
 
@@ -893,7 +904,7 @@ impl PlannerQueries<'_, '_> {
         Ok(GoExpression::pure_call(
             GoExpression::instantiation(
                 GoExpression::generated(GeneratedPackage::Prelude, "OptionFromCommaOk"),
-                GoType::type_argument(&payload.go_type(self)),
+                Some(GoType::type_argument(&payload.go_type(self))),
             ),
             vec![call],
         ))
@@ -908,7 +919,7 @@ impl PlannerQueries<'_, '_> {
         let nil = option_nil_guard(self.facts, option_ty).nil_condition(value.clone());
         prelude_call(
             "OptionFromNilable",
-            GoType::type_argument(&payload.go_type(self)),
+            Some(GoType::type_argument(&payload.go_type(self))),
             vec![value, nil],
         )
     }

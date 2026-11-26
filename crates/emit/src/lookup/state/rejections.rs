@@ -21,7 +21,10 @@ impl Rejections {
     }
 
     pub(crate) fn reject(&self, key: &str, build: impl FnOnce(&Span) -> LisetteDiagnostic) {
-        let span = self.focus.get().unwrap_or_else(Span::dummy);
+        let span = self
+            .focus
+            .get()
+            .expect("a rejection happens inside a focused source span");
         let mut seen = self.seen.borrow_mut();
         if seen
             .iter()

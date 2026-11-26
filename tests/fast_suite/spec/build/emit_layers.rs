@@ -406,11 +406,14 @@ fn emit_types_get_callable_methods_only_from_their_own_module() {
 }
 
 #[test]
-fn emit_exempts_only_lookup_facts_from_disallowed_methods() {
+fn emit_exempts_only_owner_modules_from_disallowed_methods() {
     let files = source_files("crates/emit/src");
     let mut failures = Vec::new();
     for (path, text) in &files {
-        if module_of(&file_segments(path)).as_deref() == Some("lookup/facts") {
+        if matches!(
+            layer_of(&file_segments(path)).as_deref(),
+            Some("lookup/facts" | "lowering/value_plans")
+        ) {
             continue;
         }
         for (index, line) in text.lines().enumerate() {
@@ -421,7 +424,7 @@ fn emit_exempts_only_lookup_facts_from_disallowed_methods() {
     }
     assert!(
         failures.is_empty(),
-        "reduce types through an `EmitFacts` query in `lookup/facts` instead of exempting code from `disallowed_methods`:\n{}",
+        "go through the owner in `lookup/facts` or `lowering/value_plans` instead of exempting code from `disallowed_methods`:\n{}",
         failures.join("\n")
     );
 }

@@ -7,8 +7,9 @@ disallowed-methods = [
   { path = "lisette_syntax::types::peel_alias", reason = "reduce types through an EmitFacts query" },
   { path = "lisette_syntax::types::Type::strip_refs", reason = "reduce types through an EmitFacts query" },
   { path = "lisette_syntax::types::receiver_shape", reason = "reduce types through an EmitFacts query" },
-  { path = "lisette_emit::lookup::facts::emit_facts::EmitFacts::peel_alias", reason = "reduce types through an EmitFacts query" },
-  { path = "lisette_emit::lookup::facts::emit_facts::EmitFacts::receiver_shape", reason = "reduce types through an EmitFacts query" },
   { path = "lisette_syntax::types::peel_underlying", reason = "reduce types through an EmitFacts query" },
-  { path = "lisette_emit::lookup::facts::emit_facts::EmitFacts::peel_underlying", reason = "reduce types through an EmitFacts query" },
+  { path = "lisette_syntax::types::Type::get_function_ret", reason = "read the signature with Type::as_function_type, which unwraps Forall, and expect a function where the checker gives one" },
+  { path = "lisette_syntax::types::Type::get_function_params", reason = "read the signature with Type::as_function_type, which unwraps Forall, and expect a function where the checker gives one" },
+  { path = "lisette_emit::target::ir::values::GoExpression::unreachable", reason = "build a plan that does not fall through with ValuePlan::diverging" },
+  { path = "lisette_syntax::ast::Span::dummy", reason = "a rejection or a diagnostic takes the span of the source it reports, so expect the span" },
 ]

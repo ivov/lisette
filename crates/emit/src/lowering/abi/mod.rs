@@ -13,30 +13,27 @@ pub(in crate::lowering) mod layout_change;
 pub(in crate::lowering) mod slot_coercion;
 
 use crate::Planner;
+use crate::lookup::facts::callables::CallableDeclaration;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::return_abi_rules::{
     function_return_abi, interface_method_return_abi, method_return_abi, slot_return_abi,
 };
 use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lookup::state::enclosing::ReturnContext;
-use crate::lowering::calls::call_plan::{
-    CallableDeclaration, CallableOrigin, FunctionLayoutChange,
-};
+use crate::lowering::calls::call_plan::{CallableOrigin, FunctionLayoutChange};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::prelude::prelude_constructor;
 use coercion_plan::CoercionPlan;
 use syntax::ast::Expression;
 use syntax::program::{
-    CallOperation, CheckedCallee, Definition, GoHint, Method, NativeTypeKind, SlotOrigin,
-    is_go_import,
+    CallOperation, CheckedCallee, GoHint, NativeTypeKind, SlotOrigin, is_go_import,
 };
-use syntax::types::Type;
+use syntax::types::{FunctionType, Type};
 
 #[derive(Clone, Copy)]
 pub(in crate::lowering) enum ReturnSlot<'a> {
     Function,
     Method,
-    InterfaceMethod { name: &'a str, method: &'a Method },
     FunctionValue(SlotOrigin),
     FunctionExpression(ExpressionContext<'a>),
     Go { hints: &'a [GoHint] },
@@ -45,8 +42,8 @@ pub(in crate::lowering) enum ReturnSlot<'a> {
 pub(in crate::lowering) struct CalleeSignature<'s, 'a> {
     pub(in crate::lowering) callee: &'s Expression,
     pub(in crate::lowering) origin: &'s CallableOrigin<'a>,
-    pub(in crate::lowering) id: Option<&'s str>,
-    pub(in crate::lowering) declaration: Option<CallableDeclaration<'a>>,
+    pub(in crate::lowering) named: Option<(&'s str, CallableDeclaration<'a>)>,
+    pub(in crate::lowering) function: &'s FunctionType,
     pub(in crate::lowering) declared_return: Option<&'s Type>,
     pub(in crate::lowering) return_type: &'s Type,
 }
@@ -108,9 +105,6 @@ pub(in crate::lowering) fn return_abi(
     match slot {
         ReturnSlot::Function => function_return_abi(facts, return_ty),
         ReturnSlot::Method => method_return_abi(facts, return_ty),
-        ReturnSlot::InterfaceMethod { name, method } => {
-            interface_method_return_abi(facts, return_ty, name, method)
-        }
         ReturnSlot::FunctionValue(origin) => slot_return_abi(facts, return_ty, origin),
         ReturnSlot::FunctionExpression(ctx) => {
             if ctx.forces_tagged_go_function()
@@ -122,11 +116,12 @@ pub(in crate::lowering) fn return_abi(
                 slot_return_abi(facts, return_ty, ctx.function_slot_origin())
             }
         }
-        ReturnSlot::Go { hints } => go_return_abi(return_ty, hints, |id| facts.definition(id))
-            .map_or_else(
+        ReturnSlot::Go { hints } => {
+            go_return_abi(return_ty, hints, |id| Some(facts.definition(id))).map_or_else(
                 || CallableReturnAbi::unlowered(return_ty),
                 CallableReturnAbi::Lowered,
-            ),
+            )
+        }
     }
 }
 
@@ -178,28 +173,15 @@ impl PlannerQueries<'_, '_> {
             return None;
         }
         if let Some(requirement) = self.go_bound_requirement(signature.callee) {
-            let declared_return = requirement.method.ty.get_function_ret()?;
+            let declared_return = &requirement.method.ty.as_function_type()?.return_type;
             let abi = requirement_go_return_abi(self.facts, &requirement, declared_return);
             return abi.is_lowered().then_some(abi);
         }
-        let id = signature.id.filter(|id| is_go_import(id))?;
-        if signature
-            .declaration
-            .is_some_and(CallableDeclaration::is_type_definition)
-        {
+        let (id, declaration) = signature.named.filter(|(id, _)| is_go_import(id))?;
+        if declaration.is_type_definition() {
             return Some(CallableReturnAbi::Value);
         }
-        let hints = self
-            .facts
-            .definition(id)
-            .map(Definition::go_hints)
-            .or_else(|| {
-                let (owner, name) = id.rsplit_once('.')?;
-                self.facts
-                    .method(owner, name)
-                    .map(|method| method.go_hints.as_slice())
-            })
-            .unwrap_or_default();
+        let hints = declaration.go_hints();
 
         Some(go_callable_return_abi(
             self.facts,
@@ -214,15 +196,8 @@ impl PlannerQueries<'_, '_> {
         signature: &CalleeSignature<'_, '_>,
     ) -> Option<CallableReturnAbi> {
         let callee = signature.callee;
-        let callee_ty = callee.get_type();
-        let function = self
-            .facts
-            .resolve_to_function_type(callee_ty.unwrap_forall())
-            .unwrap_or_else(|| callee_ty.unwrap_forall().clone());
-        let Type::Function(function) = function else {
-            return None;
-        };
-        if is_prelude_dispatch(signature.id, signature.origin)
+        let function = signature.function;
+        if is_prelude_dispatch(signature.named.map(|(id, _)| id), signature.origin)
             || prelude_constructor(callee).is_some()
         {
             return None;
@@ -233,15 +208,7 @@ impl PlannerQueries<'_, '_> {
             .function_value()
             .and_then(CheckedCallee::interface_requirement)
         {
-            let method = &requirement.method;
-            return Some(return_abi(
-                self.facts,
-                method.ty.get_function_ret().unwrap_or(&Type::Never),
-                ReturnSlot::InterfaceMethod {
-                    name: &method.source_name,
-                    method,
-                },
-            ));
+            return Some(interface_method_return_abi(self.facts, &requirement.method));
         }
         if self.member_spelling(callee) == MemberSpelling::TaggedCounterpart {
             return Some(CallableReturnAbi::Value);
@@ -249,19 +216,18 @@ impl PlannerQueries<'_, '_> {
         let return_ty = signature
             .declared_return
             .unwrap_or(function.return_type.as_ref());
-        let slot = match signature.declaration {
-            Some(CallableDeclaration::Method(_))
-                if signature
-                    .id
-                    .and_then(|id| id.rsplit_once('.'))
+        let slot = match signature.named {
+            Some((id, CallableDeclaration::Method(_)))
+                if id
+                    .rsplit_once('.')
                     .is_none_or(|(owner, name)| self.facts.emits_go_method(owner, name)) =>
             {
                 ReturnSlot::Method
             }
-            Some(declaration) if !declaration.is_type_definition() => ReturnSlot::Function,
+            Some((_, declaration)) if !declaration.is_type_definition() => ReturnSlot::Function,
             _ => ReturnSlot::FunctionValue(
                 self.facts
-                    .function_type_origin(&callee_ty, SlotOrigin::Lisette),
+                    .function_type_origin(&callee.get_type(), SlotOrigin::Lisette),
             ),
         };
 

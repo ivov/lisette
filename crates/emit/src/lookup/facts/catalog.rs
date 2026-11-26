@@ -1,3 +1,4 @@
+use crate::lookup::facts::emit_facts::known_definition;
 use rustc_hash::FxHashMap;
 use syntax::program::{Definition, DefinitionBody, ValueKind};
 use syntax::program::{GoHint, is_go_import};
@@ -103,7 +104,7 @@ impl GoAbiCatalog {
                 origin: SlotOrigin::of_go_declaration(
                     SlotOrigin::GoParameter,
                     &parameter.ty,
-                    |id| definitions.get(id),
+                    |id| Some(known_definition(definitions, id)),
                 ),
                 declared_type: parameter.ty.clone(),
             })
@@ -113,12 +114,14 @@ impl GoAbiCatalog {
             origin: SlotOrigin::of_go_declaration(
                 SlotOrigin::GoReturn,
                 &function.return_type,
-                |id| definitions.get(id),
+                |id| Some(known_definition(definitions, id)),
             ),
             declared_type: (*function.return_type).clone(),
         };
 
-        let return_abi = go_return_abi(&function.return_type, go_hints, |id| definitions.get(id));
+        let return_abi = go_return_abi(&function.return_type, go_hints, |id| {
+            Some(known_definition(definitions, id))
+        });
         self.callables.insert(
             qualified_name.to_string(),
             GoCallableSlots {
@@ -144,7 +147,7 @@ impl GoAbiCatalog {
                 field.name.to_string(),
                 GoSlotDescriptor {
                     origin: SlotOrigin::of_go_declaration(SlotOrigin::GoField, &field.ty, |id| {
-                        definitions.get(id)
+                        Some(known_definition(definitions, id))
                     }),
                     declared_type: field.ty.clone(),
                 },
@@ -173,7 +176,7 @@ impl GoAbiCatalog {
             qualified_name.to_string(),
             GoSlotDescriptor {
                 origin: SlotOrigin::of_go_declaration(SlotOrigin::GoField, &definition.ty, |id| {
-                    definitions.get(id)
+                    Some(known_definition(definitions, id))
                 }),
                 declared_type: definition.ty.clone(),
             },

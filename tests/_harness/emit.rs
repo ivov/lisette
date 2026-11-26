@@ -1,6 +1,5 @@
 use diagnostics::LisetteDiagnostic;
 use emit::{EmitOptions, OutputFile, Planner};
-use rustc_hash::FxHashMap;
 use syntax::program::{EmitInput, File};
 
 use super::pipeline::TestPipeline;
@@ -142,7 +141,11 @@ fn plan_inner(
 
     let mut input = EmitInput {
         checked_bodies: result.checked_bodies,
-        files: FxHashMap::from_iter([(0, file)]),
+        files: result
+            .typedef_files
+            .into_iter()
+            .chain([(0, file)])
+            .collect(),
         definitions: result.definitions,
         entry_package_id: result.package_id,
         unused_imports: result.unused_imports,

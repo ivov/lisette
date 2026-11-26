@@ -5,9 +5,9 @@ use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::{self, GoExport};
-use crate::target::names::packages::PackageUse;
-use syntax::program::{self, Definition, PRELUDE_PACKAGE_ID, is_prelude_symbol};
-use syntax::types::{Type, unqualified_name};
+use crate::target::names::packages::{PackageOrigin, PackageUse};
+use syntax::program::{self, PRELUDE_PACKAGE_ID, is_go_import, is_prelude_symbol};
+use syntax::types::unqualified_name;
 
 impl Planner<'_> {
     pub(in crate::lowering) fn canonical_package(&self, package: &str) -> String {
@@ -27,15 +27,7 @@ impl PlannerQueries<'_, '_> {
         let name = &symbol[package.len() + 1..];
         if let Some((owner, method)) = name.rsplit_once('.') {
             let owner_id = format!("{package}.{owner}");
-            let export = match self.facts.method(&owner_id, method) {
-                Some(method) => GoExport::from_visibility(method.visibility),
-                None => self
-                    .facts
-                    .definition(&format!("{owner_id}.{method}"))
-                    .map_or(GoExport::Unexported, |definition| {
-                        GoExport::from_visibility(definition.visibility)
-                    }),
-            };
+            let export = GoExport::from_visibility(*self.facts.callable(symbol).visibility());
 
             let mut expression = self.qualify_method_call(&owner_id, method, export);
             if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
@@ -47,18 +39,15 @@ impl PlannerQueries<'_, '_> {
             return GoExpression::external_name(name.to_string());
         }
         let definition = self.facts.definition(symbol);
-        let is_const = definition.is_some_and(Definition::is_const);
+        let is_const = definition.is_const();
         if self.facts.is_current_package(package) {
             let go_name = if is_const {
                 go_name::screaming_snake_to_camel(name)
             } else {
-                let export = match definition {
-                    Some(definition)
-                        if matches!(definition.ty.unwrap_forall(), Type::Function(_)) =>
-                    {
-                        GoExport::from_visibility(definition.visibility)
-                    }
-                    _ => GoExport::Unexported,
+                let export = if definition.ty.as_function_type().is_some() {
+                    GoExport::from_visibility(definition.visibility)
+                } else {
+                    GoExport::Unexported
                 };
 
                 self.names.free_function_go_name(name, export)
@@ -95,7 +84,12 @@ impl PlannerQueries<'_, '_> {
             qualifier
         };
 
-        PackageUse::new(path, qualifier)
+        let origin = if is_go_import(package) {
+            PackageOrigin::GoImport
+        } else {
+            PackageOrigin::Lisette
+        };
+        PackageUse::new(path, qualifier, origin)
     }
 
     pub(in crate::lowering) fn package_member_reference(
@@ -157,7 +151,7 @@ impl PlannerQueries<'_, '_> {
         } else {
             self.facts
                 .package_for_qualified_name(enum_id)
-                .unwrap_or(enum_id)
+                .expect("an enum symbol is package-qualified")
         };
 
         self.package_member_reference(enum_package, tag_constant)

@@ -15,22 +15,43 @@ impl PackageId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum PackageOrigin {
+    Generated,
+    GoImport,
+    Lisette,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct PackageUse {
     package: PackageId,
     qualifier: String,
+    origin: PackageOrigin,
 }
 
 impl PackageUse {
-    pub(crate) fn new(path: impl Into<String>, qualifier: impl Into<String>) -> Self {
+    pub(crate) fn new(
+        path: impl Into<String>,
+        qualifier: impl Into<String>,
+        origin: PackageOrigin,
+    ) -> Self {
         Self {
             package: PackageId::new(path),
             qualifier: qualifier.into(),
+            origin,
         }
     }
 
     pub(crate) fn generated(package: GeneratedPackage) -> Self {
-        Self::new(package.path(), package.qualifier())
+        Self::new(
+            package.path(),
+            package.qualifier(),
+            PackageOrigin::Generated,
+        )
+    }
+
+    pub(crate) fn origin(&self) -> PackageOrigin {
+        self.origin
     }
 
     pub(crate) fn package(&self) -> &PackageId {

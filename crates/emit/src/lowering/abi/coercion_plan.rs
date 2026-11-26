@@ -36,6 +36,7 @@ pub(in crate::lowering) enum CoercionPlan {
         slot_types: Vec<Type>,
         elements: Vec<CoercionPlan>,
     },
+    Then(Box<CoercionPlan>, Box<CoercionPlan>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,9 +154,13 @@ impl CoercionPlan {
     ) -> Self {
         let facts = &planner.facts;
         match adaptation {
-            Adaptation::Interface(conversion) => planner
-                .interface_adapter(conversion)
-                .map_or_else(|| Self::internal(planner, from, to), Self::WrapAsInterface),
+            Adaptation::Interface(conversion) => {
+                match (planner.interface_adapter(conversion), slot) {
+                    (Some(adapter), _) => Self::WrapAsInterface(adapter),
+                    (None, Some(_)) => Self::Identity,
+                    (None, None) => Self::internal(planner, from, to),
+                }
+            }
             Adaptation::Newtype => Self::WrapNewtype { ty: to.clone() },
             Adaptation::ImplicitSome { payload } => {
                 let payload_type = facts.ok_payload(to);
@@ -183,7 +188,24 @@ impl CoercionPlan {
             Adaptation::DivergingFunction => {
                 Self::adapted_diverging_function(planner, from, to, slot)
             }
-            _ => Self::internal(planner, from, to),
+            Adaptation::Identity | Adaptation::Delegated { .. } | Adaptation::Receiver(_) => {
+                Self::internal(planner, from, to)
+            }
+        }
+    }
+
+    pub(in crate::lowering) fn into_go_slot(
+        planner: &PlannerQueries<'_, '_>,
+        adaptation: &Adaptation,
+        (from, to): (&Type, &Type),
+        (source, target): (&ValueLayout, &ValueLayout),
+    ) -> Self {
+        let change = Self::change(planner, source, target);
+        let adapted = Self::adapted(planner, adaptation, from, to, Some(target));
+        match (change.is_identity(), adapted.is_identity()) {
+            (true, _) => adapted,
+            (_, true) => change,
+            _ => Self::Then(Box::new(change), Box::new(adapted)),
         }
     }
 
@@ -241,7 +263,14 @@ impl CoercionPlan {
             Adaptation::Identity => planner
                 .widening_element_plan(from, to)
                 .unwrap_or(Self::Identity),
-            _ => Self::adapted(planner, adaptation, from, to, None),
+            Adaptation::Delegated { .. }
+            | Adaptation::Interface(_)
+            | Adaptation::ImplicitSome { .. }
+            | Adaptation::Newtype
+            | Adaptation::Tuple(_)
+            | Adaptation::Array(_)
+            | Adaptation::DivergingFunction
+            | Adaptation::Receiver(_) => Self::adapted(planner, adaptation, from, to, None),
         }
     }
 
@@ -252,10 +281,16 @@ impl CoercionPlan {
     ) -> Self {
         if from == to {
             Self::Identity
-        } else if planner.facts.is_interface_or_unknown(to)
-            && let Some((stored, lisette)) = planner.any_slot_function_layouts(from)
-        {
-            Self::change(planner, &lisette, &stored)
+        } else if planner.facts.is_interface_or_unknown(to) {
+            if planner.facts.resolve_to_function_type(from).is_some() {
+                Self::change(
+                    planner,
+                    &planner.facts.value_layout(from, SlotOrigin::Lisette),
+                    &planner.facts.value_layout(to, SlotOrigin::Lisette),
+                )
+            } else {
+                Self::Identity
+            }
         } else if let Some(rebuild) = planner.aggregate_rebuild(from, to) {
             rebuild
         } else {
@@ -310,8 +345,9 @@ impl CoercionPlan {
             } => {
                 let (payload_setup, payload) = payload.lower(planner, value);
                 statements.extend(payload_setup);
-                let type_arguments =
-                    GoType::type_argument(&planner.queries().go_type(&payload_type));
+                let type_arguments = Some(GoType::type_argument(
+                    &planner.queries().go_type(&payload_type),
+                ));
                 prelude_call(
                     option_variant("Some").constructor,
                     type_arguments,
@@ -327,6 +363,13 @@ impl CoercionPlan {
                 slot_types,
                 elements,
             } => planner.plan_tuple_rebuild(&mut statements, value, &slot_types, elements),
+            Self::Then(first, then) => {
+                let (first_setup, value) = first.lower(planner, value);
+                statements.extend(first_setup);
+                let (then_setup, value) = then.lower(planner, value);
+                statements.extend(then_setup);
+                value
+            }
         };
 
         (statements, value)
@@ -407,7 +450,7 @@ impl PlannerQueries<'_, '_> {
             return LayoutChange::Identity;
         }
 
-        use ValueLayout::{Function, Named, NullableOption, PointerOption, TaggedOption};
+        use ValueLayout::{Function, Named, NullableOption, Plain, PointerOption, TaggedOption};
 
         if let (
             Function {
@@ -448,6 +491,15 @@ impl PlannerQueries<'_, '_> {
                     ..
                 },
             ) => self.resolve_layout_change(source, target_underlying),
+            (
+                Function {
+                    function_type,
+                    layout,
+                },
+                Plain(slot),
+            ) if self.facts.is_interface_or_unknown(slot) => {
+                self.any_slot_layout_change(function_type, layout)
+            }
             _ => self.container_layout_change(source, target),
         }
     }
@@ -543,7 +595,32 @@ impl PlannerQueries<'_, '_> {
                 Some((source_key.as_ref(), target_key.as_ref())),
                 (source_value.as_ref(), target_value.as_ref()),
             ),
-            _ => LayoutChange::Identity,
+            (_, ValueLayout::Plain(target_type))
+                if self.facts.is_interface_or_unknown(target_type) =>
+            {
+                LayoutChange::Identity
+            }
+            _ if source.go_type(self) == target.go_type(self) => LayoutChange::Identity,
+            _ => panic!("internal error: no layout rule changes {source:?} into {target:?}"),
+        }
+    }
+
+    fn any_slot_layout_change(
+        &self,
+        function_type: &Type,
+        source: &FunctionLayout,
+    ) -> LayoutChange {
+        let layout = self.facts.value_layout(function_type, SlotOrigin::GoAny);
+        let ValueLayout::Function { layout: stored, .. } = layout.underlying() else {
+            panic!("internal error: a function type has the layout {layout:?}")
+        };
+        if source.same_representation(stored) {
+            LayoutChange::Identity
+        } else {
+            LayoutChange::Function {
+                source: Box::new(source.clone()),
+                target: Box::new(stored.clone()),
+            }
         }
     }
 
@@ -646,7 +723,7 @@ impl PlannerQueries<'_, '_> {
                 slot: OptionSlot::Pointer,
                 payload: Box::new(self.resolve_layout_change(source_payload, target_payload)),
             },
-            _ => LayoutChange::Identity,
+            _ => panic!("internal error: no option layout rule changes {source:?} into {target:?}"),
         }
     }
 

@@ -245,7 +245,7 @@ impl Planner<'_> {
         sink: FoundSink<'_>,
     ) -> Vec<Statement> {
         self.lower_slice_loop(&search.call, search.shape, SliceLoopTarget::Found(sink))
-            .setup
+            .0
     }
 
     pub(super) fn try_lower_slice_loop(
@@ -254,7 +254,12 @@ impl Planner<'_> {
         target: SliceLoopTarget<'_>,
     ) -> Option<NativeCallResult> {
         let shape = self.queries().slice_loop_shape(ctx)?;
-        Some(self.lower_slice_loop(ctx, shape, target))
+        let (setup, result) = self.lower_slice_loop(ctx, shape, target);
+        let result = result.expect("a slice loop with a value target names its result");
+        Some(NativeCallResult::new(
+            setup,
+            GoExpression::identifier(result),
+        ))
     }
 
     fn lower_slice_loop(
@@ -262,7 +267,7 @@ impl Planner<'_> {
         ctx: &NativeCallContext,
         shape: SliceLoopShape<'_>,
         target: SliceLoopTarget<'_>,
-    ) -> NativeCallResult {
+    ) -> (Vec<Statement>, Option<GoIdentifier>) {
         let SliceLoopShape {
             receiver,
             kind,
@@ -277,7 +282,7 @@ impl Planner<'_> {
             callback,
         } = self.sequence_slice_loop_operands(ctx, receiver, kind, callback, &result_ty);
 
-        let planned = self.planned_loop(target, kind, &callback, receiver);
+        let planned = self.planned_loop(target, kind, &callback);
         self.queries()
             .push_slice_loop_declaration(&mut setup, &planned, &element_ty, &source);
 
@@ -291,11 +296,7 @@ impl Planner<'_> {
             body_statements,
         ));
 
-        let result = planned
-            .result()
-            .cloned()
-            .map_or_else(GoExpression::empty, GoExpression::identifier);
-        NativeCallResult::new(setup, result)
+        (setup, planned.result().cloned())
     }
 
     fn lower_slice_loop_iteration(
@@ -448,11 +449,10 @@ impl Planner<'_> {
         target: SliceLoopTarget<'t>,
         kind: SliceLoop<(GoExpression, Option<GoType>)>,
         callback: &LoopCallback<'_, GoExpression>,
-        receiver: &Expression,
     ) -> PlannedLoop<'t> {
         match target {
             SliceLoopTarget::Found(sink) => PlannedLoop::FindInto(sink),
-            target => {
+            target @ SliceLoopTarget::Fresh | target @ SliceLoopTarget::Into(_) => {
                 let result = match (target, callback) {
                     (SliceLoopTarget::Into(name), _) => name.clone(),
                     (
@@ -461,7 +461,7 @@ impl Planner<'_> {
                             accumulator: Some(accumulator),
                             ..
                         }),
-                    ) => self.accumulator_slot_name(*accumulator, receiver),
+                    ) => self.claim_go_name(accumulator.source_name()),
                     _ => self.fresh_local("result"),
                 };
 
@@ -520,22 +520,6 @@ impl Planner<'_> {
         operand
     }
 
-    fn accumulator_slot_name(
-        &mut self,
-        param: LoopParam<'_>,
-        receiver: &Expression,
-    ) -> GoIdentifier {
-        let name = param.source_name();
-        if self
-            .scope
-            .expression_reads_go_name(receiver, &name.preferred())
-        {
-            self.fresh_local(&name)
-        } else {
-            self.claim_declared_go_name(param.binding.as_slice(), &name)
-        }
-    }
-
     fn element_loop_name(
         &mut self,
         planned: &PlannedLoop<'_>,
@@ -572,10 +556,10 @@ impl Planner<'_> {
                 );
                 name
             }
-            None => self.claim_declared_binding(
+            None => self.claim_binding(
                 param.identifier,
                 param.binding.as_slice(),
-                &param.source_name(),
+                param.source_name(),
             ),
         }
     }
@@ -654,7 +638,7 @@ impl Planner<'_> {
             LoweredCallback::Body(body) => {
                 let place = PlacePlan::Assign {
                     local: slot,
-                    target_ty: Some(slot_ty),
+                    target_ty: slot_ty,
                 };
                 self.lower_block_to_place(body, &place).statements
             }
@@ -711,7 +695,7 @@ fn found_some_statements(
             local(result),
             prelude_call(
                 option_variant("Some").constructor,
-                GoType::type_argument(payload),
+                Some(GoType::type_argument(payload)),
                 vec![local(element_name)],
             ),
         ),
@@ -793,12 +777,12 @@ impl PlannerQueries<'_, '_> {
             ("all", [callback]) => (SliceLoop::All, callback),
             _ => return None,
         };
-        let callback = match callback {
-            Expression::Lambda { params, body, .. } => {
-                LoopCallback::Lambda(lambda_callback(&kind, params, body)?)
-            }
-            callee if self.callback_calls_directly(ctx, callee) => LoopCallback::Value(callee),
-            _ => return None,
+        let callback = if let Expression::Lambda { params, body, .. } = callback {
+            LoopCallback::Lambda(lambda_callback(&kind, params, body)?)
+        } else if self.callback_calls_directly(ctx, callback) {
+            LoopCallback::Value(callback)
+        } else {
+            return None;
         };
 
         let element_ty = self.facts.first_type_argument(&receiver.get_type())?;
@@ -870,7 +854,7 @@ impl PlannerQueries<'_, '_> {
                 result.clone(),
                 prelude_call(
                     option_variant("None").constructor,
-                    GoType::type_argument(&self.go_type(payload)),
+                    Some(GoType::type_argument(&self.go_type(payload))),
                     Vec::new(),
                 ),
             ),

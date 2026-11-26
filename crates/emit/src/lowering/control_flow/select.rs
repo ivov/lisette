@@ -2,7 +2,6 @@ use crate::Planner;
 use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lowering::expressions::operand_order::OrderedOperand;
 use crate::lowering::patterns::sites::TypedSubject;
-use crate::lowering::planner::OuterBindings;
 use crate::lowering::statements::placement::unreachable_panic_if_needed;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
@@ -184,7 +183,9 @@ impl Planner<'_> {
     ) -> Vec<SelectArmPlan> {
         let default_body = arms.iter().find_map(|arm| match arm {
             PreparedSelectArm::Default { body, .. } => Some(*body),
-            _ => None,
+            PreparedSelectArm::Receive { .. }
+            | PreparedSelectArm::Send { .. }
+            | PreparedSelectArm::MatchReceive { .. } => None,
         });
 
         let mut arm_plans = Vec::with_capacity(arms.len());
@@ -269,10 +270,8 @@ impl Planner<'_> {
             | SelectArm::MatchReceive {
                 receive_expression, ..
             } => {
-                let capture = match arm {
-                    SelectArm::Receive { binding, .. } => is_some_pattern(binding),
-                    _ => false,
-                };
+                let capture =
+                    matches!(arm, SelectArm::Receive { binding, .. } if is_some_pattern(binding));
                 (
                     self.plan_channel_operand(receive_expression),
                     receive_expression.get_span(),
@@ -339,11 +338,7 @@ impl Planner<'_> {
     }
 
     fn fresh_ok_var(&mut self) -> GoIdentifier {
-        if self.scope.has_binding_for_go_name("ok") || self.queries().shadows_declaration("ok") {
-            self.fresh_local("ok")
-        } else {
-            GoIdentifier::local("ok".to_string(), self.scope.new_local_id())
-        }
+        self.scope.new_local_identifier("ok")
     }
 
     fn lower_ok_check(
@@ -447,14 +442,7 @@ impl Planner<'_> {
             && let Some(go_name) = go_name_for_binding(effective_pattern)
         {
             return self.lower_ok_guard(
-                |this| {
-                    this.claim_block_binding(
-                        identifier,
-                        binding.as_slice(),
-                        &go_name,
-                        OuterBindings::MayShadow,
-                    )
-                },
+                |this| this.claim_binding(identifier, binding.as_slice(), &go_name),
                 None,
                 ctx,
             );
@@ -675,6 +663,7 @@ impl Planner<'_> {
         statements
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn classify_receive_var_pattern(&mut self, pattern: &Pattern) -> (GoIdentifier, bool) {
         match pattern {
             Pattern::WildCard { .. } => (GoIdentifier::blank(), false),
@@ -734,9 +723,10 @@ fn retry_closed_channel(channel: &GoExpression) -> LoweredBlock {
 }
 
 fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
-    match channel.node() {
-        GoExpressionNode::AddressOf(inner) => channel.peeled(inner),
-        _ => GoExpression::dereference(channel),
+    if let GoExpressionNode::AddressOf(inner) = channel.node() {
+        channel.peeled(inner)
+    } else {
+        GoExpression::dereference(channel)
     }
 }
 
@@ -775,8 +765,8 @@ fn is_some_pattern(pattern: &Pattern) -> bool {
 }
 
 fn peel_as_binding(pattern: &Pattern) -> &Pattern {
-    match pattern {
-        Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
-        p => p,
-    }
+    let Pattern::AsBinding { pattern: inner, .. } = pattern else {
+        return pattern;
+    };
+    inner.as_ref()
 }

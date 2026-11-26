@@ -1,6 +1,5 @@
-use std::mem;
-
 use super::name_uses::NameUses;
+use std::mem;
 
 use crate::target::ir::bodies::{
     AssignForm, CompoundKind, Definition, LoweredStatement, SelectArmKind, SelectStatementPlan,
@@ -23,7 +22,7 @@ pub(super) fn inline_return_aliases(statements: &mut Vec<Statement>) {
                 && uses.bindings(alias.name) == 1
                 && !uses.is_written(alias.name)
             {
-                *alias.returned = mem::replace(alias.value, GoExpression::empty());
+                mem::swap(alias.returned, alias.value);
                 list.remove(index);
             }
             index += 1;
@@ -84,19 +83,14 @@ pub(super) fn inline_name_aliases(statements: &mut Vec<Statement>) {
 }
 
 fn alias_define(statement: &LoweredStatement) -> Option<(GoIdentifier, GoIdentifier)> {
-    match statement {
-        LoweredStatement::Define(Definition { names, value }) => {
-            match (names.as_slice(), value.node()) {
-                ([temp], GoExpressionNode::Identifier(source))
-                    if go_name::is_plain_identifier(source) && !temp.refers_to_same(source) =>
-                {
-                    Some((temp.clone(), source.clone()))
-                }
-                _ => None,
-            }
-        }
-        _ => None,
-    }
+    let LoweredStatement::Define(Definition { names, value }) = statement else {
+        return None;
+    };
+    let ([temp], GoExpressionNode::Identifier(source)) = (names.as_slice(), value.node()) else {
+        return None;
+    };
+    (go_name::is_plain_identifier(source) && !temp.refers_to_same(source))
+        .then(|| (temp.clone(), source.clone()))
 }
 
 fn replace_only_read(
@@ -145,7 +139,18 @@ fn replace_only_read(
             SwitchKind::Conditional => false,
         },
         LoweredStatement::Select(plan) => rename_in(select_operands(plan), None, temp, source),
-        _ => false,
+        LoweredStatement::If(_)
+        | LoweredStatement::Loop(_)
+        | LoweredStatement::Block(_)
+        | LoweredStatement::Body(_)
+        | LoweredStatement::Break(_)
+        | LoweredStatement::Continue(_)
+        | LoweredStatement::Const(_)
+        | LoweredStatement::Assign(_)
+        | LoweredStatement::Async { .. }
+        | LoweredStatement::VarDeclaration { .. }
+        | LoweredStatement::Discard { .. }
+        | LoweredStatement::UnreachablePanic => false,
     }
 }
 
@@ -196,9 +201,12 @@ pub(super) fn replace_identifier(
     from: &GoIdentifier,
     to: &GoIdentifier,
 ) {
-    match node {
-        GoExpressionNode::Identifier(name) if name.refers_to_same(from) => *name = to.clone(),
-        _ => node.visit_children_mut(&mut |child| replace_identifier(child, from, to)),
+    if let GoExpressionNode::Identifier(name) = node
+        && name.refers_to_same(from)
+    {
+        *name = to.clone()
+    } else {
+        node.visit_children_mut(&mut |child| replace_identifier(child, from, to))
     }
 }
 
@@ -238,15 +246,35 @@ fn analyze(node: &GoExpressionNode, temp: &GoIdentifier) -> Analysis {
             ordered: true,
         };
     }
+    let temp_id = temp.id().expect("a resolved local has an ID");
     let identity_read = match node {
         GoExpressionNode::AddressOf(operand) | GoExpressionNode::Slice { base: operand, .. } => {
-            operand.mentions_local(temp)
+            operand.mentions_local(temp_id)
         }
-        GoExpressionNode::Call { callee, .. } => match callee.as_ref() {
-            GoExpressionNode::Selector { base, .. } => base.mentions_local(temp),
-            _ => false,
-        },
-        _ => false,
+        GoExpressionNode::Call { callee, .. } => {
+            if let GoExpressionNode::Selector { base, .. } = callee.as_ref() {
+                base.mentions_local(temp_id)
+            } else {
+                false
+            }
+        }
+        GoExpressionNode::Identifier(_)
+        | GoExpressionNode::Qualified { .. }
+        | GoExpressionNode::Literal(_)
+        | GoExpressionNode::Type(_)
+        | GoExpressionNode::CompositeLiteral { .. }
+        | GoExpressionNode::Instantiation { .. }
+        | GoExpressionNode::Selector { .. }
+        | GoExpressionNode::Index { .. }
+        | GoExpressionNode::TypeAssertion { .. }
+        | GoExpressionNode::Unary { .. }
+        | GoExpressionNode::Dereference(_)
+        | GoExpressionNode::Binary { .. }
+        | GoExpressionNode::Conversion { .. }
+        | GoExpressionNode::Spread(_)
+        | GoExpressionNode::FunctionLiteral { .. }
+        | GoExpressionNode::Verbatim(_)
+        | GoExpressionNode::Unreachable => false,
     };
 
     let mut children = Vec::new();

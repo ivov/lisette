@@ -1,6 +1,6 @@
 use crate::target::ir::bodies::{
-    ElseArm, ElseLayout, FlowSummary, IfPlan, LoopHeader, LoopTransfer, LoweredBlock,
-    LoweredStatement, Statement, SwitchStatementPlan,
+    ElseArm, ElseLayout, FlowSummary, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement,
+    Statement, SwitchStatementPlan,
 };
 use crate::target::ir::go_expression::GoExpressionNode;
 use crate::target::ir::values::GoExpression;
@@ -29,7 +29,21 @@ fn last_rendered(statements: &[Statement]) -> Option<Last<'_>> {
                 Some(body) if !body.renders_empty() => Some(Last::InlineElse(body)),
                 _ => Some(Last::Statement(&statement.kind)),
             },
-            kind => Some(Last::Statement(kind)),
+            kind @ LoweredStatement::Loop(_)
+            | kind @ LoweredStatement::Block(_)
+            | kind @ LoweredStatement::Break(_)
+            | kind @ LoweredStatement::Continue(_)
+            | kind @ LoweredStatement::Const(_)
+            | kind @ LoweredStatement::Return(_)
+            | kind @ LoweredStatement::Assign(_)
+            | kind @ LoweredStatement::Async { .. }
+            | kind @ LoweredStatement::Select(_)
+            | kind @ LoweredStatement::Switch(_)
+            | kind @ LoweredStatement::Define(_)
+            | kind @ LoweredStatement::VarDeclaration { .. }
+            | kind @ LoweredStatement::Discard { .. }
+            | kind @ LoweredStatement::ExpressionStatement { .. }
+            | kind @ LoweredStatement::UnreachablePanic => Some(Last::Statement(kind)),
         };
     }
     None
@@ -42,7 +56,7 @@ fn inline_else(plan: &IfPlan) -> Option<&LoweredBlock> {
             layout: ElseLayout::Inline,
         } => Some(body),
         ElseArm::ElseIf(next) => inline_else(next),
-        _ => None,
+        ElseArm::None | ElseArm::Else { .. } => None,
     }
 }
 
@@ -55,12 +69,7 @@ fn statement_terminates(statement: &LoweredStatement) -> bool {
         }
         LoweredStatement::If(plan) => if_terminates(plan),
         LoweredStatement::Loop(plan) => {
-            let unconditional = match &plan.header {
-                LoopHeader::Infinite => true,
-                LoopHeader::Counted { condition, .. } => condition.is_none(),
-                LoopHeader::While(_) | LoopHeader::Range { .. } => false,
-            };
-            unconditional
+            !plan.header.has_condition()
                 && !breaks_out(
                     &plan.body.statements,
                     plan.kind.label(),
@@ -73,7 +82,14 @@ fn statement_terminates(statement: &LoweredStatement) -> bool {
             list_terminates(&body.statements)
                 && !breaks_out(&body.statements, None, UnlabeledBreak::Exits)
         }),
-        _ => false,
+        LoweredStatement::Break(_)
+        | LoweredStatement::Continue(_)
+        | LoweredStatement::Const(_)
+        | LoweredStatement::Assign(_)
+        | LoweredStatement::Async { .. }
+        | LoweredStatement::Define(_)
+        | LoweredStatement::VarDeclaration { .. }
+        | LoweredStatement::Discard { .. } => false,
     }
 }
 
@@ -142,7 +158,17 @@ fn statement_breaks_out(
                 || plan.default.as_ref().is_some_and(nested)
         }
         LoweredStatement::Select(plan) => plan.arms.iter().any(|arm| nested(arm.body())),
-        _ => false,
+        LoweredStatement::Break(_)
+        | LoweredStatement::Continue(_)
+        | LoweredStatement::Const(_)
+        | LoweredStatement::Return(_)
+        | LoweredStatement::Assign(_)
+        | LoweredStatement::Async { .. }
+        | LoweredStatement::Define(_)
+        | LoweredStatement::VarDeclaration { .. }
+        | LoweredStatement::Discard { .. }
+        | LoweredStatement::ExpressionStatement { .. }
+        | LoweredStatement::UnreachablePanic => false,
     }
 }
 
@@ -170,7 +196,21 @@ impl LoweredStatement {
         match self {
             Self::If(plan) => plan.terminate_go_tail(),
             Self::Body(body) => terminate_go_path(&mut body.statements),
-            _ => {}
+            Self::Loop(_)
+            | Self::Block(_)
+            | Self::Break(_)
+            | Self::Continue(_)
+            | Self::Const(_)
+            | Self::Return(_)
+            | Self::Assign(_)
+            | Self::Async { .. }
+            | Self::Select(_)
+            | Self::Switch(_)
+            | Self::Define(_)
+            | Self::VarDeclaration { .. }
+            | Self::Discard { .. }
+            | Self::ExpressionStatement { .. }
+            | Self::UnreachablePanic => {}
         }
     }
 }

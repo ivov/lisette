@@ -379,10 +379,7 @@ impl Planner<'_> {
         enum_id: Option<&str>,
     ) -> GoType {
         if let Type::Nominal { id, .. } = ty
-            && self
-                .facts
-                .definition(id)
-                .is_some_and(|definition| definition.is_anon_struct())
+            && self.facts.definition(id).is_anon_struct()
         {
             return self.queries().go_type(ty);
         }
@@ -399,18 +396,21 @@ impl Planner<'_> {
             if let Some((package, type_name)) = qualified
                 && !self.facts.is_current_package(package)
             {
-                let type_args = if literal.via_alias {
-                    GoType::default()
-                } else if let Type::Nominal { params, .. } = ty {
-                    self.queries().format_type_args(params)
+                let type_args: Vec<GoType> = if let Type::Nominal { params, .. } = ty
+                    && !literal.via_alias
+                {
+                    params
+                        .iter()
+                        .map(|param| self.queries().go_type(param))
+                        .collect()
                 } else {
-                    GoType::default()
+                    Vec::new()
                 };
 
                 let canonical = self.canonical_package(package);
                 let member = self.facts.type_member_go_name(&canonical, type_name);
                 let package = self.queries().package_use_for_package(&canonical);
-                return GoType::named(&member, type_args.arguments(), Some(package));
+                return GoType::named(&member, &type_args, Some(package));
             }
         }
 
@@ -531,11 +531,8 @@ impl PlannerQueries<'_, '_> {
     ) -> String {
         if let Some(ref enum_ctx) = ctx.enum_ctx {
             self.facts
-                .enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
-                .unwrap_or_else(|| {
-                    self.facts
-                        .struct_field_go_name(ctx.ty, field_name, GoExport::Exported)
-                })
+                .enum_layout(&enum_ctx.enum_id)
+                .struct_field_name(&enum_ctx.variant_name, field_name)
         } else {
             self.facts
                 .struct_field_go_name(ctx.ty, field_name, GoExport::Unexported)
@@ -547,20 +544,15 @@ impl PlannerQueries<'_, '_> {
 
         let tag_constant = self.resolve_variant(name, enum_id);
 
-        let pointer_fields = if let Some(layout) = self.facts.enum_layout(enum_id) {
-            if let Some(variant) = layout.variant(&variant_name) {
-                variant
-                    .fields
-                    .iter()
-                    .filter(|f| f.is_recursive())
-                    .map(|f| f.source_name.clone())
-                    .collect()
-            } else {
-                FxHashSet::default()
-            }
-        } else {
-            FxHashSet::default()
-        };
+        let pointer_fields = self
+            .facts
+            .enum_layout(enum_id)
+            .variant(&variant_name)
+            .fields
+            .iter()
+            .filter(|f| f.is_recursive())
+            .map(|f| f.source_name.clone())
+            .collect();
 
         EnumCallContext {
             enum_id: enum_id.to_string(),

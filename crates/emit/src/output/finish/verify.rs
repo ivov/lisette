@@ -1,7 +1,8 @@
 use crate::lookup::state::scope_stack::ScopeStack;
 use crate::target::ir::bodies::{
-    AssignForm, LoopTransfer, LoweredBlock, LoweredStatement, Statement, for_each_statements_mut,
+    LoopTransfer, LoweredBlock, LoweredStatement, Statement, for_each_statements_mut,
 };
+use crate::target::ir::go_expression::NameRead;
 use crate::target::ir::go_expression::{GoExpressionNode, verbatim_identifiers};
 use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::GoExpression;
@@ -11,7 +12,6 @@ use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BodyErrorKind {
-    EmptyIfCondition,
     InvalidExpressionStatement,
     MissingGoTermination,
     UnresolvedLoopTarget,
@@ -20,7 +20,6 @@ pub(crate) enum BodyErrorKind {
     UnboundLocalReference,
     UnidentifiedLocal,
     UnorderedOperand,
-    MissingValue,
     UnusedLocal,
     NoNewShortVariable,
     RepeatedShortVariable,
@@ -55,11 +54,8 @@ fn verify_control_structure(statements: &mut Vec<Statement>) -> Result<(), BodyE
                 return;
             }
             let kind = match &statement.kind {
-                LoweredStatement::If(plan) if plan.condition.is_empty() => {
-                    Some(BodyErrorKind::EmptyIfCondition)
-                }
                 LoweredStatement::ExpressionStatement { expression, .. }
-                    if !expression.is_empty() && !expression.stands_as_a_statement() =>
+                    if !expression.stands_as_a_statement() =>
                 {
                     Some(BodyErrorKind::InvalidExpressionStatement)
                 }
@@ -70,7 +66,23 @@ fn verify_control_structure(statements: &mut Vec<Statement>) -> Result<(), BodyE
                 | LoweredStatement::Continue(LoopTransfer::Source(_)) => {
                     Some(BodyErrorKind::UnresolvedLoopTarget)
                 }
-                _ => None,
+                LoweredStatement::If(_)
+                | LoweredStatement::Loop(_)
+                | LoweredStatement::Block(_)
+                | LoweredStatement::Body(_)
+                | LoweredStatement::Break(_)
+                | LoweredStatement::Continue(_)
+                | LoweredStatement::Const(_)
+                | LoweredStatement::Return(_)
+                | LoweredStatement::Assign(_)
+                | LoweredStatement::Async { .. }
+                | LoweredStatement::Select(_)
+                | LoweredStatement::Switch(_)
+                | LoweredStatement::Define(_)
+                | LoweredStatement::VarDeclaration { .. }
+                | LoweredStatement::Discard { .. }
+                | LoweredStatement::ExpressionStatement { .. }
+                | LoweredStatement::UnreachablePanic => None,
             };
 
             error = kind.or(error);
@@ -99,7 +111,6 @@ pub(crate) fn verify_final_function_body(
     result: BodyResult,
 ) -> Result<(), BodyError> {
     verify_control_structure(&mut body.statements)?;
-    verify_values(&mut body.statements)?;
     if result == BodyResult::Value && !body.go_terminates() {
         return Err(BodyError {
             kind: BodyErrorKind::MissingGoTermination,
@@ -108,41 +119,10 @@ pub(crate) fn verify_final_function_body(
     Ok(())
 }
 
-fn verify_values(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
-    let mut missing = false;
-    for statement in statements.iter() {
-        statement.kind.visit_expressions(&mut |node| {
-            node.visit_children(&mut |child| {
-                missing |= matches!(child, GoExpressionNode::Empty);
-            });
-        });
-    }
-    for_each_statements_mut(statements, &mut |list| {
-        for statement in list.iter() {
-            let values: Vec<&GoExpression> = match &statement.kind {
-                LoweredStatement::Define(definition) => vec![&definition.value],
-                LoweredStatement::Discard { value, .. }
-                | LoweredStatement::Assign(AssignForm::Simple { value, .. }) => vec![value],
-                LoweredStatement::Return(values) => values.iter().collect(),
-                _ => Vec::new(),
-            };
-
-            missing |= values
-                .iter()
-                .any(|value| matches!(value.node(), GoExpressionNode::Empty));
-        }
-    });
-    if missing {
-        return Err(BodyError {
-            kind: BodyErrorKind::MissingValue,
-        });
-    }
-    Ok(())
-}
-
 struct LocalScopeCheck {
     frames: ScopeStack<FxHashMap<String, LocalId>>,
     spellings: FxHashMap<LocalId, String>,
+    hiding: Vec<LocalId>,
     error: Option<BodyErrorKind>,
 }
 
@@ -179,12 +159,14 @@ impl VisitorMut for LocalScopeCheck {
             .iter()
             .rev()
             .find_map(|frame| frame.get(name.spelling()));
-        if let Some(active) = active {
+        if let Some(&active) = active {
             if name.id().is_none() {
                 self.error.get_or_insert(BodyErrorKind::UnidentifiedLocal);
-            } else if name.id() != Some(*active) {
+                self.hiding.push(active);
+            } else if name.id() != Some(active) {
                 self.error
                     .get_or_insert(BodyErrorKind::ShadowedLocalReference);
+                self.hiding.push(active);
             }
         } else if let Some(id) = name.id()
             && !self
@@ -206,9 +188,13 @@ impl VisitorMut for LocalScopeCheck {
             return;
         };
         self.check_spelling(name);
-        self.frames
+        let previous = self
+            .frames
             .innermost_mut()
             .insert(name.spelling().to_string(), id);
+        if previous.is_some_and(|previous| previous != id) {
+            self.hiding.push(id);
+        }
     }
 
     fn enter_scope(&mut self) {
@@ -220,20 +206,36 @@ impl VisitorMut for LocalScopeCheck {
     }
 }
 
-pub(crate) fn verify_local_scopes(
+fn check_local_scopes(
     statements: &mut Vec<Statement>,
     bindings: &[GoIdentifier],
-) -> Result<(), BodyError> {
+) -> LocalScopeCheck {
     let mut check = LocalScopeCheck {
         frames: ScopeStack::new(FxHashMap::default()),
         spellings: FxHashMap::default(),
+        hiding: Vec::new(),
         error: None,
     };
     for name in bindings {
         check.local_binding(&mut name.clone(), BindingSite::Parameter);
     }
     visit_statements_mut(statements, &mut check);
+    check
+}
+
+pub(crate) fn verify_local_scopes(
+    statements: &mut Vec<Statement>,
+    bindings: &[GoIdentifier],
+) -> Result<(), BodyError> {
+    let check = check_local_scopes(statements, bindings);
     check.error.map_or(Ok(()), |kind| Err(BodyError { kind }))
+}
+
+pub(crate) fn hiding_locals(
+    statements: &mut Vec<Statement>,
+    bindings: &[GoIdentifier],
+) -> Vec<LocalId> {
+    check_local_scopes(statements, bindings).hiding
 }
 
 struct GoNameCheck {
@@ -270,21 +272,21 @@ impl GoNameCheck {
 
 impl VisitorMut for GoNameCheck {
     fn expression(&mut self, node: &mut GoExpressionNode) {
-        match node {
-            GoExpressionNode::Identifier(name) if name.is_blank() => {
+        match node.name_read() {
+            NameRead::Local(name) if name.is_blank() => {
                 self.error.get_or_insert(BodyErrorKind::BlankValueRead);
             }
-            GoExpressionNode::Identifier(name) => {
+            NameRead::Local(name) => {
                 if let Some(id) = name.id() {
                     self.read.insert(id);
                 }
             }
-            GoExpressionNode::Verbatim(source) => {
+            NameRead::Verbatim(source) => {
                 for spelling in verbatim_identifiers(source) {
                     self.read_spelling(spelling);
                 }
             }
-            _ => {}
+            NameRead::NoName => {}
         }
     }
 
@@ -300,7 +302,22 @@ impl VisitorMut for GoNameCheck {
                 | LoweredStatement::Continue(LoopTransfer::Labeled(label)) => {
                     self.jumps.insert(label.clone());
                 }
-                _ => {}
+                LoweredStatement::If(_)
+                | LoweredStatement::Block(_)
+                | LoweredStatement::Body(_)
+                | LoweredStatement::Break(_)
+                | LoweredStatement::Continue(_)
+                | LoweredStatement::Const(_)
+                | LoweredStatement::Return(_)
+                | LoweredStatement::Assign(_)
+                | LoweredStatement::Async { .. }
+                | LoweredStatement::Select(_)
+                | LoweredStatement::Switch(_)
+                | LoweredStatement::Define(_)
+                | LoweredStatement::VarDeclaration { .. }
+                | LoweredStatement::Discard { .. }
+                | LoweredStatement::ExpressionStatement { .. }
+                | LoweredStatement::UnreachablePanic => {}
             }
         }
     }

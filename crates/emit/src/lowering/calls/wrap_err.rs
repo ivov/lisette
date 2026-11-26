@@ -13,25 +13,15 @@ pub(in crate::lowering) struct WrapMessage {
     args: Vec<GoExpression>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::lowering) enum ErrorUse {
-    Read,
-    Unread,
-}
-
 impl Planner<'_> {
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn prepare_wrap_messages(
         &mut self,
         messages: &[&Expression],
-        error_use: ErrorUse,
     ) -> (Vec<Statement>, Vec<WrapMessage>) {
         let mut setup = Vec::new();
         let mut prepared = Vec::new();
         for message in messages {
-            if error_use == ErrorUse::Unread {
-                setup.extend(self.lower_discard_value(message));
-                continue;
-            }
             let (format, args) = match message {
                 Expression::Literal {
                     literal: Literal::String { value, raw: false },

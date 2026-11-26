@@ -38,12 +38,12 @@ func main() {
 		return read()
 	}
 	total := 0
-	for _, target3 := range []int{2, 3} {
+	for _, target := range []int{2, 3} {
 		left := total
 		var tmp int
 		switch {
-		case target3 > 0:
-			value := target3
+		case target > 0:
+			value := target
 			read := func() int {
 				return value
 			}

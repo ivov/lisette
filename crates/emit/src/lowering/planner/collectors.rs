@@ -13,17 +13,18 @@ pub(in crate::lowering) fn collect_escape_remap(
     let entries: Vec<(&str, String)> = files
         .iter()
         .flat_map(|f| &f.items)
-        .filter_map(|item| match item {
-            Expression::Function {
+        .filter_map(|item| {
+            let Expression::Function {
                 name,
                 visibility: Visibility::Private,
                 ..
-            } => {
-                let natural =
-                    go_name::escape_reserved(&go_name::snake_to_lower_camel(name)).into_owned();
-                Some((name.as_str(), natural))
-            }
-            _ => None,
+            } = item
+            else {
+                return None;
+            };
+            let natural =
+                go_name::escape_reserved(&go_name::snake_to_lower_camel(name)).into_owned();
+            Some((name.as_str(), natural))
         })
         .collect();
 
@@ -112,6 +113,9 @@ fn collect_item_generic_names(item: &Expression, out: &mut FxHashSet<EcoString>)
                 }
             }
         }
-        _ => {}
+        Expression::Const { .. }
+        | Expression::VariableDeclaration { .. }
+        | Expression::PackageImport { .. }
+        | body_expression!() => {}
     }
 }

@@ -58,9 +58,8 @@ impl Planner<'_> {
                 generics,
                 ..
             } => {
-                let mut declarations = self
-                    .try_emit_enum(name, generics, attributes, type_documentation(doc, name))
-                    .unwrap_or_default();
+                let mut declarations =
+                    self.emit_enum(name, generics, attributes, type_documentation(doc, name));
                 for declaration in &mut declarations {
                     declaration.position = self.facts.source_position(name_span);
                 }
@@ -122,7 +121,9 @@ impl Planner<'_> {
                 };
                 vec![self.emit_const(identifier, expression, ty, doc)]
             }
-            _ => Vec::new(),
+            Expression::VariableDeclaration { .. }
+            | Expression::PackageImport { .. }
+            | body_expression!() => Vec::new(),
         }
     }
 
@@ -210,7 +211,7 @@ impl Planner<'_> {
                     Some(PackageUse::generated(GeneratedPackage::Testing)),
                 )),
             )],
-            GoType::default(),
+            None,
             LoweredBlock { statements },
         )
     }

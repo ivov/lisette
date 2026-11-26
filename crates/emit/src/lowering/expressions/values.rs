@@ -8,7 +8,6 @@ use crate::lowering::calls::split_native_receiver;
 use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
-use crate::lowering::expressions::operand_order::identifier_read_stability;
 use crate::lowering::expressions::tuple_literal::TupleLiteral;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::asserts::test_log_call;
@@ -35,7 +34,6 @@ use crate::target::ir::bodies::{
 use crate::target::ir::go_expression::FunctionLiteralLayout;
 use crate::target::ir::values::{CaptureBoundary, GoExpression, OperandForm};
 use crate::target::names::go_name::GeneratedPackage;
-use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::CallableReturnAbi;
 use syntax::ast::{Expression, IdentifierResolution, Span, UnaryOperator};
 use syntax::program::SlotOrigin;
@@ -90,8 +88,8 @@ impl Planner<'_> {
         {
             return self
                 .plan_value(expression, context)
-                .map_observable_expression(|setup, call| {
-                    if !call.is_empty() {
+                .settle_observable_value(|setup, call| {
+                    if let Some(call) = call {
                         setup.push(effect_statement(call));
                     }
                     self.unit_value(Some(expression), context.expected_slot_type())
@@ -140,23 +138,13 @@ impl Planner<'_> {
                 resolution,
                 ..
             } => self.plan_identifier_value(expression, value, resolution, ty, ctx),
-            Expression::Call {
-                expression: callee,
-                args,
-                spread,
-                type_arguments,
-                ty,
-                ..
-            } => {
-                let site = CallSite {
-                    expression,
-                    callee,
-                    args,
-                    spread: spread.as_deref(),
-                    type_arguments,
-                    ty,
-                };
+            Expression::Call { ty, .. } => {
+                let site =
+                    CallSite::of(expression).expect("internal error: a call has a call site");
                 self.plan_call_value(site, ty, ctx)
+            }
+            Expression::RawGo { text, .. } if text.is_empty() => {
+                ValuePlan::without_value(Vec::new())
             }
             Expression::RawGo { text, .. } => ValuePlan::verbatim(text.clone()),
             Expression::Unit { .. } => {
@@ -171,7 +159,7 @@ impl Planner<'_> {
                 Some(body) => {
                     ValuePlan::computed(Vec::new(), self.plan_lambda(params, body, ty, ctx))
                 }
-                None => ValuePlan::computed(Vec::new(), GoExpression::empty()),
+                None => ValuePlan::without_value(Vec::new()),
             },
             Expression::If { ty, .. }
             | Expression::IfLet { ty, .. }
@@ -197,7 +185,37 @@ impl Planner<'_> {
                 vec![self.lower_assert_statement(expression, operand).into()],
                 self.unit_value(Some(expression), None),
             ),
-            _ => unreachable!(
+            Expression::Let { .. }
+            | Expression::Tuple { .. }
+            | Expression::StructCall { .. }
+            | Expression::DotAccess { .. }
+            | Expression::Return { .. }
+            | Expression::Propagate { .. }
+            | Expression::TryBlock { .. }
+            | Expression::RecoverBlock { .. }
+            | Expression::ImplBlock { .. }
+            | Expression::Binary { .. }
+            | Expression::Unary { .. }
+            | Expression::Paren { .. }
+            | Expression::Const { .. }
+            | Expression::VariableDeclaration { .. }
+            | Expression::Loop { .. }
+            | Expression::While { .. }
+            | Expression::WhileLet { .. }
+            | Expression::For { .. }
+            | Expression::Break { .. }
+            | Expression::Continue { .. }
+            | Expression::Enum { .. }
+            | Expression::Struct { .. }
+            | Expression::TypeAlias { .. }
+            | Expression::PackageImport { .. }
+            | Expression::Reference { .. }
+            | Expression::Interface { .. }
+            | Expression::IndexedAccess { .. }
+            | Expression::Task { .. }
+            | Expression::Defer { .. }
+            | Expression::Range { .. }
+            | Expression::Cast { .. } => unreachable!(
                 "unexpected leaf expression in plan_operand: {:?}",
                 expression
             ),
@@ -215,14 +233,7 @@ impl Planner<'_> {
         let go_expression = self
             .queries()
             .plan_identifier(expression, value, resolution, ty, ctx);
-        let stability = match self
-            .scope
-            .resolve_identifier_with_resolution(value, resolution)
-        {
-            Some(BindingValue::InlineExpression(inline)) => inline.stability(),
-            _ => identifier_read_stability(&self.facts, expression),
-        };
-
+        let stability = self.queries().place_read_stability(expression);
         ValuePlan::from_identifier_expression(go_expression, stability)
     }
 
@@ -251,7 +262,15 @@ impl Planner<'_> {
                     self.facts.tuple_or_type_arguments(&tuple_use.slot),
                 ))
             }
-            _ => None,
+            Adaptation::Identity
+            | Adaptation::Delegated { .. }
+            | Adaptation::Interface(_)
+            | Adaptation::ImplicitSome { .. }
+            | Adaptation::Newtype
+            | Adaptation::Tuple(_)
+            | Adaptation::Array(_)
+            | Adaptation::DivergingFunction
+            | Adaptation::Receiver(_) => None,
         };
 
         if placed.is_some() {
@@ -314,15 +333,14 @@ impl Planner<'_> {
             elements,
             ty,
         } = literal;
-        let inferred_slot_types: Vec<Type> = match ty {
-            Type::Tuple(slots) => slots.clone(),
-            _ => Vec::new(),
+        let Type::Tuple(inferred_slot_types) = ty else {
+            panic!("internal error: a tuple literal has the type {ty:?}");
         };
         let tail_slots = match position {
             TuplePosition::Tail => self.queries().tail_tuple_return_slots(tuple),
             TuplePosition::Value => None,
         };
-        let slot_types = tail_slots.unwrap_or(inferred_slot_types);
+        let slot_types = tail_slots.unwrap_or_else(|| inferred_slot_types.clone());
 
         let operands: Vec<ValuePlan> = elements
             .iter()
@@ -406,8 +424,8 @@ impl Planner<'_> {
     pub(in crate::lowering) fn plan_reference(&mut self, inner: &Expression) -> ValuePlan {
         if self.queries().is_unit_call(inner) {
             let operand = self.plan_operand(inner, ExpressionContext::value());
-            return operand.map_observable_expression(|setup, value_operand| {
-                if !value_operand.is_empty() {
+            return operand.settle_observable_value(|setup, value_operand| {
+                if let Some(value_operand) = value_operand {
                     setup.push(effect_statement(value_operand));
                 }
                 let unit = self.unit_value(Some(inner), None);
@@ -417,10 +435,8 @@ impl Planner<'_> {
         }
 
         let unaddressable = self.queries().is_go_unaddressable(inner);
-        let reads_field = match inner {
-            Expression::DotAccess { resolution, .. } => resolution.is_field_read(),
-            _ => false,
-        };
+        let reads_field =
+            matches!(inner, Expression::DotAccess { resolution, .. } if resolution.is_field_read());
         let inner_plan = if self
             .facts
             .resolve_to_function_type(&inner.get_type())
@@ -492,23 +508,20 @@ impl Planner<'_> {
         kind: AsyncKind,
         expression: &Expression,
     ) -> ValuePlan {
-        let statement_plan =
-            |setup: Vec<Statement>| ValuePlan::computed(setup, GoExpression::empty());
-        let immediate_call = |body: LoweredBlock| {
-            immediate_call(GoType::default(), body, FunctionLiteralLayout::MultiLine)
-        };
+        let immediate_call =
+            |body: LoweredBlock| immediate_call(None, body, FunctionLiteralLayout::MultiLine);
 
         if let Expression::Block { .. } = expression {
             let body = self.with_isolated_function(ReturnContext::Void(Type::unit()), |planner| {
                 planner.lower_block_as_body(expression)
             });
-            return statement_plan(vec![async_statement(kind, immediate_call(body))]);
+            return ValuePlan::without_value(vec![async_statement(kind, immediate_call(body))]);
         }
 
         let mut setup: Vec<Statement> = Vec::new();
         if let Some(call) = self.try_plan_go_call_discarded(&mut setup, expression) {
             setup.push(async_statement(kind, call));
-            return statement_plan(setup);
+            return ValuePlan::without_value(setup);
         }
 
         let checkpoint = self.planning_snapshot();
@@ -524,11 +537,11 @@ impl Planner<'_> {
             self.restore_planning(checkpoint);
             let (mut setup, body) = self.plan_delayed_async_body(expression);
             setup.push(async_statement(kind, immediate_call(body)));
-            return statement_plan(setup);
+            return ValuePlan::without_value(setup);
         }
         let (mut setup, inner) = plan.into_parts();
         setup.push(async_statement(kind, inner));
-        statement_plan(setup)
+        ValuePlan::without_value(setup)
     }
 
     fn plan_delayed_async_body(
@@ -540,10 +553,10 @@ impl Planner<'_> {
                 expression,
                 ExpressionContext::value().with_capture_boundary(CaptureBoundary::Delayed),
             )
-            .into_parts();
+            .into_setup_and_value();
 
         let mut statements = Vec::new();
-        if !inner.is_empty() {
+        if let Some(inner) = inner {
             statements.push(if self.facts.resolves_to_unit(&expression.get_type()) {
                 effect_statement(inner)
             } else {
@@ -577,6 +590,7 @@ impl Planner<'_> {
         self.plan_operand_shape(expression, ctx)
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn plan_operand_shape(
         &mut self,
         expression: &Expression,
@@ -663,13 +677,13 @@ impl Planner<'_> {
                 ValuePlan::new(setup, value, stability)
             }
             Expression::Loop { body, ty, .. } => self.plan_loop_as_operand_temp(body, ty),
-            Expression::If { ty, .. }
-            | Expression::IfLet { ty, .. }
-            | Expression::Match { ty, .. }
-            | Expression::Select { ty, .. }
+            Expression::If { .. }
+            | Expression::IfLet { .. }
+            | Expression::Match { .. }
+            | Expression::Select { .. }
                 if let Some(branching) = Branching::of(expression) =>
             {
-                self.plan_branching_as_operand_temp(expression, branching, ty)
+                self.plan_branching_as_operand_temp(expression, branching)
             }
             _ => self.plan_operand_leaf(expression, ctx),
         }
@@ -784,7 +798,8 @@ impl PlannerQueries<'_, '_> {
             return None;
         }
         let return_type = slot
-            .get_function_ret()
+            .as_function_type()
+            .map(|slot| slot.return_type.as_ref())
             .filter(|return_type| !self.facts.returns_go_void(return_type));
         let (source_result, target_result, return_abi) = match return_type {
             Some(return_type) => (
@@ -913,39 +928,77 @@ impl PlannerQueries<'_, '_> {
             .resolve_to_function_type(&expression.get_type())
             .is_some()
         {
-            return match expression {
-                Expression::Identifier {
-                    resolution: IdentifierResolution::Definition { name, .. },
-                    ..
-                } => !self
-                    .facts
-                    .definition(name)
-                    .is_some_and(|definition| definition.is_variable()),
-                Expression::Identifier {
-                    value, resolution, ..
-                } => !matches!(
-                    self.scope
-                        .resolve_identifier_with_resolution(value, resolution),
-                    Some(BindingValue::GoName(_))
-                ),
-                Expression::DotAccess {
-                    resolution: DotAccessResolution::PackageMember { definition, .. },
-                    ..
-                } => !definition
-                    .as_ref()
-                    .and_then(|name| self.facts.definition(name))
-                    .is_some_and(|definition| definition.is_variable()),
-                Expression::DotAccess { resolution, .. } if resolution.is_field_read() => {
-                    !self.receiver_is_addressable(expression)
-                }
-                Expression::IndexedAccess { .. }
-                | Expression::Unary {
-                    operator: UnaryOperator::Deref,
-                    ..
-                } => !self.receiver_is_addressable(expression),
-                _ => true,
-            };
+            return self.function_value_is_unaddressable(expression);
         }
+        self.value_is_unaddressable(expression)
+    }
+
+    fn function_value_is_unaddressable(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Definition { name, .. },
+                ..
+            } => !self.facts.definition(name).is_variable(),
+            Expression::Identifier {
+                value, resolution, ..
+            } => !matches!(
+                self.scope
+                    .resolve_identifier_with_resolution(value, resolution),
+                Some(BindingValue::GoName(_))
+            ),
+            Expression::DotAccess {
+                resolution: DotAccessResolution::PackageMember { definition, .. },
+                ..
+            } => !definition
+                .as_ref()
+                .is_some_and(|name| self.facts.definition(name).is_variable()),
+            Expression::DotAccess { resolution, .. } if resolution.is_field_read() => {
+                !self.receiver_is_addressable(expression)
+            }
+            Expression::IndexedAccess { .. }
+            | Expression::Unary {
+                operator: UnaryOperator::Deref,
+                ..
+            } => !self.receiver_is_addressable(expression),
+            Expression::Literal { .. }
+            | Expression::Lambda { .. }
+            | Expression::Block { .. }
+            | Expression::Let { .. }
+            | Expression::Call { .. }
+            | Expression::If { .. }
+            | Expression::IfLet { .. }
+            | Expression::Match { .. }
+            | Expression::Tuple { .. }
+            | Expression::StructCall { .. }
+            | Expression::DotAccess { .. }
+            | Expression::Assignment { .. }
+            | Expression::Return { .. }
+            | Expression::Propagate { .. }
+            | Expression::TryBlock { .. }
+            | Expression::RecoverBlock { .. }
+            | Expression::Binary { .. }
+            | Expression::Unary { .. }
+            | Expression::Paren { .. }
+            | Expression::RawGo { .. }
+            | Expression::Loop { .. }
+            | Expression::While { .. }
+            | Expression::WhileLet { .. }
+            | Expression::For { .. }
+            | Expression::Break { .. }
+            | Expression::Continue { .. }
+            | Expression::Reference { .. }
+            | Expression::Task { .. }
+            | Expression::Defer { .. }
+            | Expression::Assert { .. }
+            | Expression::Select { .. }
+            | Expression::Unit { .. }
+            | Expression::Range { .. }
+            | Expression::Cast { .. }
+            | declaration_expression!() => true,
+        }
+    }
+
+    fn value_is_unaddressable(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Call { .. } => true,
             Expression::Identifier {
@@ -961,7 +1014,42 @@ impl PlannerQueries<'_, '_> {
             {
                 matches!(resolution, DotAccessResolution::EnumVariant { .. })
             }
-            _ => false,
+            Expression::Literal { .. }
+            | Expression::Lambda { .. }
+            | Expression::Block { .. }
+            | Expression::Let { .. }
+            | Expression::Identifier { .. }
+            | Expression::If { .. }
+            | Expression::IfLet { .. }
+            | Expression::Match { .. }
+            | Expression::Tuple { .. }
+            | Expression::StructCall { .. }
+            | Expression::DotAccess { .. }
+            | Expression::Assignment { .. }
+            | Expression::Return { .. }
+            | Expression::Propagate { .. }
+            | Expression::TryBlock { .. }
+            | Expression::RecoverBlock { .. }
+            | Expression::Binary { .. }
+            | Expression::Unary { .. }
+            | Expression::Paren { .. }
+            | Expression::RawGo { .. }
+            | Expression::Loop { .. }
+            | Expression::While { .. }
+            | Expression::WhileLet { .. }
+            | Expression::For { .. }
+            | Expression::Break { .. }
+            | Expression::Continue { .. }
+            | Expression::Reference { .. }
+            | Expression::IndexedAccess { .. }
+            | Expression::Task { .. }
+            | Expression::Defer { .. }
+            | Expression::Assert { .. }
+            | Expression::Select { .. }
+            | Expression::Unit { .. }
+            | Expression::Range { .. }
+            | Expression::Cast { .. }
+            | declaration_expression!() => false,
         }
     }
 

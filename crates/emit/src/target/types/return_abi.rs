@@ -108,7 +108,7 @@ impl LoweredReturnAbi {
             Self::Option(OptionReturnAbi::CommaOk { .. }) => {
                 Self::Option(OptionReturnAbi::CommaOk { payload })
             }
-            other => other,
+            other @ Self::BareError | other @ Self::Option(_) | other @ Self::Tuple { .. } => other,
         }
     }
 

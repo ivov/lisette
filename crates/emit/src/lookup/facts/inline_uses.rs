@@ -3,24 +3,21 @@ use std::slice;
 use syntax::ast::{BindingId, Expression, FormatStringPart, Literal, SelectArm};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum InlineDecision {
+enum InlineDecision {
     Inline,
     Unused,
     Keep,
 }
 
-pub(crate) fn analyze_inline_candidate_ids(
-    binding_ids: &[BindingId],
-    consumers: &[&Expression],
-) -> InlineDecision {
+pub(crate) fn is_inline_candidate(binding_ids: &[BindingId], consumers: &[&Expression]) -> bool {
     if binding_ids.is_empty() {
-        return InlineDecision::Keep;
+        return false;
     }
     let mut walker = Walker::new(binding_ids);
     for consumer in consumers {
         walker.walk(consumer, AccessRole::Read);
     }
-    walker.decision
+    walker.decision == InlineDecision::Inline
 }
 
 pub(crate) fn region_blocks_inline<'a, I>(trees: I, binding_id: Option<BindingId>) -> bool
@@ -68,6 +65,7 @@ impl<'a> Walker<'a> {
         };
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn walk(&mut self, expression: &Expression, role: AccessRole) {
         match expression {
             Expression::Identifier { resolution, .. } => {

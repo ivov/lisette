@@ -1,11 +1,10 @@
 use crate::Planner;
-use crate::lookup::facts::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
+use crate::lookup::facts::inline_uses::is_inline_candidate;
 use crate::lookup::state::bindings::{BindingValue, InlineExpression};
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::decision_tree::{
     Check, PatternBinding, PatternInfo, SubjectRoot, lift_root_assertion, render_condition,
 };
-use crate::lowering::planner::OuterBindings;
 use crate::target::ir::bodies::{Definition, LoweredStatement, Statement, assign, define_many};
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::local::GoIdentifier;
@@ -163,8 +162,7 @@ impl Planner<'_> {
             let access_expression = binding.path.render(subject);
 
             if binding.coercion.is_identity()
-                && analyze_inline_candidate_ids(&binding.binding_ids, consumers)
-                    == InlineDecision::Inline
+                && is_inline_candidate(&binding.binding_ids, consumers)
             {
                 let composable = binding.path.render(subject);
                 let stability = self.queries().path_read_stability(&composable);
@@ -178,12 +176,7 @@ impl Planner<'_> {
             let (setup, access_expression) =
                 binding.coercion.clone().lower(self, access_expression);
             statements.extend(setup);
-            let name = self.claim_block_binding(
-                &binding.lisette_name,
-                &binding.binding_ids,
-                go_name,
-                OuterBindings::StayVisible,
-            );
+            let name = self.claim_binding(&binding.lisette_name, &binding.binding_ids, go_name);
 
             statements
                 .push(LoweredStatement::Define(Definition::single(name, access_expression)).into());

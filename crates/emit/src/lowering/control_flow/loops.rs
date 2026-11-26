@@ -1,10 +1,10 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::queries::go_name_for_binding;
+use crate::lookup::state::enclosing::LoopSlot;
 use crate::lowering::calls::predicates::strip_negations;
 use crate::lowering::control_flow::targets::legalize_source_loop;
 use crate::lowering::expressions::operand_order::OrderedOperand;
-use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -49,7 +49,7 @@ impl Planner<'_> {
         let shape = classify_for(&self.facts, binding, iterable, kind);
 
         let line = self.facts.source_position(&full_expression.get_span());
-        let plan = self.with_loop(None, None, |this| {
+        let plan = self.with_loop(None, |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range(range) => this.lower_range_for(binding, range, body),
                 ForShape::StoredRange(range_end) => {
@@ -104,7 +104,7 @@ impl Planner<'_> {
                 let reference = this.capture_operand_into(&mut prologue, iterable);
                 let range = this.facts.dereference_refs(&iterable_ty, reference);
                 GoExpression::identifier(this.hoist_temp(&mut prologue, "range", range))
-            } else if is_unmutated_identifier(&this.facts, iterable) {
+            } else if this.queries().place_read_stability(iterable).is_fixed() {
                 this.capture_operand_into(&mut prologue, iterable)
             } else {
                 this.capture_value_at_boundary(
@@ -172,7 +172,7 @@ impl Planner<'_> {
                 let reference = this.capture_operand_into(&mut prologue, receiver);
                 let value = this.facts.dereference_refs(&receiver_ty, reference);
                 GoExpression::identifier(this.hoist_temp(&mut prologue, "s", value))
-            } else if is_unmutated_identifier(&this.facts, receiver) {
+            } else if this.queries().place_read_stability(receiver).is_fixed() {
                 this.capture_operand_into(&mut prologue, receiver)
             } else {
                 this.capture_value_at_boundary(
@@ -314,12 +314,15 @@ impl Planner<'_> {
         iter_expression: GoExpression,
         body: &Expression,
     ) -> (LoopHeader, LoweredBlock) {
-        let element_tys: &[Type] = match binding_ty {
-            Type::Tuple(tys) => tys.as_slice(),
-            _ => &[],
+        let Type::Tuple(element_tys) = binding_ty else {
+            panic!("internal error: a map entry binding has the type {binding_ty:?}");
         };
-        let first_ty = element_tys.first().unwrap_or(binding_ty);
-        let second_ty = element_tys.get(1).unwrap_or(binding_ty);
+        let [first_ty, second_ty] = element_tys.as_slice() else {
+            panic!(
+                "internal error: a map entry binding has {} elements",
+                element_tys.len()
+            );
+        };
 
         let key_identifier = self.fresh_local("key");
         let value_identifier = self.fresh_local("value");
@@ -482,14 +485,7 @@ impl Planner<'_> {
         } = pattern
             && let Some(go_name) = go_name_for_binding(pattern)
         {
-            let preferred = go_name.preferred();
-            let go_name = if self.scope.has_binding_for_go_name(&preferred)
-                || self.queries().shadows_declaration(&preferred)
-            {
-                self.fresh_local(&go_name)
-            } else {
-                self.scope.new_local_identifier(preferred)
-            };
+            let go_name = self.scope.new_unreserved_local(go_name, self.names);
 
             return self
                 .scope
@@ -508,7 +504,11 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let result = GoExpression::identifier(result_var.clone());
-        let plan = self.with_loop(Some(result), Some(ty.clone()), |this| {
+        let slot = LoopSlot {
+            target: result,
+            ty: ty.clone(),
+        };
+        let plan = self.with_loop(Some(slot), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
         ValuePlan::captured(
@@ -524,14 +524,12 @@ impl Planner<'_> {
         scrutinee: &Expression,
         body: &Expression,
     ) -> Statement {
-        let body = self.with_loop(None, None, |this| {
-            this.lower_while_let(pattern, scrutinee, body)
-        });
+        let body = self.with_loop(None, |this| this.lower_while_let(pattern, scrutinee, body));
         directed_at(&self.facts, expression, LoweredStatement::Body(body))
     }
 
     pub(in crate::lowering) fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
-        self.with_loop(None, None, |this| {
+        self.with_loop(None, |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         })
     }
@@ -541,7 +539,7 @@ impl Planner<'_> {
         condition: &Expression,
         body: &Expression,
     ) -> LoopPlan {
-        self.with_loop(None, None, |this| {
+        self.with_loop(None, |this| {
             let (target, polarity) = strip_negations(condition);
             if let Some(exit) = this.try_plan_fused_predicate_value(target, polarity.flip()) {
                 let (setup, failure) = exit.into_parts();

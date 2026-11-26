@@ -36,6 +36,7 @@ pub(in crate::lowering) struct MapLambda<'a> {
     pub(in crate::lowering) body: &'a Expression,
 }
 
+#[allow(clippy::wildcard_enum_match_arm)]
 fn escapes_lambda(expression: &Expression) -> bool {
     match expression {
         Expression::Return { .. }
@@ -62,6 +63,7 @@ fn is_literal_default(default: &Expression) -> bool {
     }
 }
 
+#[allow(clippy::wildcard_enum_match_arm)]
 fn runs_no_code(expression: &Expression) -> bool {
     match expression {
         Expression::Literal {
@@ -92,7 +94,9 @@ fn is_go_zero_literal(default: &Expression, kind: SimpleKind) -> bool {
         }
         Literal::Boolean(value) => !value && kind == SimpleKind::Bool,
         Literal::String { value, .. } => value.is_empty() && kind == SimpleKind::String,
-        _ => false,
+        Literal::Imaginary(_) | Literal::FormatString(_) | Literal::Char(_) | Literal::Slice(_) => {
+            false
+        }
     }
 }
 
@@ -147,7 +151,9 @@ impl<'p> Planner<'p> {
             FallibleProducer::Option(OptionFusePlan::Index { site }) => {
                 return self.plan_defaulted_index_into_slot(site, default, ty, slot);
             }
-            producer => producer.payload(self, slot),
+            producer @ FallibleProducer::Result(_)
+            | producer @ FallibleProducer::Option(_)
+            | producer @ FallibleProducer::TryBlock(_) => producer.payload(self, slot),
         };
 
         let failure = bound.failure_condition();
@@ -196,7 +202,10 @@ impl<'p> Planner<'p> {
         let (mut statements, index) = self.lower_bounds_checked_index(site);
         let value = match slot {
             CommaOkValueSlot::Named(name) => name,
-            _ => self.fresh_declared("ret"),
+            CommaOkValueSlot::Temp
+            | CommaOkValueSlot::Arm(_)
+            | CommaOkValueSlot::Unused
+            | CommaOkValueSlot::Discarded => self.fresh_declared("ret"),
         };
         let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
         let plan = self.plan_value(
@@ -263,7 +272,7 @@ impl<'p> Planner<'p> {
             arms,
             &PlacePlan::Assign {
                 local: &target,
-                target_ty: Some(target_ty),
+                target_ty,
             },
         )
     }

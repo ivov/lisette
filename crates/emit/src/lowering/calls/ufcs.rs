@@ -54,7 +54,7 @@ impl Planner<'_> {
             capture_boundary: CaptureBoundary::SiblingSequence,
             assigned_place: None,
             callee_is_builtin: false,
-            callee_pins_type_args: !type_args_string.is_empty(),
+            callee_pins_type_args: type_args_string.is_some(),
             receiver_binding: (!call_plan.resolved.is_prelude_dispatch)
                 .then(|| receiver_type_binding(&self.facts, function, &call_plan.resolved))
                 .flatten(),
@@ -160,26 +160,26 @@ impl Planner<'_> {
         receiver: &Expression,
         operand: ValuePlan,
     ) -> ValuePlan {
-        match receiver {
-            Expression::Call { .. } => operand
+        if matches!(receiver, Expression::Call { .. }) {
+            return operand
                 .map_expression(|setup, value| {
                     let temp = self.hoist_temp(setup, "ref", value);
                     GoExpression::address_of(GoExpression::identifier(temp))
                 })
-                .with_stability(Stability::StableAcrossCalls),
-            Expression::Identifier { .. } => operand
-                .map_expression(|_, value| GoExpression::address_of(value))
-                .with_stability(Stability::StableAcrossCalls),
-            _ if operand.setup().is_empty() => {
-                operand.map_observable_expression(|_, value| GoExpression::address_of(value))
-            }
-            _ => {
-                let (mut setup, value) = operand.into_parts();
-                let addressed = GoExpression::address_of(value);
-                let temp = self.hoist_temp(&mut setup, "ref", addressed);
-                ValuePlan::captured(setup, temp)
-            }
+                .with_stability(Stability::StableAcrossCalls);
         }
+        if matches!(receiver, Expression::Identifier { .. }) {
+            return operand
+                .map_expression(|_, value| GoExpression::address_of(value))
+                .with_stability(Stability::StableAcrossCalls);
+        }
+        if operand.setup().is_empty() {
+            return operand.map_observable_expression(|_, value| GoExpression::address_of(value));
+        }
+        let (mut setup, value) = operand.into_parts();
+        let addressed = GoExpression::address_of(value);
+        let temp = self.hoist_temp(&mut setup, "ref", addressed);
+        ValuePlan::captured(setup, temp)
     }
 
     pub(super) fn plan_receiver_method_ufcs(
@@ -205,13 +205,12 @@ impl Planner<'_> {
         let mut emitted_all = sequenced.values;
         let receiver = emitted_all.remove(0);
 
-        let receiver = match receiver.node() {
-            GoExpressionNode::AddressOf(inner)
-                if !is_address_of_composite_literal(args.first()) =>
-            {
-                receiver.peeled(inner)
-            }
-            _ => receiver,
+        let receiver = if let GoExpressionNode::AddressOf(inner) = receiver.node()
+            && !is_address_of_composite_literal(args.first())
+        {
+            receiver.peeled(inner)
+        } else {
+            receiver
         };
 
         ValuePlan::computed(
@@ -245,16 +244,16 @@ impl PlannerQueries<'_, '_> {
         callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
         member: &str,
-        type_args_string: GoType,
+        type_args_string: Option<GoType>,
     ) -> GoExpression {
         let qualified_name = self
             .facts
             .receiver_nominal_id(receiver_ty)
             .unwrap_or_else(|| unreachable!("UFCS receiver must be a constructor type"));
-        let export = callee
+        let declaration = callee
             .declaration
-            .map(|declaration| GoExport::from_visibility(*declaration.visibility()))
-            .unwrap_or(GoExport::Unexported);
+            .expect("a UFCS callee names a declaration");
+        let export = GoExport::from_visibility(*declaration.visibility());
 
         let qualified_method_name = self.qualify_method_call(&qualified_name, member, export);
         GoExpression::instantiation(qualified_method_name, type_args_string)

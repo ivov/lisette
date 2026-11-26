@@ -68,7 +68,7 @@ pub(crate) fn async_statement(kind: AsyncKind, call: GoExpression) -> Statement 
         GoExpression::call(
             GoExpression::unchecked_function_literal(
                 Vec::new(),
-                GoType::default(),
+                None,
                 LoweredBlock {
                     statements: vec![effect_statement(call)],
                 },
@@ -194,7 +194,20 @@ pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: O
             LoweredStatement::If(plan) => inherit_into_if(plan, line),
             LoweredStatement::Select(plan) => inherit_into_select(plan, line),
             LoweredStatement::Switch(plan) => inherit_into_switch(plan, line),
-            kind => {
+            kind @ LoweredStatement::Loop(_)
+            | kind @ LoweredStatement::Block(_)
+            | kind @ LoweredStatement::Body(_)
+            | kind @ LoweredStatement::Break(_)
+            | kind @ LoweredStatement::Continue(_)
+            | kind @ LoweredStatement::Const(_)
+            | kind @ LoweredStatement::Return(_)
+            | kind @ LoweredStatement::Assign(_)
+            | kind @ LoweredStatement::Async { .. }
+            | kind @ LoweredStatement::Define(_)
+            | kind @ LoweredStatement::VarDeclaration { .. }
+            | kind @ LoweredStatement::Discard { .. }
+            | kind @ LoweredStatement::ExpressionStatement { .. }
+            | kind @ LoweredStatement::UnreachablePanic => {
                 kind.for_each_expression_mut(&mut |value| inherit_into_expression(value, line));
                 kind.for_each_block_mut(&mut |body| {
                     inherit_line_directives(&mut body.statements, line)
@@ -591,7 +604,7 @@ impl LoopPlan {
         let mut body = FlowSummary::statements(&self.body.statements);
         let label = self.kind.label();
         let breaks = consume_loop_exits(&mut body.exits, label);
-        body.falls_through = breaks || !matches!(self.header, LoopHeader::Infinite);
+        body.falls_through = breaks || self.header.has_condition();
         body
     }
 }
@@ -633,6 +646,14 @@ pub(crate) enum LoopHeader {
 }
 
 impl LoopHeader {
+    pub(crate) fn has_condition(&self) -> bool {
+        match self {
+            LoopHeader::Infinite => false,
+            LoopHeader::Counted { condition, .. } => condition.is_some(),
+            LoopHeader::While(_) | LoopHeader::Range { .. } => true,
+        }
+    }
+
     fn for_each_expression_mut(&mut self, visit: &mut impl FnMut(&mut GoExpression)) {
         match self {
             LoopHeader::Infinite => {}
@@ -851,6 +872,32 @@ pub(crate) fn rename_generated_locals(
     super::visit::visit_statements_mut(statements, &mut Rename(by_id));
 }
 
+pub(crate) fn scope_statements(statements: &[Statement]) -> Vec<&LoweredStatement> {
+    let mut flat = Vec::new();
+    for statement in statements {
+        match &statement.kind {
+            LoweredStatement::Body(body) => flat.extend(scope_statements(&body.statements)),
+            kind @ LoweredStatement::If(_)
+            | kind @ LoweredStatement::Loop(_)
+            | kind @ LoweredStatement::Block(_)
+            | kind @ LoweredStatement::Break(_)
+            | kind @ LoweredStatement::Continue(_)
+            | kind @ LoweredStatement::Const(_)
+            | kind @ LoweredStatement::Return(_)
+            | kind @ LoweredStatement::Assign(_)
+            | kind @ LoweredStatement::Async { .. }
+            | kind @ LoweredStatement::Select(_)
+            | kind @ LoweredStatement::Switch(_)
+            | kind @ LoweredStatement::Define(_)
+            | kind @ LoweredStatement::VarDeclaration { .. }
+            | kind @ LoweredStatement::Discard { .. }
+            | kind @ LoweredStatement::ExpressionStatement { .. }
+            | kind @ LoweredStatement::UnreachablePanic => flat.push(kind),
+        }
+    }
+    flat
+}
+
 pub(crate) fn for_each_statements_mut(
     statements: &mut Vec<Statement>,
     f: &mut impl FnMut(&mut Vec<Statement>),
@@ -871,7 +918,6 @@ pub(crate) fn for_each_statements_mut(
 #[derive(Default)]
 pub(crate) struct GoUses {
     locals: FxHashSet<LocalId>,
-    spellings: FxHashSet<String>,
 }
 
 impl GoUses {
@@ -893,17 +939,12 @@ impl GoUses {
         self.locals.contains(&id)
     }
 
-    pub(crate) fn contains(&self, name: &str) -> bool {
-        self.spellings.contains(name)
-    }
-
     fn record(&mut self, node: &GoExpressionNode) {
         if let GoExpressionNode::Identifier(name) = node {
             assert!(
                 !name.is_pending(),
                 "local-use analysis needs identified reads"
             );
-            self.spellings.insert(name.spelling().to_string());
             if let Some(id) = name.id() {
                 self.locals.insert(id);
             }
@@ -932,10 +973,6 @@ impl LoweredBlock {
 }
 
 impl LoweredStatement {
-    pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
-        self.walk(&mut Expressions(visit));
-    }
-
     pub(crate) fn own_types(&self, visit: &mut impl FnMut(&GoType)) {
         match self {
             LoweredStatement::VarDeclaration { go_type, .. }
@@ -943,7 +980,22 @@ impl LoweredStatement {
                 go_type: Some(go_type),
                 ..
             }) => visit(go_type),
-            _ => {}
+            LoweredStatement::If(_)
+            | LoweredStatement::Loop(_)
+            | LoweredStatement::Block(_)
+            | LoweredStatement::Body(_)
+            | LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Const(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Assign(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Select(_)
+            | LoweredStatement::Switch(_)
+            | LoweredStatement::Define(_)
+            | LoweredStatement::Discard { .. }
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => {}
         }
     }
 
@@ -1089,7 +1141,21 @@ impl LoweredStatement {
                 names.iter().any(|name| name.id() == Some(id))
             }
             LoweredStatement::VarDeclaration { name, .. } => name.id() == Some(id),
-            _ => false,
+            LoweredStatement::If(_)
+            | LoweredStatement::Loop(_)
+            | LoweredStatement::Block(_)
+            | LoweredStatement::Body(_)
+            | LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Const(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Assign(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Select(_)
+            | LoweredStatement::Switch(_)
+            | LoweredStatement::Discard { .. }
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => false,
         })
     }
 
@@ -1104,7 +1170,22 @@ impl LoweredStatement {
                 value: Some(_),
                 ..
             } => name,
-            _ => return false,
+            LoweredStatement::If(_)
+            | LoweredStatement::Loop(_)
+            | LoweredStatement::Block(_)
+            | LoweredStatement::Body(_)
+            | LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Const(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Assign(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Select(_)
+            | LoweredStatement::Switch(_)
+            | LoweredStatement::VarDeclaration { .. }
+            | LoweredStatement::Discard { .. }
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => return false,
         };
 
         *bound = go_name.clone();
@@ -1127,11 +1208,11 @@ impl LoweredStatement {
             | LoweredStatement::VarDeclaration { .. }
             | LoweredStatement::Discard { .. }
             | LoweredStatement::UnreachablePanic
-            | LoweredStatement::Return(_) => true,
+            | LoweredStatement::Return(_)
+            | LoweredStatement::ExpressionStatement { .. } => true,
             LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => true,
             },
-            LoweredStatement::ExpressionStatement { expression, .. } => !expression.is_empty(),
         }
     }
 

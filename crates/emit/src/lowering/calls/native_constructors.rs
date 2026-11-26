@@ -24,9 +24,11 @@ use syntax::types::{SimpleKind, Type};
 fn keys_checked_as_go_constants(keys: &[&Expression], key_kind: Option<SimpleKind>) -> bool {
     let Some(literals) = keys
         .iter()
-        .map(|key| match key {
-            Expression::Literal { literal, .. } => Some(literal),
-            _ => None,
+        .map(|key| {
+            let Expression::Literal { literal, .. } = key else {
+                return None;
+            };
+            Some(literal)
         })
         .collect::<Option<Vec<_>>>()
     else {
@@ -153,7 +155,7 @@ impl Planner<'_> {
         let operand = self.plan_operand(argument, ExpressionContext::value());
         let (setup, source) = operand.into_parts();
 
-        let slice_name = self.scope.helper_local("s", self.names);
+        let slice_name = self.scope.new_unreserved_local("s", self.names);
         let slice = GoExpression::identifier(slice_name.clone());
         let ok_values = shape.ok_values(vec![GoExpression::conversion(array_go, slice.clone())]);
         let value = GoExpression::call(
@@ -287,12 +289,14 @@ fn map_from_literal_entries<'e>(ctx: &NativeCallContext<'e>) -> Option<&'e [Expr
 fn literal_map_pairs(entries: &[Expression]) -> Option<Vec<(&Expression, &Expression)>> {
     entries
         .iter()
-        .map(|entry| match entry {
-            Expression::Tuple { elements, .. } => match elements.as_slice() {
-                [key, value] => Some((key, value)),
-                _ => None,
-            },
-            _ => None,
+        .map(|entry| {
+            let Expression::Tuple { elements, .. } = entry else {
+                return None;
+            };
+            let [key, value] = elements.as_slice() else {
+                return None;
+            };
+            Some((key, value))
         })
         .collect()
 }

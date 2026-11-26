@@ -111,7 +111,14 @@ impl FunctionLayout {
                 option_type: self.result_layout.logical_type().clone(),
                 payload: Box::new(payload.clone()),
             }),
-            _ => None,
+            ReturnLayout::Void
+            | ReturnLayout::Value(_)
+            | ReturnLayout::BareError
+            | ReturnLayout::Result(_)
+            | ReturnLayout::Partial(_)
+            | ReturnLayout::CommaOk(_)
+            | ReturnLayout::Sentinel { .. }
+            | ReturnLayout::Tuple { .. } => None,
         }
     }
 
@@ -229,9 +236,10 @@ pub(crate) enum ValueLayout {
 
 impl ValueLayout {
     pub(crate) fn underlying(&self) -> &Self {
-        match self {
-            Self::Named { underlying, .. } => underlying.underlying(),
-            _ => self,
+        if let Self::Named { underlying, .. } = self {
+            underlying.underlying()
+        } else {
+            self
         }
     }
 
@@ -273,7 +281,14 @@ impl ValueLayout {
                 },
                 payload,
             }),
-            _ => None,
+            Self::Plain(_)
+            | Self::Reference { .. }
+            | Self::Slice { .. }
+            | Self::Map { .. }
+            | Self::Array { .. }
+            | Self::Function { .. }
+            | Self::Tuple { .. }
+            | Self::Named { .. } => None,
         }
     }
 
@@ -283,14 +298,30 @@ impl ValueLayout {
             | Self::TaggedOption { payload, .. }
             | Self::NullableOption { payload, .. }
             | Self::PointerOption { payload, .. } => Some(payload),
-            _ => None,
+            Self::Plain(_)
+            | Self::Reference { .. }
+            | Self::Slice { .. }
+            | Self::Map { .. }
+            | Self::Array { .. }
+            | Self::Function { .. }
+            | Self::Tuple { .. }
+            | Self::Named { .. } => None,
         }
     }
 
     pub(crate) fn element(&self) -> Option<&Self> {
         match self.underlying() {
             Self::Slice { element, .. } | Self::Array { element, .. } => Some(element),
-            _ => None,
+            Self::Plain(_)
+            | Self::Fallible { .. }
+            | Self::TaggedOption { .. }
+            | Self::NullableOption { .. }
+            | Self::PointerOption { .. }
+            | Self::Reference { .. }
+            | Self::Map { .. }
+            | Self::Function { .. }
+            | Self::Tuple { .. }
+            | Self::Named { .. } => None,
         }
     }
 
@@ -304,21 +335,39 @@ impl ValueLayout {
             } else {
                 payload
             }),
-            _ => None,
+            Self::Plain(_)
+            | Self::Reference { .. }
+            | Self::Slice { .. }
+            | Self::Map { .. }
+            | Self::Array { .. }
+            | Self::Function { .. }
+            | Self::Tuple { .. }
+            | Self::Named { .. } => None,
         }
     }
 
     pub(crate) fn indexed_element(&self) -> Option<&Self> {
         match self.underlying() {
             Self::Map { value, .. } => Some(value),
-            _ => self.element(),
+            Self::Plain(_)
+            | Self::Fallible { .. }
+            | Self::TaggedOption { .. }
+            | Self::NullableOption { .. }
+            | Self::PointerOption { .. }
+            | Self::Reference { .. }
+            | Self::Slice { .. }
+            | Self::Array { .. }
+            | Self::Function { .. }
+            | Self::Tuple { .. }
+            | Self::Named { .. } => self.element(),
         }
     }
 
     pub(crate) fn tuple_elements(&self) -> Option<&[Self]> {
-        match self.underlying() {
-            Self::Tuple { elements, .. } => Some(elements),
-            _ => None,
+        if let Self::Tuple { elements, .. } = self.underlying() {
+            Some(elements)
+        } else {
+            None
         }
     }
 
@@ -435,7 +484,18 @@ impl ValueLayout {
             {
                 Some(function_type)
             }
-            _ => None,
+            Self::Plain(_)
+            | Self::Fallible { .. }
+            | Self::TaggedOption { .. }
+            | Self::NullableOption { .. }
+            | Self::PointerOption { .. }
+            | Self::Reference { .. }
+            | Self::Slice { .. }
+            | Self::Map { .. }
+            | Self::Array { .. }
+            | Self::Function { .. }
+            | Self::Tuple { .. }
+            | Self::Named { .. } => None,
         }
     }
 

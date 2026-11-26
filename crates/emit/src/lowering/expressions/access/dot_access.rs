@@ -283,6 +283,7 @@ impl Planner<'_> {
         Some(coerced)
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn plan_coerced_expression(
         &mut self,
         expression: &Expression,
@@ -345,17 +346,15 @@ fn go_constant_exceeds_int(facts: &EmitFacts<'_>, package: &str, member: &str, t
     let qualified_name = format!("{}.{}", package, member);
     facts
         .definition(qualified_name.as_str())
-        .and_then(|definition| definition.const_value()?.value())
+        .const_value()
+        .and_then(|constant| constant.value())
         .is_some_and(|value| constant::converts_go_constant(&value, ty))
 }
 
 fn package_member_is_fixed(facts: &EmitFacts<'_>, package: &str, member: &str) -> bool {
     let qualified_name = format!("{}.{}", package, member);
-    facts
-        .definition(qualified_name.as_str())
-        .is_some_and(|definition| {
-            matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
-        })
+    let definition = facts.definition(qualified_name.as_str());
+    matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
 }
 
 impl PlannerQueries<'_, '_> {
@@ -379,7 +378,10 @@ impl PlannerQueries<'_, '_> {
         self.facts.prelude_receiver_method_layouts(
             &receiver.get_type(),
             callee.declared_type()?.as_function_type()?,
-            callee.instantiated.as_function_type()?,
+            callee
+                .instantiated
+                .as_function_type()
+                .expect("a callee must have a function type"),
             callee.function_layout(self.facts),
         )
     }
@@ -428,7 +430,13 @@ impl PlannerQueries<'_, '_> {
                     go_name::tuple_struct_field(index),
                 ))
             }
-            _ => None,
+            DotAccessResolution::Unresolved
+            | DotAccessResolution::StructField { .. }
+            | DotAccessResolution::PackageMember { .. }
+            | DotAccessResolution::EnumVariant { .. }
+            | DotAccessResolution::InstanceMethod { .. }
+            | DotAccessResolution::InstanceMethodValue { .. }
+            | DotAccessResolution::StaticMethod { .. } => None,
         }
     }
 
@@ -471,10 +479,7 @@ impl PlannerQueries<'_, '_> {
         if ctx.is_callee() || expression_ty.as_import_namespace().is_none() {
             return base_access;
         }
-        match self.format_value_type_args(dot_access) {
-            Some(type_args) => GoExpression::instantiation(base_access, type_args),
-            None => base_access,
-        }
+        GoExpression::instantiation(base_access, self.format_value_type_args(dot_access))
     }
 
     fn try_plan_newtype_cast(
@@ -537,7 +542,12 @@ impl PlannerQueries<'_, '_> {
                 };
                 self.try_plan_instance_method_value_dot(member, result_ty, export, spelling)
             }
-            _ => None,
+            DotAccessResolution::Unresolved
+            | DotAccessResolution::StructField { .. }
+            | DotAccessResolution::TupleStructField { .. }
+            | DotAccessResolution::TupleElement
+            | DotAccessResolution::PackageMember { .. }
+            | DotAccessResolution::InstanceMethod { .. } => None,
         }
     }
 
@@ -573,7 +583,19 @@ impl PlannerQueries<'_, '_> {
                     Vec::new(),
                 ))
             }
-            _ => None,
+            Type::Simple(_)
+            | Type::Compound { .. }
+            | Type::ImportNamespace(_)
+            | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Forall { .. }
+            | Type::Parameter(_)
+            | Type::Never
+            | Type::Tuple(_)
+            | Type::Array { .. }
+            | Type::Error
+            | Type::ReceiverPlaceholder => None,
         }
     }
 
@@ -587,7 +609,6 @@ impl PlannerQueries<'_, '_> {
         if ctx.is_callee() {
             return function;
         }
-        let type_args = self.format_value_type_args(dot_access);
-        GoExpression::instantiation(function, type_args.unwrap_or_default())
+        GoExpression::instantiation(function, self.format_value_type_args(dot_access))
     }
 }

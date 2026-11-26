@@ -43,19 +43,20 @@ struct Walker {
 
 impl Walker {
     fn names_the_local(&self, expression: &Expression) -> bool {
-        match expression {
+        matches!(
+            expression,
             Expression::Identifier {
                 resolution: IdentifierResolution::Binding(id),
                 ..
-            } => self.binding_id == *id,
-            _ => false,
-        }
+            } if self.binding_id == *id
+        )
     }
 
     fn targets_local(&self, target: &Expression) -> bool {
         target.root_binding_id() == Some(self.binding_id)
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn walk(&mut self, expression: &Expression) -> Option<()> {
         match expression {
             Expression::Identifier { .. } if self.names_the_local(expression) => {
@@ -203,9 +204,8 @@ impl Walker {
 }
 
 fn is_component_arm(pattern: &Pattern) -> bool {
-    match pattern {
-        Pattern::WildCard { .. } => true,
-        _ => matches!(
+    matches!(pattern, Pattern::WildCard { .. })
+        || matches!(
             prelude_variant(pattern),
             Some((
                 PreludeVariant::Some | PreludeVariant::None | PreludeVariant::Ok | PreludeVariant::Err,
@@ -214,8 +214,7 @@ fn is_component_arm(pattern: &Pattern) -> bool {
                 && fields.iter().all(|field| {
                     matches!(field, Pattern::WildCard { .. } | Pattern::Identifier { .. })
                 })
-        ),
-    }
+        )
 }
 
 fn binds_payload(pattern: &Pattern) -> bool {

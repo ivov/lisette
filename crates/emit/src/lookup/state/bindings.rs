@@ -1,4 +1,4 @@
-use crate::target::ir::local::GoIdentifier;
+use crate::target::ir::local::{GoIdentifier, LocalId};
 use crate::target::ir::values::{GoExpression, Stability};
 use syntax::types::Type;
 
@@ -88,13 +88,10 @@ impl BindingValue {
         }
     }
 
-    pub(crate) fn mentions_local(&self, local: &GoIdentifier) -> bool {
-        let Some(id) = local.id() else {
-            return false;
-        };
+    pub(crate) fn mentions_local(&self, id: LocalId) -> bool {
         match self {
             Self::GoName(name) | Self::GoConst(name) => name.id() == Some(id),
-            Self::InlineExpression(inline) => inline.expression().node().mentions_local(local),
+            Self::InlineExpression(inline) => inline.expression().node().mentions_local(id),
             Self::Components(components) => {
                 components.value.id() == Some(id) || components.status.id() == Some(id)
             }

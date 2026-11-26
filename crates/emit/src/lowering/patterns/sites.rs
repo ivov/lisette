@@ -1,5 +1,4 @@
 use crate::lowering::abi::fallible_producer::ResultFusePlan;
-use crate::lowering::expressions::operand_order::is_unmutated_identifier;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::effect_statement;
 use std::borrow::Cow;
@@ -8,7 +7,6 @@ use std::slice;
 use crate::lowering::patterns::binding_declarations::{
     has_binding_or_pattern, split_binding_or_patterns,
 };
-use crate::target::ir::bodies::GoUses;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 
 use syntax::ast::{Expression, Pattern, Span};
@@ -114,9 +112,10 @@ fn field_path_go_root(expression: &GoExpression) -> Option<&GoIdentifier> {
     while let GoExpressionNode::Selector { base: inner, .. } = base {
         base = inner.as_ref();
     }
-    match base {
-        GoExpressionNode::Identifier(name) => Some(name),
-        _ => None,
+    if let GoExpressionNode::Identifier(name) = base {
+        Some(name)
+    } else {
+        None
     }
 }
 
@@ -225,7 +224,7 @@ impl Planner<'_> {
             ty: &value_ty,
         };
 
-        let subject_is_fixed = is_unmutated_identifier(&self.facts, scrutinee);
+        let subject_is_fixed = self.queries().place_read_stability(scrutinee).is_fixed();
         let body = if matches!(pattern, Pattern::Or { .. }) || has_binding_or_pattern(pattern) {
             self.lower_let_else_or_pattern(pattern, subject, fail)
         } else {
@@ -594,9 +593,10 @@ impl Planner<'_> {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let alternatives = match pattern {
-            Pattern::Or { patterns, .. } => patterns.as_slice(),
-            _ => slice::from_ref(pattern),
+        let alternatives = if let Pattern::Or { patterns, .. } = pattern {
+            patterns.as_slice()
+        } else {
+            slice::from_ref(pattern)
         };
         let mut infos: Vec<_> = alternatives
             .iter()
@@ -612,14 +612,7 @@ impl Planner<'_> {
         let failure = refutable.then(|| self.lower_refutable_fail(fail, subject_var));
 
         let mut statements = Vec::new();
-        let failure_uses = failure
-            .as_ref()
-            .map(|failure| GoUses::of(&failure.statements));
-        self.declare_alternative_bindings(
-            &mut statements,
-            &infos[0].bindings,
-            failure_uses.as_ref(),
-        );
+        self.declare_alternative_bindings(&mut statements, &infos[0].bindings);
         let alternatives = self.prepare_refutable_alternatives(&mut statements, infos, subject_var);
         let mut pieces = Vec::new();
         for alternative in alternatives {
@@ -649,7 +642,6 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         bindings: &[PatternBinding],
-        failure_uses: Option<&GoUses>,
     ) {
         for binding in bindings {
             let (go_name, ty) = match &binding.target {
@@ -665,13 +657,7 @@ impl Planner<'_> {
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
             };
 
-            let go_name = if failure_uses.is_some_and(|uses| uses.contains(&go_name.preferred())) {
-                let fresh = self.fresh_declared(go_name);
-                self.scope
-                    .bind_new_local(&binding.lisette_name, &binding.binding_ids, fresh)
-            } else {
-                self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, go_name)
-            };
+            let go_name = self.claim_binding(&binding.lisette_name, &binding.binding_ids, go_name);
 
             let go_type = self.queries().go_type(ty);
             statements.push(declare(go_name, go_type));
@@ -771,7 +757,24 @@ impl PlannerQueries<'_, '_> {
             GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => {
                 self.plan_rests_in_stable_name(plan)
             }
-            _ => {
+            GoExpressionNode::Literal(_)
+            | GoExpressionNode::Type(_)
+            | GoExpressionNode::CompositeLiteral { .. }
+            | GoExpressionNode::Call { .. }
+            | GoExpressionNode::Instantiation { .. }
+            | GoExpressionNode::Selector { .. }
+            | GoExpressionNode::Index { .. }
+            | GoExpressionNode::Slice { .. }
+            | GoExpressionNode::TypeAssertion { .. }
+            | GoExpressionNode::Unary { .. }
+            | GoExpressionNode::AddressOf(_)
+            | GoExpressionNode::Dereference(_)
+            | GoExpressionNode::Binary { .. }
+            | GoExpressionNode::Conversion { .. }
+            | GoExpressionNode::Spread(_)
+            | GoExpressionNode::FunctionLiteral { .. }
+            | GoExpressionNode::Verbatim(_)
+            | GoExpressionNode::Unreachable => {
                 guards == SubjectGuards::Absent
                     && field_path_go_root(expression).is_some_and(|root| root.id().is_some())
             }

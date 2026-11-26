@@ -144,6 +144,7 @@ impl Planner<'_> {
         )
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {
         match target {
             Expression::Identifier { .. } | Expression::Literal { .. } => Vec::new(),
@@ -233,6 +234,7 @@ impl Planner<'_> {
         (target_capture, target)
     }
 
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn plan_place(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -537,6 +539,7 @@ fn is_compound_eligible(operator: &BinaryOperator) -> bool {
     )
 }
 
+#[allow(clippy::wildcard_enum_match_arm)]
 fn is_place_expression(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
     match expression {
         Expression::Identifier { .. }
@@ -555,6 +558,7 @@ fn reads_through_reference(facts: &EmitFacts<'_>, base: &Expression) -> bool {
     matches!(base, Expression::Identifier { .. }) && facts.is_reference(&base.get_type())
 }
 
+#[allow(clippy::wildcard_enum_match_arm)]
 pub(in crate::lowering) fn is_lvalue_chain(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
     match expression {
         Expression::Identifier { .. }
@@ -571,6 +575,7 @@ pub(in crate::lowering) fn is_lvalue_chain(facts: &EmitFacts<'_>, expression: &E
 }
 
 impl PlannerQueries<'_, '_> {
+    #[allow(clippy::wildcard_enum_match_arm)]
     fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
         match target {
             Expression::DotAccess {

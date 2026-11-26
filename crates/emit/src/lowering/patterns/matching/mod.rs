@@ -29,6 +29,7 @@ use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::source_name::SourceName;
+use std::iter;
 use syntax::EcoString;
 use syntax::ast::{BindingId, Expression, MatchArm, Pattern};
 use syntax::types::Type;
@@ -135,6 +136,11 @@ impl Planner<'_> {
         let mut statements: Vec<Statement> = Vec::new();
 
         if self.facts.is_never(&subject.get_type()) {
+            for arm in arms {
+                for dropped in arm.guard.iter().chain(iter::once(&arm.expression)) {
+                    self.conversions.record_dropped_code(dropped.get_span());
+                }
+            }
             return LoweredBlock {
                 statements: self.lower_never_value(subject),
             };
@@ -159,7 +165,10 @@ impl Planner<'_> {
                 ref name,
                 ref expression,
             } if inline_subject_into_header(&mut block.statements, name, expression) => {}
-            resolved => resolved.push_declaration(&mut statements),
+            resolved @ ResolvedSubject::Existing(_)
+            | resolved @ ResolvedSubject::Deferred { .. } => {
+                resolved.push_declaration(&mut statements)
+            }
         }
         statements.extend(block.statements);
 
@@ -345,7 +354,22 @@ fn header_mut(statement: &mut Statement) -> Option<&mut GoExpression> {
             SwitchKind::Conditional => None,
         },
         LoweredStatement::If(plan) if plan.initializer.is_none() => Some(&mut plan.condition),
-        _ => None,
+        LoweredStatement::If(_)
+        | LoweredStatement::Loop(_)
+        | LoweredStatement::Block(_)
+        | LoweredStatement::Body(_)
+        | LoweredStatement::Break(_)
+        | LoweredStatement::Continue(_)
+        | LoweredStatement::Const(_)
+        | LoweredStatement::Return(_)
+        | LoweredStatement::Assign(_)
+        | LoweredStatement::Async { .. }
+        | LoweredStatement::Select(_)
+        | LoweredStatement::Define(_)
+        | LoweredStatement::VarDeclaration { .. }
+        | LoweredStatement::Discard { .. }
+        | LoweredStatement::ExpressionStatement { .. }
+        | LoweredStatement::UnreachablePanic => None,
     }
 }
 

@@ -178,6 +178,7 @@ impl CompiledTest {
             equality_index,
             go_package_names,
             go_package_ids,
+            typedef_files,
         ) = {
             let mut typed_ast = store
                 .get_file(TEST_FILE_ID)
@@ -232,6 +233,14 @@ impl CompiledTest {
                 .cloned()
                 .collect();
 
+            let typedef_files: FxHashMap<u32, File> = store
+                .packages()
+                .values()
+                .flat_map(|package| package.files.iter())
+                .filter(|(_, file)| file.is_d_lis())
+                .map(|(id, file)| (*id, file.clone()))
+                .collect();
+
             let errors = checker.sink.into_diagnostics();
 
             (
@@ -243,6 +252,7 @@ impl CompiledTest {
                 equality_index,
                 go_package_names,
                 go_package_ids,
+                typedef_files,
             )
         };
 
@@ -257,6 +267,7 @@ impl CompiledTest {
             equality_index,
             go_package_names,
             go_package_ids,
+            typedef_files,
         }
     }
 }
@@ -272,6 +283,7 @@ pub struct InferenceResult {
     pub equality_index: EqualityIndex,
     pub go_package_names: FxHashMap<String, String>,
     pub go_package_ids: FxHashSet<String>,
+    pub typedef_files: FxHashMap<u32, File>,
 }
 
 fn unwrap_hoisted_test_wrapper(expression: Expression) -> Option<Expression> {

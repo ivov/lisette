@@ -10,10 +10,7 @@ pub(in crate::output) fn is_plain_type_name(go_type: &GoType) -> bool {
     let printed = go_type.alias.as_deref().unwrap_or(go_type);
     matches!(
         printed.shape.as_ref(),
-        GoTypeShape::Empty
-            | GoTypeShape::Name(_)
-            | GoTypeShape::Qualified { .. }
-            | GoTypeShape::EmptyInterface
+        GoTypeShape::Name(_) | GoTypeShape::Qualified { .. } | GoTypeShape::EmptyInterface
     )
 }
 
@@ -22,7 +19,6 @@ fn write_go_type(text: &mut String, go_type: &GoType) {
         return write_go_type(text, alias);
     }
     match go_type.shape.as_ref() {
-        GoTypeShape::Empty => {}
         GoTypeShape::Name(name) => text.push_str(name),
         GoTypeShape::Qualified { package, member } => {
             text.push_str(package);

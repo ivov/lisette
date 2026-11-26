@@ -36,11 +36,11 @@ pub(super) enum NativeCallForm<'a> {
 
 impl<'a> NativeCallForm<'a> {
     pub(super) fn method(function: &'a Expression) -> Self {
-        match function {
-            Expression::DotAccess { expression, .. } => Self::Dot {
-                receiver: expression,
-            },
-            _ => Self::Identifier,
+        let Expression::DotAccess { expression, .. } = function else {
+            return Self::Identifier;
+        };
+        Self::Dot {
+            receiver: expression,
         }
     }
 
@@ -123,6 +123,12 @@ impl<'p> PlannerQueries<'_, 'p> {
         'p: 'a,
     {
         let site = CallSite::of(value)?;
+        if !matches!(
+            self.facts.checked(site.callee).callee().operation,
+            CallOperation::Native { .. }
+        ) {
+            return None;
+        }
         let plan = self.plan_call(site);
         let CallableOrigin::Source(CallOperation::Native { kind, method }) = plan.resolved.origin
         else {

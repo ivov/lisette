@@ -162,7 +162,9 @@ impl NameCollector<'_, '_> {
                 methods,
                 ..
             } => collect_impl_block(self.facts, receiver_name, methods, collected),
-            _ => {}
+            Expression::VariableDeclaration { .. }
+            | Expression::PackageImport { .. }
+            | body_expression!() => {}
         }
     }
 
@@ -296,7 +298,10 @@ impl NameCollector<'_, '_> {
                         }
                     }
                 }
-                _ => {}
+                Expression::Const { .. }
+                | Expression::VariableDeclaration { .. }
+                | Expression::PackageImport { .. }
+                | body_expression!() => {}
             }
         }
         diagnostics
