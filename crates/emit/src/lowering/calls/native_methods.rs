@@ -1,6 +1,7 @@
 use super::{NativeCallContext, NativeCallForm, split_native_receiver};
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::queries::contains_call;
 use crate::lowering::calls::arguments::converts_for_inference;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::predicates::Polarity;
@@ -25,9 +26,7 @@ use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, Literal};
-use syntax::program::{
-    CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
-};
+use syntax::program::{CallOperation, ElementEquality, EqualityRecipe, NativeTypeKind};
 use syntax::program::{NativeInlineForm, NativeInlinePackage, NativeOperation};
 use syntax::types::Type;
 
@@ -280,16 +279,6 @@ pub(super) fn try_inline_native_method(
         arguments,
         polarity,
     ))
-}
-
-fn contains_call_expression(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::Call { .. } | Expression::Task { .. }
-    ) || expression
-        .children()
-        .into_iter()
-        .any(contains_call_expression)
 }
 
 fn array_to_slice_receiver<'e>(
@@ -639,7 +628,7 @@ impl Planner<'_> {
         if context.spread.is_some()
             || !NativeOperation::new(context.native_type, context.method)
                 .reads_elements_only(arguments.len())
-            || arguments.iter().any(contains_call_expression)
+            || arguments.iter().any(contains_call)
         {
             return None;
         }
@@ -1049,10 +1038,7 @@ impl PlannerQueries<'_, '_> {
         match Place::of(self.facts, expression) {
             Place::Name { .. } | Place::Deref { .. } | Place::ReferenceCall => true,
             Place::Field(site) => {
-                !matches!(
-                    site.resolution,
-                    DotAccessResolution::TupleStructField { is_newtype: true }
-                ) && self.receiver_is_addressable(site.receiver)
+                !site.reads_newtype() && self.receiver_is_addressable(site.receiver)
             }
             Place::Index { base, .. } => match self.facts.native_kind(&base.get_type()) {
                 Some(NativeTypeKind::Map) => false,

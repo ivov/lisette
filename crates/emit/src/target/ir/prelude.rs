@@ -108,6 +108,12 @@ pub(crate) enum ConstructorKind {
     Failure,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ConstructorCall<'e> {
+    pub(crate) kind: ConstructorKind,
+    pub(crate) args: &'e [Expression],
+}
+
 impl Fallible {
     pub(crate) fn from_type(ty: &Type) -> Option<Self> {
         if ty.is_result() {
@@ -129,7 +135,25 @@ impl Fallible {
         matches!(self, Self::Result { .. })
     }
 
-    pub(crate) fn classify_constructor(&self, expression: &Expression) -> Option<ConstructorKind> {
+    pub(crate) fn constructor_call<'e>(
+        &self,
+        expression: &'e Expression,
+    ) -> Option<ConstructorCall<'e>> {
+        if let Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } = expression
+        {
+            let kind = self.classify_constructor(callee)?;
+            return Some(ConstructorCall { kind, args });
+        }
+        let kind = self.classify_constructor(expression)?;
+        (kind == ConstructorKind::Failure && self.err_ty().is_none())
+            .then_some(ConstructorCall { kind, args: &[] })
+    }
+
+    fn classify_constructor(&self, expression: &Expression) -> Option<ConstructorKind> {
         match (self.is_result(), prelude_constructor(expression)?) {
             (true, PreludeVariant::Ok) | (false, PreludeVariant::Some) => {
                 Some(ConstructorKind::Success)

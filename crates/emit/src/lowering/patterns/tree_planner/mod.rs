@@ -11,7 +11,6 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::control_flow::branches::Divergence;
-use crate::lowering::patterns::binding_declarations::is_catchall_pattern;
 use crate::lowering::patterns::decision_tree::{
     AccessPath, ArmLeaf, ChainTail, Decision, GuardedLeaf, PatternBinding, SubjectRoot,
 };
@@ -80,11 +79,6 @@ fn callee_renders_inline(facts: &EmitFacts<'_>, callee: &Expression) -> bool {
         }
         _ => false,
     }
-}
-
-fn contains_call(expression: &Expression) -> bool {
-    matches!(expression, Expression::Call { .. })
-        || expression.children().into_iter().any(contains_call)
 }
 
 fn join_and(conditions: &[GoExpression]) -> Option<GoExpression> {
@@ -293,14 +287,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .iter()
             .all(|arm| self.planner.facts.is_never(&arm.expression.get_type()));
         let root_has_unguarded_terminal = tree.has_unguarded_terminal();
-        let last_arm_is_any_catchall = self
-            .arms
-            .last()
-            .is_some_and(|arm| !arm.has_guard() && is_catchall_pattern(&arm.pattern));
 
         let use_direct_return = place.is_return();
-        let unguarded_exit = root_has_unguarded_terminal || last_arm_is_any_catchall;
-        let skip_wrapper = !use_direct_return && unguarded_exit && all_arms_diverge;
+        let skip_wrapper = !use_direct_return && root_has_unguarded_terminal && all_arms_diverge;
 
         if use_direct_return || skip_wrapper {
             let ctx = WalkContext::retry_loop(place, None);
@@ -324,7 +313,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let ctx = WalkContext::retry_loop(place, Some(label.as_str()));
         let mut body: Vec<Statement> = Vec::new();
         self.walk(&mut body, tree, &ctx);
-        if !unguarded_exit {
+        if !root_has_unguarded_terminal {
             body.push(LoweredStatement::Break(LoopTransfer::Labeled(label.clone())).into());
         }
         statements.push(

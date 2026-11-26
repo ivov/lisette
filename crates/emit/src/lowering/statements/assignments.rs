@@ -515,9 +515,8 @@ fn reads_through_reference(facts: &EmitFacts<'_>, base: &Expression) -> bool {
 pub(in crate::lowering) fn is_lvalue_chain(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
     match Place::of(facts, expression) {
         Place::Name { .. } | Place::Deref { .. } | Place::ReferenceCall => true,
-        Place::Field(DotAccessSite { receiver: base, .. }) | Place::Index { base, .. } => {
-            is_lvalue_chain(facts, base)
-        }
+        Place::Field(site) => !site.reads_newtype() && is_lvalue_chain(facts, site.receiver),
+        Place::Index { base, .. } => is_lvalue_chain(facts, base),
         Place::Value => false,
     }
 }

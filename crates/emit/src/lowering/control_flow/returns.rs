@@ -17,7 +17,7 @@ use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement};
-use crate::target::ir::prelude::{ConstructorKind, Fallible, prelude_call};
+use crate::target::ir::prelude::{ConstructorCall, ConstructorKind, Fallible, prelude_call};
 use crate::target::ir::termination::list_terminates;
 use crate::target::ir::values::GoExpression;
 use crate::target::types::return_abi::{
@@ -66,7 +66,11 @@ impl Planner<'_> {
         };
         let fallible = self.facts.fallible(&written_ty)?;
 
-        if fallible.classify_constructor(expression) == Some(ConstructorKind::Failure) {
+        if let Some(ConstructorCall {
+            kind: ConstructorKind::Failure,
+            args: [],
+        }) = fallible.constructor_call(expression)
+        {
             return Some(self.lower_failure_constructor_return(&[], &fallible, &[]));
         }
 
@@ -116,23 +120,24 @@ impl Planner<'_> {
         fallible: &Fallible,
         return_ty: &Type,
     ) -> Vec<Statement> {
-        let args = site.args;
         let (inner, wraps) = self.queries().peel_wrap_err(site.expression);
-        if let Expression::Call {
-            expression: inner_callee,
-            args: inner_args,
-            ..
-        } = inner
+        if let Some(ConstructorCall {
+            kind: ConstructorKind::Failure,
+            args,
+        }) = fallible.constructor_call(inner)
             && !wraps.is_empty()
-            && fallible.classify_constructor(inner_callee) == Some(ConstructorKind::Failure)
         {
-            return self.lower_failure_constructor_return(inner_args, fallible, &wraps);
+            return self.lower_failure_constructor_return(args, fallible, &wraps);
         }
-        match fallible.classify_constructor(site.callee) {
-            Some(ConstructorKind::Success) => self.lower_success_constructor_return(args, fallible),
-            Some(ConstructorKind::Failure) => {
-                self.lower_failure_constructor_return(args, fallible, &[])
-            }
+        match fallible.constructor_call(site.expression) {
+            Some(ConstructorCall {
+                kind: ConstructorKind::Success,
+                args,
+            }) => self.lower_success_constructor_return(args, fallible),
+            Some(ConstructorCall {
+                kind: ConstructorKind::Failure,
+                args,
+            }) => self.lower_failure_constructor_return(args, fallible, &[]),
             None => self.lower_wrapped_passthrough_return(site, fallible, return_ty),
         }
     }
@@ -426,12 +431,7 @@ impl Planner<'_> {
         last: &Expression,
     ) -> Vec<Statement> {
         match last {
-            Expression::If { .. }
-            | Expression::Select { .. }
-            | Expression::IfLet { .. }
-            | Expression::Match { .. }
-                if let Some(branching) = Branching::of(last) =>
-            {
+            _ if let Some(branching) = Branching::of(last) => {
                 self.lower_branching_to_block(branching, &PlacePlan::Return)
                     .statements
             }

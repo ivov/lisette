@@ -4,7 +4,6 @@ use crate::target::ir::go_expression::Position;
 use syntax::ast::Expression;
 
 use crate::lowering::control_flow::branches::Divergence;
-use crate::lowering::patterns::binding_declarations::is_unconditional_catchall;
 use crate::lowering::patterns::decision_tree::{
     ArmLeaf, ChainArm, ChainTail, ChainTest, render_condition,
 };
@@ -23,11 +22,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         tail: &ChainTail,
         place: &PlacePlan,
     ) {
-        let chain_tail_is_exhaustive = !matches!(tail, ChainTail::Open)
-            || self
-                .arms
-                .last()
-                .is_some_and(|arm| !arm.has_guard() && is_unconditional_catchall(&arm.pattern));
+        let chain_tail_is_exhaustive = !matches!(tail, ChainTail::Open);
         self.lower_chain_branch(statements, tests, tail, place);
         if let Some(panic) = unreachable_panic_if_needed(place, chain_tail_is_exhaustive) {
             statements.push(panic);

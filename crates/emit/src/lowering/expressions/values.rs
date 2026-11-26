@@ -729,25 +729,6 @@ pub(in crate::lowering) fn with_source_positions(
     })
 }
 
-pub(in crate::lowering) fn contains_newtype_access(expression: &Expression) -> bool {
-    let mut current = expression;
-    while let Expression::DotAccess {
-        expression: inner,
-        resolution,
-        ..
-    } = current
-    {
-        if matches!(
-            resolution,
-            DotAccessResolution::TupleStructField { is_newtype: true }
-        ) {
-            return true;
-        }
-        current = inner;
-    }
-    false
-}
-
 impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn function_value_layout_change(
         &self,

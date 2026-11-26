@@ -194,6 +194,48 @@ impl<'a> EmitFacts<'a> {
         types::is_lisette_enum(ty, |id| Some(self.definition(id)))
     }
 
+    pub(crate) fn nominal_zero(&self, ty: &Type) -> NominalZero {
+        let Type::Nominal { id, params, .. } = ty else {
+            return NominalZero::Opaque;
+        };
+        let go_import = is_go_import(id.as_str());
+        if id == "prelude.Option" {
+            return NominalZero::OptionNone {
+                payload: params.first().cloned(),
+            };
+        }
+        if go_import && (self.is_interface(ty) || self.resolve_to_function_type(ty).is_some()) {
+            return NominalZero::GoZero;
+        }
+        if !go_import
+            && matches!(
+                self.definition(id.as_str()).body,
+                DefinitionBody::Enum { .. }
+            )
+        {
+            return NominalZero::LisetteEnum;
+        }
+        if let Some(underlying) = self.newtype_underlying(ty) {
+            return NominalZero::Newtype(underlying);
+        }
+        if go_import {
+            return NominalZero::GoImported;
+        }
+        if let Some(fields) = self.struct_fields(ty) {
+            return NominalZero::Struct(fields);
+        }
+        match self.immediate_underlying(ty) {
+            Some(underlying) => NominalZero::Underlying(underlying),
+            None => NominalZero::Opaque,
+        }
+    }
+
+    fn fields_keep_go_zero(&self, fields: &[(EcoString, FieldSelection)]) -> bool {
+        fields
+            .iter()
+            .all(|(_, selection)| self.go_zero_is_lisette_zero(&selection.field_ty()))
+    }
+
     pub(crate) fn go_zero_is_lisette_zero(&self, ty: &Type) -> bool {
         let ty = self.peel_alias(ty);
         match &ty {
@@ -205,29 +247,22 @@ impl<'a> EmitFacts<'a> {
             Type::Array { length, element } => {
                 *length == 0 || self.go_zero_is_lisette_zero(element)
             }
-            Type::Nominal { id, .. } => {
-                if self.is_option(&ty)
-                    || self.is_lisette_enum(&ty)
-                    || is_go_import(id.as_str())
-                        && (self.is_interface(&ty) || self.resolve_to_function_type(&ty).is_some())
-                {
-                    return true;
+            Type::Nominal { .. } => match self.nominal_zero(&ty) {
+                NominalZero::OptionNone { .. } | NominalZero::GoZero | NominalZero::LisetteEnum => {
+                    true
                 }
-                if let Some(underlying) = self.newtype_underlying(&ty) {
-                    return self.go_zero_is_lisette_zero(&underlying);
+                NominalZero::Newtype(underlying) | NominalZero::Underlying(underlying) => {
+                    self.go_zero_is_lisette_zero(&underlying)
                 }
-                if matches!(
-                    self.definition(id.as_str()).body,
-                    DefinitionBody::Struct { .. }
-                ) && let Some(fields) = self.struct_fields(&ty)
-                {
-                    return fields
-                        .iter()
-                        .all(|(_, selection)| self.go_zero_is_lisette_zero(&selection.field_ty()));
-                }
-                self.immediate_underlying(&ty)
-                    .is_some_and(|underlying| self.go_zero_is_lisette_zero(&underlying))
-            }
+                NominalZero::Struct(fields) => self.fields_keep_go_zero(&fields),
+                NominalZero::GoImported => match self.struct_fields(&ty) {
+                    Some(fields) => self.fields_keep_go_zero(&fields),
+                    None => self
+                        .immediate_underlying(&ty)
+                        .is_some_and(|underlying| self.go_zero_is_lisette_zero(&underlying)),
+                },
+                NominalZero::Opaque => false,
+            },
             Type::ImportNamespace(_)
             | Type::Function(_)
             | Type::Var { .. }
@@ -758,4 +793,15 @@ pub(crate) fn ref_stripped_type_parameter(ty: &Type) -> Option<EcoString> {
         return None;
     };
     Some(name)
+}
+
+pub(crate) enum NominalZero {
+    OptionNone { payload: Option<Type> },
+    GoZero,
+    LisetteEnum,
+    Newtype(Type),
+    GoImported,
+    Struct(Vec<(EcoString, FieldSelection)>),
+    Underlying(Type),
+    Opaque,
 }

@@ -25,27 +25,6 @@ pub(in crate::lowering) fn pattern_literal(literal: &Literal) -> GoLiteral {
     }
 }
 
-pub(in crate::lowering) fn is_catchall_pattern(pattern: &Pattern) -> bool {
-    match pattern {
-        Pattern::WildCard { .. } | Pattern::Identifier { .. } | Pattern::Unit { .. } => true,
-        Pattern::Literal { .. } | Pattern::EnumVariant { .. } => false,
-        Pattern::Struct { fields, rest, .. } => {
-            *rest && fields.iter().all(|f| is_catchall_pattern(&f.value))
-        }
-        Pattern::Tuple { elements, .. } => elements.iter().all(is_catchall_pattern),
-        Pattern::Slice { prefix, rest, .. } => prefix.is_empty() && rest.is_present(),
-        Pattern::Or { patterns, .. } => patterns.iter().any(is_catchall_pattern),
-        Pattern::AsBinding { pattern, .. } => is_catchall_pattern(pattern),
-    }
-}
-
-pub(in crate::lowering) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
-    let Pattern::Or { patterns, .. } = pattern else {
-        return is_catchall_pattern(pattern);
-    };
-    patterns.iter().all(is_catchall_pattern)
-}
-
 pub(in crate::lowering) fn pattern_binds_name(pattern: &Pattern, name: &str) -> bool {
     match pattern {
         Pattern::Identifier { identifier, .. } => identifier == name,

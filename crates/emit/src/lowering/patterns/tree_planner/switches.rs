@@ -1,8 +1,9 @@
 use super::chains::split_chain_with_catchall_lift;
 use super::{
     BranchTest, MatchSubject, TreePlanner, WalkContext, apply_leaf_terminator, capture_diverge,
-    contains_call, join_and,
+    join_and,
 };
+use crate::lookup::facts::queries::contains_call;
 use crate::lowering::patterns::tree_planner::guard_renders_inline;
 use std::iter;
 use syntax::go_names::ENUM_TAG_FIELD;

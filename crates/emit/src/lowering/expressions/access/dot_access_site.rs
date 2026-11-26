@@ -32,4 +32,11 @@ impl<'e> DotAccessSite<'e> {
             resolution,
         })
     }
+
+    pub(in crate::lowering) fn reads_newtype(&self) -> bool {
+        matches!(
+            self.resolution,
+            DotAccessResolution::TupleStructField { is_newtype: true }
+        )
+    }
 }

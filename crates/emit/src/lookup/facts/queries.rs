@@ -38,6 +38,13 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
     !(is_scalar_literal(expression) || matches!(expression, Expression::Identifier { .. }))
 }
 
+pub(crate) fn contains_call(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Call { .. } | Expression::Task { .. }
+    ) || expression.children().into_iter().any(contains_call)
+}
+
 impl<'a> EmitFacts<'a> {
     pub(crate) fn field_read_cannot_panic(&self, ty: &Type) -> bool {
         !self.is_nilable_go_type(ty) && !ty.is_variable() && !ty.is_placeholder()

@@ -12,7 +12,7 @@ use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::{LoweredBlock, Statement, define};
 use crate::target::ir::go_expression::FunctionLiteralLayout;
 use crate::target::ir::local::GoIdentifier;
-use crate::target::ir::prelude::{ConstructorKind, Fallible};
+use crate::target::ir::prelude::{ConstructorCall, ConstructorKind, Fallible};
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::return_abi::{
@@ -186,40 +186,26 @@ impl Planner<'_> {
         statements
     }
 
-    #[allow(clippy::wildcard_enum_match_arm)]
     pub(super) fn try_lower_error_constructor(
         &mut self,
         expression: &Expression,
         fallible: &Fallible,
     ) -> Option<Vec<Statement>> {
-        let mut statements: Vec<Statement> = Vec::new();
-        let err_arg = match expression {
-            Expression::Call {
-                expression: function,
-                args,
-                ..
-            } => {
-                if fallible.classify_constructor(function) != Some(ConstructorKind::Failure) {
-                    return None;
-                }
-                if !args.is_empty() {
-                    let (setup, value) = self
-                        .plan_value(&args[0], ExpressionContext::value())
-                        .into_parts();
-                    statements.extend(setup);
-                    Some(value)
-                } else {
-                    None
-                }
-            }
-            Expression::Identifier { .. } => {
-                if fallible.classify_constructor(expression) != Some(ConstructorKind::Failure) {
-                    return None;
-                }
-                None
-            }
-            _ => return None,
+        let Some(ConstructorCall {
+            kind: ConstructorKind::Failure,
+            args,
+        }) = fallible.constructor_call(expression)
+        else {
+            return None;
         };
+        let mut statements: Vec<Statement> = Vec::new();
+        let err_arg = args.first().map(|argument| {
+            let (setup, value) = self
+                .plan_value(argument, ExpressionContext::value())
+                .into_parts();
+            statements.extend(setup);
+            value
+        });
 
         let error = err_arg.map(|value| {
             self.convert_error_to_return_context(&mut statements, expression, value, fallible)

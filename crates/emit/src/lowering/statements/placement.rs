@@ -9,7 +9,6 @@ use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::expressions::operand_order::{LaterOperands, SpreadSequenceOptions};
 use crate::lowering::expressions::tuple_literal::TupleLiteral;
 use crate::lowering::expressions::values::TuplePosition;
-use crate::lowering::expressions::values::contains_newtype_access;
 use crate::lowering::patterns::binding_declarations::pattern_binds_name;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::assignments::PlaceOrdering;
@@ -26,7 +25,7 @@ use crate::target::ir::bodies::{
 use crate::target::ir::evaluation::Effects;
 use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode, GoUnaryOperator};
 use crate::target::ir::local::GoIdentifier;
-use crate::target::ir::prelude::{ConstructorKind, Fallible};
+use crate::target::ir::prelude::{ConstructorCall, ConstructorKind, Fallible};
 use crate::target::ir::values::Stability;
 use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::types::go_type::GoType;
@@ -59,21 +58,20 @@ fn calls_a_function(operation: Option<&CallOperation>) -> bool {
 
 fn fallible_constructor<'e>(
     fallible: &Fallible,
-    callee: &Expression,
-    args: &'e [Expression],
+    call: ConstructorCall<'e>,
 ) -> Option<(&'static str, Option<(&'e Expression, Type)>)> {
-    match (fallible.classify_constructor(callee), args) {
-        (Some(ConstructorKind::Success), [argument]) => Some((
+    match (call.kind, call.args) {
+        (ConstructorKind::Success, [argument]) => Some((
             fallible.ok_constructor(),
             Some((argument, fallible.ok_ty().clone())),
         )),
-        (Some(ConstructorKind::Failure), [argument]) if let Some(err_ty) = fallible.err_ty() => {
+        (ConstructorKind::Failure, [argument]) if let Some(err_ty) = fallible.err_ty() => {
             Some((fallible.err_constructor(), Some((argument, err_ty.clone()))))
         }
-        (Some(ConstructorKind::Failure), _) if fallible.err_ty().is_none() => {
+        (ConstructorKind::Failure, []) if fallible.err_ty().is_none() => {
             Some((fallible.err_constructor(), None))
         }
-        _ => None,
+        (ConstructorKind::Success | ConstructorKind::Failure, _) => None,
     }
 }
 
@@ -316,17 +314,45 @@ fn join_boolean_branches(
 }
 
 pub(in crate::lowering) fn requires_temp_var(expression: &Expression) -> bool {
-    matches!(
-        expression,
+    match expression {
         Expression::If { .. }
-            | Expression::IfLet { .. }
-            | Expression::Match { .. }
-            | Expression::Block { .. }
-            | Expression::Loop { .. }
-            | Expression::Propagate { .. }
-            | Expression::TryBlock { .. }
-            | Expression::Select { .. }
-    )
+        | Expression::IfLet { .. }
+        | Expression::Match { .. }
+        | Expression::Select { .. } => Branching::of(expression).is_some(),
+        Expression::Block { .. }
+        | Expression::Loop { .. }
+        | Expression::Propagate { .. }
+        | Expression::TryBlock { .. } => true,
+        Expression::Literal { .. }
+        | Expression::Lambda { .. }
+        | Expression::Let { .. }
+        | Expression::Identifier { .. }
+        | Expression::Call { .. }
+        | Expression::Tuple { .. }
+        | Expression::StructCall { .. }
+        | Expression::DotAccess { .. }
+        | Expression::Assignment { .. }
+        | Expression::Return { .. }
+        | Expression::RecoverBlock { .. }
+        | Expression::Binary { .. }
+        | Expression::Unary { .. }
+        | Expression::Paren { .. }
+        | Expression::RawGo { .. }
+        | Expression::While { .. }
+        | Expression::WhileLet { .. }
+        | Expression::For { .. }
+        | Expression::Break { .. }
+        | Expression::Continue { .. }
+        | Expression::Reference { .. }
+        | Expression::IndexedAccess { .. }
+        | Expression::Task { .. }
+        | Expression::Defer { .. }
+        | Expression::Assert { .. }
+        | Expression::Unit { .. }
+        | Expression::Range { .. }
+        | Expression::Cast { .. }
+        | declaration_expression!() => false,
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -338,10 +364,8 @@ pub(in crate::lowering) enum ElidableTail {
 impl ElidableTail {
     fn accepts(self, value: &Expression) -> bool {
         match self {
-            Self::Branching => matches!(
-                value,
-                Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
-            ),
+            Self::Branching => Branching::of(value)
+                .is_some_and(|branching| !matches!(branching, Branching::Select { .. })),
             Self::FallibleBlock => matches!(value, Expression::TryBlock { .. }),
         }
     }
@@ -538,7 +562,6 @@ impl<'p> Planner<'p> {
         vec![simple_assign(target, value).into()]
     }
 
-    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn lower_option_result_assignment(
         &mut self,
         target: &GoExpression,
@@ -558,40 +581,24 @@ impl<'p> Planner<'p> {
         };
         let line = self.facts.source_position(&actual_expression.get_span());
 
-        let statements = match actual_expression {
-            Expression::Call {
-                expression: callee,
-                args,
-                ..
-            } => {
-                let Some((constructor_name, constructor_arg)) =
-                    fallible_constructor(&fallible, callee, args)
-                else {
-                    return directed_first(
-                        line,
-                        self.lower_plain_assign(target, target_ty, expression),
-                    );
-                };
-
-                let value =
-                    self.plan_fallible_constructor(&fallible, constructor_name, constructor_arg);
-                vec![simple_assign(target, value).into()]
-            }
-            Expression::Identifier { .. } => {
-                if fallible.classify_constructor(actual_expression)
-                    == Some(ConstructorKind::Failure)
-                {
-                    let call = self.queries().fallible_call(
-                        &fallible,
-                        fallible.err_constructor(),
-                        Vec::new(),
-                    );
-                    vec![simple_assign(target, ValuePlan::computed(Vec::new(), call)).into()]
-                } else {
-                    self.lower_plain_assign(target, target_ty, expression)
-                }
-            }
-            _ => self.lower_block_to_var(expression, target, target_ty),
+        let statements = if let Some(call) = fallible.constructor_call(actual_expression) {
+            let Some((constructor_name, constructor_arg)) = fallible_constructor(&fallible, call)
+            else {
+                return directed_first(
+                    line,
+                    self.lower_plain_assign(target, target_ty, expression),
+                );
+            };
+            let value =
+                self.plan_fallible_constructor(&fallible, constructor_name, constructor_arg);
+            vec![simple_assign(target, value).into()]
+        } else if matches!(
+            actual_expression,
+            Expression::Call { .. } | Expression::Identifier { .. }
+        ) {
+            self.lower_plain_assign(target, target_ty, expression)
+        } else {
+            self.lower_block_to_var(expression, target, target_ty)
         };
 
         directed_first(line, statements)
@@ -764,10 +771,7 @@ impl<'p> Planner<'p> {
         let site = CallSite::of(last)?;
         let (growth, receiver) = slice_growth_method(&self.facts, site.callee)?;
 
-        let receiver_is_lvalue =
-            is_lvalue_chain(&self.facts, receiver) && !contains_newtype_access(receiver);
-
-        let (value, mut statements) = if receiver_is_lvalue {
+        let (value, mut statements) = if is_lvalue_chain(&self.facts, receiver) {
             self.lower_slice_growth_in_place(target, site, growth, receiver)
         } else {
             let (setup, value) = self

@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::lookup::facts::emit_facts::NominalZero;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
@@ -137,9 +138,7 @@ impl Planner<'_> {
                 let value = value.go_type(&self.queries());
                 GoExpression::empty_composite(GoType::map_of(&key, &value))
             }
-            (Type::Nominal { id, params, .. }, _) => {
-                self.lisette_zero_nominal(ty, id.as_str(), params)
-            }
+            (Type::Nominal { id, .. }, _) => self.lisette_zero_nominal(ty, id.as_str()),
             (Type::Tuple(slots), ValueLayout::Tuple { elements, .. }) => {
                 let parts: Vec<GoExpression> = elements
                     .iter()
@@ -162,52 +161,40 @@ impl Planner<'_> {
         }
     }
 
-    fn lisette_zero_nominal(&mut self, ty: &Type, id: &str, params: &[Type]) -> GoExpression {
-        if id == "prelude.Option" {
-            let [payload] = params else {
-                panic!(
-                    "internal error: an Option has {} type arguments",
-                    params.len()
-                );
-            };
-            let inner = self.queries().go_type(payload);
-            return GoExpression::call(
-                GoExpression::instantiation(
-                    GoExpression::generated(
-                        GeneratedPackage::Prelude,
-                        option_variant("None").constructor,
+    fn lisette_zero_nominal(&mut self, ty: &Type, id: &str) -> GoExpression {
+        match self.facts.nominal_zero(ty) {
+            NominalZero::OptionNone { payload } => {
+                let payload = payload.expect("internal error: an Option has one type argument");
+                let inner = self.queries().go_type(&payload);
+                GoExpression::call(
+                    GoExpression::instantiation(
+                        GoExpression::generated(
+                            GeneratedPackage::Prelude,
+                            option_variant("None").constructor,
+                        ),
+                        Some(GoType::type_argument(&inner)),
                     ),
-                    Some(GoType::type_argument(&inner)),
-                ),
-                Vec::new(),
-            );
-        }
-        let go_import = is_go_import(id);
-        if go_import
-            && (self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some())
-        {
-            return self.go_zero(ty);
-        }
-        if let Some(underlying) = self.facts.newtype_underlying(ty) {
-            let go_ty = self.queries().go_type(ty);
-            if go_import {
-                return self
-                    .go_newtype_zero(go_ty.clone(), &underlying)
-                    .unwrap_or_else(|| GoExpression::new_zero(go_ty));
+                    Vec::new(),
+                )
             }
-            let inner = self.lisette_zero(&underlying);
-            return GoExpression::conversion(go_ty, inner);
+            NominalZero::GoZero => self.go_zero(ty),
+            NominalZero::Newtype(underlying) => {
+                let go_ty = self.queries().go_type(ty);
+                if is_go_import(id) {
+                    return self
+                        .go_newtype_zero(go_ty.clone(), &underlying)
+                        .unwrap_or_else(|| GoExpression::new_zero(go_ty));
+                }
+                let inner = self.lisette_zero(&underlying);
+                GoExpression::conversion(go_ty, inner)
+            }
+            NominalZero::GoImported => self.queries().go_imported_zero(ty, id),
+            NominalZero::Struct(fields) => self.lisette_struct_zero(ty, fields),
+            NominalZero::Underlying(underlying) => self.lisette_zero(&underlying),
+            NominalZero::LisetteEnum | NominalZero::Opaque => {
+                GoExpression::empty_composite(self.queries().go_type(ty))
+            }
         }
-        if go_import {
-            return self.queries().go_imported_zero(ty, id);
-        }
-        if let Some(fields) = self.facts.struct_fields(ty) {
-            return self.lisette_struct_zero(ty, fields);
-        }
-        if let Some(underlying) = self.facts.immediate_underlying(ty) {
-            return self.lisette_zero(&underlying);
-        }
-        GoExpression::empty_composite(self.queries().go_type(ty))
     }
 
     fn lisette_struct_zero(
