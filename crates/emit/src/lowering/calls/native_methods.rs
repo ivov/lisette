@@ -7,6 +7,7 @@ use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::calls::slice_loop::SliceLoopTarget;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::index_access::range_var_bounds;
+use crate::lowering::expressions::access::place::Place;
 use crate::lowering::expressions::operand_order::{SequencedArray, SpreadSequenceOptions};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::assignments::lvalues_match;
@@ -23,7 +24,7 @@ use crate::target::ir::values::{CaptureBoundary, GoExpression};
 use crate::target::names::go_name;
 use crate::target::names::go_name::GeneratedPackage;
 use crate::target::types::go_type::GoType;
-use syntax::ast::{Expression, Literal, UnaryOperator};
+use syntax::ast::{Expression, Literal};
 use syntax::program::{
     CallOperation, DotAccessResolution, ElementEquality, EqualityRecipe, NativeTypeKind,
 };
@@ -1041,36 +1042,19 @@ impl PlannerQueries<'_, '_> {
         ))
     }
 
-    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn receiver_is_addressable(&self, expression: &Expression) -> bool {
         if self.facts.is_reference(&expression.get_type()) {
             return true;
         }
-        match expression {
-            Expression::Identifier { .. }
-            | Expression::Unary {
-                operator: UnaryOperator::Deref,
-                ..
-            } => true,
-            Expression::DotAccess {
-                expression: base,
-                resolution,
-                ..
-            } => {
-                if matches!(
-                    resolution,
+        match Place::of(self.facts, expression) {
+            Place::Name { .. } | Place::Deref { .. } | Place::ReferenceCall => true,
+            Place::Field(site) => {
+                !matches!(
+                    site.resolution,
                     DotAccessResolution::TupleStructField { is_newtype: true }
-                ) {
-                    return false;
-                }
-                let fresh_value = matches!(&**base, Expression::StructCall { .. })
-                    || (matches!(&**base, Expression::Call { .. })
-                        && !self.facts.is_reference(&base.get_type()));
-                !fresh_value && self.receiver_is_addressable(base)
+                ) && self.receiver_is_addressable(site.receiver)
             }
-            Expression::IndexedAccess {
-                expression: base, ..
-            } => match self.facts.native_kind(&base.get_type()) {
+            Place::Index { base, .. } => match self.facts.native_kind(&base.get_type()) {
                 Some(NativeTypeKind::Map) => false,
                 Some(NativeTypeKind::Slice) => true,
                 Some(
@@ -1083,7 +1067,7 @@ impl PlannerQueries<'_, '_> {
                 )
                 | None => self.receiver_is_addressable(base),
             },
-            _ => false,
+            Place::Value => false,
         }
     }
 }

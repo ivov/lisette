@@ -4,6 +4,7 @@ use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
+use crate::lowering::expressions::access::place::Place;
 use crate::lowering::expressions::operand_order::LaterOperands;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -144,24 +145,20 @@ impl Planner<'_> {
         )
     }
 
-    #[allow(clippy::wildcard_enum_match_arm)]
     fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {
-        match target {
-            Expression::Identifier { .. } | Expression::Literal { .. } => Vec::new(),
-            Expression::DotAccess { expression, .. }
-            | Expression::Unary {
-                operator: UnaryOperator::Deref,
-                expression,
-                ..
-            } => self.lower_target_operands(expression),
-            Expression::IndexedAccess {
-                expression, index, ..
-            } => {
-                let mut statements = self.lower_target_operands(expression);
+        match Place::of(&self.facts, target) {
+            Place::Name { .. } => Vec::new(),
+            Place::Field(DotAccessSite {
+                receiver: inner, ..
+            })
+            | Place::Deref { pointee: inner } => self.lower_target_operands(inner),
+            Place::Index { base, index } => {
+                let mut statements = self.lower_target_operands(base);
                 statements.extend(self.lower_target_operands(index));
                 statements
             }
-            operand => self.lower_discard_value(operand),
+            Place::Value if matches!(target, Expression::Literal { .. }) => Vec::new(),
+            Place::ReferenceCall | Place::Value => self.lower_discard_value(target),
         }
     }
 
@@ -234,47 +231,19 @@ impl Planner<'_> {
         (target_capture, target)
     }
 
-    #[allow(clippy::wildcard_enum_match_arm)]
     pub(in crate::lowering) fn plan_place(
         &mut self,
         setup: &mut Vec<Statement>,
         expression: &Expression,
         ordering: PlaceOrdering,
     ) -> GoExpression {
-        match expression {
-            Expression::Identifier {
-                value, resolution, ..
-            } => self.plan_identifier_place(value, resolution),
-            Expression::DotAccess {
-                expression: receiver,
-                member,
-                ty,
-                resolution,
-                ..
-            } => {
-                let site = DotAccessSite {
-                    expression,
-                    receiver,
-                    member,
-                    ty,
-                    resolution,
-                };
-                self.plan_dot_place(setup, site, ordering)
-            }
-            Expression::IndexedAccess {
-                expression: base,
-                index,
-                ..
-            } => self.plan_indexed_place(setup, base, index, ordering),
-            Expression::Unary {
-                operator: UnaryOperator::Deref,
-                expression: pointee,
-                ..
-            } => self.plan_deref_lvalue(setup, pointee, ordering),
-            Expression::Call { .. } if self.facts.is_reference(&expression.get_type()) => {
-                self.place_operand(setup, expression, "ref", ordering)
-            }
-            _ => unreachable!(
+        match Place::of(&self.facts, expression) {
+            Place::Name { value, resolution } => self.plan_identifier_place(value, resolution),
+            Place::Field(site) => self.plan_dot_place(setup, site, ordering),
+            Place::Index { base, index } => self.plan_indexed_place(setup, base, index, ordering),
+            Place::Deref { pointee } => self.plan_deref_lvalue(setup, pointee, ordering),
+            Place::ReferenceCall => self.place_operand(setup, expression, "ref", ordering),
+            Place::Value => unreachable!(
                 "assignment target has no Go place at {:?}: {:?}",
                 expression.get_span(),
                 expression
@@ -333,7 +302,7 @@ impl Planner<'_> {
         let base_value = if let Some(inner) = elided_deref {
             self.place_operand(setup, inner, "ref", ordering)
         } else if reads_through_reference(&self.facts, base)
-            || !is_place_expression(&self.facts, base)
+            || !Place::of(&self.facts, base).is_place()
         {
             self.place_operand(setup, base, "ref", ordering)
         } else {
@@ -368,7 +337,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         let base_expression = if let Some(inner) = base.deref_inner() {
             GoExpression::dereference(self.place_operand(setup, inner, "ref", ordering))
-        } else if is_place_expression(&self.facts, base) {
+        } else if Place::of(&self.facts, base).is_place() {
             self.plan_place(setup, base, ordering)
         } else {
             self.place_operand(setup, base, "base", ordering)
@@ -539,60 +508,31 @@ fn is_compound_eligible(operator: &BinaryOperator) -> bool {
     )
 }
 
-#[allow(clippy::wildcard_enum_match_arm)]
-fn is_place_expression(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    match expression {
-        Expression::Identifier { .. }
-        | Expression::DotAccess { .. }
-        | Expression::IndexedAccess { .. }
-        | Expression::Unary {
-            operator: UnaryOperator::Deref,
-            ..
-        } => true,
-        Expression::Call { .. } => facts.is_reference(&expression.get_type()),
-        _ => false,
-    }
-}
-
 fn reads_through_reference(facts: &EmitFacts<'_>, base: &Expression) -> bool {
     matches!(base, Expression::Identifier { .. }) && facts.is_reference(&base.get_type())
 }
 
-#[allow(clippy::wildcard_enum_match_arm)]
 pub(in crate::lowering) fn is_lvalue_chain(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
-    match expression {
-        Expression::Identifier { .. }
-        | Expression::Unary {
-            operator: UnaryOperator::Deref,
-            ..
-        } => true,
-        Expression::IndexedAccess { expression, .. } | Expression::DotAccess { expression, .. } => {
-            is_lvalue_chain(facts, expression)
+    match Place::of(facts, expression) {
+        Place::Name { .. } | Place::Deref { .. } | Place::ReferenceCall => true,
+        Place::Field(DotAccessSite { receiver: base, .. }) | Place::Index { base, .. } => {
+            is_lvalue_chain(facts, base)
         }
-        Expression::Call { .. } => facts.is_reference(&expression.get_type()),
-        _ => false,
+        Place::Value => false,
     }
 }
 
 impl PlannerQueries<'_, '_> {
-    #[allow(clippy::wildcard_enum_match_arm)]
     fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
-        match target {
-            Expression::DotAccess {
-                expression,
-                member,
-                ty,
-                ..
-            } => self.facts.field_slot_layout(
-                &expression.get_type(),
+        match Place::of(self.facts, target) {
+            Place::Field(site) => self.facts.field_slot_layout(
+                &site.receiver.get_type(),
                 self.facts.checked(target).field_selection(),
-                member,
-                ty,
+                site.member,
+                site.ty,
             ),
-            Expression::IndexedAccess { expression, .. } => {
-                self.go_place_layout(expression)?.indexed_element().cloned()
-            }
-            _ => None,
+            Place::Index { base, .. } => self.go_place_layout(base)?.indexed_element().cloned(),
+            Place::Name { .. } | Place::Deref { .. } | Place::ReferenceCall | Place::Value => None,
         }
     }
 
