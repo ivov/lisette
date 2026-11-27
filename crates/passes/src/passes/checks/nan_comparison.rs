@@ -1,6 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
-use syntax::program::resolved_definition;
+use syntax::program::resolved_definition_name;
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::Binary {
@@ -32,5 +32,5 @@ pub(super) fn is_math_nan_call(expression: &Expression, _ctx: &NodeCtx) -> bool 
     else {
         return false;
     };
-    resolved_definition(callee) == Some("go:math.NaN")
+    resolved_definition_name(callee) == Some("go:math.NaN")
 }

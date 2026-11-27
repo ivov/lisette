@@ -1,0 +1,10 @@
+pub(crate) mod adapter_registry;
+pub(crate) mod bindings;
+pub(crate) mod conversion_record;
+pub(crate) mod enclosing;
+pub(crate) mod file_namespace;
+pub(crate) mod imports;
+mod local_names;
+pub(crate) mod rejections;
+pub(crate) mod scope;
+pub(crate) mod scope_stack;

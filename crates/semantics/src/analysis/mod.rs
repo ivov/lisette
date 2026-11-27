@@ -4,7 +4,7 @@ mod entry;
 mod entry_function;
 mod packages;
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use entry::{compute_roots, find_unreachable_packages, load_sibling_files, register_entry_file};
 use packages::{PackageInferenceInput, infer_all_packages};
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use syntax::FileParseStatus;
-use syntax::program::{File, Package};
+use syntax::program::{File, Package, strip_go_prefix};
 
 use deps::TypedefLocator;
 
@@ -209,7 +209,7 @@ impl LazyGoStdlibCache {
         }
     }
 
-    fn package_ids(&self) -> Option<HashSet<String>> {
+    fn package_ids(&self) -> Option<FxHashSet<String>> {
         match self {
             Self::Loaded(cache) => Some(cache.package_ids().cloned().collect()),
             Self::Unloaded | Self::Missing => None,
@@ -237,7 +237,7 @@ impl<'a> GoPackageSources<'a> {
     }
 
     pub(crate) fn load_cached(&mut self, store: &mut Store, package_id: &str) -> bool {
-        let go_pkg = package_id.strip_prefix("go:").unwrap_or(package_id);
+        let go_pkg = strip_go_prefix(package_id).unwrap_or(package_id);
         if !deps::is_stdlib(go_pkg) {
             return false;
         }
@@ -261,7 +261,7 @@ pub struct InferenceOutput {
     pub sink: LocalSink,
     pub has_pre_check_errors: bool,
     pub compiled_packages: Vec<CompiledPackage>,
-    pub cached_packages: HashSet<String>,
+    pub cached_packages: FxHashSet<String>,
     pub cached_diagnostics: Vec<LisetteDiagnostic>,
     pub cache_root: Option<PathBuf>,
     pub unreachable_packages: Vec<String>,
@@ -312,7 +312,7 @@ impl<'a> CacheState<'a> {
         }
     }
 
-    fn go_package_ids(&self) -> Option<HashSet<String>> {
+    fn go_package_ids(&self) -> Option<FxHashSet<String>> {
         match self {
             Self::Disabled => None,
             Self::Enabled { go_stdlib, .. } => go_stdlib.package_ids(),
@@ -362,7 +362,8 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         .get_file(ENTRY_FILE_ID)
         .is_some_and(|file| file.parse_status == FileParseStatus::Failed)
     {
-        let checker = TaskState::with_sink(sink, input.project_kind, input.scope.script_unit());
+        let checker =
+            TaskState::with_sink(sink, input.project_kind, input.scope.script_unit(), true);
         return InferenceOutput {
             dependencies: None,
             store,
@@ -370,7 +371,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             sink: checker.sink,
             has_pre_check_errors: true,
             compiled_packages: Vec::new(),
-            cached_packages: HashSet::default(),
+            cached_packages: FxHashSet::default(),
             cached_diagnostics: Vec::new(),
             cache_root: None,
             unreachable_packages: Vec::new(),

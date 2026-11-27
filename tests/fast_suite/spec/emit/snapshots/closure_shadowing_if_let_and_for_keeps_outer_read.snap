@@ -27,8 +27,8 @@ func main() {
 		total := 0
 		subject := lisette.MakeOptionSome(x + 1)
 		if subject.Tag == lisette.OptionSome {
-			x2 := subject.SomeVal
-			for _, x := range []int{x2, x2 + 1} {
+			x := subject.SomeVal
+			for _, x := range []int{x, x + 1} {
 				read := func() int {
 					return x
 				}

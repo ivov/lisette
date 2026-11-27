@@ -14,8 +14,8 @@ func main() {
 	x := 100
 	fmt.Println(x)
 	x = 200
-	if x2, err := parse(); err == nil {
-		fmt.Println(x2)
+	if x, err := parse(); err == nil {
+		fmt.Println(x)
 	} else {
 		fmt.Println("err")
 	}

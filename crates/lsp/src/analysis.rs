@@ -24,8 +24,8 @@ use semantics::loader;
 use semantics::loader::ExternalTestFileIssue;
 use std::fs;
 use syntax::ast::Span;
-use syntax::program::File;
 use syntax::program::SourceFileKind;
+use syntax::program::{File, PRELUDE_PREFIX};
 use syntax::types;
 
 pub(crate) enum AnalysisError {
@@ -92,8 +92,8 @@ pub(crate) fn type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String
             args,
             ..
         } => args.first().and_then(|ty| type_name(ty, snapshot)),
-        Type::Compound { kind, .. } => Some(format!("prelude.{}", kind.leaf_name())),
-        Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
+        Type::Compound { kind, .. } => Some(format!("{PRELUDE_PREFIX}{}", kind.leaf_name())),
+        Type::Simple(kind) => Some(format!("{PRELUDE_PREFIX}{}", kind.leaf_name())),
         Type::Array { .. } => Some("prelude.Array".to_string()),
         _ => None,
     }

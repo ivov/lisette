@@ -1,0 +1,312 @@
+use crate::Planner;
+use crate::lookup::facts::definition_key::DeclaredName;
+use crate::lookup::facts::queries::go_name_for_binding;
+use crate::lowering::abi::ReturnSlot;
+use crate::lowering::abi::return_abi;
+use crate::target::ir::bodies::async_statement;
+use crate::target::ir::bodies::effect_statement;
+use crate::target::ir::bodies::{
+    AsyncKind, Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement,
+};
+use crate::target::ir::declarations::Documentation;
+use crate::target::ir::declarations::GoDeclaration;
+use crate::target::ir::go_expression::{GoBinaryOperator, GoParameter};
+use crate::target::ir::local::GoIdentifier;
+use crate::target::ir::values::GoExpression;
+use crate::target::names::go_name::{self, testing_qualifier, testkit_qualifier};
+use crate::target::names::go_name::{GeneratedPackage, GoExport};
+use crate::target::names::packages::PackageUse;
+use crate::target::types::go_type::GoType;
+use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
+use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, Span};
+use syntax::types::Type;
+
+impl Planner<'_> {
+    pub(in crate::lowering) fn emit_top_item(&mut self, item: &Expression) -> Vec<GoDeclaration> {
+        self.with_rejection_span(item.get_span(), |this| this.emit_top_item_within_span(item))
+    }
+
+    fn emit_top_item_within_span(&mut self, item: &Expression) -> Vec<GoDeclaration> {
+        if let Expression::Const {
+            doc,
+            identifier,
+            expression,
+            ty,
+            ..
+        } = item
+        {
+            return expression
+                .value()
+                .map(|expression| self.emit_const(identifier, expression, ty, doc))
+                .into_iter()
+                .collect();
+        }
+        DeclaredName::of(item).map_or_else(Vec::new, |name| self.emit_declaration(item, name))
+    }
+
+    fn emit_declaration(
+        &mut self,
+        item: &Expression,
+        name: DeclaredName<'_>,
+    ) -> Vec<GoDeclaration> {
+        match item {
+            Expression::Function {
+                doc, visibility, ..
+            } => self.emit_function_item(item, doc, name, GoExport::from_visibility(*visibility)),
+            Expression::Struct {
+                doc,
+                attributes,
+                name_span,
+                generics,
+                fields,
+                ..
+            } => {
+                let mut declarations =
+                    self.emit_struct_definition(name, generics, fields, attributes);
+                declarations[0].documentation = type_documentation(doc, name.as_str());
+                for declaration in &mut declarations {
+                    declaration.position = self.facts.source_position(name_span);
+                }
+                declarations
+            }
+            Expression::Enum {
+                doc,
+                attributes,
+                name_span,
+                generics,
+                ..
+            } => {
+                let mut declarations = self.emit_enum(
+                    name,
+                    generics,
+                    attributes,
+                    type_documentation(doc, name.as_str()),
+                );
+                for declaration in &mut declarations {
+                    declaration.position = self.facts.source_position(name_span);
+                }
+                declarations
+            }
+            Expression::TypeAlias {
+                doc, generics, ty, ..
+            } => {
+                if self.facts.alias_emits_nothing(name) {
+                    return Vec::new();
+                }
+                let mut declaration = self.queries().emit_type_alias(name, generics, ty);
+                declaration.documentation = type_documentation(doc, name.as_str());
+                vec![declaration]
+            }
+            Expression::Interface {
+                doc,
+                method_signatures,
+                parents,
+                generics,
+                visibility,
+                ..
+            } => {
+                let export = GoExport::from_visibility(*visibility);
+                let mut declaration = self.queries().emit_interface(
+                    name,
+                    method_signatures,
+                    parents,
+                    generics,
+                    export,
+                );
+                declaration.documentation = type_documentation(doc, name.as_str());
+                vec![declaration]
+            }
+            Expression::ImplBlock {
+                ty,
+                methods,
+                generics,
+                ..
+            } => {
+                let receiver_generics = self.facts.checked(item).receiver_generics();
+                self.emit_impl_block(name, ty, methods, generics, receiver_generics)
+            }
+            Expression::Const { .. }
+            | Expression::VariableDeclaration { .. }
+            | Expression::PackageImport { .. }
+            | body_expression!() => Vec::new(),
+        }
+    }
+
+    fn emit_function_item(
+        &mut self,
+        item: &Expression,
+        doc: &Option<String>,
+        name: DeclaredName<'_>,
+        export: GoExport,
+    ) -> Vec<GoDeclaration> {
+        let function = item.function_definition_view();
+        let go_name = self.names.free_function_go_name(function.name, export);
+        let documentation = item_documentation(doc, name.as_str(), &go_name);
+        if self.facts.is_test(&self.facts.qualified_current(name)) {
+            return self.emit_test_function(name.as_str(), function, export, documentation);
+        }
+        let mut declarations = self.emit_function(function, None, &go_name, None);
+        if let Some(first) = declarations.first_mut() {
+            first.documentation = documentation;
+        }
+        declarations
+    }
+
+    fn emit_test_function(
+        &mut self,
+        name: &str,
+        function: FunctionDefinitionView<'_>,
+        export: GoExport,
+        documentation: Documentation,
+    ) -> Vec<GoDeclaration> {
+        let injected = synthesized_test_handle_params(function);
+        let function = match &injected {
+            Some(params) => FunctionDefinitionView { params, ..function },
+            None => function,
+        };
+        let callee = self.names.free_function_go_name(function.name, export);
+        let handle = go_name::fresh_suffixed("t", |name| {
+            name == callee || name == testkit_qualifier() || name == testing_qualifier()
+        });
+        let mut declarations = self.emit_function(function, None, &callee, None);
+        if let Some(first) = declarations.first_mut() {
+            first.documentation = documentation;
+        }
+        let handle = self.scope.new_local_identifier(handle);
+        declarations.push(self.emit_test_wrapper(name, function, callee, handle));
+        declarations
+    }
+
+    fn emit_test_wrapper(
+        &mut self,
+        name: &str,
+        function: FunctionDefinitionView<'_>,
+        callee: String,
+        handle: GoIdentifier,
+    ) -> GoDeclaration {
+        let handle_value = GoExpression::identifier(handle.clone());
+        let location = span_location(function.name_span);
+        let mut recover_args = vec![handle_value.clone()];
+        recover_args.extend(location.clone());
+        let mut statements = vec![async_statement(
+            AsyncKind::Defer,
+            testkit_call("Recover", recover_args),
+        )];
+        let call = GoExpression::call(
+            GoExpression::external_name(callee),
+            vec![testkit_call("New", vec![handle_value.clone()])],
+        );
+        if matches!(
+            return_abi(&self.facts, function.return_type, ReturnSlot::Function),
+            CallableReturnAbi::Lowered(LoweredReturnAbi::BareError)
+        ) {
+            statements.push(self.test_error_check(handle_value, location, call));
+        } else {
+            statements.push(effect_statement(call));
+        }
+        GoDeclaration::function(
+            None,
+            go_name::go_test_function_name(name),
+            Vec::new(),
+            vec![GoParameter::new(
+                handle,
+                GoType::pointer_to(&GoType::named(
+                    "T",
+                    &[],
+                    Some(PackageUse::generated(GeneratedPackage::Testing)),
+                )),
+            )],
+            None,
+            LoweredBlock { statements },
+        )
+    }
+
+    fn test_error_check(
+        &mut self,
+        handle_value: GoExpression,
+        location: [GoExpression; 3],
+        call: GoExpression,
+    ) -> Statement {
+        let error_name = self.scope.new_local_identifier("err".to_string());
+        let error = GoExpression::identifier(error_name.clone());
+        let mut arguments = vec![handle_value];
+        arguments.extend(location);
+        arguments.extend([
+            GoExpression::token("\"result_err\"".to_string()),
+            GoExpression::token("\"test returned Err\"".to_string()),
+            testkit_call("ErrOperand", vec![error.clone()]),
+        ]);
+        let mut check = IfPlan::plain(
+            GoExpression::binary(error, GoBinaryOperator::NotEqual, GoExpression::nil()),
+            LoweredBlock {
+                statements: vec![effect_statement(testkit_call("Fail", arguments))],
+            },
+            ElseArm::None,
+        );
+
+        check.initializer = Some(Definition {
+            names: vec![error_name],
+            value: call,
+        });
+        LoweredStatement::If(check).into()
+    }
+}
+
+fn span_location(span: Span) -> [GoExpression; 3] {
+    [
+        span.file_id,
+        span.byte_offset,
+        span.byte_offset + span.byte_length,
+    ]
+    .map(|value| GoExpression::integer(i128::from(value)))
+}
+
+fn testkit_call(name: &str, arguments: Vec<GoExpression>) -> GoExpression {
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::TestKit, name),
+        arguments,
+    )
+}
+
+fn type_documentation(doc: &Option<String>, name: &str) -> Documentation {
+    item_documentation(doc, name, &go_name::escape_type_name(name))
+}
+
+pub(in crate::lowering) fn item_documentation(
+    doc: &Option<String>,
+    lisette_name: &str,
+    go_name: &str,
+) -> Documentation {
+    let Some(text) = doc else {
+        return Documentation::default();
+    };
+    let first_word = text
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .next()
+        .unwrap_or_default();
+    if first_word == lisette_name && lisette_name != go_name {
+        Documentation::of_text(&format!("{go_name}{}", &text[first_word.len()..]))
+    } else {
+        Documentation::of_text(text)
+    }
+}
+
+fn synthesized_test_handle_params(function: FunctionDefinitionView<'_>) -> Option<Vec<Binding>> {
+    let has_usable_handle = function
+        .params
+        .iter()
+        .any(|param| param.ty.is_test_context() && go_name_for_binding(&param.pattern).is_some());
+    if has_usable_handle {
+        return None;
+    }
+    Some(vec![Binding {
+        pattern: Pattern::Identifier {
+            identifier: go_name::TEST_CTX_PARAM.into(),
+            span: function.name_span,
+            binding: None,
+        },
+        annotation: None,
+        ty: Type::test_context(),
+        mut_span: None,
+    }])
+}

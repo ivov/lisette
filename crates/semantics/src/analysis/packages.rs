@@ -3,18 +3,20 @@ use std::sync::Arc;
 use super::*;
 use crate::cache::all_go_outputs_exist;
 use crate::cache::{
-    CacheKey, CacheKeyInputs, DiagnosticMode, compute_emit_artifact_hash, global_emit_context,
-    go_method_check_context,
+    CacheKey, CacheKeyInputs, DiagnosticMode, chain_go_method_contexts, compute_emit_artifact_hash,
+    global_emit_context, go_method_check_context,
 };
 use crate::checker::InferredFile;
 use crate::checker::infer::constant_values;
 use crate::loader;
 use crate::path::DisplayPathBase;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::ParseError;
 use syntax::ast::Span;
-use syntax::program::UninferredExports;
+use syntax::program::{
+    GoMethodPolicy, PRELUDE_PACKAGE_ID, PackageId, UninferredExports, is_go_import, strip_go_prefix,
+};
 
 struct CacheCandidate {
     pending: CompiledPendingPackage,
@@ -103,7 +105,7 @@ struct RegistrationOutput {
 
 pub(super) struct PackageInferenceInput<'a> {
     pub(super) order: Vec<String>,
-    pub(super) files: HashMap<String, Vec<ScannedFile>>,
+    pub(super) files: FxHashMap<String, Vec<ScannedFile>>,
     pub(super) dependencies: DependencyGraph,
     pub(super) sink: LocalSink,
     pub(super) compile_phase: CompilePhase,
@@ -150,7 +152,7 @@ impl<'a> CacheKeyContext<'a> {
 pub(super) struct PackageInferenceOutput {
     pub(super) dependencies: DependencyGraph,
     pub(super) facts: Facts,
-    pub(super) cached_packages: HashSet<String>,
+    pub(super) cached_packages: FxHashSet<String>,
     pub(super) cached_diagnostics: Vec<LisetteDiagnostic>,
     pub(super) compiled_packages: Vec<CompiledPackage>,
     pub(super) sink: LocalSink,
@@ -165,11 +167,15 @@ pub(super) fn infer_all_packages(
     mut input: PackageInferenceInput,
 ) -> PackageInferenceOutput {
     let key_context = CacheKeyContext::of(&input);
-    let mut checker =
-        TaskState::with_sink(input.sink, input.project_kind, input.scope.script_unit());
+    let mut checker = TaskState::with_sink(
+        input.sink,
+        input.project_kind,
+        input.scope.script_unit(),
+        input.compile_phase != CompilePhase::Check,
+    );
 
-    let mut package_hashes: HashMap<String, u64> = HashMap::default();
-    let mut cached_packages: HashSet<String> = HashSet::default();
+    let mut package_hashes: FxHashMap<String, u64> = FxHashMap::default();
+    let mut cached_packages: FxHashSet<String> = FxHashSet::default();
     let order = input.order;
     let dependencies = &input.dependencies;
 
@@ -177,7 +183,8 @@ pub(super) fn infer_all_packages(
     let mut candidates: Vec<CacheCandidate> = Vec::new();
     let mut unparsed: Vec<UnparsedPackage> = Vec::new();
 
-    let mut source_hashes: HashMap<String, (u64, u64)> = if input.files.len() < PARALLEL_THRESHOLD {
+    let mut source_hashes: FxHashMap<String, (u64, u64)> = if input.files.len() < PARALLEL_THRESHOLD
+    {
         input
             .files
             .iter()
@@ -206,7 +213,7 @@ pub(super) fn infer_all_packages(
     }
 
     for (topo_rank, package_id) in order.into_iter().enumerate() {
-        if package_id.starts_with("go:") {
+        if is_go_import(&package_id) {
             if dependencies.is_link_only_package(&package_id) {
                 continue;
             }
@@ -328,32 +335,17 @@ pub(super) fn infer_all_packages(
     let mut registered = register_packages(&mut checker, store, predeclared, dependencies);
 
     checker.finalize_registration(store);
-    let policy = store.go_method_policy();
-    let emit_contexts: HashMap<_, _> = store
-        .packages()
-        .keys()
-        .map(|package_id| {
-            let mut reachable = HashSet::default();
-            let mut pending = vec![package_id.clone(), "prelude".to_string()];
-            while let Some(id) = pending.pop() {
-                if reachable.insert(id.clone()) {
-                    pending.extend(dependencies.dependencies(&id).map(ToString::to_string));
-                }
-            }
-            let relevant = policy.for_definitions(
-                store
-                    .packages()
-                    .iter()
-                    .filter(|(id, _)| reachable.contains(*id))
-                    .flat_map(|(_, package)| package.definitions.iter()),
-            );
-            let contexts = (
-                global_emit_context(&relevant),
-                go_method_check_context(&relevant),
-            );
-            (package_id.clone(), contexts)
-        })
+    let keyed_packages: Vec<&str> = compiled_packages
+        .iter()
+        .map(|package| package.package_id.as_str())
+        .chain(
+            cache_load
+                .artifacts
+                .iter()
+                .map(|artifact| artifact.pending.package.package_id.as_str()),
+        )
         .collect();
+    let emit_contexts = go_method_contexts(store, dependencies, &keyed_packages);
     let finalize_hash = |package: &mut CompiledPackage| {
         let (emit_context, check_context) = emit_contexts[&package.package_id];
         package.artifact_hash =
@@ -426,7 +418,7 @@ pub(super) fn infer_all_packages(
         let all_go_packages: Vec<String> = store
             .packages()
             .keys()
-            .filter(|id| id.strip_prefix("go:").is_some_and(deps::is_stdlib))
+            .filter(|id| strip_go_prefix(id).is_some_and(deps::is_stdlib))
             .cloned()
             .collect();
         // A non-empty list implies the lazy cache load was attempted.
@@ -506,7 +498,7 @@ fn parse_and_store_packages(
 fn store_uninferred_packages(
     checker: &mut TaskState,
     store: &mut Store,
-    packages: HashMap<String, Vec<ScannedFile>>,
+    packages: FxHashMap<String, Vec<ScannedFile>>,
     recover_target: &RecoverTarget,
 ) {
     for (package_id, scanned) in packages {
@@ -546,7 +538,7 @@ fn register_go_package(
     script: Option<ScriptUnit>,
     sources: &mut GoPackageSources,
 ) {
-    let go_pkg = package_id.strip_prefix("go:").unwrap_or(package_id);
+    let go_pkg = strip_go_prefix(package_id).unwrap_or(package_id);
     if sources.load_cached(store, package_id) {
         return;
     }
@@ -592,7 +584,7 @@ struct CachedArtifact {
 
 #[derive(Default)]
 struct CacheLoad {
-    cached: HashSet<String>,
+    cached: FxHashSet<String>,
     diagnostics: Vec<LisetteDiagnostic>,
     missed: Vec<UnparsedPackage>,
     artifacts: Vec<CachedArtifact>,
@@ -689,7 +681,7 @@ fn register_packages(
     }
 
     let package_ids: Vec<_> = packages.iter().map(|package| package.id.clone()).collect();
-    let mut inputs: HashMap<_, _> = packages
+    let mut inputs: FxHashMap<_, _> = packages
         .into_iter()
         .map(|package| (package.id.clone(), package))
         .collect();
@@ -770,9 +762,9 @@ fn evaluate_constants_in_dependency_order(
     fn visit(
         store: &mut Store,
         package_id: &str,
-        batch: &HashSet<&str>,
+        batch: &FxHashSet<&str>,
         dependencies: &DependencyGraph,
-        evaluated: &mut HashSet<String>,
+        evaluated: &mut FxHashSet<String>,
     ) {
         if !evaluated.insert(package_id.to_string()) {
             return;
@@ -788,8 +780,8 @@ fn evaluate_constants_in_dependency_order(
         constant_values::evaluate_package_constants(store, package_id);
     }
 
-    let batch: HashSet<&str> = package_ids.iter().map(String::as_str).collect();
-    let mut evaluated = HashSet::default();
+    let batch: FxHashSet<&str> = package_ids.iter().map(String::as_str).collect();
+    let mut evaluated = FxHashSet::default();
     for package_id in package_ids {
         visit(store, package_id, &batch, dependencies, &mut evaluated);
     }
@@ -825,10 +817,118 @@ fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<Regi
     checker.check_post_inference_bounds(store);
 }
 
+fn go_method_contexts(
+    store: &Store,
+    dependencies: &DependencyGraph,
+    package_ids: &[&str],
+) -> FxHashMap<String, (u64, u64)> {
+    let mut reachable: FxHashSet<&str> = FxHashSet::default();
+    let mut pending: Vec<&str> = package_ids.to_vec();
+    pending.push(PRELUDE_PACKAGE_ID);
+    while let Some(id) = pending.pop() {
+        if reachable.insert(id) {
+            pending.extend(dependencies.dependencies(id).map(PackageId::as_str));
+        }
+    }
+    let policy = store.go_method_policy();
+    let own = reachable
+        .into_par_iter()
+        .map(|package_id| {
+            let own = policy_contexts(
+                &policy.for_definitions(
+                    store
+                        .get_package(package_id)
+                        .into_iter()
+                        .flat_map(|package| package.definitions.iter()),
+                ),
+            );
+            (package_id, own)
+        })
+        .collect();
+    let mut chained = ChainedGoMethodContexts {
+        dependencies,
+        own,
+        contexts: FxHashMap::default(),
+    };
+    let mut contexts = FxHashMap::default();
+    for package_id in package_ids {
+        let Some(context) = chained.context(package_id) else {
+            return reachable_go_method_contexts(store, dependencies, package_ids);
+        };
+        contexts.insert(package_id.to_string(), context);
+    }
+    contexts
+}
+
+struct ChainedGoMethodContexts<'a> {
+    dependencies: &'a DependencyGraph,
+    own: FxHashMap<&'a str, (u64, u64)>,
+    contexts: FxHashMap<String, Option<(u64, u64)>>,
+}
+
+impl ChainedGoMethodContexts<'_> {
+    fn context(&mut self, package_id: &str) -> Option<(u64, u64)> {
+        if let Some(context) = self.contexts.get(package_id) {
+            return *context;
+        }
+        self.contexts.insert(package_id.to_string(), None);
+        let dependencies = self.dependencies;
+        let mut imported: Vec<&str> = dependencies
+            .dependencies(package_id)
+            .map(PackageId::as_str)
+            .collect();
+        if package_id != PRELUDE_PACKAGE_ID {
+            imported.push(PRELUDE_PACKAGE_ID);
+        }
+        imported.sort_unstable();
+        imported.dedup();
+        let mut imported_contexts = Vec::with_capacity(imported.len());
+        for imported_id in imported {
+            imported_contexts.push(self.context(imported_id)?);
+        }
+        let own = self.own[package_id];
+        let context = chain_go_method_contexts(own, imported_contexts.into_iter());
+        self.contexts.insert(package_id.to_string(), Some(context));
+        Some(context)
+    }
+}
+
+fn reachable_go_method_contexts(
+    store: &Store,
+    dependencies: &DependencyGraph,
+    package_ids: &[&str],
+) -> FxHashMap<String, (u64, u64)> {
+    let policy = store.go_method_policy();
+    package_ids
+        .iter()
+        .map(|package_id| {
+            let mut reachable = FxHashSet::default();
+            let mut pending = vec![package_id.to_string(), PRELUDE_PACKAGE_ID.to_string()];
+            while let Some(id) = pending.pop() {
+                if reachable.insert(id.clone()) {
+                    pending.extend(dependencies.dependencies(&id).map(ToString::to_string));
+                }
+            }
+            let relevant = policy.for_definitions(
+                store
+                    .packages()
+                    .iter()
+                    .filter(|(id, _)| reachable.contains(*id))
+                    .flat_map(|(_, package)| package.definitions.iter()),
+            );
+            (package_id.to_string(), policy_contexts(&relevant))
+        })
+        .collect()
+}
+
+fn policy_contexts(policy: &GoMethodPolicy) -> (u64, u64) {
+    (global_emit_context(policy), go_method_check_context(policy))
+}
+
 /// Groups topologically ordered packages into dependency waves, so a wave only
 /// reads packages registered in earlier waves.
 fn registration_waves(packages: &[String], dependencies: &DependencyGraph) -> Vec<Vec<String>> {
-    let mut wave_of: HashMap<&str, usize> = HashMap::default();
+    let mut wave_of: FxHashMap<&str, usize> = FxHashMap::default();
     let mut waves: Vec<Vec<String>> = Vec::new();
     for package_id in packages {
         let wave = dependencies

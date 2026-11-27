@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::ops::Deref;
 
 use syntax::ast::Literal;
@@ -87,6 +87,6 @@ pub enum NormalizedPattern {
     },
 }
 
-pub type UnionTable = HashMap<TypeName, Union>;
+pub type UnionTable = FxHashMap<TypeName, Union>;
 
 pub const INTERFACE_UNKNOWN_TAG: &str = "__interface_unknown__";

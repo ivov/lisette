@@ -7,8 +7,8 @@ use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::{
-    AliasKind, CallOperation, DefinitionBody, DotAccessResolution, NativeTypeKind,
-    ReceiverCoercion, resolved_instantiation,
+    AliasKind, CallOperation, DefinitionBody, DotAccessResolution, MethodName, NativeTypeKind,
+    PRELUDE_PREFIX, ReceiverCoercion, resolved_instantiation,
 };
 use syntax::types::{
     Bound, CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, substitute,
@@ -180,7 +180,7 @@ impl InferCtx<'_> {
                     && (!matches!(prefix, "Array" | "Map" | "Channel")
                         || (self.scopes.lookup_binding_id(prefix).is_none()
                             && self.lookup_qualified_name(self.store, prefix).as_deref()
-                                == Some(format!("prelude.{prefix}").as_str())))
+                                == Some(format!("{PRELUDE_PREFIX}{prefix}").as_str())))
             })
         });
 
@@ -503,7 +503,7 @@ impl InferCtx<'_> {
         }
         let owner_id =
             self.method_owner(&self.lookup_qualified_name(self.store, owner)?, member)?;
-        let definition = Symbol::from_raw(format!("{owner_id}.{member}"));
+        let definition = MethodName::new(Symbol::from_raw(owner_id), member);
         let receiver = receiver.unwrap_parens();
         let call = Expression::Call {
             id: self.fresh_expression_id(),
@@ -544,8 +544,8 @@ impl InferCtx<'_> {
         };
         let target_id = match target {
             Type::Nominal { id, .. } => id.to_string(),
-            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()),
-            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()),
+            Type::Simple(kind) => format!("{PRELUDE_PREFIX}{}", kind.leaf_name()),
+            Type::Compound { kind, .. } => format!("{PRELUDE_PREFIX}{}", kind.leaf_name()),
             _ => return None,
         };
         if !generics.is_empty() || target_id == owner_id {
@@ -1602,7 +1602,11 @@ fn receiver_inferred_prefix_count(body: &Type, vars: &[EcoString]) -> usize {
         .count()
 }
 
-fn calls_method_as_written(call: &Expression, definition: &Symbol, written: &Expression) -> bool {
+fn calls_method_as_written(
+    call: &Expression,
+    definition: &MethodName,
+    written: &Expression,
+) -> bool {
     let Expression::Call { expression, .. } = call else {
         return false;
     };
@@ -1611,7 +1615,7 @@ fn calls_method_as_written(call: &Expression, definition: &Symbol, written: &Exp
         resolution:
             DotAccessResolution::InstanceMethod {
                 receiver_coercion,
-                definition: Some(found),
+                method: Some(found),
                 ..
             },
         ..

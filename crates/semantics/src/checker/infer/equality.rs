@@ -67,7 +67,7 @@ pub(super) fn select_equalities(
         }
         _ => {}
     }
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         select_equalities(store, package, bodies, child, selected);
-    }
+    });
 }

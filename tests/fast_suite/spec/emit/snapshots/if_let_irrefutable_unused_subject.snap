@@ -22,5 +22,5 @@ func mk() P {
 }
 
 func test() {
-	_ = mk()
+	mk()
 }

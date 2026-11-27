@@ -1,5 +1,6 @@
 use crate::protocol::Error;
 use std::borrow::Cow;
+use syntax::program::{is_go_import, is_prelude_symbol};
 /// All keywords, including contextual ones (`var`, `self`).
 pub(crate) const KEYWORDS: &[&str] = &[
     "fn",
@@ -61,14 +62,6 @@ pub(crate) fn validate_rename(new_name: &str) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-fn is_prelude_symbol(qualified_name: &str) -> bool {
-    qualified_name.starts_with("prelude.")
-}
-
-fn is_go_import(qualified_name: &str) -> bool {
-    qualified_name.starts_with("go:")
 }
 
 pub(crate) fn rename_error(message: impl Into<Cow<'static, str>>) -> Error {

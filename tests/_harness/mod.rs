@@ -20,7 +20,7 @@ pub use emit::{emit_with_go_typedefs, emit_with_sourcemap};
 pub use filesystem::MockFileSystem;
 pub use formatting::{snapshot_description, syntax_tree_snapshot};
 pub use infer::{InferResult, infer, infer_package, infer_with_go_typedefs};
-use syntax::program::ValueKind;
+use syntax::program::{PRELUDE_PACKAGE_ID, PRELUDE_PREFIX, ValueKind};
 
 pub const TEST_PACKAGE_ID: &str = "test";
 
@@ -33,7 +33,7 @@ use diagnostics::LocalSink;
 use semantics::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use semantics::store::Store;
 use syntax::program::{Definition, DefinitionBody, Visibility};
-use syntax::types::{CompoundKind, FunctionParameter, Type};
+use syntax::types::{CompoundKind, FunctionParameter, Symbol, Type};
 
 pub fn new_test_store() -> Store {
     static TEMPLATE: OnceLock<Store> = OnceLock::new();
@@ -52,12 +52,12 @@ pub fn new_test_store() -> Store {
 
 fn register_test_builtins(store: &mut Store) {
     let package = store
-        .edit_package("prelude")
+        .edit_package(PRELUDE_PACKAGE_ID)
         .expect("prelude package must exist");
 
     let mut define = |name: &str, params: Vec<Type>, return_type: Type| {
         package.definitions.insert(
-            format!("prelude.{name}").into(),
+            Symbol::from_raw(format!("{PRELUDE_PREFIX}{name}")),
             Definition {
                 visibility: Visibility::Public,
                 ty: Type::function(
@@ -82,7 +82,7 @@ fn register_test_builtins(store: &mut Store) {
     };
 
     let unknown = Type::Nominal {
-        id: "prelude.Unknown".into(),
+        id: Symbol::from_raw("prelude.Unknown"),
         params: vec![],
         writable: false,
     };

@@ -3,7 +3,7 @@ use std::iter::once;
 use crate::passes::walk::NodeCtx;
 use semantics::store::Store;
 use syntax::ast::Expression;
-use syntax::program::{CallOperation, Definition, resolved_definition};
+use syntax::program::{CallOperation, Definition, PRELUDE_PACKAGE_ID, resolved_definition_name};
 
 pub fn check_task_argument_call(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Task {
@@ -68,7 +68,7 @@ fn constructs_value(callee: &Expression, operation: &CallOperation, store: &Stor
     matches!(
         operation,
         CallOperation::TupleStructConstructor { .. } | CallOperation::NativeConstructor { .. }
-    ) || resolved_definition(callee).is_some_and(|qualified| {
+    ) || resolved_definition_name(callee).is_some_and(|qualified| {
         store
             .get_definition(qualified)
             .is_some_and(Definition::is_type_definition)
@@ -83,7 +83,7 @@ fn is_variant_constructor(qualified: &str, store: &Store) -> bool {
     if store.variant_of(prefix, variant).is_some() {
         return true;
     }
-    prefix == "prelude"
+    prefix == PRELUDE_PACKAGE_ID
         && ["prelude.Option", "prelude.Result", "prelude.Partial"]
             .iter()
             .any(|enum_name| store.variant_of(enum_name, variant).is_some())

@@ -73,9 +73,9 @@ fn visit_expression(
         _ => {}
     }
 
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_expression(child, enclosing, store, sink);
-    }
+    });
 }
 
 /// The callee as written, so the suggested type argument pastes back.

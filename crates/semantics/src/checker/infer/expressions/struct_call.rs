@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::checker::EnvResolve;
 use crate::zero::{MapZero, NoZero, NoZeroReason};
@@ -6,7 +6,7 @@ use ecow::EcoString;
 use syntax::ast::{
     Expression, ExpressionId, Span, StructFieldAssignment, StructFields, StructSpread,
 };
-use syntax::program::{CheckedStructLiteral, Definition, DefinitionBody, FieldKey};
+use syntax::program::{CheckedStructLiteral, Definition, DefinitionBody, FieldKey, is_go_import};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::permission::{ConstructionGrant, MissingSupply};
@@ -385,7 +385,7 @@ impl InferCtx<'_> {
             || struct_name
                 .split_once('.')
                 .is_some_and(|(prefix, _)| self.imports.namespace(prefix).is_some());
-        let is_go_imported = qualified_name.starts_with("go:");
+        let is_go_imported = is_go_import(&qualified_name);
 
         let denies_zero = is_go_imported
             && !matches!(new_spread, StructSpread::From(_))
@@ -681,7 +681,7 @@ impl InferCtx<'_> {
             via_alias,
         } = target;
         let mut unset_fields = Vec::new();
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         for (name, ty) in fields {
             if !seen.insert(name) {
                 continue;
@@ -717,7 +717,7 @@ impl InferCtx<'_> {
         resolved_enum: &Type,
         written_name: &str,
         variant_fields: &[EnumFieldDefinition],
-        matched_fields: &HashSet<EcoString>,
+        matched_fields: &FxHashSet<EcoString>,
         spread_span: Span,
     ) {
         let store = self.store;
@@ -794,11 +794,11 @@ impl InferCtx<'_> {
         &mut self,
         ctx: StructishCtx<'_, impl Iterator<Item = (&'a EcoString, &'a Type)> + Clone>,
         mut find_def: FindDef,
-    ) -> (Vec<StructFieldAssignment>, HashSet<EcoString>)
+    ) -> (Vec<StructFieldAssignment>, FxHashSet<EcoString>)
     where
         FindDef: FnMut(&mut Self, &StructFieldAssignment) -> Option<&'a Type>,
     {
-        let mut matched = HashSet::default();
+        let mut matched = FxHashSet::default();
         let mut unknown_fields: Vec<EcoString> = vec![];
         let new_assignments: Vec<StructFieldAssignment> = ctx
             .field_assignments
@@ -870,7 +870,7 @@ impl InferCtx<'_> {
         &mut self,
         owner_name: &str,
         fields: impl Iterator<Item = (&'a EcoString, &'a Type)>,
-        matched_fields: &HashSet<EcoString>,
+        matched_fields: &FxHashSet<EcoString>,
         map: &SubstitutionMap,
         spread_span: Span,
     ) {

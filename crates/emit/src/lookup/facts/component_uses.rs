@@ -1,0 +1,222 @@
+use crate::target::ir::prelude::{PreludeVariant, prelude_variant};
+use rustc_hash::FxHashSet;
+use syntax::ast::{
+    BindingId, Expression, IdentifierResolution, MatchArm, Pattern, collect_pattern_bindings,
+};
+use syntax::program::DotAccessResolution;
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ValueDemand {
+    #[default]
+    StatusOnly,
+    Payload,
+    Whole,
+}
+
+const STATUS_METHODS: &[&str] = &["is_some", "is_none", "is_ok", "is_err"];
+const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
+
+#[derive(Clone, Default)]
+pub(crate) struct ComponentDemand {
+    pub(crate) value: ValueDemand,
+    pub(crate) read_indices: FxHashSet<usize>,
+    pub(crate) defaults: usize,
+}
+
+pub(crate) fn component_demand<'a, I>(region: I, binding_id: BindingId) -> Option<ComponentDemand>
+where
+    I: IntoIterator<Item = &'a Expression>,
+{
+    let mut walker = Walker {
+        binding_id,
+        supported: false,
+        demand: ComponentDemand::default(),
+    };
+    walker.walk_items(region)?;
+    walker.supported.then_some(walker.demand)
+}
+
+struct Walker {
+    binding_id: BindingId,
+    supported: bool,
+    demand: ComponentDemand,
+}
+
+impl Walker {
+    fn names_the_local(&self, expression: &Expression) -> bool {
+        matches!(
+            expression,
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(id),
+                ..
+            } if self.binding_id == *id
+        )
+    }
+
+    fn targets_local(&self, target: &Expression) -> bool {
+        target.root_binding_id() == Some(self.binding_id)
+    }
+
+    #[allow(clippy::wildcard_enum_match_arm)]
+    fn walk(&mut self, expression: &Expression) -> Option<()> {
+        match expression {
+            Expression::Identifier { .. } if self.names_the_local(expression) => {
+                self.demand.value = ValueDemand::Whole;
+                return Some(());
+            }
+            Expression::Assignment { target, value, .. } => {
+                if self.targets_local(target) {
+                    return None;
+                }
+                self.walk(target)?;
+                self.walk(value)?;
+                return Some(());
+            }
+            Expression::Reference { expression, .. } if self.names_the_local(expression) => {
+                return None;
+            }
+            Expression::Match { subject, arms, .. } => return self.walk_match(subject, arms),
+            Expression::IfLet {
+                pattern,
+                scrutinee,
+                consequence,
+                alternative,
+                ..
+            } => {
+                self.walk_if_let(pattern, scrutinee, consequence)?;
+                if let Some(alternative) = alternative.expression() {
+                    self.walk(alternative)?;
+                }
+                return Some(());
+            }
+            Expression::Propagate { expression, .. } if self.names_the_local(expression) => {
+                self.demand.value = ValueDemand::Whole;
+                return Some(());
+            }
+            Expression::DotAccess {
+                expression: receiver,
+                resolution: DotAccessResolution::TupleElement { index },
+                ..
+            } if self.names_the_local(receiver) => {
+                self.supported = true;
+                self.demand.value = self.demand.value.max(ValueDemand::Payload);
+                self.demand.read_indices.insert(*index);
+                return Some(());
+            }
+            Expression::Call {
+                expression: callee,
+                args,
+                ..
+            } if let Some(member) = self.local_component_method(callee) => {
+                return self.walk_component_method_call(member, args);
+            }
+            _ => {}
+        }
+        self.walk_items(expression.children())
+    }
+
+    fn walk_if_let(
+        &mut self,
+        pattern: &Pattern,
+        scrutinee: &Expression,
+        consequence: &Expression,
+    ) -> Option<()> {
+        if self.names_the_local(scrutinee) {
+            if !is_component_arm(pattern) {
+                return None;
+            }
+            self.supported = true;
+            if binds_payload(pattern) {
+                self.demand.value = self.demand.value.max(ValueDemand::Payload);
+            }
+        } else {
+            self.walk(scrutinee)?;
+        }
+        self.walk(consequence)
+    }
+
+    fn local_component_method<'e>(&self, callee: &'e Expression) -> Option<&'e str> {
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = callee
+        else {
+            return None;
+        };
+        let member = member.as_str();
+        (self.names_the_local(receiver)
+            && (STATUS_METHODS.contains(&member) || PAYLOAD_METHODS.contains(&member)))
+        .then_some(member)
+    }
+
+    fn walk_component_method_call(&mut self, member: &str, args: &[Expression]) -> Option<()> {
+        self.supported = true;
+        if PAYLOAD_METHODS.contains(&member) {
+            self.demand.value = self.demand.value.max(ValueDemand::Payload);
+        }
+        self.demand.defaults += usize::from(member == "unwrap_or");
+        for argument in args {
+            self.walk(argument)?;
+        }
+        Some(())
+    }
+
+    fn walk_match(&mut self, subject: &Expression, arms: &[MatchArm]) -> Option<()> {
+        if self.names_the_local(subject) {
+            if !arms.iter().all(|arm| is_component_arm(&arm.pattern)) {
+                return None;
+            }
+            let has_guard = arms.iter().any(MatchArm::has_guard);
+            self.supported |= !has_guard;
+            let value = if has_guard {
+                ValueDemand::Whole
+            } else if arms.iter().any(|arm| binds_payload(&arm.pattern)) {
+                ValueDemand::Payload
+            } else {
+                ValueDemand::StatusOnly
+            };
+
+            self.demand.value = self.demand.value.max(value);
+        } else {
+            self.walk(subject)?;
+        }
+        self.walk_arms(arms)
+    }
+
+    fn walk_items<'e>(&mut self, items: impl IntoIterator<Item = &'e Expression>) -> Option<()> {
+        for item in items {
+            self.walk(item)?;
+        }
+        Some(())
+    }
+
+    fn walk_arms(&mut self, arms: &[MatchArm]) -> Option<()> {
+        for arm in arms {
+            if let Some(guard) = &arm.guard {
+                self.walk(guard)?;
+            }
+            self.walk(&arm.expression)?;
+        }
+        Some(())
+    }
+}
+
+fn is_component_arm(pattern: &Pattern) -> bool {
+    matches!(pattern, Pattern::WildCard { .. })
+        || matches!(
+            prelude_variant(pattern),
+            Some((
+                PreludeVariant::Some | PreludeVariant::None | PreludeVariant::Ok | PreludeVariant::Err,
+                fields,
+            )) if fields.len() <= 1
+                && fields.iter().all(|field| {
+                    matches!(field, Pattern::WildCard { .. } | Pattern::Identifier { .. })
+                })
+        )
+}
+
+fn binds_payload(pattern: &Pattern) -> bool {
+    let is_err = matches!(prelude_variant(pattern), Some((PreludeVariant::Err, _)));
+    !is_err && !collect_pattern_bindings(pattern).is_empty()
+}

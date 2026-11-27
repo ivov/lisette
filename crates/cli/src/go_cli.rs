@@ -11,8 +11,9 @@ use std::collections::HashMap;
 include!(concat!(env!("OUT_DIR"), "/go_versions.rs"));
 
 use deps::TypedefLocator;
-use emit::{OutputFile, PRELUDE_IMPORT_PATH};
+use emit::OutputFile;
 use lisette::pipeline::ProjectKind;
+use stdlib::PRELUDE_GO_MODULE;
 use stdlib::Target;
 
 pub fn go_command(target: Target) -> Command {
@@ -201,7 +202,7 @@ pub fn go_mod_content(
 ) -> Result<String, String> {
     let prelude_version = env!("CARGO_PKG_VERSION");
 
-    let mut requires = vec![format!("\t{} v{}", PRELUDE_IMPORT_PATH, prelude_version)];
+    let mut requires = vec![format!("\t{} v{}", PRELUDE_GO_MODULE, prelude_version)];
     let mut replace_lines: Vec<String> = Vec::new();
 
     for (module_path, dep) in locator.deps() {
@@ -250,7 +251,7 @@ pub fn go_mod_content(
         if let Ok(canonical) = prelude_dir.canonicalize() {
             content.push_str(&format!(
                 "\nreplace {} => {}\n",
-                PRELUDE_IMPORT_PATH,
+                PRELUDE_GO_MODULE,
                 go_mod_quote(&canonical.display().to_string())
             ));
         }
@@ -595,7 +596,7 @@ pub fn prewarm_module_cache(target: Target) {
         .args([
             "mod",
             "download",
-            &format!("{}@v{}", PRELUDE_IMPORT_PATH, prelude_version),
+            &format!("{}@v{}", PRELUDE_GO_MODULE, prelude_version),
         ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())

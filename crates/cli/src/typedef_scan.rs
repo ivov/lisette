@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use syntax::program::strip_go_prefix;
 
 use syntax::ast::{Expression, ImportAlias};
 use syntax::parse::Parser;
@@ -81,7 +82,7 @@ fn scan_file_imports(path: PathBuf) -> Result<Vec<ScannedImport>, SourceScanErro
     let mut imports = Vec::new();
     for expr in &parse_result.ast {
         if let Expression::PackageImport { name, alias, .. } = expr
-            && let Some(pkg) = name.strip_prefix("go:")
+            && let Some(pkg) = strip_go_prefix(name)
             && deps::is_third_party(pkg)
         {
             imports.push(ScannedImport {

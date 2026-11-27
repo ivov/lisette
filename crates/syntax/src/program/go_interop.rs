@@ -419,7 +419,7 @@ mod tests {
             assert_eq!(
                 go_option_representation(
                     &Type::option_of(Type::Nominal {
-                        id: "prelude.Unknown".into(),
+                        id: types::Symbol::from_raw("prelude.Unknown"),
                         params: vec![],
                         writable: false
                     }),

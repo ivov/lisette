@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::collections::DenseMap;
 
 use std::sync::Arc;
@@ -8,7 +8,7 @@ use passes::Analysis;
 use semantics::facts::{BindingFact, UsageIndex};
 use syntax::FileParseStatus::Failed;
 use syntax::ast::BindingId;
-use syntax::program::{Definition, File};
+use syntax::program::{Definition, File, PRELUDE_PACKAGE_ID, is_go_import};
 use syntax::types::Symbol;
 
 use crate::analysis::offset_in_span;
@@ -22,9 +22,9 @@ use std::path::Path;
 
 pub(crate) struct AnalysisSnapshot {
     pub(crate) analysis: Analysis,
-    sources: HashMap<u32, SnapshotSource>,
-    file_ids_by_uri: HashMap<Url, u32>,
-    binding_ids_by_file: HashMap<u32, Vec<BindingId>>,
+    sources: FxHashMap<u32, SnapshotSource>,
+    file_ids_by_uri: FxHashMap<Url, u32>,
+    binding_ids_by_file: FxHashMap<u32, Vec<BindingId>>,
     packages: PackageResolver,
 }
 
@@ -78,13 +78,14 @@ impl AnalysisSnapshot {
     }
 
     pub(crate) fn new(
-        analysis: Analysis,
+        mut analysis: Analysis,
         config: &ProjectConfig,
         entry_dir: &Path,
         external_test: bool,
         packages: PackageResolver,
     ) -> Self {
-        let mut sources = HashMap::default();
+        analysis.emit_input.checked_bodies = Default::default();
+        let mut sources = FxHashMap::default();
 
         for (file_id, file) in &analysis.emit_input.files {
             let uri = if !external_test && file.package_id == ENTRY_PACKAGE_ID {
@@ -99,7 +100,7 @@ impl AnalysisSnapshot {
                     Ok(uri) => uri,
                     Err(_) => continue,
                 }
-            } else if file.package_id.starts_with("go:") || file.package_id == "prelude" {
+            } else if is_go_import(&file.package_id) || file.package_id == PRELUDE_PACKAGE_ID {
                 // Embedded typedef with no recorded on-disk path; nothing to navigate to.
                 continue;
             } else {
@@ -119,7 +120,7 @@ impl AnalysisSnapshot {
             );
         }
 
-        let mut file_ids_by_uri = HashMap::default();
+        let mut file_ids_by_uri = FxHashMap::default();
         for (file_id, source) in &sources {
             file_ids_by_uri
                 .entry(source.uri.clone())
@@ -127,7 +128,7 @@ impl AnalysisSnapshot {
         }
 
         let bindings = analysis.bindings();
-        let mut binding_ids_by_file: HashMap<u32, Vec<BindingId>> = HashMap::default();
+        let mut binding_ids_by_file: FxHashMap<u32, Vec<BindingId>> = FxHashMap::default();
         for (&binding_id, binding) in bindings {
             binding_ids_by_file
                 .entry(binding.span.file_id)
@@ -189,7 +190,7 @@ impl AnalysisSnapshot {
             .as_deref()
     }
 
-    pub(crate) fn files(&self) -> &HashMap<u32, File> {
+    pub(crate) fn files(&self) -> &FxHashMap<u32, File> {
         &self.analysis.emit_input.files
     }
 
@@ -212,7 +213,7 @@ impl AnalysisSnapshot {
         self.analysis.usages()
     }
 
-    pub(crate) fn definitions(&self) -> &HashMap<Symbol, Definition> {
+    pub(crate) fn definitions(&self) -> &FxHashMap<Symbol, Definition> {
         &self.analysis.emit_input.definitions
     }
 

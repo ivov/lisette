@@ -1,5 +1,5 @@
 use crate::store;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::parse::ParseResult;
 use syntax::program::{SourceFileKind, is_test_file};
 
@@ -38,7 +38,7 @@ impl FileContent {
     }
 }
 
-pub type Files = HashMap<String, FileContent>;
+pub type Files = FxHashMap<String, FileContent>;
 
 fn counts_for_internal_test_root(name: &str) -> bool {
     match SourceFileKind::of(name) {
@@ -161,7 +161,7 @@ impl DiscoveredPackageContents {
 
 #[derive(Debug, Clone, Default)]
 pub struct DiscoveredPackages {
-    packages: HashMap<String, DiscoveredPackageContents>,
+    packages: FxHashMap<String, DiscoveredPackageContents>,
 }
 
 impl DiscoveredPackages {
@@ -223,7 +223,7 @@ pub trait Loader: Sync {
 /// playground, and anywhere the source content does not live on disk.
 #[derive(Debug, Clone, Default)]
 pub struct MemoryLoader {
-    folders: HashMap<String, Files>,
+    folders: FxHashMap<String, Files>,
 }
 
 impl MemoryLoader {

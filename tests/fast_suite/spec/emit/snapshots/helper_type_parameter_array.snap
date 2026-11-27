@@ -16,13 +16,13 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func count[arr any](_ arr) int {
 	values := [2]lisette.Option[arr]{}
-	count := 0
+	count2 := 0
 	for _, value := range values {
 		if value.IsNone() {
-			count++
+			count2++
 		}
 	}
-	return count
+	return count2
 }
 
 func main() {

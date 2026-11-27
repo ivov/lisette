@@ -2,11 +2,11 @@ use diagnostics::LocalSink;
 use syntax::ast::Expression;
 
 use semantics::store::Store;
-use syntax::program::NativeTypeKind;
 use syntax::program::Package;
+use syntax::program::{NativeTypeKind, PRELUDE_PACKAGE_ID, PRELUDE_PREFIX};
 
 pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
-    let Some(prelude_package) = store.get_package("prelude") else {
+    let Some(prelude_package) = store.get_package(PRELUDE_PACKAGE_ID) else {
         return;
     };
     for item in typed_ast {
@@ -20,7 +20,7 @@ fn check_top_level_function(item: &Expression, prelude_package: &Package, sink: 
         name, name_span, ..
     } = item
     {
-        let qualified = format!("prelude.{}", name);
+        let qualified = format!("{PRELUDE_PREFIX}{name}");
         if prelude_package.definitions.contains_key(qualified.as_str()) {
             sink.push(diagnostics::infer::prelude_function_shadowed(
                 name, *name_span,
@@ -45,7 +45,7 @@ fn visit_expression(expression: &Expression, prelude_package: &Package, sink: &L
         } => {
             // Prelude-defined types (Slice, Map, …) plus inline builtins like
             // `Array` that have no prelude definition but are still reserved.
-            let qualified = format!("prelude.{}", name);
+            let qualified = format!("{PRELUDE_PREFIX}{name}");
             if prelude_package.definitions.contains_key(qualified.as_str())
                 || NativeTypeKind::from_name(name).is_some()
             {
@@ -55,7 +55,7 @@ fn visit_expression(expression: &Expression, prelude_package: &Package, sink: &L
         _ => {}
     }
 
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_expression(child, prelude_package, sink);
-    }
+    });
 }

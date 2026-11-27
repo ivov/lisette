@@ -3,7 +3,7 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::thread;
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
@@ -26,7 +26,7 @@ pub struct SourceInfo {
 }
 
 /// Per-file source, with key as file_id, for mapping diagnostics back to source text.
-pub type Sources = HashMap<u32, SourceInfo>;
+pub type Sources = FxHashMap<u32, SourceInfo>;
 
 #[derive(Debug)]
 pub struct CompileConfig<'a> {
@@ -170,13 +170,17 @@ pub fn compile(
         recover_target: RecoverTarget::None,
     });
     let failed = analysis.failed();
-    let emit_result = (!failed).then(|| {
-        Planner::emit(
+    let emit_result = (!failed).then(|| match mode {
+        CompileMode::Check => {
+            Planner::check(&mut analysis.emit_input, go_module, entry_package_name)
+                .map(|()| Vec::new())
+        }
+        CompileMode::Emit { .. } | CompileMode::Test => Planner::emit(
             &mut analysis.emit_input,
             go_module,
             entry_package_name,
             emit_options,
-        )
+        ),
     });
 
     if let (Some(root), Some(Err(rejections))) = (&project_root, &emit_result) {

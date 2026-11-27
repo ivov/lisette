@@ -1,14 +1,14 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::ast::{BindingId as AstBindingId, Span};
 use crate::types::Symbol;
 
-use super::{Definition, EqualityRecipe, File, FileImport};
+use super::{Definition, EqualityRecipe, File, FileImport, GoMethodPolicy};
 
 /// Name spans of imports that no code in their file uses.
 #[derive(Debug, Clone, Default)]
 pub struct UnusedImports {
-    keys: HashSet<ImportKey>,
+    keys: FxHashSet<ImportKey>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,14 +36,27 @@ impl UnusedImports {
 
 #[derive(Debug, Clone, Default)]
 pub struct EmitBindings {
-    mutations: HashMap<AstBindingId, BindingMutation>,
+    mutations: FxHashMap<AstBindingId, BindingMutation>,
+    hidden: FxHashMap<AstBindingId, AstBindingId>,
 }
 
 impl EmitBindings {
-    pub fn record(&mut self, id: AstBindingId, mutation: Option<BindingMutation>) {
+    pub fn record(
+        &mut self,
+        id: AstBindingId,
+        mutation: Option<BindingMutation>,
+        hides: Option<AstBindingId>,
+    ) {
         if let Some(mutation) = mutation {
             self.mutations.insert(id, mutation);
         }
+        if let Some(hidden) = hides {
+            self.hidden.insert(id, hidden);
+        }
+    }
+
+    pub fn hidden_binding(&self, id: AstBindingId) -> Option<AstBindingId> {
+        self.hidden.get(&id).copied()
     }
 
     pub fn is_mutated(&self, id: AstBindingId) -> bool {
@@ -119,8 +132,8 @@ impl TestIndex {
 
 #[derive(Debug, Clone, Default)]
 pub struct EqualityIndex {
-    by_id: HashMap<String, EqualityInfo>,
-    synthesized_fields: HashMap<String, Vec<EqualityRecipe>>,
+    by_id: FxHashMap<String, EqualityInfo>,
+    synthesized_fields: FxHashMap<String, Vec<EqualityRecipe>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,16 +251,18 @@ impl BindingMutation {
 #[derive(Default)]
 pub struct EmitInput {
     pub checked_bodies: super::CheckedBodies,
-    pub files: HashMap<u32, File>,
-    pub definitions: HashMap<Symbol, Definition>,
+    pub files: FxHashMap<u32, File>,
+    pub definitions: FxHashMap<Symbol, Definition>,
     pub entry_package_id: String,
     pub unused_imports: UnusedImports,
     pub bindings: EmitBindings,
-    pub cached_packages: HashSet<String>,
+    pub cached_packages: FxHashSet<String>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
-    pub go_package_names: HashMap<String, String>,
-    pub go_package_ids: HashSet<String>,
+    pub go_package_names: FxHashMap<String, String>,
+    pub go_package_ids: FxHashSet<String>,
+    pub files_with_unspellable_types: FxHashSet<u32>,
+    pub go_method_policy: GoMethodPolicy,
 }
 
 #[cfg(test)]

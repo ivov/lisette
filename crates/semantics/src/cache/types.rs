@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use syntax::ast::{
     Annotation, Attribute, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition,
@@ -20,7 +20,7 @@ impl CachedDefinition {
 
     pub(crate) fn from_definition(
         definition: &Definition,
-        file_id_to_index: &HashMap<u32, u32>,
+        file_id_to_index: &FxHashMap<u32, u32>,
     ) -> Self {
         debug_assert!(
             definition
@@ -39,16 +39,16 @@ impl CachedDefinition {
     }
 
     pub(crate) fn install_into(
-        &self,
+        self,
         definitions: &mut DenseMap<Symbol, Definition>,
         qualified_name: Symbol,
         file_ids: &[u32],
     ) {
-        definitions.insert(qualified_name, self.to_definition(file_ids));
+        definitions.insert(qualified_name, self.into_definition(file_ids));
     }
 
-    pub(crate) fn to_definition(&self, file_ids: &[u32]) -> Definition {
-        let mut definition = self.0.clone();
+    pub(crate) fn into_definition(self, file_ids: &[u32]) -> Definition {
+        let mut definition = self.0;
         remap_definition_spans(&mut definition, &mut |span| {
             if !span.is_dummy() {
                 span.file_id = file_ids.get(span.file_id as usize).copied().unwrap_or(0);
@@ -356,7 +356,7 @@ mod tests {
         let cached = CachedDefinition::from_definition(&definition, &file_map);
         let bytes = bincode::serialize(&cached).unwrap();
         let cached: CachedDefinition = bincode::deserialize(&bytes).unwrap();
-        let restored = cached.to_definition(&[cached_file]);
+        let restored = cached.clone().into_definition(&[cached_file]);
         let mut expected = definition;
         remap_definition_spans(&mut expected, &mut |span| span.file_id = cached_file);
 
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn cached_methods_preserve_dictionary_format_and_iteration_order() {
-        let methods: rustc_hash::FxHashMap<EcoString, Method> = ["get", "set", "compare"]
+        let methods: FxHashMap<EcoString, Method> = ["get", "set", "compare"]
             .into_iter()
             .map(|name| {
                 let name = EcoString::from(name);
@@ -385,8 +385,7 @@ mod tests {
             .collect();
         let bytes = bincode::serialize(&methods).unwrap();
         let restored: Methods = bincode::deserialize(&bytes).unwrap();
-        let original_format: rustc_hash::FxHashMap<EcoString, Method> =
-            bincode::deserialize(&bytes).unwrap();
+        let original_format: FxHashMap<EcoString, Method> = bincode::deserialize(&bytes).unwrap();
 
         assert_eq!(
             restored.iter().collect::<Vec<_>>(),

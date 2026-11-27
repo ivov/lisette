@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::passes::walk::visit_ast;
 use diagnostics::LisetteDiagnostic;
@@ -18,12 +18,12 @@ impl Borrow<str> for LintName {
 
 struct Allow {
     span: Span,
-    lints: HashSet<LintName>,
+    lints: FxHashSet<LintName>,
 }
 
 #[derive(Default)]
 pub(super) struct AllowIndex {
-    by_file: HashMap<u32, Vec<Allow>>,
+    by_file: FxHashMap<u32, Vec<Allow>>,
 }
 
 impl Extend<AllowIndex> for AllowIndex {
@@ -79,13 +79,13 @@ fn collect_allows(
     out
 }
 
-fn allow_flags(expression: &Expression) -> HashSet<LintName> {
+fn allow_flags(expression: &Expression) -> FxHashSet<LintName> {
     let attributes = match expression {
         Expression::Function { attributes, .. }
         | Expression::Struct { attributes, .. }
         | Expression::Enum { attributes, .. }
         | Expression::TypeAlias { attributes, .. } => attributes,
-        _ => return HashSet::default(),
+        _ => return FxHashSet::default(),
     };
     attributes
         .iter()
@@ -156,9 +156,9 @@ mod tests {
 
     fn allow(file_id: u32, name: &str) -> AllowIndex {
         let span = Span::new(file_id, 0, 100);
-        let mut lints = HashSet::default();
+        let mut lints = FxHashSet::default();
         lints.insert(LintName(name.into()));
-        let mut by_file = HashMap::default();
+        let mut by_file = FxHashMap::default();
         by_file.insert(file_id, vec![Allow { span, lints }]);
         AllowIndex { by_file }
     }

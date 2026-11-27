@@ -1,0 +1,137 @@
+use crate::lookup::facts::catalog::GoAbiCatalog;
+use crate::lookup::facts::definition_key::type_query_lookup;
+use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::target::ir::go_expression::Position;
+use crate::target::types::enum_layout::EnumLayout;
+use rustc_hash::FxHashMap;
+use std::sync::{Arc, OnceLock};
+use syntax::ast::Span;
+use syntax::program::{Definition, DefinitionBody, GoMethodPolicy, is_prelude_symbol};
+use syntax::types::Symbol;
+
+pub(crate) struct GlobalEmitData<'a> {
+    definitions: &'a FxHashMap<Symbol, Definition>,
+    pub(crate) method_policy: &'a GoMethodPolicy,
+    go_abi_catalog: OnceLock<GoAbiCatalog>,
+    enum_layouts: OnceLock<FxHashMap<Symbol, EnumLayout>>,
+}
+
+impl<'a> GlobalEmitData<'a> {
+    pub(crate) fn new(
+        definitions: &'a FxHashMap<Symbol, Definition>,
+        method_policy: &'a GoMethodPolicy,
+    ) -> Self {
+        debug_assert!(
+            *method_policy
+                == GoMethodPolicy::compute(definitions.iter(), type_query_lookup(definitions)),
+            "internal error: the checker's Go method policy differs from the policy of the emitted definitions"
+        );
+        GlobalEmitData {
+            definitions,
+            method_policy,
+            go_abi_catalog: OnceLock::new(),
+            enum_layouts: OnceLock::new(),
+        }
+    }
+
+    pub(crate) fn go_abi_catalog(&self) -> &GoAbiCatalog {
+        self.go_abi_catalog
+            .get_or_init(|| GoAbiCatalog::from_definitions(self.definitions))
+    }
+
+    pub(crate) fn enum_layouts(&self) -> &FxHashMap<Symbol, EnumLayout> {
+        self.enum_layouts
+            .get_or_init(|| enum_layouts(self.definitions))
+    }
+}
+
+fn enum_layouts(definitions: &FxHashMap<Symbol, Definition>) -> FxHashMap<Symbol, EnumLayout> {
+    let mut layouts = FxHashMap::default();
+    for (key, definition) in definitions {
+        let DefinitionBody::Enum {
+            generics,
+            variants,
+            default_variant,
+            ..
+        } = &definition.body
+        else {
+            continue;
+        };
+        if is_prelude_symbol(key) {
+            continue;
+        }
+        let layout = EnumLayout::new(
+            key,
+            generics,
+            variants,
+            *default_variant,
+            type_query_lookup(definitions),
+        );
+        layouts.insert(key.clone(), layout);
+    }
+    layouts
+}
+
+pub(crate) struct SharedEmitContext<'a> {
+    pub(crate) go_module: &'a str,
+    pub(crate) entry_package_name: &'a str,
+    pub(crate) emit_tests: bool,
+    pub(crate) line_indexes: Option<FxHashMap<u32, LineIndex>>,
+    pub(crate) globals: GlobalEmitData<'a>,
+}
+
+impl EmitFacts<'_> {
+    pub(crate) fn position_at(&self, span: &Span, byte_offset: u32) -> Option<Position> {
+        if span.is_dummy() {
+            return None;
+        }
+        let source = self.line_index(span.file_id)?;
+        Some(Position {
+            path: Arc::clone(&source.path),
+            line: source.line_for_offset(byte_offset),
+            column: source.col_for_offset(byte_offset),
+        })
+    }
+
+    pub(crate) fn source_position(&self, span: &Span) -> Option<Position> {
+        self.position_at(span, span.byte_offset)
+    }
+
+    pub(crate) fn end_position(&self, span: &Span) -> Option<Position> {
+        self.position_at(span, span.byte_offset + span.byte_length)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct LineIndex {
+    pub(crate) path: Arc<str>,
+    line_offsets: Vec<u32>,
+}
+
+impl LineIndex {
+    pub(crate) fn from_source(path: String, source: &str) -> Self {
+        let mut line_offsets = vec![0];
+        for (i, byte) in source.bytes().enumerate() {
+            if byte == b'\n' {
+                line_offsets.push((i + 1) as u32);
+            }
+        }
+        Self {
+            path: path.into(),
+            line_offsets,
+        }
+    }
+
+    pub(crate) fn line_for_offset(&self, byte_offset: u32) -> usize {
+        match self.line_offsets.binary_search(&byte_offset) {
+            Ok(line) => line + 1,
+            Err(line) => line,
+        }
+    }
+
+    pub(crate) fn col_for_offset(&self, byte_offset: u32) -> usize {
+        let line = self.line_for_offset(byte_offset);
+        let line_start = self.line_offsets[line - 1];
+        (byte_offset - line_start + 1) as usize
+    }
+}

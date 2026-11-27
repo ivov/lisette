@@ -1,21 +1,118 @@
+use std::fmt::{self, Display, Formatter};
+
+use ecow::EcoString;
+
+use super::{PRELUDE_PACKAGE_ID, is_go_import, is_prelude_symbol};
 use crate::ast::Expression;
 use crate::types::Symbol;
 use crate::types::{CompoundKind, SimpleKind, SubstitutionMap, Type};
 
-pub fn resolved_definition(expression: &Expression) -> Option<&str> {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MethodName {
+    pub owner: Symbol,
+    pub name: EcoString,
+}
+
+impl MethodName {
+    pub fn new(owner: Symbol, name: &str) -> Self {
+        Self {
+            owner,
+            name: name.into(),
+        }
+    }
+
+    pub fn is_go(&self) -> bool {
+        is_go_import(&self.owner)
+    }
+}
+
+impl Display for MethodName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.owner, self.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CalleeName {
+    Definition(Symbol),
+    Method(MethodName),
+}
+
+impl CalleeName {
+    pub fn definition(&self) -> Option<&Symbol> {
+        match self {
+            Self::Definition(name) => Some(name),
+            Self::Method(_) => None,
+        }
+    }
+
+    pub fn method(&self) -> Option<&MethodName> {
+        match self {
+            Self::Definition(_) => None,
+            Self::Method(method) => Some(method),
+        }
+    }
+
+    pub fn is_go(&self) -> bool {
+        match self {
+            Self::Definition(name) => is_go_import(name),
+            Self::Method(method) => method.is_go(),
+        }
+    }
+
+    pub fn is_prelude(&self) -> bool {
+        match self {
+            Self::Definition(name) => is_prelude_symbol(name),
+            Self::Method(method) => is_prelude_symbol(&method.owner),
+        }
+    }
+
+    pub fn qualified_name(&self) -> Symbol {
+        match self {
+            Self::Definition(name) => name.clone(),
+            Self::Method(method) => method.owner.with_segment(&method.name),
+        }
+    }
+
+    pub fn last_segment(&self) -> &str {
+        match self {
+            Self::Definition(name) => name.last_segment(),
+            Self::Method(method) => &method.name,
+        }
+    }
+}
+
+impl Display for CalleeName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Definition(name) => name.fmt(f),
+            Self::Method(method) => method.fmt(f),
+        }
+    }
+}
+
+pub fn resolved_callee(expression: &Expression) -> Option<CalleeName> {
+    match expression.unwrap_parens() {
+        Expression::Identifier { resolution, .. } => resolution.callee_name(),
+        Expression::DotAccess { resolution, .. } => resolution.callee_name(),
+        _ => None,
+    }
+}
+
+pub fn resolved_definition_name(expression: &Expression) -> Option<&str> {
     match expression.unwrap_parens() {
         Expression::Identifier { resolution, .. } => resolution.definition(),
-        Expression::DotAccess { resolution, .. } => resolution.definition(),
+        Expression::DotAccess { resolution, .. } => resolution.defined_name().map(Symbol::as_str),
         _ => None,
     }
 }
 
 /// The prelude enum and member an expression resolves to, as `("prelude.Option", "None")`.
 pub fn prelude_constructor(expression: &Expression) -> Option<(&str, &str)> {
-    let (owner, member) = resolved_definition(expression)?.rsplit_once('.')?;
+    let (owner, member) = resolved_definition_name(expression)?.rsplit_once('.')?;
     let owner = match (owner, member) {
-        ("prelude", "Some" | "None") => "prelude.Option",
-        ("prelude", "Ok" | "Err") => "prelude.Result",
+        (PRELUDE_PACKAGE_ID, "Some" | "None") => "prelude.Option",
+        (PRELUDE_PACKAGE_ID, "Ok" | "Err") => "prelude.Result",
         _ => owner,
     };
     Some((owner, member))
@@ -116,10 +213,13 @@ pub enum DotAccessResolution {
     /// `is_newtype` is true when the struct has exactly 1 field and no generics,
     /// meaning access should emit a type cast rather than `.F0`.
     TupleStructField {
+        index: usize,
         is_newtype: bool,
     },
     /// Tuple element access (e.g., `t.0`, `t.1`)
-    TupleElement,
+    TupleElement {
+        index: usize,
+    },
     /// Package member access (e.g., `mod.func`)
     PackageMember {
         definition: Option<Symbol>,
@@ -134,14 +234,14 @@ pub enum DotAccessResolution {
     InstanceMethod {
         is_exported: bool,
         receiver_coercion: Option<ReceiverCoercion>,
-        definition: Option<Symbol>,
+        method: Option<MethodName>,
         instantiation: SubstitutionMap,
     },
     /// Instance method used as a first-class value (not called).
     /// E.g., `Point.area` used as a callback.
     InstanceMethodValue {
         is_exported: bool,
-        definition: Option<Symbol>,
+        method: Option<MethodName>,
         instantiation: SubstitutionMap,
     },
     /// Static method (no `self` receiver)
@@ -158,7 +258,7 @@ impl DotAccessResolution {
             self,
             Self::StructField { .. }
                 | Self::TupleStructField { .. }
-                | Self::TupleElement
+                | Self::TupleElement { .. }
                 | Self::InstanceMethod { .. }
                 | Self::InstanceMethodValue { .. }
         )
@@ -167,7 +267,7 @@ impl DotAccessResolution {
     pub fn is_field_read(&self) -> bool {
         matches!(
             self,
-            Self::StructField { .. } | Self::TupleStructField { .. } | Self::TupleElement
+            Self::StructField { .. } | Self::TupleStructField { .. } | Self::TupleElement { .. }
         )
     }
 
@@ -187,20 +287,34 @@ impl DotAccessResolution {
         }
     }
 
-    pub fn definition(&self) -> Option<&str> {
+    pub fn defined_name(&self) -> Option<&Symbol> {
         match self {
-            Self::PackageMember { definition, .. }
-            | Self::InstanceMethod { definition, .. }
-            | Self::InstanceMethodValue { definition, .. } => {
-                definition.as_ref().map(Symbol::as_str)
-            }
+            Self::PackageMember { definition, .. } => definition.as_ref(),
             Self::EnumVariant { definition, .. } | Self::StaticMethod { definition, .. } => {
                 Some(definition)
             }
             Self::Unresolved
             | Self::StructField { .. }
             | Self::TupleStructField { .. }
-            | Self::TupleElement => None,
+            | Self::TupleElement { .. }
+            | Self::InstanceMethod { .. }
+            | Self::InstanceMethodValue { .. } => None,
+        }
+    }
+
+    pub fn method(&self) -> Option<&MethodName> {
+        match self {
+            Self::InstanceMethod { method, .. } | Self::InstanceMethodValue { method, .. } => {
+                method.as_ref()
+            }
+            _ => None,
+        }
+    }
+
+    pub fn callee_name(&self) -> Option<CalleeName> {
+        match self.method() {
+            Some(method) => Some(CalleeName::Method(method.clone())),
+            None => self.defined_name().cloned().map(CalleeName::Definition),
         }
     }
 
@@ -214,7 +328,7 @@ impl DotAccessResolution {
             Self::Unresolved
             | Self::StructField { .. }
             | Self::TupleStructField { .. }
-            | Self::TupleElement => None,
+            | Self::TupleElement { .. } => None,
         }
     }
 }

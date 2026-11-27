@@ -68,7 +68,12 @@ pub(crate) fn place_key(expression: &Expression) -> Option<PlaceKey> {
     Some(match expression.unwrap_parens() {
         Expression::Identifier { resolution, .. } => match resolution {
             IdentifierResolution::Binding(id) => PlaceKey::Binding(*id),
-            IdentifierResolution::Definition { name, .. } => PlaceKey::Definition(name.clone()),
+            IdentifierResolution::Definition { name, .. } => {
+                PlaceKey::Definition(name.as_eco().clone())
+            }
+            IdentifierResolution::Method { method, .. } => {
+                PlaceKey::Definition(method.to_string().into())
+            }
             IdentifierResolution::Unresolved => return None,
         },
         Expression::DotAccess {

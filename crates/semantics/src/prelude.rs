@@ -1,11 +1,10 @@
 use diagnostics::LocalSink;
 use stdlib::{LIS_PRELUDE_SOURCE, LIS_TEST_PRELUDE_SOURCE};
-use syntax::program::{File, Visibility};
+use syntax::program::{File, PRELUDE_PACKAGE_ID, Visibility};
 
 use crate::checker::{FileContext, TaskState};
 use crate::store::Store;
 
-pub(crate) const PRELUDE_PACKAGE_ID: &str = "prelude";
 pub(crate) const PRELUDE_FILE_ID: u32 = 1;
 
 /// Synthetic, internal package id. The `**` prefix is reserved: imports beginning with

@@ -19,5 +19,6 @@ func test() {
 		panic("boom")
 	})
 	if result.Tag == lisette.ResultOk {
+		panic("unreachable")
 	}
 }

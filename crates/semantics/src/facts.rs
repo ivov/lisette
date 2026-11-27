@@ -6,7 +6,7 @@ use syntax::program::{
 mod usages;
 pub use usages::{UsageFacts, UsageIndex};
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -54,21 +54,25 @@ pub struct Facts {
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub redundant_pipeline_placeholders: Vec<Span>,
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
-    pub interface_satisfied_methods: HashMap<String, HashMap<String, InterfaceSatisfactions>>,
+    pub interface_satisfied_methods: FxHashMap<String, FxHashMap<String, InterfaceSatisfactions>>,
 
-    pub suggested_names: HashMap<String, HashSet<String>>,
+    pub suggested_names: FxHashMap<String, FxHashSet<String>>,
 
     pub(crate) deferred: DeferredChecks,
 
     /// Patterns the checker rejected. Pattern checks skip them.
-    pub pattern_error_spans: HashSet<Span>,
+    pub pattern_error_spans: FxHashSet<Span>,
 
     /// Spans of binary expressions the checker rejected, so lints can skip them.
-    pub type_error_spans: HashSet<Span>,
+    pub type_error_spans: FxHashSet<Span>,
 
     /// Span of every inferred function, so lints can attribute errors to
     /// the containing function.
     pub function_spans: Vec<Span>,
+
+    pub files_with_unspellable_types: FxHashSet<u32>,
+
+    pub lambdas_in_go_function_slots: FxHashSet<ExpressionId>,
 }
 
 #[derive(Debug, Default)]
@@ -91,7 +95,7 @@ pub(crate) struct ValueUseObligations {
 #[derive(Debug, Clone)]
 pub(crate) struct ValueUseObligation {
     pub(crate) key: ValueUseKey,
-    pub(crate) source: Type,
+    pub(crate) source: Option<Type>,
     pub(crate) slot: Type,
     /// The conformances that the checker selected while it accepted this value.
     pub(crate) witnesses: Vec<ConformanceWitness>,
@@ -111,7 +115,9 @@ impl ValueUseObligations {
 
     pub(crate) fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {
         for obligation in &mut self.uses {
-            visit(&mut obligation.source);
+            if let Some(source) = &mut obligation.source {
+                visit(source);
+            }
             visit(&mut obligation.slot);
             for witness in &mut obligation.witnesses {
                 witness.visit_types_mut(&mut visit);
@@ -218,7 +224,7 @@ enum InterfaceMatch {
 
 #[derive(Debug, Default)]
 pub struct InterfaceSatisfactions {
-    impl_types: HashMap<String, InterfaceMatch>,
+    impl_types: FxHashMap<String, InterfaceMatch>,
 }
 
 impl InterfaceSatisfactions {
@@ -336,16 +342,18 @@ impl Facts {
             redundant_pipeline_placeholders: Vec::new(),
             unprefixed_fstrings: Vec::new(),
             deferred: DeferredChecks::default(),
-            pattern_error_spans: HashSet::default(),
-            type_error_spans: HashSet::default(),
+            pattern_error_spans: FxHashSet::default(),
+            type_error_spans: FxHashSet::default(),
             function_spans: Vec::new(),
+            files_with_unspellable_types: FxHashSet::default(),
+            lambdas_in_go_function_slots: FxHashSet::default(),
             usages: UsageFacts::default(),
             conformances: ConformanceIndex::default(),
             checked_bodies: CheckedBodiesBuilder::default(),
             selections: Selections::default(),
             value_uses: ValueUseObligations::default(),
-            interface_satisfied_methods: HashMap::default(),
-            suggested_names: HashMap::default(),
+            interface_satisfied_methods: FxHashMap::default(),
+            suggested_names: FxHashMap::default(),
         }
     }
 
@@ -376,9 +384,16 @@ impl Facts {
                 mutation: None,
                 origin,
                 shadows,
+                hides: None,
             },
         );
         id
+    }
+
+    pub(crate) fn record_hidden_binding(&mut self, id: BindingId, hidden: BindingId) {
+        if let Some(fact) = self.bindings.get_mut(&id) {
+            fact.hides = Some(hidden);
+        }
     }
 
     pub(crate) fn binding_span(&self, id: BindingId) -> Option<Span> {
@@ -524,6 +539,8 @@ impl Facts {
             pattern_error_spans,
             type_error_spans,
             function_spans,
+            files_with_unspellable_types,
+            lambdas_in_go_function_slots,
             usages,
             interface_satisfied_methods,
             conformances,
@@ -547,6 +564,10 @@ impl Facts {
         self.pattern_error_spans.extend(pattern_error_spans);
         self.type_error_spans.extend(type_error_spans);
         self.function_spans.extend(function_spans);
+        self.files_with_unspellable_types
+            .extend(files_with_unspellable_types);
+        self.lambdas_in_go_function_slots
+            .extend(lambdas_in_go_function_slots);
 
         self.usages.merge(usages);
         self.conformances.merge(conformances);
@@ -599,6 +620,7 @@ pub struct BindingFact {
     pub mutation: Option<BindingMutation>,
     pub origin: BindingOrigin,
     pub shadows: Option<Span>,
+    pub hides: Option<BindingId>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -811,9 +833,9 @@ mod tests {
 #[derive(Debug, Clone, Default)]
 pub struct Selections {
     /// Keyed by the callee of each call.
-    pub(crate) operations: HashMap<ExpressionId, CallOperation>,
+    pub(crate) operations: FxHashMap<ExpressionId, CallOperation>,
     /// Keyed as `CheckedBodies` keys its equalities.
-    pub(crate) equalities: HashMap<ExpressionId, EqualityRecipe>,
+    pub(crate) equalities: FxHashMap<ExpressionId, EqualityRecipe>,
 }
 
 impl Selections {

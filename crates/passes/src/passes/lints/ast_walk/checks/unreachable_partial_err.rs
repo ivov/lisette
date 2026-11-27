@@ -1,7 +1,7 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{ConstructorPatternResolution, Expression, Pattern};
-use syntax::program::{CallOperation, resolved_definition};
-use syntax::types::{GO_IMPORT_PREFIX, unqualified_name};
+use syntax::program::{CallOperation, CalleeName, resolved_callee};
+use syntax::types::unqualified_name;
 
 pub fn check_unreachable_partial_err(expression: &Expression, ctx: &NodeCtx<'_>) {
     let Expression::IfLet {
@@ -39,8 +39,7 @@ pub fn check_unreachable_partial_err(expression: &Expression, ctx: &NodeCtx<'_>)
         return;
     }
     // Lisette functions can construct Err even with a non-nilable value type.
-    let Some(callee_id) = resolved_definition(callee).filter(|id| id.starts_with(GO_IMPORT_PREFIX))
-    else {
+    let Some(callee_id) = resolved_callee(callee).filter(CalleeName::is_go) else {
         return;
     };
     let ty = ctx.store.peel_alias(ty);
@@ -59,6 +58,6 @@ pub fn check_unreachable_partial_err(expression: &Expression, ctx: &NodeCtx<'_>)
     }
     ctx.sink.push(diagnostics::lint::unreachable_partial_err(
         span,
-        unqualified_name(callee_id),
+        callee_id.last_segment(),
     ));
 }

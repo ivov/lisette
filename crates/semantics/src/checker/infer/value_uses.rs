@@ -1,12 +1,14 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::borrow::Cow;
 use std::mem;
 
 use syntax::ast::{Expression, ExpressionId, FormatStringPart, Literal, MatchArm, SelectArm, Span};
 use syntax::program::{
-    Adaptation, CallOperation, CheckedBodiesBuilder, CheckedCallee, CheckedValueUse,
+    Adaptation, CallOperation, CalleeName, CheckedBodiesBuilder, CheckedCallee, CheckedValueUse,
     ConformanceWitness, Definition, DefinitionBody, DotAccessResolution, FieldKey, FieldSelection,
-    InterfaceConversion, InterfaceRequirement, NativeOperation, ReceiverCoercion, ValueUseKey,
-    constructor_fields, interface_requirements, resolved_definition, resolved_instantiation,
+    InterfaceConversion, InterfaceRequirement, MethodName, NativeOperation, ReceiverCoercion,
+    ValueUseKey, constructor_fields, interface_requirements, is_go_import, resolved_callee,
+    resolved_instantiation,
 };
 use syntax::types::{
     CompoundKind, FunctionType, SubstitutionMap, Symbol, Type, TypeVarId, build_substitution_map,
@@ -71,12 +73,12 @@ impl InferCtx<'_> {
         slot: &Type,
         witnesses: Vec<ConformanceWitness>,
     ) {
-        self.record_obligation(
-            ValueUseKey::value(expression),
-            expression.get_type(),
-            slot.clone(),
+        self.facts.value_uses.uses.push(ValueUseObligation {
+            key: ValueUseKey::value(expression),
+            source: None,
+            slot: slot.clone(),
             witnesses,
-        );
+        });
     }
 
     pub(crate) fn record_obligation(
@@ -88,7 +90,7 @@ impl InferCtx<'_> {
     ) {
         self.facts.value_uses.uses.push(ValueUseObligation {
             key,
-            source,
+            source: Some(source),
             slot,
             witnesses,
         });
@@ -112,21 +114,21 @@ impl InferCtx<'_> {
         interface_method: Option<Box<InterfaceRequirement>>,
     ) {
         let callee = callee.unwrap_value_wrappers();
-        let definition =
-            resolved_definition(callee).map(|definition| unaliased_owner(self.store, definition));
+        let name = resolved_callee(callee).map(|name| unaliased_callee(self.store, name));
         let copies_storage = matches!(
             &operation,
             CallOperation::Native { kind, method } if NativeOperation::new(*kind, method).grows_slice()
         );
         let binds_receiver = is_instance_method_access(callee)
-            && definition
-                .as_deref()
-                .is_some_and(|definition| declares_receiver(self.store, definition));
+            && name
+                .as_ref()
+                .and_then(CalleeName::method)
+                .is_some_and(|method| declares_receiver(self.store, method));
         self.facts.value_uses.callees.push((
             ValueUseKey::value(callee),
             CheckedCallee {
                 operation,
-                definition,
+                name,
                 type_arguments,
                 copies_storage,
                 binds_receiver,
@@ -185,7 +187,7 @@ impl InferCtx<'_> {
         self.facts.value_uses.selected_witnesses.clear();
         let mut finalizer = Finalizer {
             store: self.store,
-            obligations: HashMap::default(),
+            obligations: FxHashMap::with_capacity_and_hasher(obligations.len(), Default::default()),
             callees: callees.into_iter().collect(),
             receivers: receivers.into_iter().collect(),
             bodies: CheckedBodiesBuilder::default(),
@@ -197,6 +199,9 @@ impl InferCtx<'_> {
             delegated_witnesses: Vec::new(),
             delegations: Vec::new(),
             discards_next: false,
+            lambdas_in_go_function_slots: Vec::new(),
+            keeps_uses: self.state.keeps_all_checked_bodies
+                || self.facts.files_with_unspellable_types.contains(&file_id),
         };
         for obligation in obligations {
             let key = obligation.key;
@@ -214,6 +219,8 @@ impl InferCtx<'_> {
             failures,
             mismatches,
             uninferred,
+            lambdas_in_go_function_slots,
+            keeps_uses,
             ..
         } = finalizer;
         for (if_let, unit) in mem::take(&mut self.facts.value_uses.implicit_units) {
@@ -258,10 +265,15 @@ impl InferCtx<'_> {
             return;
         }
         if failures.is_empty() && mismatches.is_empty() && uninferred.is_empty() {
-            self.facts.checked_bodies.merge(bodies);
+            self.facts
+                .lambdas_in_go_function_slots
+                .extend(lambdas_in_go_function_slots);
+            if keeps_uses {
+                self.facts.checked_bodies.merge(bodies);
+            }
         }
         let mut reported_variables = if uninferred.is_empty() {
-            HashSet::default()
+            FxHashSet::default()
         } else {
             self.deferred_variables()
         };
@@ -290,7 +302,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn deferred_variables(&self) -> HashSet<TypeVarId> {
+    fn deferred_variables(&self) -> FxHashSet<TypeVarId> {
         let package_id = self.cursor.package_id();
         let deferred = &self.facts.deferred;
         let bounds = deferred
@@ -328,7 +340,23 @@ impl InferCtx<'_> {
 }
 
 /// `definition` with an aliased owner type replaced by the type it names.
-pub(crate) fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
+fn unaliased_callee(store: &Store, name: CalleeName) -> CalleeName {
+    match name {
+        CalleeName::Definition(definition) => {
+            CalleeName::Definition(unaliased_owner(store, &definition))
+        }
+        CalleeName::Method(method) => CalleeName::Method(MethodName {
+            owner: unaliased_type(store, method.owner),
+            name: method.name,
+        }),
+    }
+}
+
+fn unaliased_type(store: &Store, id: Symbol) -> Symbol {
+    store.peel_alias_name(&id).unwrap_or(id)
+}
+
+fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
     if let Some(Definition {
         body: DefinitionBody::TypeAlias { .. },
         ..
@@ -340,22 +368,12 @@ pub(crate) fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
     let Some((owner, member)) = definition.rsplit_once('.') else {
         return Symbol::from_raw(definition);
     };
-    let owner_type = Type::Nominal {
-        id: Symbol::from_raw(owner),
-        params: Vec::new(),
-        writable: false,
-    };
-    match store.peel_alias(&owner_type) {
-        Type::Nominal { id, .. } => id.with_segment(member),
-        _ => Symbol::from_raw(definition),
-    }
+    unaliased_type(store, Symbol::from_raw(owner)).with_segment(member)
 }
 
 /// Whether the method `definition` lists its receiver as its first parameter, which interface methods do not.
-fn declares_receiver(store: &Store, definition: &str) -> bool {
-    let Some((owner, member)) = definition.rsplit_once('.') else {
-        return false;
-    };
+fn declares_receiver(store: &Store, method: &MethodName) -> bool {
+    let (owner, member) = (method.owner.as_str(), method.name.as_str());
     store.get_definition(owner).is_some_and(|declaration| {
         !matches!(declaration.body, DefinitionBody::Interface { .. })
             && store.get_method(owner, member).is_some()
@@ -363,10 +381,8 @@ fn declares_receiver(store: &Store, definition: &str) -> bool {
 }
 
 /// The operation that a function value naming the declaration `definition` runs when it is called.
-fn method_value_operation(store: &Store, definition: &str) -> CallOperation {
-    let Some((owner, member)) = definition.rsplit_once('.') else {
-        return CallOperation::Function;
-    };
+fn method_value_operation(store: &Store, method: &MethodName) -> CallOperation {
+    let (owner, member) = (method.owner.as_str(), method.name.as_str());
     let Some(method) = store.get_method(owner, member) else {
         return CallOperation::Function;
     };
@@ -391,9 +407,9 @@ fn method_value_operation(store: &Store, definition: &str) -> CallOperation {
 
 struct Finalizer<'s> {
     store: &'s Store,
-    obligations: HashMap<ValueUseKey, ValueUseObligation>,
-    callees: HashMap<ValueUseKey, CheckedCallee>,
-    receivers: HashMap<ValueUseKey, ReceiverCoercion>,
+    obligations: FxHashMap<ValueUseKey, ValueUseObligation>,
+    callees: FxHashMap<ValueUseKey, CheckedCallee>,
+    receivers: FxHashMap<ValueUseKey, ReceiverCoercion>,
     bodies: CheckedBodiesBuilder,
     failures: Vec<(Span, &'static str)>,
     mismatches: Vec<Mismatch>,
@@ -406,11 +422,18 @@ struct Finalizer<'s> {
     delegations: Vec<bool>,
     /// Whether the position of the next value use discards its value.
     discards_next: bool,
+    lambdas_in_go_function_slots: Vec<ExpressionId>,
+    keeps_uses: bool,
 }
 
 impl Finalizer<'_> {
     /// Check one value use, in the slot that a delegating parent passes down if any.
     fn value_use(&mut self, expression: &Expression, inherited: Option<Type>) {
+        self.converting_use(expression, inherited);
+    }
+
+    /// Check one value use, and tell whether its adaptation converts, when the walk publishes one.
+    fn converting_use(&mut self, expression: &Expression, inherited: Option<Type>) -> Option<bool> {
         let expression = expression.unwrap_parens();
         if matches!(expression, Expression::Lambda { .. }) && is_unresolved(&expression.get_type())
         {
@@ -423,8 +446,8 @@ impl Finalizer<'_> {
         }
         let key = ValueUseKey::value(expression);
         let is_discarded = mem::take(&mut self.discards_next);
-        let (recorded, mut witnesses) = match self.obligations.get(&key) {
-            Some(obligation) => (Some(obligation.slot.clone()), obligation.witnesses.clone()),
+        let (recorded, mut witnesses) = match self.obligations.remove(&key) {
+            Some(obligation) => (Some(obligation.slot), obligation.witnesses),
             None => {
                 self.fail(expression.get_span(), "this value has no checked slot");
                 (None, Vec::new())
@@ -433,14 +456,14 @@ impl Finalizer<'_> {
         let is_inherited = inherited.is_some();
         let Some(slot) = inherited.or(recorded) else {
             self.positions(expression, &Type::ignored());
-            return;
+            return None;
         };
         // A discarded value keeps its own type, and the values that a discarded construct produces are discarded too.
-        let (use_slot, published_slot) = if is_discarded || slot.is_ignored() {
-            (Type::ignored(), expression.get_type())
+        let is_discarded = is_discarded || slot.is_ignored();
+        let use_slot = if is_discarded {
+            Type::ignored()
         } else {
-            let slot = self.value_slot(slot, expression);
-            (slot.clone(), slot)
+            self.value_slot(slot, expression)
         };
         if delegates(expression) {
             let mark = self.delegated_witnesses.len();
@@ -449,13 +472,14 @@ impl Finalizer<'_> {
             self.positions(expression, &use_slot);
             let converts = self.delegations.pop().unwrap_or(false);
             self.delegated_witnesses.truncate(mark);
-            self.publish(
-                published_slot,
+            self.publish_use(
+                is_discarded,
+                use_slot,
                 Adaptation::Delegated { converts },
                 expression,
             );
             self.mark_produced(is_inherited, converts);
-            return;
+            return Some(converts);
         }
         if is_inherited {
             witnesses.extend(self.delegated_witnesses.iter().cloned());
@@ -467,18 +491,40 @@ impl Finalizer<'_> {
             &witnesses,
             false,
         );
-        self.mark_produced(is_inherited, adaptation.converts());
-        self.publish(published_slot, adaptation, expression);
+        let converts = adaptation.converts();
+        self.mark_produced(is_inherited, converts);
         self.positions(expression, &use_slot);
+        self.publish_use(is_discarded, use_slot, adaptation, expression);
+        Some(converts)
+    }
+
+    fn publish_use(
+        &mut self,
+        is_discarded: bool,
+        use_slot: Type,
+        adaptation: Adaptation,
+        expression: &Expression,
+    ) {
+        let slot = if is_discarded {
+            expression.get_type()
+        } else {
+            use_slot
+        };
+        self.publish(slot, adaptation, expression);
     }
 
     /// The slot that `expression` goes into, where a slot that no value reaches or that already reported an error takes the type of the value.
     fn value_slot(&mut self, slot: Type, expression: &Expression) -> Type {
-        let value_type = expression.get_type();
         match slot {
-            Type::Never | Type::Error => value_type,
+            Type::Never | Type::Error => expression.get_type(),
             // A value that never arrives, or that already reported an error, constrains no slot.
-            Type::Var { .. } if value_type.is_never() || value_type.is_error() => value_type,
+            Type::Var { .. }
+                if expression
+                    .type_ref()
+                    .is_some_and(|value_type| value_type.is_never() || value_type.is_error()) =>
+            {
+                expression.get_type()
+            }
             slot if is_unresolved(&slot) => {
                 self.not_inferred(
                     expression.get_span(),
@@ -486,7 +532,7 @@ impl Finalizer<'_> {
                     UninferredKind::Value,
                     "this value goes into a slot of unresolved type",
                 );
-                value_type
+                expression.get_type()
             }
             slot => slot,
         }
@@ -516,13 +562,7 @@ impl Finalizer<'_> {
 
     /// Check a value use in a position that takes the value as it is, such as a match subject.
     fn unadapted_use(&mut self, expression: &Expression) {
-        self.value_use(expression, None);
-        if self
-            .bodies
-            .records()
-            .value_use(&ValueUseKey::value(expression))
-            .is_some_and(|checked| checked.adaptation.converts())
-        {
+        if self.converting_use(expression, None) == Some(true) {
             self.fail(
                 expression.get_span(),
                 "this position takes its value as it is, but the value converts",
@@ -578,17 +618,20 @@ impl Finalizer<'_> {
     }
 
     fn special_use(&mut self, key: ValueUseKey, span: Span, reason: &'static str, is_cast: bool) {
-        let Some(obligation) = self.obligations.get(&key) else {
+        let Some(ValueUseObligation {
+            source: Some(source),
+            slot,
+            witnesses,
+            ..
+        }) = self.obligations.remove(&key)
+        else {
             self.fail(span, reason);
             return;
         };
-        let (source, slot) = (obligation.source.clone(), obligation.slot.clone());
-        let witnesses = obligation.witnesses.clone();
         let adaptation = self.adaptation(&source, &slot, span, &witnesses, is_cast);
         self.bodies.insert_use(
             key,
             CheckedValueUse {
-                value_type: source,
                 slot,
                 adaptation,
                 span,
@@ -605,9 +648,9 @@ impl Finalizer<'_> {
             return;
         };
         if let Some(Type::Forall { vars, .. }) = checked
-            .definition
+            .name
             .as_ref()
-            .and_then(|definition| self.declared_type(definition))
+            .and_then(|name| self.declared_type(name))
             && vars
                 .iter()
                 .any(|name| checked.type_arguments.get(name).is_none())
@@ -628,15 +671,15 @@ impl Finalizer<'_> {
         {
             return;
         }
-        let definition = resolved_definition(expression)
-            .map(|definition| unaliased_owner(self.store, definition));
+        let name = resolved_callee(expression).map(|name| unaliased_callee(self.store, name));
         let checked = CheckedCallee {
-            operation: definition
-                .as_deref()
-                .map_or(CallOperation::Function, |definition| {
-                    method_value_operation(self.store, definition)
+            operation: name
+                .as_ref()
+                .and_then(CalleeName::method)
+                .map_or(CallOperation::Function, |method| {
+                    method_value_operation(self.store, method)
                 }),
-            definition,
+            name,
             type_arguments: resolved_instantiation(expression)
                 .cloned()
                 .unwrap_or_default(),
@@ -649,14 +692,17 @@ impl Finalizer<'_> {
     }
 
     /// The declared type of the function or method `definition`.
-    fn declared_type(&self, definition: &str) -> Option<&Type> {
-        if let Some(declared) = self.store.get_definition(definition) {
-            return Some(&declared.ty);
+    fn declared_type(&self, name: &CalleeName) -> Option<&Type> {
+        match name {
+            CalleeName::Definition(definition) => self
+                .store
+                .get_definition(definition)
+                .map(|declared| &declared.ty),
+            CalleeName::Method(method) => self
+                .store
+                .get_method(&method.owner, &method.name)
+                .map(|declared| &declared.ty),
         }
-        let (owner, method) = definition.rsplit_once('.')?;
-        self.store
-            .get_method(owner, method)
-            .map(|declared| &declared.ty)
     }
 
     /// A method receiver whose address the method takes, or whose reference it reads through.
@@ -689,10 +735,19 @@ impl Finalizer<'_> {
     }
 
     fn publish(&mut self, slot: Type, adaptation: Adaptation, expression: &Expression) {
+        if matches!(expression, Expression::Lambda { .. })
+            && matches!(&slot, Type::Nominal { id, .. } if is_go_import(id))
+            && self.store.resolve_to_function_type(&slot).is_some()
+        {
+            self.lambdas_in_go_function_slots
+                .push(ValueUseKey::value(expression).expression());
+        }
+        if !self.keeps_uses {
+            return;
+        }
         self.bodies.insert_use(
             ValueUseKey::value(expression),
             CheckedValueUse {
-                value_type: expression.get_type(),
                 slot,
                 adaptation,
                 span: expression.get_span(),
@@ -1028,6 +1083,9 @@ impl Finalizer<'_> {
         if written_source.is_never() {
             return Adaptation::Identity;
         }
+        if written_source == written_slot && !is_unresolved(written_source) {
+            return Adaptation::Identity;
+        }
         // The checker reported the error, and a file with errors publishes no body.
         if written_source.contains_error() || written_slot.contains_error() {
             return Adaptation::Identity;
@@ -1153,7 +1211,7 @@ impl Finalizer<'_> {
     }
 
     fn is_go_package_interface(&self, ty: &Type) -> bool {
-        matches!(ty, Type::Nominal { id, .. } if id.starts_with("go:") && self.store.is_interface(ty))
+        matches!(ty, Type::Nominal { id, .. } if is_go_import(id) && self.store.is_interface(ty))
     }
 
     /// A named source or a type parameter satisfies a method-bearing interface through the methods that the checker selected.
@@ -1242,8 +1300,15 @@ struct Mismatch {
     span: Span,
 }
 
-fn fallible_block_source(store: &Store, expression: &Expression, slot: &Type) -> Type {
-    let ty = expression.get_type();
+fn fallible_block_source<'a>(
+    store: &Store,
+    expression: &'a Expression,
+    slot: &Type,
+) -> Cow<'a, Type> {
+    let ty = match expression.type_ref() {
+        Some(ty) => Cow::Borrowed(ty),
+        None => Cow::Owned(expression.get_type()),
+    };
     if !matches!(
         expression,
         Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
@@ -1253,7 +1318,7 @@ fn fallible_block_source(store: &Store, expression: &Expression, slot: &Type) ->
     }
     let slot = store.peel_alias(slot);
     if (slot.is_option() && ty.is_option()) || (slot.is_result() && ty.is_result()) {
-        slot
+        Cow::Owned(slot)
     } else {
         ty
     }

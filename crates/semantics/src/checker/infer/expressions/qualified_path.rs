@@ -1,6 +1,8 @@
 use ecow::EcoString;
 use syntax::ast::{Expression, IdentifierResolution, Span};
-use syntax::program::{DefinitionBody, DotAccessResolution, NativeTypeKind};
+use syntax::program::{
+    DefinitionBody, DotAccessResolution, NativeTypeKind, PRELUDE_PREFIX, strip_prelude_prefix,
+};
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
@@ -73,8 +75,7 @@ impl InferCtx<'_> {
                     &member,
                     expression.get_span(),
                 ));
-            } else if let Some(native) = qualified_root
-                .strip_prefix("prelude.")
+            } else if let Some(native) = strip_prelude_prefix(&qualified_root)
                 .filter(|name| NativeTypeKind::from_name(name).is_some())
             {
                 let path = format!("{native}.{member}");
@@ -177,9 +178,9 @@ impl InferCtx<'_> {
             {
                 Some(id.to_string())
             }
-            Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
+            Type::Simple(kind) => Some(format!("{PRELUDE_PREFIX}{}", kind.leaf_name())),
             Type::Compound { kind, args, .. } if args.is_empty() => {
-                Some(format!("prelude.{}", kind.leaf_name()))
+                Some(format!("{PRELUDE_PREFIX}{}", kind.leaf_name()))
             }
             _ => None,
         }

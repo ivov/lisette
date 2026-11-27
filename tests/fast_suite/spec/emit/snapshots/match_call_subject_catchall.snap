@@ -29,6 +29,6 @@ func makePoint() Point {
 }
 
 func test() int {
-	_ = makePoint()
+	makePoint()
 	return 1
 }

@@ -90,8 +90,7 @@ fn signatures_match(lambda_ty: &Type, callee_ty: &Type) -> bool {
 
     lambda_positions.len() == callee_positions.len()
         && lambda_positions
-            .iter()
-            .zip(&callee_positions)
+            .zip(callee_positions)
             .all(|(closure_ty, callee_ty)| {
                 closure_ty == callee_ty || is_unresolved(closure_ty) || is_unresolved(callee_ty)
             })

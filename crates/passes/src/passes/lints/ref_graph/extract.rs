@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::facts::Selections;
@@ -14,7 +14,7 @@ use syntax::types::{Symbol, Type, unqualified_name};
 use super::reference_graph::{EnumVariantId, PackageItemId, ReferenceGraph, StructFieldId};
 
 pub struct AliasMap<'a> {
-    aliases: HashMap<String, ImportSpans>,
+    aliases: FxHashMap<String, ImportSpans>,
     file_id: u32,
     store: &'a Store,
     selections: &'a Selections,
@@ -27,7 +27,7 @@ struct ImportSpans {
 
 impl<'a> AliasMap<'a> {
     pub fn build(file: &File, store: &'a Store, selections: &'a Selections) -> Self {
-        let mut aliases = HashMap::default();
+        let mut aliases = FxHashMap::default();
 
         for import in file.imports() {
             if let Some(effective) = import.effective_alias(&store.go_package_names) {
@@ -96,7 +96,10 @@ pub(super) fn walk_expression(
             walk_identifier(
                 package,
                 value,
-                resolution.definition(),
+                resolution
+                    .callee_name()
+                    .map(|name| name.qualified_name())
+                    .as_deref(),
                 graph,
                 alias_map,
                 ctx,
@@ -322,9 +325,9 @@ pub(super) fn walk_expression(
         }
 
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 walk_expression(package, child, graph, alias_map, ctx);
-            }
+            });
         }
     }
 }
@@ -442,7 +445,7 @@ fn walk_struct_call(
         StructSpread::From(spread_expression) => {
             walk_expression(package, spread_expression, graph, alias_map, ctx);
             if let Some(ty_name) = qualified_type_name(&spread_expression.get_type(), alias_map) {
-                let explicit: HashSet<&str> =
+                let explicit: FxHashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
                 if let Some(def) = package.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body
@@ -460,7 +463,7 @@ fn walk_struct_call(
         }
         StructSpread::Autofill { .. } => {
             if let Some(ty_name) = qualified_type_name(ty, alias_map) {
-                let explicit: HashSet<&str> =
+                let explicit: FxHashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
                 if let Some(def) = package.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body

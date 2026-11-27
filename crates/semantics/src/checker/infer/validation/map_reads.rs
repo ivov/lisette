@@ -85,9 +85,9 @@ impl InferCtx<'_> {
                 self.walk_map_bracket_reads(index, false, bounds);
             }
             _ => {
-                for child in expression.children() {
+                expression.for_each_child(|child| {
                     self.walk_map_bracket_reads(child, false, bounds);
-                }
+                });
             }
         }
         bounds.truncate(enclosing);

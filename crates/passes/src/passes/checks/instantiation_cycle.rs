@@ -15,11 +15,13 @@ use std::ptr;
 
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use semantics::store::Store;
 use syntax::ast::{Binding, EnumVariant, Expression, Generic, Pattern, Span};
-use syntax::program::{AliasKind, DefinitionBody};
-use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
+use syntax::program::{
+    AliasKind, CalleeName, DefinitionBody, is_go_import, resolved_callee, resolved_instantiation,
+};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 pub(crate) fn run(store: &Store, sink: &LocalSink) {
     let mut graph = Graph::new(store);
@@ -56,30 +58,30 @@ struct AliasUse {
     identity: Option<usize>,
 }
 
-type Scope = HashMap<EcoString, usize>;
+type Scope = FxHashMap<EcoString, usize>;
 
 struct Graph<'a> {
     store: &'a Store,
-    vertices: HashMap<(EcoString, usize), usize>,
+    vertices: FxHashMap<(EcoString, usize), usize>,
     edges: Vec<Vec<usize>>,
     growing: Vec<Growing>,
-    functions: HashMap<EcoString, Scope>,
-    ordered_parameters: HashMap<EcoString, (Vec<(EcoString, usize)>, usize)>,
-    aliases: HashMap<Symbol, Option<AliasUse>>,
-    summarizing: HashSet<Symbol>,
+    functions: FxHashMap<EcoString, Scope>,
+    ordered_parameters: FxHashMap<EcoString, (Vec<(EcoString, usize)>, usize)>,
+    aliases: FxHashMap<Symbol, Option<AliasUse>>,
+    summarizing: FxHashSet<Symbol>,
 }
 
 impl<'a> Graph<'a> {
     fn new(store: &'a Store) -> Self {
         Self {
             store,
-            vertices: HashMap::default(),
+            vertices: FxHashMap::default(),
             edges: Vec::new(),
             growing: Vec::new(),
-            functions: HashMap::default(),
-            ordered_parameters: HashMap::default(),
-            aliases: HashMap::default(),
-            summarizing: HashSet::default(),
+            functions: FxHashMap::default(),
+            ordered_parameters: FxHashMap::default(),
+            aliases: FxHashMap::default(),
+            summarizing: FxHashSet::default(),
         }
     }
 
@@ -97,14 +99,13 @@ impl<'a> Graph<'a> {
 
     fn type_vertex(&mut self, id: &Symbol, position: usize) -> Option<usize> {
         let generics = self.store.get_definition(id)?.body.generics()?;
-        (!id.as_str().starts_with(GO_IMPORT_PREFIX) && position < generics.len())
-            .then(|| self.vertex(id.as_eco(), position))
+        (!is_go_import(id) && position < generics.len()).then(|| self.vertex(id.as_eco(), position))
     }
 
     fn add_type_definitions(&mut self) {
         let store = self.store;
         let packages = store.packages().values();
-        for package in packages.filter(|package| !package.id.starts_with(GO_IMPORT_PREFIX)) {
+        for package in packages.filter(|package| !is_go_import(&package.id)) {
             for (id, definition) in &package.definitions {
                 let generics = definition.body.generics().unwrap_or_default();
                 if generics.is_empty() || embeds_itself(store, id) {
@@ -326,15 +327,17 @@ impl<'a> Graph<'a> {
         while let Some((expression, call_span)) = pending.pop() {
             let reference = match expression {
                 Expression::Function { .. } => continue,
-                Expression::Identifier { resolution, .. } => {
-                    resolution.definition().zip(resolution.instantiation())
-                }
-                Expression::DotAccess { resolution, .. } => {
-                    resolution.definition().zip(resolution.instantiation())
+                Expression::Identifier { .. } | Expression::DotAccess { .. } => {
+                    resolved_instantiation(expression)
+                        .filter(|instantiation| !instantiation.is_empty())
+                        .and_then(|instantiation| {
+                            Some((resolved_callee(expression)?.qualified_name(), instantiation))
+                        })
                 }
                 _ => None,
             };
             if let Some((definition, instantiation)) = reference {
+                let definition: &str = &definition;
                 let span = call_span.unwrap_or_else(|| expression.get_span());
                 for (parameter, argument) in instantiation.iter() {
                     self.add_call(definition, parameter, argument, scope, span);
@@ -361,10 +364,12 @@ impl<'a> Graph<'a> {
                 } => Some((callee.as_ref(), *span)),
                 _ => None,
             };
-            for child in expression.children().into_iter().rev() {
+            let first_child = pending.len();
+            expression.for_each_child(|child| {
                 let call_span = callee.filter(|(callee, _)| ptr::eq(*callee, child));
                 pending.push((child, call_span.map(|(_, span)| span)));
-            }
+            });
+            pending[first_child..].reverse();
         }
     }
 
@@ -375,14 +380,14 @@ impl<'a> Graph<'a> {
         scope: &Scope,
         span: Span,
     ) {
-        let definition = match callee.unwrap_parens() {
-            Expression::Identifier { resolution, .. } => resolution.definition(),
-            Expression::DotAccess { resolution, .. } => resolution.definition(),
-            _ => None,
-        };
+        let callee = resolved_callee(callee);
         let arguments: Vec<&Type> = arguments.collect();
-        let (all, own_start) = definition
-            .and_then(|definition| self.ordered_parameters.get(definition))
+        let (all, own_start) = callee
+            .as_ref()
+            .and_then(|callee| {
+                self.ordered_parameters
+                    .get(callee.qualified_name().as_str())
+            })
             .cloned()
             .unwrap_or_default();
         let parameters = if arguments.len() == all.len() {
@@ -390,11 +395,7 @@ impl<'a> Graph<'a> {
         } else {
             &all[own_start.min(all.len())..]
         };
-        let function = definition.map_or("", |definition| {
-            definition
-                .rsplit_once('.')
-                .map_or(definition, |(_, member)| member)
-        });
+        let function = callee.as_ref().map_or("", CalleeName::last_segment);
         for (position, argument) in arguments.into_iter().enumerate() {
             self.add_type(argument, scope, span, true);
             if let Some((parameter, target)) = parameters.get(position) {
@@ -433,7 +434,7 @@ impl<'a> Graph<'a> {
     fn add_type(&mut self, ty: &Type, scope: &Scope, span: Span, inferred: bool) {
         let mut pending = vec![ty];
         while let Some(ty) = pending.pop() {
-            pending.extend(ty.children().into_iter().rev());
+            pending.extend(ty.children().rev());
             let Type::Nominal { id, params, .. } = ty else {
                 continue;
             };
@@ -462,7 +463,7 @@ impl<'a> Graph<'a> {
             Type::Parameter(name) => Some(name.clone()),
             _ => None,
         };
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         for parameter in parameters {
             let Some(&source) = scope.get(&parameter) else {
                 continue;
@@ -575,8 +576,8 @@ impl<'a> Graph<'a> {
             let is_declaration = matches!(edge.site, Site::Declaration { .. });
             (is_declaration, edge.span.file_id, edge.span.byte_offset)
         });
-        let mut reported = HashSet::default();
-        let mut reported_spans = HashSet::default();
+        let mut reported = FxHashSet::default();
+        let mut reported_spans = FxHashSet::default();
         for edge in &self.growing {
             let component = components[edge.source];
             if component != components[edge.target]
@@ -648,7 +649,7 @@ fn embeds_itself(store: &Store, name: &Symbol) -> bool {
             .collect::<Vec<_>>()
     };
     let mut pending = parents(name);
-    let mut visited = HashSet::default();
+    let mut visited = FxHashSet::default();
     while let Some(parent) = pending.pop() {
         if parent == name.as_str() {
             return true;

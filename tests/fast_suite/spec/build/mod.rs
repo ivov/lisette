@@ -1,3 +1,4 @@
+mod emit_layers;
 mod package_namespace;
 
 use crate::_harness::build::{

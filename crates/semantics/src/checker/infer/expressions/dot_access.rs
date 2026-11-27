@@ -6,8 +6,8 @@ use syntax::ast::{
 };
 use syntax::go_names;
 use syntax::program::{
-    Definition, DefinitionBody, DotAccessResolution, FieldKey, NativeTypeKind,
-    go_import_default_name,
+    Definition, DefinitionBody, DotAccessResolution, FieldKey, NativeTypeKind, PRELUDE_PACKAGE_ID,
+    go_import_default_name, is_go_import,
 };
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
@@ -340,8 +340,8 @@ impl InferCtx<'_> {
         let store = self.store;
         let type_package = store.package_for_qualified_name(type_id).unwrap_or(type_id);
         type_package != self.cursor.package_id()
-            && type_package != "prelude"
-            && !type_package.starts_with("go:")
+            && type_package != PRELUDE_PACKAGE_ID
+            && !is_go_import(type_package)
     }
 
     /// As the base of a member access, a type names itself, not its constructor.
@@ -506,7 +506,10 @@ impl InferCtx<'_> {
             args.member_name.to_string()
         };
 
-        let field = struct_fields.iter().find(|f| f.name == field_name)?;
+        let (index, field) = struct_fields
+            .iter()
+            .enumerate()
+            .find(|(_, f)| f.name == field_name)?;
 
         self.mark_component_grant(args.expression, args.expression_ty, &field.ty);
         let field_type = self.granted_field_type(&struct_name, &field.ty, args.expression_ty);
@@ -537,7 +540,7 @@ impl InferCtx<'_> {
 
         let is_exported = field_is_pub || is_cross_package;
         let resolution = if struct_kind == StructKind::Tuple {
-            DotAccessResolution::TupleStructField { is_newtype }
+            DotAccessResolution::TupleStructField { index, is_newtype }
         } else {
             DotAccessResolution::StructField {
                 is_exported,
@@ -639,7 +642,7 @@ impl InferCtx<'_> {
         let element_ty = elements[index].clone();
         self.unify(args.expected_ty, &element_ty, args.span);
 
-        Some(args.build_dot_access(element_ty, DotAccessResolution::TupleElement))
+        Some(args.build_dot_access(element_ty, DotAccessResolution::TupleElement { index }))
     }
 
     fn as_package_member(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {

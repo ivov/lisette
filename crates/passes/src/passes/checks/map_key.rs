@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use semantics::checker::{TypeEnv, check_never_comparable};
 use semantics::store::Store;
 use syntax::ast::{Expression, Span};
@@ -31,10 +31,10 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
             if ctx.is_claimed(ClaimKind::MapKey, span) {
                 return;
             }
-            report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut HashSet::default());
+            report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut FxHashSet::default());
         }
         Expression::TypeAlias { ty, span, .. } => {
-            report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut HashSet::default());
+            report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut FxHashSet::default());
         }
         _ => {}
     }
@@ -45,7 +45,7 @@ fn report_bad_map_key(
     ty: &Type,
     span: Span,
     sink: &LocalSink,
-    expanding: &mut HashSet<Symbol>,
+    expanding: &mut FxHashSet<Symbol>,
 ) -> bool {
     let alias_head = match ty {
         Type::Nominal { id, .. }
@@ -78,7 +78,6 @@ fn report_bad_map_key(
     } else {
         resolved
             .children()
-            .iter()
             .any(|child| report_bad_map_key(store, child, span, sink, expanding))
     };
     if let Some(id) = alias_head {

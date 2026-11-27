@@ -7,13 +7,15 @@
 //! any remaining unbound `Type::Var` to Go's `any`.
 
 use crate::facts::Facts;
+use rustc_hash::FxHashMap;
+use std::cell::{Cell, RefCell};
 use syntax::ast::{
     Binding, EnumFieldDefinition, Expression, FormatStringPart, IdentifierResolution, Literal,
     Pattern, SelectArm, SequencePatternResolution, StructFieldDefinition, StructSpread,
     VariantFields,
 };
-use syntax::program::DotAccessResolution;
-use syntax::types::{SubstitutionMap, Type};
+use syntax::program::{DotAccessResolution, PRELUDE_PACKAGE_ID, strip_go_prefix};
+use syntax::types::{SubstitutionMap, Symbol, Type};
 
 use crate::checker::type_env::TypeEnv;
 use crate::store::Store;
@@ -21,11 +23,41 @@ use crate::store::Store;
 pub struct FreezeFolder<'a> {
     env: &'a TypeEnv,
     store: &'a Store,
+    package_id: Option<&'a str>,
+    mentions_unspellable_type: Cell<bool>,
+    named_types: RefCell<FxHashMap<Symbol, NamedType>>,
+}
+
+#[derive(Clone, Copy)]
+struct NamedType {
+    is_alias: bool,
+    is_unspellable: bool,
 }
 
 impl<'a> FreezeFolder<'a> {
     pub fn new(env: &'a TypeEnv, store: &'a Store) -> Self {
-        Self { env, store }
+        Self {
+            env,
+            store,
+            package_id: None,
+            mentions_unspellable_type: Cell::new(false),
+            named_types: RefCell::default(),
+        }
+    }
+
+    pub fn in_package(env: &'a TypeEnv, store: &'a Store, package_id: &'a str) -> Self {
+        Self {
+            package_id: Some(package_id),
+            ..Self::new(env, store)
+        }
+    }
+
+    pub fn mentions_unspellable_type(&self) -> bool {
+        self.mentions_unspellable_type.get()
+    }
+
+    fn looks_for_unspellable_types(&self) -> bool {
+        self.package_id.is_some() && !self.mentions_unspellable_type.get()
     }
 
     fn normalize_ref_aliases(&self, ty: &Type) -> Type {
@@ -36,6 +68,94 @@ impl<'a> FreezeFolder<'a> {
             }
         }
         ty.map_children(|child| self.normalize_ref_aliases(child))
+    }
+
+    fn scan(&self, ty: &Type) -> bool {
+        let mut mentions_ref_alias = false;
+        match ty {
+            Type::Nominal { id, .. } => {
+                if self.note_named_type(id) {
+                    let target = self.store.peel_alias(ty);
+                    mentions_ref_alias = target.is_ref();
+                    if self.looks_for_unspellable_types() {
+                        self.note_alias_target(&target, &mut vec![id.clone()]);
+                    }
+                }
+            }
+            Type::Function(function) => {
+                for bound in &function.bounds {
+                    mentions_ref_alias |= self.scan(&bound.generic);
+                    mentions_ref_alias |= self.scan(&bound.ty);
+                }
+            }
+            Type::Error => self.mentions_unspellable_type.set(true),
+            _ => {}
+        }
+        for child in ty.children() {
+            mentions_ref_alias |= self.scan(child);
+        }
+        mentions_ref_alias
+    }
+
+    fn note_alias_target(&self, ty: &Type, expanding: &mut Vec<Symbol>) {
+        match ty {
+            Type::Nominal { id, .. } => {
+                if self.note_named_type(id) && !expanding.contains(id) {
+                    expanding.push(id.clone());
+                    self.note_alias_target(&self.store.peel_alias(ty), expanding);
+                    expanding.pop();
+                }
+            }
+            Type::Error => self.mentions_unspellable_type.set(true),
+            _ => {}
+        }
+        for child in ty.children() {
+            self.note_alias_target(child, expanding);
+        }
+    }
+
+    fn note_named_type(&self, id: &Symbol) -> bool {
+        let cached = self.named_types.borrow().get(id).copied();
+        let named = cached.unwrap_or_else(|| {
+            let named = NamedType {
+                is_alias: self
+                    .store
+                    .get_definition(id)
+                    .is_some_and(|definition| definition.is_type_alias()),
+                is_unspellable: self.is_unspellable_name(id),
+            };
+            self.named_types.borrow_mut().insert(id.clone(), named);
+            named
+        });
+        if named.is_unspellable {
+            self.mentions_unspellable_type.set(true);
+        }
+        named.is_alias
+    }
+
+    fn is_unspellable_name(&self, id: &str) -> bool {
+        let Some(current_package) = self.package_id else {
+            return false;
+        };
+        let split = match strip_go_prefix(id) {
+            Some(rest) => rest
+                .rsplit_once('.')
+                .map(|(_, name)| (&id[..id.len() - name.len() - 1], name)),
+            None => id.split_once('.'),
+        };
+        let Some((package, name)) = split else {
+            return false;
+        };
+        package != current_package
+            && package != PRELUDE_PACKAGE_ID
+            && name != "Unknown"
+            && !name.starts_with(char::is_uppercase)
+    }
+
+    fn normalize_ref_aliases_in_place(&self, ty: &mut Type) {
+        if self.scan(ty) {
+            *ty = self.normalize_ref_aliases(ty);
+        }
     }
 
     pub fn freeze_items(&mut self, mut items: Vec<Expression>) -> Vec<Expression> {
@@ -314,7 +434,7 @@ impl<'a> FreezeFolder<'a> {
         facts.conformances.visit_types_mut(
             |ty| {
                 self.env.resolve_in_place(ty);
-                *ty = self.normalize_ref_aliases(ty);
+                self.normalize_ref_aliases_in_place(ty);
             },
             |id| self.store.get_definition(id),
         );
@@ -328,11 +448,14 @@ impl<'a> FreezeFolder<'a> {
 
     fn freeze_ty(&self, ty: &mut Type) {
         self.env.resolve_in_place(ty);
+        if self.looks_for_unspellable_types() {
+            self.scan(ty);
+        }
     }
 
     fn freeze_expr_ty(&self, ty: &mut Type) {
         self.env.resolve_in_place(ty);
-        *ty = self.normalize_ref_aliases(ty);
+        self.normalize_ref_aliases_in_place(ty);
     }
 
     fn freeze_instantiation(&self, instantiation: &mut SubstitutionMap) {
@@ -416,7 +539,9 @@ impl<'a> FreezeFolder<'a> {
         match expression {
             Expression::Identifier { ty, resolution, .. } => {
                 self.freeze_expr_ty(ty);
-                if let IdentifierResolution::Definition { instantiation, .. } = resolution {
+                if let IdentifierResolution::Definition { instantiation, .. }
+                | IdentifierResolution::Method { instantiation, .. } = resolution
+                {
                     self.freeze_instantiation(instantiation);
                 }
             }

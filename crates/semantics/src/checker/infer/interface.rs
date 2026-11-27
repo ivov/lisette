@@ -5,15 +5,15 @@ use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
 use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
-use syntax::program::CheckedMethod;
 use syntax::program::ConformanceWitness;
 use syntax::program::GoHint;
 use syntax::program::GoInteropContract;
+use syntax::program::{CheckedMethod, PRELUDE_PACKAGE_ID, is_go_import, is_prelude_symbol};
 use syntax::program::{
     DefinitionBody, InterfaceRequirement, Methods, interface_declares_any_method,
     interface_requirements,
 };
-use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
+use syntax::types::{Symbol, Type, unqualified_name};
 use syntax::types::{method_receiver_substitution, substitute};
 
 use crate::checker::infer::InferCtx;
@@ -81,7 +81,7 @@ impl InferCtx<'_> {
                 _ => return false,
             }
         };
-        if !owner.starts_with(GO_IMPORT_PREFIX) {
+        if !is_go_import(&owner) {
             return false;
         }
         store
@@ -132,12 +132,10 @@ impl InferCtx<'_> {
         let Some(receiver_id) = receiver.get_qualified_id() else {
             return;
         };
-        let receiver_is_go = receiver_id.starts_with(GO_IMPORT_PREFIX);
+        let receiver_is_go = is_go_import(receiver_id);
         let is_parameter = |ty: &Type| matches!(store.peel_alias(ty), Type::Parameter(_));
         for requirement in interface_requirements(bound, |id| store.get_definition(id)) {
-            let declared_by_go = requirement
-                .declaring_interface
-                .starts_with(GO_IMPORT_PREFIX);
+            let declared_by_go = is_go_import(&requirement.declaring_interface);
             let unsupported = if receiver_is_go {
                 !declared_by_go
                     && requirement
@@ -327,9 +325,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::sealed_interface_not_satisfiable(
                     &sealed.interface_name,
                     &type_name,
-                    resolved
-                        .get_qualified_id()
-                        .is_some_and(|id| id.starts_with("go:")),
+                    resolved.get_qualified_id().is_some_and(is_go_import),
                     *span,
                 ));
             return Err(violations);
@@ -368,7 +364,7 @@ impl InferCtx<'_> {
         } else {
             let foreign_package = resolved
                 .get_qualified_id()
-                .filter(|id| id.starts_with("go:"))
+                .filter(|id| is_go_import(id))
                 .and_then(|id| id.rsplit_once('.').map(|(package, _)| package));
             diagnostics::infer::interface_not_implemented(
                 unqualified_name(interface_qualified_id),
@@ -413,8 +409,7 @@ impl InferCtx<'_> {
         match resolved.strip_refs() {
             Type::Simple(_) | Type::Compound { .. } | Type::Array { .. } => true,
             Type::Nominal { id, .. } => {
-                id.as_str().starts_with("prelude.")
-                    && self.store.get_interface(id.as_str()).is_none()
+                is_prelude_symbol(&id) && self.store.get_interface(id.as_str()).is_none()
             }
             _ => false,
         }
@@ -629,7 +624,7 @@ impl InferCtx<'_> {
         let Some(id) = resolved.get_qualified_id() else {
             return false;
         };
-        !id.starts_with(GO_IMPORT_PREFIX)
+        !is_go_import(id)
             && matches!(
                 self.store
                     .get_definition(id)
@@ -762,8 +757,7 @@ impl InferCtx<'_> {
                             check.methods.push(CheckedMethod {
                                 required_interface: interface_qualified_id.clone(),
                                 required_name: method_name.clone(),
-                                selected_definition: Symbol::from(bound_id)
-                                    .with_segment(&impl_method_name),
+                                selected_owner: Symbol::from_raw(bound_id),
                                 selected_name: impl_method_name.clone(),
                                 selected_requirement,
                                 pointer_receiver: symbol_method
@@ -839,7 +833,7 @@ impl InferCtx<'_> {
                     check.methods.push(CheckedMethod {
                         required_interface: interface_qualified_id.clone(),
                         required_name: method_name.clone(),
-                        selected_definition: owner.with_segment(&impl_method_name),
+                        selected_owner: owner.clone(),
                         selected_name: impl_method_name.clone(),
                         selected_requirement,
                         pointer_receiver: symbol_method
@@ -870,8 +864,7 @@ impl InferCtx<'_> {
                         .symbol_methods
                         .get(impl_method_name.as_str())
                         .and_then(|method| method.name_span);
-                    let through_type_parameter = interface_qualified_id
-                        .starts_with(GO_IMPORT_PREFIX)
+                    let through_type_parameter = is_go_import(interface_qualified_id)
                         && permission_gap_only_at_type_parameters(
                             &requirement.method.ty,
                             &expected,
@@ -972,7 +965,7 @@ impl InferCtx<'_> {
         )
         .unwrap_or_else(|| impl_method_without_receiver.clone());
 
-        let go_interface = site.interface_qualified_id.starts_with(GO_IMPORT_PREFIX);
+        let go_interface = is_go_import(site.interface_qualified_id);
 
         enum Mismatch {
             Receiver,
@@ -1052,7 +1045,7 @@ impl InferCtx<'_> {
     ) -> Option<HiddenPrivateMethod> {
         let store = self.store;
         let method_package = store.package_for_qualified_name(owner)?;
-        if method_package.starts_with(GO_IMPORT_PREFIX) || method_package == "prelude" {
+        if is_go_import(method_package) || method_package == PRELUDE_PACKAGE_ID {
             return None;
         }
         if store.package_for_qualified_name(interface_id) == Some(method_package) {
@@ -1113,7 +1106,7 @@ enum SignatureCheck {
 
 pub(crate) fn interface_requires_methods(store: &Store, id: &str) -> bool {
     let interface_ty = Type::Nominal {
-        id: id.into(),
+        id: Symbol::from_raw(id),
         params: vec![],
         writable: false,
     };
@@ -1130,7 +1123,7 @@ fn covariant_return_adjustment(
     impl_method: &Type,
     store: &Store,
 ) -> Option<Type> {
-    if !interface_qualified_id.starts_with(GO_IMPORT_PREFIX) {
+    if !is_go_import(interface_qualified_id) {
         return None;
     }
 

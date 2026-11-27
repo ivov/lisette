@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use semantics::facts::Selections;
 use std::borrow::Cow;
 use syntax::ast::{Expression, Literal, Span};
@@ -12,7 +12,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    let mut seen: HashMap<KeyValue, Span> = HashMap::default();
+    let mut seen: FxHashMap<KeyValue, Span> = FxHashMap::default();
     for entry in entries {
         let Some(Expression::Literal { literal, span, .. }) =
             entry_key(entry).map(Expression::unwrap_parens)

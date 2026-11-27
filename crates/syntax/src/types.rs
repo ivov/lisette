@@ -1,13 +1,16 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::mem;
+use std::slice;
 use std::sync::Arc;
 
 use ecow::EcoString;
 
 use crate::ast::{Generic, VariantFields};
-use crate::program::{Definition, DefinitionBody};
+use crate::program::{
+    Definition, DefinitionBody, PRELUDE_PACKAGE_ID, is_go_import, strip_go_prefix,
+};
 use fmt::Formatter;
 use std::fmt;
 use std::fmt::Display;
@@ -108,27 +111,9 @@ impl Display for Symbol {
     }
 }
 
-impl From<EcoString> for Symbol {
-    fn from(s: EcoString) -> Self {
-        Self(s)
-    }
-}
-
 impl From<Symbol> for EcoString {
     fn from(s: Symbol) -> Self {
         s.0
-    }
-}
-
-impl From<&str> for Symbol {
-    fn from(s: &str) -> Self {
-        Self(EcoString::from(s))
-    }
-}
-
-impl From<String> for Symbol {
-    fn from(s: String) -> Self {
-        Self(EcoString::from(s))
     }
 }
 
@@ -151,8 +136,6 @@ pub fn unqualified_name(id: &str) -> &str {
     id.rsplit('.').next().unwrap_or(id)
 }
 
-pub const GO_IMPORT_PREFIX: &str = "go:";
-
 pub const SELF_TYPE_NAME: &str = "Self";
 
 /// Resolve the package of a qualified ID. For `go:` IDs containing `/`,
@@ -164,7 +147,7 @@ pub fn package_for_qualified_name(
     id: &str,
     mut contains_package: impl FnMut(&str) -> bool,
 ) -> Option<&str> {
-    if !id.starts_with(GO_IMPORT_PREFIX) || !id.contains('/') {
+    if !is_go_import(id) || !id.contains('/') {
         return id.split_once('.').map(|(m, _)| m);
     }
 
@@ -1173,19 +1156,68 @@ impl Type {
     }
 
     /// Direct child types, for read-only walks. Excludes `Function.bounds`.
-    pub fn children(&self) -> Vec<&Type> {
+    pub fn children(&self) -> TypeChildren<'_> {
         match self {
-            Type::Nominal { params, .. } => params.iter().collect(),
-            Type::Compound { args, .. } => args.iter().collect(),
+            Type::Nominal { params, .. } => TypeChildren::Types(params.iter()),
+            Type::Compound { args, .. } => TypeChildren::Types(args.iter()),
             Type::Function(f) => {
-                let mut c: Vec<&Type> = f.params.iter().map(|param| &param.ty).collect();
-                c.push(&f.return_type);
-                c
+                TypeChildren::Function(f.params.iter(), Some(f.return_type.as_ref()))
             }
-            Type::Tuple(elements) => elements.iter().collect(),
-            Type::Array { element, .. } => vec![element],
-            Type::Forall { body, .. } => vec![body],
-            _ => vec![],
+            Type::Tuple(elements) => TypeChildren::Types(elements.iter()),
+            Type::Array { element, .. } => TypeChildren::One(Some(element)),
+            Type::Forall { body, .. } => TypeChildren::One(Some(body)),
+            _ => TypeChildren::One(None),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum TypeChildren<'a> {
+    Types(slice::Iter<'a, Type>),
+    Function(slice::Iter<'a, FunctionParameter>, Option<&'a Type>),
+    One(Option<&'a Type>),
+}
+
+impl<'a> Iterator for TypeChildren<'a> {
+    type Item = &'a Type;
+
+    fn next(&mut self) -> Option<&'a Type> {
+        match self {
+            TypeChildren::Types(types) => types.next(),
+            TypeChildren::Function(params, return_type) => params
+                .next()
+                .map(|param| &param.ty)
+                .or_else(|| return_type.take()),
+            TypeChildren::One(child) => child.take(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+}
+
+impl ExactSizeIterator for TypeChildren<'_> {
+    fn len(&self) -> usize {
+        match self {
+            TypeChildren::Types(types) => types.len(),
+            TypeChildren::Function(params, return_type) => {
+                params.len() + usize::from(return_type.is_some())
+            }
+            TypeChildren::One(child) => usize::from(child.is_some()),
+        }
+    }
+}
+
+impl DoubleEndedIterator for TypeChildren<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self {
+            TypeChildren::Types(types) => types.next_back(),
+            TypeChildren::Function(params, return_type) => return_type
+                .take()
+                .or_else(|| params.next_back().map(|param| &param.ty)),
+            TypeChildren::One(child) => child.take(),
         }
     }
 }
@@ -1547,8 +1579,12 @@ impl Type {
     }
 
     pub fn get_qualified_id(&self) -> Option<&str> {
+        self.nominal_id().map(Symbol::as_str)
+    }
+
+    pub fn nominal_id(&self) -> Option<&Symbol> {
         match self {
-            Type::Nominal { id, .. } => Some(id.as_str()),
+            Type::Nominal { id, .. } => Some(id),
             _ => None,
         }
     }
@@ -1571,7 +1607,7 @@ impl Type {
 
     pub fn option_of(inner: Type) -> Type {
         Type::Nominal {
-            id: Symbol::from_parts("prelude", "Option"),
+            id: Symbol::from_parts(PRELUDE_PACKAGE_ID, "Option"),
             params: vec![inner],
             writable: false,
         }
@@ -1764,7 +1800,7 @@ impl Type {
         }
     }
 
-    pub fn remove_found_type_names(&self, names: &mut HashSet<EcoString>) {
+    pub fn remove_found_type_names(&self, names: &mut FxHashSet<EcoString>) {
         if names.is_empty() {
             return;
         }
@@ -1840,7 +1876,7 @@ impl Type {
         let Type::ImportNamespace(package_id) = self else {
             return None;
         };
-        let path = package_id.strip_prefix("go:").unwrap_or(package_id);
+        let path = strip_go_prefix(package_id).unwrap_or(package_id);
         path.rsplit('/').next()
     }
 
@@ -1899,8 +1935,10 @@ impl Type {
         }
         match current {
             Type::Nominal { id, .. } => Some(id.clone()),
-            Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-            Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
+            Type::Simple(kind) => Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name())),
+            Type::Compound { kind, .. } => {
+                Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()))
+            }
             _ => None,
         }
     }
@@ -1972,7 +2010,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = ty.unwrap_forall().clone();
-    let mut seen: HashSet<Type> = HashSet::default();
+    let mut seen: FxHashSet<Type> = FxHashSet::default();
     while let Type::Nominal {
         id,
         params,
@@ -1980,14 +2018,14 @@ where
     } = &current
     {
         let writable = *writable;
-        if !seen.insert(current.clone()) {
-            break;
-        }
         let Some(target) = lookup(id.as_str())
             .and_then(|definition| definition.instantiate_alias_target(params, writable))
         else {
             break;
         };
+        if !seen.insert(current.clone()) {
+            break;
+        }
         current = target.unwrap_forall().clone();
     }
     current
@@ -1998,7 +2036,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = peel_alias(ty, &lookup);
-    let mut seen: HashSet<Symbol> = HashSet::default();
+    let mut seen: FxHashSet<Symbol> = FxHashSet::default();
     while current.is_ref() {
         let stripped = current.strip_refs();
         if let Type::Nominal { id, .. } = stripped.unwrap_forall()
@@ -2036,7 +2074,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let mut current = ty.unwrap_forall().clone();
-    let mut seen: HashSet<Symbol> = HashSet::default();
+    let mut seen: FxHashSet<Symbol> = FxHashSet::default();
     while let Type::Nominal {
         id,
         params,
@@ -2171,7 +2209,7 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     matches!(peel_alias(ty, &lookup), Type::Nominal { id, .. }
-    if !id.starts_with(GO_IMPORT_PREFIX)
+    if !is_go_import(&id)
         && matches!(
             lookup(id.as_str()).map(|definition| &definition.body),
             Some(DefinitionBody::Enum { .. })
@@ -2589,7 +2627,7 @@ impl Type {
     }
 
     pub fn remove_vars(types: &[&Type]) -> (Vec<Type>, Vec<EcoString>) {
-        let mut vars = HashMap::default();
+        let mut vars = FxHashMap::default();
         let types = types
             .iter()
             .map(|v| Self::remove_vars_impl(v, &mut vars))
@@ -2598,7 +2636,7 @@ impl Type {
         (types, vars.into_values().collect())
     }
 
-    fn remove_vars_impl(ty: &Type, vars: &mut HashMap<u32, EcoString>) -> Type {
+    fn remove_vars_impl(ty: &Type, vars: &mut FxHashMap<u32, EcoString>) -> Type {
         match ty {
             Type::Nominal {
                 id: name,
@@ -2754,7 +2792,7 @@ mod tests {
     #[test]
     fn error_type_equals_itself() {
         let nominal_over_error = || Type::Nominal {
-            id: Symbol::from_parts("prelude", "Option"),
+            id: Symbol::from_parts(PRELUDE_PACKAGE_ID, "Option"),
             params: vec![Type::Error],
             writable: false,
         };

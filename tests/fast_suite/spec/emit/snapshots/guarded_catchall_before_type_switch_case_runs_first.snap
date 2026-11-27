@@ -46,7 +46,7 @@ func g(_ Shape) bool {
 }
 
 func f(s Shape) string {
-	switch s := s.(type) {
+	switch s.(type) {
 	case Sq:
 		return "sq"
 	default:

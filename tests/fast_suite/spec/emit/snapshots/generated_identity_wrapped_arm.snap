@@ -53,9 +53,9 @@ func main() {
 	for _, ret := range []int{1, 2} {
 		subject := lisette.MakeOptionSome(ret)
 		if subject.Tag == lisette.OptionSome {
-			err3 := subject.SomeVal
+			err := subject.SomeVal
 			read := func() int {
-				return err3 + f()
+				return err + f()
 			}
 			total += read()
 		}

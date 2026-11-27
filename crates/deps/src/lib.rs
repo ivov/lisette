@@ -16,8 +16,8 @@ use std::process;
 use std::sync::PoisonError;
 pub use stdlib::Target;
 use stdlib::{
-    GO_STD_CONTENT_HASH, LIS_PRELUDE_SOURCE, PRELUDE_CONTENT_HASH, get_go_stdlib_packages,
-    get_go_stdlib_typedef,
+    GO_STD_CONTENT_HASH, LIS_PRELUDE_SOURCE, PRELUDE_CONTENT_HASH, PRELUDE_GO_MODULE,
+    get_go_stdlib_packages, get_go_stdlib_typedef,
 };
 
 /// Disambiguates temp paths so concurrent typedef extractions do not collide.
@@ -55,8 +55,6 @@ pub use typedef_locator::{
     ImportablePackage, ResolvedReplacement, ScriptSession, TypedefLocator, TypedefLocatorResult,
     TypedefOrigin,
 };
-
-pub const PRELUDE_GO_MODULE: &str = "github.com/ivov/lisette/prelude";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModuleKind {

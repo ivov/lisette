@@ -17,7 +17,6 @@ type Point struct {
 	y int
 }
 
-func test(p Point) int {
-	_ = p
+func test(_ Point) int {
 	return 1
 }

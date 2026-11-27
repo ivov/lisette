@@ -1,5 +1,5 @@
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Span};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{Definition, DefinitionBody, PRELUDE_PREFIX, is_go_import};
 
 use crate::analysis::find_package_by_alias;
 use crate::definition::{
@@ -131,7 +131,7 @@ fn lookup_type_by_name(name: &str, file: &File, snapshot: &AnalysisSnapshot) -> 
     let candidates = [
         format!("{}.{}", file.package_id, name),
         name.to_string(),
-        format!("prelude.{}", name),
+        format!("{PRELUDE_PREFIX}{name}"),
     ];
     for qualified in &candidates {
         if let Some(def) = snapshot.definitions().get(qualified.as_str()) {
@@ -139,7 +139,7 @@ fn lookup_type_by_name(name: &str, file: &File, snapshot: &AnalysisSnapshot) -> 
         }
     }
     for import in file.imports() {
-        if import.name.starts_with("go:") {
+        if is_go_import(&import.name) {
             continue;
         }
         let qualified = format!("{}.{}", import.name, name);

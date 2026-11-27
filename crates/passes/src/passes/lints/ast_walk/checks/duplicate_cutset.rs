@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, Literal};
 
 const CUTSET_FUNCTIONS: &[&str] = &["Trim", "TrimLeft", "TrimRight"];
@@ -47,6 +47,6 @@ pub fn check_duplicate_cutset(expression: &Expression, ctx: &NodeCtx) {
 }
 
 fn has_duplicate_char(cutset: &str) -> bool {
-    let mut seen = HashSet::default();
+    let mut seen = FxHashSet::default();
     !cutset.chars().all(|c| seen.insert(c))
 }

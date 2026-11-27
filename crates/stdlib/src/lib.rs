@@ -9,6 +9,8 @@ pub use go_modules::{
 pub use target::{SUPPORTED_TARGETS, Target, format_targets};
 pub use typedef::{HEADER_LINES, declared_package_name};
 
+pub const PRELUDE_GO_MODULE: &str = "github.com/ivov/lisette/prelude";
+
 pub const LIS_PRELUDE_SOURCE: &str = include_str!("../prelude.d.lis");
 
 pub const LIS_TEST_PRELUDE_SOURCE: &str = include_str!("../test_prelude.d.lis");

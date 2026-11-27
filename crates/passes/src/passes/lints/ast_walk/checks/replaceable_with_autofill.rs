@@ -1,7 +1,7 @@
 use diagnostics::{Edit, Fix};
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
-use syntax::program::{DefinitionBody, DotAccessResolution};
+use syntax::program::{DefinitionBody, DotAccessResolution, is_go_import};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::helpers::replacement_drops_comment;
@@ -118,7 +118,7 @@ fn is_go_imported(ty: &Type) -> bool {
     let Type::Nominal { id, .. } = ty.strip_refs() else {
         return false;
     };
-    id.as_str().starts_with("go:")
+    is_go_import(&id)
 }
 
 fn struct_package(ty: &Type) -> Option<String> {
@@ -159,7 +159,7 @@ fn unspecified_fields(
     name: &str,
     field_assignments: &[StructFieldAssignment],
 ) -> Option<Vec<OmittedField>> {
-    let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
+    let assigned: FxHashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
     fields_filtered(store, ty, name, &assigned)
 }
 
@@ -169,7 +169,7 @@ fn post_rewrite_unspecified_fields(
     name: &str,
     field_assignments: &[StructFieldAssignment],
 ) -> Option<Vec<OmittedField>> {
-    let kept: HashSet<&str> = field_assignments
+    let kept: FxHashSet<&str> = field_assignments
         .iter()
         .filter(|f| !is_obvious_zero(&f.value, store))
         .map(|f| f.name.as_str())
@@ -181,7 +181,7 @@ fn fields_filtered(
     store: &Store,
     ty: &Type,
     name: &str,
-    keep_specified: &HashSet<&str>,
+    keep_specified: &FxHashSet<&str>,
 ) -> Option<Vec<OmittedField>> {
     let stripped = ty.strip_refs();
     let Type::Nominal { id, params, .. } = &stripped else {

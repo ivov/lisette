@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -523,7 +523,7 @@ struct FixSummary {
 }
 
 fn apply_result_fixes(result: &CompileResult, summary: &mut FixSummary) {
-    let mut by_file: HashMap<u32, Vec<&Fix>> = HashMap::default();
+    let mut by_file: FxHashMap<u32, Vec<&Fix>> = FxHashMap::default();
     for diagnostic in result.diagnostics.iter() {
         let Some(fix) = diagnostic.fix() else {
             continue;

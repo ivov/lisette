@@ -4,7 +4,7 @@ mod reference_graph;
 mod visibility_constraints;
 
 use rayon::prelude::*;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
 use crate::passes::lints::span_edit::statement_deletion;
@@ -31,7 +31,7 @@ use visibility_constraints::check_visibility_constraints;
 
 struct RefLintResult {
     diagnostics: Vec<LisetteDiagnostic>,
-    unused_import_spans: HashSet<Span>,
+    unused_import_spans: FxHashSet<Span>,
 }
 
 pub(crate) fn run(
@@ -128,7 +128,7 @@ fn run_ref_lints(
     let files = &package.files;
     let equality_index = &store.equality_index;
     let mut diagnostics = Vec::new();
-    let mut unused_import_spans = HashSet::default();
+    let mut unused_import_spans = FxHashSet::default();
     let mut graph = ReferenceGraph::new();
 
     let files_with_aliases: Vec<_> = files

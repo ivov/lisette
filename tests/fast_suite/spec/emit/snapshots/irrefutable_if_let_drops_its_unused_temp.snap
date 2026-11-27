@@ -10,9 +10,7 @@ description: |
 ---
 package main
 
-func f(x int) int {
-	if x > 0 {
-	}
+func f(_ int) int {
 	return 1
 }
 

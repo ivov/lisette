@@ -2,10 +2,10 @@ use std::borrow::Cow;
 use std::fmt;
 
 use crate::ast::Annotation;
-use crate::program::go_import_default_name;
 use crate::program::is_internal_package_id;
+use crate::program::{go_import_default_name, is_go_import, strip_go_prefix};
 use crate::types::SimpleKind;
-use crate::types::{GO_IMPORT_PREFIX, Symbol, Type};
+use crate::types::{Symbol, Type};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Qualifier {
@@ -58,7 +58,7 @@ impl Type {
 
                 let leaf = id.last_segment();
 
-                if !id.as_str().starts_with(GO_IMPORT_PREFIX) {
+                if !is_go_import(id) {
                     if leaf == "Unit" {
                         return "()".to_string();
                     }
@@ -135,7 +135,7 @@ impl Type {
             }
 
             Type::ImportNamespace(package_id) => {
-                let path = package_id.strip_prefix("go:").unwrap_or(package_id);
+                let path = strip_go_prefix(package_id).unwrap_or(package_id);
                 path.rsplit('/').next().unwrap_or(package_id).to_string()
             }
 
@@ -163,7 +163,7 @@ impl Type {
 }
 
 fn qualified_name(id: &Symbol, qualifier: Qualifier) -> Cow<'_, str> {
-    if let Some(path) = id.as_str().strip_prefix(GO_IMPORT_PREFIX) {
+    if let Some(path) = strip_go_prefix(id) {
         if qualifier == Qualifier::Package
             && let Some(short) = go_package_qualified_name(path, id.last_segment())
         {

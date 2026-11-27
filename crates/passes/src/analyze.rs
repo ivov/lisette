@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use syntax::collections::DenseMap;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use diagnostics::LisetteDiagnostic;
 use syntax::FileParseStatus;
 use syntax::ast::BindingId;
-use syntax::program::{EmitInput, UnusedImports, is_internal_package_id};
+use syntax::program::{EmitInput, UnusedImports, is_go_import, is_internal_package_id};
 
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, save_package_cache};
@@ -18,7 +18,6 @@ use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 use crate::passes;
 use semantics::cache::CompiledPackage;
 use std::mem;
-use syntax::types;
 
 pub struct Analysis {
     pub emit_input: EmitInput,
@@ -150,7 +149,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     }
     all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
     // A bound re-checked at several stages reports the same thing each time.
-    let mut seen = HashSet::default();
+    let mut seen = FxHashSet::default();
     all_diagnostics.retain(|diagnostic| seen.insert(diagnostic.dedup_key()));
     all_diagnostics.splice(0..0, entry_parse_errors.into_iter().map(Into::into));
 
@@ -188,7 +187,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
                 let Some(package) = store.get_package(&compiled.package_id) else {
                     return;
                 };
-                let file_ids: HashSet<u32> = package.file_ids().collect();
+                let file_ids: FxHashSet<u32> = package.file_ids().collect();
 
                 let package_lints: Vec<_> = all_diagnostics
                     .iter()
@@ -225,13 +224,14 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         }
     }
 
-    let mut files = HashMap::default();
-    let mut definitions = HashMap::default();
+    let mut files = FxHashMap::default();
+    let mut definitions = FxHashMap::default();
+    let go_method_policy = store.go_method_policy().clone();
 
-    let go_package_ids: HashSet<String> = store
+    let go_package_ids: FxHashSet<String> = store
         .packages()
         .keys()
-        .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
+        .filter(|id| is_go_import(id))
         .cloned()
         .collect();
 
@@ -271,6 +271,8 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             test_index: store.test_index,
             go_package_names: store.go_package_names,
             go_package_ids,
+            files_with_unspellable_types: facts.files_with_unspellable_types,
+            go_method_policy,
         },
         emit_stamps,
         unreachable_packages,

@@ -1,7 +1,7 @@
 use super::*;
 use crate::loader;
 use std::iter;
-use syntax::program::go_import_default_name;
+use syntax::program::{PRELUDE_PACKAGE_ID, PRELUDE_PREFIX, go_import_default_name, is_go_import};
 
 /// A method that member lookup selected for a receiver type.
 pub(crate) struct MethodSelection {
@@ -22,9 +22,9 @@ enum MethodSource<'a> {
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct ImportState {
-    pub(super) prefixed: HashMap<String, PrefixedImport>,
+    pub(super) prefixed: FxHashMap<String, PrefixedImport>,
     /// Packages whose exports are available without prefix (current package and prelude)
-    pub(super) unprefixed_imports: HashSet<String>,
+    pub(super) unprefixed_imports: FxHashSet<String>,
     pub(super) has_unnamed_failure: bool,
 }
 
@@ -240,7 +240,7 @@ impl TaskState {
     }
 
     pub(super) fn is_const_name(&self, store: &Store, qualified_name: &str) -> bool {
-        if qualified_name.starts_with("go:") {
+        if is_go_import(qualified_name) {
             return false;
         }
         store.is_const(qualified_name)
@@ -386,7 +386,7 @@ impl TaskState {
         store: &Store,
         type_name: &str,
     ) -> Option<(String, Type)> {
-        let qualified_name = format!("prelude.{}", type_name);
+        let qualified_name = format!("{PRELUDE_PREFIX}{type_name}");
         let ty = store.get_type(&qualified_name)?.clone();
         Some((qualified_name, ty))
     }
@@ -456,11 +456,15 @@ impl TaskState {
     }
 
     pub fn put_prelude_in_scope(&mut self, store: &Store) {
-        self.put_unprefixed_package_in_scope(store, "prelude");
-        if self.imports.namespace("prelude").is_some() {
+        self.put_unprefixed_package_in_scope(store, PRELUDE_PACKAGE_ID);
+        if self.imports.namespace(PRELUDE_PACKAGE_ID).is_some() {
             return;
         }
-        self.put_package_in_scope(store, "prelude", Some("prelude".to_string()));
+        self.put_package_in_scope(
+            store,
+            PRELUDE_PACKAGE_ID,
+            Some(PRELUDE_PACKAGE_ID.to_string()),
+        );
     }
 
     pub(super) fn put_unprefixed_package_in_scope(&mut self, store: &Store, package_id: &str) {
@@ -468,8 +472,8 @@ impl TaskState {
     }
 
     pub fn put_imported_packages_in_scope(&mut self, store: &Store, imports: &[FileImport]) {
-        let mut seen_aliases: HashMap<String, String> = HashMap::default(); // alias -> path
-        let mut seen_paths: HashSet<String> = HashSet::default();
+        let mut seen_aliases: FxHashMap<String, String> = FxHashMap::default(); // alias -> path
+        let mut seen_paths: FxHashSet<String> = FxHashSet::default();
 
         for import in imports {
             if seen_paths.contains(import.name.as_str()) {
@@ -524,7 +528,7 @@ impl TaskState {
             let package = store.get_package(&import.name);
             if package.is_none() || package.is_some_and(Package::is_empty_stub) {
                 if import.alias.is_none()
-                    && import.name.starts_with("go:")
+                    && is_go_import(&import.name)
                     && !store.go_package_names.contains_key(import.name.as_str())
                 {
                     self.imports.has_unnamed_failure = true;

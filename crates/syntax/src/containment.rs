@@ -1,6 +1,6 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
-use crate::program::AliasKind;
+use crate::program::{AliasKind, strip_prelude_prefix};
 use crate::program::{Definition, DefinitionBody};
 use crate::types::{CompoundKind, Type, peel_alias};
 
@@ -20,8 +20,8 @@ pub fn enum_payload_pointer_wrapped<'d, F>(
 where
     F: Fn(&str) -> Option<&'d Definition>,
 {
-    let severed = HashSet::default();
-    let mut wrap_checking = HashSet::default();
+    let severed = FxHashSet::default();
+    let mut wrap_checking = FxHashSet::default();
     ContainmentWalk {
         lookup: &lookup,
         enum_payloads: EnumPayloads::Traverse,
@@ -34,13 +34,13 @@ pub fn definition_contains_by_value<'d, F>(
     current_id: &str,
     target_id: &str,
     enum_payloads: EnumPayloads,
-    severed: &HashSet<String>,
+    severed: &FxHashSet<String>,
     lookup: F,
 ) -> bool
 where
     F: Fn(&str) -> Option<&'d Definition>,
 {
-    let mut wrap_checking = HashSet::default();
+    let mut wrap_checking = FxHashSet::default();
     ContainmentWalk {
         lookup: &lookup,
         enum_payloads,
@@ -49,7 +49,7 @@ where
     .definition_contains(
         current_id,
         target_id,
-        &mut HashSet::default(),
+        &mut FxHashSet::default(),
         &mut wrap_checking,
     )
 }
@@ -57,7 +57,7 @@ where
 struct ContainmentWalk<'w, F> {
     lookup: &'w F,
     enum_payloads: EnumPayloads,
-    severed: &'w HashSet<String>,
+    severed: &'w FxHashSet<String>,
 }
 
 impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
@@ -65,8 +65,8 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         &self,
         ty: &Type,
         target_id: &str,
-        visited: &mut HashSet<String>,
-        wrap_checking: &mut HashSet<(String, usize, usize)>,
+        visited: &mut FxHashSet<String>,
+        wrap_checking: &mut FxHashSet<(String, usize, usize)>,
     ) -> bool {
         let peeled = peel_alias(ty, self.lookup);
         match &peeled {
@@ -83,7 +83,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                     if self.argument_stored_inline(
                         id.as_str(),
                         position,
-                        &mut HashSet::default(),
+                        &mut FxHashSet::default(),
                         wrap_checking,
                     ) && self.type_contains(param, target_id, visited, wrap_checking)
                     {
@@ -107,8 +107,8 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         &self,
         current_id: &str,
         target_id: &str,
-        visited: &mut HashSet<String>,
-        wrap_checking: &mut HashSet<(String, usize, usize)>,
+        visited: &mut FxHashSet<String>,
+        wrap_checking: &mut FxHashSet<(String, usize, usize)>,
     ) -> bool {
         if self.severed.contains(current_id) {
             return false;
@@ -136,8 +136,8 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         &self,
         id: &str,
         position: usize,
-        checking: &mut HashSet<(String, usize)>,
-        wrap_checking: &mut HashSet<(String, usize, usize)>,
+        checking: &mut FxHashSet<(String, usize)>,
+        wrap_checking: &mut FxHashSet<(String, usize, usize)>,
     ) -> bool {
         if !checking.insert((id.to_string(), position)) {
             return false;
@@ -206,19 +206,19 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         variant: usize,
         field: usize,
         payload: &Type,
-        wrap_checking: &mut HashSet<(String, usize, usize)>,
+        wrap_checking: &mut FxHashSet<(String, usize, usize)>,
     ) -> bool {
         let key = (enum_id.to_string(), variant, field);
         if !wrap_checking.insert(key.clone()) {
             return false;
         }
-        let severed = HashSet::default();
+        let severed = FxHashSet::default();
         let wrapped = ContainmentWalk {
             lookup: self.lookup,
             enum_payloads: EnumPayloads::Traverse,
             severed: &severed,
         }
-        .type_contains(payload, enum_id, &mut HashSet::default(), wrap_checking);
+        .type_contains(payload, enum_id, &mut FxHashSet::default(), wrap_checking);
         wrap_checking.remove(&key);
         wrapped
     }
@@ -227,8 +227,8 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         &self,
         ty: &Type,
         parameter: &str,
-        checking: &mut HashSet<(String, usize)>,
-        wrap_checking: &mut HashSet<(String, usize, usize)>,
+        checking: &mut FxHashSet<(String, usize)>,
+        wrap_checking: &mut FxHashSet<(String, usize, usize)>,
     ) -> bool {
         match ty {
             Type::Parameter(name) => name == parameter,
@@ -258,5 +258,5 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
 }
 
 fn is_indirection_type(id: &str) -> bool {
-    CompoundKind::from_name(id.strip_prefix("prelude.").unwrap_or(id)).is_some()
+    CompoundKind::from_name(strip_prelude_prefix(id).unwrap_or(id)).is_some()
 }

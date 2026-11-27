@@ -25,12 +25,23 @@ fn make_type_key(name: &str, type_args: &[Type]) -> TypeName {
     }
 }
 
+mod position;
+
+use position::{Position, ValueContext};
+
 pub struct NormalizationContext<'a> {
-    pub store: &'a Store,
-    pub scrutinee_type: Option<Type>,
+    store: &'a Store,
+    scrutinee_type: Option<Type>,
 }
 
 impl<'a> NormalizationContext<'a> {
+    pub fn new(store: &'a Store, scrutinee_type: Type) -> Self {
+        Self {
+            store,
+            scrutinee_type: Some(scrutinee_type),
+        }
+    }
+
     fn at_position(&self, scrutinee_type: Option<Type>) -> NormalizationContext<'a> {
         NormalizationContext {
             store: self.store,
@@ -39,64 +50,72 @@ impl<'a> NormalizationContext<'a> {
     }
 }
 
-fn try_normalize_interface_implementer(
-    ctx: &NormalizationContext,
-    struct_name: &str,
-    arity: usize,
-    args: Vec<NormalizedPattern>,
+fn normalize_on_interface(
+    interface: &Type,
+    pattern: &Pattern,
     unions: &mut UnionTable,
-) -> Option<NormalizedPattern> {
-    let scrutinee_ty = ctx.scrutinee_type.as_ref()?;
-    let peeled = ctx.store.peel_alias(scrutinee_ty);
-    let Type::Nominal {
-        id: interface_id,
-        params: interface_params,
-        ..
-    } = &peeled
-    else {
-        return None;
-    };
-    ctx.store.get_interface(interface_id)?;
-
-    let interface_type_name = make_type_key(interface_id, interface_params);
-    let struct_ctor = Constructor {
-        tag_id: struct_name.into(),
-        arity,
-    };
-
-    if let Some(union) = unions.get_mut(&interface_type_name) {
-        let mut found = false;
-        let mut unknown_pos = union.len();
-        for (i, c) in union.iter().enumerate() {
-            if c.tag_id.as_str() == struct_name {
-                found = true;
-                break;
-            }
-            if c.tag_id.as_str() == INTERFACE_UNKNOWN_TAG {
-                unknown_pos = i;
-            }
+    ctx: &NormalizationContext,
+    cache: &mut InhabitanceCache,
+) -> NormalizedPattern {
+    let implementer = match pattern {
+        Pattern::Identifier { .. } | Pattern::WildCard { .. } => return Wildcard,
+        Pattern::AsBinding { pattern, .. } => {
+            return normalize_pattern(pattern, unions, ctx, cache);
         }
-        if !found {
-            union.insert(unknown_pos, struct_ctor);
+        Pattern::Or { .. } => {
+            unreachable!("Or-patterns are expanded by `expand_or_patterns` before normalization")
         }
-    } else {
-        unions.insert(
-            interface_type_name.clone(),
-            vec![
-                struct_ctor,
-                Constructor {
-                    tag_id: INTERFACE_UNKNOWN_TAG.into(),
-                    arity: 0,
-                },
-            ],
+        Pattern::Slice {
+            resolution: SequencePatternResolution::Slice { element_type },
+            ..
+        } => make_type_key("Slice", slice::from_ref(element_type)).to_string(),
+        pattern => match pattern.get_type() {
+            Some(ty) => match ctx.store.peel_alias(&ty) {
+                Type::Nominal { id, params, .. } => make_type_key(&id, &params).to_string(),
+                other => other.to_string(),
+            },
+            None => return Wildcard,
+        },
+    };
+    let Type::Nominal { id, params, .. } = interface else {
+        unreachable!("an interface position has a nominal type")
+    };
+    let interface_key = make_type_key(id, params);
+    let implementer_ctx = ctx.at_position(pattern.get_type());
+    let inner = match implementer_ctx.position() {
+        Position::Value(value_ctx) => normalize_value_pattern(pattern, unions, &value_ctx, cache),
+        Position::Interface(_) => Wildcard,
+    };
+    let tag: TagId = match &inner {
+        NormalizedPattern::Constructor { type_name, .. } => type_name.as_str().into(),
+        _ => implementer.into(),
+    };
+
+    let union = unions.entry(interface_key.clone()).or_insert_with(|| {
+        vec![Constructor {
+            tag_id: INTERFACE_UNKNOWN_TAG.into(),
+            arity: 0,
+        }]
+    });
+    if !union.iter().any(|c| c.tag_id == tag) {
+        let unknown_position = union
+            .iter()
+            .position(|c| c.tag_id.as_str() == INTERFACE_UNKNOWN_TAG)
+            .unwrap_or(union.len());
+        union.insert(
+            unknown_position,
+            Constructor {
+                tag_id: tag.clone(),
+                arity: 1,
+            },
         );
     }
 
-    Some(NormalizedPattern::Constructor {
-        type_name: interface_type_name,
-        tag: struct_name.into(),
-        args,
-    })
+    NormalizedPattern::Constructor {
+        type_name: interface_key,
+        tag,
+        args: vec![inner],
+    }
 }
 
 pub fn normalize_arm(
@@ -117,10 +136,30 @@ pub fn normalize_pattern(
     ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
+    if matches!(
+        pattern,
+        Pattern::Identifier { .. } | Pattern::WildCard { .. }
+    ) {
+        return Wildcard;
+    }
+    match ctx.position() {
+        Position::Interface(interface) => {
+            normalize_on_interface(&interface, pattern, unions, ctx, cache)
+        }
+        Position::Value(value_ctx) => normalize_value_pattern(pattern, unions, &value_ctx, cache),
+    }
+}
+
+fn normalize_value_pattern(
+    pattern: &Pattern,
+    unions: &mut UnionTable,
+    ctx: &ValueContext,
+    cache: &mut InhabitanceCache,
+) -> NormalizedPattern {
     match pattern {
         Pattern::Identifier { .. } | Pattern::WildCard { .. } | Pattern::Unit { .. } => Wildcard,
 
-        Pattern::AsBinding { pattern, .. } => normalize_pattern(pattern, unions, ctx, cache),
+        Pattern::AsBinding { pattern, .. } => normalize_value_pattern(pattern, unions, ctx, cache),
 
         Pattern::Literal { literal, .. } => {
             if let Literal::Boolean(b) = literal {
@@ -172,7 +211,7 @@ pub fn normalize_pattern(
 fn normalize_enum_variant_pattern(
     pattern: &Pattern,
     unions: &mut UnionTable,
-    ctx: &NormalizationContext,
+    ctx: &ValueContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let Pattern::EnumVariant {
@@ -223,23 +262,6 @@ fn normalize_enum_variant_pattern(
             let mut patterns = patterns;
             if rest && patterns.len() < field_types.len() {
                 patterns.resize(field_types.len(), Wildcard);
-            }
-
-            if let DefinitionBody::Struct {
-                fields: struct_fields,
-                ..
-            } = enum_body
-            {
-                let arity = struct_fields.len();
-                let mut args = patterns.clone();
-                while args.len() < arity {
-                    args.push(Wildcard);
-                }
-                if let Some(normalized) =
-                    try_normalize_interface_implementer(ctx, enum_name, arity, args, unions)
-                {
-                    return normalized;
-                }
             }
 
             let type_name = make_type_key(enum_name, &type_args);
@@ -298,7 +320,7 @@ fn normalize_record_pattern(
     ty: &Type,
     resolution: &RecordPatternResolution,
     unions: &mut UnionTable,
-    ctx: &NormalizationContext,
+    ctx: &ValueContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     match resolution {
@@ -371,16 +393,6 @@ fn normalize_record_pattern(
                 })
                 .collect();
 
-            if let Some(normalized) = try_normalize_interface_implementer(
-                ctx,
-                struct_name,
-                struct_fields.len(),
-                patterns.clone(),
-                unions,
-            ) {
-                return normalized;
-            }
-
             let type_name = make_type_key(struct_name, &type_args);
 
             register_union(unions, &type_name, || {
@@ -445,7 +457,7 @@ fn normalize_slice(
     has_rest: bool,
     element_type: &Type,
     unions: &mut UnionTable,
-    ctx: &NormalizationContext,
+    ctx: &ValueContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let type_name = make_type_key("Slice", slice::from_ref(element_type));
@@ -504,7 +516,7 @@ fn normalize_slice(
 fn normalize_tuple(
     elements: &[Pattern],
     unions: &mut UnionTable,
-    ctx: &NormalizationContext,
+    ctx: &ValueContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let arity = elements.len();
@@ -543,7 +555,7 @@ fn normalize_array(
     element_type: &Type,
     length: u64,
     unions: &mut UnionTable,
-    ctx: &NormalizationContext,
+    ctx: &ValueContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let type_name = make_type_key(&format!("Array{length}"), slice::from_ref(element_type));

@@ -1,6 +1,5 @@
 use diagnostics::LisetteDiagnostic;
 use emit::{EmitOptions, OutputFile, Planner};
-use rustc_hash::FxHashMap as HashMap;
 use syntax::program::{EmitInput, File};
 
 use super::pipeline::TestPipeline;
@@ -142,7 +141,11 @@ fn plan_inner(
 
     let mut input = EmitInput {
         checked_bodies: result.checked_bodies,
-        files: HashMap::from_iter([(0, file)]),
+        files: result
+            .typedef_files
+            .into_iter()
+            .chain([(0, file)])
+            .collect(),
         definitions: result.definitions,
         entry_package_id: result.package_id,
         unused_imports: result.unused_imports,
@@ -150,6 +153,8 @@ fn plan_inner(
         equality_index: result.equality_index,
         go_package_names: result.go_package_names,
         go_package_ids: result.go_package_ids,
+        files_with_unspellable_types: result.files_with_unspellable_types,
+        go_method_policy: result.go_method_policy,
         ..Default::default()
     };
     let options = EmitOptions {

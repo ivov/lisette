@@ -10,7 +10,4 @@ description: |
 ---
 package main
 
-func test(x int) {
-	if x > 10 {
-	}
-}
+func test(_ int) {}

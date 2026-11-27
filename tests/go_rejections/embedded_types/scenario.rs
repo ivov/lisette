@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use syntax::program::is_go_import;
 
 /// A node's identity: its index into [`Scenario::nodes`].
 pub type NodeId = usize;
@@ -205,7 +206,7 @@ impl Scenario {
                 return Err(format!("node {} has id {}", index, node.id));
             }
             if let Some(pkg) = node.origin.pkg()
-                && pkg.starts_with("go:")
+                && is_go_import(pkg)
             {
                 return Err(format!(
                     "imported node `{}` has Lisette-prefixed pkg `{pkg}`; use the raw Go path",

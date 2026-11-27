@@ -1,0 +1,704 @@
+use crate::target::ir::bodies::{LoweredBlock, LoweredStatement};
+use crate::target::ir::local::{GoIdentifier, LocalId};
+use crate::target::names::packages::PackageUse;
+use crate::target::types::go_type::GoType;
+use crate::target::types::go_type::GoTypeShape;
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+use syntax::ast::BinaryOperator;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GoUnaryOperator {
+    Negate,
+    Complement,
+    Not,
+}
+
+impl GoUnaryOperator {
+    pub(crate) fn sign(self) -> char {
+        match self {
+            Self::Negate => '-',
+            Self::Complement => '^',
+            Self::Not => '!',
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GoBinaryOperator {
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
+    Remainder,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    BitwiseAndNot,
+    ShiftLeft,
+    ShiftRight,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    And,
+    Or,
+}
+
+impl GoBinaryOperator {
+    pub(crate) fn symbol(self) -> &'static str {
+        match self {
+            Self::Addition => "+",
+            Self::Subtraction => "-",
+            Self::Multiplication => "*",
+            Self::Division => "/",
+            Self::Remainder => "%",
+            Self::BitwiseAnd => "&",
+            Self::BitwiseOr => "|",
+            Self::BitwiseXor => "^",
+            Self::BitwiseAndNot => "&^",
+            Self::ShiftLeft => "<<",
+            Self::ShiftRight => ">>",
+            Self::Equal => "==",
+            Self::NotEqual => "!=",
+            Self::LessThan => "<",
+            Self::LessThanOrEqual => "<=",
+            Self::GreaterThan => ">",
+            Self::GreaterThanOrEqual => ">=",
+            Self::And => "&&",
+            Self::Or => "||",
+        }
+    }
+
+    pub(crate) fn level(self) -> u8 {
+        match self {
+            Self::Multiplication
+            | Self::Division
+            | Self::Remainder
+            | Self::ShiftLeft
+            | Self::ShiftRight
+            | Self::BitwiseAnd
+            | Self::BitwiseAndNot => 5,
+            Self::Addition | Self::Subtraction | Self::BitwiseOr | Self::BitwiseXor => 4,
+            Self::Equal
+            | Self::NotEqual
+            | Self::LessThan
+            | Self::LessThanOrEqual
+            | Self::GreaterThan
+            | Self::GreaterThanOrEqual => 3,
+            Self::And => 2,
+            Self::Or => 1,
+        }
+    }
+
+    pub(crate) fn has_compound_form(self) -> bool {
+        match self {
+            Self::Addition
+            | Self::Subtraction
+            | Self::Multiplication
+            | Self::Division
+            | Self::Remainder
+            | Self::BitwiseAnd
+            | Self::BitwiseOr
+            | Self::BitwiseXor
+            | Self::BitwiseAndNot
+            | Self::ShiftLeft
+            | Self::ShiftRight => true,
+            Self::Equal
+            | Self::NotEqual
+            | Self::LessThan
+            | Self::LessThanOrEqual
+            | Self::GreaterThan
+            | Self::GreaterThanOrEqual
+            | Self::And
+            | Self::Or => false,
+        }
+    }
+}
+
+impl From<&BinaryOperator> for GoBinaryOperator {
+    fn from(operator: &BinaryOperator) -> Self {
+        match operator {
+            BinaryOperator::Addition => Self::Addition,
+            BinaryOperator::Subtraction => Self::Subtraction,
+            BinaryOperator::Multiplication => Self::Multiplication,
+            BinaryOperator::Division => Self::Division,
+            BinaryOperator::Remainder => Self::Remainder,
+            BinaryOperator::BitwiseAnd => Self::BitwiseAnd,
+            BinaryOperator::BitwiseOr => Self::BitwiseOr,
+            BinaryOperator::BitwiseXor => Self::BitwiseXor,
+            BinaryOperator::BitwiseAndNot => Self::BitwiseAndNot,
+            BinaryOperator::ShiftLeft => Self::ShiftLeft,
+            BinaryOperator::ShiftRight => Self::ShiftRight,
+            BinaryOperator::Equal => Self::Equal,
+            BinaryOperator::NotEqual => Self::NotEqual,
+            BinaryOperator::LessThan => Self::LessThan,
+            BinaryOperator::LessThanOrEqual => Self::LessThanOrEqual,
+            BinaryOperator::GreaterThan => Self::GreaterThan,
+            BinaryOperator::GreaterThanOrEqual => Self::GreaterThanOrEqual,
+            BinaryOperator::And => Self::And,
+            BinaryOperator::Or => Self::Or,
+            BinaryOperator::Pipeline => {
+                unreachable!("pipeline expressions are lowered during inference")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CallPurity {
+    Constructor,
+    Conversion,
+    ReadOnly,
+    Effectful,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GoLiteral {
+    Nil,
+    Bool(bool),
+    Int(i128),
+    Token(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GoExpressionNode {
+    Identifier(GoIdentifier),
+    Qualified {
+        package: PackageUse,
+        name: String,
+    },
+    Literal(GoLiteral),
+    Type(GoType),
+    CompositeLiteral {
+        go_type: Option<Box<GoType>>,
+        elements: Vec<CompositeElement>,
+        layout: CompositeLayout,
+        end: SourcePosition,
+    },
+    Call {
+        callee: Operand,
+        arguments: Vec<Operand>,
+        purity: CallPurity,
+        paren: SourcePosition,
+    },
+    Instantiation {
+        base: Operand,
+        type_arguments: GoType,
+    },
+    Selector {
+        base: Operand,
+        field: String,
+        may_panic: bool,
+    },
+    Index {
+        base: Operand,
+        index: Operand,
+        in_bounds: bool,
+    },
+    Slice {
+        base: Operand,
+        low: Option<Operand>,
+        high: Option<Operand>,
+        max: Option<Operand>,
+        in_bounds: bool,
+    },
+    TypeAssertion {
+        base: Operand,
+        go_type: GoType,
+    },
+    Unary {
+        operator: GoUnaryOperator,
+        operand: Operand,
+    },
+    AddressOf(Operand),
+    Dereference(Operand),
+    Binary {
+        operator: GoBinaryOperator,
+        left: Operand,
+        right: Operand,
+    },
+    Conversion {
+        go_type: GoType,
+        operand: Operand,
+    },
+    Spread(Operand),
+    FunctionLiteral {
+        parameters: Vec<GoParameter>,
+        result: Option<Box<GoType>>,
+        body: LoweredBlock,
+        layout: FunctionLiteralLayout,
+        end: SourcePosition,
+    },
+    Verbatim(String),
+    Unreachable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GoParameter {
+    pub(crate) name: GoIdentifier,
+    pub(crate) go_type: GoType,
+}
+
+impl GoParameter {
+    pub(crate) fn new(name: impl Into<GoIdentifier>, go_type: impl Into<GoType>) -> Self {
+        Self {
+            name: name.into(),
+            go_type: go_type.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FunctionLiteralLayout {
+    Inline,
+    MultiLine,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CompositeElement {
+    pub key: Option<CompositeKey>,
+    pub value: Operand,
+    pub position: SourcePosition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CompositeKey {
+    Field(String),
+    Value(Operand),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Position {
+    pub(crate) path: Arc<str>,
+    pub(crate) line: usize,
+    pub(crate) column: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SourcePosition(Option<Box<Position>>);
+
+impl SourcePosition {
+    pub(crate) fn get(&self) -> Option<&Position> {
+        self.0.as_deref()
+    }
+
+    pub(crate) fn is_set(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub(crate) fn fill(&mut self, position: Option<Position>) {
+        if self.0.is_none() {
+            self.0 = position.map(Box::new);
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl PartialEq for SourcePosition {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for SourcePosition {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Operand(Box<PositionedNode>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PositionedNode {
+    position: SourcePosition,
+    node: GoExpressionNode,
+}
+
+impl Operand {
+    pub(crate) fn new(position: SourcePosition, node: GoExpressionNode) -> Self {
+        Self(Box::new(PositionedNode { position, node }))
+    }
+
+    pub(crate) fn into_parts(self) -> (SourcePosition, GoExpressionNode) {
+        let PositionedNode { position, node } = *self.0;
+        (position, node)
+    }
+
+    pub(crate) fn position(&self) -> &SourcePosition {
+        &self.0.position
+    }
+
+    pub(crate) fn position_mut(&mut self) -> &mut SourcePosition {
+        &mut self.0.position
+    }
+}
+
+impl From<GoExpressionNode> for Operand {
+    fn from(node: GoExpressionNode) -> Self {
+        Self::new(SourcePosition::default(), node)
+    }
+}
+
+impl Deref for Operand {
+    type Target = GoExpressionNode;
+
+    fn deref(&self) -> &GoExpressionNode {
+        &self.0.node
+    }
+}
+
+impl DerefMut for Operand {
+    fn deref_mut(&mut self) -> &mut GoExpressionNode {
+        &mut self.0.node
+    }
+}
+
+impl AsRef<GoExpressionNode> for Operand {
+    fn as_ref(&self) -> &GoExpressionNode {
+        &self.0.node
+    }
+}
+
+impl AsMut<GoExpressionNode> for Operand {
+    fn as_mut(&mut self) -> &mut GoExpressionNode {
+        &mut self.0.node
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CompositeLayout {
+    Inline { padded: bool },
+    MultiLine { indented: bool },
+}
+
+impl CompositeLayout {
+    pub(crate) fn for_elements(count: usize, widest: usize) -> Self {
+        if count > 1 && widest > 30 {
+            Self::MultiLine { indented: true }
+        } else {
+            Self::Inline { padded: true }
+        }
+    }
+}
+
+pub(crate) trait TreeVisitor {
+    fn expression(&mut self, node: &GoExpressionNode);
+
+    fn statement(&mut self, _statement: &LoweredStatement) {}
+}
+
+pub(crate) struct Expressions<'a, F>(pub(crate) &'a mut F);
+
+impl<F: FnMut(&GoExpressionNode)> TreeVisitor for Expressions<'_, F> {
+    fn expression(&mut self, node: &GoExpressionNode) {
+        (self.0)(node)
+    }
+}
+
+pub(crate) fn verbatim_identifiers(source: &str) -> impl Iterator<Item = &str> {
+    source
+        .split(|character: char| !(character.is_alphanumeric() || character == '_'))
+        .filter(|token| {
+            token
+                .chars()
+                .next()
+                .is_some_and(|first| first.is_alphabetic() || first == '_')
+        })
+}
+
+pub(crate) enum NameRead<'n> {
+    Local(&'n GoIdentifier),
+    Verbatim(&'n str),
+    NoName,
+}
+
+impl GoExpressionNode {
+    pub(crate) fn name_read(&self) -> NameRead<'_> {
+        match self {
+            Self::Identifier(name) => NameRead::Local(name),
+            Self::Verbatim(text) => NameRead::Verbatim(text),
+            Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::CompositeLiteral { .. }
+            | Self::Call { .. }
+            | Self::Instantiation { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::TypeAssertion { .. }
+            | Self::Unary { .. }
+            | Self::AddressOf(_)
+            | Self::Dereference(_)
+            | Self::Binary { .. }
+            | Self::Conversion { .. }
+            | Self::Spread(_)
+            | Self::FunctionLiteral { .. }
+            | Self::Unreachable => NameRead::NoName,
+        }
+    }
+
+    pub(super) fn is_unit_struct_literal(&self) -> bool {
+        let Self::CompositeLiteral {
+            go_type: Some(go_type),
+            elements,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        elements.is_empty()
+            && matches!(go_type.shape.as_ref(), GoTypeShape::Struct(fields) if fields.is_empty())
+    }
+
+    pub(crate) fn mentions_local(&self, id: LocalId) -> bool {
+        let mut found = false;
+        self.visit(&mut |inner| {
+            if let Self::Identifier(read) = inner
+                && read.id() == Some(id)
+            {
+                found = true;
+            }
+        });
+        found
+    }
+
+    pub(crate) fn has_call(&self) -> bool {
+        let mut found = false;
+        self.visit(&mut |inner| {
+            if matches!(
+                inner,
+                Self::Call { .. } | Self::FunctionLiteral { .. } | Self::Verbatim(_)
+            ) {
+                found = true;
+            }
+        });
+        found
+    }
+
+    pub(crate) fn mentions(&self, name: &str) -> bool {
+        let mut found = false;
+        self.visit(&mut |inner| {
+            if let Self::Identifier(read) = inner
+                && read.spelling() == name
+            {
+                found = true;
+            }
+        });
+        found
+    }
+
+    pub(crate) fn fill_positions(&mut self, start: &Position, end: &Position) {
+        match self {
+            Self::Call { paren, .. } => paren.fill(Some(start.clone())),
+            Self::FunctionLiteral { end: slot, .. }
+            | Self::CompositeLiteral {
+                end: slot,
+                layout: CompositeLayout::MultiLine { .. },
+                ..
+            } => slot.fill(Some(end.clone())),
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::CompositeLiteral { .. }
+            | Self::Instantiation { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::TypeAssertion { .. }
+            | Self::Unary { .. }
+            | Self::AddressOf(_)
+            | Self::Dereference(_)
+            | Self::Binary { .. }
+            | Self::Conversion { .. }
+            | Self::Spread(_)
+            | Self::Verbatim(_)
+            | Self::Unreachable => {}
+        }
+    }
+
+    pub(crate) fn drop_positions(&mut self) {
+        self.visit_operands_mut(&mut |operand| {
+            operand.position_mut().clear();
+            operand.drop_positions();
+        });
+    }
+
+    pub(crate) fn visit(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        self.walk(&mut Expressions(visit));
+    }
+
+    pub(crate) fn own_types(&self, visit: &mut impl FnMut(&GoType)) {
+        match self {
+            Self::CompositeLiteral {
+                go_type: Some(go_type),
+                ..
+            } => visit(go_type),
+            Self::Type(go_type)
+            | Self::TypeAssertion { go_type, .. }
+            | Self::Conversion { go_type, .. }
+            | Self::Instantiation {
+                type_arguments: go_type,
+                ..
+            } => visit(go_type),
+            Self::FunctionLiteral {
+                parameters, result, ..
+            } => {
+                for parameter in parameters {
+                    visit(&parameter.go_type);
+                }
+                if let Some(result) = result {
+                    visit(result);
+                }
+            }
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::CompositeLiteral { .. }
+            | Self::Call { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::Unary { .. }
+            | Self::AddressOf(_)
+            | Self::Dereference(_)
+            | Self::Binary { .. }
+            | Self::Spread(_)
+            | Self::Verbatim(_)
+            | Self::Unreachable => {}
+        }
+    }
+
+    pub(crate) fn walk(&self, visit: &mut impl TreeVisitor) {
+        visit.expression(self);
+        if let Self::FunctionLiteral { body, .. } = self {
+            body.walk(visit);
+        } else {
+            self.visit_children(&mut |child| child.walk(visit));
+        }
+    }
+
+    pub(crate) fn visit_children(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        self.visit_operands(&mut |operand| visit(operand));
+    }
+
+    pub(crate) fn visit_children_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        self.visit_operands_mut(&mut |operand| visit(operand));
+    }
+
+    fn visit_operands(&self, visit: &mut impl FnMut(&Operand)) {
+        match self {
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::Verbatim(_)
+            | Self::Unreachable
+            | Self::FunctionLiteral { .. } => {}
+            Self::CompositeLiteral { elements, .. } => {
+                for element in elements {
+                    if let Some(CompositeKey::Value(key)) = &element.key {
+                        visit(key);
+                    }
+                    visit(&element.value);
+                }
+            }
+            Self::Call {
+                callee, arguments, ..
+            } => {
+                visit(callee);
+                for argument in arguments {
+                    visit(argument);
+                }
+            }
+            Self::Instantiation { base, .. }
+            | Self::Selector { base, .. }
+            | Self::TypeAssertion { base, .. } => visit(base),
+            Self::Index { base, index, .. } => {
+                visit(base);
+                visit(index);
+            }
+            Self::Slice {
+                base,
+                low,
+                high,
+                max,
+                ..
+            } => {
+                visit(base);
+                for bound in [low, high, max].into_iter().flatten() {
+                    visit(bound);
+                }
+            }
+            Self::Unary { operand, .. }
+            | Self::Conversion { operand, .. }
+            | Self::AddressOf(operand)
+            | Self::Dereference(operand)
+            | Self::Spread(operand) => visit(operand),
+            Self::Binary { left, right, .. } => {
+                visit(left);
+                visit(right);
+            }
+        }
+    }
+
+    fn visit_operands_mut(&mut self, visit: &mut impl FnMut(&mut Operand)) {
+        match self {
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::Verbatim(_)
+            | Self::Unreachable
+            | Self::FunctionLiteral { .. } => {}
+            Self::CompositeLiteral { elements, .. } => {
+                for element in elements {
+                    if let Some(CompositeKey::Value(key)) = &mut element.key {
+                        visit(key);
+                    }
+                    visit(&mut element.value);
+                }
+            }
+            Self::Call {
+                callee, arguments, ..
+            } => {
+                visit(callee);
+                for argument in arguments {
+                    visit(argument);
+                }
+            }
+            Self::Instantiation { base, .. }
+            | Self::Selector { base, .. }
+            | Self::TypeAssertion { base, .. } => visit(base),
+            Self::Index { base, index, .. } => {
+                visit(base);
+                visit(index);
+            }
+            Self::Slice {
+                base,
+                low,
+                high,
+                max,
+                ..
+            } => {
+                visit(base);
+                for bound in [low, high, max].into_iter().flatten() {
+                    visit(bound);
+                }
+            }
+            Self::Unary { operand, .. }
+            | Self::Conversion { operand, .. }
+            | Self::AddressOf(operand)
+            | Self::Dereference(operand)
+            | Self::Spread(operand) => visit(operand),
+            Self::Binary { left, right, .. } => {
+                visit(left);
+                visit(right);
+            }
+        }
+    }
+}

@@ -12,7 +12,7 @@ description: |
 package main
 
 func test() int {
-	x := "now a string"
-	x3 := len(x)
-	return x3
+	x2 := "now a string"
+	x := len(x2)
+	return x
 }

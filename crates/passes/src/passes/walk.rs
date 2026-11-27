@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{BindingId, Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::constant::{self, Constant, ConstantSource};
 use syntax::program::{Definition, File, Package};
@@ -13,8 +13,8 @@ pub(crate) struct NodeCtx<'a> {
     package: &'a Package,
     file: &'a File,
     pub sink: &'a LocalSink,
-    claimed_spans: HashSet<(ClaimKind, Span)>,
-    local_constants: HashMap<BindingId, Constant>,
+    claimed_spans: FxHashSet<(ClaimKind, Span)>,
+    local_constants: FxHashMap<BindingId, Constant>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,8 +43,8 @@ impl<'a> NodeCtx<'a> {
             package,
             file,
             sink,
-            claimed_spans: HashSet::default(),
-            local_constants: HashMap::default(),
+            claimed_spans: FxHashSet::default(),
+            local_constants: FxHashMap::default(),
         }
     }
 
@@ -300,7 +300,7 @@ fn visit_node<'a, C, E, P, X>(
         },
         _ => FunctionRole::Free,
     };
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_node(
             child,
             child_role,
@@ -309,7 +309,7 @@ fn visit_node<'a, C, E, P, X>(
             pattern_visitor,
             expression_exit_visitor,
         );
-    }
+    });
     expression_exit_visitor(expression, role, ctx);
 }
 

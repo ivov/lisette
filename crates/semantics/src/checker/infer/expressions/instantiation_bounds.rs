@@ -99,9 +99,9 @@ impl InferCtx<'_> {
     }
 
     fn visit_children(&mut self, expression: &Expression) {
-        for child in expression.children() {
+        expression.for_each_child(|child| {
             self.visit_instantiations(child);
-        }
+        });
     }
 
     fn put_generic_bounds_in_scope(&mut self, generics: &[Generic]) {

@@ -26,7 +26,6 @@ func diverges() {
 func pick(x int) int {
 	if x > 5 {
 		diverges()
-		panic("unreachable")
 	}
 	return x
 }

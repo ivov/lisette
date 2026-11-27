@@ -30,7 +30,6 @@ use std::sync::atomic::Ordering;
 
 use crate::protocol::RpcResult as Result;
 use crate::protocol::*;
-use syntax::ast::IdentifierResolution;
 
 use crate::analysis::{convert_diagnostic, cursor_offset, offset_in_span, type_name};
 use crate::completion::{
@@ -49,8 +48,8 @@ use std::sync::Arc;
 use syntax::ast::Expression;
 use syntax::ast::Span;
 use syntax::doc::to_markdown;
-use syntax::program::File;
 use syntax::program::is_test_file;
+use syntax::program::{File, PRELUDE_PACKAGE_ID};
 use syntax::types::SELF_TYPE_NAME;
 
 pub use crate::state::{Backend, SharedState};
@@ -468,12 +467,11 @@ impl Backend {
             return Ok(None);
         };
         let file = cursor.document.file;
-        if let Some(Expression::Identifier {
-            resolution: IdentifierResolution::Definition { name, .. },
-            ..
-        }) = find_expression_at(&file.items, symbol.occurrence_span.byte_offset)
+        if let Some(Expression::Identifier { resolution, .. }) =
+            find_expression_at(&file.items, symbol.occurrence_span.byte_offset)
+            && let Some(name) = resolution.callee_name()
         {
-            validation::check_rename_guards(name.as_str())?;
+            validation::check_rename_guards(&name.qualified_name())?;
         }
         if symbol.is_import()
             || is_generated_typedef_span(&snapshot, &symbol.reference_definition_span())
@@ -824,7 +822,7 @@ fn package_prefix_completions(
         return Vec::new();
     }
 
-    for package in [file.package_id.as_str(), "prelude"] {
+    for package in [file.package_id.as_str(), PRELUDE_PACKAGE_ID] {
         let qualified = format!("{package}.{prefix}");
         if let Some(definition) = snapshot.definitions().get(qualified.as_str())
             && definition.is_type_definition()

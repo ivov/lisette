@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use syntax::program::is_go_import;
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::checker::TaskState;
@@ -7,7 +8,7 @@ use crate::store::Store;
 impl TaskState {
     fn builtin_qualified_name(&mut self, store: &Store, type_name: &str) -> Symbol {
         self.lookup_qualified_name(store, type_name)
-            .map(Symbol::from)
+            .map(Symbol::from_raw)
             .unwrap_or_else(|| panic!("Builtin type {type_name} not found in store"))
     }
 
@@ -112,7 +113,7 @@ impl TaskState {
 
         params.iter().any(|p| {
             if let Type::Nominal { id, .. } = p.resolve_in(&self.env) {
-                store.get_interface(&id).is_some() || id.starts_with("go:")
+                store.get_interface(&id).is_some() || is_go_import(&id)
             } else {
                 false
             }

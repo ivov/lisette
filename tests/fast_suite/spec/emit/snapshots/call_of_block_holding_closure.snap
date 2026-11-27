@@ -14,8 +14,8 @@ package main
 
 func compose(f, g func(int) int) func(int) int {
 	return func(x int) int {
-		return f(func(x2 int) int {
-			return g(f(g(x2)))
+		return f(func(x int) int {
+			return g(f(g(x)))
 		}(g(x)))
 	}
 }

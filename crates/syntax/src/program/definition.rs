@@ -1,6 +1,7 @@
 use crate::collections::SharedMap;
 use crate::constant;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use crate::program::PRELUDE_PACKAGE_ID;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use ecow::EcoString;
 
@@ -659,8 +660,8 @@ where
         interface_ty: &Type,
         parent_of: Option<&Symbol>,
         lookup: F,
-        visited: &mut HashSet<Type>,
-        visiting: &mut HashSet<Symbol>,
+        visited: &mut FxHashSet<Type>,
+        visiting: &mut FxHashSet<Symbol>,
         instances: &mut Vec<InterfaceInstance>,
     ) where
         F: Copy + Fn(&str) -> Option<&'d Definition>,
@@ -703,8 +704,8 @@ where
         interface_ty,
         None,
         lookup,
-        &mut HashSet::default(),
-        &mut HashSet::default(),
+        &mut FxHashSet::default(),
+        &mut FxHashSet::default(),
         &mut instances,
     );
     instances
@@ -840,7 +841,7 @@ where
 /// Resolve the complete method set for a type, including inherited and alias methods.
 pub fn methods_for_type<'d, F>(
     ty: &Type,
-    trait_bounds: &HashMap<Symbol, Vec<Type>>,
+    trait_bounds: &FxHashMap<Symbol, Vec<Type>>,
     lookup: F,
 ) -> Methods
 where
@@ -848,9 +849,9 @@ where
 {
     fn collect<'d, F>(
         ty: &Type,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        trait_bounds: &FxHashMap<Symbol, Vec<Type>>,
         lookup: F,
-        visited: &mut HashSet<String>,
+        visited: &mut FxHashSet<String>,
     ) -> Methods
     where
         F: Copy + Fn(&str) -> Option<&'d Definition>,
@@ -905,7 +906,7 @@ where
         methods
     }
 
-    collect(ty, trait_bounds, lookup, &mut HashSet::default())
+    collect(ty, trait_bounds, lookup, &mut FxHashSet::default())
 }
 
 /// Whether an interface or any of its parents declares a method.
@@ -931,7 +932,7 @@ where
 
 pub fn method_for_type<'d, F>(
     ty: &Type,
-    trait_bounds: &HashMap<Symbol, Vec<Type>>,
+    trait_bounds: &FxHashMap<Symbol, Vec<Type>>,
     lookup: F,
     wanted: &str,
 ) -> Option<Method>
@@ -940,9 +941,9 @@ where
 {
     fn collect<'d, F>(
         ty: &Type,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        trait_bounds: &FxHashMap<Symbol, Vec<Type>>,
         lookup: F,
-        visited: &mut HashSet<Symbol>,
+        visited: &mut FxHashSet<Symbol>,
         wanted: &str,
     ) -> Option<Method>
     where
@@ -996,14 +997,14 @@ where
         own
     }
 
-    collect(ty, trait_bounds, lookup, &mut HashSet::default(), wanted)
+    collect(ty, trait_bounds, lookup, &mut FxHashSet::default(), wanted)
 }
 
 pub fn type_has_any_method<'d, F>(ty: &Type, lookup: F) -> bool
 where
     F: Copy + Fn(&str) -> Option<&'d Definition>,
 {
-    fn collect<'d, F>(ty: &Type, lookup: F, visited: &mut HashSet<Symbol>) -> bool
+    fn collect<'d, F>(ty: &Type, lookup: F, visited: &mut FxHashSet<Symbol>) -> bool
     where
         F: Copy + Fn(&str) -> Option<&'d Definition>,
     {
@@ -1039,15 +1040,17 @@ where
         false
     }
 
-    collect(ty, lookup, &mut HashSet::default())
+    collect(ty, lookup, &mut FxHashSet::default())
 }
 
 fn method_lookup_key(ty: &Type) -> Option<Symbol> {
     match ty {
         Type::Nominal { id, .. } => Some(id.clone()),
-        Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-        Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-        Type::Array { .. } => Some(Symbol::from_parts("prelude", "Array")),
+        Type::Compound { kind, .. } => {
+            Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name()))
+        }
+        Type::Simple(kind) => Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, kind.leaf_name())),
+        Type::Array { .. } => Some(Symbol::from_parts(PRELUDE_PACKAGE_ID, "Array")),
         _ => None,
     }
 }
@@ -1247,7 +1250,7 @@ mod tests {
         }
     }
 
-    fn table(entries: Vec<(&str, Definition)>) -> HashMap<String, Definition> {
+    fn table(entries: Vec<(&str, Definition)>) -> FxHashMap<String, Definition> {
         entries
             .into_iter()
             .map(|(id, definition)| (id.to_string(), definition))
@@ -1256,8 +1259,8 @@ mod tests {
 
     /// The narrow lookup must answer exactly what the whole method set holds.
     fn assert_narrow_matches_broad(
-        table: &HashMap<String, Definition>,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        table: &FxHashMap<String, Definition>,
+        trait_bounds: &FxHashMap<Symbol, Vec<Type>>,
         ty: &Type,
         name: &str,
     ) {
@@ -1291,7 +1294,7 @@ mod tests {
             ),
         ]);
 
-        assert_narrow_matches_broad(&table, &HashMap::default(), &nominal("m.Child"), "run");
+        assert_narrow_matches_broad(&table, &FxHashMap::default(), &nominal("m.Child"), "run");
     }
 
     #[test]
@@ -1314,7 +1317,7 @@ mod tests {
                 ),
             ),
         ]);
-        let trait_bounds = HashMap::from_iter([(
+        let trait_bounds = FxHashMap::from_iter([(
             Symbol::from_raw("m.T"),
             vec![nominal("m.First"), nominal("m.Second")],
         )]);
@@ -1356,7 +1359,7 @@ mod tests {
                 Methods::from_iter([named_method("run", Type::Parameter("T".into()))]),
             ),
         )]);
-        let trait_bounds = HashMap::from_iter([(
+        let trait_bounds = FxHashMap::from_iter([(
             Symbol::from_raw("m.T"),
             vec![
                 instantiated("m.Boxed", Type::int()),
@@ -1370,7 +1373,7 @@ mod tests {
     #[test]
     fn a_self_referential_bound_terminates() {
         let table = table(vec![]);
-        let trait_bounds = HashMap::from_iter([(Symbol::from_raw("m.T"), vec![nominal("m.T")])]);
+        let trait_bounds = FxHashMap::from_iter([(Symbol::from_raw("m.T"), vec![nominal("m.T")])]);
 
         assert_narrow_matches_broad(&table, &trait_bounds, &nominal("m.T"), "run");
     }
@@ -1395,7 +1398,7 @@ mod tests {
             ),
         ]);
 
-        assert_narrow_matches_broad(&table, &HashMap::default(), &nominal("m.Alias"), "run");
+        assert_narrow_matches_broad(&table, &FxHashMap::default(), &nominal("m.Alias"), "run");
     }
 
     #[test]
@@ -1414,7 +1417,7 @@ mod tests {
             ),
         ]);
 
-        assert_narrow_matches_broad(&table, &HashMap::default(), &nominal("m.Alias"), "run");
+        assert_narrow_matches_broad(&table, &FxHashMap::default(), &nominal("m.Alias"), "run");
         assert!(type_has_any_method(&nominal("m.Alias"), |id| table.get(id)));
     }
 

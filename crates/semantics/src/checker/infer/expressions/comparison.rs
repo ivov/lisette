@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
@@ -9,7 +9,7 @@ use crate::checker::scopes::Scopes;
 use crate::store::Store;
 use syntax::ast::Generic;
 use syntax::ast::{Annotation, Expression, Span, StructFields};
-use syntax::program::{AliasKind, ElementEquality, EqualityRecipe};
+use syntax::program::{AliasKind, ElementEquality, EqualityRecipe, is_go_import};
 use syntax::program::{DefinitionBody, Visibility, interface_instances, interface_requirements};
 use syntax::types::{CompoundKind, Type, substitute};
 
@@ -31,13 +31,18 @@ fn nested_reason(inner: &'static str, wrapper: &'static str) -> &'static str {
 }
 
 pub fn check_not_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
-    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), false, &mut |_| {
-        false
-    })
+    check_not_comparable_impl(
+        env,
+        store,
+        ty,
+        &mut FxHashSet::default(),
+        false,
+        &mut |_| false,
+    )
 }
 
 pub fn check_never_comparable(env: &TypeEnv, store: &Store, ty: &Type) -> Option<&'static str> {
-    check_not_comparable_impl(env, store, ty, &mut HashSet::default(), true, &mut |_| {
+    check_not_comparable_impl(env, store, ty, &mut FxHashSet::default(), true, &mut |_| {
         false
     })
 }
@@ -52,7 +57,7 @@ pub(crate) fn check_not_comparable_with_bounds(
         env,
         store,
         ty,
-        &mut HashSet::default(),
+        &mut FxHashSet::default(),
         false,
         comparable_parameter,
     )
@@ -68,7 +73,7 @@ pub(crate) fn check_never_comparable_with_bounds(
         env,
         store,
         ty,
-        &mut HashSet::default(),
+        &mut FxHashSet::default(),
         true,
         comparable_parameter,
     )
@@ -78,7 +83,7 @@ fn check_not_comparable_impl(
     env: &TypeEnv,
     store: &Store,
     ty: &Type,
-    visiting: &mut HashSet<Type>,
+    visiting: &mut FxHashSet<Type>,
     definite_only: bool,
     comparable_parameter: &mut dyn FnMut(&str) -> bool,
 ) -> Option<&'static str> {
@@ -269,7 +274,7 @@ fn definition_reaches_itself(env: &TypeEnv, store: &Store, target: &str) -> bool
     let Some(definition) = store.get_definition(target) else {
         return false;
     };
-    let mut visited = HashSet::default();
+    let mut visited = FxHashSet::default();
     let mut field_reaches = |field_ty: &Type| {
         reaches_definition(
             env,
@@ -295,7 +300,7 @@ fn reaches_definition(
     store: &Store,
     ty: &Type,
     target: &str,
-    visited: &mut HashSet<Type>,
+    visited: &mut FxHashSet<Type>,
     depth: usize,
 ) -> bool {
     if depth > REACHES_DEPTH_LIMIT {
@@ -360,7 +365,7 @@ fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
     let Some(id) = ty.get_qualified_id() else {
         return false;
     };
-    if !id.starts_with("go:") {
+    if !is_go_import(id) {
         return false;
     }
     let Some(definition) = store.get_definition(id) else {
@@ -427,9 +432,9 @@ pub(crate) fn select_equality(
             EqualityRecipe::Operator
         };
     }
-    match peeled.get_qualified_id() {
+    match peeled.nominal_id() {
         Some(id) if type_has_usable_equals(store, &peeled, package) => EqualityRecipe::Method {
-            owner: Some(id.into()),
+            owner: Some(id.clone()),
         },
         _ => EqualityRecipe::Operator,
     }
@@ -705,7 +710,7 @@ impl InferCtx<'_> {
         let Some(name) = resolved.get_qualified_id() else {
             return false;
         };
-        if name.starts_with("go:") {
+        if is_go_import(name) {
             return false;
         }
         let Some(definition) = self.store.get_definition(name) else {

@@ -2,6 +2,7 @@ use crate::checker::EnvResolve;
 use Type::{Function, Nominal};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
+use syntax::program::is_go_import;
 use syntax::types::{Bound, Type};
 
 use crate::checker::infer::InferCtx;
@@ -534,7 +535,7 @@ impl InferCtx<'_> {
         // `Some`. The opposite direction would let `None` reach a non-nil slot.
         if symbol1 == "prelude.Option"
             && params1.len() == 1
-            && symbol2.starts_with("go:")
+            && is_go_import(symbol2)
             && store.get_interface(symbol2).is_some()
         {
             return self.try_unify(&params1[0], t2, span);
@@ -1134,7 +1135,7 @@ impl InferCtx<'_> {
         let return_index = expected_positions.len().checked_sub(1)?;
 
         let mut adapter = None;
-        for (index, (left, right)) in expected_positions.iter().zip(&actual_positions).enumerate() {
+        for (index, (left, right)) in expected_positions.zip(actual_positions).enumerate() {
             if left == right {
                 continue;
             }
@@ -1383,11 +1384,10 @@ fn arity_difference<'a>(expected: &'a Type, actual: &'a Type) -> Option<(&'a Typ
     }
     expected
         .children()
-        .into_iter()
         .zip(actual.children())
         .find_map(|(e, a)| arity_difference(e, a))
 }
 
-fn contains_type_variable(ty: &Type) -> bool {
+pub(super) fn contains_type_variable(ty: &Type) -> bool {
     matches!(ty, Type::Var { .. }) || ty.children().into_iter().any(contains_type_variable)
 }

@@ -1,5 +1,5 @@
 use ecow::EcoString;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use std::slice;
 use syntax::ast::{
     BinaryOperator, Binding, Expression, FormatStringPart, Literal, Pattern, Span, UnaryOperator,
@@ -25,7 +25,7 @@ pub(super) fn struct_field_names(
     store: &Store,
     ty: &Type,
     name: &str,
-) -> Option<HashSet<EcoString>> {
+) -> Option<FxHashSet<EcoString>> {
     let Type::Nominal { id, .. } = ty.strip_refs() else {
         return None;
     };

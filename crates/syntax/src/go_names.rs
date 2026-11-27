@@ -1,15 +1,15 @@
 //! Go identifier computation shared by the checker and the emitter, so
 //! neither has to mirror the other's naming policy.
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 
 use crate::EcoString;
 use crate::ast::StructFieldDefinition;
 use crate::ast::{EnumVariant, VariantFields};
 use crate::attributes;
-use crate::program::Methods;
-use crate::types::{GO_IMPORT_PREFIX, Type};
+use crate::program::{Methods, is_go_import, is_prelude_symbol};
+use crate::types::Type;
 
 /// Go reserved keywords that cannot be used as identifiers.
 /// See: https://go.dev/ref/spec#Keywords
@@ -208,7 +208,7 @@ fn embedded_field_go_name(field: &StructFieldDefinition) -> Cow<'_, str> {
         .ty
         .strip_refs()
         .get_qualified_id()
-        .is_some_and(|id| !id.starts_with("prelude.") && !id.starts_with(GO_IMPORT_PREFIX));
+        .is_some_and(|id| !is_prelude_symbol(id) && !is_go_import(id));
     if declared_in_lisette {
         escape_type_name(&field.name)
     } else {
@@ -281,8 +281,7 @@ pub fn enum_field_shape(fields: &VariantFields) -> Option<EnumFieldShape> {
 /// Whether an interface's requirements match implementations by exact source
 /// spelling rather than by emitted Go name.
 pub fn interface_matches_by_source_name(interface_id: &str, interface_is_public: bool) -> bool {
-    !interface_id.starts_with(GO_IMPORT_PREFIX)
-        && (interface_id.starts_with("prelude.") || !interface_is_public)
+    !is_go_import(interface_id) && (is_prelude_symbol(interface_id) || !interface_is_public)
 }
 
 /// Resolve which implementing method satisfies an interface requirement, by
@@ -330,7 +329,7 @@ fn select_by_emitted_name<'a>(
     candidate: &dyn Fn(&str) -> ConformanceCandidate,
     as_if_public: bool,
 ) -> Option<(&'a EcoString, &'a Type)> {
-    let want = if interface_id.starts_with(GO_IMPORT_PREFIX) {
+    let want = if is_go_import(interface_id) {
         Cow::Borrowed(method_name)
     } else {
         Cow::Owned(snake_to_camel(method_name))
@@ -463,9 +462,9 @@ pub fn enum_field_slots(enum_name: &str, variants: &[EnumVariant]) -> Vec<Vec<St
     slots
 }
 
-fn contested_slots(variants: &[EnumVariant], slots: &[Vec<String>]) -> HashSet<String> {
-    let mut claimed: HashMap<&str, &Type> = HashMap::default();
-    let mut contested = HashSet::default();
+fn contested_slots(variants: &[EnumVariant], slots: &[Vec<String>]) -> FxHashSet<String> {
+    let mut claimed: FxHashMap<&str, &Type> = FxHashMap::default();
+    let mut contested = FxHashSet::default();
 
     for (variant, names) in variants.iter().zip(slots) {
         for (field, name) in variant.fields.iter().zip(names) {

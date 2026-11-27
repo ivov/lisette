@@ -4,7 +4,7 @@
 //! methods with one name and fails to compile with "method redeclared".
 
 use diagnostics::LocalSink;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::Expression;
 
 use semantics::store::Store;
@@ -14,7 +14,7 @@ pub(crate) fn run_package(package_id: &str, store: &Store, sink: &LocalSink) {
         return;
     };
 
-    let json_enums: HashSet<&str> = package
+    let json_enums: FxHashSet<&str> = package
         .source_files()
         .flat_map(|file| file.items.iter())
         .filter_map(|item| match item {

@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -10,18 +10,19 @@ use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_BUILD_HASH, GO_STDLIB_HASH};
 use crate::store::Store;
 use std::fs;
-use syntax::program::File;
+use syntax::program::{File, GO_IMPORT_PREFIX, strip_go_prefix};
+use syntax::types::Symbol;
 
 #[derive(Serialize, Deserialize)]
 struct GoStdlibHeader {
     version: u32,
     content_hash: u64,
     compiler_version: u64,
-    block_ranges: HashMap<String, (usize, usize)>,
+    block_ranges: FxHashMap<String, (usize, usize)>,
 }
 
 pub struct GoStdlibCache {
-    packages: HashMap<String, Range<usize>>,
+    packages: FxHashMap<String, Range<usize>>,
     bytes: Vec<u8>,
 }
 
@@ -64,7 +65,7 @@ impl GoStdlibCache {
     }
 
     fn encode(blocks: &[(&str, &[u8])]) -> Option<Vec<u8>> {
-        let mut block_ranges = HashMap::default();
+        let mut block_ranges = FxHashMap::default();
         let mut offset = 0;
         for (package_id, block) in blocks {
             block_ranges.insert(package_id.to_string(), (offset, offset + block.len()));
@@ -91,8 +92,8 @@ const HEADER_LENGTH_SIZE: usize = size_of::<u64>();
 
 #[derive(Serialize, Deserialize)]
 pub struct GoPackageCache {
-    pub definitions: HashMap<String, CachedDefinition>,
-    unsupported_go_symbols: HashMap<String, String>,
+    pub definitions: FxHashMap<String, CachedDefinition>,
+    unsupported_go_symbols: FxHashMap<String, String>,
     /// Go package imports (e.g., `["go:io", "go:sync"]`).
     go_imports: Vec<String>,
 }
@@ -126,13 +127,13 @@ pub(crate) fn save_go_stdlib_cache(
     };
 
     // Go definitions don't reference files, so file_id_to_index is always empty.
-    let empty_file_map = HashMap::default();
+    let empty_file_map = FxHashMap::default();
     let mut encoded: Vec<(&str, Vec<u8>)> = Vec::with_capacity(go_package_ids.len());
     for package_id in go_package_ids {
         let Some(package) = store.get_package(package_id) else {
             continue;
         };
-        let definitions: HashMap<String, CachedDefinition> = package
+        let definitions: FxHashMap<String, CachedDefinition> = package
             .definitions
             .iter()
             .map(|(name, definition)| {
@@ -213,7 +214,7 @@ fn register_cached_go_package(
     cached: &GoPackageCache,
     target: Target,
 ) {
-    let go_pkg = package_id.strip_prefix("go:");
+    let go_pkg = strip_go_prefix(package_id);
     let source = go_pkg.and_then(|go_pkg| get_go_stdlib_typedef(go_pkg, target));
 
     if let Some(source) = source
@@ -240,9 +241,9 @@ fn register_cached_go_package(
 
     let package = store.edit_package(package_id).unwrap();
     for (qualified_name, cached_definition) in &cached.definitions {
-        cached_definition.install_into(
+        cached_definition.clone().install_into(
             package.definitions,
-            qualified_name.clone().into(),
+            Symbol::from_raw(qualified_name.clone()),
             file_ids,
         );
     }
@@ -256,7 +257,7 @@ fn register_cached_go_package(
 
 /// Extract Go imports from a package's `.d.lis` source without parsing.
 fn get_go_imports_from_source(package_id: &str, target: Target) -> Vec<String> {
-    let Some(go_pkg) = package_id.strip_prefix("go:") else {
+    let Some(go_pkg) = strip_go_prefix(package_id) else {
         return vec![];
     };
     let Some(source) = get_go_stdlib_typedef(go_pkg, target) else {
@@ -268,7 +269,7 @@ fn get_go_imports_from_source(package_id: &str, target: Target) -> Vec<String> {
             let line = line.trim();
             let rest = line.strip_prefix("import \"go:")?;
             let pkg = rest.strip_suffix('"')?;
-            Some(format!("go:{pkg}"))
+            Some(format!("{GO_IMPORT_PREFIX}{pkg}"))
         })
         .collect()
 }

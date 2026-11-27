@@ -40,9 +40,9 @@ func main() {
 		if subject2.Tag != lisette.OptionSome {
 			return subject
 		}
-		subject3 := subject2.SomeVal
+		subject := subject2.SomeVal
 		g := func() int {
-			return subject3
+			return subject
 		}
 		return g()
 	}

@@ -1,7 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
-use syntax::program::{ValueUseKey, resolved_definition};
-use syntax::types::{GO_IMPORT_PREFIX, Type};
+use syntax::program::{ValueUseKey, resolved_callee};
 
 pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
     match expression {
@@ -12,7 +11,7 @@ pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
             expression: callee,
             args,
             ..
-        } if resolved_definition(callee).is_some_and(|id| id.starts_with(GO_IMPORT_PREFIX)) => {
+        } if resolved_callee(callee).is_some_and(|callee| callee.is_go()) => {
             for argument in args {
                 let argument = argument.unwrap_parens();
                 if !slot_is_go_function_type(argument, ctx) {
@@ -25,18 +24,9 @@ pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
 }
 
 fn slot_is_go_function_type(expression: &Expression, ctx: &NodeCtx) -> bool {
-    let Some(value_use) = ctx
-        .facts
-        .checked_bodies
-        .value_use(&ValueUseKey::value(expression))
-    else {
-        return false;
-    };
-    matches!(&value_use.slot, Type::Nominal { id, .. } if id.starts_with(GO_IMPORT_PREFIX))
-        && ctx
-            .store
-            .resolve_to_function_type(&value_use.slot)
-            .is_some()
+    ctx.facts
+        .lambdas_in_go_function_slots
+        .contains(&ValueUseKey::value(expression).expression())
 }
 
 fn check_lambda(expression: &Expression, ctx: &NodeCtx) {

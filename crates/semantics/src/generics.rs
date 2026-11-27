@@ -105,7 +105,7 @@ pub(crate) fn type_argument_children(ty: &Type) -> Vec<&Type> {
     match ty {
         // Bound checks visit instantiated types, not the body of a type scheme.
         Type::Forall { .. } => Vec::new(),
-        _ => ty.children(),
+        _ => ty.children().collect(),
     }
 }
 

@@ -1,16 +1,16 @@
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use syntax::ast::{Generic, StructFieldDefinition, Visibility};
 use syntax::go_names;
 use syntax::program::{
-    Definition, DefinitionBody, Method, Methods, method_for_type, methods_for_type,
+    Definition, DefinitionBody, Method, Methods, is_go_import, method_for_type, methods_for_type,
 };
 use syntax::types::{
-    self, CompoundKind, GO_IMPORT_PREFIX, SubstitutionMap, Symbol, Type,
-    build_named_substitution_map, build_substitution_map, substitute,
+    self, CompoundKind, SubstitutionMap, Symbol, Type, build_named_substitution_map,
+    build_substitution_map, substitute,
 };
 
 use crate::checker::resolution::MethodSelection;
@@ -71,7 +71,7 @@ pub(crate) fn selector_receiver<'d>(
     lookup: impl Fn(&str) -> Option<&'d Definition>,
 ) -> Type {
     let mut current = ty.unwrap_forall().strip_refs();
-    let mut seen = HashSet::default();
+    let mut seen = FxHashSet::default();
     while let Type::Nominal {
         id,
         params: parameters,
@@ -154,7 +154,7 @@ where
 {
     let entries = walk(outer, lookup);
 
-    let mut names: HashSet<EcoString> = HashSet::default();
+    let mut names: FxHashSet<EcoString> = FxHashSet::default();
     for entry in &entries {
         collect_member_names(&entry.ty, lookup, &mut names);
     }
@@ -210,7 +210,7 @@ where
     F: Copy + Fn(&str) -> Option<&'d Definition>,
 {
     let mut visited: Vec<Entry> = Vec::new();
-    let mut seen: HashSet<Type> = HashSet::default();
+    let mut seen: FxHashSet<Type> = FxHashSet::default();
 
     let Some(root) = nominal_entry(outer.clone(), 0, false, false, lookup) else {
         return visited;
@@ -340,7 +340,7 @@ where
     let Some(definition) = lookup(id) else {
         return false;
     };
-    let go_import = id.starts_with(GO_IMPORT_PREFIX);
+    let go_import = is_go_import(id);
     let claims = |key: &EcoString, method: &Method| {
         key != seal_key && method_go_name(key, method, go_import) == selector
     };
@@ -482,7 +482,7 @@ where
 }
 
 /// Every field and method name a type exposes.
-fn collect_member_names<'d, F>(ty: &Type, lookup: F, names: &mut HashSet<EcoString>)
+fn collect_member_names<'d, F>(ty: &Type, lookup: F, names: &mut FxHashSet<EcoString>)
 where
     F: Copy + Fn(&str) -> Option<&'d Definition>,
 {
@@ -534,7 +534,7 @@ where
 /// one path so its members resolve as ambiguous.
 fn consolidate(list: Vec<Entry>) -> Vec<Entry> {
     let mut result: Vec<Entry> = Vec::with_capacity(list.len());
-    let mut index_of: HashMap<Type, usize> = HashMap::default();
+    let mut index_of: FxHashMap<Type, usize> = FxHashMap::default();
     for entry in list {
         if let Some(&i) = index_of.get(&entry.ty) {
             result[i].multiples = true;

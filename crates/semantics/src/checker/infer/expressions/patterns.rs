@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::sync::Arc;
 use syntax::ast::{BindingId, BindingKind};
@@ -8,11 +8,12 @@ use syntax::ast::{
     expand_or_patterns,
 };
 use syntax::program::{Definition, DefinitionBody, FieldKey, constructor_fields};
-use syntax::types::{CompoundKind, Type, substitute, unqualified_name};
+use syntax::types::{CompoundKind, Symbol, Type, substitute, unqualified_name};
 
 use crate::checker::EnvResolve;
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::unify::contains_type_variable;
 use crate::facts::BindingOrigin;
 
 impl InferCtx<'_> {
@@ -35,7 +36,31 @@ impl InferCtx<'_> {
         if expected_ty.resolve_in(&self.env).is_error() {
             return self.infer_pattern_on_error(pattern, kind, is_struct_field);
         }
-        self.infer_pattern_kind(pattern, expected_ty, kind, is_struct_field)
+        let narrows = matches!(
+            pattern,
+            Pattern::Slice { .. } | Pattern::EnumVariant { .. } | Pattern::Struct { .. }
+        );
+        if !narrows || !self.scrutinee_is_interface(&expected_ty) {
+            return self.infer_pattern_kind(pattern, expected_ty, kind, is_struct_field);
+        }
+        let span = pattern.get_span();
+        let interface = expected_ty.resolve_in(&self.env);
+        let checkpoint = self.sink.checkpoint();
+        let inferred = self.infer_pattern_kind(pattern, expected_ty, kind, is_struct_field);
+        let Some(narrowed) = narrowed_pattern_type(&inferred) else {
+            return inferred;
+        };
+        let narrowed = narrowed.resolve_in(&self.env);
+        if !contains_type_variable(&narrowed) || self.sink.has_errors_since(&checkpoint) {
+            return inferred;
+        }
+        self.sink
+            .push(diagnostics::pattern::interface_pattern_type_not_fixed(
+                span,
+                &interface.to_string(),
+                &narrowed.to_string(),
+            ));
+        self.rejected_pattern(span)
     }
 
     fn infer_pattern_kind(
@@ -314,9 +339,13 @@ impl InferCtx<'_> {
         self.check_binding_shadows_import(&name, span, origin.is_typedef());
 
         let shadows = self.shadowed_capture_span(&name);
+        let hidden = self.scopes.lookup_binding_id(&name);
         let binding_id = self
             .facts
             .add_binding(name.clone(), span, kind, origin, shadows);
+        if let Some(hidden) = hidden {
+            self.facts.record_hidden_binding(binding_id, hidden);
+        }
         let scope = self.scopes.current_mut();
         scope.insert_binding(name, ty, binding_id, kind.is_mutable());
         binding_id
@@ -577,7 +606,7 @@ impl InferCtx<'_> {
                 }
 
                 ConstructorPatternResolution::EnumVariant {
-                    enum_name: id.into(),
+                    enum_name: id.clone(),
                     variant_name: identifier.clone(),
                 }
             }
@@ -808,11 +837,11 @@ impl InferCtx<'_> {
             .and_then(|value| value.to_literal())
         {
             Some(value) => ConstructorPatternResolution::ConstValue {
-                qualified_name: qualified,
+                qualified_name: Symbol::from_raw(qualified),
                 value,
             },
             None => ConstructorPatternResolution::Const {
-                qualified_name: qualified,
+                qualified_name: Symbol::from_raw(qualified),
             },
         };
 
@@ -1142,12 +1171,12 @@ impl InferCtx<'_> {
             false,
         );
         let first_bindings = collect_pattern_bindings(&first);
-        let first_names: HashSet<&str> = first_bindings
+        let first_names: FxHashSet<&str> = first_bindings
             .iter()
             .map(|(name, _)| name.as_str())
             .collect();
 
-        let first_binding_types: HashMap<String, Type> = first_bindings
+        let first_binding_types: FxHashMap<String, Type> = first_bindings
             .iter()
             .filter_map(|(name, _)| {
                 self.scopes
@@ -1165,7 +1194,7 @@ impl InferCtx<'_> {
                     let alt =
                         this.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
                     let alt_bindings = collect_pattern_bindings(&alt);
-                    let alt_names: HashSet<&str> =
+                    let alt_names: FxHashSet<&str> =
                         alt_bindings.iter().map(|(name, _)| name.as_str()).collect();
 
                     if first_names != alt_names {
@@ -1212,7 +1241,7 @@ impl InferCtx<'_> {
             inferred.push(alt);
         }
 
-        let mut bound_late: HashSet<String> = HashSet::default();
+        let mut bound_late: FxHashSet<String> = FxHashSet::default();
         for (name, name_span) in only_in_later_alternatives {
             if bound_late.insert(name.clone()) {
                 self.bind_name_in_scope(
@@ -1237,7 +1266,7 @@ impl InferCtx<'_> {
     fn check_or_pattern_binding_types(
         &mut self,
         alt_bindings: &[(String, Span)],
-        first_binding_types: &HashMap<String, Type>,
+        first_binding_types: &FxHashMap<String, Type>,
     ) {
         for (name, alt_span) in alt_bindings {
             if let Some(first_ty) = first_binding_types.get(name)
@@ -1442,7 +1471,7 @@ impl InferCtx<'_> {
             self.facts.add_usage(*span, definition_span);
         }
         let resolution = RecordPatternResolution::EnumVariant {
-            enum_name: id.into(),
+            enum_name: id.clone(),
             variant_name: identifier.into(),
         };
 
@@ -1508,4 +1537,18 @@ fn or_pattern_error_span(
 
 fn is_bare_constructor_name(identifier: &str, fields: &[Pattern], kind: BindingKind) -> bool {
     fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position()
+}
+
+fn narrowed_pattern_type(pattern: &Pattern) -> Option<Type> {
+    match pattern {
+        Pattern::Slice {
+            resolution: SequencePatternResolution::Slice { element_type },
+            ..
+        } => Some(Type::compound(
+            CompoundKind::Slice,
+            vec![element_type.clone()],
+        )),
+        Pattern::EnumVariant { .. } | Pattern::Struct { .. } => pattern.get_type(),
+        _ => None,
+    }
 }

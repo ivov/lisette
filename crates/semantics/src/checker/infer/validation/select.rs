@@ -64,13 +64,6 @@ impl InferCtx<'_> {
                     } else {
                         some_arm_span = Some(arm.pattern.get_span());
                     }
-
-                    if !Self::is_irrefutable_select_pattern(&fields[0]) {
-                        self.sink
-                            .push(diagnostics::infer::select_receive_refutable_pattern(
-                                fields[0].get_span(),
-                            ));
-                    }
                 } else if variant_name == "None" && fields.is_empty() {
                     if none_arm_span.is_some() {
                         self.sink
@@ -103,21 +96,6 @@ impl InferCtx<'_> {
             let span = match_arms.last().map(|a| a.pattern.get_span()).unwrap();
             self.sink
                 .push(diagnostics::infer::select_match_missing_none_arm(span));
-        }
-    }
-
-    /// Check if a pattern always matches any value (irrefutable).
-    pub(crate) fn is_irrefutable_select_pattern(pattern: &Pattern) -> bool {
-        match pattern {
-            Pattern::WildCard { .. } | Pattern::Identifier { .. } => true,
-            Pattern::Tuple { elements, .. } => {
-                elements.iter().all(Self::is_irrefutable_select_pattern)
-            }
-            Pattern::Struct { fields, .. } => fields
-                .iter()
-                .all(|f| Self::is_irrefutable_select_pattern(&f.value)),
-            Pattern::AsBinding { pattern, .. } => Self::is_irrefutable_select_pattern(pattern),
-            _ => false,
         }
     }
 

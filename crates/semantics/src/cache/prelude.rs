@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -6,16 +6,18 @@ use serde::{Deserialize, Serialize};
 use super::disk;
 use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_BUILD_HASH, PRELUDE_HASH};
-use crate::prelude::{PRELUDE_FILE_ID, PRELUDE_PACKAGE_ID};
+use crate::prelude::PRELUDE_FILE_ID;
 use crate::store::Store;
 use std::fs;
+use syntax::program::PRELUDE_PACKAGE_ID;
+use syntax::types::Symbol;
 
 #[derive(Serialize, Deserialize)]
 pub struct PreludeCache {
     version: u32,
     content_hash: u64,
     compiler_version: u64,
-    definitions: HashMap<String, CachedDefinition>,
+    definitions: FxHashMap<String, CachedDefinition>,
 }
 
 fn cache_file_name() -> &'static str {
@@ -48,8 +50,8 @@ pub(crate) fn save_prelude_cache(store: &Store) {
         return;
     };
 
-    let file_id_to_index: HashMap<u32, u32> = [(PRELUDE_FILE_ID, 0)].into_iter().collect();
-    let definitions: HashMap<String, CachedDefinition> = package
+    let file_id_to_index: FxHashMap<u32, u32> = [(PRELUDE_FILE_ID, 0)].into_iter().collect();
+    let definitions: FxHashMap<String, CachedDefinition> = package
         .definitions
         .iter()
         .map(|(name, definition)| {
@@ -89,7 +91,11 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
         .edit_package(PRELUDE_PACKAGE_ID)
         .expect("prelude package must be registered before loading cached definitions");
     for (qualified_name, cached_definition) in cached.definitions {
-        cached_definition.install_into(package.definitions, qualified_name.into(), file_ids);
+        cached_definition.install_into(
+            package.definitions,
+            Symbol::from_raw(qualified_name),
+            file_ids,
+        );
     }
 }
 

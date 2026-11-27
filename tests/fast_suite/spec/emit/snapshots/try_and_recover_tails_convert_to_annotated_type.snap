@@ -63,16 +63,15 @@ func unit() {}
 
 func test() {
 	p := lisette.RecoverBlock(func() lisette.Tuple2[any, int] {
-		tup := lisette.MakeTuple2[int, int](1, 2)
-		return lisette.MakeTuple2[any, int](tup.First, tup.Second)
+		return lisette.MakeTuple2[any, int](1, 2)
 	})
 	t := func() lisette.Result[lisette.Tuple2[any, int], string] {
 		check := risky()
 		if check.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[lisette.Tuple2[any, int], string](check.ErrVal)
 		}
-		tup2 := lisette.MakeTuple2[int, int](1, 2)
-		return lisette.MakeResultOk[lisette.Tuple2[any, int], string](lisette.MakeTuple2[any, int](tup2.First, tup2.Second))
+		tup := lisette.MakeTuple2[int, int](1, 2)
+		return lisette.MakeResultOk[lisette.Tuple2[any, int], string](lisette.MakeTuple2[any, int](tup.First, tup.Second))
 	}()
 	n := func() lisette.Option[Named] {
 		check2 := lisette.MakeOptionSome(1)

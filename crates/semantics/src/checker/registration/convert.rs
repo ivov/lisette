@@ -18,9 +18,9 @@ use crate::checker::TaskState;
 use crate::checker::scopes::DeferredMapKeyCheck;
 use crate::checker::state::PendingArraySizeCheck;
 use crate::generics::apply_bounds;
-use crate::prelude::PRELUDE_PACKAGE_ID;
 use crate::store::Store;
 use crate::zero::{self, MapZero, NoZeroReason};
+use syntax::program::PRELUDE_PACKAGE_ID;
 
 enum ArraySizeError {
     NotInteger,
@@ -654,7 +654,7 @@ impl TaskState {
         if params.len() == 1 && self.cursor.package_id() == PRELUDE_PACKAGE_ID {
             let element = self.convert_to_type_mode(store, &params[0], span, mode.nested());
             return Type::Nominal {
-                id: Symbol::from_parts("prelude", "Array"),
+                id: Symbol::from_parts(PRELUDE_PACKAGE_ID, "Array"),
                 params: vec![element],
                 writable: false,
             };

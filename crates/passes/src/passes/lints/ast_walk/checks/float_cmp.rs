@@ -1,6 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
-use syntax::program::resolved_definition;
+use syntax::program::resolved_definition_name;
 
 use super::helpers::{expressions_equivalent, is_float_operand, is_side_effect_free};
 
@@ -57,7 +57,7 @@ fn is_exact_operand(expression: &Expression, _ctx: &NodeCtx) -> bool {
         return false;
     };
     matches!(
-        resolved_definition(callee),
+        resolved_definition_name(callee),
         Some("go:math.NaN" | "go:math.Inf")
     )
 }

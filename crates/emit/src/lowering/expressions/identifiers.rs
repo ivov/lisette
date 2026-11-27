@@ -1,0 +1,186 @@
+use crate::lookup::state::bindings::BindingValue;
+use crate::lowering::calls::go_interop::build_tuple_literal;
+use crate::lowering::definitions::interface_adapter::has_tagged_counterpart;
+use crate::lowering::planner::queries::PlannerQueries;
+use crate::lowering::value_plans::context::ExpressionContext;
+use crate::target::ir::values::GoExpression;
+use crate::target::names::go_name;
+use crate::target::names::go_name::{GeneratedPackage, GoExport, MemberSpelling};
+use crate::target::names::packages::PackageUse;
+use crate::target::types::go_type::GoType;
+use syntax::ast::{Expression, IdentifierResolution};
+use syntax::program::{CallOperation, CalleeName, strip_prelude_prefix};
+use syntax::types::Type;
+
+fn resolve(name: &str) -> GoExpression {
+    if let Some(rest) = strip_prelude_prefix(name) {
+        let go_name: String = rest.split('.').map(go_name::snake_to_camel).collect();
+        GoExpression::qualified(PackageUse::generated(GeneratedPackage::Prelude), go_name)
+    } else {
+        GoExpression::external_name(go_name::escape_reserved(&name.replace('.', "_")).into_owned())
+    }
+}
+
+impl PlannerQueries<'_, '_> {
+    pub(super) fn variant_value_type_args(
+        &self,
+        params: &[Type],
+        ctx: ExpressionContext<'_>,
+    ) -> Option<GoType> {
+        ctx.expected_slot_type()
+            .and_then(|t| self.prelude_container_type_args(t))
+            .or_else(|| self.format_type_args(params))
+    }
+
+    fn try_plan_method_expression(
+        &self,
+        identifier: &Expression,
+        id_ty: &Type,
+    ) -> Option<GoExpression> {
+        let recorded = self.facts.checked(identifier).function_value()?;
+        let CallOperation::ReceiverMethod { is_public } = recorded.operation else {
+            return None;
+        };
+        let symbol = recorded.method()?;
+        let method = symbol.name.as_str();
+        let first = id_ty.as_function_type()?.params.first()?;
+        let export = if is_public {
+            GoExport::Exported
+        } else {
+            GoExport::Unexported
+        };
+        let spelling = if has_tagged_counterpart(self.facts, &symbol.owner, &symbol.name) {
+            MemberSpelling::TaggedCounterpart
+        } else {
+            MemberSpelling::Plain
+        };
+        let go_method = self
+            .facts
+            .receiver_method_go_name(&first.ty, method, export, spelling);
+        Some(self.method_expression(&first.ty, go_method))
+    }
+
+    pub(in crate::lowering) fn method_expression(
+        &self,
+        receiver_param: &Type,
+        go_method: String,
+    ) -> GoExpression {
+        let receiver_type = self.facts.dereferenced_layout(receiver_param).go_type(self);
+        let receiver = if self.facts.is_reference(receiver_param) {
+            GoType::pointer_to(&receiver_type)
+        } else {
+            receiver_type
+        };
+        GoExpression::selector(GoExpression::type_name(receiver), go_method)
+    }
+
+    pub(in crate::lowering) fn plan_identifier(
+        &self,
+        identifier: &Expression,
+        value: &str,
+        resolution: &IdentifierResolution,
+        ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> GoExpression {
+        let binding = match resolution {
+            IdentifierResolution::Definition { .. } | IdentifierResolution::Method { .. } => {
+                let name = resolution
+                    .callee_name()
+                    .expect("a definition or method identifier has a callee name");
+                return self.plan_definition_identifier(identifier, &name, ty, ctx);
+            }
+            IdentifierResolution::Binding(id) => self.scope.resolve_binding_id(*id),
+
+            IdentifierResolution::Unresolved => self.scope.resolve_identifier_binding(value),
+        };
+
+        let local = match binding {
+            Some(BindingValue::InlineExpression(inline)) => return inline.expression().clone(),
+            Some(BindingValue::Components(components)) => {
+                let components = components.clone();
+                return self.rebuild_from_components(&components);
+            }
+            Some(BindingValue::TupleComponents(tuple)) => {
+                return build_tuple_literal(
+                    tuple
+                        .names
+                        .iter()
+                        .cloned()
+                        .map(GoExpression::identifier)
+                        .collect(),
+                );
+            }
+            Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => name.clone(),
+            None => {
+                assert!(
+                    resolution.binding_id().is_none(),
+                    "source binding has no emitted value: {value}"
+                );
+                return resolve(value);
+            }
+        };
+
+        GoExpression::identifier(local)
+    }
+
+    fn plan_definition_identifier(
+        &self,
+        identifier: &Expression,
+        name: &CalleeName,
+        ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> GoExpression {
+        if let CalleeName::Definition(symbol) = name
+            && let Some(make_function) = self.variant_make_reference(symbol)
+        {
+            match ty {
+                Type::Nominal { params, .. } => {
+                    let type_args = self.variant_value_type_args(params, ctx);
+                    return GoExpression::pure_call(
+                        GoExpression::instantiation(make_function, type_args),
+                        Vec::new(),
+                    );
+                }
+                Type::Function(f) => {
+                    if let Type::Nominal {
+                        params: return_type_arguments,
+                        ..
+                    } = f.return_type.as_ref()
+                    {
+                        let type_args = self.constructor_reference_type_arguments(
+                            &f.params,
+                            return_type_arguments,
+                            ctx,
+                        );
+                        return GoExpression::instantiation(make_function, type_args);
+                    }
+                }
+                Type::Simple(_)
+                | Type::Compound { .. }
+                | Type::ImportNamespace(_)
+                | Type::Var { .. }
+                | Type::Uninferred
+                | Type::Ignored
+                | Type::Forall { .. }
+                | Type::Parameter(_)
+                | Type::Never
+                | Type::Tuple(_)
+                | Type::Array { .. }
+                | Type::Error
+                | Type::ReceiverPlaceholder => {}
+            }
+        }
+
+        if let Some(expression) = self.try_plan_method_expression(identifier, ty) {
+            return expression;
+        }
+        let function = match name {
+            CalleeName::Definition(symbol) => self.definition_reference(symbol),
+            CalleeName::Method(method) => self.method_reference(method),
+        };
+        if ctx.is_callee() {
+            return function;
+        }
+        GoExpression::instantiation(function, self.format_value_type_args(identifier))
+    }
+}

@@ -212,9 +212,9 @@ fn visit_expression(
         _ => {}
     }
 
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_expression(child, TailUse::Kept, file, facts);
-    }
+    });
 }
 
 fn visit_match_arms(
@@ -325,9 +325,9 @@ fn visit_break_values(
         | Expression::Task { .. }
         | Expression::Defer { .. } => {}
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 visit_break_values(child, loop_use, file, facts);
-            }
+            });
         }
     }
 }
@@ -526,9 +526,9 @@ fn descend_loop_break_values(
         | Expression::Task { .. }
         | Expression::Defer { .. } => {}
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 descend_loop_break_values(child, mode, file, facts);
-            }
+            });
         }
     }
 }
@@ -720,9 +720,8 @@ fn callee_allowed_lints(expression: &Expression, package_id: &str, store: &Store
         {
             return definition.allowed_lints().to_vec();
         }
-        if let Some(q) = resolution.definition()
-            && let Some((owner, name)) = q.rsplit_once('.')
-            && let Some(method) = store.get_method(owner, name)
+        if let Some(method) = resolution.method()
+            && let Some(method) = store.get_method(&method.owner, &method.name)
         {
             return method.allowed_lints.clone();
         }

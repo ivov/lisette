@@ -7,9 +7,9 @@ pub fn check_infallible_assertion(expression: &Expression, ctx: &NodeCtx) {
     if !ctx.is_test() || !establishes_test_context(expression) {
         return;
     }
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         scan(child, ctx);
-    }
+    });
 }
 
 fn scan(expression: &Expression, ctx: &NodeCtx) {
@@ -29,9 +29,9 @@ fn scan(expression: &Expression, ctx: &NodeCtx) {
     {
         return;
     }
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         scan(child, ctx);
-    }
+    });
 }
 
 fn establishes_test_context(expression: &Expression) -> bool {

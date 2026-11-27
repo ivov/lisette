@@ -1,5 +1,5 @@
 use deps::{BindgenFailure, TypedefLocator, TypedefLocatorResult};
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::output::print_warning;
 use crate::workspace::extract_go_imports;
@@ -18,7 +18,7 @@ pub fn prewarm_typedef_cache(
     source_imports: &[String],
     locator: &TypedefLocator,
 ) -> PrewarmOutcome {
-    let mut visited: HashSet<String> = HashSet::default();
+    let mut visited: FxHashSet<String> = FxHashSet::default();
     let mut queue: Vec<String> = Vec::with_capacity(source_imports.len());
     for pkg in source_imports {
         if visited.insert(pkg.clone()) {
@@ -27,8 +27,8 @@ pub fn prewarm_typedef_cache(
     }
 
     let mut had_failure = false;
-    let mut undeclared: HashSet<String> = HashSet::default();
-    let mut typedef_imports: HashSet<String> = HashSet::default();
+    let mut undeclared: FxHashSet<String> = FxHashSet::default();
+    let mut typedef_imports: FxHashSet<String> = FxHashSet::default();
 
     while let Some(pkg) = queue.pop() {
         match locator.find_typedef_content(&pkg) {

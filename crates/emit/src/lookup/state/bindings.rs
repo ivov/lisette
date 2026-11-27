@@ -1,0 +1,118 @@
+use crate::target::ir::local::{GoIdentifier, LocalId};
+use crate::target::ir::values::{GoExpression, Stability};
+use syntax::types::Type;
+
+#[derive(Clone, Debug)]
+pub(crate) struct InlineExpression {
+    expression: GoExpression,
+    stability: Stability,
+}
+
+impl InlineExpression {
+    pub(crate) fn new(expression: GoExpression, stability: Stability) -> Self {
+        Self {
+            expression: expression.without_positions(),
+            stability,
+        }
+    }
+
+    pub(crate) fn expression(&self) -> &GoExpression {
+        &self.expression
+    }
+
+    pub(crate) fn stability(&self) -> Stability {
+        self.stability
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum BindingValue {
+    GoName(GoIdentifier),
+    GoConst(GoIdentifier),
+    InlineExpression(InlineExpression),
+    Components(ComponentBinding),
+    TupleComponents(TupleBinding),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TupleBinding {
+    pub(crate) names: Vec<GoIdentifier>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ComponentBinding {
+    pub(crate) value: GoIdentifier,
+    pub(crate) status: GoIdentifier,
+    pub(crate) payload_type: Type,
+    pub(crate) kind: ComponentKind,
+    pub(crate) shared_payload: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ComponentKind {
+    Option,
+    ErrorResult,
+    OtherResult,
+}
+
+impl ComponentKind {
+    pub(crate) fn is_result(self) -> bool {
+        matches!(self, Self::ErrorResult | Self::OtherResult)
+    }
+
+    pub(crate) fn whole_value_constructor(self) -> Option<&'static str> {
+        match self {
+            Self::Option => Some("OptionFromCommaOk"),
+            Self::ErrorResult => Some("ResultFromPair"),
+            Self::OtherResult => None,
+        }
+    }
+}
+
+impl BindingValue {
+    pub(crate) fn as_go_name(&self) -> Option<&str> {
+        match self {
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.spelling()),
+            BindingValue::InlineExpression(_)
+            | BindingValue::Components(_)
+            | BindingValue::TupleComponents(_) => None,
+        }
+    }
+
+    pub(crate) fn as_go_identifier(&self) -> Option<&GoIdentifier> {
+        match self {
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name),
+            BindingValue::InlineExpression(_)
+            | BindingValue::Components(_)
+            | BindingValue::TupleComponents(_) => None,
+        }
+    }
+
+    pub(crate) fn mentions_local(&self, id: LocalId) -> bool {
+        match self {
+            Self::GoName(name) | Self::GoConst(name) => name.id() == Some(id),
+            Self::InlineExpression(inline) => inline.expression().node().mentions_local(id),
+            Self::Components(components) => {
+                components.value.id() == Some(id) || components.status.id() == Some(id)
+            }
+            Self::TupleComponents(tuple) => tuple.names.iter().any(|name| name.id() == Some(id)),
+        }
+    }
+
+    pub(crate) fn mentions(&self, go_name: &str) -> bool {
+        match self {
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => name.spelling() == go_name,
+            BindingValue::InlineExpression(inline) => inline.expression().node().mentions(go_name),
+            BindingValue::Components(components) => {
+                components.value.spelling() == go_name || components.status.spelling() == go_name
+            }
+            BindingValue::TupleComponents(tuple) => {
+                tuple.names.iter().any(|name| name.spelling() == go_name)
+            }
+        }
+    }
+
+    pub(crate) fn is_discard(&self) -> bool {
+        self.as_go_name() == Some("_")
+    }
+}

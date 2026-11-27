@@ -31,6 +31,22 @@ pub fn irrefutable_while_let(pattern_span: Span) -> LisetteDiagnostic {
         .with_help("Use `loop` with `let` binding instead")
 }
 
+pub fn interface_pattern_type_not_fixed(
+    pattern_span: Span,
+    interface: &str,
+    pattern_type: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Pattern type is not fixed")
+        .with_infer_code("interface_pattern_type_not_fixed")
+        .with_span_label(
+            &pattern_span,
+            format!("the value is `{interface}`, and this pattern does not fix all of `{pattern_type}`"),
+        )
+        .with_help(
+            "A pattern on an interface value tests for one type. Match on a type that has no free type arguments, or convert the value first",
+        )
+}
+
 pub fn redundant_arm(
     span: Span,
     label: impl Into<String>,

@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::sync::PoisonError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+use syntax::program::strip_go_prefix;
 
 use deps::{
     Bindgen, BindgenFailure, BindgenSession, BindgenSetup, GoModule, GoPackage, TypedefLocator,
@@ -1244,7 +1245,7 @@ pub(crate) fn extract_go_imports(typedef: &str) -> Vec<String> {
                 if matches!(alias, Some(ImportAlias::Blank(_))) {
                     return None;
                 }
-                Some(name.strip_prefix("go:")?.to_string())
+                Some(strip_go_prefix(name)?.to_string())
             }
             _ => None,
         })

@@ -161,7 +161,7 @@ fn check_clean_programs_declare_distinct_package_go_names() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
-fn source_files(directory: &str) -> Vec<(String, String)> {
+pub(super) fn source_files(directory: &str) -> Vec<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut pending = vec![root.join(directory)];
     let mut files = Vec::new();
@@ -226,11 +226,11 @@ fn package_definitions_are_inserted_by_one_owner() {
 #[test]
 fn package_block_names_are_numbered_by_one_allocator() {
     let allowed = [
-        "crates/emit/src/names/go_name.rs",
-        "crates/emit/src/state/package_state.rs",
-        "crates/emit/src/state/scope/names.rs",
-        "crates/emit/src/names/receiver.rs",
-        "crates/emit/src/expressions/top_items.rs",
+        "crates/emit/src/target/names/go_name.rs",
+        "crates/emit/src/lookup/facts/package_names.rs",
+        "crates/emit/src/lookup/state/local_names.rs",
+        "crates/emit/src/target/names/receiver.rs",
+        "crates/emit/src/lowering/definitions/top_items.rs",
     ];
     let offenders: Vec<String> = source_files("crates/emit/src")
         .into_iter()

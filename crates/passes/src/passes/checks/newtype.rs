@@ -4,6 +4,7 @@
 
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, UnaryOperator};
+use syntax::program::DotAccessResolution;
 use syntax::types::{Type, unqualified_name};
 
 use crate::passes::walk::NodeCtx;
@@ -20,7 +21,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         }
         Expression::Reference {
             expression, span, ..
-        } if targets_newtype_field(expression, ctx.store) => {
+        } if targets_newtype_field(expression) => {
             sink.push(diagnostics::infer::reference_through_newtype(*span));
         }
         _ => {}
@@ -64,19 +65,21 @@ fn check_newtype_field_assignment(
     }
 }
 
-fn targets_newtype_field(expression: &Expression, store: &Store) -> bool {
+fn targets_newtype_field(expression: &Expression) -> bool {
     let mut current = expression.unwrap_parens();
     while let Expression::DotAccess {
         expression: inner,
-        member,
+        resolution,
         ..
     } = current
     {
-        if member.parse::<usize>().is_ok()
-            && let Type::Nominal { id, .. } = inner.get_type().strip_refs()
-            && let Some(def) = store.get_definition(id.as_str())
-            && def.is_newtype()
-        {
+        if matches!(
+            resolution,
+            DotAccessResolution::TupleStructField {
+                is_newtype: true,
+                ..
+            }
+        ) {
             return true;
         }
         current = inner.unwrap_parens();

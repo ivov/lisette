@@ -1,7 +1,7 @@
 use crate::passes::walk::{FunctionRole, NodeCtx};
 use std::iter;
 use syntax::ast::{BinaryOperator, Expression, LetMode, MatchArm, Span};
-use syntax::program::resolved_definition;
+use syntax::program::resolved_callee;
 use syntax::types::{Symbol, Type};
 
 pub fn check_unconditional_recursion(expression: &Expression, ctx: &NodeCtx, role: FunctionRole) {
@@ -60,7 +60,8 @@ fn scan(expression: &Expression, target: &str) -> Flow {
                 .chain(args)
                 .chain(spread.as_deref());
             sequence(scan_sequence(operands, target), || {
-                if resolved_definition(callee) == Some(target) {
+                if resolved_callee(callee).is_some_and(|callee| callee.qualified_name() == *target)
+                {
                     Flow::SelfCall(*span)
                 } else if returns_to_caller(ty) {
                     Flow::Continues

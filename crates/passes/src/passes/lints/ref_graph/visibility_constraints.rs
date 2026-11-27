@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::{Annotation, Expression, Span};
@@ -8,7 +8,7 @@ use syntax::types::{Type, unqualified_name};
 
 pub fn check_visibility_constraints(
     package: &Package,
-    files: &HashMap<u32, File>,
+    files: &FxHashMap<u32, File>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     let public_definitions: Vec<_> = package
@@ -44,11 +44,11 @@ fn item_name(qualified_name: &str) -> &str {
 }
 
 fn index_function_annotations<'files, 'names>(
-    files: &'files HashMap<u32, File>,
+    files: &'files FxHashMap<u32, File>,
     names: impl IntoIterator<Item = &'names str>,
-) -> HashMap<&'files str, &'files Annotation> {
-    let mut annotations = HashMap::default();
-    let mut pending: HashSet<&str> = names.into_iter().collect();
+) -> FxHashMap<&'files str, &'files Annotation> {
+    let mut annotations = FxHashMap::default();
+    let mut pending: FxHashSet<&str> = names.into_iter().collect();
     if pending.is_empty() {
         return annotations;
     }

@@ -16,7 +16,6 @@ func test() int {
 	var x int
 	for {
 		for {
-			_ = 42
 			break
 		}
 		x = 0

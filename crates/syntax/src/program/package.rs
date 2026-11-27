@@ -1,6 +1,6 @@
 use crate::collections::DenseMap;
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Borrow;
 use std::fmt;
 use std::ops::Deref;
@@ -68,19 +68,41 @@ impl PartialEq<&str> for PackageId {
     }
 }
 
+pub const GO_IMPORT_PREFIX: &str = "go:";
+
+pub const PRELUDE_PACKAGE_ID: &str = "prelude";
+
+pub const PRELUDE_PREFIX: &str = "prelude.";
+
+pub fn is_go_import(id: &str) -> bool {
+    id.starts_with(GO_IMPORT_PREFIX)
+}
+
+pub fn strip_go_prefix(id: &str) -> Option<&str> {
+    id.strip_prefix(GO_IMPORT_PREFIX)
+}
+
+pub fn is_prelude_symbol(id: &str) -> bool {
+    id.starts_with(PRELUDE_PREFIX)
+}
+
+pub fn strip_prelude_prefix(id: &str) -> Option<&str> {
+    id.strip_prefix(PRELUDE_PREFIX)
+}
+
 pub fn is_internal_package_id(id: &str) -> bool {
-    id == "prelude" || id == "**test_prelude" || id == "**nominal" || id.starts_with("go:")
+    id == PRELUDE_PACKAGE_ID || id == "**test_prelude" || id == "**nominal" || is_go_import(id)
 }
 
 #[derive(Debug, Clone)]
 pub struct Package {
     pub id: String,
     /// file ID -> file. Source and declaration files are classified by [`File::is_d_lis`].
-    pub files: HashMap<u32, File>,
+    pub files: FxHashMap<u32, File>,
     /// qualified name -> definition
     pub definitions: DenseMap<Symbol, Definition>,
     /// Go symbol name -> reason Lisette cannot support it, from `#[go(skipped, "...")]`
-    pub unsupported_go_symbols: HashMap<EcoString, String>,
+    pub unsupported_go_symbols: FxHashMap<EcoString, String>,
     /// Set when an import cycle keeps the package out of inference: nothing
     /// registers its files, so its exports are read from syntax.
     pub uninferred_exports: Option<UninferredExports>,
@@ -89,7 +111,7 @@ pub struct Package {
 #[derive(Debug, Clone)]
 pub enum UninferredExports {
     /// Read from the syntax of the package's files.
-    Known(HashSet<EcoString>),
+    Known(FxHashSet<EcoString>),
     /// A file did not parse, so its declarations cannot be read.
     Unreadable,
 }

@@ -2850,7 +2850,7 @@ fn main() {
 }
 
 #[test]
-fn nil_ref_in_ok_from_lisette_method_tagged_twin_reads_as_ok() {
+fn nil_ref_in_ok_from_lisette_method_tagged_counterpart_reads_as_ok() {
     let input = r#"
 import "go:cmp"
 
@@ -5963,6 +5963,31 @@ fn main() {
   match r {
     Ok(_) => {},
     Err(_) => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn discard_of_payload_with_unresolved_type() {
+    let input = r#"
+fn test() -> int {
+  let r = Ok(1)
+  let total = match r {
+    Ok(v) => v,
+    Err(e) => {
+      let _ = e
+      0
+    },
+  }
+  let o = None
+  match o {
+    Some(x) => {
+      let _ = x
+      total
+    },
+    None => total + 1,
   }
 }
 "#;

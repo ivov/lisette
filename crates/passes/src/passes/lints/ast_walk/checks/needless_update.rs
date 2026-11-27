@@ -1,5 +1,6 @@
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, Span, StructSpread};
+use syntax::program::is_go_import;
 use syntax::types::Type;
 
 use super::helpers::{expression_is_pure, is_side_effect_free, struct_field_names};
@@ -35,7 +36,7 @@ pub fn check_needless_update(expression: &Expression, ctx: &NodeCtx) {
     let Some(fields) = struct_field_names(ctx.store, ty, name) else {
         return;
     };
-    let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
+    let assigned: FxHashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
     if !fields.iter().all(|f| assigned.contains(f.as_str())) {
         return;
     }
@@ -56,7 +57,7 @@ pub fn check_needless_update(expression: &Expression, ctx: &NodeCtx) {
 }
 
 fn is_go_imported(ty: &Type) -> bool {
-    matches!(ty.strip_refs(), Type::Nominal { id, .. } if id.as_str().starts_with("go:"))
+    matches!(ty.strip_refs(), Type::Nominal { id, .. } if is_go_import(&id))
 }
 
 fn same_named_type(a: &Type, b: &Type) -> bool {

@@ -1,5 +1,5 @@
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::mem;
 use syntax::ast::BindingId;
 use syntax::ast::Span;
@@ -136,7 +136,7 @@ impl FunctionContext {
 #[derive(Debug, Clone)]
 pub struct Scope {
     values: FlatMap<String, ScopedValue>,
-    generic_parameters: HashMap<String, Vec<Type>>,
+    generic_parameters: FxHashMap<String, Vec<Type>>,
     function: Option<FunctionContext>,
     propagation_context: PropagationContext,
     impl_receiver_type: Option<Type>,
@@ -153,7 +153,7 @@ impl Scope {
     fn new() -> Self {
         Scope {
             values: Default::default(),
-            generic_parameters: HashMap::default(),
+            generic_parameters: FxHashMap::default(),
             function: None,
             propagation_context: PropagationContext::None,
             impl_receiver_type: None,
@@ -515,7 +515,7 @@ impl Scopes {
     }
 
     pub(crate) fn visible_parameter_bounds(&self) -> impl Iterator<Item = (&str, &[Type])> {
-        let mut seen = HashSet::default();
+        let mut seen = FxHashSet::default();
         self.stack
             .iter()
             .rev()
@@ -792,7 +792,7 @@ mod tests {
         scopes.insert_trait_bound("T", Type::bool());
         scopes.insert_trait_bound("T", Type::bool());
 
-        let bounds: HashMap<_, _> = scopes.visible_parameter_bounds().collect();
+        let bounds: FxHashMap<_, _> = scopes.visible_parameter_bounds().collect();
 
         assert_eq!(bounds["T"], [Type::bool()]);
         assert_eq!(bounds["U"], [Type::string()]);

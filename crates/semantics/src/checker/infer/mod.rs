@@ -13,7 +13,7 @@ pub use context::InferCtx;
 pub(crate) use unify::BuiltinBound;
 
 use crate::facts::BindingOrigin;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 use syntax::ast::BindingKind;
 
 use super::freeze::FreezeFolder;
@@ -21,10 +21,9 @@ use super::registration::{RegisteredPackage, RegistrationFile};
 use super::state::InferredFile;
 use super::{EnvResolve, FileContext, TaskState};
 use crate::loader;
-use crate::prelude;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
-use syntax::program::FileImport;
+use syntax::program::{FileImport, PRELUDE_PACKAGE_ID};
 use syntax::types::Type;
 
 impl TaskState {
@@ -117,9 +116,13 @@ impl InferCtx<'_> {
                 let frozen_items = {
                     let store = context.store;
                     let state = &mut *context.state;
-                    let folder = FreezeFolder::new(&state.env, store);
+                    let mut folder = FreezeFolder::in_package(&state.env, store, package_id);
                     folder.freeze_facts(&mut state.facts);
-                    FreezeFolder::new(&state.env, store).freeze_items(inferred_items)
+                    let items = folder.freeze_items(inferred_items);
+                    if folder.mentions_unspellable_type() {
+                        state.facts.files_with_unspellable_types.insert(file_id);
+                    }
+                    items
                 };
                 context.check_instantiation_bounds(&frozen_items);
                 context.finalize_value_uses(&frozen_items, file_id);
@@ -138,7 +141,7 @@ impl InferCtx<'_> {
         imports: &[FileImport],
     ) {
         let store = self.store;
-        let alias_to_path: HashMap<String, String> = imports
+        let alias_to_path: FxHashMap<String, String> = imports
             .iter()
             .filter_map(|imp| {
                 imp.effective_alias(&store.go_package_names)
@@ -183,7 +186,7 @@ impl InferCtx<'_> {
 
     fn check_binding_shadows_import(&mut self, name: &str, span: Span, is_typedef: bool) {
         if !is_typedef
-            && name != prelude::PRELUDE_PACKAGE_ID
+            && name != PRELUDE_PACKAGE_ID
             && let Some(import_path) = self.imports.package_id(name)
         {
             self.sink.push(diagnostics::infer::name_shadows_import(

@@ -14,8 +14,8 @@ func both(m map[string]int, a, b string) bool {
 	if !cond2 {
 		cond := b != ""
 		if cond {
-			_, ok2 := m[b]
-			cond = ok2
+			_, ok := m[b]
+			cond = ok
 		}
 		cond2 = cond
 	}

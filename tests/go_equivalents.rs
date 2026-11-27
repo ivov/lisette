@@ -3,6 +3,9 @@ mod _harness;
 
 use _harness::go::go_available;
 
+#[path = "go_equivalents/widened_subjects.rs"]
+mod widened_subjects;
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
@@ -11,7 +14,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use rayon::prelude::*;
 use syntax::ast::{Annotation, Expression, LetMode, Span, UnaryOperator};
-use syntax::program::{DotAccessResolution, ReceiverCoercion};
+use syntax::program::{DotAccessResolution, ReceiverCoercion, strip_go_prefix};
 use syntax::types::Type;
 
 use _harness::go::{
@@ -344,18 +347,18 @@ fn call_rewrite(callee: &Expression, arguments: &[&str], source: &str) -> Option
             resolution:
                 DotAccessResolution::InstanceMethod {
                     receiver_coercion,
-                    definition: Some(definition),
+                    method: Some(method),
                     ..
                 },
             ..
         } => {
-            let (owner_id, _) = definition.as_str().rsplit_once('.')?;
+            let owner_id = method.owner.as_str();
             if let Type::Nominal { id, .. } = receiver.get_type().strip_refs()
                 && id.as_str() != owner_id
             {
                 return None;
             }
-            let owner = match owner_id.strip_prefix("go:") {
+            let owner = match strip_go_prefix(owner_id) {
                 Some(path) => path.rsplit('/').next()?.to_string(),
                 None => owner_id.rsplit('.').next()?.to_string(),
             };

@@ -79,6 +79,12 @@ impl LocalSink {
             .any(|diagnostic| diagnostic.code_str() == Some(code))
     }
 
+    pub fn has_errors_since(&self, checkpoint: &DiagnosticCheckpoint) -> bool {
+        self.diagnostics.borrow()[checkpoint.0..]
+            .iter()
+            .any(LisetteDiagnostic::is_error)
+    }
+
     pub fn has_changed_since(&self, checkpoint: DiagnosticCheckpoint) -> bool {
         self.diagnostics.borrow().len() != checkpoint.0
     }

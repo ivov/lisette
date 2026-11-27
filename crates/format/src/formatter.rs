@@ -6,6 +6,7 @@ mod top_level_item;
 use crate::comments::{Comments, SplitComments};
 use crate::lindig::{Document, concat};
 use syntax::ast::{Attribute, Expression, ImportAlias, Visibility};
+use syntax::program::is_go_import;
 
 pub struct Formatter<'a> {
     comments: Comments<'a>,
@@ -24,7 +25,7 @@ struct Import<'a> {
 
 impl Import<'_> {
     fn is_go(&self) -> bool {
-        self.name.starts_with("go:")
+        is_go_import(self.name)
     }
 
     fn sort_path(&self) -> &str {

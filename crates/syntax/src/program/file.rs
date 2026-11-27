@@ -1,3 +1,4 @@
+use super::{is_go_import, strip_go_prefix};
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::path::PathBuf;
@@ -96,14 +97,14 @@ pub fn unaliased_binding_name<'a, S: BuildHasher>(
     if let Some(package_name) = go_package_names.get(path) {
         return package_name;
     }
-    if path.starts_with("go:") {
+    if is_go_import(path) {
         return go_import_default_name(path);
     }
     path.rsplit('/').next().unwrap_or(path)
 }
 
 pub fn go_import_default_name(import_path: &str) -> &str {
-    let path = import_path.strip_prefix("go:").unwrap_or(import_path);
+    let path = strip_go_prefix(import_path).unwrap_or(import_path);
     let mut segments = path.rsplit('/');
     let last = segments.next().unwrap_or(path);
     if is_major_version_segment(last)
