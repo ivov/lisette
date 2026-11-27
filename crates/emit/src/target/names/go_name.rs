@@ -59,7 +59,8 @@ pub(crate) fn reserved_prefix_of(go: &str) -> Option<&'static str> {
 }
 
 pub(crate) const TEST_PRELUDE_PACKAGE: &str = "**test_prelude";
-pub(crate) const TEST_LOG_METHOD: &str = "**test_prelude.TestContext.log";
+pub(crate) const TEST_CONTEXT_TYPE: &str = "**test_prelude.TestContext";
+pub(crate) const TEST_LOG_METHOD: &str = "log";
 const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
 pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
@@ -213,12 +214,6 @@ pub(crate) fn tuple_field(index: usize) -> &'static str {
     TUPLE_FIELDS
         .get(index)
         .expect("the parser limits tuple arity to the tuple field names")
-}
-
-pub(crate) fn tuple_field_index(field: &str) -> Option<usize> {
-    TUPLE_FIELDS
-        .iter()
-        .position(|tuple_field| *tuple_field == field)
 }
 
 pub(crate) fn enum_tag_constant(enum_name: &str, variant_name: &str) -> String {

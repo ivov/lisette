@@ -96,7 +96,10 @@ pub(super) fn walk_expression(
             walk_identifier(
                 package,
                 value,
-                resolution.definition(),
+                resolution
+                    .callee_name()
+                    .map(|name| name.qualified_name())
+                    .as_deref(),
                 graph,
                 alias_map,
                 ctx,

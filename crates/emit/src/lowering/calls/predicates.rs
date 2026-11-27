@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::FallibleProducer;
-use crate::lowering::calls::comma_ok::CommaOkValueSlot;
+use crate::lowering::calls::bound_value::{InExpression, InIfHeader};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::PairCondition;
 
@@ -20,6 +20,14 @@ impl Polarity {
         match self {
             Self::Positive => Self::Negated,
             Self::Negated => Self::Positive,
+        }
+    }
+
+    fn relative_to(self, requested: Self) -> Self {
+        if self == requested {
+            Self::Positive
+        } else {
+            Self::Negated
         }
     }
 }
@@ -44,29 +52,14 @@ pub(in crate::lowering) fn strip_negations(mut expression: &Expression) -> (&Exp
 }
 
 impl<'p> Planner<'p> {
-    fn bind_fused_predicate(
-        &mut self,
-        predicate: FusedPredicate<'_>,
-        polarity: Polarity,
-        slot: CommaOkValueSlot,
-    ) -> (Vec<Statement>, PairCondition) {
-        let predicate_polarity = predicate.polarity;
-        let bound = predicate.producer.bind_slot(self, slot);
-        let condition = if predicate_polarity == polarity {
-            bound.success_condition()
-        } else {
-            bound.failure_condition()
-        };
-        (bound.statements, condition)
-    }
-
     pub(in crate::lowering) fn try_plan_fused_predicate_condition(
         &mut self,
         condition: &Expression,
     ) -> Option<(Vec<Statement>, PairCondition)> {
         let (target, polarity) = strip_negations(condition);
         let predicate = self.queries().fused_predicate(target)?;
-        Some(self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Unused))
+        let polarity = predicate.polarity.relative_to(polarity);
+        Some(predicate.producer.bind_test::<InIfHeader>(self, polarity))
     }
 
     pub(in crate::lowering) fn try_plan_fused_predicate_value(
@@ -75,10 +68,9 @@ impl<'p> Planner<'p> {
         polarity: Polarity,
     ) -> Option<ValuePlan> {
         let predicate = self.queries().fused_predicate(expression)?;
-        let (setup, condition) =
-            self.bind_fused_predicate(predicate, polarity, CommaOkValueSlot::Discarded);
-        debug_assert!(condition.initializer.is_none());
-        Some(ValuePlan::plain_call(setup, condition.condition))
+        let polarity = predicate.polarity.relative_to(polarity);
+        let (setup, condition) = predicate.producer.bind_test::<InExpression>(self, polarity);
+        Some(ValuePlan::plain_call(setup, condition))
     }
 }
 
@@ -114,10 +106,10 @@ impl<'p> PlannerQueries<'_, 'p> {
             return None;
         };
 
-        let definition = self.facts.checked(callee).callee().definition.as_deref()?;
-        let polarity = match definition {
-            "prelude.Result.is_ok" | "prelude.Option.is_some" => Polarity::Positive,
-            "prelude.Result.is_err" | "prelude.Option.is_none" => Polarity::Negated,
+        let method = self.facts.checked(callee).callee().method()?;
+        let polarity = match (method.owner.as_str(), method.name.as_str()) {
+            ("prelude.Result", "is_ok") | ("prelude.Option", "is_some") => Polarity::Positive,
+            ("prelude.Result", "is_err") | ("prelude.Option", "is_none") => Polarity::Negated,
             _ => return None,
         };
         Some(FusedPredicate {

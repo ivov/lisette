@@ -4,7 +4,8 @@ use std::fmt::{self, Debug};
 use std::hash::Hash;
 
 use super::{
-    ConformanceWitness, InterfaceRequirement, NativeOperation, NativeTypeKind, ReceiverCoercion,
+    CalleeName, ConformanceWitness, InterfaceRequirement, NativeOperation, NativeTypeKind,
+    ReceiverCoercion,
 };
 use crate::EcoString;
 use crate::ast::{Expression, ExpressionId, Span};
@@ -121,7 +122,7 @@ pub struct CheckedValueUse {
 pub struct CheckedCallee {
     pub operation: CallOperation,
     /// The declaration that the callee names, with an aliased owner type replaced by its target.
-    pub definition: Option<Symbol>,
+    pub name: Option<CalleeName>,
     /// The solved type arguments of a generic callee, in the order of its type parameters.
     pub type_arguments: SubstitutionMap,
     /// Whether the call must write into storage that no other name sees, as slice growth must.
@@ -134,6 +135,17 @@ pub struct CheckedCallee {
 }
 
 impl CheckedCallee {
+    pub fn definition(&self) -> Option<&str> {
+        self.name
+            .as_ref()
+            .and_then(CalleeName::definition)
+            .map(Symbol::as_str)
+    }
+
+    pub fn method(&self) -> Option<&super::MethodName> {
+        self.name.as_ref().and_then(CalleeName::method)
+    }
+
     pub fn interface_requirement(&self) -> Option<&InterfaceRequirement> {
         match &self.operation {
             CallOperation::BoundMethod { requirement, .. } => Some(requirement),

@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::synthesized_methods::SynthesizedMethod;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::target::ir::bodies::{
@@ -26,7 +27,7 @@ use syntax::types::{Symbol, Type};
 impl Planner<'_> {
     pub(in crate::lowering) fn emit_enum(
         &mut self,
-        name: &str,
+        name: DeclaredName<'_>,
         generics: &[Generic],
         attributes: &[Attribute],
         documentation: Documentation,
@@ -51,12 +52,12 @@ impl Planner<'_> {
                     result.extend(layout.json_declarations(self, &receiver_generics))
                 }
                 SynthesizedMethod::ToString => result.push(self.emit_to_string_method(
-                    name,
+                    name.as_str(),
                     &receiver_generics,
                     &self.facts.to_string_method_go_name(),
                 )),
                 SynthesizedMethod::Equals => result.extend(self.enum_equals_method(
-                    name,
+                    name.as_str(),
                     &enum_id,
                     layout,
                     &receiver_generics,
@@ -67,10 +68,10 @@ impl Planner<'_> {
             }
         }
         if has_iterate {
-            let definition = self.facts.definition(enum_id.as_str());
+            let definition = self.facts.definition(&enum_id);
             let export = GoExport::from_visibility(definition.visibility);
 
-            let fn_name = go_name::associated_function_go_name(name, "variants", export);
+            let fn_name = go_name::associated_function_go_name(name.as_str(), "variants", export);
             result.push(layout.variants_declaration(&fn_name));
         }
 
@@ -80,7 +81,7 @@ impl Planner<'_> {
     fn enum_equals_method(
         &mut self,
         name: &str,
-        enum_id: &str,
+        enum_id: &Symbol,
         layout: &EnumLayout,
         receiver_generics: &ReceiverGenerics,
     ) -> Option<GoDeclaration> {
@@ -179,7 +180,7 @@ impl Planner<'_> {
 
     pub(in crate::lowering) fn create_make_function_code(
         &mut self,
-        enum_id: &str,
+        enum_id: &Symbol,
         variant_name: &str,
     ) -> GoDeclaration {
         let layout = self.facts.enum_layout(enum_id);
@@ -206,7 +207,7 @@ impl Planner<'_> {
             ));
         }
         let result = self.queries().go_type(&Type::Nominal {
-            id: Symbol::from_raw(enum_id),
+            id: enum_id.clone(),
             writable: false,
             params: layout
                 .generics

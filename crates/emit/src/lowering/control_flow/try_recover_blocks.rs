@@ -2,8 +2,8 @@ use super::propagation::plain_return;
 use crate::Planner;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
-use crate::lowering::calls::bound_value::BoundValue;
-use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PairKind};
+use crate::lowering::calls::bound_value::{BoundValue, SlotPlacement};
+use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PlainPair, PlainPairKind, StatementSlot};
 use crate::lowering::statements::blocks::{BlockTail, TailTarget};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -28,15 +28,11 @@ pub(in crate::lowering) struct TryBlockPairPlan<'e> {
     fallible: Fallible,
     body_ctx: ReturnContext,
     shape: LoweredReturnAbi,
-    kind: PairKind,
+    kind: PlainPairKind,
 }
 
 impl TryBlockPairPlan<'_> {
-    pub(in crate::lowering) fn bind(
-        self,
-        planner: &mut Planner<'_>,
-        slot: CommaOkValueSlot,
-    ) -> BoundValue {
+    fn call(self, planner: &mut Planner<'_>) -> (GoExpression, PlainPairKind) {
         let go_return = planner.queries().return_go_type(
             &CallableReturnAbi::Lowered(self.shape.clone()),
             &self.effective_ty,
@@ -45,7 +41,27 @@ impl TryBlockPairPlan<'_> {
             statements: planner.lower_try_items(self.items, &self.fallible),
         });
         let call = immediate_call(go_return, body, FunctionLiteralLayout::MultiLine);
-        planner.bind_pair(Vec::new(), call, slot, self.kind, None)
+        (call, self.kind)
+    }
+
+    pub(in crate::lowering) fn bind<P: SlotPlacement>(
+        self,
+        planner: &mut Planner<'_>,
+        slot: CommaOkValueSlot,
+    ) -> BoundValue<P> {
+        let (call, kind) = self.call(planner);
+        planner
+            .bind_pair(Vec::new(), call, slot, kind.into(), None)
+            .into_value()
+    }
+
+    pub(in crate::lowering) fn bind_plain(
+        self,
+        planner: &mut Planner<'_>,
+        slot: StatementSlot,
+    ) -> PlainPair {
+        let (call, kind) = self.call(planner);
+        planner.bind_plain_pair(Vec::new(), call, slot, kind)
     }
 }
 
@@ -82,10 +98,10 @@ impl Planner<'_> {
         let kind = match shape {
             LoweredReturnAbi::Result {
                 payload: PayloadLayout::Packed,
-            } => PairKind::Result { nil_guard: None },
+            } => PlainPairKind::Result,
             LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
                 payload: PayloadLayout::Packed,
-            }) => PairKind::CommaOk { nil_guard: None },
+            }) => PlainPairKind::CommaOk,
             LoweredReturnAbi::BareError
             | LoweredReturnAbi::Result { .. }
             | LoweredReturnAbi::Partial { .. }

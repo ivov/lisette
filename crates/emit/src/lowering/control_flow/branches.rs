@@ -8,7 +8,7 @@ use crate::target::ir::bodies::{
     ElseArm, ElseLayout, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement,
     directed_first, with_setup,
 };
-use crate::target::ir::go_expression::{GoBinaryOperator, Position};
+use crate::target::ir::go_expression::Position;
 use crate::target::ir::values::GoExpression;
 use syntax::ast::{
     BinaryOperator, Expression, ExpressionId, IfLetAlternative, MatchArm, Pattern, SelectArm, Span,
@@ -156,16 +156,9 @@ fn split_conjuncts(condition: &Expression) -> (&Expression, Vec<&Expression>) {
     (first, rest)
 }
 
-fn merge_conjunct(level: ConjunctLevel, next: PairCondition) -> ConjunctLevel {
+fn merge_conjunct(level: ConjunctLevel, next: GoExpression) -> ConjunctLevel {
     let (setup, current) = level;
-    let condition = GoExpression::binary(current.condition, GoBinaryOperator::And, next.condition);
-    (
-        setup,
-        PairCondition {
-            initializer: current.initializer,
-            condition,
-        },
-    )
+    (setup, current.and(next))
 }
 
 type ConjunctLevel = (Vec<Statement>, PairCondition);
@@ -246,13 +239,7 @@ impl Planner<'_> {
             return fused;
         }
         let (setup, rendered) = self.plan_condition(condition);
-        (
-            setup,
-            PairCondition {
-                initializer: None,
-                condition: rendered,
-            },
-        )
+        (setup, PairCondition::plain(rendered))
     }
 
     pub(in crate::lowering) fn lower_conjunction_guard(
@@ -266,10 +253,15 @@ impl Planner<'_> {
         let mut levels: Vec<ConjunctLevel> = Vec::new();
         for conjunct in rest {
             let (setup, next) = self.lower_if_condition(conjunct);
-            if !setup.is_empty() || next.initializer.is_some() {
-                levels.push((setup, next));
-                self.scope.enter_block();
-            } else if let Some(level) = levels.pop() {
+            let next = match next.into_plain() {
+                Ok(next) if setup.is_empty() => next,
+                next => {
+                    levels.push((setup, next.map_or_else(|pair| *pair, PairCondition::plain)));
+                    self.scope.enter_block();
+                    continue;
+                }
+            };
+            if let Some(level) = levels.pop() {
                 levels.push(merge_conjunct(level, next));
             } else {
                 outermost = merge_conjunct(outermost, next);

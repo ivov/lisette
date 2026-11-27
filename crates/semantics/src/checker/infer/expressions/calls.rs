@@ -7,8 +7,8 @@ use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::{
-    AliasKind, CallOperation, DefinitionBody, DotAccessResolution, NativeTypeKind, PRELUDE_PREFIX,
-    ReceiverCoercion, resolved_instantiation,
+    AliasKind, CallOperation, DefinitionBody, DotAccessResolution, MethodName, NativeTypeKind,
+    PRELUDE_PREFIX, ReceiverCoercion, resolved_instantiation,
 };
 use syntax::types::{
     Bound, CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, substitute,
@@ -503,7 +503,7 @@ impl InferCtx<'_> {
         }
         let owner_id =
             self.method_owner(&self.lookup_qualified_name(self.store, owner)?, member)?;
-        let definition = Symbol::from_raw(format!("{owner_id}.{member}"));
+        let definition = MethodName::new(Symbol::from_raw(owner_id), member);
         let receiver = receiver.unwrap_parens();
         let call = Expression::Call {
             id: self.fresh_expression_id(),
@@ -1602,7 +1602,11 @@ fn receiver_inferred_prefix_count(body: &Type, vars: &[EcoString]) -> usize {
         .count()
 }
 
-fn calls_method_as_written(call: &Expression, definition: &Symbol, written: &Expression) -> bool {
+fn calls_method_as_written(
+    call: &Expression,
+    definition: &MethodName,
+    written: &Expression,
+) -> bool {
     let Expression::Call { expression, .. } = call else {
         return false;
     };
@@ -1611,7 +1615,7 @@ fn calls_method_as_written(call: &Expression, definition: &Symbol, written: &Exp
         resolution:
             DotAccessResolution::InstanceMethod {
                 receiver_coercion,
-                definition: Some(found),
+                method: Some(found),
                 ..
             },
         ..

@@ -30,7 +30,6 @@ use std::sync::atomic::Ordering;
 
 use crate::protocol::RpcResult as Result;
 use crate::protocol::*;
-use syntax::ast::IdentifierResolution;
 
 use crate::analysis::{convert_diagnostic, cursor_offset, offset_in_span, type_name};
 use crate::completion::{
@@ -468,12 +467,11 @@ impl Backend {
             return Ok(None);
         };
         let file = cursor.document.file;
-        if let Some(Expression::Identifier {
-            resolution: IdentifierResolution::Definition { name, .. },
-            ..
-        }) = find_expression_at(&file.items, symbol.occurrence_span.byte_offset)
+        if let Some(Expression::Identifier { resolution, .. }) =
+            find_expression_at(&file.items, symbol.occurrence_span.byte_offset)
+            && let Some(name) = resolution.callee_name()
         {
-            validation::check_rename_guards(name.as_str())?;
+            validation::check_rename_guards(&name.qualified_name())?;
         }
         if symbol.is_import()
             || is_generated_typedef_span(&snapshot, &symbol.reference_definition_span())

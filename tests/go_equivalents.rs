@@ -3,6 +3,9 @@ mod _harness;
 
 use _harness::go::go_available;
 
+#[path = "go_equivalents/widened_subjects.rs"]
+mod widened_subjects;
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
@@ -344,12 +347,12 @@ fn call_rewrite(callee: &Expression, arguments: &[&str], source: &str) -> Option
             resolution:
                 DotAccessResolution::InstanceMethod {
                     receiver_coercion,
-                    definition: Some(definition),
+                    method: Some(method),
                     ..
                 },
             ..
         } => {
-            let (owner_id, _) = definition.as_str().rsplit_once('.')?;
+            let owner_id = method.owner.as_str();
             if let Type::Nominal { id, .. } = receiver.get_type().strip_refs()
                 && id.as_str() != owner_id
             {

@@ -364,10 +364,24 @@ impl ValueLayout {
     }
 
     pub(crate) fn tuple_elements(&self) -> Option<&[Self]> {
-        if let Self::Tuple { elements, .. } = self.underlying() {
-            Some(elements)
-        } else {
-            None
+        match self {
+            Self::Tuple { elements, .. } => Some(elements),
+            Self::Named {
+                underlying,
+                go_alias: true,
+                ..
+            } => underlying.tuple_elements(),
+            Self::Plain(_)
+            | Self::Fallible { .. }
+            | Self::TaggedOption { .. }
+            | Self::NullableOption { .. }
+            | Self::PointerOption { .. }
+            | Self::Reference { .. }
+            | Self::Slice { .. }
+            | Self::Map { .. }
+            | Self::Array { .. }
+            | Self::Function { .. }
+            | Self::Named { .. } => None,
         }
     }
 

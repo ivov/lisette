@@ -1,3 +1,4 @@
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::{GeneratedPackage, GoExport};
@@ -8,7 +9,7 @@ use syntax::go_names;
 use syntax::go_names::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::program::{MethodOrigin, interface_requirements};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 const DEBUG_STRING_METHOD: &str = "DebugString";
 const STRINGER_METHODS: [&str; 2] = ["string", ENUM_STRINGER_METHOD];
@@ -102,14 +103,14 @@ impl<'a> StringFormat<'a> {
 impl EmitFacts<'_> {
     pub(crate) fn declared_field_go_name(
         &self,
-        struct_id: &str,
+        struct_id: &Symbol,
         field: &StructFieldDefinition,
     ) -> String {
         let forces_export = self.definition(struct_id).is_serialized();
         go_names::struct_field_go_name(field, forces_export).into_owned()
     }
 
-    fn declares_string_selector(&self, id: &str) -> bool {
+    fn declares_string_selector(&self, id: &Symbol) -> bool {
         let definition = self.definition(id);
         if matches!(definition.body, DefinitionBody::Interface { .. }) {
             return self.interface_has_string_selector(id);
@@ -119,40 +120,40 @@ impl EmitFacts<'_> {
             .any(|method| self.emits_go_method(id, method))
     }
 
-    fn interface_has_string_selector(&self, id: &str) -> bool {
+    fn interface_has_string_selector(&self, id: &Symbol) -> bool {
         let interface_ty = Type::Nominal {
-            id: id.into(),
+            id: id.clone(),
             params: vec![],
             writable: false,
         };
-        interface_requirements(&interface_ty, |id| Some(self.definition(id)))
+        interface_requirements(&interface_ty, self.type_query_lookup())
             .iter()
             .any(|requirement| STRINGER_METHODS.contains(&requirement.name.as_str()))
     }
 
-    fn should_synthesize_to_string(&self, name: &str) -> bool {
+    fn should_synthesize_to_string(&self, name: DeclaredName<'_>) -> bool {
         let qualified = self.qualified_current(name);
         self.method(&qualified, "to_string")
             .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
     }
 
-    fn should_synthesize_equals(&self, name: &str) -> bool {
+    fn should_synthesize_equals(&self, name: DeclaredName<'_>) -> bool {
         let qualified = self.qualified_current(name);
         self.synthesizes_equals(qualified.as_str())
     }
 
-    pub(crate) fn is_newtype_definition(&self, name: &str) -> bool {
+    pub(crate) fn is_newtype_definition(&self, name: DeclaredName<'_>) -> bool {
         let qualified = self.qualified_current(name);
-        self.definition(qualified.as_str()).is_newtype()
+        self.definition(&qualified).is_newtype()
     }
 
-    fn is_pointer_backed_newtype(&self, name: &str) -> bool {
+    fn is_pointer_backed_newtype(&self, name: DeclaredName<'_>) -> bool {
         let qualified = self.qualified_current(name);
-        self.definition(qualified.as_str())
-            .is_pointer_backed_newtype(|id| Some(self.definition(id)))
+        self.definition(&qualified)
+            .is_pointer_backed_newtype(self.type_query_lookup())
     }
 
-    fn stringer_overrides(&self, name: &str) -> (bool, bool) {
+    fn stringer_overrides(&self, name: DeclaredName<'_>) -> (bool, bool) {
         let qualified = self.qualified_current(name);
         let declares = |methods: &[&str]| {
             methods
@@ -165,14 +166,14 @@ impl EmitFacts<'_> {
         )
     }
 
-    fn debug_string_override(&self, name: &str) -> bool {
+    fn debug_string_override(&self, name: DeclaredName<'_>) -> bool {
         let qualified = self.qualified_current(name);
         (self.method_needs_export("debug_string")
             && self.has_stringer_signature(&qualified, "debug_string"))
             || self.has_stringer_signature(&qualified, DEBUG_STRING_METHOD)
     }
 
-    fn synthesizes_debug_string(&self, name: &str) -> bool {
+    fn synthesizes_debug_string(&self, name: DeclaredName<'_>) -> bool {
         self.tests_enabled() && !self.debug_string_override(name)
     }
 
@@ -184,7 +185,11 @@ impl EmitFacts<'_> {
         self.method_go_name("equals", GoExport::Unexported)
     }
 
-    fn stringer_method_name(&self, name: &str, attributes: &[Attribute]) -> Option<&'static str> {
+    fn stringer_method_name(
+        &self,
+        name: DeclaredName<'_>,
+        attributes: &[Attribute],
+    ) -> Option<&'static str> {
         if !should_synthesize_stringer(attributes) {
             return None;
         }
@@ -197,7 +202,7 @@ impl EmitFacts<'_> {
 
     pub(crate) fn enum_synthesized_methods(
         &self,
-        name: &str,
+        name: DeclaredName<'_>,
         attributes: &[Attribute],
     ) -> Vec<SynthesizedMethod> {
         let mut methods = Vec::new();
@@ -241,7 +246,7 @@ impl EmitFacts<'_> {
         }
     }
 
-    pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
+    pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: DeclaredName<'_>) -> bool {
         let id = self.qualified_current(name);
         let definition = self.definition(&id);
         !definition.is_display()
@@ -254,12 +259,16 @@ impl EmitFacts<'_> {
         if !visited.insert(id.to_string()) {
             return None;
         }
-        let kind = self.stringer_kind_of(id.as_str(), visited);
+        let kind = self.stringer_kind_of(id, visited);
         visited.remove(id.as_str());
         kind
     }
 
-    fn stringer_kind_of(&self, id: &str, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
+    fn stringer_kind_of(
+        &self,
+        id: &Symbol,
+        visited: &mut FxHashSet<String>,
+    ) -> Option<StringerKind> {
         let definition = self.definition(id);
         if self.declares_string_selector(id) {
             return Some(StringerKind::Foreign);
@@ -297,7 +306,7 @@ impl EmitFacts<'_> {
 
     pub(crate) fn struct_synthesized_methods(
         &self,
-        name: &str,
+        name: DeclaredName<'_>,
         attributes: &[Attribute],
         shape: StructShape,
     ) -> Vec<SynthesizedMethod> {

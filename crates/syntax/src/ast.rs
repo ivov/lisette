@@ -1,8 +1,8 @@
 use ecow::EcoString;
 
-use crate::program::DotAccessResolution;
+use crate::program::{CalleeName, DotAccessResolution, MethodName};
 use crate::types;
-use crate::types::Type;
+use crate::types::{Symbol, Type};
 use fmt::Formatter;
 use std::borrow::Cow;
 use std::fmt;
@@ -89,7 +89,11 @@ pub enum IdentifierResolution {
     Unresolved,
     Binding(BindingId),
     Definition {
-        name: EcoString,
+        name: Symbol,
+        instantiation: types::SubstitutionMap,
+    },
+    Method {
+        method: MethodName,
         instantiation: types::SubstitutionMap,
     },
 }
@@ -98,20 +102,37 @@ impl IdentifierResolution {
     pub fn binding_id(&self) -> Option<BindingId> {
         match self {
             Self::Binding(id) => Some(*id),
-            Self::Unresolved | Self::Definition { .. } => None,
+            Self::Unresolved | Self::Definition { .. } | Self::Method { .. } => None,
         }
     }
 
     pub fn definition(&self) -> Option<&str> {
         match self {
             Self::Definition { name, .. } => Some(name),
+            Self::Unresolved | Self::Binding(_) | Self::Method { .. } => None,
+        }
+    }
+
+    pub fn method(&self) -> Option<&MethodName> {
+        match self {
+            Self::Method { method, .. } => Some(method),
+            Self::Unresolved | Self::Binding(_) | Self::Definition { .. } => None,
+        }
+    }
+
+    pub fn callee_name(&self) -> Option<CalleeName> {
+        match self {
+            Self::Definition { name, .. } => Some(CalleeName::Definition(name.clone())),
+            Self::Method { method, .. } => Some(CalleeName::Method(method.clone())),
             Self::Unresolved | Self::Binding(_) => None,
         }
     }
 
     pub fn instantiation(&self) -> Option<&types::SubstitutionMap> {
         match self {
-            Self::Definition { instantiation, .. } => Some(instantiation),
+            Self::Definition { instantiation, .. } | Self::Method { instantiation, .. } => {
+                Some(instantiation)
+            }
             Self::Unresolved | Self::Binding(_) => None,
         }
     }
@@ -359,14 +380,14 @@ impl RestPattern {
 pub enum ConstructorPatternResolution {
     Unresolved,
     Const {
-        qualified_name: EcoString,
+        qualified_name: Symbol,
     },
     ConstValue {
-        qualified_name: EcoString,
+        qualified_name: Symbol,
         value: Literal,
     },
     EnumVariant {
-        enum_name: EcoString,
+        enum_name: Symbol,
         variant_name: EcoString,
     },
 }
@@ -378,7 +399,7 @@ pub enum RecordPatternResolution {
         struct_name: EcoString,
     },
     EnumVariant {
-        enum_name: EcoString,
+        enum_name: Symbol,
         variant_name: EcoString,
     },
 }

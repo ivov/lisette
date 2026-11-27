@@ -4,9 +4,9 @@ use rustc_hash::FxHashSet;
 use syntax::ast::{CallTypeArguments, Expression, IdentifierResolution, StructFields};
 use syntax::program::{
     CallOperation, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, PRELUDE_PREFIX,
-    ValueKind, is_go_import,
+    ValueKind,
 };
-use syntax::program::{resolved_definition, resolved_instantiation};
+use syntax::program::{resolved_callee, resolved_definition_name, resolved_instantiation};
 use syntax::types::{
     FunctionParameter, RangeKind, SubstitutionMap, Symbol, Type, peel_to_range_type,
 };
@@ -182,7 +182,7 @@ impl InferCtx<'_> {
                 ..
             }
         );
-        let declared_by_go = resolved_definition(callee).is_some_and(is_go_import);
+        let declared_by_go = resolved_callee(callee).is_some_and(|name| name.is_go());
         let selected_by_access =
             || (!is_instance_method_access(callee)).then_some(CallOperation::Function);
         let operation = match call_kind {
@@ -340,7 +340,7 @@ impl InferCtx<'_> {
     }
 
     pub(super) fn is_panic_call(&self, expression: &Expression) -> bool {
-        resolved_definition(expression) == Some("prelude.panic")
+        resolved_definition_name(expression) == Some("prelude.panic")
     }
 
     pub(super) fn mark_native_mutating_call(&mut self, callee: &Expression) {
@@ -543,6 +543,10 @@ impl InferCtx<'_> {
                 resolution: IdentifierResolution::Definition { name, .. },
                 ..
             } => Some(name.as_str()),
+            Expression::Identifier {
+                resolution: IdentifierResolution::Method { .. },
+                ..
+            } => return true,
             Expression::DotAccess {
                 resolution:
                     DotAccessResolution::EnumVariant { .. }

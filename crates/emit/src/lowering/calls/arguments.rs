@@ -1,4 +1,5 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::member_slot::MemberSlot;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::is_closure_literal;
@@ -469,6 +470,7 @@ impl PlannerQueries<'_, '_> {
             expression: base,
             member,
             ty,
+            resolution,
             ..
         } = expression
         else {
@@ -478,7 +480,7 @@ impl PlannerQueries<'_, '_> {
         let raw = self.facts.field_slot_layout(
             &base.get_type(),
             self.facts.checked(expression).field_selection(),
-            member,
+            MemberSlot::of(resolution, member),
             ty,
         )?;
 

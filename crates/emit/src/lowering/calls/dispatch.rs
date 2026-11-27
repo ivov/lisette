@@ -1,3 +1,4 @@
+use crate::lookup::facts::member_slot::MemberSlot;
 use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
@@ -43,7 +44,12 @@ impl TupleStructTarget<'_> {
             .zip(&self.selections)
             .enumerate()
             .map(|(index, (ty, selection))| {
-                facts.field_slot_layout(&self.owner_type, Some(selection), &index.to_string(), ty)
+                facts.field_slot_layout(
+                    &self.owner_type,
+                    Some(selection),
+                    MemberSlot::TupleStructField(index),
+                    ty,
+                )
             })
             .collect()
     }
@@ -329,8 +335,8 @@ pub(super) fn callee_go_name<'f>(
     facts: &'f EmitFacts<'_>,
     function: &Expression,
 ) -> Option<&'f str> {
-    let symbol = facts.checked(function).callee().definition.as_ref()?;
-    facts.callable(symbol).go_name()
+    let name = facts.checked(function).callee().name.as_ref()?;
+    facts.callable(name).go_name()
 }
 
 pub(super) fn callee_is_go_builtin<'a>(facts: &EmitFacts<'a>, callee: &Expression) -> bool {
@@ -341,8 +347,7 @@ pub(super) fn go_builtin_name<'a>(facts: &EmitFacts<'a>, callee: &Expression) ->
     facts
         .checked(callee)
         .callee()
-        .definition
-        .as_deref()
+        .definition()
         .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
         .and_then(strip_prelude_prefix)
 }
@@ -362,14 +367,13 @@ impl<'a> PlannerQueries<'_, 'a> {
         plan: &CallPlan<'_, '_>,
         export: GoExport,
     ) -> String {
-        let (_, method) = self
+        let method = &self
             .facts
             .checked(callee)
             .callee()
-            .definition
-            .as_deref()
-            .and_then(|symbol| symbol.rsplit_once('.'))
-            .expect("receiver method callee must name its method");
+            .method()
+            .expect("receiver method callee must name its method")
+            .name;
         let receiver = plan
             .resolved
             .instantiated

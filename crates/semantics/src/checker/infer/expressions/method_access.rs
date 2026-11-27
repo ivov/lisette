@@ -4,7 +4,7 @@ use crate::checker::EnvResolve;
 use syntax::ast::{BindingId, Expression, Span};
 use syntax::program::{
     CallOperation, Definition, DefinitionBody, DotAccessResolution, InterfaceRequirement,
-    PRELUDE_PACKAGE_ID, ReceiverCoercion, interface_requirements, is_go_import,
+    MethodName, PRELUDE_PACKAGE_ID, ReceiverCoercion, interface_requirements,
 };
 use syntax::types::{
     FunctionParameter, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
@@ -111,7 +111,7 @@ impl InferCtx<'_> {
             DotAccessResolution::InstanceMethod {
                 is_exported,
                 receiver_coercion,
-                definition: resolved_definition,
+                method: resolved_definition,
                 instantiation: instantiation.clone(),
             },
         );
@@ -185,7 +185,7 @@ impl InferCtx<'_> {
             return None;
         };
 
-        let resolved_definition = member.declaring_type.with_segment(args.member_name);
+        let resolved_definition = MethodName::new(member.declaring_type.clone(), args.member_name);
         self.check_instance_method_access(
             &args.deref_ty,
             method_ty,
@@ -209,7 +209,7 @@ impl InferCtx<'_> {
             method_ty,
             DotAccessResolution::InstanceMethodValue {
                 is_exported,
-                definition: Some(resolved_definition),
+                method: Some(resolved_definition),
                 instantiation,
             },
         ))
@@ -236,15 +236,13 @@ impl InferCtx<'_> {
         deref_ty: &Type,
         method_ty: &Type,
         args: &DotAccessResolutionArgs,
-        resolved_definition: Option<Symbol>,
-    ) -> Option<Symbol> {
+        resolved_definition: Option<MethodName>,
+    ) -> Option<MethodName> {
         let store = self.store;
         let resolved_definition = resolved_definition
             .or_else(|| self.resolve_instance_method_definition(deref_ty, args.member_name));
         if let Some(method_key) = resolved_definition.as_ref() {
-            let declaring = method_key
-                .without_last_segment()
-                .unwrap_or(method_key.as_str());
+            let declaring = method_key.owner.as_str();
             if let Some(definition_span) = store
                 .get_method(declaring, args.member_name)
                 .and_then(|method| method.name_span)
@@ -269,9 +267,7 @@ impl InferCtx<'_> {
             }
         }
 
-        let is_go_method = resolved_definition
-            .as_ref()
-            .is_some_and(|definition| is_go_import(definition));
+        let is_go_method = resolved_definition.as_ref().is_some_and(MethodName::is_go);
         if !self.is_callee_context()
             && !is_go_method
             && (matches!(deref_ty, Type::Nominal { id, .. }
@@ -292,10 +288,10 @@ impl InferCtx<'_> {
         &self,
         receiver_type: &Type,
         method_name: &str,
-    ) -> Option<Symbol> {
+    ) -> Option<MethodName> {
         let store = self.store;
         if let Type::Nominal { id, .. } = receiver_type {
-            let direct = id.with_segment(method_name);
+            let direct = MethodName::new(id.clone(), method_name);
             if store.get_method(id, method_name).is_some() {
                 return Some(direct);
             }
@@ -303,7 +299,7 @@ impl InferCtx<'_> {
                 && let Resolution::Found(member) =
                     promotion::resolve_selector(store, receiver_type, method_name)
             {
-                let promoted = member.declaring_type.with_segment(method_name);
+                let promoted = MethodName::new(member.declaring_type.clone(), method_name);
                 if store
                     .get_method(&member.declaring_type, method_name)
                     .is_some()
@@ -321,7 +317,7 @@ impl InferCtx<'_> {
             Type::Array { .. } => Symbol::from_parts(PRELUDE_PACKAGE_ID, "Array"),
             _ => return None,
         };
-        let resolved_definition = owner.with_segment(method_name);
+        let resolved_definition = MethodName::new(owner.clone(), method_name);
         store
             .get_method(&owner, method_name)
             .is_some()
@@ -336,7 +332,7 @@ impl InferCtx<'_> {
         args: &DotAccessResolutionArgs,
         method_ty: &mut Type,
         is_exported: bool,
-        resolved_definition: Option<Symbol>,
+        resolved_definition: Option<MethodName>,
         instantiation: &SubstitutionMap,
     ) -> Option<Expression> {
         if !self.is_type_level_receiver(args.expression) {
@@ -367,7 +363,7 @@ impl InferCtx<'_> {
             method_ty.clone(),
             DotAccessResolution::InstanceMethodValue {
                 is_exported,
-                definition: resolved_definition,
+                method: resolved_definition,
                 instantiation: instantiation.clone(),
             },
         ))

@@ -18,6 +18,7 @@ use syntax::ast::StructFields;
 use syntax::program::DefinitionBody;
 use syntax::program::Visibility;
 use syntax::program::{Definition, strip_go_prefix};
+use syntax::types::Symbol;
 use syntax::types::Type;
 
 const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(PathBuf::new());
@@ -872,11 +873,11 @@ fn store_get_definition_domain_style_go_package() {
 
     let package = store.edit_package("go:github.com/gorilla/mux").unwrap();
     package.definitions.insert(
-        "go:github.com/gorilla/mux.Router".into(),
+        Symbol::from_raw("go:github.com/gorilla/mux.Router"),
         Definition {
             visibility: Visibility::Public,
             ty: Type::Nominal {
-                id: "go:github.com/gorilla/mux.Router".into(),
+                id: Symbol::from_raw("go:github.com/gorilla/mux.Router"),
                 params: vec![],
                 writable: false,
             },

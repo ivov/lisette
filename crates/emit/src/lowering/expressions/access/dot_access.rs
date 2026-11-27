@@ -19,7 +19,7 @@ use syntax::ast::Expression;
 use syntax::constant;
 use syntax::program::{DefinitionBody, DotAccessResolution, ReceiverCoercion};
 use syntax::program::{SlotOrigin, is_go_import};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum NullableField {
@@ -51,7 +51,6 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let dot_access = site.expression;
         let expression = site.receiver;
-        let member = site.member;
         let resolution = site.resolution;
 
         let spelling = self.queries().member_spelling(dot_access);
@@ -61,7 +60,7 @@ impl Planner<'_> {
         }
 
         let expression_ty = expression.get_type();
-        if let Some(component) = self.queries().tuple_component_read(expression, member) {
+        if let Some(component) = self.queries().tuple_component_read(expression, resolution) {
             return self.plan_tuple_component_read(site, component, nullable, ctx);
         }
 
@@ -73,7 +72,7 @@ impl Planner<'_> {
         let base = self.plan_bound_dispatch_receiver(&mut setup, dot_access, base, &expression_ty);
         if let Some(member_access) =
             self.queries()
-                .try_plan_tuple_member_dot(&base, &expression_ty, member, resolution)
+                .try_plan_tuple_member_dot(&base, &expression_ty, resolution)
         {
             if let Some(wrapped) = self.try_plan_nullable_field_access(
                 &mut setup,
@@ -114,7 +113,7 @@ impl Planner<'_> {
             ctx,
         );
         let expression = if let Some(package) = expression_ty.as_import_namespace()
-            && go_constant_exceeds_int(&self.facts, package, site.member, site.ty)
+            && go_constant_exceeds_int(&self.facts, package, site.resolution, site.ty)
         {
             GoExpression::conversion(self.queries().go_type(site.ty), expression)
         } else {
@@ -249,7 +248,6 @@ impl Planner<'_> {
         }
         let dot_access = site.expression;
         let expression = site.receiver;
-        let member = site.member;
         let result_ty = site.ty;
 
         let expression_ty = &expression.get_type();
@@ -257,7 +255,7 @@ impl Planner<'_> {
         let source_layout = self.facts.field_slot_layout(
             expression_ty,
             self.facts.checked(dot_access).field_selection(),
-            member,
+            site.slot(),
             result_ty,
         )?;
 
@@ -325,12 +323,9 @@ fn dot_member_stability(
     base_stability: Stability,
 ) -> Stability {
     let expression = site.receiver;
-    let member = site.member;
     let resolution = site.resolution;
 
-    if let Some(package) = expression_ty.as_import_namespace()
-        && package_member_is_fixed(facts, package, member)
-    {
+    if expression_ty.as_import_namespace().is_some() && package_member_is_fixed(facts, resolution) {
         Stability::Fixed
     } else if facts.reads_value_member(resolution, expression, expression_ty) {
         base_stability
@@ -339,21 +334,30 @@ fn dot_member_stability(
     }
 }
 
-fn go_constant_exceeds_int(facts: &EmitFacts<'_>, package: &str, member: &str, ty: &Type) -> bool {
+fn go_constant_exceeds_int(
+    facts: &EmitFacts<'_>,
+    package: &str,
+    resolution: &DotAccessResolution,
+    ty: &Type,
+) -> bool {
     if !is_go_import(package) {
         return false;
     }
-    let qualified_name = format!("{}.{}", package, member);
+    let Some(definition) = resolution.defined_name() else {
+        return false;
+    };
     facts
-        .definition(qualified_name.as_str())
+        .definition(definition)
         .const_value()
         .and_then(|constant| constant.value())
         .is_some_and(|value| constant::converts_go_constant(&value, ty))
 }
 
-fn package_member_is_fixed(facts: &EmitFacts<'_>, package: &str, member: &str) -> bool {
-    let qualified_name = format!("{}.{}", package, member);
-    let definition = facts.definition(qualified_name.as_str());
+fn package_member_is_fixed(facts: &EmitFacts<'_>, resolution: &DotAccessResolution) -> bool {
+    let Some(definition) = resolution.defined_name() else {
+        return false;
+    };
+    let definition = facts.definition(definition);
     matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
 }
 
@@ -386,7 +390,14 @@ impl PlannerQueries<'_, '_> {
         )
     }
 
-    fn tuple_component_read(&self, expression: &Expression, member: &str) -> Option<GoIdentifier> {
+    fn tuple_component_read(
+        &self,
+        expression: &Expression,
+        resolution: &DotAccessResolution,
+    ) -> Option<GoIdentifier> {
+        let DotAccessResolution::TupleElement { index } = *resolution else {
+            return None;
+        };
         let Expression::Identifier {
             value, resolution, ..
         } = expression
@@ -401,7 +412,6 @@ impl PlannerQueries<'_, '_> {
             return None;
         };
 
-        let index = member.parse::<usize>().ok()?;
         tuple.names.get(index).cloned()
     }
 
@@ -409,19 +419,15 @@ impl PlannerQueries<'_, '_> {
         &self,
         base: &GoExpression,
         expression_ty: &Type,
-        member: &str,
         resolution: &DotAccessResolution,
     ) -> Option<GoExpression> {
-        let Ok(index) = member.parse::<usize>() else {
-            return None;
-        };
-        match resolution {
-            DotAccessResolution::TupleElement => {
+        match *resolution {
+            DotAccessResolution::TupleElement { index } => {
                 let field = go_name::tuple_field(index).to_string();
                 Some(self.facts.field_access(base.clone(), expression_ty, field))
             }
-            DotAccessResolution::TupleStructField { is_newtype } => {
-                if *is_newtype && let Some(cast) = self.try_plan_newtype_cast(expression_ty, base) {
+            DotAccessResolution::TupleStructField { index, is_newtype } => {
+                if is_newtype && let Some(cast) = self.try_plan_newtype_cast(expression_ty, base) {
                     return Some(cast);
                 }
                 Some(self.facts.field_access(
@@ -446,14 +452,13 @@ impl PlannerQueries<'_, '_> {
     ) -> Option<NilGuard> {
         let subject = site.expression;
         let expression = site.receiver;
-        let member = site.member;
         let result_ty = site.ty;
 
         let expression_ty = expression.get_type();
         let source_layout = self.facts.field_slot_layout(
             &expression_ty,
             self.facts.checked(subject).field_selection(),
-            member,
+            site.slot(),
             result_ty,
         )?;
 
@@ -545,7 +550,7 @@ impl PlannerQueries<'_, '_> {
             DotAccessResolution::Unresolved
             | DotAccessResolution::StructField { .. }
             | DotAccessResolution::TupleStructField { .. }
-            | DotAccessResolution::TupleElement
+            | DotAccessResolution::TupleElement { .. }
             | DotAccessResolution::PackageMember { .. }
             | DotAccessResolution::InstanceMethod { .. } => None,
         }
@@ -602,7 +607,7 @@ impl PlannerQueries<'_, '_> {
     fn plan_static_method_dot(
         &self,
         dot_access: &Expression,
-        definition: &str,
+        definition: &Symbol,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
         let function = self.definition_reference(definition);

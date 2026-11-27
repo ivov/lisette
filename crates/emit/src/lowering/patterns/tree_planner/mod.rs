@@ -22,6 +22,7 @@ use crate::target::ir::bodies::{
 };
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::values::GoExpression;
+use crate::target::types::go_type::GoType;
 
 #[allow(clippy::wildcard_enum_match_arm)]
 fn guard_renders_inline(facts: &EmitFacts<'_>, guard: &Expression) -> bool {
@@ -153,6 +154,11 @@ impl<'a> WalkContext<'a> {
 pub(in crate::lowering) enum MatchSubject {
     Var(GoExpression),
     Elements(Vec<GoExpression>),
+    Narrowed {
+        subject: GoExpression,
+        go_type: GoType,
+        value: GoExpression,
+    },
 }
 
 impl MatchSubject {
@@ -160,6 +166,15 @@ impl MatchSubject {
         match self {
             Self::Var(var) => SubjectRoot::Var(var),
             Self::Elements(elements) => SubjectRoot::Elements(elements),
+            Self::Narrowed {
+                subject,
+                go_type,
+                value,
+            } => SubjectRoot::Narrowed {
+                subject,
+                go_type,
+                value,
+            },
         }
     }
 }

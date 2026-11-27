@@ -346,7 +346,7 @@ impl Planner<'_> {
         owner_generics: &[(EcoString, Vec<Type>)],
     ) -> Option<GoDeclaration> {
         let method_parameters = method_parameters?;
-        let owner = receiver_ty.and_then(Type::get_qualified_id)?;
+        let owner = receiver_ty.and_then(Type::nominal_id)?;
         if !has_tagged_counterpart(&self.facts, owner, function_definition.name) {
             return None;
         }

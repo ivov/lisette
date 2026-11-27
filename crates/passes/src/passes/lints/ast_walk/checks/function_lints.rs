@@ -1,6 +1,6 @@
 use crate::passes::walk::{FunctionRole, NodeCtx};
 use syntax::ast::Expression;
-use syntax::program::resolved_definition;
+use syntax::program::resolved_callee;
 
 use super::{exit_after_defer, unconditional_recursion, waitgroup};
 
@@ -88,9 +88,10 @@ impl FunctionLintFeatures {
                 self.has_exit_call |= exit_after_defer::is_os_exit(callee);
                 self.has_waitgroup_call |= waitgroup::waitgroup_method(callee).is_some();
                 self.has_self_call |= self.recursive_target.is_some_and(|target| {
-                    resolved_definition(callee).is_some_and(|definition| {
+                    resolved_callee(callee).is_some_and(|callee| {
+                        let definition = callee.qualified_name();
                         definition.len() == target.0
-                            && fingerprint_segments(&[definition]) == target.1
+                            && fingerprint_segments(&[definition.as_str()]) == target.1
                     })
                 });
             }

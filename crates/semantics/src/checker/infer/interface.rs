@@ -757,8 +757,7 @@ impl InferCtx<'_> {
                             check.methods.push(CheckedMethod {
                                 required_interface: interface_qualified_id.clone(),
                                 required_name: method_name.clone(),
-                                selected_definition: Symbol::from(bound_id)
-                                    .with_segment(&impl_method_name),
+                                selected_owner: Symbol::from_raw(bound_id),
                                 selected_name: impl_method_name.clone(),
                                 selected_requirement,
                                 pointer_receiver: symbol_method
@@ -834,7 +833,7 @@ impl InferCtx<'_> {
                     check.methods.push(CheckedMethod {
                         required_interface: interface_qualified_id.clone(),
                         required_name: method_name.clone(),
-                        selected_definition: owner.with_segment(&impl_method_name),
+                        selected_owner: owner.clone(),
                         selected_name: impl_method_name.clone(),
                         selected_requirement,
                         pointer_receiver: symbol_method
@@ -1107,7 +1106,7 @@ enum SignatureCheck {
 
 pub(crate) fn interface_requires_methods(store: &Store, id: &str) -> bool {
     let interface_ty = Type::Nominal {
-        id: id.into(),
+        id: Symbol::from_raw(id),
         params: vec![],
         writable: false,
     };

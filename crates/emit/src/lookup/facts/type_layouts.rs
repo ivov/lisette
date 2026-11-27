@@ -1,4 +1,5 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::member_slot::MemberSlot;
 use crate::lookup::facts::return_abi_rules::slot_return_abi;
 use crate::lookup::facts::value_layout::{
     FallibleKind, FunctionLayout, PayloadSlots, ResultProducer, ReturnLayout, ValueLayout,
@@ -9,7 +10,8 @@ use crate::target::types::return_abi::{
     CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
 };
 use syntax::program::{
-    FieldSelection, GoOptionRepresentation, SlotOrigin, go_option_representation, is_go_import,
+    CalleeName, FieldSelection, GoOptionRepresentation, SlotOrigin, go_option_representation,
+    is_go_import,
 };
 use syntax::types::{CompoundKind, FunctionType, Symbol, Type};
 
@@ -165,23 +167,27 @@ impl EmitFacts<'_> {
         &self,
         owner_type: &Type,
         selection: Option<&FieldSelection>,
-        field: &str,
+        slot: MemberSlot<'_>,
         value_type: &Type,
     ) -> Option<ValueLayout> {
-        if let Ok(index) = field.parse::<usize>()
-            && let Some(elements) = self
-                .value_layout(&owner_type.strip_refs(), SlotOrigin::Lisette)
+        if let MemberSlot::TupleElement(index) = slot {
+            let layout = self.value_layout(&owner_type.strip_refs(), SlotOrigin::Lisette);
+            let elements = layout
                 .tuple_elements()
-        {
+                .expect("internal error: a tuple element is read from a tuple layout");
             return elements.get(index).cloned();
         }
-        if let Some(package) = owner_type.as_import_namespace()
+        if let Some(field) = slot.name()
+            && let Some(package) = owner_type.as_import_namespace()
             && let Some(layout) = self.go_variable_layout(package, field, value_type)
         {
             return Some(layout);
         }
         let selection = selection?;
         if is_go_import(&selection.owner) {
+            let field = slot
+                .name()
+                .expect("internal error: a Go field is read by name");
             let slot = self
                 .go_field(selection.owner.as_str(), field)
                 .unwrap_or_else(|| {
@@ -259,7 +265,7 @@ impl EmitFacts<'_> {
 
     pub(crate) fn interface_result_layout(
         &self,
-        go_method: Option<&str>,
+        go_method: Option<&CalleeName>,
         return_type: &Type,
     ) -> ValueLayout {
         match go_method.and_then(|id| self.go_callable_return_slot(id)) {
@@ -796,7 +802,7 @@ impl EmitFacts<'_> {
             };
         }
 
-        match go_option_representation(&ty, origin, |id| Some(self.definition(id))) {
+        match go_option_representation(&ty, origin, self.type_query_lookup()) {
             GoOptionRepresentation::Tagged => ValueLayout::TaggedOption {
                 option_type: ty,
                 payload,

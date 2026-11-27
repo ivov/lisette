@@ -82,7 +82,7 @@ fn conformance_key<'d>(ty: &Type, lookup: &impl Fn(&str) -> Option<&'d Definitio
 pub struct CheckedMethod {
     pub required_interface: Symbol,
     pub required_name: EcoString,
-    pub selected_definition: Symbol,
+    pub selected_owner: Symbol,
     pub selected_name: EcoString,
     pub selected_requirement: Option<InterfaceRequirement>,
     pub signature: Type,
@@ -131,7 +131,7 @@ mod tests {
         use crate::program::{AliasKind, DefinitionBody};
         use crate::types::CompoundKind;
         let nominal = |id: &str, parameters| Type::Nominal {
-            id: id.into(),
+            id: Symbol::from_raw(id),
             params: parameters,
             writable: false,
         };
@@ -217,12 +217,12 @@ mod tests {
     #[test]
     fn repeated_and_permission_qualified_checks_share_one_witness() {
         let receiver = Type::Nominal {
-            id: "a.Item".into(),
+            id: Symbol::from_raw("a.Item"),
             params: vec![],
             writable: false,
         };
         let interface = Type::Nominal {
-            id: "api.View".into(),
+            id: Symbol::from_raw("api.View"),
             params: vec![receiver.clone()],
             writable: false,
         };
@@ -244,7 +244,7 @@ mod tests {
         assert_eq!(index.witnesses.len(), 1);
         assert!(index.get(&receiver, &interface, |_| None).is_some());
         let other = Type::Nominal {
-            id: "b.Item".into(),
+            id: Symbol::from_raw("b.Item"),
             params: vec![],
             writable: false,
         };

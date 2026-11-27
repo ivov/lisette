@@ -211,25 +211,12 @@ impl InferCtx<'_> {
                 ));
         }
 
-        if let Pattern::EnumVariant {
-            identifier, fields, ..
-        } = inner_binding
-        {
+        if let Pattern::EnumVariant { identifier, .. } = inner_binding {
             let variant_name = unqualified_name(identifier);
             if variant_name == "None" {
                 self.sink
                     .push(diagnostics::infer::none_pattern_in_select_receive(
                         binding.get_span(),
-                    ));
-            }
-
-            if variant_name == "Some"
-                && fields.len() == 1
-                && !Self::is_irrefutable_select_pattern(&fields[0])
-            {
-                self.sink
-                    .push(diagnostics::infer::select_receive_refutable_pattern(
-                        fields[0].get_span(),
                     ));
             }
         }

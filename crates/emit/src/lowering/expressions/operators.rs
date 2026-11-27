@@ -400,7 +400,7 @@ fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
 
 impl ConstantSource for PlannerQueries<'_, '_> {
     fn definition(&self, qualified_name: &str) -> Option<&program::Definition> {
-        Some(self.facts.definition(qualified_name))
+        self.facts.find_definition(qualified_name)
     }
 
     fn local_constant(&self, binding: BindingId) -> Option<Constant> {

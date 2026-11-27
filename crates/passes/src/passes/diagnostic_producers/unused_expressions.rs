@@ -720,9 +720,8 @@ fn callee_allowed_lints(expression: &Expression, package_id: &str, store: &Store
         {
             return definition.allowed_lints().to_vec();
         }
-        if let Some(q) = resolution.definition()
-            && let Some((owner, name)) = q.rsplit_once('.')
-            && let Some(method) = store.get_method(owner, name)
+        if let Some(method) = resolution.method()
+            && let Some(method) = store.get_method(&method.owner, &method.name)
         {
             return method.allowed_lints.clone();
         }

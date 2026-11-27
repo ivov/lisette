@@ -1,7 +1,7 @@
-use crate::lookup::facts::emit_facts::known_definition;
+use crate::lookup::facts::definition_key::type_query_lookup;
 use rustc_hash::FxHashMap;
+use syntax::program::{CalleeName, GoHint, MethodName, is_go_import};
 use syntax::program::{Definition, DefinitionBody, ValueKind};
-use syntax::program::{GoHint, is_go_import};
 use syntax::types::{Symbol, Type};
 
 use crate::target::types::return_abi::LoweredReturnAbi;
@@ -10,7 +10,7 @@ use syntax::program::SlotOrigin;
 
 #[derive(Debug, Default)]
 pub(crate) struct GoAbiCatalog {
-    callables: FxHashMap<String, GoCallableSlots>,
+    callables: FxHashMap<CalleeName, GoCallableSlots>,
     fields: FxHashMap<String, FxHashMap<String, GoSlotDescriptor>>,
     variables: FxHashMap<String, GoSlotDescriptor>,
 }
@@ -37,7 +37,7 @@ impl GoAbiCatalog {
             }
             catalog.register_callable(
                 definitions,
-                qualified_name,
+                CalleeName::Definition(qualified_name.clone()),
                 &definition.ty,
                 definition.go_hints(),
             );
@@ -45,7 +45,10 @@ impl GoAbiCatalog {
                 for method in methods.values() {
                     catalog.register_callable(
                         definitions,
-                        &format!("{qualified_name}.{}", method.source_name),
+                        CalleeName::Method(MethodName::new(
+                            qualified_name.clone(),
+                            &method.source_name,
+                        )),
                         &method.ty,
                         &method.go_hints,
                     );
@@ -59,19 +62,25 @@ impl GoAbiCatalog {
 
     pub(crate) fn callable_parameter(
         &self,
-        qualified_name: &str,
+        qualified_name: &CalleeName,
         index: usize,
     ) -> Option<&GoSlotDescriptor> {
         self.callables.get(qualified_name)?.parameters.get(index)
     }
 
-    pub(crate) fn callable_return_slot(&self, qualified_name: &str) -> Option<&GoSlotDescriptor> {
+    pub(crate) fn callable_return_slot(
+        &self,
+        qualified_name: &CalleeName,
+    ) -> Option<&GoSlotDescriptor> {
         self.callables
             .get(qualified_name)
             .map(|callable| &callable.return_slot)
     }
 
-    pub(crate) fn callable_return_abi(&self, qualified_name: &str) -> Option<&LoweredReturnAbi> {
+    pub(crate) fn callable_return_abi(
+        &self,
+        qualified_name: &CalleeName,
+    ) -> Option<&LoweredReturnAbi> {
         self.callables.get(qualified_name)?.return_abi.as_ref()
     }
 
@@ -90,7 +99,7 @@ impl GoAbiCatalog {
     fn register_callable(
         &mut self,
         definitions: &FxHashMap<Symbol, Definition>,
-        qualified_name: &str,
+        qualified_name: CalleeName,
         ty: &Type,
         go_hints: &[GoHint],
     ) {
@@ -104,7 +113,7 @@ impl GoAbiCatalog {
                 origin: SlotOrigin::of_go_declaration(
                     SlotOrigin::GoParameter,
                     &parameter.ty,
-                    |id| Some(known_definition(definitions, id)),
+                    type_query_lookup(definitions),
                 ),
                 declared_type: parameter.ty.clone(),
             })
@@ -114,16 +123,18 @@ impl GoAbiCatalog {
             origin: SlotOrigin::of_go_declaration(
                 SlotOrigin::GoReturn,
                 &function.return_type,
-                |id| Some(known_definition(definitions, id)),
+                type_query_lookup(definitions),
             ),
             declared_type: (*function.return_type).clone(),
         };
 
-        let return_abi = go_return_abi(&function.return_type, go_hints, |id| {
-            Some(known_definition(definitions, id))
-        });
+        let return_abi = go_return_abi(
+            &function.return_type,
+            go_hints,
+            type_query_lookup(definitions),
+        );
         self.callables.insert(
-            qualified_name.to_string(),
+            qualified_name,
             GoCallableSlots {
                 parameters,
                 return_slot,
@@ -146,9 +157,11 @@ impl GoAbiCatalog {
             slots.insert(
                 field.name.to_string(),
                 GoSlotDescriptor {
-                    origin: SlotOrigin::of_go_declaration(SlotOrigin::GoField, &field.ty, |id| {
-                        Some(known_definition(definitions, id))
-                    }),
+                    origin: SlotOrigin::of_go_declaration(
+                        SlotOrigin::GoField,
+                        &field.ty,
+                        type_query_lookup(definitions),
+                    ),
                     declared_type: field.ty.clone(),
                 },
             );
@@ -175,9 +188,11 @@ impl GoAbiCatalog {
         self.variables.insert(
             qualified_name.to_string(),
             GoSlotDescriptor {
-                origin: SlotOrigin::of_go_declaration(SlotOrigin::GoField, &definition.ty, |id| {
-                    Some(known_definition(definitions, id))
-                }),
+                origin: SlotOrigin::of_go_declaration(
+                    SlotOrigin::GoField,
+                    &definition.ty,
+                    type_query_lookup(definitions),
+                ),
                 declared_type: definition.ty.clone(),
             },
         );

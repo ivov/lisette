@@ -1,3 +1,4 @@
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -132,16 +133,24 @@ impl NameCollector<'_, '_> {
                 identifier_span,
                 ..
             } => collect_const(identifier, *identifier_span, collected),
-            Expression::TypeAlias {
-                name, name_span, ..
-            } => collect_type_alias(self.facts, name, *name_span, collected),
+            Expression::TypeAlias { name_span, .. } => collect_type_alias(
+                self.facts,
+                DeclaredName::declared(item),
+                *name_span,
+                collected,
+            ),
             Expression::Struct {
-                name,
                 name_span,
                 fields,
                 attributes,
                 ..
-            } => self.collect_struct(name, *name_span, fields, attributes, collected),
+            } => self.collect_struct(
+                DeclaredName::declared(item),
+                *name_span,
+                fields,
+                attributes,
+                collected,
+            ),
             Expression::Enum { .. } => collect_enum(self.facts, item, collected),
             Expression::Interface {
                 name,
@@ -157,11 +166,9 @@ impl NameCollector<'_, '_> {
                 visibility,
                 collected,
             ),
-            Expression::ImplBlock {
-                receiver_name,
-                methods,
-                ..
-            } => collect_impl_block(self.facts, receiver_name, methods, collected),
+            Expression::ImplBlock { methods, .. } => {
+                collect_impl_block(self.facts, DeclaredName::declared(item), methods, collected)
+            }
             Expression::VariableDeclaration { .. }
             | Expression::PackageImport { .. }
             | body_expression!() => {}
@@ -201,13 +208,13 @@ impl NameCollector<'_, '_> {
 
     fn collect_struct(
         &self,
-        name: &str,
+        name: DeclaredName<'_>,
         name_span: Span,
         fields: &StructFields,
         attributes: &[Attribute],
         collected: &mut CollectedNames,
     ) {
-        let type_go = go_name::escape_type_name(name).into_owned();
+        let type_go = go_name::escape_type_name(name.as_str()).into_owned();
         check_reserved_prefix(&type_go, &name_span, &mut collected.diagnostics);
         check_reserved_qualifier(&type_go, &name_span, &mut collected.diagnostics);
         collected.package_block.claim(type_go.clone(), name_span);
@@ -267,13 +274,10 @@ impl NameCollector<'_, '_> {
                     }
                 }
                 Expression::ImplBlock {
-                    receiver_name,
-                    methods,
-                    generics,
-                    ..
+                    methods, generics, ..
                 } => {
                     self.check_reserved_qualifier_generics(generics, &mut diagnostics);
-                    let qualified_type = self.facts.qualified_current(receiver_name);
+                    let qualified_type = self.facts.qualified_current(DeclaredName::declared(item));
                     for method in methods {
                         let Expression::Function {
                             name,
@@ -388,14 +392,14 @@ fn collect_const(identifier: &str, identifier_span: Span, collected: &mut Collec
 
 fn collect_type_alias(
     facts: &EmitFacts<'_>,
-    name: &str,
+    name: DeclaredName<'_>,
     name_span: Span,
     collected: &mut CollectedNames,
 ) {
     if facts.alias_emits_nothing(name) {
         return;
     }
-    let go = go_name::escape_type_name(name).into_owned();
+    let go = go_name::escape_type_name(name.as_str()).into_owned();
     check_reserved_prefix(&go, &name_span, &mut collected.diagnostics);
     check_reserved_qualifier(&go, &name_span, &mut collected.diagnostics);
     collected.package_block.claim(go, name_span);
@@ -420,11 +424,11 @@ fn collect_import_aliases(
 
 fn collect_impl_block(
     facts: &EmitFacts<'_>,
-    receiver_name: &str,
+    receiver_name: DeclaredName<'_>,
     methods: &[Expression],
     collected: &mut CollectedNames,
 ) {
-    let type_go = go_name::escape_type_name(receiver_name).into_owned();
+    let type_go = go_name::escape_type_name(receiver_name.as_str()).into_owned();
     let qualified_type = facts.qualified_current(receiver_name);
     for method in methods {
         let Expression::Function {
@@ -449,7 +453,7 @@ fn collect_impl_block(
                 .claim(method_go, *name_span);
             continue;
         } else {
-            go_name::associated_function_go_name(receiver_name, name, export)
+            go_name::associated_function_go_name(receiver_name.as_str(), name, export)
         };
 
         check_reserved_prefix(name, name_span, &mut collected.diagnostics);
@@ -532,7 +536,7 @@ fn collect_enum(facts: &EmitFacts<'_>, item: &Expression, collected: &mut Collec
 
     let members = collected.selectors.entry(type_go).or_default();
     members.claim(ENUM_TAG_FIELD, name_span);
-    for method in facts.enum_synthesized_methods(name, attributes) {
+    for method in facts.enum_synthesized_methods(DeclaredName::declared(item), attributes) {
         for go_name in facts.synthesized_method_go_names(method) {
             members.claim(go_name, name_span);
         }

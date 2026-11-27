@@ -75,7 +75,7 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id, .. } = ty else {
             return None;
         };
-        let index = constructor_fields(id, Some(variant), ty, |id| Some(self.definition(id)))
+        let index = constructor_fields(id, Some(variant), ty, self.type_query_lookup())
             .unwrap_or_else(|| panic!("internal error: `{id}` has no variant `{variant}`"))
             .fields
             .iter()
@@ -92,7 +92,7 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id, .. } = self.receiver_shape(ty) else {
             return None;
         };
-        let definition = self.definition(id.as_str());
+        let definition = self.definition(&id);
         Some(ResolvedNominal { id, definition })
     }
 
@@ -142,10 +142,9 @@ impl<'a> EmitFacts<'a> {
             .cloned()
     }
 
-    pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
+    pub(crate) fn as_enum(&self, ty: &Type) -> Option<Symbol> {
         let resolved = self.resolve_nominal(ty)?;
-        matches!(&resolved.definition.body, DefinitionBody::Enum { .. })
-            .then(|| resolved.id.to_string())
+        matches!(&resolved.definition.body, DefinitionBody::Enum { .. }).then_some(resolved.id)
     }
 
     pub(crate) fn enum_tuple_field_name(&self, ty: &Type, variant: &str, index: usize) -> String {
@@ -226,13 +225,13 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
         let receiver_ty = self.peel_alias(&receiver_ty.strip_refs());
         receiver_ty
-            .get_qualified_id()
+            .nominal_id()
             .filter(|owner| is_go_import(owner))
             .and_then(|owner| self.method(owner, method))
             .is_some_and(|method| method.go_hints.contains(&GoHint::ValueMethodSet))
     }
 
-    pub(crate) fn has_stringer_signature(&self, id: &str, method_name: &str) -> bool {
+    pub(crate) fn has_stringer_signature(&self, id: &Symbol, method_name: &str) -> bool {
         self.method(id, method_name)
             .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
             && self.emits_go_method(id, method_name)
@@ -246,7 +245,7 @@ impl<'a> EmitFacts<'a> {
         let Type::Nominal { id, .. } = &stripped else {
             return None;
         };
-        let constructor = constructor_fields(id, None, &stripped, |id| Some(self.definition(id)))?;
+        let constructor = constructor_fields(id, None, &stripped, self.type_query_lookup())?;
         let Type::Nominal { id: owner, .. } = self.peel_alias(&stripped) else {
             return None;
         };
@@ -311,7 +310,7 @@ impl<'a> EmitFacts<'a> {
             }
             DotAccessResolution::Unresolved
             | DotAccessResolution::TupleStructField { .. }
-            | DotAccessResolution::TupleElement
+            | DotAccessResolution::TupleElement { .. }
             | DotAccessResolution::PackageMember { .. }
             | DotAccessResolution::EnumVariant { .. }
             | DotAccessResolution::InstanceMethodValue { .. }
@@ -362,7 +361,7 @@ impl<'a> EmitFacts<'a> {
                     resolved.definition.is_serialized(),
                 ));
             }
-            if let Some(method) = self.method(resolved.id.as_str(), name) {
+            if let Some(method) = self.method(&resolved.id, name) {
                 return Some(method.visibility.is_public());
             }
             return fields
@@ -371,7 +370,7 @@ impl<'a> EmitFacts<'a> {
                 .filter_map(|field| self.resolve_nominal(&field.ty))
                 .find_map(|embedded| self.member_is_public(&embedded, name));
         }
-        self.method(resolved.id.as_str(), name)
+        self.method(&resolved.id, name)
             .map(|method| method.visibility.is_public())
     }
 

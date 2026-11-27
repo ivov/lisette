@@ -31,21 +31,22 @@ use rustc_hash::FxHashSet;
 use syntax::ast::{Binding, Expression, FunctionDefinitionView};
 use syntax::program::{CallOperation, CheckedMethod, ConformanceWitness, InterfaceConversion};
 use syntax::program::{
-    CheckedCallee, DotAccessResolution, InterfaceRequirement, interface_requirements,
+    CalleeName, CheckedCallee, DotAccessResolution, InterfaceRequirement, MethodName,
+    interface_requirements,
 };
 use syntax::program::{SlotOrigin, is_go_import, is_prelude_symbol, strip_go_prefix};
-use syntax::types::{Type, unqualified_name};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 #[derive(Debug, Clone)]
 enum AdapterConcrete {
-    Nominal(EcoString),
+    Nominal(Symbol),
     Parameter(EcoString),
 }
 
 #[derive(Debug, Clone)]
 pub(in crate::lowering) struct AdapterPlan {
     concrete: AdapterConcrete,
-    interface_id: EcoString,
+    interface_id: Symbol,
     interface_ty: Type,
     concrete_ty: Type,
     methods: Vec<AdapterMethod>,
@@ -438,17 +439,10 @@ impl Planner<'_> {
 fn adapter_source_owner<'s>(
     source_requirement: Option<&'s InterfaceRequirement>,
     checked: &'s CheckedMethod,
-    concrete_ty: &'s Type,
-) -> Option<&'s str> {
-    source_requirement
-        .map(|source| source.declaring_interface.as_str())
-        .or_else(|| {
-            checked
-                .selected_definition
-                .rsplit_once('.')
-                .map(|(owner, _)| owner)
-        })
-        .or_else(|| concrete_ty.get_qualified_id())
+) -> &'s Symbol {
+    source_requirement.map_or(&checked.selected_owner, |source| {
+        &source.declaring_interface
+    })
 }
 
 struct AdapterBindings {
@@ -457,8 +451,8 @@ struct AdapterBindings {
 }
 
 struct AdapterSource<'s> {
-    owner: &'s str,
-    go_method: Option<String>,
+    owner: &'s Symbol,
+    go_method: Option<CalleeName>,
     requirement: Option<&'s InterfaceRequirement>,
     return_type: &'s Type,
 }
@@ -496,7 +490,7 @@ fn adapter_uses_type_parameter(
 }
 
 pub(in crate::lowering) fn bound_needs_dispatch(facts: &EmitFacts<'_>, bound: &Type) -> bool {
-    interface_requirements(bound, |id| Some(facts.definition(id)))
+    interface_requirements(bound, facts.type_query_lookup())
         .iter()
         .any(|requirement| {
             !is_go_import(&requirement.declaring_interface)
@@ -514,12 +508,17 @@ pub(in crate::lowering) fn requirement_go_return_abi(
 ) -> CallableReturnAbi {
     go_callable_return_abi(
         facts,
-        &requirement
-            .declaring_interface
-            .with_segment(&requirement.method.source_name),
+        &requirement_callee(requirement),
         declared_return,
         &requirement.method.go_hints,
     )
+}
+
+fn requirement_callee(requirement: &InterfaceRequirement) -> CalleeName {
+    CalleeName::Method(MethodName::new(
+        requirement.declaring_interface.clone(),
+        &requirement.method.source_name,
+    ))
 }
 
 fn requirement_uses_tagged_counterpart(
@@ -532,7 +531,7 @@ fn requirement_uses_tagged_counterpart(
 
 pub(in crate::lowering) fn has_tagged_counterpart(
     facts: &EmitFacts<'_>,
-    owner: &str,
+    owner: &Symbol,
     member: &str,
 ) -> bool {
     !is_go_import(owner)
@@ -545,19 +544,11 @@ fn callee_selects_tagged_counterpart(facts: &EmitFacts<'_>, callee: &CheckedCall
     match callee.interface_requirement() {
         Some(requirement) => requirement_uses_tagged_counterpart(facts, requirement),
         None => callee
-            .definition
-            .as_deref()
-            .is_some_and(|symbol| definition_selects_tagged_counterpart(facts, symbol)),
+            .name
+            .as_ref()
+            .and_then(CalleeName::method)
+            .is_some_and(|method| has_tagged_counterpart(facts, &method.owner, &method.name)),
     }
-}
-
-pub(in crate::lowering) fn definition_selects_tagged_counterpart(
-    facts: &EmitFacts<'_>,
-    symbol: &str,
-) -> bool {
-    symbol
-        .rsplit_once('.')
-        .is_some_and(|(owner, name)| has_tagged_counterpart(facts, owner, name))
 }
 
 fn adapter_source_go_name(
@@ -724,11 +715,11 @@ impl PlannerQueries<'_, '_> {
             .zip(&declared.params)
             .map(|(parameter, declared)| {
                 let origin = match abi {
-                    RequirementAbi::Go => {
-                        SlotOrigin::of_go_declaration(SlotOrigin::GoParameter, &declared.ty, |id| {
-                            Some(self.facts.definition(id))
-                        })
-                    }
+                    RequirementAbi::Go => SlotOrigin::of_go_declaration(
+                        SlotOrigin::GoParameter,
+                        &declared.ty,
+                        self.facts.type_query_lookup(),
+                    ),
                     RequirementAbi::Lisette => SlotOrigin::Lisette,
                 };
 
@@ -738,11 +729,11 @@ impl PlannerQueries<'_, '_> {
             .collect();
 
         let origin = match abi {
-            RequirementAbi::Go => {
-                SlotOrigin::of_go_declaration(SlotOrigin::GoReturn, &declared.return_type, |id| {
-                    Some(self.facts.definition(id))
-                })
-            }
+            RequirementAbi::Go => SlotOrigin::of_go_declaration(
+                SlotOrigin::GoReturn,
+                &declared.return_type,
+                self.facts.type_query_lookup(),
+            ),
             RequirementAbi::Lisette => SlotOrigin::Lisette,
         };
 
@@ -778,7 +769,7 @@ impl PlannerQueries<'_, '_> {
         };
         let mut methods = Vec::new();
         let mut seen = FxHashSet::default();
-        for requirement in interface_requirements(target, |id| Some(self.facts.definition(id))) {
+        for requirement in interface_requirements(target, self.facts.type_query_lookup()) {
             if !seen.insert(
                 self.facts
                     .method_go_name(&requirement.name, GoExport::Unexported),
@@ -819,7 +810,7 @@ impl PlannerQueries<'_, '_> {
         }
         Some(AdapterPlan {
             concrete: AdapterConcrete::Parameter(name),
-            interface_id: id.as_eco().clone(),
+            interface_id: id.clone(),
             interface_ty: target.clone(),
             concrete_ty: source.clone(),
             generic_context: self.adapter_generic_context(source, &methods),
@@ -861,10 +852,10 @@ impl PlannerQueries<'_, '_> {
         let Type::Nominal { id: source_id, .. } = source_shape else {
             return None;
         };
-        let methods = self.adapted_methods(source_shape, target, conversion.witness.as_ref())?;
+        let methods = self.adapted_methods(target, conversion.witness.as_ref())?;
         Some(AdapterPlan {
-            concrete: AdapterConcrete::Nominal(source_id.as_eco().clone()),
-            interface_id: target_id.as_eco().clone(),
+            concrete: AdapterConcrete::Nominal(source_id.clone()),
+            interface_id: target_id.clone(),
             interface_ty: target.clone(),
             concrete_ty: source_ty.clone(),
             generic_context: self.adapter_generic_context(source_ty, &methods),
@@ -874,11 +865,10 @@ impl PlannerQueries<'_, '_> {
 
     fn adapted_methods(
         &self,
-        source_stripped: &Type,
         target: &Type,
         witness: Option<&ConformanceWitness>,
     ) -> Option<Vec<AdapterMethod>> {
-        let requirements = interface_requirements(target, |id| Some(self.facts.definition(id)));
+        let requirements = interface_requirements(target, self.facts.type_query_lookup());
         if requirements.is_empty() {
             return None;
         }
@@ -898,7 +888,6 @@ impl PlannerQueries<'_, '_> {
             let checked = witness.method_for(&requirement);
             let method = self.build_adapter_method(
                 &requirement,
-                source_stripped,
                 checked.selected_requirement.as_ref(),
                 checked,
             )?;
@@ -931,7 +920,6 @@ impl PlannerQueries<'_, '_> {
     fn build_adapter_method(
         &self,
         requirement: &InterfaceRequirement,
-        concrete_ty: &Type,
         source_requirement: Option<&InterfaceRequirement>,
         checked: &CheckedMethod,
     ) -> Option<AdapterMethod> {
@@ -942,12 +930,13 @@ impl PlannerQueries<'_, '_> {
         let param_types: Vec<Type> = parameters.iter().map(|param| param.ty.clone()).collect();
         let return_type = instantiated.return_type.as_ref().clone();
 
-        let source_owner = adapter_source_owner(source_requirement, checked, concrete_ty)?;
+        let source_owner = adapter_source_owner(source_requirement, checked);
 
         let adapter_source = AdapterSource {
             owner: source_owner,
-            go_method: is_go_import(source_owner)
-                .then(|| format!("{source_owner}.{implementation_name}")),
+            go_method: is_go_import(source_owner).then(|| {
+                CalleeName::Method(MethodName::new(source_owner.clone(), implementation_name))
+            }),
             requirement: source_requirement,
             return_type: source_requirement
                 .and_then(|source| source.method.ty.as_function_type())
@@ -961,7 +950,7 @@ impl PlannerQueries<'_, '_> {
         );
         let user_result = self
             .facts
-            .interface_result_layout(adapter_source.go_method.as_deref(), &return_type);
+            .interface_result_layout(adapter_source.go_method.as_ref(), &return_type);
         let source =
             self.adapter_source_layout(&adapter_source, &param_types, &user_result, user_abi);
 
@@ -1027,7 +1016,7 @@ impl PlannerQueries<'_, '_> {
             producer,
             ..self.facts.function_layout(
                 self.interface_parameter_layouts(
-                    source.go_method.as_deref(),
+                    source.go_method.as_ref(),
                     param_types,
                     usize::from(source.requirement.is_none()),
                 ),
@@ -1046,21 +1035,18 @@ impl PlannerQueries<'_, '_> {
         fallback: ResultFallback<'_>,
     ) -> Option<FunctionLayout> {
         let interface_return = &requirement.method.ty.as_function_type()?.return_type;
-        let go_method = is_go_import(&requirement.declaring_interface).then(|| {
-            requirement
-                .declaring_interface
-                .with_segment(&requirement.method.source_name)
-        });
+        let go_method =
+            is_go_import(&requirement.declaring_interface).then(|| requirement_callee(requirement));
         let interface_abi = if go_method.is_some() {
             requirement_go_return_abi(self.facts, requirement, interface_return)
         } else {
             interface_method_return_abi(self.facts, &requirement.method)
         };
-        let parameters = self.interface_parameter_layouts(go_method.as_deref(), param_types, 0);
+        let parameters = self.interface_parameter_layouts(go_method.as_ref(), param_types, 0);
         if interface_abi.fits_return_type(self.facts, return_type) {
             let result = self
                 .facts
-                .interface_result_layout(go_method.as_deref(), return_type);
+                .interface_result_layout(go_method.as_ref(), return_type);
             return Some(self.facts.function_layout(
                 parameters,
                 &result,
@@ -1078,7 +1064,7 @@ impl PlannerQueries<'_, '_> {
 
     fn interface_parameter_layouts(
         &self,
-        go_method: Option<&str>,
+        go_method: Option<&CalleeName>,
         param_types: &[Type],
         offset: usize,
     ) -> Vec<ValueLayout> {

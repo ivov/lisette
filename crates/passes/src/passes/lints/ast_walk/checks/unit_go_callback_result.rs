@@ -1,6 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
-use syntax::program::{ValueUseKey, is_go_import, resolved_definition};
+use syntax::program::{ValueUseKey, is_go_import, resolved_callee};
 use syntax::types::Type;
 
 pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
@@ -12,7 +12,7 @@ pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
             expression: callee,
             args,
             ..
-        } if resolved_definition(callee).is_some_and(is_go_import) => {
+        } if resolved_callee(callee).is_some_and(|callee| callee.is_go()) => {
             for argument in args {
                 let argument = argument.unwrap_parens();
                 if !slot_is_go_function_type(argument, ctx) {

@@ -420,9 +420,10 @@ pub(in crate::lowering) fn test_log_call<'e>(
     let is_test_log = facts
         .checked(callee)
         .callee()
-        .definition
-        .as_deref()
-        .is_some_and(|definition| definition == go_name::TEST_LOG_METHOD);
+        .method()
+        .is_some_and(|method| {
+            method.owner == go_name::TEST_CONTEXT_TYPE && method.name == go_name::TEST_LOG_METHOD
+        });
     let Expression::DotAccess {
         expression: handle, ..
     } = &**callee

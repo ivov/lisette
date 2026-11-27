@@ -1,4 +1,3 @@
-use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::output::finish::function_literals::immediate_call;
@@ -30,159 +29,34 @@ use syntax::program::SlotOrigin;
 
 mod checks;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::lowering) enum PathSegment {
-    Field(String),
-    ValueField(String),
-    Index(usize),
-    SliceFrom(usize),
-    ArraySliceFrom { offset: usize, go_type: GoType },
-    Deref,
-    NewtypeCast(GoType),
-    AssertedAs(GoType),
-}
+mod path;
 
-fn element_index(segments: &[PathSegment]) -> usize {
-    let [
-        PathSegment::Field(field) | PathSegment::ValueField(field),
-        ..,
-    ] = segments
-    else {
-        unreachable!("a tuple-element subject only resolves field paths")
-    };
-
-    go_name::tuple_field_index(field).expect("a tuple-element subject only resolves tuple fields")
-}
-
-#[derive(Clone, Copy)]
-pub(in crate::lowering) enum SubjectRoot<'a> {
-    Var(&'a GoExpression),
-    Elements(&'a [GoExpression]),
-}
-
-impl<'a> SubjectRoot<'a> {
-    fn resolve<'p>(&self, segments: &'p [PathSegment]) -> (GoExpression, &'p [PathSegment]) {
-        match self {
-            Self::Var(var) => ((*var).clone(), segments),
-            Self::Elements(elements) => (elements[element_index(segments)].clone(), &segments[1..]),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::lowering) struct AccessPath {
-    pub segments: Vec<PathSegment>,
-}
-
-impl AccessPath {
-    pub(in crate::lowering) fn root() -> Self {
-        Self { segments: vec![] }
-    }
-
-    fn is_root(&self) -> bool {
-        self.segments.is_empty()
-    }
-
-    fn push(&self, segment: PathSegment) -> Self {
-        let mut new = self.clone();
-        new.segments.push(segment);
-        new
-    }
-
-    fn rebase_past(&mut self, segment: &PathSegment) {
-        if self.segments.first() == Some(segment) {
-            self.segments.remove(0);
-        }
-    }
-
-    pub(in crate::lowering) fn render(&self, subject: SubjectRoot<'_>) -> GoExpression {
-        let (root, segments) = subject.resolve(&self.segments);
-        let mut result = root;
-        for segment in segments {
-            result = match segment {
-                PathSegment::Field(name) => GoExpression::selector(result, name.clone()),
-                PathSegment::ValueField(name) => GoExpression::value_field(result, name.clone()),
-                PathSegment::Index(index) => {
-                    GoExpression::index(result, GoExpression::integer(*index as i128))
-                        .proven_in_bounds()
-                }
-                PathSegment::SliceFrom(offset) => GoExpression::slice(
-                    result,
-                    Some(&GoExpression::integer(*offset as i128)),
-                    None,
-                    None,
-                )
-                .proven_in_bounds(),
-                PathSegment::ArraySliceFrom { offset, go_type } => GoExpression::conversion(
-                    go_type.clone(),
-                    GoExpression::slice(
-                        result,
-                        Some(&GoExpression::integer(*offset as i128)),
-                        None,
-                        None,
-                    )
-                    .proven_in_bounds(),
-                ),
-                PathSegment::Deref => GoExpression::dereference(result),
-                PathSegment::NewtypeCast(go_type) => {
-                    GoExpression::conversion(go_type.clone(), result)
-                }
-                PathSegment::AssertedAs(ty) => GoExpression::type_assertion(result, ty.clone()),
-            };
-        }
-        result
-    }
-
-    pub(in crate::lowering) fn payload_is_index(&self) -> bool {
-        self.segments
-            .iter()
-            .any(|segment| matches!(segment, PathSegment::Index(_)))
-    }
-
-    pub(in crate::lowering) fn contains_deferred_evaluation(&self) -> bool {
-        self.segments.iter().any(|segment| {
-            matches!(
-                segment,
-                PathSegment::ArraySliceFrom { .. }
-                    | PathSegment::Deref
-                    | PathSegment::NewtypeCast(_)
-                    | PathSegment::AssertedAs(_)
-            )
-        })
-    }
-
-    fn checked_tuple_element(&self, arity: usize) -> Option<usize> {
-        let Some(PathSegment::Field(field) | PathSegment::ValueField(field)) =
-            self.segments.first()
-        else {
-            return None;
-        };
-        go_name::tuple_field_index(field).filter(|index| *index < arity)
-    }
-}
+use path::Place;
+pub(in crate::lowering) use path::{AccessPath, ConcretePath, SubjectRoot};
 
 #[derive(Clone, Debug)]
 pub(in crate::lowering) enum Check {
     Nilable {
-        path: AccessPath,
+        path: ConcretePath,
         guard: NilGuard,
         some: bool,
     },
     EnumTag {
-        path: AccessPath,
+        path: ConcretePath,
         tag_constant: GoExpression,
     },
     Literal {
         path: AccessPath,
         go_literal: GoExpression,
         value: Option<Literal>,
+        on_interface: bool,
     },
     SliceLengthEqual {
-        path: AccessPath,
+        path: ConcretePath,
         length: usize,
     },
     SliceLengthAtLeast {
-        path: AccessPath,
+        path: ConcretePath,
         min_length: usize,
     },
     Or {
@@ -226,7 +100,7 @@ impl Check {
         let negative = matches!(polarity, CheckPolarity::Negative);
         match self {
             Check::Nilable { path, guard, some } => {
-                let value = path.render(subject);
+                let value = path.path().render(subject);
                 if *some != negative {
                     guard.non_nil_condition(value)
                 } else {
@@ -240,21 +114,24 @@ impl Check {
                     GoBinaryOperator::Equal
                 };
                 GoExpression::binary(
-                    GoExpression::selector(path.render(subject), ENUM_TAG_FIELD.to_string()),
+                    GoExpression::selector(path.path().render(subject), ENUM_TAG_FIELD.to_string()),
                     operator,
                     tag_constant.clone(),
                 )
             }
             Check::Literal {
-                path, go_literal, ..
-            } => render_literal_check(path.render(subject), go_literal, polarity),
+                path,
+                go_literal,
+                on_interface,
+                ..
+            } => render_literal_check(path.render(subject), go_literal, *on_interface, polarity),
             Check::SliceLengthEqual { path, length } => {
                 let operator = if negative {
                     GoBinaryOperator::NotEqual
                 } else {
                     GoBinaryOperator::Equal
                 };
-                render_length_check(path.render(subject), operator, *length)
+                render_length_check(path.path().render(subject), operator, *length)
             }
             Check::SliceLengthAtLeast { path, min_length } => {
                 let operator = if negative {
@@ -262,7 +139,7 @@ impl Check {
                 } else {
                     GoBinaryOperator::GreaterThanOrEqual
                 };
-                render_length_check(path.render(subject), operator, *min_length)
+                render_length_check(path.path().render(subject), operator, *min_length)
             }
             Check::Or { alternatives } if !negative => alternatives
                 .iter()
@@ -283,27 +160,10 @@ impl Check {
         match self {
             Check::Nilable { path, .. }
             | Check::EnumTag { path, .. }
-            | Check::Literal { path, .. }
             | Check::SliceLengthEqual { path, .. }
-            | Check::SliceLengthAtLeast { path, .. }
-            | Check::TypeAssert { path, .. } => CheckTarget::Path(path),
+            | Check::SliceLengthAtLeast { path, .. } => CheckTarget::Path(path.path()),
+            Check::Literal { path, .. } | Check::TypeAssert { path, .. } => CheckTarget::Path(path),
             Check::Or { alternatives } => CheckTarget::Alternatives(alternatives),
-        }
-    }
-
-    fn rebase_past(&mut self, segment: &PathSegment) {
-        match self {
-            Check::Nilable { path, .. }
-            | Check::EnumTag { path, .. }
-            | Check::Literal { path, .. }
-            | Check::SliceLengthEqual { path, .. }
-            | Check::SliceLengthAtLeast { path, .. }
-            | Check::TypeAssert { path, .. } => path.rebase_past(segment),
-            Check::Or { alternatives } => {
-                for check in alternatives.iter_mut().flatten() {
-                    check.rebase_past(segment);
-                }
-            }
         }
     }
 
@@ -393,10 +253,12 @@ enum CheckTarget<'a> {
 fn render_literal_check(
     rendered_path: GoExpression,
     go_literal: &GoExpression,
+    on_interface: bool,
     polarity: CheckPolarity,
 ) -> GoExpression {
     let negative = matches!(polarity, CheckPolarity::Negative);
-    match (go_literal.as_boolean(), negative) {
+    let boolean = go_literal.as_boolean().filter(|_| !on_interface);
+    match (boolean, negative) {
         (Some(true), false) | (Some(false), true) => rendered_path,
         (Some(true), true) | (Some(false), false) => {
             GoExpression::unary(GoUnaryOperator::Not, rendered_path)
@@ -788,7 +650,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
             .iter()
             .map(|arm| {
                 let mut arm = arm.clone();
-                let label = lift_root_assertion(&mut arm.checks, &mut arm.bindings)?;
+                let label = lift_root_assertion(&mut arm.checks)?;
                 Some(LabeledCase {
                     label,
                     extra_labels: Vec::new(),
@@ -1095,33 +957,19 @@ fn root_assertion_position(checks: &[Check]) -> Option<usize> {
         .position(|check| root_assertion(check).is_some())
 }
 
-pub(super) fn lift_root_assertion(
-    checks: &mut Vec<Check>,
-    bindings: &mut [PatternBinding],
-) -> Option<Vec<GoType>> {
+pub(super) fn lift_root_assertion(checks: &mut Vec<Check>) -> Option<Vec<GoType>> {
     let (position, assertion) = checks
         .iter()
         .enumerate()
         .find_map(|(position, check)| Some((position, root_assertion(check)?)))?;
-    let (go_types, asserted) = match assertion {
-        RootAssertion::Single(go_type) => (
-            vec![go_type.clone()],
-            Some(PathSegment::AssertedAs(go_type.clone())),
-        ),
+    let go_types = match assertion {
+        RootAssertion::Single(go_type) => vec![go_type.clone()],
         RootAssertion::Alternatives(go_types) => {
             debug_assert!(!go_types.is_empty(), "at least one alternative");
-            (go_types.into_iter().cloned().collect(), None)
+            go_types.into_iter().cloned().collect()
         }
     };
     checks.remove(position);
-    if let Some(asserted) = asserted {
-        for check in checks.iter_mut() {
-            check.rebase_past(&asserted);
-        }
-        for binding in bindings {
-            binding.path.rebase_past(&asserted);
-        }
-    }
     Some(go_types)
 }
 
@@ -1170,20 +1018,12 @@ impl Planner<'_> {
     ) -> PatternInfo {
         let mut info = PatternInfo::new();
         self.collect_checks_and_bindings(
-            &AccessPath::root(),
+            &Place::new(&self.facts, AccessPath::root(), subject_ty),
             pattern,
             subject_ty,
             Some(&self.facts.value_layout(subject_ty, SlotOrigin::Lisette)),
             &mut info,
         );
         info
-    }
-}
-
-fn field_segment(facts: &EmitFacts<'_>, receiver_ty: &Type, name: String) -> PathSegment {
-    if facts.field_read_cannot_panic(receiver_ty) {
-        PathSegment::ValueField(name)
-    } else {
-        PathSegment::Field(name)
     }
 }

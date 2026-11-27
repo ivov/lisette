@@ -1389,6 +1389,6 @@ fn arity_difference<'a>(expected: &'a Type, actual: &'a Type) -> Option<(&'a Typ
         .find_map(|(e, a)| arity_difference(e, a))
 }
 
-fn contains_type_variable(ty: &Type) -> bool {
+pub(super) fn contains_type_variable(ty: &Type) -> bool {
     matches!(ty, Type::Var { .. }) || ty.children().into_iter().any(contains_type_variable)
 }

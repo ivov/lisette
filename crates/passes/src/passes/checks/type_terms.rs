@@ -2,7 +2,7 @@ use std::ptr;
 
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Generic, Span};
-use syntax::program::{GoTypeTerm, GoTypeTerms};
+use syntax::program::{GoTypeTerm, GoTypeTerms, resolved_callee, resolved_instantiation};
 use syntax::types::{CompoundKind, SimpleKind, SubstitutionMap, Type, unqualified_name};
 
 use semantics::store::Store;
@@ -43,13 +43,15 @@ fn visit<'a>(
         Expression::Function { generics, .. } | Expression::ImplBlock { generics, .. } => {
             scope.extend(generics);
         }
-        Expression::Identifier { resolution, .. } => {
-            let reference = resolution.definition().zip(resolution.instantiation());
-            check_reference(expression, reference, scope, store, sink, call_span);
-        }
-        Expression::DotAccess { resolution, .. } => {
-            let reference = resolution.definition().zip(resolution.instantiation());
-            check_reference(expression, reference, scope, store, sink, call_span);
+        Expression::Identifier { .. } | Expression::DotAccess { .. } => {
+            if let Some(instantiation) =
+                resolved_instantiation(expression).filter(|instantiation| !instantiation.is_empty())
+                && let Some(name) = resolved_callee(expression)
+            {
+                let name = name.qualified_name();
+                let reference = Some((name.as_str(), instantiation));
+                check_reference(expression, reference, scope, store, sink, call_span);
+            }
         }
         _ => {}
     }

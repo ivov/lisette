@@ -5968,3 +5968,28 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn discard_of_payload_with_unresolved_type() {
+    let input = r#"
+fn test() -> int {
+  let r = Ok(1)
+  let total = match r {
+    Ok(v) => v,
+    Err(e) => {
+      let _ = e
+      0
+    },
+  }
+  let o = None
+  match o {
+    Some(x) => {
+      let _ = x
+      total
+    },
+    None => total + 1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

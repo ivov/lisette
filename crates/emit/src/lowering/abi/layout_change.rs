@@ -32,7 +32,7 @@ use crate::target::types::go_type::GoType;
 use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use syntax::ast::Expression;
 use syntax::go_names::ENUM_TAG_FIELD;
-use syntax::program::{GO_IMPORT_PREFIX, SlotOrigin};
+use syntax::program::{Definition, GO_IMPORT_PREFIX, SlotOrigin};
 use syntax::types::{CompoundKind, Type};
 
 fn some_condition(option: &GoExpression) -> GoExpression {
@@ -726,7 +726,10 @@ impl Planner<'_> {
                 PackageOrigin::Generated | PackageOrigin::Lisette => true,
                 PackageOrigin::GoImport => {
                     let id = format!("{GO_IMPORT_PREFIX}{}.{name}", package.package().path());
-                    !self.facts.definition(&id).is_variable()
+                    !self
+                        .facts
+                        .find_definition(&id)
+                        .is_some_and(Definition::is_variable)
                 }
             },
             GoExpressionNode::Literal(_)

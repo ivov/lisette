@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> int {
+    let r = Ok(1)
+    let total = match r {
+      Ok(v) => v,
+      Err(e) => {
+        let _ = e
+        0
+      },
+    }
+    let o = None
+    match o {
+      Some(x) => {
+        let _ = x
+        total
+      },
+      None => total + 1,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	r := lisette.MakeResultOk[int, any](1)
+	var total int
+	if r.Tag == lisette.ResultOk {
+		total = r.OkVal
+	} else {
+		_ = r.ErrVal
+		total = 0
+	}
+	o := lisette.MakeOptionNone[any]()
+	if o.Tag == lisette.OptionSome {
+		_ = o.SomeVal
+		return total
+	}
+	return total + 1
+}

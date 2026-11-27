@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::synthesized_methods::{StringFormat, StructShape, SynthesizedMethod};
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::definitions::tags::{format_tag_string, interpret_field_attributes};
@@ -20,11 +21,12 @@ use crate::target::types::go_type::GoType;
 use crate::target::types::go_type::receiver_type;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::go_names::ENUM_STRINGER_METHOD;
+use syntax::types::Symbol;
 
 impl Planner<'_> {
     pub(in crate::lowering) fn emit_struct_definition(
         &mut self,
-        name: &str,
+        name: DeclaredName<'_>,
         generics: &[Generic],
         fields: &StructFields,
         attributes: &[Attribute],
@@ -49,7 +51,7 @@ impl Planner<'_> {
             .unzip();
         let receiver_generics = self.names.receiver_generics(generics);
         let mut result = vec![GoDeclaration::new(DeclarationKind::Struct {
-            name: go_name::escape_type_name(name).into_owned(),
+            name: go_name::escape_type_name(name.as_str()).into_owned(),
             parameters,
             fields: fields_plan,
         })];
@@ -59,18 +61,18 @@ impl Planner<'_> {
         {
             result.push(match method {
                 SynthesizedMethod::Format(format) => self.emit_struct_format_method(
-                    name,
+                    name.as_str(),
                     &receiver_generics,
                     &stringer_fields,
                     format,
                 ),
                 SynthesizedMethod::StringerShadow => self.emit_struct_shadow_stringer_method(
-                    name,
+                    name.as_str(),
                     &receiver_generics,
                     &stringer_fields,
                 ),
                 SynthesizedMethod::ToString => self.emit_to_string_method(
-                    name,
+                    name.as_str(),
                     &receiver_generics,
                     &self.facts.to_string_method_go_name(),
                 ),
@@ -83,7 +85,7 @@ impl Planner<'_> {
 
     fn emit_tuple_struct(
         &mut self,
-        name: &str,
+        name: DeclaredName<'_>,
         parameters: Vec<TypeParameter>,
         fields: &[StructFieldDefinition],
         generics: &[Generic],
@@ -93,7 +95,7 @@ impl Planner<'_> {
             .facts
             .is_newtype_definition(name)
             .then(|| self.queries().go_type(&fields[0].ty));
-        let go_name = go_name::escape_type_name(name).into_owned();
+        let go_name = go_name::escape_type_name(name.as_str()).into_owned();
         let definition = match &underlying {
             Some(underlying) => DeclarationKind::Type {
                 name: go_name,
@@ -111,7 +113,7 @@ impl Planner<'_> {
         let receiver_generics = self.names.receiver_generics(generics);
         let formats = fields
             .iter()
-            .map(|field| DisplayForm::of(&field.ty, |id| Some(self.facts.definition(id))))
+            .map(|field| DisplayForm::of(&field.ty, self.facts.type_query_lookup()))
             .collect::<Vec<_>>();
         for method in self
             .facts
@@ -119,14 +121,14 @@ impl Planner<'_> {
         {
             result.push(match method {
                 SynthesizedMethod::Format(format) => self.emit_tuple_struct_format_method(
-                    name,
+                    name.as_str(),
                     &receiver_generics,
                     &formats,
                     underlying.as_ref(),
                     format,
                 ),
                 SynthesizedMethod::ToString => self.emit_to_string_method(
-                    name,
+                    name.as_str(),
                     &receiver_generics,
                     &self.facts.to_string_method_go_name(),
                 ),
@@ -155,12 +157,12 @@ impl Planner<'_> {
 
     fn struct_equals_method(
         &mut self,
-        name: &str,
+        name: DeclaredName<'_>,
         generics: &[Generic],
         fields: &[StructFieldDefinition],
     ) -> GoDeclaration {
         let receiver_generics = self.names.receiver_generics(generics);
-        let receiver = synthesized_receiver_name(name, &receiver_generics);
+        let receiver = synthesized_receiver_name(name.as_str(), &receiver_generics);
         let other = synthesized_local_name("other", &receiver, &receiver_generics);
         let receiver = self.scope.new_local_identifier(receiver);
         let other = self.scope.new_local_identifier(other);
@@ -192,7 +194,7 @@ impl Planner<'_> {
             .into_iter()
             .reduce(|left, right| GoExpression::binary(left, GoBinaryOperator::And, right))
             .unwrap_or_else(|| GoExpression::boolean(true));
-        let receiver_type = receiver_type(&receiver_generics, name);
+        let receiver_type = receiver_type(&receiver_generics, name.as_str());
         GoDeclaration::function(
             Some(GoParameter::new(receiver, receiver_type.clone())),
             self.facts.equals_method_go_name(),
@@ -385,7 +387,7 @@ pub(in crate::lowering) fn format_value(
 impl PlannerQueries<'_, '_> {
     fn emit_struct_field(
         &self,
-        struct_id: &str,
+        struct_id: &Symbol,
         field: &StructFieldDefinition,
         attributes: &[Attribute],
     ) -> (FieldDeclaration, StringerField) {
@@ -409,7 +411,7 @@ impl PlannerQueries<'_, '_> {
             StringerField {
                 source_name: field.name.to_string(),
                 go_name: name,
-                format: DisplayForm::of(&field.ty, |id| Some(self.facts.definition(id))),
+                format: DisplayForm::of(&field.ty, self.facts.type_query_lookup()),
             },
         )
     }

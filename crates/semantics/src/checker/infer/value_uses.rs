@@ -3,10 +3,10 @@ use std::mem;
 
 use syntax::ast::{Expression, ExpressionId, FormatStringPart, Literal, MatchArm, SelectArm, Span};
 use syntax::program::{
-    Adaptation, CallOperation, CheckedBodiesBuilder, CheckedCallee, CheckedValueUse,
+    Adaptation, CallOperation, CalleeName, CheckedBodiesBuilder, CheckedCallee, CheckedValueUse,
     ConformanceWitness, Definition, DefinitionBody, DotAccessResolution, FieldKey, FieldSelection,
-    InterfaceConversion, InterfaceRequirement, NativeOperation, ReceiverCoercion, ValueUseKey,
-    constructor_fields, interface_requirements, is_go_import, resolved_definition,
+    InterfaceConversion, InterfaceRequirement, MethodName, NativeOperation, ReceiverCoercion,
+    ValueUseKey, constructor_fields, interface_requirements, is_go_import, resolved_callee,
     resolved_instantiation,
 };
 use syntax::types::{
@@ -113,21 +113,21 @@ impl InferCtx<'_> {
         interface_method: Option<Box<InterfaceRequirement>>,
     ) {
         let callee = callee.unwrap_value_wrappers();
-        let definition =
-            resolved_definition(callee).map(|definition| unaliased_owner(self.store, definition));
+        let name = resolved_callee(callee).map(|name| unaliased_callee(self.store, name));
         let copies_storage = matches!(
             &operation,
             CallOperation::Native { kind, method } if NativeOperation::new(*kind, method).grows_slice()
         );
         let binds_receiver = is_instance_method_access(callee)
-            && definition
-                .as_deref()
-                .is_some_and(|definition| declares_receiver(self.store, definition));
+            && name
+                .as_ref()
+                .and_then(CalleeName::method)
+                .is_some_and(|method| declares_receiver(self.store, method));
         self.facts.value_uses.callees.push((
             ValueUseKey::value(callee),
             CheckedCallee {
                 operation,
-                definition,
+                name,
                 type_arguments,
                 copies_storage,
                 binds_receiver,
@@ -329,7 +329,23 @@ impl InferCtx<'_> {
 }
 
 /// `definition` with an aliased owner type replaced by the type it names.
-pub(crate) fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
+fn unaliased_callee(store: &Store, name: CalleeName) -> CalleeName {
+    match name {
+        CalleeName::Definition(definition) => {
+            CalleeName::Definition(unaliased_owner(store, &definition))
+        }
+        CalleeName::Method(method) => CalleeName::Method(MethodName {
+            owner: unaliased_type(store, method.owner),
+            name: method.name,
+        }),
+    }
+}
+
+fn unaliased_type(store: &Store, id: Symbol) -> Symbol {
+    store.peel_alias_name(&id).unwrap_or(id)
+}
+
+fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
     if let Some(Definition {
         body: DefinitionBody::TypeAlias { .. },
         ..
@@ -341,22 +357,12 @@ pub(crate) fn unaliased_owner(store: &Store, definition: &str) -> Symbol {
     let Some((owner, member)) = definition.rsplit_once('.') else {
         return Symbol::from_raw(definition);
     };
-    let owner_type = Type::Nominal {
-        id: Symbol::from_raw(owner),
-        params: Vec::new(),
-        writable: false,
-    };
-    match store.peel_alias(&owner_type) {
-        Type::Nominal { id, .. } => id.with_segment(member),
-        _ => Symbol::from_raw(definition),
-    }
+    unaliased_type(store, Symbol::from_raw(owner)).with_segment(member)
 }
 
 /// Whether the method `definition` lists its receiver as its first parameter, which interface methods do not.
-fn declares_receiver(store: &Store, definition: &str) -> bool {
-    let Some((owner, member)) = definition.rsplit_once('.') else {
-        return false;
-    };
+fn declares_receiver(store: &Store, method: &MethodName) -> bool {
+    let (owner, member) = (method.owner.as_str(), method.name.as_str());
     store.get_definition(owner).is_some_and(|declaration| {
         !matches!(declaration.body, DefinitionBody::Interface { .. })
             && store.get_method(owner, member).is_some()
@@ -364,10 +370,8 @@ fn declares_receiver(store: &Store, definition: &str) -> bool {
 }
 
 /// The operation that a function value naming the declaration `definition` runs when it is called.
-fn method_value_operation(store: &Store, definition: &str) -> CallOperation {
-    let Some((owner, member)) = definition.rsplit_once('.') else {
-        return CallOperation::Function;
-    };
+fn method_value_operation(store: &Store, method: &MethodName) -> CallOperation {
+    let (owner, member) = (method.owner.as_str(), method.name.as_str());
     let Some(method) = store.get_method(owner, member) else {
         return CallOperation::Function;
     };
@@ -606,9 +610,9 @@ impl Finalizer<'_> {
             return;
         };
         if let Some(Type::Forall { vars, .. }) = checked
-            .definition
+            .name
             .as_ref()
-            .and_then(|definition| self.declared_type(definition))
+            .and_then(|name| self.declared_type(name))
             && vars
                 .iter()
                 .any(|name| checked.type_arguments.get(name).is_none())
@@ -629,15 +633,15 @@ impl Finalizer<'_> {
         {
             return;
         }
-        let definition = resolved_definition(expression)
-            .map(|definition| unaliased_owner(self.store, definition));
+        let name = resolved_callee(expression).map(|name| unaliased_callee(self.store, name));
         let checked = CheckedCallee {
-            operation: definition
-                .as_deref()
-                .map_or(CallOperation::Function, |definition| {
-                    method_value_operation(self.store, definition)
+            operation: name
+                .as_ref()
+                .and_then(CalleeName::method)
+                .map_or(CallOperation::Function, |method| {
+                    method_value_operation(self.store, method)
                 }),
-            definition,
+            name,
             type_arguments: resolved_instantiation(expression)
                 .cloned()
                 .unwrap_or_default(),
@@ -650,14 +654,17 @@ impl Finalizer<'_> {
     }
 
     /// The declared type of the function or method `definition`.
-    fn declared_type(&self, definition: &str) -> Option<&Type> {
-        if let Some(declared) = self.store.get_definition(definition) {
-            return Some(&declared.ty);
+    fn declared_type(&self, name: &CalleeName) -> Option<&Type> {
+        match name {
+            CalleeName::Definition(definition) => self
+                .store
+                .get_definition(definition)
+                .map(|declared| &declared.ty),
+            CalleeName::Method(method) => self
+                .store
+                .get_method(&method.owner, &method.name)
+                .map(|declared| &declared.ty),
         }
-        let (owner, method) = definition.rsplit_once('.')?;
-        self.store
-            .get_method(owner, method)
-            .map(|declared| &declared.ty)
     }
 
     /// A method receiver whose address the method takes, or whose reference it reads through.

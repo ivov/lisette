@@ -10,6 +10,7 @@ use crate::prelude::PRELUDE_FILE_ID;
 use crate::store::Store;
 use std::fs;
 use syntax::program::PRELUDE_PACKAGE_ID;
+use syntax::types::Symbol;
 
 #[derive(Serialize, Deserialize)]
 pub struct PreludeCache {
@@ -90,7 +91,11 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
         .edit_package(PRELUDE_PACKAGE_ID)
         .expect("prelude package must be registered before loading cached definitions");
     for (qualified_name, cached_definition) in cached.definitions {
-        cached_definition.install_into(package.definitions, qualified_name.into(), file_ids);
+        cached_definition.install_into(
+            package.definitions,
+            Symbol::from_raw(qualified_name),
+            file_ids,
+        );
     }
 }
 

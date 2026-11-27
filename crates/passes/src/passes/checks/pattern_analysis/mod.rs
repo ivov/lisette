@@ -60,18 +60,8 @@ impl<'a, 'sink> PatternAnalysisContext<'a, 'sink> {
         self.sink
     }
 
-    fn normalize_context(&self) -> NormalizationContext<'a> {
-        NormalizationContext {
-            store: self.store,
-            scrutinee_type: None,
-        }
-    }
-
-    fn normalize_context_for_match(&self, scrutinee_type: Type) -> NormalizationContext<'a> {
-        NormalizationContext {
-            store: self.store,
-            scrutinee_type: Some(scrutinee_type),
-        }
+    fn normalize_context(&self, scrutinee_type: Type) -> NormalizationContext<'a> {
+        NormalizationContext::new(self.store, scrutinee_type)
     }
 
     fn add_issue(&self, span: Span, kind: IssueKind) {
@@ -94,7 +84,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
 
         Expression::Function { params, body, .. } => {
             for param in params {
-                if !check_refutability(&param.pattern, ctx) {
+                if !check_refutability(&param.pattern, &param.ty, ctx) {
                     return;
                 }
             }
@@ -104,7 +94,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
         }
         Expression::Lambda { params, body, .. } => {
             for param in params {
-                if !check_refutability(&param.pattern, ctx) {
+                if !check_refutability(&param.pattern, &param.ty, ctx) {
                     return;
                 }
             }
@@ -127,15 +117,15 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             } else if let Some(else_expression) = mode.else_block() {
                 check(else_expression, ctx);
 
-                if is_pattern_irrefutable(&binding.pattern, ctx.store) {
+                if is_pattern_irrefutable(&binding.pattern, &binding.ty, ctx.store) {
                     ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetElse);
                 }
             } else if mode.is_assert() {
-                if is_pattern_irrefutable(&binding.pattern, ctx.store) {
+                if is_pattern_irrefutable(&binding.pattern, &binding.ty, ctx.store) {
                     ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetAssert);
                 }
             } else {
-                check_refutability(&binding.pattern, ctx);
+                check_refutability(&binding.pattern, &binding.ty, ctx);
             }
         }
 
@@ -148,7 +138,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
         } => {
             check(scrutinee, ctx);
             if !is_rejected(scrutinee) && !has_rejected_pattern(pattern, ctx.pattern_error_spans) {
-                check_if_let(pattern, alternative, ctx);
+                check_if_let(pattern, &scrutinee.get_type(), alternative, ctx);
             }
             check(consequence, ctx);
             if let Some(alternative) = alternative.expression() {
@@ -179,7 +169,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             }
 
             let mut unions = FxHashMap::default();
-            let norm_ctx = ctx.normalize_context_for_match(subject.get_type());
+            let norm_ctx = ctx.normalize_context(subject.get_type());
 
             let rejected_spans = ctx.pattern_error_spans;
             if arms
@@ -264,7 +254,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
 
             if !is_rejected(scrutinee)
                 && !has_rejected_pattern(pattern, ctx.pattern_error_spans)
-                && is_pattern_irrefutable(pattern, ctx.store)
+                && is_pattern_irrefutable(pattern, &scrutinee.get_type(), ctx.store)
             {
                 sink.push(diagnostics::pattern::irrefutable_while_let(
                     pattern.get_span(),
@@ -278,7 +268,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             body,
             ..
         } => {
-            if !check_refutability(&binding.pattern, ctx) {
+            if !check_refutability(&binding.pattern, &binding.ty, ctx) {
                 return;
             }
             check(iterable, ctx);
@@ -289,11 +279,12 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             for arm in arms {
                 match arm {
                     SelectArm::Receive {
+                        binding,
                         receive_expression,
                         body,
-                        ..
                     } => {
                         check(receive_expression.as_ref(), ctx);
+                        check_select_payload(binding, receive_expression, ctx);
                         check(body.as_ref(), ctx);
                     }
                     SelectArm::Send {
@@ -309,6 +300,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
                     } => {
                         check(receive_expression.as_ref(), ctx);
                         for match_arm in match_arms {
+                            check_select_payload(&match_arm.pattern, receive_expression, ctx);
                             check(&match_arm.expression, ctx);
                         }
                     }
@@ -518,10 +510,11 @@ fn has_rejected_pattern(pattern: &Pattern, rejected_spans: &FxHashSet<Span>) -> 
 
 fn check_if_let(
     pattern: &Pattern,
+    scrutinee_type: &Type,
     alternative: &IfLetAlternative,
     ctx: &mut PatternAnalysisContext,
 ) {
-    if is_pattern_irrefutable(pattern, ctx.store) {
+    if is_pattern_irrefutable(pattern, scrutinee_type, ctx.store) {
         ctx.add_issue(pattern.get_span(), IssueKind::RedundantIfLet);
 
         if let (Some(alternative_expression), Some(else_span)) =
@@ -539,7 +532,11 @@ fn check_if_let(
     }
 }
 
-fn check_refutability(pattern: &Pattern, ctx: &mut PatternAnalysisContext) -> bool {
+fn check_refutability(
+    pattern: &Pattern,
+    scrutinee_type: &Type,
+    ctx: &mut PatternAnalysisContext,
+) -> bool {
     let mut innermost = pattern;
     while let Pattern::AsBinding { pattern, .. } = innermost {
         innermost = pattern;
@@ -549,7 +546,7 @@ fn check_refutability(pattern: &Pattern, ctx: &mut PatternAnalysisContext) -> bo
     }
 
     let mut unions = FxHashMap::default();
-    let norm_ctx = ctx.normalize_context();
+    let norm_ctx = ctx.normalize_context(scrutinee_type.clone());
     let row = vec![normalize_pattern(
         pattern,
         &mut unions,
@@ -611,12 +608,38 @@ fn refutable_pattern<'a>(
     }
 }
 
-pub fn is_pattern_irrefutable(pattern: &Pattern, store: &Store) -> bool {
-    let mut cache = InhabitanceCache::new();
-    let norm_ctx = NormalizationContext {
-        store,
-        scrutinee_type: None,
+fn check_select_payload(
+    pattern: &Pattern,
+    receive_expression: &Expression,
+    ctx: &PatternAnalysisContext,
+) {
+    let Pattern::EnumVariant {
+        identifier, fields, ..
+    } = pattern
+    else {
+        return;
     };
+    let [payload] = fields.as_slice() else {
+        return;
+    };
+    let received = receive_expression.get_type();
+    if unqualified_name(identifier) != "Some"
+        || !received.is_option()
+        || has_rejected_pattern(pattern, ctx.pattern_error_spans)
+    {
+        return;
+    }
+    if !is_pattern_irrefutable(payload, &received.ok_type(), ctx.store) {
+        ctx.sink
+            .push(diagnostics::infer::select_receive_refutable_pattern(
+                payload.get_span(),
+            ));
+    }
+}
+
+pub fn is_pattern_irrefutable(pattern: &Pattern, scrutinee_type: &Type, store: &Store) -> bool {
+    let mut cache = InhabitanceCache::new();
+    let norm_ctx = NormalizationContext::new(store, scrutinee_type.clone());
 
     let mut unions = FxHashMap::default();
 

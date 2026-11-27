@@ -416,7 +416,9 @@ impl<'a> FreezeFolder<'a> {
         match expression {
             Expression::Identifier { ty, resolution, .. } => {
                 self.freeze_expr_ty(ty);
-                if let IdentifierResolution::Definition { instantiation, .. } = resolution {
+                if let IdentifierResolution::Definition { instantiation, .. }
+                | IdentifierResolution::Method { instantiation, .. } = resolution
+                {
                     self.freeze_instantiation(instantiation);
                 }
             }

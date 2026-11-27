@@ -1,16 +1,13 @@
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::OptionFusePlan;
-use crate::lowering::abi::go_result_wrapping::{
-    nil_condition, non_nil_condition, unexpected_nil_error,
-};
-use crate::lowering::calls::bound_value::BoundValue;
+use crate::lowering::abi::go_result_wrapping::{nil_condition, non_nil_condition};
+use crate::lowering::calls::bound_value::{Arms, BoundValue};
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::target::ir::prelude::{PartialVariant, PreludeVariant, prelude_variant};
 use crate::target::types::return_abi::LoweredReturnAbi;
 
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
-use crate::lowering::calls::wrap_err::WrapMessage;
 use crate::lowering::patterns::binding_declarations::{
     has_binding_or_pattern, pattern_has_bindings,
 };
@@ -20,10 +17,11 @@ use crate::lowering::patterns::tree_planner::{MatchSubject, TreePlanner};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::lowering::value_plans::value_plan::ValuePlan;
+use crate::target::ir::bodies::ElseLayout;
 use crate::target::ir::bodies::GoUses;
 use crate::target::ir::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PairCondition,
-    Statement, SwitchKind, assign, define, define_many, discard,
+    Statement, SwitchKind, define, define_many, discard,
 };
 use crate::target::ir::go_expression::{GoBinaryOperator, GoExpressionNode};
 use crate::target::ir::local::GoIdentifier;
@@ -224,29 +222,26 @@ impl Planner<'_> {
         }
         let none_body = none_body?;
         let payload_ty = self.facts.ok_payload(&subject.get_type());
-        let mut bound = fuse.bind(self, CommaOkValueSlot::Temp);
+        let bound: BoundValue = fuse.bind(self, CommaOkValueSlot::Temp);
         let value = bound.payload()?;
-        let condition = bound.success_condition();
         let then_body =
             self.lower_match_tree(&some_arms, MatchSubject::Var(value), payload_ty, place);
 
         let then_body = finish_nested_pair_arm(then_body);
-        let else_body = self.lower_block_to_place(none_body, place);
-        let else_arm = if then_body.ends_with_diverge() {
-            ElseArm::inline(else_body)
+        let else_body = bound.failure_body(|| self.lower_block_to_place(none_body, place));
+        let failure_layout = if then_body.ends_with_diverge() {
+            ElseLayout::Inline
         } else {
-            ElseArm::block(else_body)
+            ElseLayout::Block
         };
-        bound.statements.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                condition,
-                then_body,
-                else_arm,
-                IfOrigin::Match { else_label: None },
-            ))
-            .into(),
-        );
-        Some(bound.statements)
+        Some(bound.branch(
+            Arms::SuccessFirst {
+                success: then_body,
+                failure_layout,
+            },
+            else_body,
+            IfOrigin::Match { else_label: None },
+        ))
     }
 
     fn try_lower_tuple_subject_match(

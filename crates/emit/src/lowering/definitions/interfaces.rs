@@ -1,3 +1,4 @@
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::return_abi_rules::interface_method_return_abi;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::declarations::{DeclarationKind, GoDeclaration, InterfaceMethod};
@@ -10,13 +11,13 @@ use syntax::program::PRELUDE_PACKAGE_ID;
 impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn emit_interface(
         &self,
-        name: &str,
+        name: DeclaredName<'_>,
         items: &[Expression],
         parents: &[ParentInterface],
         generics: &[Generic],
         export: GoExport,
     ) -> GoDeclaration {
-        let name_go = go_name::escape_type_name(name).into_owned();
+        let name_go = go_name::escape_type_name(name.as_str()).into_owned();
         if self.facts.is_current_package(PRELUDE_PACKAGE_ID) {
             return GoDeclaration::new(DeclarationKind::Struct {
                 name: name_go,
@@ -53,7 +54,7 @@ impl PlannerQueries<'_, '_> {
 
     fn emit_interface_method(
         &self,
-        interface_name: &str,
+        interface_name: DeclaredName<'_>,
         item: &Expression,
         export: GoExport,
     ) -> InterfaceMethod {

@@ -5,6 +5,7 @@ use crate::lookup::state::scope::ScopeState;
 use crate::lowering::patterns::decision_tree::{
     Check, PatternBinding, PatternInfo, SubjectRoot, lift_root_assertion, render_condition,
 };
+use crate::lowering::patterns::tree_planner::MatchSubject;
 use crate::target::ir::bodies::{Definition, LoweredStatement, Statement, assign, define_many};
 use crate::target::ir::go_expression::GoBinaryOperator;
 use crate::target::ir::local::GoIdentifier;
@@ -13,19 +14,23 @@ use crate::target::types::go_type::GoType;
 use syntax::ast::Expression;
 
 pub(in crate::lowering) struct AssertedPattern {
-    pub subject: GoExpression,
+    subject: MatchSubject,
     pub ok_test: Option<GoExpression>,
     pub checks: Vec<Check>,
     pub bindings: Vec<PatternBinding>,
 }
 
 impl AssertedPattern {
+    pub(in crate::lowering) fn root(&self) -> SubjectRoot<'_> {
+        self.subject.root()
+    }
+
     pub(in crate::lowering) fn is_irrefutable(&self) -> bool {
         self.ok_test.is_none() && self.checks.is_empty()
     }
 
     pub(in crate::lowering) fn condition(&self, scope: &mut ScopeState) -> GoExpression {
-        let condition = render_condition(scope, &self.checks, SubjectRoot::Var(&self.subject));
+        let condition = render_condition(scope, &self.checks, self.root());
         match &self.ok_test {
             None => condition,
             Some(ok) if self.checks.is_empty() => ok.clone(),
@@ -47,23 +52,27 @@ impl Planner<'_> {
     ) -> AssertedPattern {
         let PatternInfo {
             mut checks,
-            mut bindings,
+            bindings,
             ..
         } = info;
-        let subject = match lift_root_assertion(&mut checks, &mut bindings) {
+        let narrowed = match lift_root_assertion(&mut checks) {
             Some(go_types) if requires_asserted_subject(&checks, &bindings) => {
                 let [go_type] = go_types.as_slice() else {
                     unreachable!("multi-type root assertions only reach match destructure paths")
                 };
                 let expression = GoExpression::type_assertion(subject.clone(), go_type.clone());
                 let var = self.hoist_temp(statements, "asserted", expression);
-                GoExpression::identifier(var)
+                MatchSubject::Narrowed {
+                    subject: subject.clone(),
+                    go_type: go_type.clone(),
+                    value: GoExpression::identifier(var),
+                }
             }
-            _ => subject.clone(),
+            _ => MatchSubject::Var(subject.clone()),
         };
 
         AssertedPattern {
-            subject,
+            subject: narrowed,
             ok_test: None,
             checks,
             bindings,
@@ -78,12 +87,12 @@ impl Planner<'_> {
     ) -> AssertedPattern {
         let PatternInfo {
             mut checks,
-            mut bindings,
+            bindings,
             ..
         } = info;
-        let Some(go_types) = lift_root_assertion(&mut checks, &mut bindings) else {
+        let Some(go_types) = lift_root_assertion(&mut checks) else {
             return AssertedPattern {
-                subject: subject.clone(),
+                subject: MatchSubject::Var(subject.clone()),
                 ok_test: None,
                 checks,
                 bindings,
@@ -93,7 +102,7 @@ impl Planner<'_> {
         let needs_asserted = requires_asserted_subject(&checks, &bindings);
         let assertion_of =
             |go_type: &GoType| GoExpression::type_assertion(subject.clone(), go_type.clone());
-        let (subject, ok_test) = match go_types.as_slice() {
+        let (narrowed, ok_test) = match go_types.as_slice() {
             [go_type] => {
                 let asserted_lhs = if needs_asserted {
                     self.fresh_declared("asserted")
@@ -105,21 +114,21 @@ impl Planner<'_> {
                     vec![asserted_lhs.clone(), ok.clone()],
                     assertion_of(go_type),
                 ));
-                let effective = if needs_asserted {
-                    GoExpression::identifier(asserted_lhs)
-                } else {
-                    subject.clone()
-                };
-                (effective, Some(GoExpression::identifier(ok)))
+                let narrowed = needs_asserted.then(|| MatchSubject::Narrowed {
+                    subject: subject.clone(),
+                    go_type: go_type.clone(),
+                    value: GoExpression::identifier(asserted_lhs),
+                });
+                (narrowed, Some(GoExpression::identifier(ok)))
             }
             multiple => (
-                subject.clone(),
+                None,
                 Some(self.assert_any_root_type(statements, subject, multiple)),
             ),
         };
 
         AssertedPattern {
-            subject,
+            subject: narrowed.unwrap_or_else(|| MatchSubject::Var(subject.clone())),
             ok_test,
             checks,
             bindings,
@@ -196,17 +205,12 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         bindings: &[PatternBinding],
-        subject: &GoExpression,
+        subject: SubjectRoot<'_>,
         body: &Expression,
         f: impl FnOnce(&mut Planner, &mut Vec<Statement>) -> R,
     ) -> R {
         self.with_binding_frame(|planner| {
-            planner.tree_binding_statements(
-                statements,
-                bindings,
-                SubjectRoot::Var(subject),
-                &[body],
-            );
+            planner.tree_binding_statements(statements, bindings, subject, &[body]);
             f(planner, statements)
         })
     }
@@ -215,7 +219,7 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         bindings: &[PatternBinding],
-        subject: &GoExpression,
+        subject: SubjectRoot<'_>,
     ) {
         for binding in bindings {
             if !binding.target.is_named() {
@@ -230,7 +234,7 @@ impl Planner<'_> {
                 .expect("a named alternative binding is registered")
                 .clone();
 
-            let access_expression = binding.path.render(SubjectRoot::Var(subject));
+            let access_expression = binding.path.render(subject);
             let (setup, access_expression) =
                 binding.coercion.clone().lower(self, access_expression);
             statements.extend(setup);

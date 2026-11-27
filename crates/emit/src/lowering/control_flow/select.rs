@@ -625,7 +625,7 @@ impl Planner<'_> {
             self.with_tree_bindings(
                 &mut statements,
                 &asserted.bindings,
-                &asserted.subject,
+                asserted.root(),
                 body,
                 |this, statements| {
                     let block = this.lower_block_to_place(body, place);
@@ -639,7 +639,7 @@ impl Planner<'_> {
         self.with_tree_bindings(
             &mut then_body,
             &asserted.bindings,
-            &asserted.subject,
+            asserted.root(),
             body,
             |this, then_body| {
                 let block = this.lower_block_to_place(body, place);

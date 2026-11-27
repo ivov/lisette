@@ -19,11 +19,11 @@ pub(in crate::lowering) struct BoundsCheckedIndex {
 }
 
 impl BoundsCheckedIndex {
-    pub(in crate::lowering) fn element(&self) -> GoExpression {
+    pub(super) fn element(&self) -> GoExpression {
         GoExpression::index(self.receiver.clone(), self.index.clone())
     }
 
-    pub(in crate::lowering) fn condition(&self, polarity: Polarity) -> GoExpression {
+    pub(super) fn condition(&self, polarity: Polarity) -> GoExpression {
         let length = GoExpression::call(
             GoExpression::external_name("len".to_string()),
             vec![self.receiver.clone()],

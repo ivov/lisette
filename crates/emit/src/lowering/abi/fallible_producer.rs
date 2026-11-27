@@ -2,18 +2,23 @@ use crate::Planner;
 use crate::lookup::facts::component_uses::ValueDemand;
 use crate::lookup::state::bindings::{ComponentBinding, ComponentKind};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
-use crate::lowering::abi::go_returns::tag_check_with_initializer;
-use crate::lowering::calls::bound_value::BoundValue;
+use crate::lowering::abi::go_returns::multi_value_return;
+use crate::lowering::calls::bound_value::{
+    BoundPair, BoundValue, PredicatePlacement, SlotPlacement,
+};
 use crate::lowering::calls::bounds_checks::IndexSite;
 use crate::lowering::calls::call_site::CallSite;
-use crate::lowering::calls::comma_ok::{CommaOkSource, CommaOkValueSlot, PairKind};
+use crate::lowering::calls::comma_ok::{
+    CommaOkSource, CommaOkValueSlot, PlainCommaOk, PlainPairKind, StatementSlot,
+};
+use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::calls::slice_loop::{FindLoop, FoundSink};
-use crate::lowering::calls::wrap_err::WrapMessage;
+use crate::lowering::calls::wrap_err::FusedCall;
 use crate::lowering::control_flow::try_recover_blocks::TryBlockPairPlan;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
-use crate::target::ir::bodies::{Statement, define};
+use crate::target::ir::bodies::{IfOrigin, LoweredBlock, Statement};
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::Fallible;
 use crate::target::ir::prelude::prelude_call;
@@ -33,11 +38,17 @@ pub(in crate::lowering) struct ResultFusePlan<'a> {
 
 enum ResultFuseSource<'a> {
     Bound(ComponentBinding),
-    Call {
-        site: CallSite<'a>,
-        nil_guard: Option<NilGuard>,
-        wraps: Vec<&'a Expression>,
+    Call(FusedCall<'a>),
+}
+
+pub(in crate::lowering) enum ComponentSource<'a> {
+    Bound(ComponentBinding),
+    ResultCall(CallSite<'a>),
+    CommaOk {
+        subject: CallSite<'a>,
+        source: PlainCommaOk<'a>,
     },
+    TryBlock(TryBlockPairPlan<'a>),
 }
 
 pub(in crate::lowering) enum NullableSource<'a> {
@@ -65,13 +76,15 @@ pub(in crate::lowering) enum OptionFusePlan<'a> {
 }
 
 impl OptionFusePlan<'_> {
-    pub(in crate::lowering) fn bind(
+    pub(in crate::lowering) fn bind<P: SlotPlacement>(
         self,
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
-    ) -> BoundValue {
+    ) -> BoundValue<P> {
         match self {
-            Self::Bound(components) => planner.bind_component_pair(components, slot),
+            Self::Bound(components) => planner
+                .bind_component_pair::<P>(components, slot)
+                .into_value(),
             Self::CommaOk { subject, source } => planner.bind_comma_ok_pair(subject, source, slot),
             Self::Nullable { subject, nil_guard } => {
                 planner.bind_nullable_pair(subject, nil_guard, slot)
@@ -92,31 +105,13 @@ impl OptionFusePlan<'_> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::lowering) enum ErrorNilGuard {
-    Guarded,
-    Unguarded,
-}
-
-impl ResultFusePlan<'_> {
+impl<'a> ResultFusePlan<'a> {
     pub(in crate::lowering) fn wraps_error(&self) -> bool {
-        matches!(&self.source, ResultFuseSource::Call { wraps, .. } if !wraps.is_empty())
+        matches!(&self.source, ResultFuseSource::Call(call) if call.wraps_error())
     }
 
     pub(in crate::lowering) fn is_bound(&self) -> bool {
         matches!(self.source, ResultFuseSource::Bound(_))
-    }
-
-    pub(in crate::lowering) fn error_nil_guard(&self) -> ErrorNilGuard {
-        match self.source {
-            ResultFuseSource::Call {
-                nil_guard: Some(_), ..
-            } => ErrorNilGuard::Guarded,
-            ResultFuseSource::Call {
-                nil_guard: None, ..
-            }
-            | ResultFuseSource::Bound(_) => ErrorNilGuard::Unguarded,
-        }
     }
 
     pub(in crate::lowering) fn shape(&self) -> &LoweredReturnAbi {
@@ -127,66 +122,29 @@ impl ResultFusePlan<'_> {
         matches!(self.shape, LoweredReturnAbi::Result { .. })
     }
 
-    pub(in crate::lowering) fn bind(
+    pub(in crate::lowering) fn bind<P: SlotPlacement>(
         self,
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
         error_name: Option<&SourceName>,
-    ) -> BoundValue {
-        self.bind_wrapped(planner, slot, error_name).0
+    ) -> BoundPair<P> {
+        let carries_value = self.carries_payload();
+        match self.source {
+            ResultFuseSource::Bound(components) => planner.bind_component_pair(components, slot),
+            ResultFuseSource::Call(call) => {
+                planner.bind_fused_call(call, slot, carries_value, error_name)
+            }
+        }
     }
 
-    pub(in crate::lowering) fn bind_wrapped(
-        self,
-        planner: &mut Planner<'_>,
-        slot: CommaOkValueSlot,
-        error_name: Option<&SourceName>,
-    ) -> (BoundValue, Vec<WrapMessage>) {
-        let carries_value = self.carries_payload();
-        let (site, nil_guard, wraps) = match self.source {
-            ResultFuseSource::Bound(components) => {
-                return (planner.bind_component_pair(components, slot), Vec::new());
-            }
-            ResultFuseSource::Call {
-                site,
-                nil_guard,
-                wraps,
-            } => (site, nil_guard, wraps),
-        };
-        let (setup, call) = planner
-            .plan_call_expression(site, None, ExpressionContext::value())
-            .into_parts();
-        let (message_setup, messages) = planner.prepare_wrap_messages(&wraps);
-
-        let slot = if message_setup.is_empty() {
-            slot
-        } else {
-            match slot {
-                CommaOkValueSlot::Arm(name) => {
-                    let name = planner.declared_arm_value_name(&name);
-                    CommaOkValueSlot::Named(name)
-                }
-                CommaOkValueSlot::Unused => CommaOkValueSlot::Discarded,
-                slot @ CommaOkValueSlot::Named(_)
-                | slot @ CommaOkValueSlot::Temp
-                | slot @ CommaOkValueSlot::Discarded => slot,
-            }
-        };
-
-        let mut pair = planner.bind_pair(
-            setup,
-            call,
-            slot,
-            if carries_value {
-                PairKind::Result { nil_guard }
-            } else {
-                PairKind::BareError
-            },
-            error_name,
-        );
-
-        pair.statements.extend(message_setup);
-        (pair, messages)
+    fn into_component_source(self) -> Option<ComponentSource<'a>> {
+        if !self.carries_payload() {
+            return None;
+        }
+        match self.source {
+            ResultFuseSource::Bound(components) => Some(ComponentSource::Bound(components)),
+            ResultFuseSource::Call(call) => call.into_plain_site().map(ComponentSource::ResultCall),
+        }
     }
 }
 
@@ -202,17 +160,26 @@ pub(in crate::lowering) struct GuardedPayload {
     pub(in crate::lowering) payload_is_index: bool,
 }
 
-impl FallibleProducer<'_> {
-    pub(in crate::lowering) fn bind_slot(
+impl<'a> FallibleProducer<'a> {
+    pub(in crate::lowering) fn bind_slot<P: SlotPlacement>(
         self,
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
-    ) -> BoundValue {
+    ) -> BoundValue<P> {
         match self {
-            Self::Result(producer) => producer.bind(planner, slot, None),
+            Self::Result(producer) => producer.bind(planner, slot, None).into_value(),
             Self::Option(producer) => producer.bind(planner, slot),
             Self::TryBlock(producer) => producer.bind(planner, slot),
         }
+    }
+
+    pub(in crate::lowering) fn bind_test<P: PredicatePlacement>(
+        self,
+        planner: &mut Planner<'_>,
+        polarity: Polarity,
+    ) -> (Vec<Statement>, P::Condition) {
+        self.bind_slot::<P>(planner, P::test_slot())
+            .into_test(polarity)
     }
 
     pub(in crate::lowering) fn payload(
@@ -225,109 +192,100 @@ impl FallibleProducer<'_> {
         (bound, value)
     }
 
-    pub(in crate::lowering) fn components(
-        self,
-        planner: &mut Planner<'_>,
-        slot: CommaOkValueSlot,
-        payload_type: Type,
-        kind: ComponentKind,
-        shared_payload: bool,
-    ) -> Option<(Vec<Statement>, ComponentBinding)> {
-        if !self.supports_components() {
-            return None;
-        }
-        let bound = self.bind_slot(planner, slot);
-        let components = ComponentBinding {
-            value: bound
-                .payload_identifier()
-                .cloned()
-                .unwrap_or_else(GoIdentifier::blank),
-            status: bound.status_identifier().clone(),
-            payload_type,
-            kind,
-            shared_payload,
-        };
-
-        Some((bound.statements, components))
-    }
-
     pub(in crate::lowering) fn control_transfer(
         self,
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
         failure_values: Vec<GoExpression>,
     ) -> GuardedPayload {
-        let bound = self.bind_slot(planner, slot);
-        let condition = bound.failure_condition();
-        let late = bound.late_binding();
+        let bound: BoundValue = self.bind_slot(planner, slot);
         let payload = bound.payload();
         let payload_is_index = !bound.binds_value();
-        let mut statements = bound.statements;
-        statements.push(
-            tag_check_with_initializer(
-                condition.initializer,
-                condition.condition,
-                Vec::new(),
-                failure_values,
-            )
-            .into(),
-        );
-        statements.extend(late);
+        let failure = bound.failure_body(|| LoweredBlock {
+            statements: vec![multi_value_return(failure_values)],
+        });
         GuardedPayload {
-            statements,
+            statements: bound.guard(failure, IfOrigin::User),
             payload,
             payload_is_index,
         }
     }
 
-    fn supports_components(&self) -> bool {
+    fn into_component_source(self) -> Option<ComponentSource<'a>> {
         match self {
-            Self::Result(producer) => {
-                producer.error_nil_guard() == ErrorNilGuard::Unguarded
-                    && !producer.wraps_error()
-                    && producer.carries_payload()
-            }
-            Self::Option(OptionFusePlan::CommaOk { source, .. }) => !source.has_nil_guard(),
-            Self::TryBlock(_) => true,
-            Self::Option(_) => false,
+            Self::Result(producer) => producer.into_component_source(),
+            Self::Option(OptionFusePlan::CommaOk { subject, source }) => source
+                .plain()
+                .map(|source| ComponentSource::CommaOk { subject, source }),
+            Self::TryBlock(plan) => Some(ComponentSource::TryBlock(plan)),
+            Self::Option(_) => None,
         }
     }
 }
 
+impl ComponentSource<'_> {
+    pub(in crate::lowering) fn components(
+        self,
+        planner: &mut Planner<'_>,
+        slot: StatementSlot,
+        payload_type: Type,
+        kind: ComponentKind,
+        shared_payload: bool,
+    ) -> (Vec<Statement>, ComponentBinding) {
+        let pair = match self {
+            Self::Bound(components) => planner.bind_plain_component_pair(components, slot),
+            Self::ResultCall(site) => {
+                let (setup, call) = planner
+                    .plan_call_expression(site, None, ExpressionContext::value())
+                    .into_parts();
+                planner.bind_plain_pair(setup, call, slot, PlainPairKind::Result)
+            }
+            Self::CommaOk { subject, source } => {
+                planner.bind_plain_comma_ok_pair(subject, source, slot)
+            }
+            Self::TryBlock(plan) => plan.bind_plain(planner, slot),
+        };
+        let components = ComponentBinding {
+            value: pair.value.unwrap_or_else(GoIdentifier::blank),
+            status: pair.status,
+            payload_type,
+            kind,
+            shared_payload,
+        };
+        (pair.statements, components)
+    }
+}
+
 impl<'p> Planner<'p> {
-    fn bind_nullable_pair(
+    fn bind_nullable_pair<P: SlotPlacement>(
         &mut self,
         subject: NullableSource<'_>,
         nil_guard: NilGuard,
         slot: CommaOkValueSlot,
-    ) -> BoundValue {
+    ) -> BoundValue<P> {
         let value = match subject {
             NullableSource::Field(field) => self.plan_raw_nullable_field(field),
             NullableSource::Call(site) => {
                 self.plan_call_expression(site, None, ExpressionContext::value())
             }
         };
-        let (mut statements, call) = value.into_parts();
-        let (value, opens_if) = match slot {
-            CommaOkValueSlot::Named(name) => (name, false),
-            CommaOkValueSlot::Arm(name) => (name, true),
-            CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
-                (self.fresh_declared("ret"), false)
+        let (statements, call) = value.into_parts();
+        let opens_if = P::opens_if(&slot);
+        let value = match slot {
+            CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name) => name,
+            CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded | CommaOkValueSlot::Unused => {
+                self.fresh_declared("ret")
             }
-            CommaOkValueSlot::Unused => (self.fresh_declared("ret"), true),
         };
 
-        let initializer_call = if opens_if {
-            Some(call)
-        } else {
-            statements.push(define(value.clone(), call));
-            None
-        };
-
-        BoundValue::nullable(statements, value, nil_guard, initializer_call)
+        BoundValue::nullable(statements, value, nil_guard, call, opens_if)
     }
 
-    fn bind_found_pair(&mut self, search: FindLoop<'_>, slot: CommaOkValueSlot) -> BoundValue {
+    fn bind_found_pair<P: SlotPlacement>(
+        &mut self,
+        search: FindLoop<'_>,
+        slot: CommaOkValueSlot,
+    ) -> BoundValue<P> {
         let value = match slot {
             CommaOkValueSlot::Named(name) => Some(name),
             CommaOkValueSlot::Arm(name) => {
@@ -355,7 +313,7 @@ impl<'p> Planner<'p> {
         subject: &'a Expression,
         value_demand: ValueDemand,
         kind: ComponentKind,
-    ) -> Option<FallibleProducer<'a>>
+    ) -> Option<ComponentSource<'a>>
     where
         'p: 'a,
     {
@@ -367,7 +325,7 @@ impl<'p> Planner<'p> {
         } else {
             self.queries().fallible_producer(subject)?
         };
-        producer.supports_components().then_some(producer)
+        producer.into_component_source()
     }
 }
 
@@ -427,13 +385,10 @@ impl<'p> PlannerQueries<'_, 'p> {
         if lowered.from_go && lowered.has_tuple_payload(self) {
             return None;
         }
+        let shape = lowered.shape.clone();
         Some(ResultFusePlan {
-            shape: lowered.shape,
-            source: ResultFuseSource::Call {
-                site: lowered.site,
-                nil_guard: lowered.nil_guard,
-                wraps: lowered.wraps,
-            },
+            shape,
+            source: ResultFuseSource::Call(lowered.into_fused_call()),
         })
     }
 

@@ -6,8 +6,8 @@ use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
 use crate::target::names::go_name::{self, GoExport};
 use crate::target::names::packages::{PackageOrigin, PackageUse};
-use syntax::program::{self, PRELUDE_PACKAGE_ID, is_go_import, is_prelude_symbol};
-use syntax::types::unqualified_name;
+use syntax::program::{self, MethodName, PRELUDE_PACKAGE_ID, is_go_import, is_prelude_symbol};
+use syntax::types::{Symbol, unqualified_name};
 
 impl Planner<'_> {
     pub(in crate::lowering) fn canonical_package(&self, package: &str) -> String {
@@ -19,7 +19,7 @@ impl Planner<'_> {
 }
 
 impl PlannerQueries<'_, '_> {
-    pub(in crate::lowering) fn definition_reference(&self, symbol: &str) -> GoExpression {
+    pub(in crate::lowering) fn definition_reference(&self, symbol: &Symbol) -> GoExpression {
         let package = self
             .facts
             .package_for_qualified_name(symbol)
@@ -27,13 +27,8 @@ impl PlannerQueries<'_, '_> {
         let name = &symbol[package.len() + 1..];
         if let Some((owner, method)) = name.rsplit_once('.') {
             let owner_id = format!("{package}.{owner}");
-            let export = GoExport::from_visibility(*self.facts.callable(symbol).visibility());
-
-            let mut expression = self.qualify_method_call(&owner_id, method, export);
-            if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
-                *identifier = GoIdentifier::external(identifier.spelling().to_string());
-            }
-            return expression;
+            let export = GoExport::from_visibility(self.facts.definition(symbol).visibility);
+            return self.associated_reference(&owner_id, method, export);
         }
         if package == PRELUDE_PACKAGE_ID {
             return GoExpression::external_name(name.to_string());
@@ -107,6 +102,23 @@ impl PlannerQueries<'_, '_> {
             return GoExpression::external_name(go_name);
         }
         GoExpression::qualified(self.package_use_for_package(package), go_name)
+    }
+
+    pub(in crate::lowering) fn method_reference(&self, method: &MethodName) -> GoExpression {
+        let export = GoExport::from_visibility(
+            self.facts
+                .known_method(&method.owner, &method.name)
+                .visibility,
+        );
+        self.associated_reference(&method.owner, &method.name, export)
+    }
+
+    fn associated_reference(&self, owner_id: &str, method: &str, export: GoExport) -> GoExpression {
+        let mut expression = self.qualify_method_call(owner_id, method, export);
+        if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
+            *identifier = GoIdentifier::external(identifier.spelling().to_string());
+        }
+        expression
     }
 
     pub(in crate::lowering) fn variant_make_reference(&self, symbol: &str) -> Option<GoExpression> {

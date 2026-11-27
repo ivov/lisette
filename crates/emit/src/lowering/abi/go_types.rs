@@ -7,7 +7,7 @@ use crate::target::types::return_abi::CallableReturnAbi;
 use syntax::program::DefinitionBody;
 use syntax::program::SlotOrigin;
 use syntax::program::{GO_IMPORT_PREFIX, NativeTypeKind, strip_go_prefix, strip_prelude_prefix};
-use syntax::types::{CompoundKind, SimpleKind, Type};
+use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
 
 impl ValueLayout {
     pub(in crate::lowering) fn go_type(&self, planner: &PlannerQueries<'_, '_>) -> GoType {
@@ -155,7 +155,7 @@ impl PlannerQueries<'_, '_> {
             .result_go_type(self)
     }
 
-    fn anon_struct_go_type(&self, id: &str) -> Option<GoType> {
+    fn anon_struct_go_type(&self, id: &Symbol) -> Option<GoType> {
         let definition = self.facts.definition(id);
         if !definition.is_anon_struct() {
             return None;
@@ -270,7 +270,12 @@ impl PlannerQueries<'_, '_> {
         }
     }
 
-    fn constructor_go_type(&self, qualified_name: &str, parameters: &[Type], ty: &Type) -> GoType {
+    fn constructor_go_type(
+        &self,
+        qualified_name: &Symbol,
+        parameters: &[Type],
+        ty: &Type,
+    ) -> GoType {
         if let Some(index) = self.facts.type_parameter_alias_index(qualified_name)
             && let Some(target) = parameters.get(index)
         {

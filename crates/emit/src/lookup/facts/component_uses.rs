@@ -3,6 +3,7 @@ use rustc_hash::FxHashSet;
 use syntax::ast::{
     BindingId, Expression, IdentifierResolution, MatchArm, Pattern, collect_pattern_bindings,
 };
+use syntax::program::DotAccessResolution;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ValueDemand {
@@ -94,14 +95,12 @@ impl Walker {
             }
             Expression::DotAccess {
                 expression: receiver,
-                member,
+                resolution: DotAccessResolution::TupleElement { index },
                 ..
-            } if self.names_the_local(receiver)
-                && let Ok(index) = member.parse::<usize>() =>
-            {
+            } if self.names_the_local(receiver) => {
                 self.supported = true;
                 self.demand.value = self.demand.value.max(ValueDemand::Payload);
-                self.demand.read_indices.insert(index);
+                self.demand.read_indices.insert(*index);
                 return Some(());
             }
             Expression::Call {

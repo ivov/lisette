@@ -1,11 +1,12 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lookup::facts::member_slot::MemberSlot;
 use crate::lowering::expressions::zero_values::ZeroSpelling;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::names::go_name::GoExport;
 use rustc_hash::FxHashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
-use syntax::types::{Type, unqualified_name};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 use crate::Planner;
 use crate::lookup::facts::queries::is_order_sensitive;
@@ -35,7 +36,7 @@ struct StructCallContext<'a> {
 }
 
 struct EnumCallContext {
-    enum_id: String,
+    enum_id: Symbol,
     variant_name: String,
     tag_constant: GoExpression,
     pointer_fields: FxHashSet<String>,
@@ -211,7 +212,7 @@ impl Planner<'_> {
                 let layout = self.facts.field_slot_layout(
                     ty,
                     Some(ctx.checked.literal_field(&assignment.name)),
-                    &assignment.name,
+                    MemberSlot::Named(&assignment.name),
                     &field_ty,
                 );
 
@@ -539,7 +540,7 @@ impl PlannerQueries<'_, '_> {
         }
     }
 
-    fn compute_enum_call_context(&self, name: &str, enum_id: &str) -> EnumCallContext {
+    fn compute_enum_call_context(&self, name: &str, enum_id: &Symbol) -> EnumCallContext {
         let variant_name = unqualified_name(name).to_string();
 
         let tag_constant = self.resolve_variant(name, enum_id);
@@ -555,7 +556,7 @@ impl PlannerQueries<'_, '_> {
             .collect();
 
         EnumCallContext {
-            enum_id: enum_id.to_string(),
+            enum_id: enum_id.clone(),
             variant_name,
             tag_constant,
             pointer_fields,

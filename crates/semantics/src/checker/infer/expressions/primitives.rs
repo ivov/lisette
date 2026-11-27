@@ -3,10 +3,12 @@ use crate::facts::StatementTailCheck;
 use crate::store::Store;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
-use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
-use syntax::program::{ConformanceWitness, DefinitionBody};
-use syntax::types::CompoundKind;
+use syntax::ast::{
+    BinaryOperator, BindingId, Expression, IdentifierResolution, Literal, Span, UnaryOperator,
+};
+use syntax::program::{ConformanceWitness, DefinitionBody, MethodName};
 use syntax::types::Type;
+use syntax::types::{CompoundKind, Symbol};
 
 use super::super::addressability::{
     check_is_non_addressable, check_non_addressable_assignment_target, restricted_package_value,
@@ -373,18 +375,30 @@ impl InferCtx<'_> {
             }
         }
 
-        let qualified: Option<EcoString> = if binding_id.is_none() {
-            self.lookup_qualified_name(store, &value).or_else(|| {
-                let (owner, method) = value.rsplit_once('.')?;
-                let owner = self.lookup_qualified_name(store, owner)?;
-                store.get_method(&owner, method)?;
-                Some(format!("{owner}.{method}").into())
-            })
+        let method_name = || {
+            let (owner, method) = value.rsplit_once('.')?;
+            let owner = self.lookup_qualified_name(store, owner)?;
+            let name_span = store.get_method(&owner, method)?.name_span;
+            Some((MethodName::new(Symbol::from_raw(owner), method), name_span))
+        };
+        let target = if let Some(id) = binding_id {
+            NameTarget::Binding(id)
+        } else if let Some(qualified) = self.lookup_qualified_name(store, &value) {
+            NameTarget::Definition(qualified)
         } else {
-            None
+            method_name().map_or(NameTarget::Unresolved, |(method, name_span)| {
+                if let Some(definition_span) = name_span {
+                    self.facts.add_usage(span, definition_span);
+                }
+                NameTarget::Method(method)
+            })
+        };
+        let qualified = match &target {
+            NameTarget::Definition(qualified) => Some(qualified),
+            NameTarget::Binding(_) | NameTarget::Method(_) | NameTarget::Unresolved => None,
         };
 
-        if let Some(ref qname) = qualified
+        if let Some(qname) = qualified
             && let Some(definition) = store.get_definition(qname.as_str())
         {
             if let Some(definition_span) = definition.name_span {
@@ -412,17 +426,7 @@ impl InferCtx<'_> {
                     .push(diagnostics::infer::type_used_as_value(&value, span));
             }
         }
-        if let Some(ref qname) = qualified
-            && store.get_definition(qname.as_str()).is_none()
-            && let Some((owner, name)) = qname.rsplit_once('.')
-            && let Some(method) = store.get_method(owner, name)
-            && let Some(definition_span) = method.name_span
-        {
-            self.facts.add_usage(span, definition_span);
-        }
-
         let base_ty = qualified
-            .as_ref()
             .and_then(|qname| store.get_definition(qname.as_str()))
             .and_then(|definition| self.type_named_as_base(definition));
         let ty = match base_ty.or_else(|| self.lookup_type(store, &value)) {
@@ -467,14 +471,17 @@ impl InferCtx<'_> {
 
         self.unify(expected_ty, &identifier_ty, &span);
 
-        let resolution = match (binding_id, qualified) {
-            (Some(id), None) => IdentifierResolution::Binding(id),
-            (None, Some(name)) => IdentifierResolution::Definition {
-                name,
+        let resolution = match target {
+            NameTarget::Binding(id) => IdentifierResolution::Binding(id),
+            NameTarget::Definition(name) => IdentifierResolution::Definition {
+                name: Symbol::from_raw(name),
                 instantiation,
             },
-            (None, None) => IdentifierResolution::Unresolved,
-            (Some(_), Some(_)) => unreachable!("identifier cannot be local and global"),
+            NameTarget::Method(method) => IdentifierResolution::Method {
+                method,
+                instantiation,
+            },
+            NameTarget::Unresolved => IdentifierResolution::Unresolved,
         };
 
         Expression::Identifier {
@@ -1018,4 +1025,11 @@ impl InferCtx<'_> {
 
 fn is_placeholder_identifier(expression: &Expression) -> bool {
     matches!(expression, Expression::Identifier { value, .. } if value == "_")
+}
+
+enum NameTarget {
+    Binding(BindingId),
+    Definition(EcoString),
+    Method(MethodName),
+    Unresolved,
 }

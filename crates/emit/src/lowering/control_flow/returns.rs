@@ -4,9 +4,9 @@ use crate::lowering::abi::fallible_producer::OptionFusePlan;
 use crate::lowering::abi::go_returns;
 use crate::lowering::calls::call_plan::CallPlan;
 use crate::lowering::calls::call_site::CallSite;
-use crate::lowering::calls::comma_ok::CommaOkValueSlot;
+use crate::lowering::calls::comma_ok::StatementSlot;
 use crate::lowering::calls::go_interop::LoweredProducer;
-use crate::lowering::calls::wrap_err::wrap_error;
+use crate::lowering::calls::wrap_err::WrapChain;
 use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::tuple_literal::TupleLiteral;
@@ -17,6 +17,7 @@ use crate::lowering::statements::placement::try_elide_tail_let;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::target::ir::bodies::{LoweredBlock, LoweredStatement, Statement};
+use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::prelude::{ConstructorCall, ConstructorKind, Fallible, prelude_call};
 use crate::target::ir::termination::list_terminates;
 use crate::target::ir::values::GoExpression;
@@ -71,7 +72,11 @@ impl Planner<'_> {
             args: [],
         }) = fallible.constructor_call(expression)
         {
-            return Some(self.lower_failure_constructor_return(&[], &fallible, &[]));
+            return Some(self.lower_failure_constructor_return(
+                &[],
+                &fallible,
+                &WrapChain::default(),
+            ));
         }
 
         if let Some(branching) = Branching::of(expression)
@@ -137,7 +142,7 @@ impl Planner<'_> {
             Some(ConstructorCall {
                 kind: ConstructorKind::Failure,
                 args,
-            }) => self.lower_failure_constructor_return(args, fallible, &[]),
+            }) => self.lower_failure_constructor_return(args, fallible, &WrapChain::default()),
             None => self.lower_wrapped_passthrough_return(site, fallible, return_ty),
         }
     }
@@ -195,23 +200,15 @@ impl Planner<'_> {
         &mut self,
         args: &[Expression],
         fallible: &Fallible,
-        wraps: &[&Expression],
+        wraps: &WrapChain<'_>,
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let error = fallible.err_ty().zip(args.first()).map(|(err_ty, arg)| {
             let error = self.plan_composite_value(arg, ExpressionContext::value());
-            let (message_setup, wraps) = self.prepare_wrap_messages(wraps);
-            let error = if message_setup.is_empty() {
-                error
-            } else {
-                self.eager_operand(error, "err")
-            };
-            let (setup, error) = error.into_parts();
-            statements.extend(setup);
-            let to = self.queries().contextual_err_ty(err_ty);
-            let error = self.apply_type_coercion(&mut statements, Some(&to), arg, error);
-            statements.extend(message_setup);
-            wrap_error(&wraps, error)
+            self.wrap_planned_error(&mut statements, wraps, error, |this, statements, error| {
+                let to = this.queries().contextual_err_ty(err_ty);
+                this.apply_type_coercion(statements, Some(&to), arg, error)
+            })
         });
 
         statements.push(self.failure_return(fallible, error));
@@ -279,19 +276,14 @@ impl Planner<'_> {
     }
 
     fn try_lower_comma_ok_return(&mut self, site: CallSite<'_>) -> Option<Vec<Statement>> {
-        let source = self
-            .queries()
-            .comma_ok_source(site)
-            .filter(|source| !source.has_nil_guard())?;
-        let pair = self.bind_comma_ok_pair(site, source, CommaOkValueSlot::Temp);
-        let ok = GoExpression::identifier(pair.status_identifier().clone());
-        let value = GoExpression::identifier(
-            pair.payload_identifier()
-                .expect("Temp slot always captures the value")
-                .clone(),
-        );
+        let source = self.queries().comma_ok_source(site)?.plain()?;
+        let pair = self.bind_plain_comma_ok_pair(site, source, StatementSlot::Temp);
+        let value = pair.value.unwrap_or_else(GoIdentifier::blank);
         let mut statements = pair.statements;
-        statements.push(go_returns::multi_value_return(vec![value, ok]));
+        statements.push(go_returns::multi_value_return(vec![
+            GoExpression::identifier(value),
+            GoExpression::identifier(pair.status),
+        ]));
         Some(statements)
     }
 

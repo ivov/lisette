@@ -1,5 +1,5 @@
-use syntax::types::FunctionParameter;
 use syntax::types::{CompoundKind, SimpleKind, Type};
+use syntax::types::{FunctionParameter, Symbol};
 
 pub fn int_type() -> Type {
     Type::Simple(SimpleKind::Int)
@@ -62,7 +62,7 @@ pub fn array_type(length: u64, element: Type) -> Type {
 
 pub fn con_type(name: &str, args: Vec<Type>) -> Type {
     Type::Nominal {
-        id: format!("_entry_.{}", name).into(),
+        id: Symbol::from_raw(format!("_entry_.{}", name)),
         params: args,
         writable: false,
     }

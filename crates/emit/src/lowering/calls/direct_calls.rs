@@ -282,7 +282,7 @@ impl<'a> Planner<'a> {
         expression_ctx: ExpressionContext<'_>,
     ) -> Option<ValuePlan> {
         if spread.is_some()
-            || self.facts.checked(function).callee().definition.as_deref() != Some("go:errors.New")
+            || self.facts.checked(function).callee().definition() != Some("go:errors.New")
         {
             return None;
         }
@@ -473,7 +473,7 @@ impl<'a> PlannerQueries<'_, 'a> {
             return None;
         };
         match (
-            self.facts.checked(callee).callee().definition.as_deref(),
+            self.facts.checked(callee).callee().definition(),
             arguments.as_slice(),
             spread,
         ) {

@@ -1,8 +1,8 @@
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
+use crate::lowering::calls::bound_value::{Arms, BoundValue};
 use crate::lowering::calls::bounds_checks::IndexSite;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
-use crate::lowering::calls::predicates::Polarity;
 use crate::lowering::patterns::matching::{FusedName, OptionArms, field_binding};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::placement::collapse_declared_temp;
@@ -10,7 +10,7 @@ use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, declare, define,
+    ElseLayout, IfOrigin, LoweredBlock, LoweredStatement, Statement, assign, declare, define,
 };
 use crate::target::ir::local::GoIdentifier;
 use crate::target::ir::values::GoExpression;
@@ -147,7 +147,7 @@ impl<'p> Planner<'p> {
         ty: &Type,
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, GoIdentifier) {
-        let (bound, value) = match producer {
+        let (mut bound, value) = match producer {
             FallibleProducer::Option(OptionFusePlan::Index { site }) => {
                 return self.plan_defaulted_index_into_slot(site, default, ty, slot);
             }
@@ -156,8 +156,6 @@ impl<'p> Planner<'p> {
             | producer @ FallibleProducer::TryBlock(_) => producer.payload(self, slot),
         };
 
-        let failure = bound.failure_condition();
-        let mut statements = bound.statements;
         let literal_default = is_literal_default(default);
         let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
         let value_plan = self.plan_value(
@@ -169,26 +167,16 @@ impl<'p> Planner<'p> {
         } else {
             self.eager_operand(value_plan, "default")
         };
-        let (default_setup, default_value) = value_plan.into_parts();
-        statements.extend(default_setup);
-        let default_value =
-            self.apply_type_coercion(&mut statements, Some(ty), default, default_value);
-        statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: failure.initializer,
-                condition: failure.condition,
-                then_body: LoweredBlock {
-                    statements: vec![assign(
-                        GoExpression::identifier(value.clone()),
-                        default_value,
-                    )],
-                },
-                else_arm: ElseArm::None,
-                else_if_line: None,
-                origin: IfOrigin::User,
-            })
-            .into(),
-        );
+        let (mut setup, default_value) = value_plan.into_parts();
+        let default_value = self.apply_type_coercion(&mut setup, Some(ty), default, default_value);
+        bound.extend_setup(setup);
+        let failure = bound.failure_body(|| LoweredBlock {
+            statements: vec![assign(
+                GoExpression::identifier(value.clone()),
+                default_value,
+            )],
+        });
+        let statements = bound.guard(failure, IfOrigin::User);
         (statements, value)
     }
 
@@ -200,6 +188,7 @@ impl<'p> Planner<'p> {
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, GoIdentifier) {
         let (mut statements, index) = self.lower_bounds_checked_index(site);
+        let element = index.element();
         let value = match slot {
             CommaOkValueSlot::Named(name) => name,
             CommaOkValueSlot::Temp
@@ -234,21 +223,18 @@ impl<'p> Planner<'p> {
         } else {
             define(value.clone(), default)
         });
-        statements.push(
-            LoweredStatement::If(IfPlan {
-                initializer: None,
-                condition: index.condition(Polarity::Positive),
-                then_body: LoweredBlock {
-                    statements: vec![assign(
-                        GoExpression::identifier(value.clone()),
-                        index.element(),
-                    )],
-                },
-                else_arm: ElseArm::None,
-                else_if_line: None,
-                origin: IfOrigin::User,
-            })
-            .into(),
+        let bound: BoundValue = BoundValue::index(statements, index, None);
+        let success = LoweredBlock {
+            statements: vec![assign(GoExpression::identifier(value.clone()), element)],
+        };
+        let failure = bound.failure_body(LoweredBlock::default);
+        let statements = bound.branch(
+            Arms::SuccessFirst {
+                success,
+                failure_layout: ElseLayout::Block,
+            },
+            failure,
+            IfOrigin::User,
         );
         (statements, value)
     }
@@ -382,15 +368,9 @@ impl<'p> PlannerQueries<'_, 'p> {
             return None;
         };
 
-        let definition = self
-            .facts
-            .checked(callee)
-            .function_value()?
-            .definition
-            .as_deref()?;
-
-        let selected = strip_prelude_prefix(definition)?.split_once('.')?;
-        (selected == (owner, method)).then_some((receiver, args.as_slice()))
+        let selected = self.facts.checked(callee).function_value()?.method()?;
+        (strip_prelude_prefix(&selected.owner) == Some(owner) && selected.name == method)
+            .then_some((receiver, args.as_slice()))
     }
 
     fn fallible_method_call<'a>(

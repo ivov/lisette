@@ -2,9 +2,10 @@ use crate::Planner;
 use crate::lookup::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
 use crate::lookup::state::scope::PairStatusKind;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
-use crate::lowering::calls::bound_value::{BoundValue, LoweredPair, PairValue};
+use crate::lowering::calls::bound_value::{BoundPair, BoundValue, PairValue, SlotPlacement};
 use crate::lowering::calls::call_plan::CallableOrigin;
 use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::calls::wrap_err::WrapChain;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::bodies::{Statement, define, define_many};
@@ -31,8 +32,8 @@ impl<'a> CommaOkSource<'a> {
         }
     }
 
-    pub(in crate::lowering) fn has_nil_guard(&self) -> bool {
-        self.nil_guard().is_some()
+    pub(in crate::lowering) fn plain(self) -> Option<PlainCommaOk<'a>> {
+        self.nil_guard().is_none().then_some(PlainCommaOk(self))
     }
 
     pub(in crate::lowering) fn map_index_receiver(&self) -> Option<&'a Expression> {
@@ -42,6 +43,8 @@ impl<'a> CommaOkSource<'a> {
         }
     }
 }
+
+pub(in crate::lowering) struct PlainCommaOk<'a>(CommaOkSource<'a>);
 
 pub(in crate::lowering) enum CommaOkValueSlot {
     Named(GoIdentifier),
@@ -63,51 +66,102 @@ pub(in crate::lowering) enum PairKind {
     BareError,
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::lowering) enum PlainPairKind {
+    CommaOk,
+    Result,
+}
+
+impl From<PlainPairKind> for PairKind {
+    fn from(kind: PlainPairKind) -> Self {
+        match kind {
+            PlainPairKind::CommaOk => PairKind::CommaOk { nil_guard: None },
+            PlainPairKind::Result => PairKind::Result { nil_guard: None },
+        }
+    }
+}
+
+pub(in crate::lowering) enum StatementSlot {
+    Named(GoIdentifier),
+    Temp,
+    Discarded,
+}
+
+impl From<StatementSlot> for CommaOkValueSlot {
+    fn from(slot: StatementSlot) -> Self {
+        match slot {
+            StatementSlot::Named(name) => CommaOkValueSlot::Named(name),
+            StatementSlot::Temp => CommaOkValueSlot::Temp,
+            StatementSlot::Discarded => CommaOkValueSlot::Discarded,
+        }
+    }
+}
+
+pub(in crate::lowering) struct PlainPair {
+    pub(in crate::lowering) statements: Vec<Statement>,
+    pub(in crate::lowering) value: Option<GoIdentifier>,
+    pub(in crate::lowering) status: GoIdentifier,
+}
+
 impl Planner<'_> {
-    pub(in crate::lowering) fn bind_component_pair(
+    fn component_value(
         &mut self,
-        components: ComponentBinding,
+        components: &ComponentBinding,
         slot: CommaOkValueSlot,
-    ) -> BoundValue {
-        let (statements, value, borrowed) = match slot {
+    ) -> (Vec<Statement>, GoIdentifier, bool) {
+        match slot {
             CommaOkValueSlot::Named(name) if name.spelling() != components.value.spelling() => {
                 self.scope.declare_go_name(name.spelling());
-                let copy = define(name.clone(), GoExpression::identifier(components.value));
+                let copy = define(
+                    name.clone(),
+                    GoExpression::identifier(components.value.clone()),
+                );
                 (vec![copy], name, false)
             }
             CommaOkValueSlot::Named(_)
             | CommaOkValueSlot::Temp
             | CommaOkValueSlot::Arm(_)
             | CommaOkValueSlot::Unused
-            | CommaOkValueSlot::Discarded => {
-                (Vec::new(), components.value, components.shared_payload)
-            }
-        };
+            | CommaOkValueSlot::Discarded => (
+                Vec::new(),
+                components.value.clone(),
+                components.shared_payload,
+            ),
+        }
+    }
 
+    pub(in crate::lowering) fn bind_component_pair<P: SlotPlacement>(
+        &mut self,
+        components: ComponentBinding,
+        slot: CommaOkValueSlot,
+    ) -> BoundPair<P> {
+        let (statements, value, borrowed) = self.component_value(&components, slot);
         let status_kind = match components.kind {
             ComponentKind::Option => PairStatusKind::Ok,
             ComponentKind::ErrorResult | ComponentKind::OtherResult => PairStatusKind::Error,
         };
-        let pair = LoweredPair {
-            value: PairValue::Named {
-                name: value,
-                nil_guard: None,
-            },
-            status: components.status,
-            status_kind,
-            initializer_call: None,
-            borrowed,
-        };
-
-        BoundValue::pair(statements, pair)
+        BoundPair::existing(statements, value, components.status, status_kind, borrowed)
     }
 
-    pub(in crate::lowering) fn bind_comma_ok_pair(
+    pub(in crate::lowering) fn bind_plain_component_pair(
+        &mut self,
+        components: ComponentBinding,
+        slot: StatementSlot,
+    ) -> PlainPair {
+        let (statements, value, _) = self.component_value(&components, slot.into());
+        PlainPair {
+            statements,
+            value: Some(value),
+            status: components.status,
+        }
+    }
+
+    pub(in crate::lowering) fn bind_comma_ok_pair<P: SlotPlacement>(
         &mut self,
         site: CallSite<'_>,
         source: CommaOkSource<'_>,
         slot: CommaOkValueSlot,
-    ) -> BoundValue {
+    ) -> BoundValue<P> {
         let (statements, pair) = self.plan_comma_ok_pair(site, &source);
         self.bind_pair(
             statements,
@@ -118,24 +172,29 @@ impl Planner<'_> {
             },
             None,
         )
+        .into_value()
     }
 
-    pub(in crate::lowering) fn bind_pair(
+    pub(in crate::lowering) fn bind_plain_comma_ok_pair(
         &mut self,
-        statements: Vec<Statement>,
-        expression: GoExpression,
+        site: CallSite<'_>,
+        source: PlainCommaOk<'_>,
+        slot: StatementSlot,
+    ) -> PlainPair {
+        let (statements, pair) = self.plan_comma_ok_pair(site, &source.0);
+        self.bind_plain_pair(statements, pair, slot, PlainPairKind::CommaOk)
+    }
+
+    fn pair_names(
+        &mut self,
         slot: CommaOkValueSlot,
         kind: PairKind,
         status_hint: Option<&SourceName>,
-    ) -> BoundValue {
+        placement: PairPlacement,
+    ) -> (PairValue, GoIdentifier, PairStatusKind) {
         let status_kind = match kind {
             PairKind::CommaOk { .. } => PairStatusKind::Ok,
             PairKind::Result { .. } | PairKind::BareError => PairStatusKind::Error,
-        };
-        let placement = if matches!(slot, CommaOkValueSlot::Arm(_) | CommaOkValueSlot::Unused) {
-            PairPlacement::IfInitializer
-        } else {
-            PairPlacement::Statement
         };
         let value = match kind {
             PairKind::BareError => PairValue::Absent,
@@ -162,20 +221,42 @@ impl Planner<'_> {
             self.scope.reserve_go_name(&status);
             status = self.fresh_local(&status);
         }
-        let mut statements = statements;
-        let mut pair = LoweredPair {
-            value,
-            status,
-            status_kind,
-            initializer_call: None,
-            borrowed: false,
-        };
+        (value, status, status_kind)
+    }
 
-        match placement {
-            PairPlacement::IfInitializer => pair.initializer_call = Some(expression),
-            PairPlacement::Statement => statements.push(define_many(pair.binding(), expression)),
+    pub(in crate::lowering) fn bind_pair<P: SlotPlacement>(
+        &mut self,
+        statements: Vec<Statement>,
+        expression: GoExpression,
+        slot: CommaOkValueSlot,
+        kind: PairKind,
+        status_hint: Option<&SourceName>,
+    ) -> BoundPair<P> {
+        let opens_if = P::opens_if(&slot);
+        let placement = if opens_if {
+            PairPlacement::IfInitializer
+        } else {
+            PairPlacement::Statement
+        };
+        let (value, status, status_kind) = self.pair_names(slot, kind, status_hint, placement);
+        BoundPair::place(statements, value, status, status_kind, expression, opens_if)
+    }
+
+    pub(in crate::lowering) fn bind_plain_pair(
+        &mut self,
+        mut statements: Vec<Statement>,
+        expression: GoExpression,
+        slot: StatementSlot,
+        kind: PlainPairKind,
+    ) -> PlainPair {
+        let (value, status, _) =
+            self.pair_names(slot.into(), kind.into(), None, PairPlacement::Statement);
+        statements.push(define_many(value.binding(&status), expression));
+        PlainPair {
+            statements,
+            value: value.name().cloned(),
+            status,
         }
-        BoundValue::pair(statements, pair)
     }
 
     pub(in crate::lowering) fn arm_value_name(&mut self, name: &SourceName) -> GoIdentifier {
@@ -288,7 +369,7 @@ impl PlannerQueries<'_, '_> {
                 Some(CommaOkSource::MapIndex { receiver })
             }
             CallableOrigin::GoInterop | CallableOrigin::Source(_) => {
-                let lowered = self.lowered_call_of(Vec::new(), &plan)?;
+                let lowered = self.lowered_call_of(WrapChain::default(), &plan)?;
                 let pair = lowered.raw_pair()?;
                 if !matches!(
                     lowered.shape,

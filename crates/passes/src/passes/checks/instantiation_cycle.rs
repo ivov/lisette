@@ -18,7 +18,9 @@ use ecow::EcoString;
 use rustc_hash::{FxHashMap, FxHashSet};
 use semantics::store::Store;
 use syntax::ast::{Binding, EnumVariant, Expression, Generic, Pattern, Span};
-use syntax::program::{AliasKind, DefinitionBody, is_go_import};
+use syntax::program::{
+    AliasKind, CalleeName, DefinitionBody, is_go_import, resolved_callee, resolved_instantiation,
+};
 use syntax::types::{Symbol, Type, unqualified_name};
 
 pub(crate) fn run(store: &Store, sink: &LocalSink) {
@@ -325,15 +327,17 @@ impl<'a> Graph<'a> {
         while let Some((expression, call_span)) = pending.pop() {
             let reference = match expression {
                 Expression::Function { .. } => continue,
-                Expression::Identifier { resolution, .. } => {
-                    resolution.definition().zip(resolution.instantiation())
-                }
-                Expression::DotAccess { resolution, .. } => {
-                    resolution.definition().zip(resolution.instantiation())
+                Expression::Identifier { .. } | Expression::DotAccess { .. } => {
+                    resolved_instantiation(expression)
+                        .filter(|instantiation| !instantiation.is_empty())
+                        .and_then(|instantiation| {
+                            Some((resolved_callee(expression)?.qualified_name(), instantiation))
+                        })
                 }
                 _ => None,
             };
             if let Some((definition, instantiation)) = reference {
+                let definition: &str = &definition;
                 let span = call_span.unwrap_or_else(|| expression.get_span());
                 for (parameter, argument) in instantiation.iter() {
                     self.add_call(definition, parameter, argument, scope, span);
@@ -374,14 +378,14 @@ impl<'a> Graph<'a> {
         scope: &Scope,
         span: Span,
     ) {
-        let definition = match callee.unwrap_parens() {
-            Expression::Identifier { resolution, .. } => resolution.definition(),
-            Expression::DotAccess { resolution, .. } => resolution.definition(),
-            _ => None,
-        };
+        let callee = resolved_callee(callee);
         let arguments: Vec<&Type> = arguments.collect();
-        let (all, own_start) = definition
-            .and_then(|definition| self.ordered_parameters.get(definition))
+        let (all, own_start) = callee
+            .as_ref()
+            .and_then(|callee| {
+                self.ordered_parameters
+                    .get(callee.qualified_name().as_str())
+            })
             .cloned()
             .unwrap_or_default();
         let parameters = if arguments.len() == all.len() {
@@ -389,11 +393,7 @@ impl<'a> Graph<'a> {
         } else {
             &all[own_start.min(all.len())..]
         };
-        let function = definition.map_or("", |definition| {
-            definition
-                .rsplit_once('.')
-                .map_or(definition, |(_, member)| member)
-        });
+        let function = callee.as_ref().map_or("", CalleeName::last_segment);
         for (position, argument) in arguments.into_iter().enumerate() {
             self.add_type(argument, scope, span, true);
             if let Some((parameter, target)) = parameters.get(position) {

@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lowering::definitions::top_items::item_documentation;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -78,7 +79,7 @@ impl Planner<'_> {
 impl PlannerQueries<'_, '_> {
     pub(in crate::lowering) fn emit_type_alias(
         &self,
-        name: &str,
+        name: DeclaredName<'_>,
         generics: &[Generic],
         ty: &Type,
     ) -> GoDeclaration {
@@ -95,7 +96,7 @@ impl PlannerQueries<'_, '_> {
         let generics = self.plan_generics(&generics.iter().map(generic_bounds).collect::<Vec<_>>());
 
         GoDeclaration::new(DeclarationKind::Alias {
-            name: go_name::escape_type_name(name).into_owned(),
+            name: go_name::escape_type_name(name.as_str()).into_owned(),
             parameters: generics,
             underlying: underlying_type,
         })

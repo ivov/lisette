@@ -1,6 +1,7 @@
 use crate::OutputFile;
 use crate::lookup::facts::context::LineIndex;
 use crate::lookup::facts::context::{GlobalEmitData, SharedEmitContext};
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::state::adapter_registry::AdapterRegistry;
 use crate::lookup::state::conversion_record::ConversionRecord;
@@ -118,7 +119,9 @@ impl<'a> Planner<'a> {
             if is_prelude_type(name) {
                 continue;
             }
-            let enum_id = self.facts.qualified_current(name);
+            let enum_id = self
+                .facts
+                .qualified_current(DeclaredName::declared(expression));
             for variant in variants {
                 let mut declaration = self.create_make_function_code(&enum_id, &variant.name);
                 declaration.position = self.facts.source_position(&variant.name_span);

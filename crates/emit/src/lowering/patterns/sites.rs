@@ -2,6 +2,7 @@ use crate::lowering::abi::fallible_producer::ResultFusePlan;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::bodies::effect_statement;
 use std::borrow::Cow;
+use std::mem;
 use std::slice;
 
 use crate::lowering::patterns::binding_declarations::{
@@ -13,6 +14,7 @@ use syntax::ast::{Expression, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
+use crate::lowering::calls::bound_value::BoundValue;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
 use crate::lowering::patterns::binding_statements::AssertedPattern;
 use crate::lowering::patterns::decision_tree::{
@@ -24,7 +26,6 @@ use crate::lowering::patterns::matching::{
 use crate::lowering::statements::asserts::{test_context_call, testkit_operand_type};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::{PlacePlan, ValuePlan};
-use crate::target::ir::bodies::PairCondition;
 use crate::target::ir::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, declare,
     define,
@@ -164,12 +165,7 @@ impl Planner<'_> {
 
         let mut body = Vec::new();
         let asserted = self.apply_root_assertion(&mut body, info, &resolved.var());
-        self.tree_binding_statements(
-            &mut body,
-            &asserted.bindings,
-            SubjectRoot::Var(&asserted.subject),
-            &[],
-        );
+        self.tree_binding_statements(&mut body, &asserted.bindings, asserted.root(), &[]);
 
         resolved.push_declaration(&mut statements);
         statements.extend(body);
@@ -256,9 +252,8 @@ impl Planner<'_> {
             Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
             None => CommaOkValueSlot::Unused,
         };
-        let bound = fuse.bind(self, slot, None);
-        let fail_condition = bound.failure_condition();
-        Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
+        let bound = fuse.bind(self, slot, None).into_value();
+        Some(self.finish_fused_let_else(bound, binding, else_block))
     }
 
     fn try_lower_fused_result_let_else_destructure(
@@ -288,11 +283,9 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Discarded
         };
-        let bound = fuse.bind(self, slot, None);
+        let bound = fuse.bind(self, slot, None).into_value();
         let value = bound.payload_identifier().cloned();
-        let fail_condition = bound.failure_condition();
-        let mut statements =
-            self.finish_fused_let_else(bound.statements, fail_condition, None, else_block);
+        let mut statements = self.finish_fused_let_else(bound, None, else_block);
         if let Some(value) = value.filter(|_| binds) {
             statements.extend(self.lower_irrefutable_pattern_site(
                 PatternSubject::for_identifier(value),
@@ -318,31 +311,17 @@ impl Planner<'_> {
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
-        let none_condition = bound.failure_condition();
-        let late_binding = bound.late_binding();
-        let mut statements =
-            self.finish_fused_let_else(bound.statements, none_condition, binding, else_block);
-        statements.extend(late_binding);
-        Some(statements)
+        Some(self.finish_fused_let_else(bound, binding, else_block))
     }
 
     fn finish_fused_let_else(
         &mut self,
-        mut statements: Vec<Statement>,
-        fail_condition: PairCondition,
+        bound: BoundValue,
         binding: Option<(FusedName<'_>, GoIdentifier)>,
         else_block: &Expression,
     ) -> Vec<Statement> {
-        let fail_body = self.lower_block_as_body(else_block);
-        statements.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                fail_condition,
-                fail_body,
-                ElseArm::None,
-                IfOrigin::User,
-            ))
-            .into(),
-        );
+        let failure = bound.failure_body(|| self.lower_block_as_body(else_block));
+        let statements = bound.guard(failure, IfOrigin::User);
         if let Some((name, go_name)) = binding {
             self.scope
                 .bind_existing_identifier(name.name, name.binding.as_slice(), go_name);
@@ -424,23 +403,11 @@ impl Planner<'_> {
             Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
             None => CommaOkValueSlot::Unused,
         };
-        let bound = fuse.bind(self, slot);
-        let none_condition = bound.failure_condition();
-        let late_binding = bound.late_binding();
-
-        let mut loop_body = bound.statements;
-        loop_body.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                none_condition,
-                LoweredBlock {
-                    statements: vec![self.queries().loop_break().into()],
-                },
-                ElseArm::None,
-                IfOrigin::User,
-            ))
-            .into(),
-        );
-        loop_body.extend(late_binding);
+        let bound: BoundValue = fuse.bind(self, slot);
+        let failure = bound.failure_body(|| LoweredBlock {
+            statements: vec![self.queries().loop_break().into()],
+        });
+        let mut loop_body = bound.guard(failure, IfOrigin::User);
         let body_block = self.lower_fused_arm(
             &[binding
                 .as_ref()
@@ -530,20 +497,16 @@ impl Planner<'_> {
         let mut asserted = self.apply_refutable_root_assertion(&mut statements, info, subject_var);
 
         if subject_is_fixed {
-            asserted.checks.retain(|check| {
-                let condition = check.render(&mut self.scope, SubjectRoot::Var(&asserted.subject));
+            let mut checks = mem::take(&mut asserted.checks);
+            checks.retain(|check| {
+                let condition = check.render(&mut self.scope, asserted.root());
                 !self.scope.is_condition_established(&condition)
             });
+            asserted.checks = checks;
         }
 
-        let AssertedPattern {
-            subject: effective_subject,
-            ok_test,
-            checks,
-            bindings,
-        } = asserted;
-
-        match self.refutable_failure_guard(ok_test, &checks, &effective_subject) {
+        let ok_test = asserted.ok_test.take();
+        match self.refutable_failure_guard(ok_test, &asserted.checks, asserted.root()) {
             Some(guard) => {
                 let fail_body = self.lower_refutable_fail(fail, subject_var);
                 statements.push(
@@ -553,12 +516,7 @@ impl Planner<'_> {
             None => self.record_dropped_fail(&fail),
         }
 
-        self.tree_binding_statements(
-            &mut statements,
-            &bindings,
-            SubjectRoot::Var(&effective_subject),
-            &[],
-        );
+        self.tree_binding_statements(&mut statements, &asserted.bindings, asserted.root(), &[]);
         statements
     }
 
@@ -566,15 +524,15 @@ impl Planner<'_> {
         &mut self,
         ok_test: Option<GoExpression>,
         checks: &[Check],
-        subject: &GoExpression,
+        subject: SubjectRoot<'_>,
     ) -> Option<GoExpression> {
         let negated_ok = ok_test.map(|ok| GoExpression::unary(GoUnaryOperator::Not, ok));
         let negated_checks = match checks {
             [] => None,
-            [check] => Some(check.render_negated(&mut self.scope, SubjectRoot::Var(subject))),
+            [check] => Some(check.render_negated(&mut self.scope, subject)),
             _ => Some(GoExpression::unary(
                 GoUnaryOperator::Not,
-                render_condition(&mut self.scope, checks, SubjectRoot::Var(subject)),
+                render_condition(&mut self.scope, checks, subject),
             )),
         };
         negated_ok
@@ -620,7 +578,7 @@ impl Planner<'_> {
             self.tree_assignment_statements(
                 &mut assigns,
                 &alternative.bindings,
-                &alternative.subject,
+                alternative.root(),
             );
             let body = LoweredBlock {
                 statements: assigns,
@@ -703,7 +661,7 @@ impl Planner<'_> {
                 this.with_tree_bindings(
                     &mut branch,
                     &alternative.bindings,
-                    &alternative.subject,
+                    alternative.root(),
                     body,
                     |this, branch| {
                         branch.extend(this.lower_block_as_body(body).statements);

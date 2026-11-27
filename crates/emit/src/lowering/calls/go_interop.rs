@@ -2,6 +2,7 @@ use crate::lowering::abi::go_result_wrapping::WrapperOutcome;
 use crate::lowering::abi::go_result_wrapping::{GoResultForm, NilGuard, WrapperTarget};
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
 use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::calls::wrap_err::{FusedCall, WrapChain};
 use crate::lowering::planner::queries::PlannerQueries;
 
 use crate::Planner;
@@ -266,7 +267,7 @@ pub(in crate::lowering) fn build_tuple_literal(values: Vec<GoExpression>) -> GoE
 #[derive(Debug, Clone)]
 pub(in crate::lowering) struct LoweredCall<'a> {
     pub(in crate::lowering) site: CallSite<'a>,
-    pub(in crate::lowering) wraps: Vec<&'a Expression>,
+    pub(super) wraps: WrapChain<'a>,
     pub(in crate::lowering) shape: LoweredReturnAbi,
     pub(in crate::lowering) from_go: bool,
     pub(in crate::lowering) ok_ty: Type,
@@ -285,7 +286,19 @@ pub(in crate::lowering) struct RawValueSlot {
     pub(in crate::lowering) nil_guard: Option<NilGuard>,
 }
 
-impl LoweredCall<'_> {
+impl<'a> LoweredCall<'a> {
+    pub(in crate::lowering) fn wraps_error(&self) -> bool {
+        !self.wraps.is_empty()
+    }
+
+    pub(in crate::lowering) fn into_fused_call(self) -> FusedCall<'a> {
+        FusedCall {
+            site: self.site,
+            nil_guard: self.nil_guard,
+            wraps: self.wraps,
+        }
+    }
+
     pub(in crate::lowering) fn raw_pair(&self) -> Option<RawPair> {
         if self.shape.has_flattened_payload() {
             return None;
@@ -485,7 +498,7 @@ impl PlannerQueries<'_, '_> {
 
     pub(in crate::lowering) fn lowered_call_of<'a>(
         &self,
-        wraps: Vec<&'a Expression>,
+        wraps: WrapChain<'a>,
         plan: &CallPlan<'_, 'a>,
     ) -> Option<LoweredCall<'a>> {
         let shape = plan.resolved.abi.result.lowered()?.clone();

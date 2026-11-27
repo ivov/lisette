@@ -446,27 +446,34 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
         let binding_name = self.type_switch_binding_name(&subject);
+        let case_value = GoExpression::identifier(binding_name.clone());
 
-        let mut nested = TreePlanner::new(
+        let mut case_plans: Vec<SwitchCasePlan> = Vec::with_capacity(regular.len());
+        for branch in regular {
+            let labels = branch
+                .label
+                .iter()
+                .map(|go_type| GoExpression::type_name(go_type.clone()))
+                .collect();
+            let root = match branch.label.as_slice() {
+                [go_type] => MatchSubject::Narrowed {
+                    subject: subject.clone(),
+                    go_type: go_type.clone(),
+                    value: case_value.clone(),
+                },
+                _ => MatchSubject::Var(subject.clone()),
+            };
+            let mut nested = TreePlanner::new(self.planner, arms, root, subject_ty.clone());
+            case_plans.push(nested.lower_switch_case(labels, None, &branch.decision, place));
+        }
+
+        let default_block = TreePlanner::new(
             self.planner,
             arms,
-            MatchSubject::Var(GoExpression::identifier(binding_name.clone())),
+            MatchSubject::Var(subject.clone()),
             subject_ty,
-        );
-
-        let case_plans: Vec<SwitchCasePlan> = regular
-            .iter()
-            .map(|branch| {
-                let labels = branch
-                    .label
-                    .iter()
-                    .map(|go_type| GoExpression::type_name(go_type.clone()))
-                    .collect();
-                nested.lower_switch_case(labels, None, &branch.decision, place)
-            })
-            .collect();
-
-        let default_block = nested.try_lower_switch_default(default, place);
+        )
+        .try_lower_switch_default(default, place);
 
         switch_statements(
             SwitchStatementPlan {

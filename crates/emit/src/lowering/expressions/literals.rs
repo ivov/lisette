@@ -344,7 +344,7 @@ pub(in crate::lowering) fn integer_literal(value: u64, text: &Option<String>) ->
 }
 
 fn display_form(facts: &EmitFacts<'_>, expression: &Expression) -> DisplayForm {
-    DisplayForm::of(&expression.get_type(), |id| Some(facts.definition(id)))
+    DisplayForm::of(&expression.get_type(), facts.type_query_lookup())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

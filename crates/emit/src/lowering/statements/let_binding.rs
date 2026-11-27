@@ -9,7 +9,7 @@ use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::WrapperTarget;
 use crate::lowering::calls::call_plan::CallPlan;
 use crate::lowering::calls::call_site::CallSite;
-use crate::lowering::calls::comma_ok::CommaOkValueSlot;
+use crate::lowering::calls::comma_ok::StatementSlot;
 use crate::lowering::patterns::binding_declarations::pattern_has_bindings;
 use crate::lowering::patterns::sites::PatternSubject;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -229,9 +229,9 @@ impl<'a> Planner<'a> {
         let source = self.component_producer(value, demand.value, kind)?;
         let slot = if demand.value != ValueDemand::StatusOnly {
             self.scope.declare_go_name(go_identifier);
-            CommaOkValueSlot::Named(go_identifier.clone())
+            StatementSlot::Named(go_identifier.clone())
         } else {
-            CommaOkValueSlot::Discarded
+            StatementSlot::Discarded
         };
 
         let (statements, components) = source.components(
@@ -240,7 +240,7 @@ impl<'a> Planner<'a> {
             fallible.ok_ty().clone(),
             kind,
             demand.defaults > 1,
-        )?;
+        );
 
         self.scope.bind_components_filling_ids(
             let_spec.identifier,

@@ -235,7 +235,7 @@ impl PlannerQueries<'_, '_> {
         expression: &Expression,
     ) -> Option<GoType> {
         let recorded = self.facts.checked(expression).function_value()?;
-        let declaration = self.facts.callable(recorded.definition.as_deref()?);
+        let declaration = self.facts.callable(recorded.name.as_ref()?);
         let instantiation = &recorded.type_arguments;
         match declaration.go_type_param_recipe() {
             Some(recipe) => self.reconstruct_collapsed_type_args(recipe, instantiation),

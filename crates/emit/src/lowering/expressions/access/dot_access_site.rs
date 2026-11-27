@@ -1,3 +1,4 @@
+use crate::lookup::facts::member_slot::MemberSlot;
 use ecow::EcoString;
 use syntax::ast::Expression;
 use syntax::program::DotAccessResolution;
@@ -33,10 +34,17 @@ impl<'e> DotAccessSite<'e> {
         })
     }
 
+    pub(in crate::lowering) fn slot(&self) -> MemberSlot<'e> {
+        MemberSlot::of(self.resolution, self.member)
+    }
+
     pub(in crate::lowering) fn reads_newtype(&self) -> bool {
         matches!(
             self.resolution,
-            DotAccessResolution::TupleStructField { is_newtype: true }
+            DotAccessResolution::TupleStructField {
+                is_newtype: true,
+                ..
+            }
         )
     }
 }

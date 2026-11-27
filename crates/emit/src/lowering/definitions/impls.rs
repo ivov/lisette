@@ -1,11 +1,12 @@
 use crate::Planner;
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::definitions::top_items::item_documentation;
 use crate::target::ir::declarations::GoDeclaration;
 use crate::target::names::go_name::{self, GoExport};
 use syntax::EcoString;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic};
-use syntax::types::{Type, type_args_match_params};
+use syntax::types::{Symbol, Type, type_args_match_params};
 
 type ReceiverGenerics<'a> = &'a [(EcoString, Vec<Type>)];
 
@@ -14,20 +15,20 @@ struct ImplContext<'a> {
     ty: &'a Type,
     generics: &'a [Generic],
     receiver_generics: ReceiverGenerics<'a>,
-    qualified_type: String,
+    qualified_type: Symbol,
 }
 
 impl Planner<'_> {
     pub(in crate::lowering) fn emit_impl_block(
         &mut self,
-        receiver_name: &str,
+        receiver_name: DeclaredName<'_>,
         ty: &Type,
         methods: &[Expression],
         generics: &[Generic],
         receiver_generics: &[(EcoString, Vec<Type>)],
     ) -> Vec<GoDeclaration> {
         let ctx = ImplContext {
-            receiver_name,
+            receiver_name: receiver_name.as_str(),
             ty,
             generics,
             receiver_generics,

@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::lookup::facts::definition_key::DeclaredName;
 use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
@@ -26,17 +27,35 @@ impl Planner<'_> {
     }
 
     fn emit_top_item_within_span(&mut self, item: &Expression) -> Vec<GoDeclaration> {
+        if let Expression::Const {
+            doc,
+            identifier,
+            expression,
+            ty,
+            ..
+        } = item
+        {
+            return expression
+                .value()
+                .map(|expression| self.emit_const(identifier, expression, ty, doc))
+                .into_iter()
+                .collect();
+        }
+        DeclaredName::of(item).map_or_else(Vec::new, |name| self.emit_declaration(item, name))
+    }
+
+    fn emit_declaration(
+        &mut self,
+        item: &Expression,
+        name: DeclaredName<'_>,
+    ) -> Vec<GoDeclaration> {
         match item {
             Expression::Function {
-                doc,
-                visibility,
-                name,
-                ..
+                doc, visibility, ..
             } => self.emit_function_item(item, doc, name, GoExport::from_visibility(*visibility)),
             Expression::Struct {
                 doc,
                 attributes,
-                name,
                 name_span,
                 generics,
                 fields,
@@ -44,7 +63,7 @@ impl Planner<'_> {
             } => {
                 let mut declarations =
                     self.emit_struct_definition(name, generics, fields, attributes);
-                declarations[0].documentation = type_documentation(doc, name);
+                declarations[0].documentation = type_documentation(doc, name.as_str());
                 for declaration in &mut declarations {
                     declaration.position = self.facts.source_position(name_span);
                 }
@@ -53,35 +72,33 @@ impl Planner<'_> {
             Expression::Enum {
                 doc,
                 attributes,
-                name,
                 name_span,
                 generics,
                 ..
             } => {
-                let mut declarations =
-                    self.emit_enum(name, generics, attributes, type_documentation(doc, name));
+                let mut declarations = self.emit_enum(
+                    name,
+                    generics,
+                    attributes,
+                    type_documentation(doc, name.as_str()),
+                );
                 for declaration in &mut declarations {
                     declaration.position = self.facts.source_position(name_span);
                 }
                 declarations
             }
             Expression::TypeAlias {
-                doc,
-                name,
-                generics,
-                ty,
-                ..
+                doc, generics, ty, ..
             } => {
                 if self.facts.alias_emits_nothing(name) {
                     return Vec::new();
                 }
                 let mut declaration = self.queries().emit_type_alias(name, generics, ty);
-                declaration.documentation = type_documentation(doc, name);
+                declaration.documentation = type_documentation(doc, name.as_str());
                 vec![declaration]
             }
             Expression::Interface {
                 doc,
-                name,
                 method_signatures,
                 parents,
                 generics,
@@ -96,32 +113,20 @@ impl Planner<'_> {
                     generics,
                     export,
                 );
-                declaration.documentation = type_documentation(doc, name);
+                declaration.documentation = type_documentation(doc, name.as_str());
                 vec![declaration]
             }
             Expression::ImplBlock {
-                receiver_name,
                 ty,
                 methods,
                 generics,
                 ..
             } => {
                 let receiver_generics = self.facts.checked(item).receiver_generics();
-                self.emit_impl_block(receiver_name, ty, methods, generics, receiver_generics)
+                self.emit_impl_block(name, ty, methods, generics, receiver_generics)
             }
-            Expression::Const {
-                doc,
-                identifier,
-                expression,
-                ty,
-                ..
-            } => {
-                let Some(expression) = expression.value() else {
-                    return Vec::new();
-                };
-                vec![self.emit_const(identifier, expression, ty, doc)]
-            }
-            Expression::VariableDeclaration { .. }
+            Expression::Const { .. }
+            | Expression::VariableDeclaration { .. }
             | Expression::PackageImport { .. }
             | body_expression!() => Vec::new(),
         }
@@ -131,14 +136,14 @@ impl Planner<'_> {
         &mut self,
         item: &Expression,
         doc: &Option<String>,
-        name: &str,
+        name: DeclaredName<'_>,
         export: GoExport,
     ) -> Vec<GoDeclaration> {
         let function = item.function_definition_view();
         let go_name = self.names.free_function_go_name(function.name, export);
-        let documentation = item_documentation(doc, name, &go_name);
+        let documentation = item_documentation(doc, name.as_str(), &go_name);
         if self.facts.is_test(&self.facts.qualified_current(name)) {
-            return self.emit_test_function(name, function, export, documentation);
+            return self.emit_test_function(name.as_str(), function, export, documentation);
         }
         let mut declarations = self.emit_function(function, None, &go_name, None);
         if let Some(first) = declarations.first_mut() {

@@ -8,7 +8,7 @@ use crate::store::Store;
 impl TaskState {
     fn builtin_qualified_name(&mut self, store: &Store, type_name: &str) -> Symbol {
         self.lookup_qualified_name(store, type_name)
-            .map(Symbol::from)
+            .map(Symbol::from_raw)
             .unwrap_or_else(|| panic!("Builtin type {type_name} not found in store"))
     }
 

@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::NominalZero;
+use crate::lookup::facts::member_slot::MemberSlot;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
@@ -18,7 +19,7 @@ use crate::target::names::go_name::GoExport;
 use crate::target::types::go_type::GoType;
 use syntax::program::{AliasKind, DefinitionBody, FieldSelection};
 use syntax::program::{SlotOrigin, is_go_import};
-use syntax::types::{CompoundKind, SimpleKind, Type};
+use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::lowering) enum ZeroSpelling {
@@ -55,7 +56,7 @@ impl Planner<'_> {
             }
             ValueLayout::Plain(nominal @ Type::Nominal { id, .. })
                 if is_go_import(id.as_str()) && {
-                    let definition = self.facts.definition(id.as_str());
+                    let definition = self.facts.definition(id);
                     definition.is_newtype()
                         || matches!(definition.body, DefinitionBody::Struct { .. })
                 } =>
@@ -138,7 +139,7 @@ impl Planner<'_> {
                 let value = value.go_type(&self.queries());
                 GoExpression::empty_composite(GoType::map_of(&key, &value))
             }
-            (Type::Nominal { id, .. }, _) => self.lisette_zero_nominal(ty, id.as_str()),
+            (Type::Nominal { id, .. }, _) => self.lisette_zero_nominal(ty, id),
             (Type::Tuple(slots), ValueLayout::Tuple { elements, .. }) => {
                 let parts: Vec<GoExpression> = elements
                     .iter()
@@ -161,7 +162,7 @@ impl Planner<'_> {
         }
     }
 
-    fn lisette_zero_nominal(&mut self, ty: &Type, id: &str) -> GoExpression {
+    fn lisette_zero_nominal(&mut self, ty: &Type, id: &Symbol) -> GoExpression {
         match self.facts.nominal_zero(ty) {
             NominalZero::OptionNone { payload } => {
                 let payload = payload.expect("internal error: an Option has one type argument");
@@ -348,7 +349,7 @@ impl Planner<'_> {
             }) => GoExpression::nil(),
             ValueLayout::Plain(Type::Nominal { id, .. })
                 if matches!(
-                    self.facts.definition(id.as_str()).body,
+                    self.facts.definition(id).body,
                     DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }
                 ) =>
             {
@@ -367,16 +368,19 @@ impl PlannerQueries<'_, '_> {
         field: &str,
         field_ty: &Type,
     ) -> Option<GoExpression> {
-        let layout = self
-            .facts
-            .field_slot_layout(owner, Some(selection), field, field_ty)?;
+        let layout = self.facts.field_slot_layout(
+            owner,
+            Some(selection),
+            MemberSlot::Named(field),
+            field_ty,
+        )?;
         if !matches!(layout.underlying(), ValueLayout::Map { .. }) {
             return None;
         }
         Some(GoExpression::empty_composite(layout.go_type(self)))
     }
 
-    fn go_imported_zero(&self, ty: &Type, id: &str) -> GoExpression {
+    fn go_imported_zero(&self, ty: &Type, id: &Symbol) -> GoExpression {
         let go_ty = self.go_type(ty);
         let is_struct = matches!(
             self.facts.definition(id).body,

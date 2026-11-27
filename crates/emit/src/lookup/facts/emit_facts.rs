@@ -1,7 +1,8 @@
 use crate::lookup::facts::callables::CallableDeclaration;
+use crate::lookup::facts::definition_key::{DeclaredName, known_definition, type_query_lookup};
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::program::{
-    CallOperation, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection,
+    CallOperation, CalleeName, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection,
     PRELUDE_PACKAGE_ID, ValueUseKey, is_go_import, is_prelude_symbol,
 };
 
@@ -50,18 +51,25 @@ impl<'a> EmitFacts<'a> {
         types::package_for_qualified_name(id, |package| self.input.go_package_ids.contains(package))
     }
 
-    pub(crate) fn callable(&self, id: &str) -> CallableDeclaration<'a> {
-        if let Some(definition) = self.input.definitions.get(id) {
-            return CallableDeclaration::Definition(definition);
+    pub(crate) fn callable(&self, name: &CalleeName) -> CallableDeclaration<'a> {
+        match name {
+            CalleeName::Definition(id) => CallableDeclaration::Definition(self.definition(id)),
+            CalleeName::Method(method) => {
+                CallableDeclaration::Method(self.known_method(&method.owner, &method.name))
+            }
         }
-        id.rsplit_once('.')
-            .and_then(|(owner, name)| self.method(owner, name))
-            .map(CallableDeclaration::Method)
-            .unwrap_or_else(|| panic!("internal error: `{id}` names no definition and no method"))
     }
 
-    pub(crate) fn definition(&self, id: &str) -> &'a Definition {
+    pub(crate) fn definition(&self, id: &Symbol) -> &'a Definition {
         known_definition(&self.input.definitions, id)
+    }
+
+    pub(crate) fn find_definition(&self, id: &str) -> Option<&'a Definition> {
+        self.input.definitions.get(id)
+    }
+
+    pub(crate) fn type_query_lookup(&self) -> impl Copy + Fn(&str) -> Option<&'a Definition> + 'a {
+        type_query_lookup(&self.input.definitions)
     }
 
     pub(crate) fn call_operation(&self, expression: &Expression) -> Option<&'a CallOperation> {
@@ -105,11 +113,11 @@ impl<'a> EmitFacts<'a> {
             .variant_pattern_fields(pattern_span)
     }
 
-    pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
+    pub(crate) fn method(&self, owner: &Symbol, name: &str) -> Option<&'a Method> {
         self.definition(owner).methods()?.get(name)
     }
 
-    pub(crate) fn known_method(&self, owner: &str, name: &str) -> &'a Method {
+    pub(crate) fn known_method(&self, owner: &Symbol, name: &str) -> &'a Method {
         self.method(owner, name)
             .unwrap_or_else(|| panic!("internal error: `{owner}` has no method `{name}`"))
     }
@@ -118,19 +126,19 @@ impl<'a> EmitFacts<'a> {
         peel_alias(&self.input.definitions, ty)
     }
 
-    pub(crate) fn alias_emits_nothing(&self, name: &str) -> bool {
+    pub(crate) fn alias_emits_nothing(&self, name: DeclaredName<'_>) -> bool {
         self.type_parameter_alias_index(&self.qualified_current(name))
             .is_some()
     }
 
-    pub(crate) fn type_parameter_alias_index(&self, id: &str) -> Option<usize> {
+    pub(crate) fn type_parameter_alias_index(&self, id: &Symbol) -> Option<usize> {
         self.type_parameter_alias_index_inner(id, &mut FxHashSet::default())
     }
 
     fn type_parameter_alias_index_inner(
         &self,
-        id: &str,
-        visiting: &mut FxHashSet<String>,
+        id: &Symbol,
+        visiting: &mut FxHashSet<Symbol>,
     ) -> Option<usize> {
         let DefinitionBody::TypeAlias {
             generics,
@@ -141,7 +149,7 @@ impl<'a> EmitFacts<'a> {
             return None;
         };
 
-        if !visiting.insert(id.to_string()) {
+        if !visiting.insert(id.clone()) {
             return None;
         }
         let mut target = target;
@@ -157,31 +165,27 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn immediate_underlying(&self, ty: &Type) -> Option<Type> {
-        types::underlying_type(ty, |id| Some(self.definition(id)))
+        types::underlying_type(ty, self.type_query_lookup())
     }
 
     pub(crate) fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
-        types::underlying_simple_kind(ty, |id| Some(self.definition(id)))
+        types::underlying_simple_kind(ty, self.type_query_lookup())
     }
 
     pub(crate) fn resolves_to_unknown(&self, ty: &Type) -> bool {
-        types::resolves_to_unknown(ty, |id| Some(self.definition(id)))
+        types::resolves_to_unknown(ty, self.type_query_lookup())
     }
 
     pub(crate) fn resolves_to_unit(&self, ty: &Type) -> bool {
-        types::resolves_to_unit(ty, |id| Some(self.definition(id)))
+        types::resolves_to_unit(ty, self.type_query_lookup())
     }
 
     pub(crate) fn is_prelude_error(&self, ty: &Type) -> bool {
-        types::is_prelude_error(ty, |id| Some(self.definition(id)))
+        types::is_prelude_error(ty, self.type_query_lookup())
     }
 
     pub(crate) fn has_no_go_value(&self, ty: &Type) -> bool {
-        assert!(
-            !ty.is_variable() && !ty.is_placeholder(),
-            "a value type is unresolved: {ty:?}"
-        );
-        self.resolves_to_unit(ty)
+        self.resolves_to_unit(ty) || ty.is_variable() || ty.is_placeholder()
     }
 
     pub(crate) fn produces_no_go_value(&self, expression: &Expression) -> bool {
@@ -191,7 +195,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_lisette_enum(&self, ty: &Type) -> bool {
-        types::is_lisette_enum(ty, |id| Some(self.definition(id)))
+        types::is_lisette_enum(ty, self.type_query_lookup())
     }
 
     pub(crate) fn nominal_zero(&self, ty: &Type) -> NominalZero {
@@ -207,12 +211,7 @@ impl<'a> EmitFacts<'a> {
         if go_import && (self.is_interface(ty) || self.resolve_to_function_type(ty).is_some()) {
             return NominalZero::GoZero;
         }
-        if !go_import
-            && matches!(
-                self.definition(id.as_str()).body,
-                DefinitionBody::Enum { .. }
-            )
-        {
+        if !go_import && matches!(self.definition(id).body, DefinitionBody::Enum { .. }) {
             return NominalZero::LisetteEnum;
         }
         if let Some(underlying) = self.newtype_underlying(ty) {
@@ -280,31 +279,31 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_reference(&self, ty: &Type) -> bool {
-        types::is_reference(ty, |id| Some(self.definition(id)))
+        types::is_reference(ty, self.type_query_lookup())
     }
 
     pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
-        types::points_to_ref(ty, |id| Some(self.definition(id)))
+        types::points_to_ref(ty, self.type_query_lookup())
     }
 
     pub(crate) fn is_option(&self, ty: &Type) -> bool {
-        types::is_option(ty, |id| Some(self.definition(id)))
+        types::is_option(ty, self.type_query_lookup())
     }
 
     pub(crate) fn is_partial(&self, ty: &Type) -> bool {
-        types::is_partial(ty, |id| Some(self.definition(id)))
+        types::is_partial(ty, self.type_query_lookup())
     }
 
     pub(crate) fn is_tuple(&self, ty: &Type) -> bool {
-        types::is_tuple(ty, |id| Some(self.definition(id)))
+        types::is_tuple(ty, self.type_query_lookup())
     }
 
     pub(crate) fn ok_payload(&self, ty: &Type) -> Type {
-        types::ok_payload(ty, |id| Some(self.definition(id)))
+        types::ok_payload(ty, self.type_query_lookup())
     }
 
     pub(crate) fn err_payload(&self, ty: &Type) -> Type {
-        types::err_payload(ty, |id| Some(self.definition(id)))
+        types::err_payload(ty, self.type_query_lookup())
     }
 
     pub(crate) fn is_never(&self, ty: &Type) -> bool {
@@ -332,7 +331,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
-        types::simple_kind(ty, |id| Some(self.definition(id)))
+        types::simple_kind(ty, self.type_query_lookup())
     }
 
     pub(crate) fn compound_parts(&self, ty: &Type) -> Option<(CompoundKind, Vec<Type>)> {
@@ -472,7 +471,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_option_or_result(&self, ty: &Type) -> bool {
-        types::is_option_or_result(ty, |id| Some(self.definition(id)))
+        types::is_option_or_result(ty, self.type_query_lookup())
     }
 
     pub(crate) fn has_tuple_payload(&self, ty: &Type) -> bool {
@@ -483,7 +482,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn tuple_or_type_arguments(&self, ty: &Type) -> Vec<Type> {
-        types::tuple_element_types(ty, |id| Some(self.definition(id)))
+        types::tuple_element_types(ty, self.type_query_lookup())
     }
 
     pub(crate) fn is_prelude_nominal(&self, ty: &Type) -> bool {
@@ -491,15 +490,11 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(in crate::lookup::facts) fn receiver_shape(&self, ty: &Type) -> Type {
-        types::receiver_shape(ty, |id| Some(self.definition(id)))
-    }
-
-    pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        types::as_interface(ty, |id| Some(self.definition(id))).map(|id| id.to_string())
+        types::receiver_shape(ty, self.type_query_lookup())
     }
 
     pub(crate) fn is_interface(&self, ty: &Type) -> bool {
-        self.as_interface(ty).is_some()
+        types::as_interface(ty, self.type_query_lookup()).is_some()
     }
 
     pub(crate) fn is_interface_or_unknown(&self, ty: &Type) -> bool {
@@ -511,19 +506,19 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn go_nil_form(&self, ty: &Type) -> types::GoNilForm {
-        types::go_nil_form(ty, |id| Some(self.definition(id)))
+        types::go_nil_form(ty, self.type_query_lookup())
     }
 
     pub(in crate::lookup::facts) fn peel_underlying(&self, ty: &Type) -> Type {
-        types::peel_underlying(ty, |id| Some(self.definition(id)))
+        types::peel_underlying(ty, self.type_query_lookup())
     }
 
     pub(crate) fn partial_ok_is_nilable(&self, ty: &Type) -> bool {
-        types::partial_ok_is_nilable(ty, |id| Some(self.definition(id)))
+        types::partial_ok_is_nilable(ty, self.type_query_lookup())
     }
 
     pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        types::resolve_to_function_type(ty, |id| Some(self.definition(id)))
+        types::resolve_to_function_type(ty, self.type_query_lookup())
     }
 
     pub(crate) fn function_alias_declaration(&self, ty: &Type) -> Option<Type> {
@@ -577,7 +572,7 @@ impl<'a> EmitFacts<'a> {
         self.input.bindings.hidden_binding(id)
     }
 
-    pub(crate) fn emits_go_method(&self, qualified_type: &str, method: &str) -> bool {
+    pub(crate) fn emits_go_method(&self, qualified_type: &Symbol, method: &str) -> bool {
         self.method(qualified_type, method).is_some()
             && !self.definition(qualified_type).is_ufcs_method(method)
     }
@@ -614,8 +609,8 @@ impl<'a> EmitFacts<'a> {
         self.shared.entry_package_name
     }
 
-    pub(crate) fn qualified_current(&self, name: &str) -> String {
-        format!("{}.{}", self.current_package, name)
+    pub(crate) fn qualified_current(&self, name: DeclaredName<'_>) -> Symbol {
+        Symbol::from_parts(&self.current_package, name.as_str())
     }
 
     pub(crate) fn go_module(&self) -> &str {
@@ -647,7 +642,7 @@ impl<'a> EmitFacts<'a> {
             .contains(&go_name::snake_to_camel(method))
     }
 
-    pub(crate) fn enum_layout(&self, enum_id: &str) -> &'a EnumLayout {
+    pub(crate) fn enum_layout(&self, enum_id: &Symbol) -> &'a EnumLayout {
         self.shared
             .globals
             .enum_layouts
@@ -660,7 +655,7 @@ impl<'a> EmitFacts<'a> {
         enum_id: &'e str,
         variant_name: &str,
     ) -> Option<(&'e str, String)> {
-        let definition = self.definition(enum_id);
+        let definition = self.find_definition(enum_id)?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;
         };
@@ -693,7 +688,7 @@ impl<'a> EmitFacts<'a> {
             return None;
         }
         let variant = member;
-        let constructor_ty = &self.definition(symbol).ty;
+        let constructor_ty = &self.find_definition(symbol)?.ty;
         let enum_ty = constructor_ty
             .as_function_type()
             .map_or(constructor_ty.unwrap_forall(), |function| {
@@ -711,7 +706,7 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn go_callable_parameter(
         &self,
-        qualified_name: &str,
+        qualified_name: &CalleeName,
         index: usize,
     ) -> Option<&GoSlotDescriptor> {
         self.shared
@@ -722,7 +717,7 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn go_callable_return_slot(
         &self,
-        qualified_name: &str,
+        qualified_name: &CalleeName,
     ) -> Option<&GoSlotDescriptor> {
         self.shared
             .globals
@@ -771,21 +766,12 @@ impl<'a> EmitFacts<'a> {
     }
 }
 
-pub(crate) fn known_definition<'d>(
-    definitions: &'d FxHashMap<Symbol, Definition>,
-    id: &str,
-) -> &'d Definition {
-    definitions
-        .get(id)
-        .unwrap_or_else(|| panic!("internal error: `{id}` has no definition"))
-}
-
 fn is_nilable_go_type(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> bool {
-    types::is_nilable_go_type(ty, |id| Some(known_definition(definitions, id)))
+    types::is_nilable_go_type(ty, type_query_lookup(definitions))
 }
 
 fn peel_alias(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> Type {
-    types::peel_alias(ty, |id| Some(known_definition(definitions, id)))
+    types::peel_alias(ty, type_query_lookup(definitions))
 }
 
 pub(crate) fn ref_stripped_type_parameter(ty: &Type) -> Option<EcoString> {

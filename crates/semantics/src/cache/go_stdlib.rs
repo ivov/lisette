@@ -11,6 +11,7 @@ use super::{CACHE_FORMAT_VERSION, COMPILER_BUILD_HASH, GO_STDLIB_HASH};
 use crate::store::Store;
 use std::fs;
 use syntax::program::{File, GO_IMPORT_PREFIX, strip_go_prefix};
+use syntax::types::Symbol;
 
 #[derive(Serialize, Deserialize)]
 struct GoStdlibHeader {
@@ -242,7 +243,7 @@ fn register_cached_go_package(
     for (qualified_name, cached_definition) in &cached.definitions {
         cached_definition.install_into(
             package.definitions,
-            qualified_name.clone().into(),
+            Symbol::from_raw(qualified_name.clone()),
             file_ids,
         );
     }

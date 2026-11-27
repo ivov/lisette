@@ -110,27 +110,9 @@ impl Display for Symbol {
     }
 }
 
-impl From<EcoString> for Symbol {
-    fn from(s: EcoString) -> Self {
-        Self(s)
-    }
-}
-
 impl From<Symbol> for EcoString {
     fn from(s: Symbol) -> Self {
         s.0
-    }
-}
-
-impl From<&str> for Symbol {
-    fn from(s: &str) -> Self {
-        Self(EcoString::from(s))
-    }
-}
-
-impl From<String> for Symbol {
-    fn from(s: String) -> Self {
-        Self(EcoString::from(s))
     }
 }
 
@@ -1547,8 +1529,12 @@ impl Type {
     }
 
     pub fn get_qualified_id(&self) -> Option<&str> {
+        self.nominal_id().map(Symbol::as_str)
+    }
+
+    pub fn nominal_id(&self) -> Option<&Symbol> {
         match self {
-            Type::Nominal { id, .. } => Some(id.as_str()),
+            Type::Nominal { id, .. } => Some(id),
             _ => None,
         }
     }

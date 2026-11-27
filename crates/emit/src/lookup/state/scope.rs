@@ -353,9 +353,9 @@ impl ScopeState {
     ) -> Option<&BindingValue> {
         match resolution {
             IdentifierResolution::Binding(id) => self.resolve_binding_id(*id),
-            IdentifierResolution::Definition { .. } | IdentifierResolution::Unresolved => {
-                self.resolve_identifier_binding(value)
-            }
+            IdentifierResolution::Definition { .. }
+            | IdentifierResolution::Method { .. }
+            | IdentifierResolution::Unresolved => self.resolve_identifier_binding(value),
         }
     }
 

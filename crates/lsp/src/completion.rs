@@ -177,7 +177,7 @@ pub(crate) fn get_instance_completions(
     struct_field_completions(type_id, snapshot, same_package, &mut items);
 
     let ty = Type::Nominal {
-        id: type_id.into(),
+        id: types::Symbol::from_raw(type_id),
         params: vec![],
         writable: false,
     };

@@ -309,12 +309,10 @@ impl Planner<'_> {
             self.plan_place(setup, base, ordering)
         };
 
-        if let Some(access) = self.queries().try_plan_tuple_member_dot(
-            &base_value,
-            &expression_ty,
-            member,
-            resolution,
-        ) {
+        if let Some(access) =
+            self.queries()
+                .try_plan_tuple_member_dot(&base_value, &expression_ty, resolution)
+        {
             return access;
         }
         let field = self.facts.dot_member_go_name(
@@ -527,7 +525,7 @@ impl PlannerQueries<'_, '_> {
             Place::Field(site) => self.facts.field_slot_layout(
                 &site.receiver.get_type(),
                 self.facts.checked(target).field_selection(),
-                site.member,
+                site.slot(),
                 site.ty,
             ),
             Place::Index { base, .. } => self.go_place_layout(base)?.indexed_element().cloned(),

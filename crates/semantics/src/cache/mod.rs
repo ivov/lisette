@@ -22,6 +22,7 @@ use syntax::program::{File, Package, SourceFileKind, is_test_file};
 use crate::loader::is_external_test_package;
 use crate::store::{ENTRY_PACKAGE_ID, Store};
 use std::env;
+use syntax::types::Symbol;
 use types::CachedDefinition;
 
 /// Current cache format version. Bump this when making breaking changes to the cache format.
@@ -465,7 +466,11 @@ pub(crate) fn build_cached_package(
     }
 
     for (qualified_name, cached_definition) in cached.definitions {
-        cached_definition.install_into(&mut package.definitions, qualified_name.into(), &file_ids);
+        cached_definition.install_into(
+            &mut package.definitions,
+            Symbol::from_raw(qualified_name),
+            &file_ids,
+        );
     }
 
     package

@@ -9,6 +9,7 @@
     clippy::match_same_arms
 )]
 
+#[macro_use]
 mod lookup;
 mod lowering;
 mod output;

@@ -33,6 +33,7 @@ impl InferCtx<'_> {
                 let is_constant = match resolution {
                     IdentifierResolution::Binding(_) => self.scopes.lookup_const(value),
                     IdentifierResolution::Definition { name, .. } => self.store.is_const(name),
+                    IdentifierResolution::Method { .. } => false,
                     IdentifierResolution::Unresolved => true,
                 };
                 (!is_constant).then(|| ConstInitReject::RuntimeValue(value.clone(), *span))

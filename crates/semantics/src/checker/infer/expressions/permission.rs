@@ -546,7 +546,7 @@ impl InferCtx<'_> {
         };
         let binding = match resolution {
             IdentifierResolution::Binding(id) => Some(*id),
-            IdentifierResolution::Definition { .. } => None,
+            IdentifierResolution::Definition { .. } | IdentifierResolution::Method { .. } => None,
             IdentifierResolution::Unresolved => self.scopes.lookup_binding_id(value),
         }?;
         Some((binding, value.as_str()))

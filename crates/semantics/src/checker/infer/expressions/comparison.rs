@@ -432,9 +432,9 @@ pub(crate) fn select_equality(
             EqualityRecipe::Operator
         };
     }
-    match peeled.get_qualified_id() {
+    match peeled.nominal_id() {
         Some(id) if type_has_usable_equals(store, &peeled, package) => EqualityRecipe::Method {
-            owner: Some(id.into()),
+            owner: Some(id.clone()),
         },
         _ => EqualityRecipe::Operator,
     }

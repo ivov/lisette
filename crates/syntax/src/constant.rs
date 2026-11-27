@@ -7,7 +7,9 @@ use num_traits::{One, Signed, ToPrimitive, Zero};
 
 use crate::ast::{BinaryOperator, BindingId, Expression, Literal, Span, UnaryOperator};
 use crate::lex::{rune_codepoint, string_bytes};
-use crate::program::{Definition, DotAccessResolution, is_go_import, strip_prelude_prefix};
+use crate::program::{
+    Definition, DotAccessResolution, is_go_import, resolved_definition_name, strip_prelude_prefix,
+};
 use crate::types::{self, SimpleKind, Type};
 
 pub const MAX_CONSTANT_SHIFT: u32 = 1074;
@@ -136,12 +138,15 @@ pub fn evaluate(expression: &Expression, source: &dyn ConstantSource) -> Evaluat
         }
         Expression::DotAccess {
             expression: receiver,
-            resolution: DotAccessResolution::TupleStructField { is_newtype: true },
+            resolution:
+                DotAccessResolution::TupleStructField {
+                    is_newtype: true, ..
+                },
             ty,
             ..
         } => convert_to(receiver, ty, span, source),
         Expression::DotAccess { resolution, ty, .. } => Ok(resolution
-            .definition()
+            .defined_name()
             .and_then(|name| named(name, ty, source))),
         Expression::Unary {
             operator,
@@ -238,15 +243,13 @@ pub fn builtin_length_receiver(call: &Expression) -> Option<&Expression> {
             expression: receiver,
             resolution:
                 DotAccessResolution::InstanceMethod {
-                    definition: Some(definition),
+                    method: Some(method),
                     ..
                 },
             ..
         } if args.is_empty()
-            && matches!(
-                definition.as_str(),
-                "prelude.string.length" | "prelude.Array.length"
-            ) =>
+            && method.name == "length"
+            && matches!(method.owner.as_str(), "prelude.string" | "prelude.Array") =>
         {
             Some(receiver)
         }
@@ -273,12 +276,7 @@ fn evaluate_call(expression: &Expression, source: &dyn ConstantSource) -> Evalua
     if let Some(receiver) = builtin_length_receiver(expression) {
         return length(receiver, source);
     }
-    let callee = match callee.unwrap_parens() {
-        Expression::Identifier { resolution, .. } => resolution.definition(),
-        Expression::DotAccess { resolution, .. } => resolution.definition(),
-        _ => None,
-    };
-    let Some(callee) = callee else {
+    let Some(callee) = resolved_definition_name(callee) else {
         return Ok(None);
     };
     if source.is_newtype(callee) {

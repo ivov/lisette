@@ -699,8 +699,38 @@ pub(crate) struct IfPlan {
 }
 
 pub(crate) struct PairCondition {
-    pub(crate) initializer: Option<Definition>,
-    pub(crate) condition: GoExpression,
+    initializer: Option<Definition>,
+    condition: GoExpression,
+}
+
+impl PairCondition {
+    pub(crate) fn plain(condition: GoExpression) -> Self {
+        Self {
+            initializer: None,
+            condition,
+        }
+    }
+
+    pub(crate) fn initialized(initializer: Option<Definition>, condition: GoExpression) -> Self {
+        Self {
+            initializer,
+            condition,
+        }
+    }
+
+    pub(crate) fn into_plain(self) -> Result<GoExpression, Box<Self>> {
+        match self.initializer {
+            None => Ok(self.condition),
+            Some(_) => Err(Box::new(self)),
+        }
+    }
+
+    pub(crate) fn and(self, next: GoExpression) -> Self {
+        Self {
+            initializer: self.initializer,
+            condition: GoExpression::binary(self.condition, GoBinaryOperator::And, next),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

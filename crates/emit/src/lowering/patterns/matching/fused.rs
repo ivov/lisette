@@ -1,14 +1,14 @@
 use super::*;
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lowering::abi::fallible_producer::{ErrorNilGuard, ResultFusePlan};
+use crate::lowering::abi::fallible_producer::ResultFusePlan;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::go_result_wrapping::partial_ok_nil_guard;
+use crate::lowering::calls::bound_value::{Arms, BoundPair, FailureBody};
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::PairPlacement;
 use crate::lowering::calls::predicates::Polarity;
-use crate::lowering::calls::wrap_err::wrap_error;
 use crate::lowering::planner::queries::PlannerQueries;
-use crate::output::finish::cleanup::name_uses::NameUses;
+use crate::target::ir::bodies::ElseLayout;
 use crate::target::ir::bodies::effect_statement;
 use crate::target::names::source_name::SourceName;
 
@@ -16,11 +16,6 @@ use crate::target::names::source_name::SourceName;
 enum PartialOkValue {
     Nilable,
     NonNil,
-}
-
-struct ErrorPrologue<'w> {
-    nil_guard: ErrorNilGuard,
-    wraps: &'w [WrapMessage],
 }
 
 struct GuardedValue {
@@ -69,22 +64,9 @@ impl<'p> Planner<'p> {
         }
 
         self.scope.declare_go_name(go_name.spelling());
-        let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.clone()));
-        let none_condition = bound.failure_condition();
-        let fail_body = self.lower_block_as_body(arms.none_body);
-        let late_binding = bound.late_binding();
-        let mut statements = bound.statements;
-        statements.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                none_condition,
-                fail_body,
-                ElseArm::None,
-                IfOrigin::Match { else_label: None },
-            ))
-            .into(),
-        );
-        statements.extend(late_binding);
-        Some(statements)
+        let bound: BoundValue = fuse.bind(self, CommaOkValueSlot::Named(go_name.clone()));
+        let failure = bound.failure_body(|| self.lower_block_as_body(arms.none_body));
+        Some(bound.guard(failure, IfOrigin::Match { else_label: None }))
     }
 
     pub(in crate::lowering) fn try_lower_fused_partial_match_into(
@@ -147,10 +129,9 @@ impl<'p> Planner<'p> {
             return self.lower_discarded_fused_call(&fuse, subject);
         }
 
-        let nil_guard = fuse.error_nil_guard();
         let carries_payload = fuse.carries_payload();
         let slot = self.fused_value_slot(destination, ok_name);
-        let (bound, wraps) = self.bind_fused_result(fuse, slot, err_name);
+        let bound = self.bind_fused_result(fuse, slot, err_name);
 
         let unit = self.unit_value(None, None);
         let then_body = destination.is_none().then(|| {
@@ -167,13 +148,12 @@ impl<'p> Planner<'p> {
         } else {
             place
         };
-        let prologue = ErrorPrologue {
-            nil_guard,
-            wraps: &wraps,
-        };
-        let else_body =
-            self.lower_fused_err_arm(&bound, err_name, &err.arm.expression, arm_place, prologue);
-        Some(fused_result_statements(bound, then_body, else_body))
+        let else_body = self.lower_fused_err_arm(&bound, err_name, &err.arm.expression, arm_place);
+        Some(fused_result_statements(
+            bound.into_value(),
+            then_body,
+            else_body,
+        ))
     }
 
     fn bind_fused_result(
@@ -181,9 +161,9 @@ impl<'p> Planner<'p> {
         fuse: ResultFusePlan<'_>,
         slot: CommaOkValueSlot,
         err_name: Option<FusedName<'_>>,
-    ) -> (BoundValue, Vec<WrapMessage>) {
+    ) -> BoundPair {
         let err_hint = err_name.map(|err| err.go_name());
-        fuse.bind_wrapped(self, slot, err_hint.as_ref())
+        fuse.bind(self, slot, err_hint.as_ref())
     }
 
     fn fused_value_slot(
@@ -230,35 +210,23 @@ impl<'p> Planner<'p> {
         let payload_ty = self.facts.ok_payload(&subject.get_type());
         let (ok_arms, err_arm, err_payload) = self.split_nested_result_arms(arms, &payload_ty)?;
         let err_name = err_payload.and_then(field_binding).flatten();
-        let nil_guard = fuse.error_nil_guard();
         let value_name = self.fresh_local("ret");
-        let (bound, wraps) =
-            self.bind_fused_result(fuse, CommaOkValueSlot::Arm(value_name), err_name);
+        let bound = self.bind_fused_result(fuse, CommaOkValueSlot::Arm(value_name), err_name);
 
         let value = GoExpression::identifier(bound.payload_identifier()?.clone());
         let then_body =
             self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
         let then_body = finish_nested_pair_arm(then_body);
-        let prologue = ErrorPrologue {
-            nil_guard,
-            wraps: &wraps,
-        };
-        let else_body =
-            self.lower_fused_err_arm(&bound, err_name, &err_arm.expression, place, prologue);
+        let else_body = self.lower_fused_err_arm(&bound, err_name, &err_arm.expression, place);
 
-        let ok_condition = bound.success_condition();
-        let else_arm = ElseArm::block(else_body);
-        let mut statements = bound.statements;
-        statements.push(
-            LoweredStatement::If(IfPlan::pair_if(
-                ok_condition,
-                then_body,
-                else_arm,
-                IfOrigin::Match { else_label: None },
-            ))
-            .into(),
-        );
-        Some(statements)
+        Some(bound.into_value().branch(
+            Arms::SuccessFirst {
+                success: then_body,
+                failure_layout: ElseLayout::Block,
+            },
+            else_body,
+            IfOrigin::Match { else_label: None },
+        ))
     }
 
     fn split_nested_result_arms<'m>(
@@ -304,21 +272,15 @@ impl<'p> Planner<'p> {
 
     fn lower_fused_err_arm(
         &mut self,
-        bound: &BoundValue,
+        bound: &BoundPair,
         err_name: Option<FusedName<'_>>,
         body: &Expression,
         place: &PlacePlan,
-        prologue: ErrorPrologue<'_>,
-    ) -> LoweredBlock {
-        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
-        let mut else_body = self.lower_fused_arm(&[err_binding], body, place);
-        prepend_error_prologue(
-            &mut else_body,
-            bound.status_identifier(),
-            prologue.nil_guard,
-            prologue.wraps,
-        );
-        else_body
+    ) -> FailureBody {
+        bound.error_body(|status| {
+            let err_binding = ArmBinding::alias_at(err_name, Some(status));
+            self.lower_fused_arm(&[err_binding], body, place)
+        })
     }
 
     pub(super) fn try_lower_fused_partial_match(
@@ -606,7 +568,7 @@ impl<'p> Planner<'p> {
             Some(some) => CommaOkValueSlot::Arm(self.arm_value_name(&some.go_name())),
             None => CommaOkValueSlot::Unused,
         };
-        let bound = fuse.bind(self, slot);
+        let bound: BoundValue = fuse.bind(self, slot);
 
         let element = bound.payload();
         let some_binding = if bound.binds_value() {
@@ -615,33 +577,17 @@ impl<'p> Planner<'p> {
             ArmBinding::copy_at(arms.some_binding, element.as_ref())
         };
         let then_body = self.lower_fused_arm(&[some_binding], arms.some_body, place);
-        let else_body = self.lower_fused_arm(&[], arms.none_body, place);
+        let else_body = bound.failure_body(|| self.lower_fused_arm(&[], arms.none_body, place));
 
-        let invert = then_body.renders_empty() && !else_body.renders_empty();
-        let condition = if invert {
-            bound.failure_condition()
+        let arms = if then_body.renders_empty() && !else_body.renders_empty() {
+            Arms::FailureOnly
         } else {
-            bound.success_condition()
+            Arms::SuccessFirst {
+                success: then_body,
+                failure_layout: ElseLayout::Block,
+            }
         };
-        let plan = if invert {
-            IfPlan::pair_if(
-                condition,
-                else_body,
-                ElseArm::None,
-                IfOrigin::Match { else_label: None },
-            )
-        } else {
-            IfPlan::pair_if(
-                condition,
-                then_body,
-                ElseArm::block(else_body),
-                IfOrigin::Match { else_label: None },
-            )
-        };
-
-        let mut statements = bound.statements;
-        statements.push(LoweredStatement::If(plan).into());
-        statements
+        bound.branch(arms, else_body, IfOrigin::Match { else_label: None })
     }
 
     pub(in crate::lowering::patterns) fn lower_fused_arm<const N: usize>(
@@ -703,13 +649,13 @@ impl PartialPairNames {
         condition: GoExpression,
     ) -> PairCondition {
         let value = bound_value.unwrap_or_else(GoIdentifier::blank);
-        PairCondition {
-            initializer: Some(Definition {
+        PairCondition::initialized(
+            Some(Definition {
                 names: vec![value, self.error.clone()],
                 value: call,
             }),
             condition,
-        }
+        )
     }
 
     fn error_checked_if(
@@ -1066,88 +1012,22 @@ fn selective_if(test: PairCondition, selected: LoweredBlock, fallback: LoweredBl
 fn fused_result_statements(
     bound: BoundValue,
     then_body: Option<LoweredBlock>,
-    else_body: LoweredBlock,
+    else_body: FailureBody,
 ) -> Vec<Statement> {
-    let ok_condition = bound.success_condition();
-    let err_condition = bound.failure_condition();
-    let mut statements = bound.statements;
-    let plan = match then_body {
-        Some(then_body) => fused_result_if(ok_condition, err_condition, then_body, else_body),
-        None => IfPlan::pair_if(
-            err_condition,
-            else_body,
-            ElseArm::None,
-            IfOrigin::Match { else_label: None },
-        ),
+    let arms = match then_body {
+        None => Arms::FailureOnly,
+        Some(then_body) if then_body.renders_empty() && !else_body.renders_empty() => {
+            Arms::FailureOnly
+        }
+        Some(then_body) if else_body.ends_with_diverge() && then_body.ends_with_diverge() => {
+            Arms::FailureFirst { success: then_body }
+        }
+        Some(then_body) => Arms::SuccessFirst {
+            success: then_body,
+            failure_layout: ElseLayout::Block,
+        },
     };
-    statements.push(LoweredStatement::If(plan).into());
-    statements
-}
-
-fn fused_result_if(
-    ok_condition: PairCondition,
-    err_condition: PairCondition,
-    then_body: LoweredBlock,
-    else_body: LoweredBlock,
-) -> IfPlan {
-    if then_body.renders_empty() && !else_body.renders_empty() {
-        IfPlan::pair_if(
-            err_condition,
-            else_body,
-            ElseArm::None,
-            IfOrigin::Match { else_label: None },
-        )
-    } else if else_body.ends_with_diverge() && then_body.ends_with_diverge() {
-        IfPlan::pair_if(
-            err_condition,
-            else_body,
-            ElseArm::block(then_body),
-            IfOrigin::Match { else_label: None },
-        )
-    } else {
-        IfPlan::pair_if(
-            ok_condition,
-            then_body,
-            ElseArm::block(else_body),
-            IfOrigin::Match { else_label: None },
-        )
-    }
-}
-
-fn prepend_error_prologue(
-    else_body: &mut LoweredBlock,
-    status: &GoIdentifier,
-    nil_guard: ErrorNilGuard,
-    wraps: &[WrapMessage],
-) {
-    if NameUses::of(&mut else_body.statements).references(status) == 0 {
-        return;
-    }
-    let error = GoExpression::identifier(status.clone());
-    if nil_guard == ErrorNilGuard::Guarded {
-        else_body.statements.insert(
-            0,
-            LoweredStatement::If(IfPlan::plain(
-                nil_condition(error.clone()),
-                LoweredBlock {
-                    statements: vec![assign(error.clone(), unexpected_nil_error())],
-                },
-                ElseArm::None,
-            ))
-            .into(),
-        );
-    }
-    if !wraps.is_empty() {
-        let wrapped = wrap_error(wraps, error.clone());
-        let prologue = vec![assign(error, wrapped)];
-        let after_nil_guard = match nil_guard {
-            ErrorNilGuard::Guarded => 1,
-            ErrorNilGuard::Unguarded => 0,
-        };
-        else_body
-            .statements
-            .splice(after_nil_guard..after_nil_guard, prologue);
-    }
+    bound.branch(arms, else_body, IfOrigin::Match { else_label: None })
 }
 
 impl<'p> PlannerQueries<'_, 'p> {

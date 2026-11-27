@@ -33,7 +33,7 @@ use diagnostics::LocalSink;
 use semantics::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use semantics::store::Store;
 use syntax::program::{Definition, DefinitionBody, Visibility};
-use syntax::types::{CompoundKind, FunctionParameter, Type};
+use syntax::types::{CompoundKind, FunctionParameter, Symbol, Type};
 
 pub fn new_test_store() -> Store {
     static TEMPLATE: OnceLock<Store> = OnceLock::new();
@@ -57,7 +57,7 @@ fn register_test_builtins(store: &mut Store) {
 
     let mut define = |name: &str, params: Vec<Type>, return_type: Type| {
         package.definitions.insert(
-            format!("{PRELUDE_PREFIX}{name}").into(),
+            Symbol::from_raw(format!("{PRELUDE_PREFIX}{name}")),
             Definition {
                 visibility: Visibility::Public,
                 ty: Type::function(
@@ -82,7 +82,7 @@ fn register_test_builtins(store: &mut Store) {
     };
 
     let unknown = Type::Nominal {
-        id: "prelude.Unknown".into(),
+        id: Symbol::from_raw("prelude.Unknown"),
         params: vec![],
         writable: false,
     };

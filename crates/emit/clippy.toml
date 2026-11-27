@@ -11,5 +11,10 @@ disallowed-methods = [
   { path = "lisette_syntax::types::Type::get_function_ret", reason = "read the signature with Type::as_function_type, which unwraps Forall, and expect a function where the checker gives one" },
   { path = "lisette_syntax::types::Type::get_function_params", reason = "read the signature with Type::as_function_type, which unwraps Forall, and expect a function where the checker gives one" },
   { path = "lisette_emit::target::ir::values::GoExpression::unreachable", reason = "build a plan that does not fall through with ValuePlan::diverging" },
+  { path = "str::parse", reason = "read a tuple index from the DotAccessResolution, through MemberSlot::of" },
+  { path = "lisette_syntax::types::Symbol::from_raw", reason = "take the qualified Symbol that the checker gives, or look a spelled name up with EmitFacts::find_definition" },
+  { path = "lisette_syntax::types::Symbol::from_parts", reason = "take the qualified Symbol that the checker gives, or look a spelled name up with EmitFacts::find_definition" },
+  { path = "lisette_syntax::types::Symbol::with_segment", reason = "take the qualified Symbol that the checker gives, or look a spelled name up with EmitFacts::find_definition" },
+  { path = "lisette_syntax::program::resolution::CalleeName::qualified_name", reason = "a method has no definition: look a method up with EmitFacts::callable, which takes the CalleeName" },
   { path = "lisette_syntax::ast::Span::dummy", reason = "a rejection or a diagnostic takes the span of the source it reports, so expect the span" },
 ]

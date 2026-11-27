@@ -1,6 +1,6 @@
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::calls::go_interop::build_tuple_literal;
-use crate::lowering::definitions::interface_adapter::definition_selects_tagged_counterpart;
+use crate::lowering::definitions::interface_adapter::has_tagged_counterpart;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::values::GoExpression;
@@ -9,7 +9,7 @@ use crate::target::names::go_name::{GeneratedPackage, GoExport, MemberSpelling};
 use crate::target::names::packages::PackageUse;
 use crate::target::types::go_type::GoType;
 use syntax::ast::{Expression, IdentifierResolution};
-use syntax::program::{CallOperation, strip_prelude_prefix};
+use syntax::program::{CallOperation, CalleeName, strip_prelude_prefix};
 use syntax::types::Type;
 
 fn resolve(name: &str) -> GoExpression {
@@ -41,15 +41,15 @@ impl PlannerQueries<'_, '_> {
         let CallOperation::ReceiverMethod { is_public } = recorded.operation else {
             return None;
         };
-        let symbol = recorded.definition.as_deref()?;
-        let (_, method) = symbol.rsplit_once('.')?;
+        let symbol = recorded.method()?;
+        let method = symbol.name.as_str();
         let first = id_ty.as_function_type()?.params.first()?;
         let export = if is_public {
             GoExport::Exported
         } else {
             GoExport::Unexported
         };
-        let spelling = if definition_selects_tagged_counterpart(self.facts, symbol) {
+        let spelling = if has_tagged_counterpart(self.facts, &symbol.owner, &symbol.name) {
             MemberSpelling::TaggedCounterpart
         } else {
             MemberSpelling::Plain
@@ -83,8 +83,11 @@ impl PlannerQueries<'_, '_> {
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
         let binding = match resolution {
-            IdentifierResolution::Definition { name, .. } => {
-                return self.plan_definition_identifier(identifier, name, ty, ctx);
+            IdentifierResolution::Definition { .. } | IdentifierResolution::Method { .. } => {
+                let name = resolution
+                    .callee_name()
+                    .expect("a definition or method identifier has a callee name");
+                return self.plan_definition_identifier(identifier, &name, ty, ctx);
             }
             IdentifierResolution::Binding(id) => self.scope.resolve_binding_id(*id),
 
@@ -123,11 +126,13 @@ impl PlannerQueries<'_, '_> {
     fn plan_definition_identifier(
         &self,
         identifier: &Expression,
-        symbol: &str,
+        name: &CalleeName,
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        if let Some(make_function) = self.variant_make_reference(symbol) {
+        if let CalleeName::Definition(symbol) = name
+            && let Some(make_function) = self.variant_make_reference(symbol)
+        {
             match ty {
                 Type::Nominal { params, .. } => {
                     let type_args = self.variant_value_type_args(params, ctx);
@@ -169,7 +174,10 @@ impl PlannerQueries<'_, '_> {
         if let Some(expression) = self.try_plan_method_expression(identifier, ty) {
             return expression;
         }
-        let function = self.definition_reference(symbol);
+        let function = match name {
+            CalleeName::Definition(symbol) => self.definition_reference(symbol),
+            CalleeName::Method(method) => self.method_reference(method),
+        };
         if ctx.is_callee() {
             return function;
         }

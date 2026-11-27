@@ -1,0 +1,209 @@
+import "go:errors"
+import "go:fmt"
+import "go:os"
+import "go:strconv"
+import "go:strings"
+
+fn tag_error(e: error) -> error {
+  fmt.Errorf("tag: %w", e)
+}
+
+fn text_of(r: Result<int, string>) -> string {
+  match r {
+    Ok(n) => f"ok {n}",
+    Err(e) => e,
+  }
+}
+
+fn error_text_of(r: Result<int, error>) -> string {
+  match r {
+    Ok(n) => f"ok {n}",
+    Err(e) => e.Error(),
+  }
+}
+
+fn unit_text_of(r: Result<(), error>) -> string {
+  match r {
+    Ok(_) => "ok",
+    Err(e) => e.Error(),
+  }
+}
+
+fn bad_syntax() -> string {
+  "strconv.Atoi: parsing \"x\": invalid syntax"
+}
+
+fn wrap_then_map_propagated(s: string) -> Result<int, string> {
+  let n = strconv.Atoi(s).wrap_err("reading port").map_err(|e| e.Error())?
+  Ok(n)
+}
+
+fn wrap_then_map_tail(s: string) -> Result<int, error> {
+  strconv.Atoi(s).wrap_err("w").map_err(tag_error)
+}
+
+fn bare_error_wrap_then_map(p: string) -> Result<(), error> {
+  os.Chdir(p).wrap_err("cd").map_err(tag_error)?
+  Ok(())
+}
+
+fn wrap_then_map_discarded(s: string) -> Result<(), string> {
+  let _ = strconv.Atoi(s).wrap_err("reading port").map_err(|e| e.Error())?
+  Ok(())
+}
+
+fn two_wraps_then_map(s: string) -> Result<int, string> {
+  let n = strconv.Atoi(s).wrap_err("inner").wrap_err("outer").map_err(|e| e.Error())?
+  Ok(n)
+}
+
+fn guarded_wrap_then_map(p: string) -> Result<string, string> {
+  let f = os.Open(p).wrap_err("opening").map_err(|e| e.Error())?
+  Ok(f.Name())
+}
+
+fn lisette_producer(x: int) -> Result<int, error> {
+  if x > 0 { Ok(x) } else { Err(errors.New("neg")) }
+}
+
+fn lisette_wrap_then_map(x: int) -> Result<int, error> {
+  let n = lisette_producer(x).wrap_err("w").map_err(tag_error)?
+  Ok(n)
+}
+
+fn format_wrap_then_map(s: string, port: int) -> Result<int, string> {
+  let n = strconv.Atoi(s).wrap_err(f"port {port}").map_err(|e| e.Error())?
+  Ok(n)
+}
+
+fn wrap_then_two_maps(s: string) -> Result<int, string> {
+  let n = strconv.Atoi(s).wrap_err("w").map_err(tag_error).map_err(|e| e.Error())?
+  Ok(n)
+}
+
+fn wrap_propagated(s: string) -> Result<int, error> {
+  let n = strconv.Atoi(s).wrap_err("w")?
+  Ok(n)
+}
+
+fn guarded_wrap_propagated(p: string) -> Result<string, error> {
+  let f = os.Open(p).wrap_err("opening")?
+  Ok(f.Name())
+}
+
+fn wrapped_failure_return(e: error, early: bool) -> Result<int, error> {
+  if early {
+    return Err(e).wrap_err("m")
+  }
+  Ok(0)
+}
+
+fn wrap_in_match_arm(s: string) -> string {
+  match strconv.Atoi(s).wrap_err("m") {
+    Ok(n) => f"ok {n}",
+    Err(e) => e.Error(),
+  }
+}
+
+#[test]
+fn wrap_err_then_map_err_keeps_the_message_with_propagate() {
+  assert text_of(wrap_then_map_propagated("x")) == f"reading port: {bad_syntax()}"
+  assert text_of(wrap_then_map_propagated("3")) == "ok 3"
+}
+
+#[test]
+fn wrap_err_then_map_err_keeps_the_message_in_a_tail() {
+  assert error_text_of(wrap_then_map_tail("x")) == f"tag: w: {bad_syntax()}"
+}
+
+#[test]
+fn wrap_err_then_map_err_keeps_the_message_on_a_bare_error() {
+  let text = unit_text_of(bare_error_wrap_then_map("/does/not/exist"))
+  assert strings.HasPrefix(text, "tag: cd: chdir /does/not/exist")
+}
+
+#[test]
+fn wrap_err_then_map_err_keeps_the_message_when_the_value_is_discarded() {
+  let r = match wrap_then_map_discarded("x") {
+    Ok(_) => "ok",
+    Err(e) => e,
+  }
+  assert r == f"reading port: {bad_syntax()}"
+}
+
+#[test]
+fn wrap_err_then_map_err_keeps_the_message_in_a_try_block() {
+  let r: Result<int, string> = try {
+    let n = strconv.Atoi("x").wrap_err("reading port").map_err(|e| e.Error())?
+    n + 1
+  }
+  assert text_of(r) == f"reading port: {bad_syntax()}"
+}
+
+#[test]
+fn wrap_err_message_runs_once_with_map_err() {
+  let mut runs = 0
+  let message = || {
+    runs += 1
+    "reading port"
+  }
+  let parse = |s: string| -> Result<int, string> {
+    let n = strconv.Atoi(s).wrap_err(message()).map_err(|e| e.Error())?
+    Ok(n)
+  }
+  assert text_of(parse("x")) == f"reading port: {bad_syntax()}"
+  assert runs == 1
+  assert text_of(parse("1")) == "ok 1"
+  assert runs == 2
+}
+
+#[test]
+fn two_wrap_errs_then_map_err_keep_both_messages() {
+  assert text_of(two_wraps_then_map("x")) == f"outer: inner: {bad_syntax()}"
+}
+
+#[test]
+fn wrap_err_then_map_err_keeps_the_message_on_a_nil_guarded_call() {
+  let r = match guarded_wrap_then_map("/does/not/exist") {
+    Ok(name) => name,
+    Err(e) => e,
+  }
+  assert strings.HasPrefix(r, "opening: open /does/not/exist")
+}
+
+#[test]
+fn wrap_err_then_map_err_keeps_the_message_on_a_lisette_callee() {
+  assert error_text_of(lisette_wrap_then_map(-1)) == "tag: w: neg"
+  assert error_text_of(lisette_wrap_then_map(2)) == "ok 2"
+}
+
+#[test]
+fn wrap_err_with_a_format_message_then_map_err_keeps_the_message() {
+  assert text_of(format_wrap_then_map("x", 80)) == f"port 80: {bad_syntax()}"
+}
+
+#[test]
+fn wrap_err_then_two_map_errs_keep_the_message() {
+  assert text_of(wrap_then_two_maps("x")) == f"tag: w: {bad_syntax()}"
+}
+
+#[test]
+fn wrap_err_with_propagate_keeps_the_message() {
+  assert error_text_of(wrap_propagated("x")) == f"w: {bad_syntax()}"
+  let r = match guarded_wrap_propagated("/does/not/exist") {
+    Ok(name) => name,
+    Err(e) => e.Error(),
+  }
+  assert strings.HasPrefix(r, "opening: open /does/not/exist")
+}
+
+#[test]
+fn wrap_err_on_a_failure_return_keeps_the_message() {
+  assert error_text_of(wrapped_failure_return(errors.New("e"), true)) == "m: e"
+}
+
+#[test]
+fn wrap_err_in_a_match_subject_keeps_the_message() {
+  assert wrap_in_match_arm("x") == f"m: {bad_syntax()}"
+  assert wrap_in_match_arm("4") == "ok 4"
+}

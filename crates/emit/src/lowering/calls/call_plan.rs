@@ -8,8 +8,7 @@ use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::planner::queries::PlannerQueries;
 use syntax::ast::Expression;
 use syntax::program::SlotOrigin;
-use syntax::program::{CallOperation, CheckedCallee, resolved_definition};
-use syntax::program::{is_go_import, is_prelude_symbol};
+use syntax::program::{CallOperation, CalleeName, CheckedCallee, resolved_callee};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
@@ -112,7 +111,7 @@ pub(in crate::lowering) struct ArgumentSlotLayoutChange {
 struct ParamAbiSource<'s> {
     declared: Option<&'s [FunctionParameter]>,
     receiver_offset: usize,
-    callee_id: Option<&'s str>,
+    callee_id: Option<&'s CalleeName>,
     origin: CallableOrigin<'s>,
 }
 
@@ -125,7 +124,7 @@ struct ParamSlot {
 fn callee_return_slot<'r>(
     facts: &'r EmitFacts<'_>,
     origin: &CallableOrigin<'_>,
-    id: Option<&str>,
+    id: Option<&CalleeName>,
     declared_return: Option<&'r Type>,
     return_type: &Type,
 ) -> (SlotOrigin, Option<&'r Type>) {
@@ -138,7 +137,7 @@ fn callee_return_slot<'r>(
             SlotOrigin::of_go_declaration(
                 SlotOrigin::GoReturn,
                 declared_return.unwrap_or(return_type),
-                |id| Some(facts.definition(id)),
+                facts.type_query_lookup(),
             ),
             declared_return,
         ),
@@ -146,10 +145,10 @@ fn callee_return_slot<'r>(
 }
 
 pub(in crate::lowering) fn is_prelude_dispatch(
-    id: Option<&str>,
+    id: Option<&CalleeName>,
     origin: &CallableOrigin<'_>,
 ) -> bool {
-    id.is_some_and(is_prelude_symbol)
+    id.is_some_and(CalleeName::is_prelude)
         || matches!(
             origin,
             CallableOrigin::Source(
@@ -169,7 +168,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         } else {
             CallableOrigin::Source(&checked.operation)
         };
-        let definition = checked.definition.as_ref().map(ToString::to_string);
+        let definition = checked.name.clone();
 
         let resolved = self.resolve_callee(callee, origin, definition, checked.receiver_offset());
         let arguments = args
@@ -192,13 +191,13 @@ impl<'a> PlannerQueries<'_, 'a> {
         &self,
         function: &Expression,
         origin: CallableOrigin<'a>,
-        id: Option<String>,
+        id: Option<CalleeName>,
         receiver_offset: usize,
     ) -> ResolvedCallee<'a> {
         let callee_ty = function
             .type_ref()
             .expect("internal error: a callee has a type");
-        let declaration = id.as_deref().map(|id| self.facts.callable(id));
+        let declaration = id.as_ref().map(|id| self.facts.callable(id));
         let alias_declaration = self.facts.function_alias_declaration(callee_ty);
         let declared_type = declaration
             .map(CallableDeclaration::ty)
@@ -214,7 +213,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         let declared_params = declared_function.map(|function| function.params.as_slice());
         let declared_return = declared_function.map(|function| function.return_type.as_ref());
         let (params, return_type) =
-            match self.go_named_function_type_param(callee_ty, declaration, id.as_deref()) {
+            match self.go_named_function_type_param(callee_ty, declaration, id.as_ref()) {
                 Some(param) => (vec![param], callee_ty),
                 None => (
                     self.build_param_abi(
@@ -222,7 +221,7 @@ impl<'a> PlannerQueries<'_, 'a> {
                         ParamAbiSource {
                             declared: declared_params,
                             receiver_offset,
-                            callee_id: id.as_deref(),
+                            callee_id: id.as_ref(),
                             origin,
                         },
                     ),
@@ -234,13 +233,13 @@ impl<'a> PlannerQueries<'_, 'a> {
             CalleeSignature {
                 callee: function,
                 origin: &origin,
-                named: id.as_deref().zip(declaration),
+                named: id.as_ref().zip(declaration),
                 function: instantiated_function,
                 declared_return,
                 return_type,
             },
         );
-        let is_prelude_dispatch = is_prelude_dispatch(id.as_deref(), &origin);
+        let is_prelude_dispatch = is_prelude_dispatch(id.as_ref(), &origin);
 
         ResolvedCallee {
             origin,
@@ -256,7 +255,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         &self,
         callee_ty: &Type,
         declaration: Option<CallableDeclaration<'_>>,
-        id: Option<&str>,
+        id: Option<&CalleeName>,
     ) -> Option<CallableParamAbi> {
         if !declaration.is_some_and(CallableDeclaration::is_type_definition)
             || !self.facts.is_go_named_function_type(callee_ty)
@@ -266,7 +265,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         let Type::Nominal { id: type_id, .. } = callee_ty.unwrap_forall() else {
             return None;
         };
-        if id != Some(type_id.as_str()) {
+        if id.and_then(CalleeName::definition) != Some(type_id) {
             return None;
         }
         Some(CallableParamAbi {
@@ -333,16 +332,15 @@ impl<'a> PlannerQueries<'_, 'a> {
     pub(in crate::lowering) fn resolve_callee_definition(
         &self,
         function: &Expression,
-    ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
+    ) -> (Option<CalleeName>, Option<CallableDeclaration<'a>>) {
         let id = matches!(
             function,
             Expression::Identifier { .. } | Expression::DotAccess { .. }
         )
-        .then(|| self.facts.checked(function).callee().definition.as_ref())
-        .flatten()
-        .map(ToString::to_string);
+        .then(|| self.facts.checked(function).callee().name.clone())
+        .flatten();
 
-        let declaration = id.as_deref().map(|id| self.facts.callable(id));
+        let declaration = id.as_ref().map(|id| self.facts.callable(id));
         (id, declaration)
     }
 
@@ -350,7 +348,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         if self.bound_dispatch_requirement(expression).is_some() {
             return false;
         }
-        resolved_definition(expression).is_some_and(is_go_import)
+        resolved_callee(expression).is_some_and(|name| name.is_go())
             || self.go_bound_requirement(expression).is_some()
             || self
                 .facts
@@ -424,7 +422,7 @@ impl<'a> PlannerQueries<'_, 'a> {
                     SlotOrigin::of_go_declaration(
                         SlotOrigin::GoParameter,
                         declared.as_ref().unwrap_or(instantiated),
-                        |id| Some(self.facts.definition(id)),
+                        self.facts.type_query_lookup(),
                     )
                 } else {
                     SlotOrigin::Lisette
