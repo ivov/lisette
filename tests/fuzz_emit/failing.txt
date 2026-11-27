@@ -1,10 +1,3 @@
 # Failure signatures of the emit fuzz test, one `<witness> <signature>` per line.
 # The witness program is fuzz_emit/witnesses/<witness>.lis. Each run replays every witness and fails
 # when one passes or fails with another signature, so remove the line and the file when a fix closes it.
-go-build-assignment-mismatch-variable-but-bufio-scanwords-e01b8f go_build: assignment mismatch:  variable but bufio.ScanWords returns  values
-go-build-assignment-mismatch-variable-but-cb-returns-01ca89 go_build: assignment mismatch:  variable but cb returns  values
-go-build-assignment-mismatch-variable-but-fmt-print-acdab4 go_build: assignment mismatch:  variable but fmt.Print returns  values
-go-build-assignment-mismatch-variable-but-fmt-println-46a57a go_build: assignment mismatch:  variable but fmt.Println returns  values
-go-build-assignment-mismatch-variable-but-os-stat-aef306 go_build: assignment mismatch:  variable but os.Stat returns  values
-go-build-undefined-none-6ee401 go_build: undefined: None
-go-build-assignment-mismatch-variable-but-strconv-atoi-6c19fe go_build: assignment mismatch:  variable but strconv.Atoi returns  values

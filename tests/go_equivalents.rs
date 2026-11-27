@@ -8,9 +8,11 @@ mod widened_subjects;
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::ops::Range;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::PathBuf;
 
 use rayon::prelude::*;
 use syntax::ast::{Annotation, Expression, LetMode, Span, UnaryOperator};
@@ -22,10 +24,12 @@ use _harness::go::{
     run_go_build, run_go_vet, skip_reason_for_imports, snapshots_dir, write_go_mod,
     write_subpackage,
 };
+use _harness::markdown::{backticks_around, code_span};
 use _harness::pipeline::TestPipeline;
 use _harness::wrap::wrap;
 
 const SITES_PER_REWRITE: usize = 3;
+const REPORT_LIMIT: usize = 15_000;
 
 #[derive(Default)]
 struct Sites {
@@ -66,6 +70,59 @@ struct Program {
     name: String,
     go_code: String,
     variants: Vec<(Variant, Compiled)>,
+}
+
+struct Failure<'a> {
+    program: &'a str,
+    variant: &'a Variant,
+    problem: Problem,
+    repro: PathBuf,
+}
+
+enum Problem {
+    Compiler(String),
+    Go(String),
+    DifferentGo { original: String, variant: String },
+}
+
+impl Problem {
+    fn summary(&self) -> String {
+        match self {
+            Self::Compiler(message) => format!("compiler: {message}"),
+            Self::Go(line) => format!("go: {line}"),
+            Self::DifferentGo { original, variant } => format!(
+                "Go differs from the Go of the original program\n    original: {original}\n    variant:  {variant}"
+            ),
+        }
+    }
+
+    fn markdown(&self) -> (&'static str, String) {
+        match self {
+            Self::Compiler(message) => (
+                "Panic",
+                code_span(
+                    message
+                        .strip_prefix("panic: ")
+                        .unwrap_or(message)
+                        .lines()
+                        .next()
+                        .unwrap_or_default(),
+                ),
+            ),
+            Self::Go(line) => ("Build error", code_span(go_error_message(line))),
+            Self::DifferentGo { original, variant } => {
+                let lines = format!("- {original}\n+ {variant}");
+                let fence = backticks_around(&lines, 3);
+                ("Changed Go", format!("{fence}diff\n{lines}\n{fence}"))
+            }
+        }
+    }
+}
+
+fn go_error_message(line: &str) -> &str {
+    line.find(".go:")
+        .and_then(|at| line[at..].split_once(": "))
+        .map_or(line, |(_, message)| message)
 }
 
 enum Compiled {
@@ -140,26 +197,26 @@ fn equivalent_programs_give_valid_go() {
     {
         for (variant, compiled) in variants {
             variant_count += 1;
-            let error = match compiled {
+            let problem = match compiled {
                 Compiled::Rejected => {
                     rejected += 1;
                     continue;
                 }
-                Compiled::Failed(message) => format!("compiler: {message}"),
+                Compiled::Failed(message) => Problem::Compiler(message.clone()),
                 Compiled::Emitted(variant_go_code) => {
                     let variant_go_code = variant_go_code
                         .replace(&format!("test_{}", variant.name), &format!("test_{name}"));
-                    match go_errors.get(&format!("test_{}", variant.name)) {
-                        Some(line) => format!("go: {line}"),
-                        None if must_give_original_go(variant) && variant_go_code != *go_code => {
-                            "Go differs from the Go of the original program".to_string()
+                    if let Some(line) = go_errors.get(&format!("test_{}", variant.name)) {
+                        Problem::Go(line.clone())
+                    } else {
+                        let difference = go_difference(variant, go_code, &variant_go_code);
+                        let Some((original, changed)) = difference else {
+                            continue;
+                        };
+                        Problem::DifferentGo {
+                            original,
+                            variant: changed,
                         }
-                        None if variant.rewrite == "alias"
-                            && !same_go_after_alias(go_code, &variant_go_code) =>
-                        {
-                            "Go differs from the Go of the original program, with the alias replaced by its target".to_string()
-                        }
-                        None => continue,
                     }
                 }
             };
@@ -167,13 +224,12 @@ fn equivalent_programs_give_valid_go() {
             fs::create_dir_all(&repro).expect("create package dir");
             let repro = repro.join("test.lis");
             fs::write(&repro, &variant.source).expect("write test.lis");
-            failures.push(format!(
-                "{} ({}): {}\n  {error}\n  repro: {}",
-                variant.name,
-                variant.rewrite,
-                variant.change,
-                repro.display(),
-            ));
+            failures.push(Failure {
+                program: name,
+                variant,
+                problem,
+                repro,
+            });
         }
     }
 
@@ -184,14 +240,83 @@ fn equivalent_programs_give_valid_go() {
         rejected,
         failures.len(),
     );
-    for failure in &failures {
-        eprintln!("{failure}");
+    for Failure {
+        variant,
+        problem,
+        repro,
+        ..
+    } in &failures
+    {
+        eprintln!(
+            "{} ({}): {}\n  {}\n  repro: {}",
+            variant.name,
+            variant.rewrite,
+            variant.change,
+            problem.summary(),
+            repro.display(),
+        );
+    }
+    if let Ok(path) = env::var("GO_EQUIVALENTS_REPORT")
+        && !failures.is_empty()
+    {
+        fs::write(path, report(&failures)).expect("write report");
     }
     assert!(
         failures.is_empty(),
         "{} variant(s) crashed the compiler, failed go build or vet, or changed the Go of a parenthesized, wrapped or aliased program (listed above)",
         failures.len()
     );
+}
+
+fn report(failures: &[Failure]) -> String {
+    let mut groups: Vec<(&str, (&str, String), Vec<String>)> = Vec::new();
+    for Failure {
+        program,
+        variant,
+        problem,
+        ..
+    } in failures
+    {
+        let problem = problem.markdown();
+        let mut change = variant.change.clone();
+        if let Some(first) = change.get_mut(0..1) {
+            first.make_ascii_uppercase();
+        }
+        match groups
+            .iter_mut()
+            .find(|(name, text, _)| name == program && *text == problem)
+        {
+            Some((_, _, changes)) if changes.contains(&change) => {}
+            Some((_, _, changes)) => changes.push(change),
+            None => groups.push((program, problem, vec![change])),
+        }
+    }
+    let mut body = String::new();
+    let mut shown = 0;
+    let mut omitted = 0;
+    for (program, (kind, detail), changes) in &groups {
+        let bullets: String = changes
+            .iter()
+            .map(|change| format!("- {change}\n"))
+            .collect();
+        let entry = format!(
+            "\n### {}. {kind} in {}\n\n{detail}\n\n{bullets}",
+            shown + 1,
+            code_span(program)
+        );
+        if body.len() + entry.len() > REPORT_LIMIT {
+            omitted += 1;
+            continue;
+        }
+        shown += 1;
+        body.push_str(&entry);
+    }
+    if omitted > 0 {
+        body.push_str(&format!(
+            "\n{omitted} more failures do not fit in this issue. See the run log.\n"
+        ));
+    }
+    body.trim_start().to_string()
 }
 
 fn compile(name: &str, source: &str) -> Compiled {
@@ -578,7 +703,36 @@ fn record_first_errors(output: &str, errors: &mut HashMap<String, String>) -> bo
     found
 }
 
-fn same_go_after_alias(original: &str, variant: &str) -> bool {
+fn go_difference(variant: &Variant, original: &str, changed: &str) -> Option<(String, String)> {
+    if must_give_original_go(variant) {
+        if changed == original {
+            return None;
+        }
+        first_difference(original.split('\n'), changed.split('\n'))
+    } else if variant.rewrite == "alias" {
+        alias_difference(original, changed)
+    } else {
+        None
+    }
+}
+
+fn first_difference<'a>(
+    mut original: impl Iterator<Item = &'a str>,
+    mut variant: impl Iterator<Item = &'a str>,
+) -> Option<(String, String)> {
+    let shown = |line: Option<&str>| {
+        line.map_or("(end of file)".to_string(), |line| line.trim().to_string())
+    };
+    loop {
+        match (original.next(), variant.next()) {
+            (None, None) => return None,
+            (left, right) if left == right => {}
+            (left, right) => return Some((shown(left), shown(right))),
+        }
+    }
+}
+
+fn alias_difference(original: &str, variant: &str) -> Option<(String, String)> {
     let declaration = variant
         .lines()
         .find_map(|line| line.strip_prefix("type MmAlias = "));
@@ -593,14 +747,27 @@ fn same_go_after_alias(original: &str, variant: &str) -> bool {
     let (original_imports, original_body) = split_imports(&ungroup_parameters(original));
     let (variant_imports, variant_body) = split_imports(&ungroup_parameters(&variant));
     let target = declaration.unwrap_or_default();
-    original_body == variant_body
-        && original_imports
+    first_difference(
+        original_body.iter().map(String::as_str),
+        variant_body.iter().map(String::as_str),
+    )
+    .or_else(|| {
+        let same_imports = original_imports
             .iter()
             .all(|import| variant_imports.contains(import))
-        && variant_imports.iter().all(|import| {
-            original_imports.contains(import)
-                || target.contains(&format!("{}.", import_qualifier(import)))
-        })
+            && variant_imports.iter().all(|import| {
+                original_imports.contains(import)
+                    || target.contains(&format!("{}.", import_qualifier(import)))
+            });
+        if same_imports {
+            None
+        } else {
+            first_difference(
+                original_imports.iter().map(String::as_str),
+                variant_imports.iter().map(String::as_str),
+            )
+        }
+    })
 }
 
 fn replace_word(text: &str, word: &str, replacement: &str) -> String {

@@ -1,16 +1,32 @@
 name: Nightly
 on:
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
   issues: write
 
 jobs:
-  cargo-fuzz:
-    name: cargo fuzz (${{ matrix.target }})
+  find-open-issue:
+    name: Find open issue
     if: github.repository == 'ivov/lisette'
+    runs-on: ubuntu-latest
+    outputs:
+      number: ${{ steps.find.outputs.number }}
+      run: ${{ github.event_name == 'workflow_dispatch' || steps.find.outputs.number == '' }}
+    steps:
+      - id: find
+        run: |
+          number=$(gh issue list --repo ivov/lisette --state open --search 'in:title "Nightly findings"' --json number,title --jq '[.[] | select(.title | startswith("Nightly findings"))][0].number // ""')
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  crash-fuzzing:
+    name: ${{ matrix.title }} fuzzing
+    needs: find-open-issue
+    if: needs.find-open-issue.outputs.run == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -18,10 +34,13 @@ jobs:
         include:
           - target: parse
             recipe: fuzz-parse
+            title: Parser
           - target: infer
             recipe: fuzz-infer
+            title: Type checker
           - target: scan_imports
             recipe: fuzz-scan-imports
+            title: Import scanner
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
 
@@ -72,49 +91,25 @@ jobs:
           name: fuzz-crash-${{ matrix.target }}
           path: fuzz/artifacts/
 
-      - name: Create issue on crash
-        if: failure() && hashFiles('fuzz/artifacts/**') != ''
-        run: |
-          gh issue create \
-            --repo ivov/lisette \
-            --title "fuzz-${{ matrix.target }} crash (run ${{ github.run_id }})" \
-            --body "The \`${{ matrix.target }}\` target crashed in a scheduled fuzz run.
-
-          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          **Artifact:** \`fuzz-crash-${{ matrix.target }}\` (attached to the run)"
+      - name: Write report section
+        if: failure()
+        run: .github/scripts/nightly-report.sh crash "$TITLE" "$TARGET" fuzz/artifacts "$RUNNER_TEMP/nightly-report/crashes-$INDEX.md"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET: ${{ matrix.target }}
+          TITLE: ${{ matrix.title }}
+          INDEX: ${{ strategy.job-index }}
 
-      - name: Create issue on job failure
-        if: failure() && hashFiles('fuzz/artifacts/**') == ''
-        run: |
-          gh issue create \
-            --repo ivov/lisette \
-            --title "fuzz-${{ matrix.target }} job failed (run ${{ github.run_id }})" \
-            --body "The \`${{ matrix.target }}\` job failed in a scheduled fuzz run. The usual cause is the target no longer building against current \`crates/\`.
+      - name: Upload report section
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
+        with:
+          name: nightly-report-crash-fuzzing-${{ matrix.target }}
+          path: ${{ runner.temp }}/nightly-report/
 
-          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  test-fuzz-open-issue:
-    name: Fuzz tests open issue
-    if: github.repository == 'ivov/lisette'
-    runs-on: ubuntu-latest
-    outputs:
-      open: ${{ steps.count.outputs.open }}
-    steps:
-      - id: count
-        run: |
-          open=$(gh issue list --repo ivov/lisette --state open --search 'in:title "Fuzz run findings"' --json title --jq '[.[] | select(.title == "Fuzz run findings")] | length')
-          echo "open=$open" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  test-fuzz:
-    name: Fuzz tests
-    needs: test-fuzz-open-issue
-    if: github.event_name == 'workflow_dispatch' || needs.test-fuzz-open-issue.outputs.open == '0'
+  emitter-fuzzing:
+    name: Emitter fuzzing
+    needs: find-open-issue
+    if: needs.find-open-issue.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
@@ -125,7 +120,7 @@ jobs:
           go: 'true'
           go-cache: 'false'
 
-      - name: Fuzz tests
+      - name: Fuzz emitter
         env:
           FUZZ_SEED: ${{ github.run_id }}
           FUZZ_OUT: ${{ runner.temp }}/fuzz-emit
@@ -135,31 +130,28 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
         with:
-          name: test-fuzz-findings
+          name: emitter-fuzzing-findings
           path: |
             ${{ runner.temp }}/fuzz-emit/new/
             ${{ runner.temp }}/fuzz-emit/hang/
             ${{ runner.temp }}/fuzz-emit/summary.txt
           if-no-files-found: ignore
 
-      - name: Create issue on failure
-        if: failure() && needs.test-fuzz-open-issue.outputs.open == '0'
-        run: |
-          body="$RUNNER_TEMP/fuzz-emit/issue.md"
-          if [ ! -f "$body" ]; then
-            body="$RUNNER_TEMP/issue.md"
-            echo "\`fuzz_emit\` failed in [this run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) without a report. The run log has the cause." > "$body"
-          fi
-          gh issue create \
-            --repo ivov/lisette \
-            --title "Fuzz run findings" \
-            --body-file "$body"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Write report section
+        if: failure()
+        run: .github/scripts/nightly-report.sh body "$RUNNER_TEMP/fuzz-emit/issue.md" "$RUNNER_TEMP/nightly-report/emitter.md"
 
-  go-equivalents:
-    name: Go equivalents
-    if: github.repository == 'ivov/lisette'
+      - name: Upload report section
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
+        with:
+          name: nightly-report-emitter-fuzzing
+          path: ${{ runner.temp }}/nightly-report/
+
+  metamorphic-testing:
+    name: Metamorphic testing
+    needs: find-open-issue
+    if: needs.find-open-issue.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
@@ -170,4 +162,46 @@ jobs:
           go: 'true'
           go-cache: 'false'
 
-      - run: just test-go go_equivalents
+      - name: Run metamorphic tests
+        env:
+          GO_EQUIVALENTS_REPORT: ${{ runner.temp }}/go-equivalents.md
+        run: just test-go go_equivalents
+
+      - name: Write report section
+        if: failure()
+        run: .github/scripts/nightly-report.sh body "$RUNNER_TEMP/go-equivalents.md" "$RUNNER_TEMP/nightly-report/metamorphic.md"
+
+      - name: Upload report section
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
+        with:
+          name: nightly-report-metamorphic-testing
+          path: ${{ runner.temp }}/nightly-report/
+
+  report:
+    name: Report
+    needs: [find-open-issue, crash-fuzzing, emitter-fuzzing, metamorphic-testing]
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # ratchet:actions/download-artifact@v7
+        with:
+          pattern: nightly-report-*
+          path: ${{ runner.temp }}/nightly-report
+          merge-multiple: true
+
+      - name: Write report
+        run: .github/scripts/nightly-report.sh join "$RUNNER_TEMP/nightly-report" "$RUNNER_TEMP/report.md" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Open issue or add comment
+        run: |
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --repo ivov/lisette --body-file "$RUNNER_TEMP/report.md"
+          else
+            gh issue create --repo ivov/lisette --title "Nightly findings $(date -u +%F)" --body-file "$RUNNER_TEMP/report.md"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ needs.find-open-issue.outputs.number }}
