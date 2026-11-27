@@ -126,6 +126,10 @@ impl Liveness {
             && self.uses.value_reads(name) == 0
             && self.uses.bindings(name) == 1
     }
+
+    fn unscopes(&self, statements: &[Statement]) -> bool {
+        unused_declarations(statements, self).is_some_and(|count| count > 0)
+    }
 }
 
 struct UnreadBindings<'a> {
@@ -147,6 +151,11 @@ pub(crate) fn drop_unused_locals(statements: &mut Vec<Statement>) {
     loop {
         let liveness = Liveness::of(statements);
         for_each_statements_mut(statements, &mut |list| {
+            if !list.iter().any(|statement| {
+                matches!(&statement.kind, LoweredStatement::Block(body) if liveness.unscopes(&body.statements))
+            }) {
+                return;
+            }
             for statement in mem::take(list) {
                 list.extend(unscoped(statement, &liveness));
             }
@@ -167,9 +176,7 @@ pub(crate) fn drop_unused_locals(statements: &mut Vec<Statement>) {
 
 fn unscoped(statement: Statement, liveness: &Liveness) -> Vec<Statement> {
     match statement.kind {
-        LoweredStatement::Block(body)
-            if unused_declarations(&body.statements, liveness).is_some_and(|count| count > 0) =>
-        {
+        LoweredStatement::Block(body) if liveness.unscopes(&body.statements) => {
             let mut statements = body.statements;
             direct_first(&mut statements, statement.line);
             statements

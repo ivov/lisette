@@ -3,43 +3,51 @@ use crate::lookup::facts::definition_key::type_query_lookup;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::ir::go_expression::Position;
 use crate::target::types::enum_layout::EnumLayout;
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::Arc;
+use rustc_hash::FxHashMap;
+use std::sync::{Arc, OnceLock};
 use syntax::ast::Span;
 use syntax::program::{Definition, DefinitionBody, GoMethodPolicy, is_prelude_symbol};
 use syntax::types::Symbol;
 
-#[derive(Default)]
-pub(crate) struct GlobalEmitData {
-    pub(crate) go_abi_catalog: GoAbiCatalog,
-    pub(crate) method_policy: GoMethodPolicy,
-    pub(crate) tagged_method_names: FxHashSet<String>,
-    pub(crate) enum_layouts: FxHashMap<Symbol, EnumLayout>,
+pub(crate) struct GlobalEmitData<'a> {
+    definitions: &'a FxHashMap<Symbol, Definition>,
+    pub(crate) method_policy: &'a GoMethodPolicy,
+    go_abi_catalog: OnceLock<GoAbiCatalog>,
+    enum_layouts: OnceLock<FxHashMap<Symbol, EnumLayout>>,
 }
 
-impl GlobalEmitData {
-    pub(crate) fn compute(definitions: &FxHashMap<Symbol, Definition>) -> Self {
-        let policy = GoMethodPolicy::compute(definitions.iter(), type_query_lookup(definitions));
-        let mut globals = GlobalEmitData {
-            go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
-            tagged_method_names: policy.tagged_method_names.iter().cloned().collect(),
-            method_policy: policy,
-            enum_layouts: FxHashMap::default(),
-        };
-
-        for (key, definition) in definitions.iter() {
-            globals.register_enum_layout(key, definition, definitions);
+impl<'a> GlobalEmitData<'a> {
+    pub(crate) fn new(
+        definitions: &'a FxHashMap<Symbol, Definition>,
+        method_policy: &'a GoMethodPolicy,
+    ) -> Self {
+        debug_assert!(
+            *method_policy
+                == GoMethodPolicy::compute(definitions.iter(), type_query_lookup(definitions)),
+            "internal error: the checker's Go method policy differs from the policy of the emitted definitions"
+        );
+        GlobalEmitData {
+            definitions,
+            method_policy,
+            go_abi_catalog: OnceLock::new(),
+            enum_layouts: OnceLock::new(),
         }
-
-        globals
     }
 
-    fn register_enum_layout(
-        &mut self,
-        key: &Symbol,
-        definition: &Definition,
-        definitions: &FxHashMap<Symbol, Definition>,
-    ) {
+    pub(crate) fn go_abi_catalog(&self) -> &GoAbiCatalog {
+        self.go_abi_catalog
+            .get_or_init(|| GoAbiCatalog::from_definitions(self.definitions))
+    }
+
+    pub(crate) fn enum_layouts(&self) -> &FxHashMap<Symbol, EnumLayout> {
+        self.enum_layouts
+            .get_or_init(|| enum_layouts(self.definitions))
+    }
+}
+
+fn enum_layouts(definitions: &FxHashMap<Symbol, Definition>) -> FxHashMap<Symbol, EnumLayout> {
+    let mut layouts = FxHashMap::default();
+    for (key, definition) in definitions {
         let DefinitionBody::Enum {
             generics,
             variants,
@@ -47,11 +55,10 @@ impl GlobalEmitData {
             ..
         } = &definition.body
         else {
-            return;
+            continue;
         };
-
         if is_prelude_symbol(key) {
-            return;
+            continue;
         }
         let layout = EnumLayout::new(
             key,
@@ -60,8 +67,9 @@ impl GlobalEmitData {
             *default_variant,
             type_query_lookup(definitions),
         );
-        self.enum_layouts.insert(key.clone(), layout);
+        layouts.insert(key.clone(), layout);
     }
+    layouts
 }
 
 pub(crate) struct SharedEmitContext<'a> {
@@ -69,7 +77,7 @@ pub(crate) struct SharedEmitContext<'a> {
     pub(crate) entry_package_name: &'a str,
     pub(crate) emit_tests: bool,
     pub(crate) line_indexes: Option<FxHashMap<u32, LineIndex>>,
-    pub(crate) globals: GlobalEmitData,
+    pub(crate) globals: GlobalEmitData<'a>,
 }
 
 impl EmitFacts<'_> {

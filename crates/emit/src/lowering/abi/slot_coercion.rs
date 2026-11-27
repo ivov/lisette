@@ -283,9 +283,8 @@ pub(in crate::lowering) fn check_applied_conversions(
             value_use.span.file_id,
             value_use.span.byte_offset,
             format!(
-                "{}:{line}: `{written}` of type `{}` is not converted to `{}` ({})",
+                "{}:{line}: `{written}` is not converted to `{}` ({})",
                 file.display_path,
-                value_use.value_type,
                 value_use.slot,
                 adaptation_kind(&value_use.adaptation)
             ),

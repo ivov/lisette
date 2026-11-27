@@ -212,9 +212,9 @@ fn visit_expression(
         _ => {}
     }
 
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_expression(child, TailUse::Kept, file, facts);
-    }
+    });
 }
 
 fn visit_match_arms(
@@ -325,9 +325,9 @@ fn visit_break_values(
         | Expression::Task { .. }
         | Expression::Defer { .. } => {}
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 visit_break_values(child, loop_use, file, facts);
-            }
+            });
         }
     }
 }
@@ -526,9 +526,9 @@ fn descend_loop_break_values(
         | Expression::Task { .. }
         | Expression::Defer { .. } => {}
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 descend_loop_break_values(child, mode, file, facts);
-            }
+            });
         }
     }
 }

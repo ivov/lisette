@@ -170,13 +170,17 @@ pub fn compile(
         recover_target: RecoverTarget::None,
     });
     let failed = analysis.failed();
-    let emit_result = (!failed).then(|| {
-        Planner::emit(
+    let emit_result = (!failed).then(|| match mode {
+        CompileMode::Check => {
+            Planner::check(&mut analysis.emit_input, go_module, entry_package_name)
+                .map(|()| Vec::new())
+        }
+        CompileMode::Emit { .. } | CompileMode::Test => Planner::emit(
             &mut analysis.emit_input,
             go_module,
             entry_package_name,
             emit_options,
-        )
+        ),
     });
 
     if let (Some(root), Some(Err(rejections))) = (&project_root, &emit_result) {

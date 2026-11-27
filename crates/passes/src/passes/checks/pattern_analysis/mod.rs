@@ -311,9 +311,9 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             }
         }
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 check(child, ctx);
-            }
+            });
         }
     }
 }

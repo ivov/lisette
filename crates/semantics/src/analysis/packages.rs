@@ -3,8 +3,8 @@ use std::sync::Arc;
 use super::*;
 use crate::cache::all_go_outputs_exist;
 use crate::cache::{
-    CacheKey, CacheKeyInputs, DiagnosticMode, compute_emit_artifact_hash, global_emit_context,
-    go_method_check_context,
+    CacheKey, CacheKeyInputs, DiagnosticMode, chain_go_method_contexts, compute_emit_artifact_hash,
+    global_emit_context, go_method_check_context,
 };
 use crate::checker::InferredFile;
 use crate::checker::infer::constant_values;
@@ -14,7 +14,9 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use syntax::ParseError;
 use syntax::ast::Span;
-use syntax::program::{PRELUDE_PACKAGE_ID, UninferredExports, is_go_import, strip_go_prefix};
+use syntax::program::{
+    GoMethodPolicy, PRELUDE_PACKAGE_ID, PackageId, UninferredExports, is_go_import, strip_go_prefix,
+};
 
 struct CacheCandidate {
     pending: CompiledPendingPackage,
@@ -165,8 +167,12 @@ pub(super) fn infer_all_packages(
     mut input: PackageInferenceInput,
 ) -> PackageInferenceOutput {
     let key_context = CacheKeyContext::of(&input);
-    let mut checker =
-        TaskState::with_sink(input.sink, input.project_kind, input.scope.script_unit());
+    let mut checker = TaskState::with_sink(
+        input.sink,
+        input.project_kind,
+        input.scope.script_unit(),
+        input.compile_phase != CompilePhase::Check,
+    );
 
     let mut package_hashes: FxHashMap<String, u64> = FxHashMap::default();
     let mut cached_packages: FxHashSet<String> = FxHashSet::default();
@@ -329,32 +335,17 @@ pub(super) fn infer_all_packages(
     let mut registered = register_packages(&mut checker, store, predeclared, dependencies);
 
     checker.finalize_registration(store);
-    let policy = store.go_method_policy();
-    let emit_contexts: FxHashMap<_, _> = store
-        .packages()
-        .keys()
-        .map(|package_id| {
-            let mut reachable = FxHashSet::default();
-            let mut pending = vec![package_id.clone(), PRELUDE_PACKAGE_ID.to_string()];
-            while let Some(id) = pending.pop() {
-                if reachable.insert(id.clone()) {
-                    pending.extend(dependencies.dependencies(&id).map(ToString::to_string));
-                }
-            }
-            let relevant = policy.for_definitions(
-                store
-                    .packages()
-                    .iter()
-                    .filter(|(id, _)| reachable.contains(*id))
-                    .flat_map(|(_, package)| package.definitions.iter()),
-            );
-            let contexts = (
-                global_emit_context(&relevant),
-                go_method_check_context(&relevant),
-            );
-            (package_id.clone(), contexts)
-        })
+    let keyed_packages: Vec<&str> = compiled_packages
+        .iter()
+        .map(|package| package.package_id.as_str())
+        .chain(
+            cache_load
+                .artifacts
+                .iter()
+                .map(|artifact| artifact.pending.package.package_id.as_str()),
+        )
         .collect();
+    let emit_contexts = go_method_contexts(store, dependencies, &keyed_packages);
     let finalize_hash = |package: &mut CompiledPackage| {
         let (emit_context, check_context) = emit_contexts[&package.package_id];
         package.artifact_hash =
@@ -824,6 +815,114 @@ fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<Regi
     TaskState::install_inferred_files(store, inferred_files);
 
     checker.check_post_inference_bounds(store);
+}
+
+fn go_method_contexts(
+    store: &Store,
+    dependencies: &DependencyGraph,
+    package_ids: &[&str],
+) -> FxHashMap<String, (u64, u64)> {
+    let mut reachable: FxHashSet<&str> = FxHashSet::default();
+    let mut pending: Vec<&str> = package_ids.to_vec();
+    pending.push(PRELUDE_PACKAGE_ID);
+    while let Some(id) = pending.pop() {
+        if reachable.insert(id) {
+            pending.extend(dependencies.dependencies(id).map(PackageId::as_str));
+        }
+    }
+    let policy = store.go_method_policy();
+    let own = reachable
+        .into_par_iter()
+        .map(|package_id| {
+            let own = policy_contexts(
+                &policy.for_definitions(
+                    store
+                        .get_package(package_id)
+                        .into_iter()
+                        .flat_map(|package| package.definitions.iter()),
+                ),
+            );
+            (package_id, own)
+        })
+        .collect();
+    let mut chained = ChainedGoMethodContexts {
+        dependencies,
+        own,
+        contexts: FxHashMap::default(),
+    };
+    let mut contexts = FxHashMap::default();
+    for package_id in package_ids {
+        let Some(context) = chained.context(package_id) else {
+            return reachable_go_method_contexts(store, dependencies, package_ids);
+        };
+        contexts.insert(package_id.to_string(), context);
+    }
+    contexts
+}
+
+struct ChainedGoMethodContexts<'a> {
+    dependencies: &'a DependencyGraph,
+    own: FxHashMap<&'a str, (u64, u64)>,
+    contexts: FxHashMap<String, Option<(u64, u64)>>,
+}
+
+impl ChainedGoMethodContexts<'_> {
+    fn context(&mut self, package_id: &str) -> Option<(u64, u64)> {
+        if let Some(context) = self.contexts.get(package_id) {
+            return *context;
+        }
+        self.contexts.insert(package_id.to_string(), None);
+        let dependencies = self.dependencies;
+        let mut imported: Vec<&str> = dependencies
+            .dependencies(package_id)
+            .map(PackageId::as_str)
+            .collect();
+        if package_id != PRELUDE_PACKAGE_ID {
+            imported.push(PRELUDE_PACKAGE_ID);
+        }
+        imported.sort_unstable();
+        imported.dedup();
+        let mut imported_contexts = Vec::with_capacity(imported.len());
+        for imported_id in imported {
+            imported_contexts.push(self.context(imported_id)?);
+        }
+        let own = self.own[package_id];
+        let context = chain_go_method_contexts(own, imported_contexts.into_iter());
+        self.contexts.insert(package_id.to_string(), Some(context));
+        Some(context)
+    }
+}
+
+fn reachable_go_method_contexts(
+    store: &Store,
+    dependencies: &DependencyGraph,
+    package_ids: &[&str],
+) -> FxHashMap<String, (u64, u64)> {
+    let policy = store.go_method_policy();
+    package_ids
+        .iter()
+        .map(|package_id| {
+            let mut reachable = FxHashSet::default();
+            let mut pending = vec![package_id.to_string(), PRELUDE_PACKAGE_ID.to_string()];
+            while let Some(id) = pending.pop() {
+                if reachable.insert(id.clone()) {
+                    pending.extend(dependencies.dependencies(&id).map(ToString::to_string));
+                }
+            }
+            let relevant = policy.for_definitions(
+                store
+                    .packages()
+                    .iter()
+                    .filter(|(id, _)| reachable.contains(*id))
+                    .flat_map(|(_, package)| package.definitions.iter()),
+            );
+            (package_id.to_string(), policy_contexts(&relevant))
+        })
+        .collect()
+}
+
+fn policy_contexts(policy: &GoMethodPolicy) -> (u64, u64) {
+    (global_emit_context(policy), go_method_check_context(policy))
 }
 
 /// Groups topologically ordered packages into dependency waves, so a wave only

@@ -300,7 +300,7 @@ fn visit_node<'a, C, E, P, X>(
         },
         _ => FunctionRole::Free,
     };
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_node(
             child,
             child_role,
@@ -309,7 +309,7 @@ fn visit_node<'a, C, E, P, X>(
             pattern_visitor,
             expression_exit_visitor,
         );
-    }
+    });
     expression_exit_visitor(expression, role, ctx);
 }
 

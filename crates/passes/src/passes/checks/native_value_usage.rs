@@ -61,9 +61,9 @@ fn visit_expression(
             visit_expression(inner, Position::DotAccessBase, package_id, store, sink);
         }
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 visit_expression(child, Position::Value, package_id, store, sink);
-            }
+            });
         }
     }
 }

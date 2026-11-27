@@ -375,11 +375,7 @@ impl ZeroWalk<'_> {
 }
 
 fn type_node_count(ty: &Type) -> usize {
-    1 + ty
-        .children()
-        .iter()
-        .map(|c| type_node_count(c))
-        .sum::<usize>()
+    1 + ty.children().map(type_node_count).sum::<usize>()
 }
 
 /// `go:archive/zip.File` as `archive/zip.File`, so diagnostics name the package.

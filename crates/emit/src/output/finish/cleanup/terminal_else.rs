@@ -70,8 +70,12 @@ pub(super) fn unwrap_scoped_terminal_else(
     scope: &ScopeState,
 ) {
     let mut skipped = 0;
+    let mut candidates = count_scoped_terminal_else(statements);
     let mut original: Option<Resolution> = None;
     'candidates: loop {
+        if skipped >= candidates {
+            return;
+        }
         let mut flipped = statements.clone();
         let Some(flips) = rewrite_nth_scoped_terminal_else(
             &mut flipped,
@@ -100,12 +104,24 @@ pub(super) fn unwrap_scoped_terminal_else(
             );
             if Resolution::of(&mut rewritten, parameters) == baseline {
                 *statements = rewritten;
+                candidates = count_scoped_terminal_else(statements);
                 original = None;
                 continue 'candidates;
             }
         }
         skipped += 1;
     }
+}
+
+fn count_scoped_terminal_else(statements: &mut Vec<Statement>) -> usize {
+    let mut count = 0;
+    for_each_statements_mut(statements, &mut |block| {
+        count += block
+            .iter()
+            .filter(|statement| matches!(&statement.kind, LoweredStatement::If(plan) if is_candidate(plan)))
+            .count();
+    });
+    count
 }
 
 #[derive(Clone, Copy)]
@@ -130,10 +146,10 @@ fn rewrite_nth_scoped_terminal_else(
             let LoweredStatement::If(plan) = &mut block[index].kind else {
                 continue;
             };
-            let flips = flips_to_early_exit(plan);
-            if !flips && !has_scoped_terminal_else(plan) {
+            if !is_candidate(plan) {
                 continue;
             }
+            let flips = flips_to_early_exit(plan);
             if seen < target {
                 seen += 1;
                 continue;
@@ -171,6 +187,10 @@ fn rewrite_nth_scoped_terminal_else(
         }
     });
     found
+}
+
+fn is_candidate(plan: &IfPlan) -> bool {
+    flips_to_early_exit(plan) || has_scoped_terminal_else(plan)
 }
 
 fn has_scoped_terminal_else(plan: &IfPlan) -> bool {

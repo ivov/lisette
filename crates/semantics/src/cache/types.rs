@@ -39,16 +39,16 @@ impl CachedDefinition {
     }
 
     pub(crate) fn install_into(
-        &self,
+        self,
         definitions: &mut DenseMap<Symbol, Definition>,
         qualified_name: Symbol,
         file_ids: &[u32],
     ) {
-        definitions.insert(qualified_name, self.to_definition(file_ids));
+        definitions.insert(qualified_name, self.into_definition(file_ids));
     }
 
-    pub(crate) fn to_definition(&self, file_ids: &[u32]) -> Definition {
-        let mut definition = self.0.clone();
+    pub(crate) fn into_definition(self, file_ids: &[u32]) -> Definition {
+        let mut definition = self.0;
         remap_definition_spans(&mut definition, &mut |span| {
             if !span.is_dummy() {
                 span.file_id = file_ids.get(span.file_id as usize).copied().unwrap_or(0);
@@ -356,7 +356,7 @@ mod tests {
         let cached = CachedDefinition::from_definition(&definition, &file_map);
         let bytes = bincode::serialize(&cached).unwrap();
         let cached: CachedDefinition = bincode::deserialize(&bytes).unwrap();
-        let restored = cached.to_definition(&[cached_file]);
+        let restored = cached.clone().into_definition(&[cached_file]);
         let mut expected = definition;
         remap_definition_spans(&mut expected, &mut |span| span.file_id = cached_file);
 

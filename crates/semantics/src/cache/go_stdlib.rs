@@ -241,7 +241,7 @@ fn register_cached_go_package(
 
     let package = store.edit_package(package_id).unwrap();
     for (qualified_name, cached_definition) in &cached.definitions {
-        cached_definition.install_into(
+        cached_definition.clone().install_into(
             package.definitions,
             Symbol::from_raw(qualified_name.clone()),
             file_ids,

@@ -76,9 +76,7 @@ fn collect(
         _ => {}
     }
 
-    for child in expression.children() {
-        collect(child, in_task, waited, covered, adds);
-    }
+    expression.for_each_child(|child| collect(child, in_task, waited, covered, adds));
 }
 
 /// `waitgroup_add_in_task` wins a span it already took, so `warned` holds those.
@@ -107,9 +105,7 @@ fn collect_manual_go(expression: &Expression, warned: &FxHashSet<Span>, ctx: &No
         _ => {}
     }
 
-    for child in expression.children() {
-        collect_manual_go(child, warned, ctx);
-    }
+    expression.for_each_child(|child| collect_manual_go(child, warned, ctx));
 }
 
 fn unit_add(expression: &Expression) -> Option<(BindingId, Span)> {
@@ -212,11 +208,9 @@ fn mentions(expression: &Expression, binding: BindingId) -> usize {
         } if *id == binding
     ));
 
-    own + expression
-        .children()
-        .into_iter()
-        .map(|child| mentions(child, binding))
-        .sum::<usize>()
+    let mut count = own;
+    expression.for_each_child(|child| count += mentions(child, binding));
+    count
 }
 
 pub(super) fn waitgroup_method(callee: &Expression) -> Option<(&str, BindingId)> {

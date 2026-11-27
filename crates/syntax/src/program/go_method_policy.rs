@@ -20,32 +20,35 @@ impl GoMethodPolicy {
         &self,
         definitions: impl Iterator<Item = (&'a Symbol, &'a Definition)>,
     ) -> Self {
-        let mut selectors = BTreeSet::new();
+        let mut selectors: Vec<&str> = Vec::new();
         for (name, definition) in definitions {
             if let Some(methods) = definition.methods() {
-                selectors.extend(
-                    methods
-                        .values()
-                        .map(|method| method.source_name.to_string()),
-                );
+                selectors.extend(methods.values().map(|method| method.source_name.as_str()));
             }
             if matches!(definition.body, DefinitionBody::Value { .. })
-                && name.split('.').nth(2).is_some()
+                && name.bytes().filter(|byte| *byte == b'.').nth(1).is_some()
             {
-                selectors.insert(unqualified_name(name).to_string());
+                selectors.push(unqualified_name(name));
             }
         }
-        Self {
-            exported_method_names: self
-                .exported_method_names
-                .intersection(&selectors)
-                .cloned()
-                .collect(),
-            tagged_method_names: selectors
+        selectors.sort_unstable();
+        selectors.dedup();
+        let tagged_method_names = if self.tagged_method_names.is_empty() {
+            BTreeSet::new()
+        } else {
+            selectors
                 .iter()
                 .map(|name| snake_to_camel(name))
                 .filter(|name| self.tagged_method_names.contains(name))
+                .collect()
+        };
+        Self {
+            exported_method_names: selectors
+                .iter()
+                .filter(|name| self.exported_method_names.contains(**name))
+                .map(|name| (*name).to_string())
                 .collect(),
+            tagged_method_names,
         }
     }
 

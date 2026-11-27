@@ -638,6 +638,7 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn method_uses_tagged_return(&self, method: &str) -> bool {
         self.shared
             .globals
+            .method_policy
             .tagged_method_names
             .contains(&go_name::snake_to_camel(method))
     }
@@ -645,7 +646,7 @@ impl<'a> EmitFacts<'a> {
     pub(crate) fn enum_layout(&self, enum_id: &Symbol) -> &'a EnumLayout {
         self.shared
             .globals
-            .enum_layouts
+            .enum_layouts()
             .get(enum_id)
             .unwrap_or_else(|| panic!("internal error: `{enum_id}` has no enum layout"))
     }
@@ -701,7 +702,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn go_abi_catalog(&self) -> &'a GoAbiCatalog {
-        &self.shared.globals.go_abi_catalog
+        self.shared.globals.go_abi_catalog()
     }
 
     pub(crate) fn go_callable_parameter(
@@ -711,7 +712,7 @@ impl<'a> EmitFacts<'a> {
     ) -> Option<&GoSlotDescriptor> {
         self.shared
             .globals
-            .go_abi_catalog
+            .go_abi_catalog()
             .callable_parameter(qualified_name, index)
     }
 
@@ -721,22 +722,25 @@ impl<'a> EmitFacts<'a> {
     ) -> Option<&GoSlotDescriptor> {
         self.shared
             .globals
-            .go_abi_catalog
+            .go_abi_catalog()
             .callable_return_slot(qualified_name)
     }
 
     pub(crate) fn go_field(&self, owner: &str, field: &str) -> Option<&GoSlotDescriptor> {
-        self.shared.globals.go_abi_catalog.field(owner, field)
+        self.shared.globals.go_abi_catalog().field(owner, field)
     }
 
     pub(crate) fn go_variable(&self, qualified_name: &str) -> Option<&GoSlotDescriptor> {
-        self.shared.globals.go_abi_catalog.variable(qualified_name)
+        self.shared
+            .globals
+            .go_abi_catalog()
+            .variable(qualified_name)
     }
 
     pub(crate) fn is_go_imported_type(&self, qualified_name: &str) -> bool {
         self.shared
             .globals
-            .go_abi_catalog
+            .go_abi_catalog()
             .is_imported_type(qualified_name)
     }
 

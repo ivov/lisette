@@ -325,9 +325,9 @@ pub(super) fn walk_expression(
         }
 
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 walk_expression(package, child, graph, alias_map, ctx);
-            }
+            });
         }
     }
 }

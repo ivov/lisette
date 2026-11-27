@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::ast::{BindingId as AstBindingId, Span};
 use crate::types::Symbol;
 
-use super::{Definition, EqualityRecipe, File, FileImport};
+use super::{Definition, EqualityRecipe, File, FileImport, GoMethodPolicy};
 
 /// Name spans of imports that no code in their file uses.
 #[derive(Debug, Clone, Default)]
@@ -261,6 +261,8 @@ pub struct EmitInput {
     pub test_index: TestIndex,
     pub go_package_names: FxHashMap<String, String>,
     pub go_package_ids: FxHashSet<String>,
+    pub files_with_unspellable_types: FxHashSet<u32>,
+    pub go_method_policy: GoMethodPolicy,
 }
 
 #[cfg(test)]

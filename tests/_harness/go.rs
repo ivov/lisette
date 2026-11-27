@@ -102,6 +102,8 @@ pub fn compile_go_test(input: &str, package_name: &str) -> Result<EmittedTest, C
         equality_index: result.equality_index,
         go_package_names: result.go_package_names,
         go_package_ids: result.go_package_ids,
+        files_with_unspellable_types: result.files_with_unspellable_types,
+        go_method_policy: result.go_method_policy,
         ..Default::default()
     };
     let options = EmitOptions {

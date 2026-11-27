@@ -56,9 +56,9 @@ fn visit_expression(expression: &Expression, in_loop: bool, sink: &LocalSink) {
             visit_expression(body, true, sink);
         }
         _ => {
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 visit_expression(child, in_loop, sink);
-            }
+            });
         }
     }
 }

@@ -625,6 +625,7 @@ impl EmitFacts<'_> {
         origin: SlotOrigin,
         declaration: Option<&Type>,
     ) -> Option<ValueLayout> {
+        self.alias_declaration(ty)?;
         let go_target = self.peel_go_alias(ty);
         if go_target == *ty.unwrap_forall() || go_target == self.peel_alias(ty) {
             return None;

@@ -221,6 +221,21 @@ pub(crate) fn go_method_check_context(policy: &GoMethodPolicy) -> u64 {
     hasher.finish()
 }
 
+pub(crate) fn chain_go_method_contexts(
+    own: (u64, u64),
+    imported: impl Iterator<Item = (u64, u64)>,
+) -> (u64, u64) {
+    let mut emit_hasher = FnvHasher::new();
+    let mut check_hasher = FnvHasher::new();
+    own.0.hash(&mut emit_hasher);
+    own.1.hash(&mut check_hasher);
+    for (emit_context, check_context) in imported {
+        emit_context.hash(&mut emit_hasher);
+        check_context.hash(&mut check_hasher);
+    }
+    (emit_hasher.finish(), check_hasher.finish())
+}
+
 /// Hashes a package's sources, given each file's name and source: the
 /// production-only hash drives dependents and the emit artifact, the all-files
 /// hash drives the package's own validity.
@@ -965,7 +980,7 @@ mod tests {
         let bytes = bincode::serialize(&cached).unwrap();
         let restored: CachedDefinition = bincode::deserialize(&bytes).unwrap();
 
-        assert!(restored.to_definition(&[]).is_serialized());
+        assert!(restored.clone().into_definition(&[]).is_serialized());
     }
 
     #[test]
@@ -976,7 +991,7 @@ mod tests {
         let file_map = [(original_file_id, 0)].into_iter().collect();
 
         let cached = CachedDefinition::from_definition(&definition, &file_map);
-        let restored = cached.to_definition(&[restored_file_id]);
+        let restored = cached.clone().into_definition(&[restored_file_id]);
         let generics = restored.body.generics().unwrap();
         let generic = &generics[0];
 

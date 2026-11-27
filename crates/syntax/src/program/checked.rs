@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::hash_map::Entry;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
+use std::mem;
 
 use super::{
     CalleeName, ConformanceWitness, InterfaceRequirement, NativeOperation, NativeTypeKind,
@@ -109,8 +110,6 @@ pub struct InterfaceConversion {
 /// The slot type of one value use, and the adaptation into it.
 #[derive(Debug, Clone)]
 pub struct CheckedValueUse {
-    /// The type of the value before its adaptation.
-    pub value_type: Type,
     pub slot: Type,
     pub adaptation: Adaptation,
     /// Where the value is written, for diagnostics.
@@ -270,6 +269,17 @@ pub enum FieldKey {
     PatternPosition(Span, usize),
 }
 
+impl FieldKey {
+    fn file_id(&self) -> u32 {
+        match self {
+            Self::Access(expression)
+            | Self::Literal(expression, _)
+            | Self::Positional(expression, _) => expression.file_id(),
+            Self::Pattern(span) | Self::PatternPosition(span, _) => span.file_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FieldSelection {
     pub owner: Symbol,
@@ -292,6 +302,11 @@ pub struct CheckedStructLiteral {
 /// The records that the checker published for the bodies it checked, which no consumer changes.
 #[derive(Debug, Clone, Default)]
 pub struct CheckedBodies {
+    files: FxHashMap<u32, FileBodies>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct FileBodies {
     uses: FxHashMap<ValueUseKey, CheckedValueUse>,
     callees: FxHashMap<ValueUseKey, CheckedCallee>,
     /// Keyed by the callee of a built-in operation that compares elements, or by an `assert` of an `equals` call.
@@ -309,29 +324,40 @@ pub struct CheckedBodies {
 }
 
 impl CheckedBodies {
+    fn file(&self, file_id: u32) -> Option<&FileBodies> {
+        self.files.get(&file_id)
+    }
+
+    fn file_mut(&mut self, file_id: u32) -> &mut FileBodies {
+        self.files.entry(file_id).or_default()
+    }
+
     pub fn value_use(&self, key: &ValueUseKey) -> Option<&CheckedValueUse> {
-        self.uses.get(key)
+        self.file(key.expression().file_id())?.uses.get(key)
     }
 
     pub fn callee(&self, key: &ValueUseKey) -> Option<&CheckedCallee> {
-        self.callees.get(key)
+        self.file(key.expression().file_id())?.callees.get(key)
     }
 
     pub fn equality(&self, expression: ExpressionId) -> Option<&EqualityRecipe> {
-        self.equalities.get(&expression)
+        self.file(expression.file_id())?.equalities.get(&expression)
     }
 
     pub fn callees(&self) -> impl Iterator<Item = (&ValueUseKey, &CheckedCallee)> {
-        self.callees.iter()
+        self.files.values().flat_map(|file| file.callees.iter())
     }
 
     pub fn uses(&self) -> impl Iterator<Item = (&ValueUseKey, &CheckedValueUse)> {
-        self.uses.iter()
+        self.files.values().flat_map(|file| file.uses.iter())
+    }
+
+    fn field_selection(&self, key: &FieldKey) -> Option<&FieldSelection> {
+        self.file(key.file_id())?.field_selections.get(key)
     }
 
     pub fn pattern_field(&self, name_span: Span) -> &FieldSelection {
-        self.field_selections
-            .get(&FieldKey::Pattern(name_span))
+        self.field_selection(&FieldKey::Pattern(name_span))
             .unwrap_or_else(|| {
                 panic!("internal error: no checked field selection for the pattern field at {name_span:?}")
             })
@@ -340,8 +366,7 @@ impl CheckedBodies {
     pub fn variant_pattern_fields(&self, pattern_span: Span) -> Vec<&FieldSelection> {
         (0..)
             .map_while(|index| {
-                self.field_selections
-                    .get(&FieldKey::PatternPosition(pattern_span, index))
+                self.field_selection(&FieldKey::PatternPosition(pattern_span, index))
             })
             .collect()
     }
@@ -368,22 +393,38 @@ impl CheckedBodiesBuilder {
 
     /// Record `value_use` for `key`, which no other record names.
     pub fn insert_use(&mut self, key: ValueUseKey, value_use: CheckedValueUse) {
-        insert_unique(&mut self.records.uses, key, value_use);
+        insert_unique(
+            &mut self.records.file_mut(key.expression().file_id()).uses,
+            key,
+            value_use,
+        );
     }
 
     /// Record `callee` for `key`, which no other callee names.
     pub fn insert_callee(&mut self, key: ValueUseKey, callee: CheckedCallee) {
-        insert_unique(&mut self.records.callees, key, callee);
+        insert_unique(
+            &mut self.records.file_mut(key.expression().file_id()).callees,
+            key,
+            callee,
+        );
     }
 
     /// Record the equality that the comparison `expression` tests with.
     pub fn insert_equality(&mut self, expression: ExpressionId, recipe: EqualityRecipe) {
-        insert_unique(&mut self.records.equalities, expression, recipe);
+        insert_unique(
+            &mut self.records.file_mut(expression.file_id()).equalities,
+            expression,
+            recipe,
+        );
     }
 
     /// Record `unit` as the value that the `if let` with no `else` `if_let` produces when its pattern does not match.
     pub fn insert_implicit_unit(&mut self, if_let: ExpressionId, unit: ExpressionId) {
-        insert_unique(&mut self.records.implicit_units, if_let, unit);
+        insert_unique(
+            &mut self.records.file_mut(if_let.file_id()).implicit_units,
+            if_let,
+            unit,
+        );
     }
 
     /// Record that the operand `conversion` of the binary expression `binary` converts to the type of the other operand.
@@ -392,23 +433,43 @@ impl CheckedBodiesBuilder {
         binary: ExpressionId,
         conversion: OperandConversion,
     ) {
-        insert_unique(&mut self.records.operand_conversions, binary, conversion);
+        insert_unique(
+            &mut self.records.file_mut(binary.file_id()).operand_conversions,
+            binary,
+            conversion,
+        );
     }
 
     pub fn insert_struct_literal(&mut self, literal: ExpressionId, record: CheckedStructLiteral) {
-        insert_unique(&mut self.records.struct_literals, literal, record);
+        insert_unique(
+            &mut self.records.file_mut(literal.file_id()).struct_literals,
+            literal,
+            record,
+        );
     }
 
     pub fn insert_field_selection(&mut self, key: FieldKey, selection: FieldSelection) {
-        insert_unique(&mut self.records.field_selections, key, selection);
+        insert_unique(
+            &mut self.records.file_mut(key.file_id()).field_selections,
+            key,
+            selection,
+        );
     }
 
     pub fn insert_iterable_kind(&mut self, for_loop: ExpressionId, kind: IterableKind) {
-        insert_unique(&mut self.records.iterable_kinds, for_loop, kind);
+        insert_unique(
+            &mut self.records.file_mut(for_loop.file_id()).iterable_kinds,
+            for_loop,
+            kind,
+        );
     }
 
     pub fn insert_range_kind(&mut self, range: ExpressionId, kind: RangeKind) {
-        insert_unique(&mut self.records.range_kinds, range, kind);
+        insert_unique(
+            &mut self.records.file_mut(range.file_id()).range_kinds,
+            range,
+            kind,
+        );
     }
 
     pub fn insert_forwarded_failure(&mut self, operand: &Expression) {
@@ -416,7 +477,11 @@ impl CheckedBodiesBuilder {
     }
 
     fn insert_forwarded_failure_id(&mut self, operand: ExpressionId) {
-        let inserted = self.records.forwarded_failures.insert(operand);
+        let inserted = self
+            .records
+            .file_mut(operand.file_id())
+            .forwarded_failures
+            .insert(operand);
         assert!(
             inserted,
             "internal error: two forwarded failures share the key {operand:?}"
@@ -428,11 +493,32 @@ impl CheckedBodiesBuilder {
         impl_block: ExpressionId,
         generics: Vec<(EcoString, Vec<Type>)>,
     ) {
-        insert_unique(&mut self.records.receiver_generics, impl_block, generics);
+        insert_unique(
+            &mut self
+                .records
+                .file_mut(impl_block.file_id())
+                .receiver_generics,
+            impl_block,
+            generics,
+        );
     }
 
     pub fn merge(&mut self, other: Self) {
-        let CheckedBodies {
+        for (file_id, file) in other.records.files {
+            match self.records.files.entry(file_id) {
+                Entry::Vacant(entry) => {
+                    entry.insert(file);
+                }
+                Entry::Occupied(mut entry) => {
+                    let existing = mem::replace(entry.get_mut(), file);
+                    self.merge_file(existing);
+                }
+            }
+        }
+    }
+
+    fn merge_file(&mut self, other: FileBodies) {
+        let FileBodies {
             uses,
             callees,
             equalities,
@@ -444,7 +530,7 @@ impl CheckedBodiesBuilder {
             range_kinds,
             forwarded_failures,
             receiver_generics,
-        } = other.records;
+        } = other;
         for (key, value_use) in uses {
             self.insert_use(key, value_use);
         }
@@ -554,7 +640,7 @@ impl<'a> CheckedExpression<'_, 'a> {
 
     /// The unit value that this `if let` produces when its pattern does not match, or None when it has an `else`.
     pub fn implicit_unit(&self) -> Option<ExpressionId> {
-        self.bodies
+        self.table()?
             .implicit_units
             .get(&self.expression.id())
             .copied()
@@ -562,7 +648,7 @@ impl<'a> CheckedExpression<'_, 'a> {
 
     /// The operand of this binary expression that converts to the type of the other operand, or None when no operand converts.
     pub fn operand_conversion(&self) -> Option<OperandConversion> {
-        self.bodies
+        self.table()?
             .operand_conversions
             .get(&self.expression.id())
             .copied()
@@ -570,42 +656,42 @@ impl<'a> CheckedExpression<'_, 'a> {
 
     pub fn receiver_generics(&self) -> &'a [(EcoString, Vec<Type>)] {
         self.expect(
-            self.bodies
-                .receiver_generics
-                .get(&self.expression.id())
+            self.table()
+                .and_then(|table| table.receiver_generics.get(&self.expression.id()))
                 .map(Vec::as_slice),
             format_args!("checked receiver generics"),
         )
     }
 
     pub fn range_kind(&self) -> Option<RangeKind> {
-        self.bodies.range_kinds.get(&self.expression.id()).copied()
+        self.table()?
+            .range_kinds
+            .get(&self.expression.id())
+            .copied()
     }
 
     pub fn forwards_failure(&self) -> bool {
-        self.bodies
-            .forwarded_failures
-            .contains(&self.expression.id())
+        self.table()
+            .is_some_and(|table| table.forwarded_failures.contains(&self.expression.id()))
     }
 
     pub fn iterable_kind(&self) -> IterableKind {
         *self.expect(
-            self.bodies.iterable_kinds.get(&self.expression.id()),
+            self.table()
+                .and_then(|table| table.iterable_kinds.get(&self.expression.id())),
             format_args!("checked iterable kind"),
         )
     }
 
     pub fn field_selection(&self) -> Option<&'a FieldSelection> {
         self.bodies
-            .field_selections
-            .get(&FieldKey::Access(self.expression.id()))
+            .field_selection(&FieldKey::Access(self.expression.id()))
     }
 
     pub fn positional_field(&self, index: usize) -> &'a FieldSelection {
         self.expect(
             self.bodies
-                .field_selections
-                .get(&FieldKey::Positional(self.expression.id(), index)),
+                .field_selection(&FieldKey::Positional(self.expression.id(), index)),
             format_args!("checked field selection for field {index}"),
         )
     }
@@ -613,17 +699,21 @@ impl<'a> CheckedExpression<'_, 'a> {
     pub fn literal_field(&self, name: &str) -> &'a FieldSelection {
         self.expect(
             self.bodies
-                .field_selections
-                .get(&FieldKey::Literal(self.expression.id(), name.into())),
+                .field_selection(&FieldKey::Literal(self.expression.id(), name.into())),
             format_args!("checked field selection for `{name}`"),
         )
     }
 
     pub fn struct_literal(&self) -> &'a CheckedStructLiteral {
         self.expect(
-            self.bodies.struct_literals.get(&self.expression.id()),
+            self.table()
+                .and_then(|table| table.struct_literals.get(&self.expression.id())),
             format_args!("checked struct literal"),
         )
+    }
+
+    fn table(&self) -> Option<&'a FileBodies> {
+        self.bodies.file(self.expression.id().file_id())
     }
 
     fn record(&self, key: ValueUseKey) -> &'a CheckedValueUse {

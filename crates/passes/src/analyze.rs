@@ -226,6 +226,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
 
     let mut files = FxHashMap::default();
     let mut definitions = FxHashMap::default();
+    let go_method_policy = store.go_method_policy().clone();
 
     let go_package_ids: FxHashSet<String> = store
         .packages()
@@ -270,6 +271,8 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             test_index: store.test_index,
             go_package_names: store.go_package_names,
             go_package_ids,
+            files_with_unspellable_types: facts.files_with_unspellable_types,
+            go_method_policy,
         },
         emit_stamps,
         unreachable_packages,

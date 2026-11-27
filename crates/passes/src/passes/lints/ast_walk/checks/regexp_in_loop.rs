@@ -38,9 +38,9 @@ fn scan(expression: &Expression, ctx: &NodeCtx) {
             if let Some(span) = recompiled_pattern_span(expression) {
                 ctx.sink.push(diagnostics::lint::regexp_in_loop(span));
             }
-            for child in expression.children() {
+            expression.for_each_child(|child| {
                 scan(child, ctx);
-            }
+            });
         }
     }
 }

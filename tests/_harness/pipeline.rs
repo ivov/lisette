@@ -1,5 +1,5 @@
 use rustc_hash::{FxHashMap, FxHashSet};
-use syntax::program::{CheckedBodies, is_go_import, strip_go_prefix};
+use syntax::program::{CheckedBodies, GoMethodPolicy, is_go_import, strip_go_prefix};
 
 use diagnostics::LisetteDiagnostic;
 use semantics::checker::TaskState;
@@ -166,8 +166,10 @@ impl CompiledTest {
             go_test_mode,
             extra_go_typedefs,
         } = self;
-        let InferredTestFile { mut store, checker } =
-            infer_test_file(&source, ast, &extra_go_typedefs);
+        let InferredTestFile {
+            mut store,
+            mut checker,
+        } = infer_test_file(&source, ast, &extra_go_typedefs);
 
         let (
             typed_ast,
@@ -179,6 +181,8 @@ impl CompiledTest {
             go_package_names,
             go_package_ids,
             typedef_files,
+            files_with_unspellable_types,
+            go_method_policy,
         ) = {
             let mut typed_ast = store
                 .get_file(TEST_FILE_ID)
@@ -222,6 +226,8 @@ impl CompiledTest {
                 .collect();
 
             let bindings = passes::emit_bindings(&checker.facts);
+            let files_with_unspellable_types =
+                mem::take(&mut checker.facts.files_with_unspellable_types);
             let checked_bodies = checker.facts.checked_bodies.publish();
 
             let equality_index = mem::take(&mut store.equality_index);
@@ -242,6 +248,7 @@ impl CompiledTest {
                 .collect();
 
             let errors = checker.sink.into_diagnostics();
+            let go_method_policy = store.go_method_policy().clone();
 
             (
                 typed_ast,
@@ -253,6 +260,8 @@ impl CompiledTest {
                 go_package_names,
                 go_package_ids,
                 typedef_files,
+                files_with_unspellable_types,
+                go_method_policy,
             )
         };
 
@@ -268,6 +277,8 @@ impl CompiledTest {
             go_package_names,
             go_package_ids,
             typedef_files,
+            files_with_unspellable_types,
+            go_method_policy,
         }
     }
 }
@@ -284,6 +295,8 @@ pub struct InferenceResult {
     pub go_package_names: FxHashMap<String, String>,
     pub go_package_ids: FxHashSet<String>,
     pub typedef_files: FxHashMap<u32, File>,
+    pub files_with_unspellable_types: FxHashSet<u32>,
+    pub go_method_policy: GoMethodPolicy,
 }
 
 fn unwrap_hoisted_test_wrapper(expression: Expression) -> Option<Expression> {

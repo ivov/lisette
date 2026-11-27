@@ -69,6 +69,10 @@ pub struct Facts {
     /// Span of every inferred function, so lints can attribute errors to
     /// the containing function.
     pub function_spans: Vec<Span>,
+
+    pub files_with_unspellable_types: FxHashSet<u32>,
+
+    pub lambdas_in_go_function_slots: FxHashSet<ExpressionId>,
 }
 
 #[derive(Debug, Default)]
@@ -91,7 +95,7 @@ pub(crate) struct ValueUseObligations {
 #[derive(Debug, Clone)]
 pub(crate) struct ValueUseObligation {
     pub(crate) key: ValueUseKey,
-    pub(crate) source: Type,
+    pub(crate) source: Option<Type>,
     pub(crate) slot: Type,
     /// The conformances that the checker selected while it accepted this value.
     pub(crate) witnesses: Vec<ConformanceWitness>,
@@ -111,7 +115,9 @@ impl ValueUseObligations {
 
     pub(crate) fn visit_types_mut(&mut self, mut visit: impl FnMut(&mut Type)) {
         for obligation in &mut self.uses {
-            visit(&mut obligation.source);
+            if let Some(source) = &mut obligation.source {
+                visit(source);
+            }
             visit(&mut obligation.slot);
             for witness in &mut obligation.witnesses {
                 witness.visit_types_mut(&mut visit);
@@ -339,6 +345,8 @@ impl Facts {
             pattern_error_spans: FxHashSet::default(),
             type_error_spans: FxHashSet::default(),
             function_spans: Vec::new(),
+            files_with_unspellable_types: FxHashSet::default(),
+            lambdas_in_go_function_slots: FxHashSet::default(),
             usages: UsageFacts::default(),
             conformances: ConformanceIndex::default(),
             checked_bodies: CheckedBodiesBuilder::default(),
@@ -531,6 +539,8 @@ impl Facts {
             pattern_error_spans,
             type_error_spans,
             function_spans,
+            files_with_unspellable_types,
+            lambdas_in_go_function_slots,
             usages,
             interface_satisfied_methods,
             conformances,
@@ -554,6 +564,10 @@ impl Facts {
         self.pattern_error_spans.extend(pattern_error_spans);
         self.type_error_spans.extend(type_error_spans);
         self.function_spans.extend(function_spans);
+        self.files_with_unspellable_types
+            .extend(files_with_unspellable_types);
+        self.lambdas_in_go_function_slots
+            .extend(lambdas_in_go_function_slots);
 
         self.usages.merge(usages);
         self.conformances.merge(conformances);

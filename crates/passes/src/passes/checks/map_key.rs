@@ -78,7 +78,6 @@ fn report_bad_map_key(
     } else {
         resolved
             .children()
-            .iter()
             .any(|child| report_bad_map_key(store, child, span, sink, expanding))
     };
     if let Some(id) = alias_head {

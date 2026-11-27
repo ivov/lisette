@@ -1135,7 +1135,7 @@ impl InferCtx<'_> {
         let return_index = expected_positions.len().checked_sub(1)?;
 
         let mut adapter = None;
-        for (index, (left, right)) in expected_positions.iter().zip(&actual_positions).enumerate() {
+        for (index, (left, right)) in expected_positions.zip(actual_positions).enumerate() {
             if left == right {
                 continue;
             }
@@ -1384,7 +1384,6 @@ fn arity_difference<'a>(expected: &'a Type, actual: &'a Type) -> Option<(&'a Typ
     }
     expected
         .children()
-        .into_iter()
         .zip(actual.children())
         .find_map(|(e, a)| arity_difference(e, a))
 }

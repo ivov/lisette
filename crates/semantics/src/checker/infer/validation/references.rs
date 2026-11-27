@@ -64,9 +64,9 @@ impl InferCtx<'_> {
             }
             // For all other expressions, just recurse into children.
             _ => {
-                for child in expression.children() {
+                expression.for_each_child(|child| {
                     self.walk_check_ref_aliasing(child);
-                }
+                });
             }
         }
     }

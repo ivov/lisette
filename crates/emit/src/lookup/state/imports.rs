@@ -1,10 +1,11 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::target::names::go_name;
 use diagnostics::{LisetteDiagnostic, emit as emit_diagnostic};
 use syntax::ast::{ImportAlias, Span};
 use syntax::program::{File, FileImport, ImportKey, strip_go_prefix};
 
+use crate::lookup::facts::package_names::PackageNames;
 use crate::target::names::packages::PackageRequirements;
 
 #[derive(Clone, Default)]
@@ -87,6 +88,40 @@ impl ImportPlan {
         })
     }
 
+    pub(crate) fn has_qualifier_for_other_path(&self, qualifier: &str, path: &str) -> bool {
+        self.imports
+            .iter()
+            .any(|import| import.qualifier.as_deref() == Some(qualifier) && import.path != path)
+    }
+
+    pub(crate) fn rename_generated_collisions(
+        &mut self,
+        generated_qualifiers: &FxHashSet<String>,
+        names: &PackageNames,
+    ) {
+        for index in 0..self.imports.len() {
+            let Some(qualifier) = self.imports[index].qualifier.as_deref() else {
+                continue;
+            };
+            if !generated_qualifiers.contains(qualifier)
+                || !go_name::is_generated_qualifier_for_other_path(
+                    qualifier,
+                    &self.imports[index].path,
+                )
+            {
+                continue;
+            }
+            let fresh = names.fresh_package_name(&format!("{qualifier}_pkg"), |candidate| {
+                go_name::is_generated_import_qualifier(candidate)
+                    || self
+                        .imports
+                        .iter()
+                        .any(|import| import.qualifier.as_deref() == Some(candidate))
+            });
+            self.imports[index].qualifier = Some(fresh);
+        }
+    }
+
     pub(crate) fn package_for_alias(&self, alias: &str) -> Option<&str> {
         self.imports.iter().rev().find_map(|import| {
             (import.source_alias.as_deref() == Some(alias)).then_some(import.package.as_str())
@@ -123,6 +158,25 @@ impl ImportPlan {
         let diagnostics = detect_collisions(&entries);
         (entries, diagnostics)
     }
+}
+
+pub(crate) fn generated_qualifier_collisions(entries: &[OutputImport]) -> FxHashSet<String> {
+    let generated_qualifier_in_use = |qualifier: &str| {
+        entries.iter().any(|entry| {
+            entry.qualifier.as_deref() == Some(qualifier)
+                && go_name::is_generated_import_qualifier(qualifier)
+                && !go_name::is_generated_qualifier_for_other_path(qualifier, &entry.path)
+        })
+    };
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let qualifier = entry.qualifier.as_deref()?;
+            (go_name::is_generated_qualifier_for_other_path(qualifier, &entry.path)
+                && generated_qualifier_in_use(qualifier))
+            .then(|| qualifier.to_string())
+        })
+        .collect()
 }
 
 fn detect_collisions(entries: &[OutputImport]) -> Vec<LisetteDiagnostic> {

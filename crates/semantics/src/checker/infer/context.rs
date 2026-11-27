@@ -648,6 +648,7 @@ impl<'a> InferCtx<'a> {
             project_kind,
             script,
             pending,
+            keeps_all_checked_bodies,
         } = &mut **state;
 
         let mut delta = Facts::new(facts.allocator());
@@ -666,6 +667,7 @@ impl<'a> InferCtx<'a> {
             project_kind: *project_kind,
             script: *script,
             pending: mem::take(pending),
+            keeps_all_checked_bodies: *keeps_all_checked_bodies,
         };
         let diagnostics = state.sink.checkpoint();
         let local_bindings = state

@@ -133,6 +133,7 @@ pub(crate) struct TaskSeed {
     binding_ids: Arc<BindingIdAllocator>,
     project_kind: ProjectKind,
     script: Option<ScriptUnit>,
+    keeps_all_checked_bodies: bool,
 }
 
 impl TaskSeed {
@@ -143,6 +144,7 @@ impl TaskSeed {
             self.project_kind,
             store::ENTRY_PACKAGE_ID,
             self.script,
+            self.keeps_all_checked_bodies,
         )
     }
 }
@@ -158,6 +160,7 @@ pub struct TaskState {
     pub(crate) project_kind: ProjectKind,
     pub(crate) script: Option<ScriptUnit>,
     pub(crate) pending: PendingWork,
+    pub(crate) keeps_all_checked_bodies: bool,
 }
 
 impl TaskState {
@@ -167,6 +170,7 @@ impl TaskState {
         project_kind: ProjectKind,
         package_id: impl Into<String>,
         script: Option<ScriptUnit>,
+        keeps_all_checked_bodies: bool,
     ) -> Self {
         Self {
             env: TypeEnv::new(),
@@ -178,6 +182,7 @@ impl TaskState {
             project_kind,
             script,
             pending: PendingWork::default(),
+            keeps_all_checked_bodies,
         }
     }
 
@@ -188,6 +193,7 @@ impl TaskState {
             ProjectKind::Binary,
             package_id,
             None,
+            true,
         )
     }
 
@@ -195,6 +201,7 @@ impl TaskState {
         sink: LocalSink,
         project_kind: ProjectKind,
         script: Option<ScriptUnit>,
+        keeps_all_checked_bodies: bool,
     ) -> Self {
         Self::new(
             Arc::new(BindingIdAllocator::new()),
@@ -202,6 +209,7 @@ impl TaskState {
             project_kind,
             store::ENTRY_PACKAGE_ID,
             script,
+            keeps_all_checked_bodies,
         )
     }
 
@@ -217,6 +225,7 @@ impl TaskState {
             binding_ids: self.facts.allocator(),
             project_kind: self.project_kind,
             script: self.script,
+            keeps_all_checked_bodies: self.keeps_all_checked_bodies,
         }
     }
 
@@ -235,6 +244,7 @@ impl TaskState {
             project_kind: _,
             script: _,
             pending,
+            keeps_all_checked_bodies: _,
         } = self;
         TaskOutput {
             facts,

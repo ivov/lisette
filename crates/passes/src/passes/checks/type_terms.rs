@@ -63,12 +63,12 @@ fn visit<'a>(
         } => Some((callee.as_ref(), *span)),
         _ => None,
     };
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         let call_span = callee
             .filter(|(callee, _)| ptr::eq(*callee, child))
             .map(|(_, span)| span);
         visit(child, scope, call_span, store, sink);
-    }
+    });
     scope.truncate(depth);
 }
 

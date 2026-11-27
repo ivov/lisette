@@ -362,7 +362,8 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         .get_file(ENTRY_FILE_ID)
         .is_some_and(|file| file.parse_status == FileParseStatus::Failed)
     {
-        let checker = TaskState::with_sink(sink, input.project_kind, input.scope.script_unit());
+        let checker =
+            TaskState::with_sink(sink, input.project_kind, input.scope.script_unit(), true);
         return InferenceOutput {
             dependencies: None,
             store,

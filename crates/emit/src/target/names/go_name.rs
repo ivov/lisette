@@ -309,6 +309,12 @@ pub(crate) fn testing_qualifier() -> &'static str {
     GeneratedPackage::Testing.qualifier()
 }
 
+pub(crate) fn is_generated_qualifier_for_other_path(name: &str, path: &str) -> bool {
+    GeneratedPackage::ALL
+        .iter()
+        .any(|package| package.qualifier() == name && package.path() != path)
+}
+
 pub(crate) fn is_generated_import_qualifier(name: &str) -> bool {
     GeneratedPackage::ALL
         .iter()

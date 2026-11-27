@@ -55,7 +55,7 @@ fn visit_expression(expression: &Expression, prelude_package: &Package, sink: &L
         _ => {}
     }
 
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_expression(child, prelude_package, sink);
-    }
+    });
 }

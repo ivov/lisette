@@ -69,15 +69,18 @@ impl PlannerQueries<'_, '_> {
         let qualifier = if self.scope.has_binding_for_go_name(&qualifier)
             || self.scope.is_go_name_declared(&qualifier)
             || self.names.declares_name(&qualifier)
+            || self.namespace.is_claimed_by_other_path(&qualifier, &path)
         {
             self.names
                 .fresh_package_name(&format!("{qualifier}_pkg"), |candidate| {
                     self.scope.has_binding_for_go_name(candidate)
                         || self.scope.is_go_name_declared(candidate)
+                        || self.namespace.is_claimed_by_other_path(candidate, &path)
                 })
         } else {
             qualifier
         };
+        self.namespace.claim_qualifier(&qualifier, &path);
 
         let origin = if is_go_import(package) {
             PackageOrigin::GoImport

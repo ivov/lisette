@@ -1,7 +1,6 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
-use syntax::program::{ValueUseKey, is_go_import, resolved_callee};
-use syntax::types::Type;
+use syntax::program::{ValueUseKey, resolved_callee};
 
 pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
     match expression {
@@ -25,18 +24,9 @@ pub fn check_unit_go_callback_result(expression: &Expression, ctx: &NodeCtx) {
 }
 
 fn slot_is_go_function_type(expression: &Expression, ctx: &NodeCtx) -> bool {
-    let Some(value_use) = ctx
-        .facts
-        .checked_bodies
-        .value_use(&ValueUseKey::value(expression))
-    else {
-        return false;
-    };
-    matches!(&value_use.slot, Type::Nominal { id, .. } if is_go_import(id))
-        && ctx
-            .store
-            .resolve_to_function_type(&value_use.slot)
-            .is_some()
+    ctx.facts
+        .lambdas_in_go_function_slots
+        .contains(&ValueUseKey::value(expression).expression())
 }
 
 fn check_lambda(expression: &Expression, ctx: &NodeCtx) {

@@ -116,9 +116,13 @@ impl InferCtx<'_> {
                 let frozen_items = {
                     let store = context.store;
                     let state = &mut *context.state;
-                    let folder = FreezeFolder::new(&state.env, store);
+                    let mut folder = FreezeFolder::in_package(&state.env, store, package_id);
                     folder.freeze_facts(&mut state.facts);
-                    FreezeFolder::new(&state.env, store).freeze_items(inferred_items)
+                    let items = folder.freeze_items(inferred_items);
+                    if folder.mentions_unspellable_type() {
+                        state.facts.files_with_unspellable_types.insert(file_id);
+                    }
+                    items
                 };
                 context.check_instantiation_bounds(&frozen_items);
                 context.finalize_value_uses(&frozen_items, file_id);

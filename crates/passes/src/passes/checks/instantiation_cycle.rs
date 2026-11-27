@@ -364,10 +364,12 @@ impl<'a> Graph<'a> {
                 } => Some((callee.as_ref(), *span)),
                 _ => None,
             };
-            for child in expression.children().into_iter().rev() {
+            let first_child = pending.len();
+            expression.for_each_child(|child| {
                 let call_span = callee.filter(|(callee, _)| ptr::eq(*callee, child));
                 pending.push((child, call_span.map(|(_, span)| span)));
-            }
+            });
+            pending[first_child..].reverse();
         }
     }
 
@@ -432,7 +434,7 @@ impl<'a> Graph<'a> {
     fn add_type(&mut self, ty: &Type, scope: &Scope, span: Span, inferred: bool) {
         let mut pending = vec![ty];
         while let Some(ty) = pending.pop() {
-            pending.extend(ty.children().into_iter().rev());
+            pending.extend(ty.children().rev());
             let Type::Nominal { id, params, .. } = ty else {
                 continue;
             };

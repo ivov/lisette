@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::mem;
+use std::slice;
 use std::sync::Arc;
 
 use ecow::EcoString;
@@ -1155,19 +1156,68 @@ impl Type {
     }
 
     /// Direct child types, for read-only walks. Excludes `Function.bounds`.
-    pub fn children(&self) -> Vec<&Type> {
+    pub fn children(&self) -> TypeChildren<'_> {
         match self {
-            Type::Nominal { params, .. } => params.iter().collect(),
-            Type::Compound { args, .. } => args.iter().collect(),
+            Type::Nominal { params, .. } => TypeChildren::Types(params.iter()),
+            Type::Compound { args, .. } => TypeChildren::Types(args.iter()),
             Type::Function(f) => {
-                let mut c: Vec<&Type> = f.params.iter().map(|param| &param.ty).collect();
-                c.push(&f.return_type);
-                c
+                TypeChildren::Function(f.params.iter(), Some(f.return_type.as_ref()))
             }
-            Type::Tuple(elements) => elements.iter().collect(),
-            Type::Array { element, .. } => vec![element],
-            Type::Forall { body, .. } => vec![body],
-            _ => vec![],
+            Type::Tuple(elements) => TypeChildren::Types(elements.iter()),
+            Type::Array { element, .. } => TypeChildren::One(Some(element)),
+            Type::Forall { body, .. } => TypeChildren::One(Some(body)),
+            _ => TypeChildren::One(None),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum TypeChildren<'a> {
+    Types(slice::Iter<'a, Type>),
+    Function(slice::Iter<'a, FunctionParameter>, Option<&'a Type>),
+    One(Option<&'a Type>),
+}
+
+impl<'a> Iterator for TypeChildren<'a> {
+    type Item = &'a Type;
+
+    fn next(&mut self) -> Option<&'a Type> {
+        match self {
+            TypeChildren::Types(types) => types.next(),
+            TypeChildren::Function(params, return_type) => params
+                .next()
+                .map(|param| &param.ty)
+                .or_else(|| return_type.take()),
+            TypeChildren::One(child) => child.take(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+}
+
+impl ExactSizeIterator for TypeChildren<'_> {
+    fn len(&self) -> usize {
+        match self {
+            TypeChildren::Types(types) => types.len(),
+            TypeChildren::Function(params, return_type) => {
+                params.len() + usize::from(return_type.is_some())
+            }
+            TypeChildren::One(child) => usize::from(child.is_some()),
+        }
+    }
+}
+
+impl DoubleEndedIterator for TypeChildren<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self {
+            TypeChildren::Types(types) => types.next_back(),
+            TypeChildren::Function(params, return_type) => return_type
+                .take()
+                .or_else(|| params.next_back().map(|param| &param.ty)),
+            TypeChildren::One(child) => child.take(),
         }
     }
 }
@@ -1968,14 +2018,14 @@ where
     } = &current
     {
         let writable = *writable;
-        if !seen.insert(current.clone()) {
-            break;
-        }
         let Some(target) = lookup(id.as_str())
             .and_then(|definition| definition.instantiate_alias_target(params, writable))
         else {
             break;
         };
+        if !seen.insert(current.clone()) {
+            break;
+        }
         current = target.unwrap_forall().clone();
     }
     current

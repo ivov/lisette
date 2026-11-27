@@ -1,4 +1,5 @@
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::borrow::Cow;
 use std::mem;
 
 use syntax::ast::{Expression, ExpressionId, FormatStringPart, Literal, MatchArm, SelectArm, Span};
@@ -72,12 +73,12 @@ impl InferCtx<'_> {
         slot: &Type,
         witnesses: Vec<ConformanceWitness>,
     ) {
-        self.record_obligation(
-            ValueUseKey::value(expression),
-            expression.get_type(),
-            slot.clone(),
+        self.facts.value_uses.uses.push(ValueUseObligation {
+            key: ValueUseKey::value(expression),
+            source: None,
+            slot: slot.clone(),
             witnesses,
-        );
+        });
     }
 
     pub(crate) fn record_obligation(
@@ -89,7 +90,7 @@ impl InferCtx<'_> {
     ) {
         self.facts.value_uses.uses.push(ValueUseObligation {
             key,
-            source,
+            source: Some(source),
             slot,
             witnesses,
         });
@@ -186,7 +187,7 @@ impl InferCtx<'_> {
         self.facts.value_uses.selected_witnesses.clear();
         let mut finalizer = Finalizer {
             store: self.store,
-            obligations: FxHashMap::default(),
+            obligations: FxHashMap::with_capacity_and_hasher(obligations.len(), Default::default()),
             callees: callees.into_iter().collect(),
             receivers: receivers.into_iter().collect(),
             bodies: CheckedBodiesBuilder::default(),
@@ -198,6 +199,9 @@ impl InferCtx<'_> {
             delegated_witnesses: Vec::new(),
             delegations: Vec::new(),
             discards_next: false,
+            lambdas_in_go_function_slots: Vec::new(),
+            keeps_uses: self.state.keeps_all_checked_bodies
+                || self.facts.files_with_unspellable_types.contains(&file_id),
         };
         for obligation in obligations {
             let key = obligation.key;
@@ -215,6 +219,8 @@ impl InferCtx<'_> {
             failures,
             mismatches,
             uninferred,
+            lambdas_in_go_function_slots,
+            keeps_uses,
             ..
         } = finalizer;
         for (if_let, unit) in mem::take(&mut self.facts.value_uses.implicit_units) {
@@ -259,7 +265,12 @@ impl InferCtx<'_> {
             return;
         }
         if failures.is_empty() && mismatches.is_empty() && uninferred.is_empty() {
-            self.facts.checked_bodies.merge(bodies);
+            self.facts
+                .lambdas_in_go_function_slots
+                .extend(lambdas_in_go_function_slots);
+            if keeps_uses {
+                self.facts.checked_bodies.merge(bodies);
+            }
         }
         let mut reported_variables = if uninferred.is_empty() {
             FxHashSet::default()
@@ -411,11 +422,18 @@ struct Finalizer<'s> {
     delegations: Vec<bool>,
     /// Whether the position of the next value use discards its value.
     discards_next: bool,
+    lambdas_in_go_function_slots: Vec<ExpressionId>,
+    keeps_uses: bool,
 }
 
 impl Finalizer<'_> {
     /// Check one value use, in the slot that a delegating parent passes down if any.
     fn value_use(&mut self, expression: &Expression, inherited: Option<Type>) {
+        self.converting_use(expression, inherited);
+    }
+
+    /// Check one value use, and tell whether its adaptation converts, when the walk publishes one.
+    fn converting_use(&mut self, expression: &Expression, inherited: Option<Type>) -> Option<bool> {
         let expression = expression.unwrap_parens();
         if matches!(expression, Expression::Lambda { .. }) && is_unresolved(&expression.get_type())
         {
@@ -428,8 +446,8 @@ impl Finalizer<'_> {
         }
         let key = ValueUseKey::value(expression);
         let is_discarded = mem::take(&mut self.discards_next);
-        let (recorded, mut witnesses) = match self.obligations.get(&key) {
-            Some(obligation) => (Some(obligation.slot.clone()), obligation.witnesses.clone()),
+        let (recorded, mut witnesses) = match self.obligations.remove(&key) {
+            Some(obligation) => (Some(obligation.slot), obligation.witnesses),
             None => {
                 self.fail(expression.get_span(), "this value has no checked slot");
                 (None, Vec::new())
@@ -438,14 +456,14 @@ impl Finalizer<'_> {
         let is_inherited = inherited.is_some();
         let Some(slot) = inherited.or(recorded) else {
             self.positions(expression, &Type::ignored());
-            return;
+            return None;
         };
         // A discarded value keeps its own type, and the values that a discarded construct produces are discarded too.
-        let (use_slot, published_slot) = if is_discarded || slot.is_ignored() {
-            (Type::ignored(), expression.get_type())
+        let is_discarded = is_discarded || slot.is_ignored();
+        let use_slot = if is_discarded {
+            Type::ignored()
         } else {
-            let slot = self.value_slot(slot, expression);
-            (slot.clone(), slot)
+            self.value_slot(slot, expression)
         };
         if delegates(expression) {
             let mark = self.delegated_witnesses.len();
@@ -454,13 +472,14 @@ impl Finalizer<'_> {
             self.positions(expression, &use_slot);
             let converts = self.delegations.pop().unwrap_or(false);
             self.delegated_witnesses.truncate(mark);
-            self.publish(
-                published_slot,
+            self.publish_use(
+                is_discarded,
+                use_slot,
                 Adaptation::Delegated { converts },
                 expression,
             );
             self.mark_produced(is_inherited, converts);
-            return;
+            return Some(converts);
         }
         if is_inherited {
             witnesses.extend(self.delegated_witnesses.iter().cloned());
@@ -472,18 +491,40 @@ impl Finalizer<'_> {
             &witnesses,
             false,
         );
-        self.mark_produced(is_inherited, adaptation.converts());
-        self.publish(published_slot, adaptation, expression);
+        let converts = adaptation.converts();
+        self.mark_produced(is_inherited, converts);
         self.positions(expression, &use_slot);
+        self.publish_use(is_discarded, use_slot, adaptation, expression);
+        Some(converts)
+    }
+
+    fn publish_use(
+        &mut self,
+        is_discarded: bool,
+        use_slot: Type,
+        adaptation: Adaptation,
+        expression: &Expression,
+    ) {
+        let slot = if is_discarded {
+            expression.get_type()
+        } else {
+            use_slot
+        };
+        self.publish(slot, adaptation, expression);
     }
 
     /// The slot that `expression` goes into, where a slot that no value reaches or that already reported an error takes the type of the value.
     fn value_slot(&mut self, slot: Type, expression: &Expression) -> Type {
-        let value_type = expression.get_type();
         match slot {
-            Type::Never | Type::Error => value_type,
+            Type::Never | Type::Error => expression.get_type(),
             // A value that never arrives, or that already reported an error, constrains no slot.
-            Type::Var { .. } if value_type.is_never() || value_type.is_error() => value_type,
+            Type::Var { .. }
+                if expression
+                    .type_ref()
+                    .is_some_and(|value_type| value_type.is_never() || value_type.is_error()) =>
+            {
+                expression.get_type()
+            }
             slot if is_unresolved(&slot) => {
                 self.not_inferred(
                     expression.get_span(),
@@ -491,7 +532,7 @@ impl Finalizer<'_> {
                     UninferredKind::Value,
                     "this value goes into a slot of unresolved type",
                 );
-                value_type
+                expression.get_type()
             }
             slot => slot,
         }
@@ -521,13 +562,7 @@ impl Finalizer<'_> {
 
     /// Check a value use in a position that takes the value as it is, such as a match subject.
     fn unadapted_use(&mut self, expression: &Expression) {
-        self.value_use(expression, None);
-        if self
-            .bodies
-            .records()
-            .value_use(&ValueUseKey::value(expression))
-            .is_some_and(|checked| checked.adaptation.converts())
-        {
+        if self.converting_use(expression, None) == Some(true) {
             self.fail(
                 expression.get_span(),
                 "this position takes its value as it is, but the value converts",
@@ -583,17 +618,20 @@ impl Finalizer<'_> {
     }
 
     fn special_use(&mut self, key: ValueUseKey, span: Span, reason: &'static str, is_cast: bool) {
-        let Some(obligation) = self.obligations.get(&key) else {
+        let Some(ValueUseObligation {
+            source: Some(source),
+            slot,
+            witnesses,
+            ..
+        }) = self.obligations.remove(&key)
+        else {
             self.fail(span, reason);
             return;
         };
-        let (source, slot) = (obligation.source.clone(), obligation.slot.clone());
-        let witnesses = obligation.witnesses.clone();
         let adaptation = self.adaptation(&source, &slot, span, &witnesses, is_cast);
         self.bodies.insert_use(
             key,
             CheckedValueUse {
-                value_type: source,
                 slot,
                 adaptation,
                 span,
@@ -697,10 +735,19 @@ impl Finalizer<'_> {
     }
 
     fn publish(&mut self, slot: Type, adaptation: Adaptation, expression: &Expression) {
+        if matches!(expression, Expression::Lambda { .. })
+            && matches!(&slot, Type::Nominal { id, .. } if is_go_import(id))
+            && self.store.resolve_to_function_type(&slot).is_some()
+        {
+            self.lambdas_in_go_function_slots
+                .push(ValueUseKey::value(expression).expression());
+        }
+        if !self.keeps_uses {
+            return;
+        }
         self.bodies.insert_use(
             ValueUseKey::value(expression),
             CheckedValueUse {
-                value_type: expression.get_type(),
                 slot,
                 adaptation,
                 span: expression.get_span(),
@@ -1036,6 +1083,9 @@ impl Finalizer<'_> {
         if written_source.is_never() {
             return Adaptation::Identity;
         }
+        if written_source == written_slot && !is_unresolved(written_source) {
+            return Adaptation::Identity;
+        }
         // The checker reported the error, and a file with errors publishes no body.
         if written_source.contains_error() || written_slot.contains_error() {
             return Adaptation::Identity;
@@ -1250,8 +1300,15 @@ struct Mismatch {
     span: Span,
 }
 
-fn fallible_block_source(store: &Store, expression: &Expression, slot: &Type) -> Type {
-    let ty = expression.get_type();
+fn fallible_block_source<'a>(
+    store: &Store,
+    expression: &'a Expression,
+    slot: &Type,
+) -> Cow<'a, Type> {
+    let ty = match expression.type_ref() {
+        Some(ty) => Cow::Borrowed(ty),
+        None => Cow::Owned(expression.get_type()),
+    };
     if !matches!(
         expression,
         Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
@@ -1261,7 +1318,7 @@ fn fallible_block_source(store: &Store, expression: &Expression, slot: &Type) ->
     }
     let slot = store.peel_alias(slot);
     if (slot.is_option() && ty.is_option()) || (slot.is_result() && ty.is_result()) {
-        slot
+        Cow::Owned(slot)
     } else {
         ty
     }

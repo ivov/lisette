@@ -53,9 +53,9 @@ fn visit_expression(expression: &Expression, diagnostics: &mut Vec<LisetteDiagno
         _ => {}
     }
 
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         visit_expression(child, diagnostics);
-    }
+    });
 }
 
 fn check_unused_type_parameters(
@@ -165,9 +165,9 @@ fn body_remove_found_type_names(expression: &Expression, names: &mut FxHashSet<E
         Expression::Cast { ty, .. } => ty.remove_found_type_names(names),
         _ => {}
     }
-    for child in expression.children() {
+    expression.for_each_child(|child| {
         body_remove_found_type_names(child, names);
-    }
+    });
 }
 
 fn annotation_remove_names(annotation: &Annotation, names: &mut FxHashSet<EcoString>) {

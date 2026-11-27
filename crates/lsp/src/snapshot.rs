@@ -78,12 +78,13 @@ impl AnalysisSnapshot {
     }
 
     pub(crate) fn new(
-        analysis: Analysis,
+        mut analysis: Analysis,
         config: &ProjectConfig,
         entry_dir: &Path,
         external_test: bool,
         packages: PackageResolver,
     ) -> Self {
+        analysis.emit_input.checked_bodies = Default::default();
         let mut sources = FxHashMap::default();
 
         for (file_id, file) in &analysis.emit_input.files {
