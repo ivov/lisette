@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795547438703,
+  "lastUpdate": 1795805318774,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -60033,6 +60033,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "stdlib",
             "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11461,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6d1ccc576f3b3252a2488e8df7fb99dc5d08a3dd",
+          "message": "refactor: enforce structure in emit crate (#1732)",
+          "timestamp": "2026-11-27T19:48:09+01:00",
+          "tree_id": "bc65ea182d762c10d92695dcf45ab95b2e5f2ebe",
+          "url": "https://github.com/ivov/lisette/commit/6d1ccc576f3b3252a2488e8df7fb99dc5d08a3dd"
+        },
+        "date": 1795805316813,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 174187,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 49857,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 34523,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20450,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 19909,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14502,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9650,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7691,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2971,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1929,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 300,
             "unit": "lines"
           },
           {
