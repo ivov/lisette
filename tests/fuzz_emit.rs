@@ -28,6 +28,7 @@ use _harness::go::{
     snapshots_dir,
 };
 use _harness::lists::read_names;
+use _harness::markdown::{backticks_around, code_span};
 use _harness::wrap::wrap;
 use semantics::AnalysisScope;
 use semantics::loader::MemoryLoader;
@@ -219,7 +220,6 @@ enum Verdict {
 struct Report {
     kind: ReportKind,
     heading: String,
-    place: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -234,9 +234,9 @@ impl Report {
             .lines()
             .find(|line| !line.trim().is_empty())
             .unwrap_or("");
-        let (place, payload) = match first.split_once(": ") {
-            Some((location, payload)) if location.contains(".rs:") => (location, payload),
-            _ => ("", first),
+        let payload = match first.split_once(": ") {
+            Some((location, payload)) if location.contains(".rs:") => payload,
+            _ => first,
         };
         let payload = payload
             .trim_start_matches("internal error: ")
@@ -248,7 +248,6 @@ impl Report {
         Self {
             kind: ReportKind::Panic,
             heading,
-            place: place.to_string(),
         }
     }
 }
@@ -343,23 +342,12 @@ impl Builder {
             let message = parts.get(3).unwrap_or(&first).trim();
             let directory = self.work.join(&package);
             let go = read_go_files(&directory);
-            let go_line = parts
-                .first()
-                .zip(parts.get(1))
-                .and_then(|(path, line)| {
-                    let file = Path::new(path).file_name()?;
-                    let line: usize = line.parse().ok()?;
-                    let source = fs::read_to_string(directory.join(file)).ok()?;
-                    Some(source.lines().nth(line.checked_sub(1)?)?.trim().to_string())
-                })
-                .unwrap_or_default();
             verdicts[index] = Verdict::Failed {
                 signature: signature("go_build", message),
                 detail: format!("{output}\n---- go ----\n{go}"),
                 report: Report {
                     kind: ReportKind::GoBuild,
                     heading: message.to_string(),
-                    place: go_line,
                 },
             };
         }
@@ -594,7 +582,10 @@ fn start_hang_watch(out: PathBuf) {
     });
 }
 
-fn replay_witnesses(builder: &mut Builder, known: &KnownSignatures) -> Vec<(String, String)> {
+fn replay_witnesses(
+    builder: &mut Builder,
+    known: &KnownSignatures,
+) -> Vec<(String, Option<String>)> {
     let entries: Vec<(&String, &String)> = known.by_signature.iter().collect();
     let sources: Vec<String> = entries
         .iter()
@@ -605,112 +596,70 @@ fn replay_witnesses(builder: &mut Builder, known: &KnownSignatures) -> Vec<(Stri
     for ((expected, witness), verdict) in entries.into_iter().zip(verdicts) {
         match verdict {
             Verdict::Failed { signature, .. } if &signature == expected => {}
-            Verdict::Failed { signature, .. } => problems.push((
-                witness.clone(),
-                format!(
-                    "Now fails with {}. Update its line in `tests/{FAILING}`.",
-                    code_span(&signature)
-                ),
-            )),
-            Verdict::ParseFail | Verdict::Rejected | Verdict::Built => problems.push((
-                witness.clone(),
-                format!(
-                    "Passes now. Remove its line from `tests/{FAILING}` and its file from `tests/{WITNESSES}`."
-                ),
-            )),
+            Verdict::Failed { signature, .. } => problems.push((witness.clone(), Some(signature))),
+            Verdict::ParseFail | Verdict::Rejected | Verdict::Built => {
+                problems.push((witness.clone(), None))
+            }
         }
     }
     problems
 }
 
-const ISSUE_LIMIT: usize = 60_000;
+const ISSUE_LIMIT: usize = 40_000;
 
-fn backticks_around(text: &str, minimum: usize) -> String {
-    let longest = text
-        .split(|character| character != '`')
-        .map(str::len)
-        .max()
-        .unwrap_or(0);
-    "`".repeat(minimum.max(longest + 1))
-}
-
-fn code_span(text: &str) -> String {
-    let fence = backticks_around(text, 1);
-    if text.starts_with('`') || text.ends_with('`') || fence.len() > 1 {
-        format!("{fence} {text} {fence}")
-    } else {
-        format!("{fence}{text}{fence}")
+fn witness_status(signature: Option<&str>) -> String {
+    match signature {
+        Some(signature) => format!("now fails with {signature}"),
+        None => "passes".to_string(),
     }
 }
 
-fn issue_body(new: &[(Report, String)], witness_problems: &[(String, String)]) -> String {
-    let run = match (
-        env::var("GITHUB_SERVER_URL"),
-        env::var("GITHUB_REPOSITORY"),
-        env::var("GITHUB_RUN_ID"),
-    ) {
-        (Ok(server), Ok(repository), Ok(id)) => {
-            format!("[this run]({server}/{repository}/actions/runs/{id})")
-        }
-        _ => "this run".to_string(),
-    };
+fn issue_body(new: &[(Report, String)], witness_problems: &[(String, Option<String>)]) -> String {
     let mut entries: Vec<&(Report, String)> = new.iter().collect();
     entries.sort_by(|a, b| (a.0.kind, &a.0.heading).cmp(&(b.0.kind, &b.0.heading)));
     entries.dedup_by(|a, b| a.0.kind == b.0.kind && a.0.heading == b.0.heading);
 
-    let mut body = if entries.is_empty() {
-        format!("Known errors changed in {run}.\n")
-    } else {
-        format!("New errors in {run}.\n")
-    };
-    let mut id = 0;
+    let mut body = String::new();
+    let mut shown = 0;
     let mut omitted = 0;
-    let mut section = None;
     for (report, source) in &entries {
         let title = match report.kind {
-            ReportKind::Panic => "Panics",
-            ReportKind::GoBuild => "`go build` errors",
+            ReportKind::Panic => "Panic",
+            ReportKind::GoBuild => "Build error",
         };
-        let place = match report.kind {
-            _ if report.place.is_empty() => String::new(),
-            ReportKind::Panic => format!("At {}.\n\n", code_span(&report.place)),
-            ReportKind::GoBuild => format!("Emitted Go: {}\n\n", code_span(&report.place)),
-        };
-        let mut entry = String::new();
-        if section != Some(report.kind) {
-            entry.push_str(&format!("\n## {title}\n"));
-        }
         let source = source.trim_matches('\n');
         let fence = backticks_around(source, 3);
-        entry.push_str(&format!(
-            "\n### {}. {}\n\n{place}{fence}rust\n{source}\n{fence}\n",
-            id + 1,
+        let entry = format!(
+            "\n#### {}. {title}: {}\n\n{fence}rust\n{source}\n{fence}\n",
+            shown + 1,
             code_span(&report.heading),
-        ));
+        );
         if body.len() + entry.len() > ISSUE_LIMIT {
             omitted += 1;
             continue;
         }
-        section = Some(report.kind);
-        id += 1;
+        shown += 1;
         body.push_str(&entry);
     }
     if !witness_problems.is_empty() {
-        body.push_str("\n## Changed witnesses\n");
-        for (witness, problem) in witness_problems {
-            id += 1;
+        body.push_str(&format!(
+            "\n#### {}. Stale failures\n\nUpdate their lines in `tests/{FAILING}`, and delete the saved programs that pass from `tests/{WITNESSES}`.\n\n",
+            shown + 1
+        ));
+        for (witness, signature) in witness_problems {
             body.push_str(&format!(
-                "\n### {id}. {}\n\n{problem}\n",
-                code_span(witness)
+                "- {}: {}\n",
+                code_span(witness),
+                witness_status(signature.as_deref().map(code_span).as_deref())
             ));
         }
     }
     if omitted > 0 {
         body.push_str(&format!(
-            "\n{omitted} more errors do not fit in this issue. They are in the `test-fuzz-findings` artifact.\n"
+            "\n{omitted} more errors do not fit in this issue. They are in the `emitter-fuzzing-findings` artifact.\n"
         ));
     }
-    body
+    body.trim_start().to_string()
 }
 
 #[test]
@@ -741,8 +690,11 @@ fn random_programs_give_valid_go() {
     };
     let known = KnownSignatures::read();
     let witness_problems = replay_witnesses(&mut builder, &known);
-    for (witness, problem) in &witness_problems {
-        eprintln!("WITNESS {witness}: {problem}");
+    for (witness, signature) in &witness_problems {
+        eprintln!(
+            "WITNESS {witness}: {}",
+            witness_status(signature.as_deref())
+        );
     }
 
     let seeds = read_seeds();

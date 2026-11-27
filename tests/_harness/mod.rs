@@ -12,6 +12,8 @@ pub mod lint;
 #[allow(dead_code)]
 pub mod lists;
 pub mod macros;
+#[allow(dead_code)]
+pub mod markdown;
 pub mod pipeline;
 pub mod wrap;
 
