@@ -1919,3 +1919,55 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn or_pattern_arm_sends_binding_into_unknown_channel() {
+    let input = r#"
+import "go:fmt"
+
+fn test(x: (int, int)) {
+  let c = Channel.buffered<Unknown>(1)
+  match x {
+    (0, n) | (n, 0) => {
+      let _ = c.send(n)
+    },
+    _ => (),
+  }
+  fmt.Println(c.length())
+}
+
+fn main() {
+  test((0, 1))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn select_sends_unit_into_unknown_channel() {
+    let input = r#"
+fn main() {
+  let c = Channel.buffered<Unknown>(1)
+  select {
+    c.send(()) => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn send_converts_function_value_into_go_function_channel() {
+    let input = r#"
+import "go:bufio"
+fn split(data: Slice<byte>, _end: bool) -> Result<(int, Slice<byte>), error> {
+  Ok((1, data))
+}
+fn main() {
+  let f: fn(Slice<byte>, bool) -> Result<(int, Slice<byte>), error> = split
+  let c = Channel.buffered<bufio.SplitFunc>(1)
+  let _ = c.send(f)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lowering::abi::fallible_producer::{FallibleProducer, OptionFusePlan};
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::bound_value::{Arms, BoundValue};
 use crate::lowering::calls::bounds_checks::IndexSite;
 use crate::lowering::calls::comma_ok::CommaOkValueSlot;
@@ -158,9 +159,10 @@ impl<'p> Planner<'p> {
 
         let literal_default = is_literal_default(default);
         let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
-        let value_plan = self.plan_value(
+        let (value_plan, conversion) = self.plan_into_slot_deferred(
             default,
             ExpressionContext::value().with_function_slot_origin(origin),
+            SlotTarget::Layout(ty),
         );
         let value_plan = if literal_default {
             value_plan
@@ -168,7 +170,7 @@ impl<'p> Planner<'p> {
             self.eager_operand(value_plan, "default")
         };
         let (mut setup, default_value) = value_plan.into_parts();
-        let default_value = self.apply_type_coercion(&mut setup, Some(ty), default, default_value);
+        let default_value = conversion.apply(self, &mut setup, default_value);
         bound.extend_setup(setup);
         let failure = bound.failure_body(|| LoweredBlock {
             statements: vec![assign(
@@ -197,22 +199,21 @@ impl<'p> Planner<'p> {
             | CommaOkValueSlot::Discarded => self.fresh_declared("ret"),
         };
         let origin = self.facts.function_type_origin(ty, SlotOrigin::Lisette);
-        let plan = self.plan_value(
+        let (plan, conversion) = self.plan_into_slot_deferred(
             default,
             ExpressionContext::value().with_function_slot_origin(origin),
+            SlotTarget::Layout(ty),
         );
-        let coercion = self.value_slot_coercion(default, ty);
         let typed = self.queries().declaration_needs_go_type(
             default,
             plan.expression().and_then(GoExpression::constant_kind),
-            &coercion,
+            &conversion,
             ty,
         );
 
         let (setup, default) = plan.into_parts();
         statements.extend(setup);
-        let (coercion_setup, default) = coercion.lower(self, default);
-        statements.extend(coercion_setup);
+        let default = conversion.apply(self, &mut statements, default);
         statements.push(if typed {
             LoweredStatement::VarDeclaration {
                 name: value.clone(),

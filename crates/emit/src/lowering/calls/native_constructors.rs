@@ -4,6 +4,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_returns::multi_value_return;
 use crate::lowering::abi::return_abi;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -189,35 +190,45 @@ impl Planner<'_> {
             ));
         }
 
-        let operands: Vec<ValuePlan> = pairs
-            .iter()
-            .flat_map(|(key, value)| [(*key, &key_ty), (*value, &value_ty)])
-            .map(|(e, slot)| {
+        let mut operands = Vec::with_capacity(pairs.len() * 2);
+        let mut conversions = Vec::with_capacity(pairs.len() * 2);
+        for (entry, (key, value)) in entries.iter().zip(&pairs) {
+            let adaptations = self.applied_element_adaptations(entry);
+            for (index, (element, slot)) in [(*key, &key_ty), (*value, &value_ty)]
+                .into_iter()
+                .enumerate()
+            {
                 let origin = self.facts.function_type_origin(slot, SlotOrigin::Lisette);
-                self.plan_composite_value(
-                    e,
+                let target = match adaptations.get(index) {
+                    Some(adaptation) => SlotTarget::Element {
+                        adaptation,
+                        semantic: slot,
+                        slot,
+                    },
+                    None => SlotTarget::Layout(slot),
+                };
+                let (operand, conversion) = self.plan_into_slot_deferred(
+                    element,
                     ExpressionContext::value().with_function_slot_origin(origin),
-                )
-            })
-            .collect();
+                    target,
+                );
+                operands.push(operand);
+                conversions.push(conversion);
+            }
+        }
 
         let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "entry");
         let mut setup = sequenced.setup;
-        let mut values = sequenced.values.into_iter();
+        let mut values = sequenced.values.into_iter().zip(conversions);
 
-        let types = MapEntryTypes {
-            key: &key_ty,
-            value: &value_ty,
-            value_go: &value_go_ty,
-        };
         let mut lowered = Vec::with_capacity(pairs.len());
         let mut widest = 0;
-        for (entry, pair) in entries.iter().zip(&pairs) {
+        for _ in &pairs {
             let operands = (
                 values.next().expect("each pair has a key"),
                 values.next().expect("each pair has a value"),
             );
-            let lowered_entry = self.lower_map_entry(&mut setup, entry, *pair, operands, &types);
+            let lowered_entry = self.lower_map_entry(&mut setup, operands, &value_go_ty);
             widest = widest.max(lowered_entry.width);
             lowered.push((Some(lowered_entry.key), lowered_entry.value));
         }
@@ -231,21 +242,19 @@ impl Planner<'_> {
     fn lower_map_entry(
         &mut self,
         setup: &mut Vec<Statement>,
-        entry: &Expression,
-        (key, value): (&Expression, &Expression),
-        (key_operand, value_operand): (GoExpression, GoExpression),
-        types: &MapEntryTypes<'_>,
+        ((key_operand, key_conversion), (value_operand, value_conversion)): (
+            (GoExpression, SlotConversion),
+            (GoExpression, SlotConversion),
+        ),
+        value_go_ty: &GoType,
     ) -> LoweredMapEntry {
-        let [key_coercion, value_coercion] =
-            self.pair_slot_coercions(entry, [key, value], [types.key, types.value]);
-        let (key_setup, coerced_key) = key_coercion.lower(self, key_operand);
-        setup.extend(key_setup);
-        let is_whole_literal = value_coercion.is_identity() && value_operand.is_composite_literal();
-        let (value_setup, coerced_value) = value_coercion.lower(self, value_operand);
-        setup.extend(value_setup);
+        let coerced_key = key_conversion.apply(self, setup, key_operand);
+        let is_whole_literal =
+            value_conversion.is_identity() && value_operand.is_composite_literal();
+        let coerced_value = value_conversion.apply(self, setup, value_operand);
         let width = rendered(&coerced_key).len() + rendered(&coerced_value).len() + ": ".len();
         let coerced_value = if is_whole_literal {
-            coerced_value.elide_composite_type(types.value_go)
+            coerced_value.elide_composite_type(value_go_ty)
         } else {
             coerced_value
         };
@@ -261,12 +270,6 @@ struct LoweredMapEntry {
     key: GoExpression,
     value: GoExpression,
     width: usize,
-}
-
-struct MapEntryTypes<'t> {
-    key: &'t Type,
-    value: &'t Type,
-    value_go: &'t GoType,
 }
 
 fn map_from_literal_entries<'e>(ctx: &NativeCallContext<'e>) -> Option<&'e [Expression]> {

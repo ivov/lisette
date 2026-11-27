@@ -1,0 +1,42 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(x: (int, int)) {
+    let c = Channel.buffered<Unknown>(1)
+    match x {
+      (0, n) | (n, 0) => {
+        let _ = c.send(n)
+      },
+      _ => (),
+    }
+    fmt.Println(c.length())
+  }
+  
+  fn main() {
+    test((0, 1))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(x lisette.Tuple2[int, int]) {
+	c := make(chan any, 1)
+	if x.First == 0 {
+		lisette.ChannelSend(c, any(x.Second))
+	} else if x.Second == 0 {
+		lisette.ChannelSend(c, any(x.First))
+	}
+	fmt.Println(len(c))
+}
+
+func main() {
+	test(lisette.MakeTuple2[int, int](0, 1))
+}

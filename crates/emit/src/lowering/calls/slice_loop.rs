@@ -11,6 +11,7 @@ use super::NativeCallContext;
 use super::native_methods::NativeCallResult;
 use crate::Planner;
 use crate::lowering::abi::is_closure_literal;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::control_flow::branches::is_conjunction;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::PlacePlan;
@@ -200,7 +201,7 @@ struct LoopOperands<'a> {
 
 enum LoopKindOperand<'e, V> {
     Plain(SliceLoop<(GoExpression, Option<GoType>)>),
-    Fold(&'e Expression, V),
+    Fold(&'e Expression, SlotConversion, V),
 }
 
 struct PlannedLoopOperands<'a, 'e> {
@@ -363,14 +364,15 @@ impl Planner<'_> {
                 let origin = self
                     .facts
                     .function_type_origin(result_ty, SlotOrigin::Lisette);
-                let plan = self.plan_composite_value(
+                let (plan, conversion) = self.plan_into_slot_deferred(
                     init,
                     ExpressionContext::value().with_function_slot_origin(origin),
+                    SlotTarget::Layout(result_ty),
                 );
                 if !plan.effects().can_move_across(source_operand.effects()) {
                     self.pin_to_temp(&mut source_operand, "src");
                 }
-                LoopKindOperand::Fold(init, plan)
+                LoopKindOperand::Fold(init, conversion, plan)
             }
         };
         let callback = match callback {
@@ -397,16 +399,16 @@ impl Planner<'_> {
             callback,
         } = operands;
         let (mut setup, source, kind, callback) = match (kind, callback) {
-            (LoopKindOperand::Fold(init, plan), LoopCallback::Value(callee)) => {
+            (LoopKindOperand::Fold(init, conversion, plan), LoopCallback::Value(callee)) => {
                 let sequenced = self.sequence_value_array([source, plan, callee], boundary, "arg");
                 let [source, value, callee] = sequenced.values;
-                let kind = LoopKindOperand::Fold(init, value);
+                let kind = LoopKindOperand::Fold(init, conversion, value);
                 (sequenced.setup, source, kind, LoopCallback::Value(callee))
             }
-            (LoopKindOperand::Fold(init, plan), LoopCallback::Lambda(lambda)) => {
+            (LoopKindOperand::Fold(init, conversion, plan), LoopCallback::Lambda(lambda)) => {
                 let sequenced = self.sequence_value_array([source, plan], boundary, "arg");
                 let [source, value] = sequenced.values;
-                let kind = LoopKindOperand::Fold(init, value);
+                let kind = LoopKindOperand::Fold(init, conversion, value);
                 (sequenced.setup, source, kind, LoopCallback::Lambda(lambda))
             }
             (LoopKindOperand::Plain(kind), LoopCallback::Value(callee)) => {
@@ -432,9 +434,9 @@ impl Planner<'_> {
         };
         let kind = match kind {
             LoopKindOperand::Plain(kind) => kind,
-            LoopKindOperand::Fold(init, value) => {
-                SliceLoop::Fold(self.accumulator_init(&mut setup, init, value, result_ty))
-            }
+            LoopKindOperand::Fold(init, conversion, value) => SliceLoop::Fold(
+                self.accumulator_init(&mut setup, (init, conversion), value, result_ty),
+            ),
         };
         LoopOperands {
             setup,
@@ -492,19 +494,17 @@ impl Planner<'_> {
     fn accumulator_init(
         &mut self,
         setup: &mut Vec<Statement>,
-        init: &Expression,
+        (init, conversion): (&Expression, SlotConversion),
         value: GoExpression,
         result_ty: &Type,
     ) -> (GoExpression, Option<GoType>) {
-        let coercion = self.value_slot_coercion(init, result_ty);
         let typed = self.queries().declaration_needs_go_type(
             init,
             value.constant_kind(),
-            &coercion,
+            &conversion,
             result_ty,
         );
-        let (coercion_setup, value) = coercion.lower(self, value);
-        setup.extend(coercion_setup);
+        let value = conversion.apply(self, setup, value);
         (value, typed.then(|| self.queries().go_type(result_ty)))
     }
 

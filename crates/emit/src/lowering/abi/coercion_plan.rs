@@ -201,11 +201,22 @@ impl CoercionPlan {
         (source, target): (&ValueLayout, &ValueLayout),
     ) -> Self {
         let change = Self::change(planner, source, target);
-        let adapted = Self::adapted(planner, adaptation, from, to, Some(target));
-        match (change.is_identity(), adapted.is_identity()) {
-            (true, _) => adapted,
-            (_, true) => change,
-            _ => Self::Then(Box::new(change), Box::new(adapted)),
+        change.then(Self::adapted(planner, adaptation, from, to, Some(target)))
+    }
+
+    pub(in crate::lowering) fn then(self, second: Self) -> Self {
+        match (self.is_identity(), second.is_identity()) {
+            (true, _) => second,
+            (_, true) => self,
+            _ => Self::Then(Box::new(self), Box::new(second)),
+        }
+    }
+
+    pub(in crate::lowering) fn layout(change: LayoutChange) -> Self {
+        if change.is_identity() {
+            Self::Identity
+        } else {
+            Self::Layout(change)
         }
     }
 
@@ -303,12 +314,7 @@ impl CoercionPlan {
         source: &ValueLayout,
         target: &ValueLayout,
     ) -> Self {
-        let change = planner.resolve_layout_change(source, target);
-        if change.is_identity() {
-            Self::Identity
-        } else {
-            Self::Layout(change)
-        }
+        Self::layout(planner.resolve_layout_change(source, target))
     }
 
     pub(in crate::lowering) fn is_identity(&self) -> bool {

@@ -4,6 +4,7 @@ use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::go_result_wrapping::NilGuard;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::abi::return_abi;
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -142,25 +143,22 @@ impl Planner<'_> {
         if let Some(assigned) = ctx.assigned_place {
             arg_ctx = arg_ctx.with_assigned_place(assigned);
         }
-        let argument = self.plan_composite_value(arg, arg_ctx);
         let Some(param) = param else {
-            return self.convert_to_recorded_slot(arg, argument);
+            return self.plan_composite_value(arg, arg_ctx);
         };
-        let coercion = self.slot_coercion(arg, &param.instantiated, Some(&param.layout));
+        let target = SlotTarget::GoAfter {
+            change: &LayoutChange::Identity,
+            target: &param.layout,
+        };
+        let argument = self.plan_into_slot(arg, arg_ctx, target);
         let inferred = converts_for_inference(&self.facts, arg, param, |name| {
             ctx.callee_pins_type_args || ctx.receiver_bound_parameters().contains(name)
         });
-        if coercion.is_identity() && !inferred {
+        if !inferred {
             return argument;
         }
-        argument.map_expression(|setup, value| {
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
-            if inferred {
-                GoExpression::conversion(self.queries().go_type(&param.instantiated), coerced)
-            } else {
-                coerced
-            }
+        argument.map_expression(|_, value| {
+            GoExpression::conversion(self.queries().go_type(&param.instantiated), value)
         })
     }
 
@@ -172,6 +170,10 @@ impl Planner<'_> {
         if let Some(literal) = self.try_plan_option_literal_into_layout(argument, &plan.target) {
             return literal;
         }
+        let target = SlotTarget::GoAfter {
+            change: &plan.change,
+            target: &plan.target,
+        };
         let value = match plan.source {
             ArgumentValueSource::GoPhysical => match CallSite::of(argument) {
                 Some(site) => {
@@ -186,21 +188,16 @@ impl Planner<'_> {
             ),
             ArgumentValueSource::GoSlot => match DotAccessSite::of(argument) {
                 Some(field) => self.plan_raw_nullable_field(field),
-                None => self.plan_value(argument, ExpressionContext::value()),
+                None => {
+                    return self.plan_into_slot(argument, ExpressionContext::value(), target);
+                }
             },
-            ArgumentValueSource::Lisette => self.plan_value(argument, ExpressionContext::value()),
+            ArgumentValueSource::Lisette => {
+                return self.plan_into_slot(argument, ExpressionContext::value(), target);
+            }
         };
-
-        let slot = &self.facts.checked(argument).value_use().slot;
-        let coercion = self.slot_coercion(argument, slot, Some(&plan.target));
-        value.map_expression(|setup, value| {
-            let mut coercion_setup = Vec::new();
-            let changed = self.plan_layout_change(&mut coercion_setup, value, &plan.change);
-            let (conversion_setup, coerced) = coercion.lower(self, changed);
-            setup.extend(coercion_setup);
-            setup.extend(conversion_setup);
-            coerced
-        })
+        let conversion = self.slot_conversion(argument, ExpressionContext::value(), target);
+        value.map_expression(|setup, value| conversion.apply(self, setup, value))
     }
 
     fn try_plan_variadic_spread_slot_layout_change(
@@ -220,22 +217,20 @@ impl Planner<'_> {
             collection_type: spread.get_type(),
             element: Box::new(parameter.layout.clone()),
         };
-        let coercion = CoercionPlan::change(&self.queries(), &source, &target);
-        if coercion.is_identity() && raw_source.is_none() {
+        let slot = SlotTarget::GoLayout {
+            source: &source,
+            target: &target,
+        };
+        let conversion = self.slot_conversion(spread, ExpressionContext::value(), slot);
+        if conversion.is_identity() && raw_source.is_none() {
             return None;
         }
 
-        let value = match CallSite::of(spread).filter(|_| raw_source.is_some()) {
-            Some(site) => {
-                self.plan_call_expression(site, Some(site.ty), ExpressionContext::value())
-            }
-            None => self.plan_value(spread, ExpressionContext::value()),
+        let Some(site) = CallSite::of(spread).filter(|_| raw_source.is_some()) else {
+            return Some(self.plan_converted(spread, ExpressionContext::value(), conversion));
         };
-        Some(value.map_expression(|setup, value| {
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
-            coerced
-        }))
+        let value = self.plan_call_expression(site, Some(site.ty), ExpressionContext::value());
+        Some(value.map_expression(|setup, value| conversion.apply(self, setup, value)))
     }
 }
 

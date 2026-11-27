@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  interface I<T> { fn get() -> T }
+  struct S {}
+  impl S { fn get(self) -> Option<int> { None } }
+  fn main() {
+    let (i, n): (I<Option<int>>, int) = (S {}, 1)
+    let _ = i.get()
+    let _ = n
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type I[T any] interface {
+	get() T
+}
+
+type S struct{}
+
+func (s S) get() (int, bool) {
+	return 0, false
+}
+
+func main() {
+	tup := lisette.MakeTuple2[S, int](S{}, 1)
+	subject := lisette.MakeTuple2[I[lisette.Option[int]], int](_lisAdapter_S_I_0{inner: tup.First}, tup.Second)
+	i := subject.First
+	i.get()
+}
+
+type _lisAdapter_S_I_0 struct {
+	inner S
+}
+
+func (a _lisAdapter_S_I_0) get() lisette.Option[int] {
+	return lisette.OptionFromCommaOk[int](a.inner.get())
+}

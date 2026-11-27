@@ -6,6 +6,7 @@ use crate::lowering::abi::coercion_plan::{
 use crate::lowering::abi::go_result_wrapping::option_nil_guard;
 use crate::lowering::abi::go_result_wrapping::{WrapperTarget, non_nil_condition};
 use crate::lowering::abi::go_returns::{multi_value_return, tag_condition};
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::planner::queries::PlannerQueries;
@@ -118,8 +119,7 @@ impl Planner<'_> {
             return Some(plan);
         }
         let payload_ty = expression.get_type().ok_type();
-        let conversion = self.value_slot_coercion(inner, &payload_ty);
-        let inner = self.plan_nullable_payload(inner, &payload_ty, conversion);
+        let inner = self.plan_nullable_payload(inner, &payload_ty, SlotTarget::Layout(&payload_ty));
         Some(inner.map_expression(|setup, value| {
             let value = if payload.is_identity() {
                 value
@@ -153,35 +153,29 @@ impl Planner<'_> {
         let emitted = self.queries().emitted_value_layout(value, context);
         let direct = CoercionPlan::change(&self.queries(), &emitted, target_payload);
         if matches!(value, Expression::Lambda { .. }) && direct.is_identity() {
-            return Some(self.plan_composite_value(value, context));
+            return Some(self.plan_into_slot(value, context, SlotTarget::Recorded));
         }
         self.queries().go_slot_declaration_layout(value, context)?;
-        Some(
-            self.plan_composite_value(value, context)
-                .map_expression(|setup, value| {
-                    let (layout_change_setup, value) = direct.lower(self, value);
-                    setup.extend(layout_change_setup);
-                    value
-                }),
-        )
+        Some(self.plan_into_slot(
+            value,
+            context,
+            SlotTarget::Go {
+                target: target_payload,
+            },
+        ))
     }
 
     pub(in crate::lowering) fn plan_nullable_payload(
         &mut self,
         payload: &Expression,
         payload_ty: &Type,
-        conversion: CoercionPlan,
+        target: SlotTarget<'_>,
     ) -> ValuePlan {
         let origin = self
             .facts
             .function_type_origin(payload_ty, SlotOrigin::Lisette);
         let context = ExpressionContext::value().with_function_slot_origin(origin);
-        self.plan_composite_value(payload, context)
-            .map_expression(|setup, value| {
-                let (slot_setup, value) = conversion.lower(self, value);
-                setup.extend(slot_setup);
-                value
-            })
+        self.plan_into_slot(payload, context, target)
     }
 
     pub(in crate::lowering) fn plan_option_payload_wrap(

@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface Get<T> {
+    fn get() -> Option<T>
+  }
+  
+  pub struct X { pub v: int }
+  
+  pub struct S { pub n: int }
+  
+  impl S {
+    fn get(self) -> Option<Ref<X>> { Some(&X { v: self.n }) }
+  }
+  
+  fn main() {
+    let m: mut Map<Get<Ref<X>>, int> = Map.new()
+    m[S { n: 3 }] += 2
+    fmt.Println(m.length())
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Get[T any] interface {
+	get() (T, bool)
+}
+
+type X struct {
+	V int
+}
+
+type S struct {
+	N int
+}
+
+func (s S) get() *X {
+	return &X{V: s.N}
+}
+
+func main() {
+	m := make(map[Get[*X]]int)
+	m[_lisAdapter_S_Get_0{inner: S{N: 3}}] += 2
+	fmt.Println(len(m))
+}
+
+type _lisAdapter_S_Get_0 struct {
+	inner S
+}
+
+func (a _lisAdapter_S_Get_0) get() (*X, bool) {
+	raw := a.inner.get()
+	option := lisette.OptionFromNilable[*X](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
+	}
+	return nil, false
+}

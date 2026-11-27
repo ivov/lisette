@@ -1910,3 +1910,122 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn map_index_read_converts_key_into_adapted_interface() {
+    let input = r#"
+import "go:fmt"
+
+interface Get<T> {
+  fn get() -> Option<T>
+}
+
+pub struct X { pub v: int }
+
+pub struct S { pub n: int }
+
+impl S {
+  fn get(self) -> Option<Ref<X>> { Some(&X { v: self.n }) }
+}
+
+fn main() {
+  let m: Map<Get<Ref<X>>, string> = Map.new()
+  fmt.Println(m[S { n: 3 }])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_index_write_converts_key_into_adapted_interface() {
+    let input = r#"
+import "go:fmt"
+
+interface Get<T> {
+  fn get() -> Option<T>
+}
+
+pub struct X { pub v: int }
+
+pub struct S { pub n: int }
+
+impl S {
+  fn get(self) -> Option<Ref<X>> { Some(&X { v: self.n }) }
+}
+
+fn main() {
+  let m: mut Map<Get<Ref<X>>, string> = Map.new()
+  m[S { n: 3 }] = "a"
+  fmt.Println(m.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_index_compound_write_converts_key_into_adapted_interface() {
+    let input = r#"
+import "go:fmt"
+
+interface Get<T> {
+  fn get() -> Option<T>
+}
+
+pub struct X { pub v: int }
+
+pub struct S { pub n: int }
+
+impl S {
+  fn get(self) -> Option<Ref<X>> { Some(&X { v: self.n }) }
+}
+
+fn main() {
+  let m: mut Map<Get<Ref<X>>, int> = Map.new()
+  m[S { n: 3 }] += 2
+  fmt.Println(m.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn select_send_converts_value_into_adapted_interface() {
+    let input = r#"
+import "go:fmt"
+
+interface Get<T> {
+  fn get() -> Option<T>
+}
+
+pub struct X { pub v: int }
+
+pub struct S { pub n: int }
+
+impl S {
+  fn get(self) -> Option<Ref<X>> { Some(&X { v: self.n }) }
+}
+
+fn main() {
+  let c = Channel.buffered<Get<Ref<X>>>(1)
+  select {
+    c.send(S { n: 3 }) => fmt.Println("sent"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_destructuring_adapts_element_once() {
+    let input = r#"
+interface I<T> { fn get() -> T }
+struct S {}
+impl S { fn get(self) -> Option<int> { None } }
+fn main() {
+  let (i, n): (I<Option<int>>, int) = (S {}, 1)
+  let _ = i.get()
+  let _ = n
+}
+"#;
+    assert_emit_snapshot!(input);
+}

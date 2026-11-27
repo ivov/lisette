@@ -3,6 +3,7 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::BindingValue;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::access::place::Place;
 use crate::lowering::expressions::operand_order::LaterOperands;
@@ -102,7 +103,6 @@ impl Planner<'_> {
         let literal_slot = go_field_slot
             .as_ref()
             .and_then(|layout| self.try_plan_option_literal_into_layout(value, layout));
-        let is_literal_slot = literal_slot.is_some();
         let origin = if go_field_slot.is_some() {
             SlotOrigin::Lisette
         } else {
@@ -112,29 +112,20 @@ impl Planner<'_> {
         let value_context = ExpressionContext::value()
             .with_function_slot_origin(origin)
             .with_assigned_place(target);
-        let right_hand_side =
-            literal_slot.unwrap_or_else(|| self.plan_composite_value(value, value_context));
+        let target_ty = target.get_type();
+        let (right_hand_side, conversion) = match literal_slot {
+            Some(literal) => (literal, SlotConversion::identity()),
+            None => {
+                let slot = SlotTarget::go_or_layout(go_field_slot.as_ref(), &target_ty);
+                self.plan_into_slot_deferred(value, value_context, slot)
+            }
+        };
         let (target_capture, target_place) =
             self.capture_assignment_target(target, PlaceOrdering::before(&right_hand_side));
         let (value_setup, value_go) = right_hand_side.into_parts();
         let mut setup = target_capture;
         setup.extend(value_setup);
-        let value = if is_literal_slot {
-            value_go
-        } else {
-            let go_slot = go_field_slot.as_ref().map(|target| {
-                (
-                    self.queries().emitted_value_layout(value, value_context),
-                    target,
-                )
-            });
-            self.coerce_into_slot(
-                &mut setup,
-                (value, value_go),
-                &target.get_type(),
-                go_slot.as_ref().map(|(source, target)| (source, *target)),
-            )
-        };
+        let value = conversion.apply(self, &mut setup, value_go);
 
         with_setup(
             setup,

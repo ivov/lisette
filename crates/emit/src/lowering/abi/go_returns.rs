@@ -10,9 +10,9 @@ use crate::Planner;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::abi::go_result_wrapping::WrapperTarget;
 use crate::lowering::abi::layout_change::OptionSlot;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::calls::go_interop::LoweredProducer;
 use crate::lowering::control_flow::propagation::plain_return;
-use crate::lowering::expressions::values::ElementTarget;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{
@@ -332,7 +332,8 @@ impl Planner<'_> {
                 panic!("internal error: a tuple literal has the adaptation {other:?}")
             }
         };
-        let operands: Vec<ValuePlan> = elements
+        let placement = self.tuple_element_placement(literal, &slot_tys);
+        let (operands, conversions): (Vec<ValuePlan>, Vec<SlotConversion>) = elements
             .iter()
             .enumerate()
             .map(|(i, e)| match slot_tys.get(i) {
@@ -342,29 +343,25 @@ impl Planner<'_> {
                         Some(ValueLayout::NullableOption { .. })
                     ) =>
                 {
-                    self.plan_nullable_slot_value(e, &element_adaptation(i), slot_ty)
+                    let value = self.plan_nullable_slot_value(e, &element_adaptation(i), slot_ty);
+                    (value, SlotConversion::identity())
                 }
                 slot => {
                     let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
                         self.facts.function_type_origin(ty, SlotOrigin::Lisette)
                     });
-                    self.plan_composite_value(
+                    self.plan_into_slot_deferred(
                         e,
                         ExpressionContext::value().with_function_slot_origin(origin),
+                        placement.target(i, slot),
                     )
                 }
             })
-            .collect();
+            .unzip();
 
         let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "ret");
         let mut statements = sequenced.setup;
-        let parts = self.coerce_elements_to_slots(
-            &mut statements,
-            literal,
-            sequenced.values,
-            &slot_tys,
-            ElementTarget::LoweredReturn,
-        );
+        let parts = self.apply_conversions(&mut statements, sequenced.values, conversions);
 
         (statements, parts)
     }
@@ -426,14 +423,18 @@ impl Planner<'_> {
                 &abi,
             );
 
-            let coercion = self.value_layout_change(expression, &source, &target);
-            if coercion.changes_layout() {
-                self.record_converted_value(expression);
+            let conversion = self.slot_conversion(
+                expression,
+                ExpressionContext::value(),
+                SlotTarget::GoLayout {
+                    source: &source,
+                    target: &target,
+                },
+            );
+            if !conversion.is_identity() {
                 let (mut statements, value) = self
-                    .plan_value(expression, ExpressionContext::value())
+                    .plan_converted(expression, ExpressionContext::value(), conversion)
                     .into_parts();
-                let (setup, value) = coercion.lower(self, value);
-                statements.extend(setup);
                 if let Some(shape) = &shape {
                     statements.extend(self.lower_result_return(value, "v", &return_ty, shape));
                 } else {
@@ -485,18 +486,21 @@ impl Planner<'_> {
             return statements;
         }
 
-        let mut plan = self.plan_value(expression, ExpressionContext::value());
-        if matches!(
+        let target = if matches!(
             self.facts.checked(expression).value_use().adaptation,
-            Adaptation::Newtype
+            Adaptation::Tuple(_)
         ) {
-            plan = self.convert_to_recorded_slot(expression, plan);
-        }
-        let (mut statements, value) = plan.into_parts();
+            SlotTarget::Unconverted
+        } else {
+            SlotTarget::Recorded
+        };
+        let (mut statements, value) = self
+            .plan_into_slot(expression, ExpressionContext::value(), target)
+            .into_parts();
         let tuple = GoExpression::identifier(self.hoist_temp(&mut statements, "tup", value));
         let source_ty = expression.get_type();
         let adaptations = self.applied_element_adaptations(expression);
-        let adapted = (!adaptations.is_empty()).then_some((&source_ty, adaptations.as_slice()));
+        let adapted = (!adaptations.is_empty()).then_some((&source_ty, adaptations));
         let (projection, fields) = self.lowered_tuple_values(&tuple, &return_ty, adapted);
         statements.extend(projection);
         statements.push(multi_value_return(fields));
@@ -570,9 +574,12 @@ impl Planner<'_> {
         use Expression;
         if let Adaptation::ImplicitSome { payload } = adaptation {
             let payload_ty = self.facts.ok_payload(slot_ty);
-            let conversion =
-                self.adapted_slot_coercion(expression, payload, &payload_ty, &payload_ty);
-            return self.plan_nullable_payload(expression, &payload_ty, conversion);
+            let target = SlotTarget::Element {
+                adaptation: payload,
+                semantic: &payload_ty,
+                slot: &payload_ty,
+            };
+            return self.plan_nullable_payload(expression, &payload_ty, target);
         }
         if let Expression::Call {
             expression: callee,
@@ -583,15 +590,15 @@ impl Planner<'_> {
         {
             debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
             let payload_ty = self.facts.ok_payload(slot_ty);
-            let conversion = self.value_slot_coercion(&args[0], &payload_ty);
             return self
-                .plan_nullable_payload(&args[0], &payload_ty, conversion)
+                .plan_nullable_payload(&args[0], &payload_ty, SlotTarget::Layout(&payload_ty))
                 .with_constructor_stability();
         }
         if prelude_constructor(expression) == Some(PreludeVariant::None) {
             return ValuePlan::nil();
         }
-        let value = self.plan_value(expression, ExpressionContext::value());
+        let value =
+            self.plan_into_slot(expression, ExpressionContext::value(), SlotTarget::Recorded);
         let inner = self.queries().go_type(&slot_ty.ok_type());
         value.map_expression(|setup, value| {
             self.plan_option_payload_wrap(

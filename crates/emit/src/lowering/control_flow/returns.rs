@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::fallible_producer::OptionFusePlan;
 use crate::lowering::abi::go_returns;
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::call_plan::CallPlan;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::StatementSlot;
@@ -10,6 +11,7 @@ use crate::lowering::calls::wrap_err::WrapChain;
 use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::control_flow::propagation::plain_return;
 use crate::lowering::expressions::tuple_literal::TupleLiteral;
+use crate::lowering::expressions::values::TuplePosition;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::blocks::{BlockTail, TailKind, TailTarget};
 use crate::lowering::statements::placement::ElidableTail;
@@ -88,26 +90,30 @@ impl Planner<'_> {
             );
         }
 
-        let coercion = self.value_slot_coercion(expression, &written_ty);
-        if coercion.is_identity()
+        let conversion = self.slot_conversion(
+            expression,
+            ExpressionContext::value(),
+            SlotTarget::Layout(&written_ty),
+        );
+        if conversion.is_identity()
             && let Some(site) = CallSite::of(expression)
         {
+            conversion.apply_identity(self);
             return Some(self.lower_wrapped_call_return(site, &fallible, &written_ty));
         }
 
         let (mut statements, value) = if let Expression::Propagate {
             expression: inner, ..
         } = expression
-            && coercion.is_identity()
+            && conversion.is_identity()
         {
+            conversion.apply_identity(self);
             self.plan_propagate(inner)
         } else {
-            self.plan_value(expression, ExpressionContext::value())
+            self.plan_converted(expression, ExpressionContext::value(), conversion)
                 .into_parts()
         };
 
-        let (coercion_setup, value) = coercion.lower(self, value);
-        statements.extend(coercion_setup);
         statements.extend(self.wrapped_value_return(value, &written_ty));
         Some(statements)
     }
@@ -157,7 +163,11 @@ impl Planner<'_> {
             Some(LoweredReturnAbi::BareError) => {
                 if !args.is_empty() {
                     let (setup, _) = self
-                        .plan_composite_value(&args[0], ExpressionContext::value())
+                        .plan_into_slot(
+                            &args[0],
+                            ExpressionContext::value(),
+                            SlotTarget::Unconverted,
+                        )
                         .into_parts();
                     statements.extend(setup);
                 }
@@ -180,15 +190,13 @@ impl Planner<'_> {
             }
             _ => {
                 let (setup, value) = self
-                    .plan_composite_value(&args[0], ExpressionContext::value())
+                    .plan_into_slot(
+                        &args[0],
+                        ExpressionContext::value(),
+                        SlotTarget::Layout(fallible.ok_ty()),
+                    )
                     .into_parts();
                 statements.extend(setup);
-                let value = self.apply_type_coercion(
-                    &mut statements,
-                    Some(fallible.ok_ty()),
-                    &args[0],
-                    value,
-                );
 
                 statements.extend(self.success_return(fallible, value));
             }
@@ -204,10 +212,14 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let error = fallible.err_ty().zip(args.first()).map(|(err_ty, arg)| {
-            let error = self.plan_composite_value(arg, ExpressionContext::value());
+            let to = self.queries().contextual_err_ty(err_ty);
+            let (error, conversion) = self.plan_into_slot_deferred(
+                arg,
+                ExpressionContext::value(),
+                SlotTarget::Layout(&to),
+            );
             self.wrap_planned_error(&mut statements, wraps, error, |this, statements, error| {
-                let to = this.queries().contextual_err_ty(err_ty);
-                this.apply_type_coercion(statements, Some(&to), arg, error)
+                conversion.apply(this, statements, error)
             })
         });
 
@@ -445,13 +457,23 @@ impl Planner<'_> {
     }
 
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
-        let (mut statements, expression) = self.plan_tail_value(last);
-        let expression = if self.queries().tail_tuple_return_slots(last).is_some() {
-            expression
-        } else {
-            let return_ctx = self.scope.current_return_ctx();
-            self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression)
+        let return_ctx = self.scope.current_return_ctx();
+        let whole = return_ctx
+            .ty()
+            .filter(|_| self.queries().tail_tuple_return_slots(last).is_none());
+        let plan = match TupleLiteral::of(last) {
+            Some(literal) => {
+                let target = whole.map_or(SlotTarget::Unconverted, SlotTarget::Layout);
+                let conversion = self.slot_conversion(last, ExpressionContext::value(), target);
+                self.plan_tuple_value(literal, TuplePosition::Tail)
+                    .map_expression(|setup, value| conversion.apply(self, setup, value))
+            }
+            None => {
+                let target = whole.map_or(SlotTarget::Recorded, SlotTarget::Layout);
+                self.plan_into_slot(last, ExpressionContext::value(), target)
+            }
         };
+        let (mut statements, expression) = plan.into_parts();
         statements.push(plain_return(expression));
         statements
     }

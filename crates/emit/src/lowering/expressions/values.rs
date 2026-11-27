@@ -1,5 +1,4 @@
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::is_closure_literal;
 use crate::lowering::abi::return_abi;
@@ -14,7 +13,6 @@ use crate::lowering::statements::asserts::test_log_call;
 use crate::output::finish::function_literals::immediate_call;
 use crate::target::ir::bodies::AsyncKind;
 use crate::target::names::go_name;
-use syntax::program::Adaptation;
 use syntax::program::NativeOperation;
 
 use crate::Planner;
@@ -23,6 +21,7 @@ use crate::lookup::state::bindings::BindingValue;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::layout_change::GoResultLayoutChange;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin, FunctionLayoutChange};
 use crate::lowering::planner::written_span;
 use crate::lowering::statements::assignments::PlaceOrdering;
@@ -46,14 +45,93 @@ pub(in crate::lowering) enum TuplePosition {
     Tail,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::lowering) enum ElementTarget {
-    Value,
-    LoweredReturn,
-}
-
 impl Planner<'_> {
     pub(in crate::lowering) fn plan_value(
+        &mut self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        let conversion = self.slot_conversion(expression, context, SlotTarget::Recorded);
+        self.plan_unconverted_value(expression, context)
+            .map_expression(|setup, value| conversion.apply(self, setup, value))
+    }
+
+    pub(in crate::lowering) fn plan_composite_value(
+        &mut self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        match self.try_plan_unit_value(expression, context) {
+            Some(unit) => unit,
+            None => self.plan_value(expression, context),
+        }
+    }
+
+    pub(in crate::lowering) fn plan_into_slot(
+        &mut self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+        target: SlotTarget<'_>,
+    ) -> ValuePlan {
+        let conversion = self.slot_conversion(expression, context, target);
+        self.plan_converted(expression, context, conversion)
+    }
+
+    pub(in crate::lowering) fn plan_into_slot_deferred(
+        &mut self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+        target: SlotTarget<'_>,
+    ) -> (ValuePlan, SlotConversion) {
+        let conversion = self.slot_conversion(expression, context, target);
+        let plan = self.plan_unconverted_composite_value(expression, context);
+        (plan, conversion)
+    }
+
+    pub(in crate::lowering) fn plan_converted(
+        &mut self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+        conversion: SlotConversion,
+    ) -> ValuePlan {
+        self.plan_unconverted_composite_value(expression, context)
+            .map_expression(|setup, value| conversion.apply(self, setup, value))
+    }
+
+    fn plan_unconverted_composite_value(
+        &mut self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        match self.try_plan_unit_value(expression, context) {
+            Some(unit) => unit,
+            None => self.plan_unconverted_value(expression, context),
+        }
+    }
+
+    fn try_plan_unit_value(
+        &mut self,
+        expression: &Expression,
+        context: ExpressionContext<'_>,
+    ) -> Option<ValuePlan> {
+        if !self.queries().is_unit_call(expression)
+            && !(self.facts.resolves_to_unit(&expression.get_type())
+                && matches!(expression, Expression::Block { .. }))
+        {
+            return None;
+        }
+        let unit = self
+            .plan_unconverted_value(expression, context)
+            .settle_observable_value(|setup, call| {
+                if let Some(call) = call {
+                    setup.push(effect_statement(call));
+                }
+                self.unit_value(Some(expression), context.expected_slot_type())
+            });
+        Some(unit)
+    }
+
+    fn plan_unconverted_value(
         &mut self,
         expression: &Expression,
         context: ExpressionContext<'_>,
@@ -75,27 +153,6 @@ impl Planner<'_> {
                 });
         }
         self.plan_operand(expression, context)
-    }
-
-    pub(in crate::lowering) fn plan_composite_value(
-        &mut self,
-        expression: &Expression,
-        context: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        if self.queries().is_unit_call(expression)
-            || (self.facts.resolves_to_unit(&expression.get_type())
-                && matches!(expression, Expression::Block { .. }))
-        {
-            return self
-                .plan_value(expression, context)
-                .settle_observable_value(|setup, call| {
-                    if let Some(call) = call {
-                        setup.push(effect_statement(call));
-                    }
-                    self.unit_value(Some(expression), context.expected_slot_type())
-                });
-        }
-        self.plan_value(expression, context)
     }
 
     pub(in crate::lowering) fn plan_call_value(
@@ -237,92 +294,6 @@ impl Planner<'_> {
         ValuePlan::from_identifier_expression(go_expression, stability)
     }
 
-    pub(in crate::lowering) fn coerce_elements_to_slots(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        literal: TupleLiteral<'_>,
-        values: Vec<GoExpression>,
-        slot_types: &[Type],
-        target: ElementTarget,
-    ) -> Vec<GoExpression> {
-        let TupleLiteral {
-            expression: tuple,
-            elements,
-            ty,
-        } = literal;
-        let tuple_use = self.facts.checked(tuple).value_use();
-        let placed = match &tuple_use.adaptation {
-            Adaptation::Tuple(adaptations)
-                if !self
-                    .facts
-                    .same_types(&self.facts.tuple_or_type_arguments(ty), slot_types) =>
-            {
-                Some((
-                    adaptations,
-                    self.facts.tuple_or_type_arguments(&tuple_use.slot),
-                ))
-            }
-            Adaptation::Identity
-            | Adaptation::Delegated { .. }
-            | Adaptation::Interface(_)
-            | Adaptation::ImplicitSome { .. }
-            | Adaptation::Newtype
-            | Adaptation::Tuple(_)
-            | Adaptation::Array(_)
-            | Adaptation::DivergingFunction
-            | Adaptation::Receiver(_) => None,
-        };
-
-        if placed.is_some() {
-            self.record_converted_value(tuple);
-        }
-        let slot_layouts = match target {
-            ElementTarget::LoweredReturn => self
-                .facts
-                .lowered_tuple_slot_layouts(&Type::Tuple(slot_types.to_vec())),
-            ElementTarget::Value => Vec::new(),
-        };
-
-        let mut coerced_elements = Vec::with_capacity(values.len());
-        for (index, (element, value)) in elements.iter().zip(values).enumerate() {
-            let Some(slot) = slot_types.get(index).filter(|_| {
-                !matches!(
-                    slot_layouts.get(index),
-                    Some(ValueLayout::NullableOption { .. })
-                )
-            }) else {
-                coerced_elements.push(value);
-                continue;
-            };
-
-            let placement = placed
-                .as_ref()
-                .and_then(|(adaptations, slots)| adaptations.get(index).zip(slots.get(index)));
-            coerced_elements
-                .push(self.coerce_tuple_element(setup, element, value, slot, placement));
-        }
-        coerced_elements
-    }
-
-    fn coerce_tuple_element(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        element: &Expression,
-        value: GoExpression,
-        slot: &Type,
-        placement: Option<(&Adaptation, &Type)>,
-    ) -> GoExpression {
-        let coercion = match placement {
-            Some((adaptation, semantic)) => {
-                self.adapted_slot_coercion(element, adaptation, semantic, slot)
-            }
-            None => self.value_slot_coercion(element, slot),
-        };
-        let (coercion_setup, coerced) = coercion.lower(self, value);
-        setup.extend(coercion_setup);
-        coerced
-    }
-
     pub(in crate::lowering) fn plan_tuple_value(
         &mut self,
         literal: TupleLiteral<'_>,
@@ -342,7 +313,8 @@ impl Planner<'_> {
         };
         let slot_types = tail_slots.unwrap_or_else(|| inferred_slot_types.clone());
 
-        let operands: Vec<ValuePlan> = elements
+        let placement = self.tuple_element_placement(literal, &slot_types);
+        let (operands, conversions): (Vec<ValuePlan>, Vec<SlotConversion>) = elements
             .iter()
             .enumerate()
             .map(|(i, e)| {
@@ -353,20 +325,13 @@ impl Planner<'_> {
                 let element_ctx = ExpressionContext::value()
                     .with_expected_slot_type(slot)
                     .with_function_slot_origin(origin);
-                self.plan_composite_value(e, element_ctx)
+                self.plan_into_slot_deferred(e, element_ctx, placement.target(i, slot))
             })
-            .collect();
+            .unzip();
 
         let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "v");
         let mut setup = sequenced.setup;
-
-        let element_expressions = self.coerce_elements_to_slots(
-            &mut setup,
-            literal,
-            sequenced.values,
-            &slot_types,
-            ElementTarget::Value,
-        );
+        let element_expressions = self.apply_conversions(&mut setup, sequenced.values, conversions);
 
         let callee = self
             .queries()

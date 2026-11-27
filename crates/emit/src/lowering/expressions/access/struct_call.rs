@@ -11,6 +11,7 @@ use syntax::types::{Symbol, Type, unqualified_name};
 use crate::Planner;
 use crate::lookup::facts::queries::is_order_sensitive;
 use crate::lookup::facts::value_layout::ValueLayout;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
 use crate::target::ir::bodies::{Statement, assign, discard};
@@ -53,11 +54,6 @@ struct KeptField<'f> {
     assignment: &'f StructFieldAssignment,
     field_ty: Type,
     layout: Option<ValueLayout>,
-}
-
-enum FieldSlot {
-    Literal,
-    Coerced(ValueLayout),
 }
 
 struct StructCallField {
@@ -133,7 +129,7 @@ impl Planner<'_> {
         ctx: &StructCallContext<'_>,
     ) -> PlannedStructFields {
         let kept_fields = self.kept_struct_fields(field_assignments, spread, ty, ctx);
-        let (operands, slots): (Vec<ValuePlan>, Vec<FieldSlot>) = kept_fields
+        let (operands, conversions): (Vec<ValuePlan>, Vec<SlotConversion>) = kept_fields
             .iter()
             .map(|kept| self.plan_struct_field_operand(kept, ctx))
             .unzip();
@@ -155,10 +151,11 @@ impl Planner<'_> {
             });
         }
         let mut positions = Vec::new();
-        for ((kept, has_observable_evaluation), (value, slot)) in kept_fields
+        for (((kept, has_observable_evaluation), value), conversion) in kept_fields
             .into_iter()
             .zip(field_evaluations)
-            .zip(sequenced.values.into_iter().zip(slots))
+            .zip(sequenced.values)
+            .zip(conversions)
         {
             let field_name = self
                 .queries()
@@ -166,7 +163,8 @@ impl Planner<'_> {
             if let Some(position) = self.facts.source_position(&kept.assignment.name_span) {
                 positions.push((field_name.clone(), position));
             }
-            let value = self.coerce_struct_field(&mut setup, kept, value, slot, ctx);
+            let value = conversion.apply(self, &mut setup, value);
+            let value = self.wrap_recursive_enum_field(&mut setup, value, kept.assignment, ctx);
             fields.push(StructCallField {
                 name: field_name,
                 value,
@@ -229,42 +227,18 @@ impl Planner<'_> {
         &mut self,
         kept: &KeptField<'_>,
         ctx: &StructCallContext<'_>,
-    ) -> (ValuePlan, FieldSlot) {
+    ) -> (ValuePlan, SlotConversion) {
         let value = &kept.assignment.value;
         if let Some(layout) = &kept.layout
             && let Some(literal) = self.try_plan_option_literal_into_layout(value, layout)
         {
-            return (literal, FieldSlot::Literal);
+            return (literal, SlotConversion::identity());
         }
         let declared = &ctx.checked.literal_field(&kept.assignment.name).declared_ty;
         let field_ctx = ExpressionContext::value()
             .with_generic_result_slot(Some(declared), Some(&kept.field_ty));
-        let source_layout = self.queries().emitted_value_layout(value, field_ctx);
-        (
-            self.plan_composite_value(value, field_ctx),
-            FieldSlot::Coerced(source_layout),
-        )
-    }
-
-    fn coerce_struct_field(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        kept: KeptField<'_>,
-        value: GoExpression,
-        slot: FieldSlot,
-        ctx: &StructCallContext<'_>,
-    ) -> GoExpression {
-        let value = self.wrap_recursive_enum_field(setup, value, kept.assignment, ctx);
-        let layouts = match (&slot, &kept.layout) {
-            (FieldSlot::Coerced(source), Some(target)) => Some((source, target)),
-            _ => None,
-        };
-        self.coerce_into_slot(
-            setup,
-            (&kept.assignment.value, value),
-            &kept.field_ty,
-            layouts,
-        )
+        let target = SlotTarget::go_or_layout(kept.layout.as_ref(), &kept.field_ty);
+        self.plan_into_slot_deferred(value, field_ctx, target)
     }
 
     fn plan_struct_spread(
