@@ -5,6 +5,7 @@ use diagnostics::{LisetteDiagnostic, emit as emit_diagnostic};
 use syntax::ast::{ImportAlias, Span};
 use syntax::program::{File, FileImport, ImportKey, strip_go_prefix};
 
+use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::package_names::PackageNames;
 use crate::target::names::packages::PackageRequirements;
 
@@ -25,11 +26,8 @@ struct PlannedImport {
 }
 
 impl ImportPlan {
-    pub(crate) fn build(
-        file: &File,
-        go_module: &str,
-        go_package_names: &FxHashMap<String, String>,
-    ) -> Self {
+    pub(crate) fn build(file: &File, facts: &EmitFacts<'_>) -> Self {
+        let go_package_names = facts.go_package_names();
         let mut imports = Vec::new();
 
         for import in file.imports() {
@@ -40,7 +38,7 @@ impl ImportPlan {
                 import.effective_alias(go_package_names)
             };
             let qualifier = source_import_qualifier(&import, go_package_names);
-            let path = go_name::package_go_path(go_module, &import.name);
+            let path = facts.go_import_path(&import.name);
             let package = import.name.to_string();
             let span = match &import.alias {
                 Some(ImportAlias::Named(_, span)) => *span,
@@ -57,7 +55,7 @@ impl ImportPlan {
         }
 
         Self {
-            go_module: go_module.to_string(),
+            go_module: facts.go_module().to_string(),
             imports,
         }
     }

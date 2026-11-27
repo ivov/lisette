@@ -57,6 +57,7 @@ pub(in crate::lowering) struct AdapterPlan {
 pub(in crate::lowering) struct AdapterMethod {
     go_name: String,
     source_name: EcoString,
+    source_owner: Option<Symbol>,
     source_go_name: String,
     alternate: Option<FunctionLayout>,
     source: FunctionLayout,
@@ -121,6 +122,7 @@ impl Planner<'_> {
         let twin = AdapterMethod {
             go_name: go_name::tagged_counterpart(go_name),
             source_name: method.name.clone(),
+            source_owner: None,
             source_go_name: go_name.to_string(),
             alternate: None,
             source,
@@ -598,11 +600,10 @@ fn adapter_method_line(
     plan: &AdapterPlan,
     method: &AdapterMethod,
 ) -> Option<Position> {
-    let source = match &plan.concrete {
-        AdapterConcrete::Nominal(id) => Some(facts.known_method(id, &method.source_name)),
-        AdapterConcrete::Parameter(_) => None,
-    };
-    source
+    method
+        .source_owner
+        .as_ref()
+        .map(|owner| facts.known_method(owner, &method.source_name))
         .and_then(|source| source.name_span.as_ref())
         .and_then(|span| facts.source_position(span))
         .or_else(|| {
@@ -803,6 +804,7 @@ impl PlannerQueries<'_, '_> {
                 source_go_name: requirement_go_name(self.facts, &selected),
                 go_name: requirement_go_name(self.facts, &requirement),
                 source_name: selected.name,
+                source_owner: None,
                 source: local,
                 alternate: Some(foreign),
                 target,
@@ -965,6 +967,7 @@ impl PlannerQueries<'_, '_> {
         Some(AdapterMethod {
             go_name: requirement_go_name(self.facts, requirement),
             source_name: implementation_name.clone(),
+            source_owner: Some(checked.selected_owner.clone()),
             source_go_name: adapter_source_go_name(
                 self.facts,
                 requirement,

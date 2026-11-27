@@ -29,7 +29,7 @@ pub(in crate::lowering) fn build_package_plan<'f>(
         .iter()
         .map(|file| FilePlan {
             file,
-            imports: ImportPlan::build(file, facts.go_module(), facts.go_package_names()),
+            imports: ImportPlan::build(file, facts),
         })
         .collect();
 
