@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lowering::abi::callable::CallableAbi;
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::call_plan::{CallableOrigin, FunctionLayoutChange};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -257,19 +258,15 @@ impl Planner<'_> {
         param_ty: Option<&Type>,
     ) -> ValuePlan {
         let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
-        let operand = self.plan_composite_value(expression, arg_ctx);
-
         if suppress
             && let Some(adapter) = self
                 .queries()
                 .detect_lower_arg_to_tagged(expression, param_ty)
         {
-            return operand.map_expression(|setup, value| {
-                self.plan_function_layout_change(setup, value, &adapter.source, &adapter.target)
-            });
+            return self.plan_into_slot(expression, arg_ctx, SlotTarget::TaggedCallback(&adapter));
         }
 
-        self.convert_to_recorded_slot(expression, operand)
+        self.plan_into_slot(expression, arg_ctx, SlotTarget::Recorded)
     }
 
     pub(in crate::lowering) fn plan_native_method_args_from(

@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:example.com/callback"
+  fn make() -> Result<int, error> { Ok(7) }
+  fn main() {
+    let f: fn() -> Result<int, error> = make
+    let b = callback.Box { F: Some(f) }
+    let _ = b
+  }
+---
+package main
+
+import (
+	"example.com/callback"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func make_() (int, error) {
+	return 7, nil
+}
+
+func main() {
+	f := func() lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](make_())
+	}
+	cb := f
+	var adapted func() (int, error)
+	if cb != nil {
+		adapted = func() (int, error) {
+			res := cb()
+			if res.Tag == lisette.ResultOk {
+				return res.OkVal, nil
+			}
+			return 0, res.ErrVal
+		}
+	}
+	b := callback.Box{F: callback.Callback(adapted)}
+	_ = b
+}

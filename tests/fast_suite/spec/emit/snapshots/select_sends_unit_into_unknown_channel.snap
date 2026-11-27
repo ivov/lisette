@@ -1,0 +1,19 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  fn main() {
+    let c = Channel.buffered<Unknown>(1)
+    select {
+      c.send(()) => {},
+    }
+  }
+---
+package main
+
+func main() {
+	c := make(chan any, 1)
+	select {
+	case c <- struct{}{}:
+	}
+}

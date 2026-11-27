@@ -1,0 +1,33 @@
+---
+source: tests/fast_suite/spec/emit/functions.rs
+description: |
+  
+  import "go:crypto/tls"
+  fn die() -> Never { panic("x") }
+  fn main() {
+    let c = tls.Config { Time: Some(die), .. }
+    let _ = c.Time
+  }
+---
+package main
+
+import (
+	"crypto/tls"
+	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func die() {
+	panic("x")
+}
+
+func main() {
+	c := tls.Config{Time: func() time.Time {
+		die()
+		panic("unreachable")
+	}}
+	raw := c.Time
+	option := lisette.OptionFromNilable[func() time.Time](raw, raw == nil)
+	_ = option
+}

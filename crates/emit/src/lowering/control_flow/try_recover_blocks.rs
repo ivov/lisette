@@ -2,6 +2,7 @@ use super::propagation::plain_return;
 use crate::Planner;
 use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::bound_value::{BoundValue, SlotPlacement};
 use crate::lowering::calls::comma_ok::{CommaOkValueSlot, PlainPair, PlainPairKind, StatementSlot};
 use crate::lowering::statements::blocks::{BlockTail, TailTarget};
@@ -180,14 +181,12 @@ impl Planner<'_> {
         fallible: &Fallible,
     ) -> Vec<Statement> {
         let (mut statements, final_expression) = self
-            .plan_value(last, ExpressionContext::value())
+            .plan_into_slot(
+                last,
+                ExpressionContext::value(),
+                SlotTarget::Layout(fallible.ok_ty()),
+            )
             .into_parts();
-        let final_expression = self.apply_type_coercion(
-            &mut statements,
-            Some(fallible.ok_ty()),
-            last,
-            final_expression,
-        );
         statements.extend(self.success_return(fallible, final_expression));
         statements
     }

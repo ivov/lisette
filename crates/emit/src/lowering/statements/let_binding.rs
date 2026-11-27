@@ -5,8 +5,8 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::queries::go_name_for_binding;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lookup::state::bindings::{ComponentKind, TupleBinding};
-use crate::lowering::abi::coercion_plan::CoercionPlan;
 use crate::lowering::abi::go_result_wrapping::WrapperTarget;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::calls::call_plan::CallPlan;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::comma_ok::StatementSlot;
@@ -177,13 +177,13 @@ impl<'a> Planner<'a> {
             ..
         } = let_spec;
 
-        let (mut statements, plan_value) = self
-            .plan_value(value, ExpressionContext::value())
+        let (mut statements, value_expression) = self
+            .plan_into_slot(
+                value,
+                ExpressionContext::value(),
+                SlotTarget::Layout(binding_ty),
+            )
             .into_parts();
-        let (coercion_setup, value_expression) = self
-            .value_slot_coercion(value, binding_ty)
-            .lower(self, plan_value);
-        statements.extend(coercion_setup);
         if value_expression.as_identifier() != Some(&target) {
             statements.push(assign(
                 GoExpression::identifier(target.clone()),
@@ -348,7 +348,7 @@ impl<'a> Planner<'a> {
 
         let ids = binding_id.as_slice();
         let (mut statements, value_expression) = self
-            .plan_value(value, ExpressionContext::value())
+            .plan_into_slot(value, ExpressionContext::value(), SlotTarget::Unconverted)
             .into_parts();
         statements.push(effect_statement(value_expression));
         let unit = self.unit_value(Some(value), Some(binding_ty));
@@ -444,19 +444,18 @@ impl<'a> Planner<'a> {
         let origin = self
             .facts
             .function_type_origin(binding_ty, SlotOrigin::Lisette);
-        let plan = self.plan_value(
+        let (plan, conversion) = self.plan_into_slot_deferred(
             value,
             ExpressionContext::value().with_function_slot_origin(origin),
+            SlotTarget::Layout(binding_ty),
         );
         let constant = plan.expression().and_then(GoExpression::constant_kind);
         let (mut statements, plan_value) = plan.into_parts();
-        let coercion = self.value_slot_coercion(value, binding_ty);
-        let coercion_is_identity = coercion.is_identity();
-        let typed = self
-            .queries()
-            .declaration_needs_go_type(value, constant, &coercion, binding_ty);
-        let (coercion_setup, value_expression) = coercion.lower(self, plan_value);
-        statements.extend(coercion_setup);
+        let coercion_is_identity = conversion.is_identity();
+        let typed =
+            self.queries()
+                .declaration_needs_go_type(value, constant, &conversion, binding_ty);
+        let value_expression = conversion.apply(self, &mut statements, plan_value);
         DirectLetValue {
             statements,
             value: value_expression,
@@ -656,19 +655,38 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         None
     }
 
-    fn try_lower_converted_destructuring(&mut self) -> Option<LoweredBlock> {
-        let coercion = self
-            .planner
-            .value_slot_coercion(self.value, &self.binding.ty);
-        if coercion.is_identity() {
+    fn unconverted_propagated_value(&self) -> Option<&'a Expression> {
+        let Expression::Propagate {
+            expression: inner, ..
+        } = self.value
+        else {
+            return None;
+        };
+        let conversion = self.binding_conversion();
+        if !conversion.is_identity() {
             return None;
         }
-        let (mut statements, value) = self
+        conversion.apply_identity(self.planner);
+        Some(inner)
+    }
+
+    fn binding_conversion(&self) -> SlotConversion {
+        self.planner.slot_conversion(
+            self.value,
+            ExpressionContext::value(),
+            SlotTarget::Layout(&self.binding.ty),
+        )
+    }
+
+    fn try_lower_converted_destructuring(&mut self) -> Option<LoweredBlock> {
+        let conversion = self.binding_conversion();
+        if conversion.is_identity() {
+            return None;
+        }
+        let (mut statements, converted) = self
             .planner
-            .plan_value(self.value, ExpressionContext::value())
+            .plan_converted(self.value, ExpressionContext::value(), conversion)
             .into_parts();
-        let (coercion_setup, converted) = coercion.lower(self.planner, value);
-        statements.extend(coercion_setup);
         let subject = self
             .planner
             .stable_source(&mut statements, "subject", converted);
@@ -798,14 +816,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         {
             raw_go_name = Some(self.planner.fresh_local(&SourceName::new(identifier)));
         }
-        let statements = if let Expression::Propagate {
-            expression: inner, ..
-        } = self.value
-            && self
-                .planner
-                .value_slot_coercion(self.value, &self.binding.ty)
-                .is_identity()
-        {
+        let statements = if let Some(inner) = self.unconverted_propagated_value() {
             self.planner
                 .lower_let_propagate(let_spec, inner, raw_go_name.as_ref())
         } else {
@@ -963,10 +974,10 @@ impl<'a> PlannerQueries<'_, 'a> {
         &self,
         value: &Expression,
         constant: Option<ConstantKind>,
-        coercion: &CoercionPlan,
+        conversion: &SlotConversion,
         ty: &Type,
     ) -> bool {
-        (coercion.is_identity() && self.constant_needs_go_type(constant, ty).is_some())
+        (conversion.is_identity() && self.constant_needs_go_type(constant, ty).is_some())
             || needs_explicit_type_declaration(self.facts, value, ty)
     }
 

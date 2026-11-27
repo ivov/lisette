@@ -3,12 +3,11 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::inline_uses::region_blocks_inline;
 use crate::lookup::facts::queries::is_scalar_literal;
 use crate::lookup::state::enclosing::LoopSlot;
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::calls::native_methods::{SliceGrowth, is_clip_safe_path, slice_growth_call};
 use crate::lowering::control_flow::branches::Branching;
 use crate::lowering::expressions::operand_order::{LaterOperands, SpreadSequenceOptions};
-use crate::lowering::expressions::tuple_literal::TupleLiteral;
-use crate::lowering::expressions::values::TuplePosition;
 use crate::lowering::patterns::binding_declarations::pattern_binds_name;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::assignments::PlaceOrdering;
@@ -554,11 +553,11 @@ impl<'p> Planner<'p> {
         target_ty: &Type,
         expression: &Expression,
     ) -> Vec<Statement> {
-        let value = self
-            .plan_operand(expression, ExpressionContext::value())
-            .map_expression(|setup, value| {
-                self.apply_type_coercion(setup, Some(target_ty), expression, value)
-            });
+        let value = self.plan_into_slot(
+            expression,
+            ExpressionContext::value(),
+            SlotTarget::Layout(target_ty),
+        );
         vec![simple_assign(target, value).into()]
     }
 
@@ -616,10 +615,13 @@ impl<'p> Planner<'p> {
                 .fallible_call(fallible, constructor_name, Vec::new());
             return ValuePlan::computed(Vec::new(), call);
         };
-        let argument = self.plan_composite_value(constructor_arg, ExpressionContext::value());
-        let (mut arg_setup, argument) = argument.into_parts();
-        let argument =
-            self.apply_type_coercion(&mut arg_setup, Some(&payload_ty), constructor_arg, argument);
+        let (arg_setup, argument) = self
+            .plan_into_slot(
+                constructor_arg,
+                ExpressionContext::value(),
+                SlotTarget::Layout(&payload_ty),
+            )
+            .into_parts();
 
         let call = self
             .queries()
@@ -753,13 +755,11 @@ impl<'p> Planner<'p> {
         let origin = self
             .facts
             .function_type_origin(target_ty, SlotOrigin::Lisette);
-        let value = self.plan_value(
+        let value = self.plan_into_slot(
             last,
             ExpressionContext::value().with_function_slot_origin(origin),
+            SlotTarget::Layout(target_ty),
         );
-        let value = value.map_expression(|setup, expression| {
-            self.apply_type_coercion(setup, Some(target_ty), last, expression)
-        });
         vec![simple_assign(target, value).into()]
     }
 
@@ -834,10 +834,7 @@ impl<'p> Planner<'p> {
     ) -> (Vec<GoExpression>, ValuePlan) {
         let operands: Vec<ValuePlan> = args
             .iter()
-            .map(|argument| {
-                let plan = self.plan_composite_value(argument, ExpressionContext::value());
-                self.convert_to_recorded_slot(argument, plan)
-            })
+            .map(|argument| self.plan_composite_value(argument, ExpressionContext::value()))
             .collect();
 
         let spread_operand = spread.map(|spread| self.plan_copied_spread(spread));
@@ -860,19 +857,6 @@ impl<'p> Planner<'p> {
 
         let ordering = ValuePlan::without_value(sequenced.setup);
         (sequenced.values, ordering)
-    }
-
-    pub(in crate::lowering) fn plan_tail_value(
-        &mut self,
-        last: &Expression,
-    ) -> (Vec<Statement>, GoExpression) {
-        let plan = if let Some(literal) = TupleLiteral::of(last) {
-            self.plan_tuple_value(literal, TuplePosition::Tail)
-        } else {
-            self.plan_value(last, ExpressionContext::value())
-        };
-
-        plan.into_parts()
     }
 
     pub(in crate::lowering) fn plan_to_operand_temp(

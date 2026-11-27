@@ -1,4 +1,5 @@
 use crate::assert_emit_snapshot;
+use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
 fn simple_function() {
@@ -5578,6 +5579,37 @@ fn f() -> Unknown {
 fn main() {}
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn diverging_function_in_some_into_go_function_field() {
+    let input = r#"
+import "go:crypto/tls"
+fn die() -> Never { panic("x") }
+fn main() {
+  let c = tls.Config { Time: Some(die), .. }
+  let _ = c.Time
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn function_value_in_some_into_go_named_function_field() {
+    let input = r#"
+import "go:example.com/callback"
+fn make() -> Result<int, error> { Ok(7) }
+fn main() {
+  let f: fn() -> Result<int, error> = make
+  let b = callback.Box { F: Some(f) }
+  let _ = b
+}
+"#;
+    let typedef = r#"
+pub struct Callback(fn() -> Result<int, error>)
+pub struct Box { pub F: Option<Callback> }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/callback", typedef)]);
 }
 
 #[test]

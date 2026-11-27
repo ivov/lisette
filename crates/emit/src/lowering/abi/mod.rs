@@ -10,7 +10,7 @@ pub(in crate::lowering) mod go_result_wrapping;
 pub(in crate::lowering) mod go_returns;
 pub(in crate::lowering) mod go_types;
 pub(in crate::lowering) mod layout_change;
-pub(in crate::lowering) mod slot_coercion;
+pub(in crate::lowering) mod slot_conversion;
 
 use crate::Planner;
 use crate::lookup::facts::callables::CallableDeclaration;

@@ -1,0 +1,45 @@
+---
+source: tests/fast_suite/spec/emit/concurrency.rs
+description: |
+  
+  import "go:bufio"
+  fn split(data: Slice<byte>, _end: bool) -> Result<(int, Slice<byte>), error> {
+    Ok((1, data))
+  }
+  fn main() {
+    let f: fn(Slice<byte>, bool) -> Result<(int, Slice<byte>), error> = split
+    let c = Channel.buffered<bufio.SplitFunc>(1)
+    let _ = c.send(f)
+  }
+---
+package main
+
+import (
+	"bufio"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func split(data []byte, _ bool) (lisette.Tuple2[int, []byte], error) {
+	return lisette.MakeTuple2[int, []byte](1, data), nil
+}
+
+func main() {
+	f := func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+		return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](split(arg0, arg1))
+	}
+	c := make(chan bufio.SplitFunc, 1)
+	cb := f
+	var adapted func([]byte, bool) (int, []byte, error)
+	if cb != nil {
+		adapted = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res := cb(arg0, arg1)
+			if res.Tag == lisette.ResultOk {
+				tup := res.OkVal
+				return tup.First, tup.Second, nil
+			}
+			return 0, nil, res.ErrVal
+		}
+	}
+	lisette.ChannelSend(c, adapted)
+}

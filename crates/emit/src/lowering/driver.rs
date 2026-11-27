@@ -8,7 +8,7 @@ use crate::lookup::state::adapter_registry::AdapterRegistry;
 use crate::lookup::state::conversion_record::ConversionRecord;
 use crate::lookup::state::file_namespace::FileNamespace;
 use crate::lookup::state::imports::generated_qualifier_collisions;
-use crate::lowering::abi::slot_coercion::check_applied_conversions;
+use crate::lowering::abi::slot_conversion::check_applied_conversions;
 use crate::lowering::planner::Planner;
 use crate::lowering::planner::package::{FilePlan, PackagePlan, build_package_plan};
 use crate::output::render::declarations::render_declaration;

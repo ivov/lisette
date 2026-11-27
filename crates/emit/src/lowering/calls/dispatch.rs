@@ -11,6 +11,7 @@ use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::lookup::facts::value_layout::ValueLayout;
 use crate::lowering::abi::coercion_plan::CoercionPlan;
+use crate::lowering::abi::slot_conversion::SlotTarget;
 use crate::lowering::calls::call_plan::{CallPlan, CallableOrigin};
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::planner::written_span;
@@ -245,33 +246,26 @@ impl<'a> Planner<'a> {
         };
         let field_layouts = target.field_layouts(&self.facts);
 
-        let (operands, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = args
+        let operands: Vec<ValuePlan> = args
             .iter()
             .zip(&target.field_tys)
-            .map(|(a, slot)| {
+            .zip(&field_layouts)
+            .map(|((a, slot), layout)| {
                 let origin = self.facts.function_type_origin(slot, SlotOrigin::Lisette);
                 let ctx = arg_ctx.with_function_slot_origin(origin);
-                let source = self.queries().emitted_value_layout(a, ctx);
-                (self.plan_composite_value(a, ctx), source)
+                self.plan_into_slot(a, ctx, SlotTarget::go_or_layout(layout.as_ref(), slot))
             })
-            .unzip();
+            .collect();
 
         let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "arg");
-        let mut setup = sequenced.setup;
+        let setup = sequenced.setup;
 
-        let mut field_pairs = Vec::with_capacity(target.field_tys.len());
-        for (i, (field_ty, value)) in target.field_tys.iter().zip(sequenced.values).enumerate() {
-            let coerced = self.coerce_into_slot(
-                &mut setup,
-                (&args[i], value),
-                field_ty,
-                field_layouts[i]
-                    .as_ref()
-                    .map(|target| (&source_layouts[i], target)),
-            );
-
-            field_pairs.push((go_name::tuple_struct_field(i), coerced));
-        }
+        let field_pairs: Vec<_> = sequenced
+            .values
+            .into_iter()
+            .enumerate()
+            .map(|(i, value)| (go_name::tuple_struct_field(i), value))
+            .collect();
 
         let value =
             plan_struct_literal(&target.go_ty, field_pairs).position_elements(|index, _| {
@@ -297,8 +291,9 @@ impl<'a> Planner<'a> {
         };
         let (mut setup, arguments) = match site.args.first() {
             Some(a) => {
-                let plan = self.plan_composite_value(a, ExpressionContext::value());
-                let (setup, value) = self.convert_to_recorded_slot(a, plan).into_parts();
+                let (setup, value) = self
+                    .plan_composite_value(a, ExpressionContext::value())
+                    .into_parts();
                 (setup, vec![value])
             }
             None => (Vec::new(), Vec::new()),

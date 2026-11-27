@@ -141,7 +141,6 @@ impl Planner<'_> {
         let handle = self.plan_value(handle, ExpressionContext::value());
         let logged = value;
         let value = self.plan_value(logged, ExpressionContext::value());
-        let value = self.convert_to_recorded_slot(logged, value);
         let SequencedArray {
             setup: statements,
             values: [handle, value],

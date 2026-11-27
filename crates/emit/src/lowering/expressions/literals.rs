@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
+use crate::lowering::abi::slot_conversion::{SlotConversion, SlotTarget};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::lowering::value_plans::value_plan::ValuePlan;
@@ -81,18 +82,19 @@ impl Planner<'_> {
             return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }
 
-        let operands: Vec<ValuePlan> = elements
+        let (operands, conversions): (Vec<ValuePlan>, Vec<SlotConversion>) = elements
             .iter()
             .map(|e| {
                 let origin = self
                     .facts
                     .function_type_origin(&element_lisette_ty, SlotOrigin::Lisette);
-                self.plan_composite_value(
+                self.plan_into_slot_deferred(
                     e,
                     ExpressionContext::value().with_function_slot_origin(origin),
+                    SlotTarget::Layout(&element_lisette_ty),
                 )
             })
-            .collect();
+            .unzip();
 
         let sequenced = self.sequence_values(operands, CaptureBoundary::SiblingSequence, "v");
         let stability = sequenced.stability;
@@ -100,11 +102,9 @@ impl Planner<'_> {
 
         let mut wrapped = Vec::with_capacity(sequenced.values.len());
         let mut widest = 0;
-        for (expression, value) in elements.iter().zip(sequenced.values) {
-            let coercion = self.value_slot_coercion(expression, &element_lisette_ty);
-            let is_whole_literal = coercion.is_identity() && value.is_composite_literal();
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
+        for (conversion, value) in conversions.into_iter().zip(sequenced.values) {
+            let is_whole_literal = conversion.is_identity() && value.is_composite_literal();
+            let coerced = conversion.apply(self, &mut setup, value);
             widest = widest.max(rendered(&coerced).len());
             wrapped.push((
                 None,
