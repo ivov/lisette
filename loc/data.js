@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795811455902,
+  "lastUpdate": 1795818602132,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -60166,6 +60166,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 49857,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 34523,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20450,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 19909,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14502,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9650,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7691,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2971,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1929,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 300,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11461,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5b7d5589706e0c0333ca177f07fde6beace64cff",
+          "message": "refactor: move value conversions out of emit callsites (#1734)",
+          "timestamp": "2026-11-27T23:29:38+01:00",
+          "tree_id": "90ad34fc6567f3020f7a55b055bbfc3ac8ef8d13",
+          "url": "https://github.com/ivov/lisette/commit/5b7d5589706e0c0333ca177f07fde6beace64cff"
+        },
+        "date": 1795818600054,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 174257,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 49927,
             "unit": "lines"
           },
           {
