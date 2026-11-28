@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795878320990,
+  "lastUpdate": 1795878566618,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -60601,6 +60601,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/1bf90fc5288f5c18e188edfb4852e5ac88a1f836"
         },
         "date": 1795878319107,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 174170,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 49621,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 34630,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20454,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 20004,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14502,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9663,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7691,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2971,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1929,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 300,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11461,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b586ecbaabe7b868b5df900fb7bade134157024e",
+          "message": "ci: tidy test time limits and nightly reports (#1740)",
+          "timestamp": "2026-11-28T16:09:01+01:00",
+          "tree_id": "11e356c9509501b6f3b5d913e1add3ff050716ed",
+          "url": "https://github.com/ivov/lisette/commit/b586ecbaabe7b868b5df900fb7bade134157024e"
+        },
+        "date": 1795878564176,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
