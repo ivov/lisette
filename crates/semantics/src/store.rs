@@ -352,6 +352,10 @@ impl Store {
         types::peel_alias(ty, |id| self.get_definition(id))
     }
 
+    pub fn peel_alias_cached(&self, ty: &Type, aliases: &mut FxHashMap<Type, Type>) -> Type {
+        types::peel_alias_cached(ty, |id| self.get_definition(id), aliases)
+    }
+
     pub fn receiver_generic_context(&self, receiver_ty: &Type) -> Vec<(EcoString, Vec<Type>)> {
         let stripped = receiver_ty.strip_refs();
         let Type::Nominal { id, params, .. } = &stripped else {
@@ -524,8 +528,12 @@ impl Store {
     }
 
     /// Canonical form for a type built from an annotation.
-    pub fn normalized_annotation_type(&self, ty: &Type) -> Type {
-        let mut mapped = ty.map_children(|child| self.normalized_annotation_type(child));
+    pub fn normalized_annotation_type(
+        &self,
+        ty: &Type,
+        aliases: &mut FxHashMap<Type, Type>,
+    ) -> Type {
+        let mut mapped = ty.map_children(|child| self.normalized_annotation_type(child, aliases));
         match &mut mapped {
             Type::Compound {
                 kind,
@@ -549,7 +557,9 @@ impl Store {
                         .collect();
                 }
             }
-            Type::Nominal { .. } if self.peel_alias(ty).is_never() => return Type::Never,
+            Type::Nominal { .. } if self.peel_alias_cached(ty, aliases).is_never() => {
+                return Type::Never;
+            }
             Type::Nominal { id, writable, .. } => {
                 *writable &= !self.nominal_refuses_write_permission(id.as_str());
             }
@@ -1426,6 +1436,9 @@ mod closed_domain_tests {
             length: 2,
             element: Box::new(nominal),
         };
-        assert_eq!(store.normalized_annotation_type(&input), expected);
+        assert_eq!(
+            store.normalized_annotation_type(&input, &mut FxHashMap::default()),
+            expected
+        );
     }
 }
