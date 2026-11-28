@@ -26,6 +26,7 @@ pub struct FreezeFolder<'a> {
     package_id: Option<&'a str>,
     mentions_unspellable_type: Cell<bool>,
     named_types: RefCell<FxHashMap<Symbol, NamedType>>,
+    alias_targets: RefCell<FxHashMap<Type, Type>>,
 }
 
 #[derive(Clone, Copy)]
@@ -42,6 +43,7 @@ impl<'a> FreezeFolder<'a> {
             package_id: None,
             mentions_unspellable_type: Cell::new(false),
             named_types: RefCell::default(),
+            alias_targets: RefCell::default(),
         }
     }
 
@@ -60,9 +62,14 @@ impl<'a> FreezeFolder<'a> {
         self.package_id.is_some() && !self.mentions_unspellable_type.get()
     }
 
+    fn peel_alias(&self, ty: &Type) -> Type {
+        self.store
+            .peel_alias_cached(ty, &mut self.alias_targets.borrow_mut())
+    }
+
     fn normalize_ref_aliases(&self, ty: &Type) -> Type {
         if matches!(ty, Type::Nominal { .. }) {
-            let peeled = self.store.peel_alias(ty);
+            let peeled = self.peel_alias(ty);
             if peeled.is_ref() {
                 return self.normalize_ref_aliases(&peeled);
             }
@@ -75,7 +82,7 @@ impl<'a> FreezeFolder<'a> {
         match ty {
             Type::Nominal { id, .. } => {
                 if self.note_named_type(id) {
-                    let target = self.store.peel_alias(ty);
+                    let target = self.peel_alias(ty);
                     mentions_ref_alias = target.is_ref();
                     if self.looks_for_unspellable_types() {
                         self.note_alias_target(&target, &mut vec![id.clone()]);
@@ -102,7 +109,7 @@ impl<'a> FreezeFolder<'a> {
             Type::Nominal { id, .. } => {
                 if self.note_named_type(id) && !expanding.contains(id) {
                     expanding.push(id.clone());
-                    self.note_alias_target(&self.store.peel_alias(ty), expanding);
+                    self.note_alias_target(&self.peel_alias(ty), expanding);
                     expanding.pop();
                 }
             }

@@ -1,7 +1,5 @@
-use diagnostics::LocalSink;
 use rustc_hash::FxHashSet;
 use semantics::checker::{TypeEnv, check_never_comparable};
-use semantics::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::{CallOperation, Definition, NativeTypeKind};
 use syntax::types::{CompoundKind, Symbol, Type};
@@ -31,25 +29,25 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
             if ctx.is_claimed(ClaimKind::MapKey, span) {
                 return;
             }
-            report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut FxHashSet::default());
+            report_bad_map_key(ctx, ty, *span, &mut FxHashSet::default());
         }
         Expression::TypeAlias { ty, span, .. } => {
-            report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut FxHashSet::default());
+            report_bad_map_key(ctx, ty, *span, &mut FxHashSet::default());
         }
         _ => {}
     }
 }
 
 fn report_bad_map_key(
-    store: &Store,
+    ctx: &mut NodeCtx,
     ty: &Type,
     span: Span,
-    sink: &LocalSink,
     expanding: &mut FxHashSet<Symbol>,
 ) -> bool {
     let alias_head = match ty {
         Type::Nominal { id, .. }
-            if store
+            if ctx
+                .store
                 .get_definition(id.as_str())
                 .is_some_and(Definition::is_type_alias) =>
         {
@@ -64,21 +62,21 @@ fn report_bad_map_key(
             .get_type_params()
             .unwrap_or_default()
             .iter()
-            .any(|child| report_bad_map_key(store, child, span, sink, expanding));
+            .any(|child| report_bad_map_key(ctx, child, span, expanding));
     }
-    let resolved = store.peel_alias(ty);
+    let resolved = ctx.peel_alias(ty);
     let found = if let Some((CompoundKind::Map, args)) = resolved.as_compound()
         && let Some(key_ty) = args.first()
-        && let Some(reason) = check_never_comparable(&TypeEnv::default(), store, key_ty)
+        && let Some(reason) = check_never_comparable(&TypeEnv::default(), ctx.store, key_ty)
     {
-        sink.push(diagnostics::infer::non_comparable_map_key(
+        ctx.sink.push(diagnostics::infer::non_comparable_map_key(
             key_ty, reason, span,
         ));
         true
     } else {
         resolved
             .children()
-            .any(|child| report_bad_map_key(store, child, span, sink, expanding))
+            .any(|child| report_bad_map_key(ctx, child, span, expanding))
     };
     if let Some(id) = alias_head {
         expanding.remove(&id);

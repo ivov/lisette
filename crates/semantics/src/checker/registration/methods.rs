@@ -1,5 +1,6 @@
 use crate::loader;
 use ecow::EcoString;
+use rustc_hash::FxHashMap;
 use syntax::ast::{
     Annotation, Expression, Generic, Pattern, Span, Visibility as SyntacticVisibility,
 };
@@ -715,12 +716,12 @@ impl TaskState {
             if self.embeds_a_cycle(store, &pending.qualified_name) {
                 continue;
             }
-            let mut seen: rustc_hash::FxHashMap<String, (Type, String)> =
-                rustc_hash::FxHashMap::default();
+            let mut seen: FxHashMap<String, (Type, String)> = FxHashMap::default();
             for requirement in interface_requirements(interface_ty, |id| store.get_definition(id)) {
                 let source = unqualified_name(&requirement.declaring_interface);
                 // Instantiating a generic parent can undo normalization.
-                let ty = store.normalized_annotation_type(&requirement.ty);
+                let ty =
+                    store.normalized_annotation_type(&requirement.ty, &mut FxHashMap::default());
                 if let Some((existing_ty, existing_source)) = seen.get(requirement.name.as_str()) {
                     if existing_ty != &ty {
                         self.sink

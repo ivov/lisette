@@ -2031,6 +2031,42 @@ where
     current
 }
 
+pub fn peel_alias_cached<'d, F>(ty: &Type, lookup: F, cache: &mut FxHashMap<Type, Type>) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    let mut current = ty.unwrap_forall().clone();
+    let mut chain: Vec<Type> = Vec::new();
+    let mut seen: FxHashSet<Type> = FxHashSet::default();
+    let peeled = loop {
+        if let Some(peeled) = cache.get(&current) {
+            break peeled.clone();
+        }
+        let Type::Nominal {
+            id,
+            params,
+            writable,
+        } = &current
+        else {
+            break current;
+        };
+        let Some(target) = lookup(id.as_str())
+            .and_then(|definition| definition.instantiate_alias_target(params, *writable))
+        else {
+            break current;
+        };
+        if !seen.insert(current.clone()) {
+            return current;
+        }
+        chain.push(current);
+        current = target.unwrap_forall().clone();
+    };
+    for link in chain {
+        cache.insert(link, peeled.clone());
+    }
+    peeled
+}
+
 pub fn receiver_shape<'d, F>(ty: &Type, lookup: F) -> Type
 where
     F: Fn(&str) -> Option<&'d Definition>,

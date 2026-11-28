@@ -21,6 +21,7 @@ use metadata::{
     declaration_value_position_types, enum_variant_constructor_type, function_signature_pairs,
     wrap_with_impl_generics,
 };
+use rustc_hash::FxHashMap;
 use std::mem;
 
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
@@ -250,15 +251,16 @@ pub(crate) fn normalize_registered_component_types(store: &mut Store, package_id
         return;
     };
     let mut changed: Vec<(Symbol, Definition)> = Vec::new();
+    let mut aliases = FxHashMap::default();
     for (name, definition) in &package.definitions {
         if !any_component_type(&definition.body, |ty| {
-            store.normalized_annotation_type(ty) != *ty
+            store.normalized_annotation_type(ty, &mut aliases) != *ty
         }) {
             continue;
         }
         let mut updated = definition.clone();
-        let normalize = |ty: &mut Type| {
-            *ty = store.normalized_annotation_type(ty);
+        let mut normalize = |ty: &mut Type| {
+            *ty = store.normalized_annotation_type(ty, &mut aliases);
         };
         match &mut updated.body {
             DefinitionBody::Struct { fields, .. } => {
