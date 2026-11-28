@@ -49,24 +49,26 @@ pub fn type_check_module(module_dir: &Path) -> BTreeMap<String, Vec<String>> {
 fn type_checker_binary() -> PathBuf {
     static BINARY: OnceLock<PathBuf> = OnceLock::new();
     BINARY
-        .get_or_init(|| {
-            let binary = repo_root().join("target/go_type_checker/go_type_checker");
-            let output = Command::new("go")
-                .arg("build")
-                .arg("-o")
-                .arg(&binary)
-                .arg(".")
-                .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("_harness/go_type_checker"))
-                .output()
-                .expect("spawn go build for go_type_checker");
-            assert!(
-                output.status.success(),
-                "go build of go_type_checker failed:\n{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            binary
-        })
+        .get_or_init(|| build_go_helper("_harness/go_type_checker", "go_type_checker"))
         .clone()
+}
+
+pub fn build_go_helper(source: &str, name: &str) -> PathBuf {
+    let binary = repo_root().join(format!("target/{name}/{name}"));
+    let output = Command::new("go")
+        .arg("build")
+        .arg("-o")
+        .arg(&binary)
+        .arg(".")
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join(source))
+        .output()
+        .unwrap_or_else(|error| panic!("spawn go build for {name}: {error}"));
+    assert!(
+        output.status.success(),
+        "go build of {name} failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    binary
 }
 
 /// Recreates `dir` as an empty directory.
