@@ -364,7 +364,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         let type_args = self.call_type_arguments(CallTypeArgumentsRequest {
             function,
             callee: &call_plan.resolved,
-            written_type_arguments: call_plan.site.written_type_arguments(),
+            writes_type_arguments: call_plan.site.writes_type_arguments(),
             call_ty,
             arg_shape: CallArgumentShape {
                 value_count: call_plan.site.args.len(),

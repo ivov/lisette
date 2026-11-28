@@ -71,7 +71,7 @@ func (p Partial[T, E]) String() string {
 	}
 }
 
-func PartialMap[T any, U any, E any](p Partial[T, E], f func(T) U) Partial[U, E] {
+func PartialMap[T any, E any, U any](p Partial[T, E], f func(T) U) Partial[U, E] {
 	switch p.Tag {
 	case PartialOk:
 		return Partial[U, E]{Tag: PartialOk, OkVal: f(p.OkVal)}

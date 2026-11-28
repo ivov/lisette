@@ -2580,3 +2580,29 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn explicit_type_argument_names_receiver_type_parameters() {
+    let input = r#"
+fn test(ch: Channel<int>, rx: Receiver<string>, m: Map<string, int>) -> (Option<int>, Option<string>, Option<int>) {
+  (ch.receive<int>(), rx.receive<string>(), m.get<string, int>("a"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn explicit_type_argument_on_result_and_partial_methods() {
+    let input = r#"
+fn test(r: Result<int, string>, p: Partial<int, string>) -> bool {
+  let mapped = r.map<bool>(|x| x > 0)
+  let chained = r.and_then<bool>(|x| Ok(x > 1))
+  let defaulted = r.map_or<bool>(false, |x| x > 2)
+  let computed = r.map_or_else<bool>(|e| e.is_empty(), |x| x > 3)
+  let spelled = Result.map<int, string, bool>(r, |x| x > 4)
+  let partial = p.map<bool>(|x| x > 5)
+  mapped.is_ok() && chained.is_ok() && defaulted && computed && spelled.is_ok() && partial.is_ok()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

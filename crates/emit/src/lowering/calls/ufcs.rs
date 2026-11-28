@@ -30,14 +30,13 @@ impl Planner<'_> {
         let member = callee.member;
         let args = call_plan.site.args;
         let spread = call_plan.site.spread;
-        let written_type_arguments = call_plan.site.written_type_arguments();
 
         let type_args_string = self
             .queries()
             .call_type_arguments(CallTypeArgumentsRequest {
                 function,
                 callee: &call_plan.resolved,
-                written_type_arguments,
+                writes_type_arguments: call_plan.site.writes_type_arguments(),
                 call_ty: None,
                 arg_shape: CallArgumentShape {
                     value_count: args.len(),
