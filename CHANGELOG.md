@@ -2,6 +2,51 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.13.2](https://github.com/ivov/lisette/compare/lisette-v0.13.1...lisette-v0.13.2) - 2026-11-28
+
+### Features
+
+- feat: idiomatic Go for type conversions [#1737](https://github.com/ivov/lisette/pull/1737) [`1bf90fc`](https://github.com/ivov/lisette/commit/1bf90fc5288f5c18e188edfb4852e5ac88a1f836)
+- feat: nested or-patterns [#1709](https://github.com/ivov/lisette/pull/1709) [`1ba9eac`](https://github.com/ivov/lisette/commit/1ba9eace60bf3476fcf51bdfff2bd591ac32e8b6)
+
+### Fixes
+
+- fix: enforce type parameter order in prelude methods [#1741](https://github.com/ivov/lisette/pull/1741) [`08b5f1e`](https://github.com/ivov/lisette/commit/08b5f1e813d50bc6e07fae66d4cefdb7c51287e5)
+- fix: align generic interface conformance with Go [#1736](https://github.com/ivov/lisette/pull/1736) [`a2ee5f7`](https://github.com/ivov/lisette/commit/a2ee5f7a0cc714a85c7b79966b6df2fc5908b131)
+- fix: narrow gap between `lis check` and `go build` [#1730](https://github.com/ivov/lisette/pull/1730) [`0e25a97`](https://github.com/ivov/lisette/commit/0e25a97d0b55d0900cb599d5a22c6db66256dbca)
+- fix: evaluate constants as Go does [#1728](https://github.com/ivov/lisette/pull/1728) [`e44d47b`](https://github.com/ivov/lisette/commit/e44d47be80621982c275efb8b13493a5f1eba231)
+- fix: detect instantiation cycles as Go does [#1723](https://github.com/ivov/lisette/pull/1723) [`0c2657d`](https://github.com/ivov/lisette/commit/0c2657da339c677e6d216f704210645a36fb04a0)
+- fix: enforce Go union constraints [#1722](https://github.com/ivov/lisette/pull/1722) [`1d150de`](https://github.com/ivov/lisette/commit/1d150de3579077a9c6d43870e766e8eba2933f40)
+- fix: declare platform-specific Go dependencies [#1720](https://github.com/ivov/lisette/pull/1720) [`f70f099`](https://github.com/ivov/lisette/commit/f70f099bae678345c74c4003f636dcce7e713605)
+- fix: convert `break` values to type of enclosing `loop` [#1717](https://github.com/ivov/lisette/pull/1717) [`6e10fda`](https://github.com/ivov/lisette/commit/6e10fda11de3821c10532d7a8829d8073dcd8033)
+- fix: reject `.d.lis` files in project packages [#1707](https://github.com/ivov/lisette/pull/1707) [`d608699`](https://github.com/ivov/lisette/commit/d608699a02211c9af02cab39c0591fcc675bb810)
+- fix: reject casts of fractional float constants to integers [#1706](https://github.com/ivov/lisette/pull/1706) [`938ebd4`](https://github.com/ivov/lisette/commit/938ebd4784b01981496331917411a9d2b7c5b505)
+- fix: emit no value for `return` of a `Never` call [#1705](https://github.com/ivov/lisette/pull/1705) [`9f9452e`](https://github.com/ivov/lisette/commit/9f9452e830bc91f069dbc412e55073985fac9bdc)
+- fix: skip sibling files for a script in LSP [#1703](https://github.com/ivov/lisette/pull/1703) [`185a02b`](https://github.com/ivov/lisette/commit/185a02bf7552c702ad3a4fb083a2ff1a0147c4a2)
+- fix: derive `mut` on `dst` params from writes [#1702](https://github.com/ivov/lisette/pull/1702) [`05a6e6b`](https://github.com/ivov/lisette/commit/05a6e6be6573c19d578a28b64e276bfa17cadc05)
+
+### Internals
+
+- ci: tidy test time limits and nightly reports [#1740](https://github.com/ivov/lisette/pull/1740) [`b586ecb`](https://github.com/ivov/lisette/commit/b586ecbaabe7b868b5df900fb7bade134157024e)
+- perf: speed up checks of long alias chains [#1739](https://github.com/ivov/lisette/pull/1739) [`423c166`](https://github.com/ivov/lisette/commit/423c166a0f68d6298ce93fd72401a7616a69ec15)
+- test: compare aliased Go by syntax tree [#1738](https://github.com/ivov/lisette/pull/1738) [`098db62`](https://github.com/ivov/lisette/commit/098db62cc62bcbcff1e3c142d97782f961b0bc82)
+- refactor: move value conversions out of emit callsites [#1734](https://github.com/ivov/lisette/pull/1734) [`5b7d558`](https://github.com/ivov/lisette/commit/5b7d5589706e0c0333ca177f07fde6beace64cff)
+- ci: consolidate nightly findings into one issue [#1733](https://github.com/ivov/lisette/pull/1733) [`cf359f1`](https://github.com/ivov/lisette/commit/cf359f16f7e4d437db707e4d103273084d0c8571)
+- refactor: enforce structure in emit crate [#1732](https://github.com/ivov/lisette/pull/1732) [`6d1ccc5`](https://github.com/ivov/lisette/commit/6d1ccc576f3b3252a2488e8df7fb99dc5d08a3dd)
+- ci: speed up Go rejection tests [#1729](https://github.com/ivov/lisette/pull/1729) [`b379c93`](https://github.com/ivov/lisette/commit/b379c93b50405fd9af40a0537514a4e6c85480d1)
+- ci: reformat fuzz run report [#1727](https://github.com/ivov/lisette/pull/1727) [`65f1856`](https://github.com/ivov/lisette/commit/65f1856391d3d77eeccdc530a46f0b2b84b4255e)
+- test: reorganize tests into groups by prefix [#1724](https://github.com/ivov/lisette/pull/1724) [`993ccbf`](https://github.com/ivov/lisette/commit/993ccbf6e94d0ad85e78864aa971496d210f0d23)
+- refactor: centralize Go type decisions in emit [#1721](https://github.com/ivov/lisette/pull/1721) [`bd2f25f`](https://github.com/ivov/lisette/commit/bd2f25f7974d0fbad6255373e5e42559aab7a85e)
+- ci: run satellite lints in their own job [#1719](https://github.com/ivov/lisette/pull/1719) [`d63192e`](https://github.com/ivov/lisette/commit/d63192eaa07efdea204103f0711c59cc4c4bce62)
+- refactor: remove fact derivation from emit [#1718](https://github.com/ivov/lisette/pull/1718) [`47da55f`](https://github.com/ivov/lisette/commit/47da55fa305dac01749b51bd1a00108fd24b976c)
+- refactor: tidy emit crate [#1716](https://github.com/ivov/lisette/pull/1716) [`d71b5ad`](https://github.com/ivov/lisette/commit/d71b5ad929e696e9180ba0a5f8f2586bf4234f49)
+- refactor: record remaining emit choices in checker [#1714](https://github.com/ivov/lisette/pull/1714) [`56e626b`](https://github.com/ivov/lisette/commit/56e626b58f0000977724ceaac1d1f291ade98ce7)
+- refactor: record implicit conversions and method choices in checker [#1713](https://github.com/ivov/lisette/pull/1713) [`42c3e11`](https://github.com/ivov/lisette/commit/42c3e11446bf9b123e14dc6aa728f1e1a1c8ed3b)
+- chore: update `infer` fuzz target [#1712](https://github.com/ivov/lisette/pull/1712) [`f3f4f0b`](https://github.com/ivov/lisette/commit/f3f4f0b00a512a8d4a2a6cd9c04eeb1e4f6b3358)
+- refactor: record checker results for emit [#1710](https://github.com/ivov/lisette/pull/1710) [`16ead62`](https://github.com/ivov/lisette/commit/16ead620f3e875ac09459c531262f7e9554874f5)
+- refactor: deduplicate logic across checker and emit [#1708](https://github.com/ivov/lisette/pull/1708) [`0b499bb`](https://github.com/ivov/lisette/commit/0b499bb0d7db0d62f4f8948663e5cbbac81997b8)
+
+
 ## [0.13.1](https://github.com/ivov/lisette/compare/lisette-v0.13.0...lisette-v0.13.1) - 2026-11-15
 
 ### Features
