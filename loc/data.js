@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795818602132,
+  "lastUpdate": 1795870068244,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -60280,6 +60280,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 9650,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7691,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2971,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1929,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 300,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11461,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a2ee5f7a0cc714a85c7b79966b6df2fc5908b131",
+          "message": "fix: align generic interface conformance with Go (#1736)",
+          "timestamp": "2026-11-28T13:47:25+01:00",
+          "tree_id": "e6ef0dab1dee2ef7bc63bc3b37bbd3088a5cab4a",
+          "url": "https://github.com/ivov/lisette/commit/a2ee5f7a0cc714a85c7b79966b6df2fc5908b131"
+        },
+        "date": 1795870066337,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 174087,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 49600,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 34607,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 20450,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 19969,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14502,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9663,
             "unit": "lines"
           },
           {
