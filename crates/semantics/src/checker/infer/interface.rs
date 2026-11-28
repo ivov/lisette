@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use std::slice;
 
 use crate::checker::EnvResolve;
@@ -443,8 +444,11 @@ impl InferCtx<'_> {
                 .iter()
                 .filter(|earlier| earlier.name == requirement.name)
                 .any(|earlier| {
-                    self.store.normalized_annotation_type(&earlier.ty)
-                        != self.store.normalized_annotation_type(&requirement.ty)
+                    self.store
+                        .normalized_annotation_type(&earlier.ty, &mut FxHashMap::default())
+                        != self
+                            .store
+                            .normalized_annotation_type(&requirement.ty, &mut FxHashMap::default())
                 })
         })
     }

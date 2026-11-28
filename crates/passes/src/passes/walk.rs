@@ -3,6 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{BindingId, Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::constant::{self, Constant, ConstantSource};
 use syntax::program::{Definition, File, Package};
+use syntax::types::Type;
 
 use semantics::facts::Facts;
 use semantics::store::Store;
@@ -15,6 +16,7 @@ pub(crate) struct NodeCtx<'a> {
     pub sink: &'a LocalSink,
     claimed_spans: FxHashSet<(ClaimKind, Span)>,
     local_constants: FxHashMap<BindingId, Constant>,
+    alias_targets: FxHashMap<Type, Type>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -45,7 +47,12 @@ impl<'a> NodeCtx<'a> {
             sink,
             claimed_spans: FxHashSet::default(),
             local_constants: FxHashMap::default(),
+            alias_targets: FxHashMap::default(),
         }
+    }
+
+    pub fn peel_alias(&mut self, ty: &Type) -> Type {
+        self.store.peel_alias_cached(ty, &mut self.alias_targets)
     }
 
     pub fn record_local_constant(&mut self, expression: &Expression) {

@@ -13,6 +13,7 @@ use std::fs;
 use std::ops::Range;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
+use std::process::Command;
 
 use rayon::prelude::*;
 use syntax::ast::{Annotation, Expression, LetMode, Span, UnaryOperator};
@@ -24,6 +25,7 @@ use _harness::go::{
     run_go_build, run_go_vet, skip_reason_for_imports, snapshots_dir, write_go_mod,
     write_subpackage,
 };
+use _harness::go_types::{build_go_helper, fresh_dir};
 use _harness::markdown::{backticks_around, code_span};
 use _harness::pipeline::TestPipeline;
 use _harness::wrap::wrap;
@@ -186,6 +188,7 @@ fn equivalent_programs_give_valid_go() {
         }
     }
 
+    let alias_differences = alias_differences(&programs);
     let mut variant_count = 0;
     let mut rejected = 0;
     let mut failures = Vec::new();
@@ -204,12 +207,12 @@ fn equivalent_programs_give_valid_go() {
                 }
                 Compiled::Failed(message) => Problem::Compiler(message.clone()),
                 Compiled::Emitted(variant_go_code) => {
-                    let variant_go_code = variant_go_code
-                        .replace(&format!("test_{}", variant.name), &format!("test_{name}"));
+                    let variant_go_code = with_program_name(variant_go_code, variant, name);
                     if let Some(line) = go_errors.get(&format!("test_{}", variant.name)) {
                         Problem::Go(line.clone())
                     } else {
-                        let difference = go_difference(variant, go_code, &variant_go_code);
+                        let difference =
+                            go_difference(variant, go_code, &variant_go_code, &alias_differences);
                         let Some((original, changed)) = difference else {
                             continue;
                         };
@@ -339,9 +342,7 @@ fn must_give_original_go(variant: &Variant) -> bool {
 /// Whether the variant gives the Go of the original program. Such a variant needs no `go build`,
 /// because the original already gets one.
 fn gives_original_go(variant: &Variant, variant_go_code: &str, name: &str, go_code: &str) -> bool {
-    must_give_original_go(variant)
-        && variant_go_code.replace(&format!("test_{}", variant.name), &format!("test_{name}"))
-            == go_code
+    must_give_original_go(variant) && with_program_name(variant_go_code, variant, name) == go_code
 }
 
 fn panic_message(payload: Box<dyn Any + Send>) -> String {
@@ -703,17 +704,87 @@ fn record_first_errors(output: &str, errors: &mut HashMap<String, String>) -> bo
     found
 }
 
-fn go_difference(variant: &Variant, original: &str, changed: &str) -> Option<(String, String)> {
+fn go_difference(
+    variant: &Variant,
+    original: &str,
+    changed: &str,
+    alias_differences: &HashMap<String, (String, String)>,
+) -> Option<(String, String)> {
     if must_give_original_go(variant) {
         if changed == original {
             return None;
         }
         first_difference(original.split('\n'), changed.split('\n'))
     } else if variant.rewrite == "alias" {
-        alias_difference(original, changed)
+        alias_differences.get(&variant.name).cloned()
     } else {
         None
     }
+}
+
+fn alias_differences(programs: &[Program]) -> HashMap<String, (String, String)> {
+    let directory = repo_root().join("target/go_emit_equivalents_aliases");
+    fresh_dir(&directory);
+    let mut pairs = String::new();
+    for program in programs {
+        let original_path = directory.join(format!("{}.go", program.name));
+        let mut original_written = false;
+        for (variant, compiled) in &program.variants {
+            let Compiled::Emitted(variant_go_code) = compiled else {
+                continue;
+            };
+            if variant.rewrite != "alias" {
+                continue;
+            }
+            if !original_written {
+                fs::write(&original_path, &program.go_code).expect("write original Go");
+                original_written = true;
+            }
+            let variant_path = directory.join(format!("{}.variant.go", variant.name));
+            fs::write(
+                &variant_path,
+                with_program_name(variant_go_code, variant, &program.name),
+            )
+            .expect("write variant Go");
+            pairs.push_str(&format!(
+                "{}\t{}\t{}\n",
+                variant.name,
+                original_path.display(),
+                variant_path.display()
+            ));
+        }
+    }
+    let pairs_path = directory.join("pairs.tsv");
+    fs::write(&pairs_path, pairs).expect("write alias pairs");
+    let output = Command::new(build_go_helper(
+        "go_equivalents/alias_comparison",
+        "alias_comparison",
+    ))
+    .arg(&pairs_path)
+    .output()
+    .expect("spawn alias_comparison");
+    assert!(
+        output.status.success(),
+        "alias_comparison failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(3, '\t');
+            let name = fields.next()?;
+            let original = fields.next()?;
+            let variant = fields.next()?;
+            Some((
+                name.to_string(),
+                (original.to_string(), variant.to_string()),
+            ))
+        })
+        .collect()
+}
+
+fn with_program_name(go_code: &str, variant: &Variant, name: &str) -> String {
+    go_code.replace(&format!("test_{}", variant.name), &format!("test_{name}"))
 }
 
 fn first_difference<'a>(
@@ -730,205 +801,6 @@ fn first_difference<'a>(
             (left, right) => return Some((shown(left), shown(right))),
         }
     }
-}
-
-fn alias_difference(original: &str, variant: &str) -> Option<(String, String)> {
-    let declaration = variant
-        .lines()
-        .find_map(|line| line.strip_prefix("type MmAlias = "));
-    let variant = match declaration {
-        Some(target) => replace_word(
-            &variant.replacen(&format!("type MmAlias = {target}\n"), "", 1),
-            "MmAlias",
-            target,
-        ),
-        None => variant.to_string(),
-    };
-    let (original_imports, original_body) = split_imports(&ungroup_parameters(original));
-    let (variant_imports, variant_body) = split_imports(&ungroup_parameters(&variant));
-    let target = declaration.unwrap_or_default();
-    first_difference(
-        original_body.iter().map(String::as_str),
-        variant_body.iter().map(String::as_str),
-    )
-    .or_else(|| {
-        let same_imports = original_imports
-            .iter()
-            .all(|import| variant_imports.contains(import))
-            && variant_imports.iter().all(|import| {
-                original_imports.contains(import)
-                    || target.contains(&format!("{}.", import_qualifier(import)))
-            });
-        if same_imports {
-            None
-        } else {
-            first_difference(
-                original_imports.iter().map(String::as_str),
-                variant_imports.iter().map(String::as_str),
-            )
-        }
-    })
-}
-
-fn replace_word(text: &str, word: &str, replacement: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(at) = rest.find(word) {
-        let before = rest[..at].chars().next_back();
-        let after = rest[at + word.len()..].chars().next();
-        let is_word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
-        out.push_str(&rest[..at]);
-        out.push_str(if is_word(before) || is_word(after) {
-            word
-        } else {
-            replacement
-        });
-        rest = &rest[at + word.len()..];
-    }
-    out.push_str(rest);
-    out
-}
-
-fn split_imports(code: &str) -> (Vec<String>, Vec<String>) {
-    let mut imports = Vec::new();
-    let mut body = Vec::new();
-    let mut in_block = false;
-    for line in code.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        if in_block {
-            if line == ")" {
-                in_block = false;
-            } else {
-                imports.push(line.to_string());
-            }
-        } else if line == "import (" {
-            in_block = true;
-        } else if let Some(import) = line.strip_prefix("import ") {
-            imports.push(import.to_string());
-        } else {
-            body.push(line.to_string());
-        }
-    }
-    (imports, body)
-}
-
-fn import_qualifier(import: &str) -> &str {
-    match import.split_once(' ') {
-        Some((qualifier, _)) => qualifier,
-        None => import
-            .trim_matches('"')
-            .rsplit('/')
-            .next()
-            .unwrap_or_default(),
-    }
-}
-
-fn ungroup_parameters(code: &str) -> String {
-    let bytes = code.as_bytes();
-    let mut out = String::with_capacity(code.len());
-    let mut copied = 0;
-    let mut at = 0;
-    while let Some(found) = code[at..].find("func") {
-        let start = at + found;
-        at = start + 4;
-        if start > 0 && is_identifier_byte(bytes[start - 1]) {
-            continue;
-        }
-        let Some(open) = parameter_list_start(code, at) else {
-            continue;
-        };
-        let Some(close) = matching_close(code, open) else {
-            continue;
-        };
-        out.push_str(&code[copied..=open]);
-        out.push_str(&ungroup_list(&ungroup_parameters(&code[open + 1..close])));
-        copied = close;
-        at = close;
-    }
-    out.push_str(&code[copied..]);
-    out
-}
-
-fn parameter_list_start(code: &str, mut at: usize) -> Option<usize> {
-    let bytes = code.as_bytes();
-    if code[at..].starts_with(" (") {
-        at = matching_close(code, at + 1)? + 1;
-    }
-    if code[at..].starts_with(' ') {
-        at += 1;
-        while at < bytes.len() && is_identifier_byte(bytes[at]) {
-            at += 1;
-        }
-    }
-    if code[at..].starts_with('[') {
-        at = matching_close(code, at)? + 1;
-    }
-    code[at..].starts_with('(').then_some(at)
-}
-
-fn matching_close(code: &str, open: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for (offset, byte) in code.as_bytes()[open..].iter().enumerate() {
-        match byte {
-            b'(' | b'[' | b'{' => depth += 1,
-            b')' | b']' | b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(open + offset);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn ungroup_list(list: &str) -> String {
-    let mut parts = Vec::new();
-    let mut depth = 0usize;
-    let mut current = String::new();
-    for c in list.chars() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth = depth.saturating_sub(1),
-            _ => {}
-        }
-        if c == ',' && depth == 0 {
-            parts.push(current.trim().to_string());
-            current.clear();
-        } else {
-            current.push(c);
-        }
-    }
-    if !current.trim().is_empty() {
-        parts.push(current.trim().to_string());
-    }
-    let named = |part: &String| {
-        let name_end = part
-            .bytes()
-            .position(|byte| !is_identifier_byte(byte))
-            .unwrap_or(part.len());
-        name_end > 0 && (name_end == part.len() || part.as_bytes()[name_end] == b' ')
-    };
-    if !parts.iter().all(named) || parts.iter().all(|part| !part.contains(' ')) {
-        return list.to_string();
-    }
-    let mut result = Vec::new();
-    let mut pending = Vec::new();
-    for part in parts {
-        match part.split_once(' ') {
-            Some((name, ty)) => {
-                result.extend(pending.drain(..).map(|pending| format!("{pending} {ty}")));
-                result.push(format!("{name} {ty}"));
-            }
-            None => pending.push(part),
-        }
-    }
-    result.extend(pending);
-    result.join(", ")
-}
-
-fn is_identifier_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 fn reads_a_reference(source: &str, range: &Range<usize>) -> bool {

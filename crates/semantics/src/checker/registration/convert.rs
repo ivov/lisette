@@ -3,6 +3,7 @@ use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::expressions::comparison::{
     check_never_comparable, check_never_comparable_with_bounds, check_not_comparable_with_bounds,
 };
+use rustc_hash::FxHashMap;
 use std::iter;
 use std::mem;
 use syntax::EcoString;
@@ -190,7 +191,7 @@ impl TaskState {
                 is_impl_target: false,
             },
         );
-        store.normalized_annotation_type(&ty)
+        store.normalized_annotation_type(&ty, &mut FxHashMap::default())
     }
 
     pub(crate) fn convert_alias_target_to_type(
@@ -211,7 +212,7 @@ impl TaskState {
                 is_impl_target: false,
             },
         );
-        store.normalized_annotation_type(&ty)
+        store.normalized_annotation_type(&ty, &mut FxHashMap::default())
     }
 
     pub(crate) fn convert_parameter_to_type(
@@ -233,7 +234,7 @@ impl TaskState {
                 is_impl_target: false,
             },
         );
-        store.normalized_annotation_type(&ty)
+        store.normalized_annotation_type(&ty, &mut FxHashMap::default())
     }
 
     pub(crate) fn convert_receiver_to_type(
@@ -254,7 +255,7 @@ impl TaskState {
                 is_impl_target: true,
             },
         );
-        store.normalized_annotation_type(&ty)
+        store.normalized_annotation_type(&ty, &mut FxHashMap::default())
     }
 
     fn convert_to_type_mode(
