@@ -303,7 +303,7 @@ fn report(failures: &[Failure]) -> String {
             .map(|change| format!("- {change}\n"))
             .collect();
         let entry = format!(
-            "\n### {}. {kind} in {}\n\n{detail}\n\n{bullets}",
+            "\n**{}. {kind} in {}**\n\n{detail}\n\n{bullets}",
             shown + 1,
             code_span(program)
         );

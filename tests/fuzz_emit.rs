@@ -630,7 +630,7 @@ fn issue_body(new: &[(Report, String)], witness_problems: &[(String, Option<Stri
         let source = source.trim_matches('\n');
         let fence = backticks_around(source, 3);
         let entry = format!(
-            "\n#### {}. {title}: {}\n\n{fence}rust\n{source}\n{fence}\n",
+            "\n**{}. {title}: {}**\n\n{fence}rust\n{source}\n{fence}\n",
             shown + 1,
             code_span(&report.heading),
         );
@@ -643,7 +643,7 @@ fn issue_body(new: &[(Report, String)], witness_problems: &[(String, Option<Stri
     }
     if !witness_problems.is_empty() {
         body.push_str(&format!(
-            "\n#### {}. Stale failures\n\nUpdate their lines in `tests/{FAILING}`, and delete the saved programs that pass from `tests/{WITNESSES}`.\n\n",
+            "\n**{}. Stale failures**\n\nUpdate their lines in `tests/{FAILING}`, and delete the saved programs that pass from `tests/{WITNESSES}`.\n\n",
             shown + 1
         ));
         for (witness, signature) in witness_problems {
