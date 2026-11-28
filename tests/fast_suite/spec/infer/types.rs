@@ -12045,7 +12045,7 @@ fn unused_alias_arguments_still_instantiate_nested_named_types() {
 fn long_alias_chains_do_not_recurse_on_the_checker_stack() {
     use crate::_harness::assert_completes_within;
     use std::time::Duration;
-    assert_completes_within(Duration::from_secs(20), || {
+    assert_completes_within(Duration::from_secs(2), || {
         let mut source = (0..1999)
             .map(|i| format!("type A{i}<T> = A{}<T>\n", i + 1))
             .collect::<String>();

@@ -58,6 +58,8 @@ join() {
   if [ "$has_metamorphic" -eq 1 ]; then
     append "$out" '## Metamorphic testing' "$dir/metamorphic.md"
   fi
+  awk '/^\*\*[0-9]+\. / { sub(/^\*\*[0-9]+\./, "**" ++entry ".") } { print }' "$out" > "$out.numbered"
+  mv "$out.numbered" "$out"
 }
 
 "$@"
