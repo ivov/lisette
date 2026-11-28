@@ -11,5 +11,5 @@ package main
 
 func f() ([]int, []int) {
 	var xs []int
-	return xs, ([]int)(nil)
+	return xs, []int(nil)
 }

@@ -1,6 +1,6 @@
 use crate::output::render::bodies::{can_inline_block, render_lowered_block};
 use crate::output::render::declarations::group_params;
-use crate::output::render::types::{go_type_text, is_plain_type_name};
+use crate::output::render::types::{go_type_text, needs_conversion_parentheses};
 use crate::output::render::writer::GoWriter;
 use crate::target::ir::bodies::LoweredBlock;
 use crate::target::ir::go_expression::GoLiteral;
@@ -288,13 +288,13 @@ impl GoExpressionNode {
     }
 
     fn write_conversion(output: &mut GoWriter, go_type: &GoType, operand: &Operand) {
-        if is_plain_type_name(go_type) {
-            output.push_str(&go_type_text(go_type));
-            output.push('(');
-        } else {
+        if needs_conversion_parentheses(go_type) {
             output.push('(');
             output.push_str(&go_type_text(go_type));
             output.push_str(")(");
+        } else {
+            output.push_str(&go_type_text(go_type));
+            output.push('(');
         }
         operand.write(output, Slot::FREE);
         output.push(')');

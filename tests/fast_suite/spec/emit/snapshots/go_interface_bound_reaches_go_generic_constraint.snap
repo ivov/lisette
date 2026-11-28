@@ -28,7 +28,7 @@ func derive[H hash.Hash](h func() H, secret []byte) ([]byte, error) {
 }
 
 func main() {
-	key, err := derive(sha256.New, ([]byte)("secret"))
+	key, err := derive(sha256.New, []byte("secret"))
 	if err != nil {
 		panic("derive failed")
 	}

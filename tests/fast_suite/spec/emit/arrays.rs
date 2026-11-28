@@ -788,7 +788,7 @@ fn make(xs: Slice<Colour>) -> Option<Array<Colour, 2>> {
 }
 
 #[test]
-fn array_from_function_element_parenthesizes_the_conversion() {
+fn array_from_function_element() {
     let input = r#"
 fn make(xs: Slice<fn(int) -> int>) -> Option<Array<fn(int) -> int, 2>> {
   Array.from(xs)

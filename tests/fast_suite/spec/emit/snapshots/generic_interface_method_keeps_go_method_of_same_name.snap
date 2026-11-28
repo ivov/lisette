@@ -56,7 +56,7 @@ func encode[T any, E Encoder[T]](e E, _ T) T {
 type Other struct{}
 
 func (o Other) MarshalJSON() ([]byte, error) {
-	return ([]byte)("7"), nil
+	return []byte("7"), nil
 }
 
 func (o Other) MarshalJSON_() lisette.Result[[]byte, error] {
@@ -68,7 +68,7 @@ type Temp struct {
 }
 
 func (t Temp) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%dC\"", t.C)), nil
+	return []byte(fmt.Sprintf("\"%dC\"", t.C)), nil
 }
 
 func (t Temp) MarshalJSON_() lisette.Result[[]byte, error] {

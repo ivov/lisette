@@ -59,7 +59,7 @@ type Temp struct {
 }
 
 func (t Temp) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprint(t.c)), nil
+	return []byte(fmt.Sprint(t.c)), nil
 }
 
 func (t Temp) Write_(p []byte) lisette.Partial[int, error] {
@@ -86,7 +86,7 @@ func encode[M json.Marshaler](m M) ([]byte, error) {
 }
 
 func push[W Sized](w W) int {
-	n, err := w.Write(([]byte)("hello"))
+	n, err := w.Write([]byte("hello"))
 	if err != nil {
 		return -1
 	}

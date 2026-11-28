@@ -15,6 +15,6 @@ func make_(xs []lisette.Option[int]) ([2]lisette.Option[int], bool) {
 		if len(s) != 2 {
 			return [2]lisette.Option[int]{}, false
 		}
-		return ([2]lisette.Option[int])(s), true
+		return [2]lisette.Option[int](s), true
 	}(xs)
 }

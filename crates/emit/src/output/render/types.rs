@@ -6,19 +6,42 @@ pub(in crate::output) fn go_type_text(go_type: &GoType) -> String {
     text
 }
 
-pub(in crate::output) fn is_plain_type_name(go_type: &GoType) -> bool {
-    let printed = go_type.alias.as_deref().unwrap_or(go_type);
+pub(in crate::output) fn needs_conversion_parentheses(go_type: &GoType) -> bool {
     matches!(
-        printed.shape.as_ref(),
-        GoTypeShape::Name(_) | GoTypeShape::Qualified { .. } | GoTypeShape::EmptyInterface
-    )
+        printed(go_type).shape.as_ref(),
+        GoTypeShape::Pointer(_) | GoTypeShape::Channel(ChannelDirection::Receive, _)
+    ) || ends_in_function_without_result(go_type)
+}
+
+fn ends_in_function_without_result(go_type: &GoType) -> bool {
+    match printed(go_type).shape.as_ref() {
+        GoTypeShape::Function(_, None) => true,
+        GoTypeShape::Function(_, Some(inner))
+        | GoTypeShape::Slice(inner)
+        | GoTypeShape::Array(_, inner)
+        | GoTypeShape::Map(_, inner)
+        | GoTypeShape::Channel(_, inner)
+        | GoTypeShape::Pointer(inner) => ends_in_function_without_result(inner),
+        GoTypeShape::Name(_)
+        | GoTypeShape::Qualified { .. }
+        | GoTypeShape::Instantiated { .. }
+        | GoTypeShape::Arguments(_)
+        | GoTypeShape::Results(_)
+        | GoTypeShape::Variadic(_)
+        | GoTypeShape::Struct(_)
+        | GoTypeShape::EmptyInterface => false,
+    }
+}
+
+fn printed(go_type: &GoType) -> &GoType {
+    match &go_type.alias {
+        Some(alias) => printed(alias),
+        None => go_type,
+    }
 }
 
 fn write_go_type(text: &mut String, go_type: &GoType) {
-    if let Some(alias) = &go_type.alias {
-        return write_go_type(text, alias);
-    }
-    match go_type.shape.as_ref() {
+    match printed(go_type).shape.as_ref() {
         GoTypeShape::Name(name) => text.push_str(name),
         GoTypeShape::Qualified { package, member } => {
             text.push_str(package);

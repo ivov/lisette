@@ -19,6 +19,6 @@ type Wrap []int
 func main() {
 	w := Wrap([]int{1})
 	r := &w
-	recv := ([]int)(*r)
+	recv := []int(*r)
 	_ = append(slices.Clip(recv), 2)
 }

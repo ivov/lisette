@@ -46,7 +46,7 @@ func main() {
 		if len(s) != 1 {
 			return [1]int{}, false
 		}
-		return ([1]int)(s), true
+		return [1]int(s), true
 	}(arr)
 	if !ok {
 		panic("array conversion")
