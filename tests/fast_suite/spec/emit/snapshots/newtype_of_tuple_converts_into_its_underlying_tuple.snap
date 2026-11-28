@@ -27,15 +27,15 @@ import (
 type P lisette.Tuple2[int, int]
 
 func un(p P) (int, int) {
-	tup := (lisette.Tuple2[int, int])(p)
+	tup := lisette.Tuple2[int, int](p)
 	return tup.First, tup.Second
 }
 
 func main() {
 	p := P(lisette.MakeTuple2[int, int](1, 2))
 	ts := []lisette.Tuple2[int, int]{}
-	ts = append(ts, (lisette.Tuple2[int, int])(p))
-	t := (lisette.Tuple2[int, int])(p)
+	ts = append(ts, lisette.Tuple2[int, int](p))
+	t := lisette.Tuple2[int, int](p)
 	arg := ts
 	ret, ret2 := un(p)
 	tup := lisette.MakeTuple2(ret, ret2)

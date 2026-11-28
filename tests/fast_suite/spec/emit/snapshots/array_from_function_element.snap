@@ -13,6 +13,6 @@ func make_(xs []func(int) int) ([2]func(int) int, bool) {
 		if len(s) != 2 {
 			return [2]func(int) int{}, false
 		}
-		return ([2]func(int) int)(s), true
+		return [2]func(int) int(s), true
 	}(xs)
 }

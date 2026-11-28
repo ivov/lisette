@@ -26,5 +26,5 @@ func hasUser(u *url.URL) bool {
 }
 
 func decodes(text string, items *[]int) bool {
-	return strings.HasPrefix(text, "[") && json.Unmarshal(([]byte)(text), items) == nil
+	return strings.HasPrefix(text, "[") && json.Unmarshal([]byte(text), items) == nil
 }

@@ -13,6 +13,6 @@ func make_(xs []int) ([0]int, bool) {
 		if len(s) != 0 {
 			return [0]int{}, false
 		}
-		return ([0]int)(s), true
+		return [0]int(s), true
 	}(xs)
 }

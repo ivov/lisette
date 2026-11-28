@@ -27,7 +27,7 @@ func main() {
 	if !ok {
 		return
 	}
-	recv := ([]int)(*r)
+	recv := []int(*r)
 	*r = Wrap(append(slices.Clip(recv), 2))
 	_ = w
 }

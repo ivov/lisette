@@ -34,6 +34,6 @@ func make_(xs []Colour) ([2]Colour, bool) {
 		if len(s) != 2 {
 			return [2]Colour{}, false
 		}
-		return ([2]Colour)(s), true
+		return [2]Colour(s), true
 	}(xs)
 }

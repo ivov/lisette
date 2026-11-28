@@ -23,6 +23,6 @@ func f(seen []int) ([1]int, bool) {
 		if len(s) != 1 {
 			return [1]int{}, false
 		}
-		return ([1]int)(s), true
+		return [1]int(s), true
 	}(grow(seen))
 }

@@ -10,6 +10,6 @@ description: |
 package main
 
 func f(arr [3]func(int) struct{}) [2]func(int) struct{} {
-	rest := ([2]func(int) struct{})(arr[1:])
+	rest := [2]func(int) struct{}(arr[1:])
 	return rest
 }

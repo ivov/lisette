@@ -11,7 +11,7 @@ type Widget struct {
 }
 
 func (w Widget) MarshalText() ([]byte, error) {
-	return ([]byte)("custom"), nil
+	return []byte("custom"), nil
 }
 
 func marshaler() encoding.TextMarshaler {
