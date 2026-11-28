@@ -17,7 +17,7 @@ package main
 import "example.com/other"
 
 type Foo[T other.Foo] interface {
-	item() T
+	item_() T
 }
 
 type Ranked[T any] interface {

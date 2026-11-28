@@ -1,0 +1,65 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  pub struct X { pub v: int }
+  
+  interface Get<T> {
+    fn get() -> Option<T>
+  }
+  
+  pub struct S { pub x: Ref<X> }
+  
+  impl S {
+    fn get(self) -> Option<Ref<X>> { Some(self.x) }
+  }
+  
+  fn main() {
+    let s = S { x: &X { v: 1 } }
+    let g: Get<Ref<X>> = s
+    let u: Unknown = g
+    match assert_type<S>(u) {
+      Some(back) => {
+        if back.x.v != 1 { panic("wrong value") }
+      },
+      None => panic("interface value hides S"),
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type X struct {
+	V int
+}
+
+type Get[T any] interface {
+	get_() lisette.Option[T]
+}
+
+type S struct {
+	X *X
+}
+
+func (s S) get() *X {
+	return s.X
+}
+
+func (s S) get_() lisette.Option[*X] {
+	raw := s.get()
+	return lisette.OptionFromNilable[*X](raw, raw == nil)
+}
+
+func main() {
+	s := S{X: &X{V: 1}}
+	var g Get[*X] = s
+	var u any = g
+	back, ok := u.(S)
+	if !ok {
+		panic("interface value hides S")
+	}
+	if back.X.V != 1 {
+		panic("wrong value")
+	}
+}

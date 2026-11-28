@@ -1,0 +1,94 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Foo<T: Comparable> {
+    fn f() -> T
+  }
+  
+  struct IntFoo {}
+  
+  impl IntFoo {
+    fn f(self) -> int {
+      1
+    }
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct Bar<S> {
+    m: S,
+  }
+  
+  impl<S> Bar<S> {
+    fn get(self) -> Option<S> {
+      Some(self.m)
+    }
+  }
+  
+  fn consume<T: Comparable>(box: Box<Option<Foo<T>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<T: Comparable>(b: Bar<Foo<T>>) {
+    consume(b)
+  }
+  
+  fn main() {
+    let f: Foo<int> = IntFoo {}
+    pass(Bar { m: f })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Foo[T comparable] interface {
+	f_() T
+}
+
+type IntFoo struct{}
+
+func (i IntFoo) f() int {
+	return 1
+}
+
+func (i IntFoo) f_() int {
+	return i.f()
+}
+
+type Box[U any] interface {
+	get_() U
+}
+
+type Bar[S any] struct {
+	m S
+}
+
+func (b Bar[S]) get() (S, bool) {
+	return b.m, true
+}
+
+func (b Bar[S]) get_() lisette.Option[S] {
+	return lisette.OptionFromCommaOk[S](b.get())
+}
+
+func consume[T comparable](box Box[lisette.Option[Foo[T]]]) {
+	subject := box.get_()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
+	}
+}
+
+func pass[T comparable](b Bar[Foo[T]]) {
+	consume(b)
+}
+
+func main() {
+	var f Foo[int] = IntFoo{}
+	pass(Bar[Foo[int]]{m: f})
+}

@@ -471,3 +471,94 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn partial_err_from_method_stays_err() {
+    let input = r#"
+import "go:errors"
+
+pub struct R {}
+
+impl R {
+  fn read(self) -> Partial<int, error> { Partial.Err(errors.New("eof")) }
+}
+
+fn free() -> Partial<int, error> { Partial.Err(errors.New("eof")) }
+
+fn main() {
+  if !free().is_err() { panic("free function lost Err") }
+  let r = R {}
+  match r.read() {
+    Partial.Ok(_) => panic("ok"),
+    Partial.Err(_) => {},
+    Partial.Both(_, _) => panic("both"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_err_from_method_through_bare_parameter_bound_stays_err() {
+    let input = r#"
+import "go:errors"
+
+interface Bare<T> {
+  fn read() -> T
+}
+
+pub struct R {}
+
+impl R {
+  fn read(self) -> Partial<int, error> { Partial.Err(errors.New("eof")) }
+}
+
+fn through<T, B: Bare<T>>(b: B) -> T { b.read() }
+
+fn main() {
+  let p: Partial<int, error> = through(R {})
+  match p {
+    Partial.Ok(_) => panic("ok"),
+    Partial.Err(_) => {},
+    Partial.Both(_, _) => panic("both"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_partial_interface_accepts_concrete_partial_impl() {
+    let input = r#"
+import "go:errors"
+
+interface Fetch<E> {
+  fn fetch() -> Partial<int, E>
+}
+
+pub struct S {}
+
+impl S {
+  fn fetch(self) -> Partial<int, error> { Partial.Both(3, errors.New("eof")) }
+}
+
+fn read<E, F: Fetch<E>>(f: F) -> Partial<int, E> { f.fetch() }
+
+fn main() {
+  match read(S {}) {
+    Partial.Both(n, _) => {
+      if n != 3 { panic("bound lost the value") }
+    },
+    _ => panic("bound lost Both"),
+  }
+  let f: Fetch<error> = S {}
+  match f.fetch() {
+    Partial.Both(n, _) => {
+      if n != 3 { panic("interface value lost the value") }
+    },
+    _ => panic("interface value lost Both"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

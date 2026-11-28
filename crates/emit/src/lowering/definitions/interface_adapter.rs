@@ -1,6 +1,5 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lookup::facts::emit_facts::ref_stripped_type_parameter;
 use crate::lookup::facts::return_abi_rules::interface_method_return_abi;
 use crate::lookup::facts::value_layout::{FunctionLayout, ResultProducer, ValueLayout};
 use crate::lowering::abi::ReturnSlot;
@@ -11,9 +10,7 @@ use crate::lowering::definitions::functions::BodyOrigin;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::output::finish::verify::BodyResult;
 use crate::target::ir::bodies::effect_statement;
-use crate::target::ir::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, directed_first,
-};
+use crate::target::ir::bodies::{LoweredBlock, Statement, directed_first};
 use crate::target::ir::declarations::{
     DeclarationKind, FieldDeclaration, FunctionSignature, GoDeclaration,
 };
@@ -25,7 +22,7 @@ use crate::target::names::go_name;
 use crate::target::names::go_name::{GoExport, MemberSpelling};
 use crate::target::names::receiver::fresh_receiver_name;
 use crate::target::types::go_type::GoType;
-use crate::target::types::return_abi::{CallableReturnAbi, LoweredReturnAbi};
+use crate::target::types::return_abi::CallableReturnAbi;
 use ecow::EcoString;
 use rustc_hash::FxHashSet;
 use syntax::ast::{Binding, Expression, FunctionDefinitionView};
@@ -38,14 +35,8 @@ use syntax::program::{SlotOrigin, is_go_import, is_prelude_symbol, strip_go_pref
 use syntax::types::{Symbol, Type, unqualified_name};
 
 #[derive(Debug, Clone)]
-enum AdapterConcrete {
-    Nominal(Symbol),
-    Parameter(EcoString),
-}
-
-#[derive(Debug, Clone)]
 pub(in crate::lowering) struct AdapterPlan {
-    concrete: AdapterConcrete,
+    concrete_id: Symbol,
     interface_id: Symbol,
     interface_ty: Type,
     concrete_ty: Type,
@@ -59,16 +50,13 @@ pub(in crate::lowering) struct AdapterMethod {
     source_name: EcoString,
     source_owner: Option<Symbol>,
     source_go_name: String,
-    alternate: Option<FunctionLayout>,
     source: FunctionLayout,
     target: FunctionLayout,
 }
 
 impl AdapterMethod {
     fn changes_signature(&self) -> bool {
-        self.alternate.is_some()
-            || self.go_name != self.source_go_name
-            || !self.source.same_representation(&self.target)
+        self.go_name != self.source_go_name || !self.source.same_representation(&self.target)
     }
 }
 
@@ -79,9 +67,9 @@ pub(in crate::lowering) struct MethodParameters<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RequirementAbi {
-    Lisette,
-    Go,
+pub(in crate::lowering) enum MethodBody {
+    InPlain,
+    InCounterpart,
 }
 
 impl Planner<'_> {
@@ -91,6 +79,7 @@ impl Planner<'_> {
         method_parameters: MethodParameters<'_>,
         go_name: &str,
         generic_context: &[(EcoString, Vec<Type>)],
+        method_body: MethodBody,
     ) -> GoDeclaration {
         let MethodParameters {
             receiver,
@@ -102,29 +91,26 @@ impl Planner<'_> {
             .map(|param| self.facts.value_layout(&param.ty, SlotOrigin::Lisette))
             .collect();
         let result = self.facts.value_layout(return_ty, SlotOrigin::Lisette);
-        let source = FunctionLayout {
+        let layout = |abi| FunctionLayout {
             producer: ResultProducer::Lisette,
-            ..self.facts.function_layout(
-                parameters.clone(),
-                &result,
-                return_abi(&self.facts, return_ty, ReturnSlot::Method),
-                Some(return_ty),
-            )
+            ..self
+                .facts
+                .function_layout(parameters.clone(), &result, abi, Some(return_ty))
+        };
+        let plain = layout(return_abi(&self.facts, return_ty, ReturnSlot::Method));
+        let tagged = layout(CallableReturnAbi::Value);
+        let plain_go_name = go_name.to_string();
+        let tagged_go_name = go_name::tagged_counterpart(go_name);
+        let (go_name, target, source_go_name, source) = match method_body {
+            MethodBody::InPlain => (tagged_go_name, tagged, plain_go_name, plain),
+            MethodBody::InCounterpart => (plain_go_name, plain, tagged_go_name, tagged),
         };
 
-        let target = self.facts.function_layout(
-            parameters,
-            &result,
-            CallableReturnAbi::Value,
-            Some(return_ty),
-        );
-
         let twin = AdapterMethod {
-            go_name: go_name::tagged_counterpart(go_name),
+            go_name,
             source_name: method.name.clone(),
             source_owner: None,
-            source_go_name: go_name.to_string(),
-            alternate: None,
+            source_go_name,
             source,
             target,
         };
@@ -136,93 +122,6 @@ impl Planner<'_> {
             &twin,
             line.as_ref(),
         )
-    }
-
-    fn lower_dynamic_adapter_body(
-        &mut self,
-        method: &AdapterMethod,
-        alternate: &FunctionLayout,
-        receiver: &GoIdentifier,
-        parameters: &[GoIdentifier],
-    ) -> Vec<Statement> {
-        let inner = GoExpression::conversion(
-            GoType::any(),
-            GoExpression::selector(
-                GoExpression::identifier(receiver.clone()),
-                "inner".to_string(),
-            ),
-        );
-
-        let mut statements = Vec::new();
-        if !method.source.same_representation(alternate) {
-            statements.extend(self.lower_local_dynamic_call(method, inner.clone(), parameters));
-        }
-        let foreign_name = self
-            .facts
-            .method_go_name(&method.source_name, GoExport::Unexported);
-        let foreign_type = self
-            .queries()
-            .dynamic_method_interface(&foreign_name, alternate);
-        let foreign = GoExpression::type_assertion(inner, foreign_type);
-        let arguments = self.plan_layout_changed_arguments(
-            &mut statements,
-            parameters
-                .iter()
-                .map(|parameter| GoExpression::identifier(parameter.clone()))
-                .collect(),
-            alternate,
-            &method.target,
-        );
-
-        let call = GoExpression::call(GoExpression::selector(foreign, foreign_name), arguments);
-        self.plan_function_result_layout_change(&mut statements, call, alternate, &method.target);
-        statements
-    }
-
-    fn lower_local_dynamic_call(
-        &mut self,
-        method: &AdapterMethod,
-        inner: GoExpression,
-        parameters: &[GoIdentifier],
-    ) -> Vec<Statement> {
-        let local_type = self
-            .queries()
-            .dynamic_method_interface(&method.source_go_name, &method.source);
-        let local = self.fresh_local("receiver");
-        let ok = self.fresh_local("ok");
-        let assertion = define_many(
-            vec![local.clone(), ok.clone()],
-            GoExpression::type_assertion(inner, local_type),
-        );
-        let mut branch = Vec::new();
-        let arguments = self.plan_layout_changed_arguments(
-            &mut branch,
-            parameters
-                .iter()
-                .map(|parameter| GoExpression::identifier(parameter.clone()))
-                .collect(),
-            &method.source,
-            &method.target,
-        );
-
-        let call = GoExpression::call(
-            GoExpression::selector(
-                GoExpression::identifier(local),
-                method.source_go_name.clone(),
-            ),
-            arguments,
-        );
-
-        self.plan_function_result_layout_change(&mut branch, call, &method.source, &method.target);
-        if method.target.return_abi() == CallableReturnAbi::Void {
-            branch.push(LoweredStatement::Return(Vec::new()).into());
-        }
-        let check = LoweredStatement::If(IfPlan::plain(
-            GoExpression::identifier(ok),
-            LoweredBlock { statements: branch },
-            ElseArm::None,
-        ));
-        vec![assertion, check.into()]
     }
 
     pub(in crate::lowering) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> GoType {
@@ -381,13 +280,6 @@ impl Planner<'_> {
             receiver,
             parameters,
         } = bindings;
-        if let Some(alternate) = &method.alternate {
-            let go_result = method.target.result_go_type(&self.queries());
-            return (
-                go_result,
-                self.lower_dynamic_adapter_body(method, alternate, receiver, parameters),
-            );
-        }
         let mut statements = Vec::new();
         let arguments = self.plan_layout_changed_arguments(
             &mut statements,
@@ -491,18 +383,6 @@ fn adapter_uses_type_parameter(
         })
 }
 
-pub(in crate::lowering) fn bound_needs_dispatch(facts: &EmitFacts<'_>, bound: &Type) -> bool {
-    interface_requirements(bound, facts.type_query_lookup())
-        .iter()
-        .any(|requirement| {
-            !is_go_import(&requirement.declaring_interface)
-                && matches!(
-                    interface_method_return_abi(facts, &requirement.method),
-                    CallableReturnAbi::Lowered(LoweredReturnAbi::Partial { .. })
-                )
-        })
-}
-
 pub(in crate::lowering) fn requirement_go_return_abi(
     facts: &EmitFacts<'_>,
     requirement: &InterfaceRequirement,
@@ -523,33 +403,49 @@ fn requirement_callee(requirement: &InterfaceRequirement) -> CalleeName {
     ))
 }
 
-fn requirement_uses_tagged_counterpart(
-    facts: &EmitFacts<'_>,
-    requirement: &InterfaceRequirement,
-) -> bool {
-    !is_go_import(&requirement.declaring_interface)
-        && facts.method_uses_tagged_return(&requirement.name)
+fn emits_lisette_method(facts: &EmitFacts<'_>, owner: &Symbol, member: &str) -> bool {
+    !is_go_import(owner) && !is_prelude_symbol(owner) && facts.emits_go_method(owner, member)
 }
 
-pub(in crate::lowering) fn has_tagged_counterpart(
+pub(in crate::lowering) fn tagged_counterpart_body(
     facts: &EmitFacts<'_>,
     owner: &Symbol,
     member: &str,
-) -> bool {
-    !is_go_import(owner)
-        && !is_prelude_symbol(owner)
-        && facts.method_uses_tagged_return(member)
-        && facts.emits_go_method(owner, member)
+) -> Option<MethodBody> {
+    if !emits_lisette_method(facts, owner, member) {
+        None
+    } else if facts.method_returns_partial(owner, member) {
+        Some(MethodBody::InCounterpart)
+    } else if facts.method_uses_tagged_return(member) {
+        Some(MethodBody::InPlain)
+    } else {
+        None
+    }
 }
 
-fn callee_selects_tagged_counterpart(facts: &EmitFacts<'_>, callee: &CheckedCallee) -> bool {
-    match callee.interface_requirement() {
-        Some(requirement) => requirement_uses_tagged_counterpart(facts, requirement),
-        None => callee
-            .name
-            .as_ref()
-            .and_then(CalleeName::method)
-            .is_some_and(|method| has_tagged_counterpart(facts, &method.owner, &method.name)),
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::lowering) enum MethodUse {
+    Call,
+    Value,
+}
+
+fn callee_selects_tagged_counterpart(
+    facts: &EmitFacts<'_>,
+    callee: &CheckedCallee,
+    method_use: MethodUse,
+) -> bool {
+    if let Some(requirement) = callee.interface_requirement() {
+        return facts.requirement_uses_tagged_counterpart(requirement);
+    }
+    let Some(method) = callee.name.as_ref().and_then(CalleeName::method) else {
+        return false;
+    };
+    match method_use {
+        MethodUse::Call => {
+            tagged_counterpart_body(facts, &method.owner, &method.name)
+                == Some(MethodBody::InCounterpart)
+        }
+        MethodUse::Value => tagged_counterpart_body(facts, &method.owner, &method.name).is_some(),
     }
 }
 
@@ -569,7 +465,7 @@ fn adapter_source_go_name(
                 GoExport::Unexported
             };
             let spelling = if !source_owner.is_some_and(is_go_import)
-                && requirement_uses_tagged_counterpart(facts, requirement)
+                && facts.requirement_uses_tagged_counterpart(requirement)
             {
                 MemberSpelling::TaggedCounterpart
             } else {
@@ -582,7 +478,7 @@ fn adapter_source_go_name(
 }
 
 fn requirement_go_name(facts: &EmitFacts<'_>, requirement: &InterfaceRequirement) -> String {
-    let spelling = if requirement_uses_tagged_counterpart(facts, requirement) {
+    let spelling = if facts.requirement_uses_tagged_counterpart(requirement) {
         MemberSpelling::TaggedCounterpart
     } else {
         MemberSpelling::Plain
@@ -617,10 +513,7 @@ fn adapter_method_line(
 
 impl AdapterPlan {
     fn type_name(&self, index: usize) -> String {
-        let concrete_name = match &self.concrete {
-            AdapterConcrete::Nominal(id) => unqualified_name(id),
-            AdapterConcrete::Parameter(name) => name.as_str(),
-        };
+        let concrete_name = unqualified_name(&self.concrete_id);
         let go_path = strip_go_prefix(&self.interface_id).unwrap_or(self.interface_id.as_str());
         let iface_name = unqualified_name(go_path);
         format!(
@@ -634,7 +527,11 @@ impl AdapterPlan {
 }
 
 impl PlannerQueries<'_, '_> {
-    pub(in crate::lowering) fn member_spelling(&self, expression: &Expression) -> MemberSpelling {
+    pub(in crate::lowering) fn member_spelling(
+        &self,
+        expression: &Expression,
+        method_use: MethodUse,
+    ) -> MemberSpelling {
         let selects_twin = matches!(
             expression,
             Expression::DotAccess {
@@ -642,11 +539,9 @@ impl PlannerQueries<'_, '_> {
                     | DotAccessResolution::InstanceMethod { .. },
                 ..
             } | Expression::Identifier { .. }
-        ) && self
-            .facts
-            .checked(expression)
-            .function_value()
-            .is_some_and(|callee| callee_selects_tagged_counterpart(self.facts, callee));
+        ) && self.facts.checked(expression).function_value().is_some_and(
+            |callee| callee_selects_tagged_counterpart(self.facts, callee, method_use),
+        );
 
         if selects_twin {
             MemberSpelling::TaggedCounterpart
@@ -655,179 +550,16 @@ impl PlannerQueries<'_, '_> {
         }
     }
 
-    pub(in crate::lowering) fn bound_dispatch_requirement(
-        &self,
-        expression: &Expression,
-    ) -> Option<(Type, InterfaceRequirement)> {
-        self.bound_requirement(expression)
-            .filter(|(bound, _)| bound_needs_dispatch(self.facts, bound))
-    }
-
-    fn bound_requirement(&self, expression: &Expression) -> Option<(Type, InterfaceRequirement)> {
-        let CallOperation::BoundMethod { bound, requirement } =
-            &self.facts.checked(expression).function_value()?.operation
-        else {
-            return None;
-        };
-        Some((bound.clone(), (**requirement).clone()))
-    }
-
     pub(in crate::lowering) fn go_bound_requirement(
         &self,
         expression: &Expression,
     ) -> Option<InterfaceRequirement> {
-        self.bound_requirement(expression)
-            .map(|(_, requirement)| requirement)
-            .filter(|requirement| is_go_import(&requirement.declaring_interface))
-    }
-
-    pub(in crate::lowering) fn bound_dispatch_layout(
-        &self,
-        expression: &Expression,
-    ) -> Option<FunctionLayout> {
-        let (_, requirement) = self.bound_dispatch_requirement(expression)?;
-        self.requirement_value_layout(&requirement)
-    }
-
-    fn requirement_value_layout(
-        &self,
-        requirement: &InterfaceRequirement,
-    ) -> Option<FunctionLayout> {
-        let layout = self.requirement_layout(requirement, RequirementAbi::Lisette)?;
-        Some(layout.with_return_abi(self.facts, CallableReturnAbi::Value, SlotOrigin::Lisette))
-    }
-
-    fn requirement_layout(
-        &self,
-        requirement: &InterfaceRequirement,
-        abi: RequirementAbi,
-    ) -> Option<FunctionLayout> {
-        let function = requirement.ty.as_function_type()?;
-        let declared =
-            if abi == RequirementAbi::Go && !is_go_import(&requirement.declaring_interface) {
-                function
-            } else {
-                requirement.method.ty.as_function_type()?
-            };
-
-        let parameters = function
-            .params
-            .iter()
-            .zip(&declared.params)
-            .map(|(parameter, declared)| {
-                let origin = match abi {
-                    RequirementAbi::Go => SlotOrigin::of_go_declaration(
-                        SlotOrigin::GoParameter,
-                        &declared.ty,
-                        self.facts.type_query_lookup(),
-                    ),
-                    RequirementAbi::Lisette => SlotOrigin::Lisette,
-                };
-
-                self.facts
-                    .value_layout_with_declaration(&parameter.ty, origin, &declared.ty)
-            })
-            .collect();
-
-        let origin = match abi {
-            RequirementAbi::Go => SlotOrigin::of_go_declaration(
-                SlotOrigin::GoReturn,
-                &declared.return_type,
-                self.facts.type_query_lookup(),
-            ),
-            RequirementAbi::Lisette => SlotOrigin::Lisette,
-        };
-
-        let result = self.facts.target_layout_with_declaration(
-            &function.return_type,
-            origin,
-            &declared.return_type,
-        );
-        let return_abi = match abi {
-            RequirementAbi::Go => {
-                requirement_go_return_abi(self.facts, requirement, &declared.return_type)
-            }
-            RequirementAbi::Lisette => interface_method_return_abi(self.facts, &requirement.method),
-        };
-
-        Some(self.facts.function_layout(
-            parameters,
-            &result,
-            return_abi,
-            Some(&declared.return_type),
-        ))
-    }
-
-    pub(in crate::lowering) fn dynamic_interface_adapter(
-        &self,
-        source: &Type,
-        target: &Type,
-        witness: Option<&ConformanceWitness>,
-    ) -> Option<AdapterPlan> {
-        let name = ref_stripped_type_parameter(source)?;
-        let Type::Nominal { id, .. } = target else {
+        let CallOperation::BoundMethod { requirement, .. } =
+            &self.facts.checked(expression).function_value()?.operation
+        else {
             return None;
         };
-        let mut methods = Vec::new();
-        let mut seen = FxHashSet::default();
-        for requirement in interface_requirements(target, self.facts.type_query_lookup()) {
-            if !seen.insert(
-                self.facts
-                    .method_go_name(&requirement.name, GoExport::Unexported),
-            ) {
-                continue;
-            }
-            let selected = match witness {
-                Some(witness) => witness
-                    .method_for(&requirement)
-                    .selected_requirement
-                    .clone()
-                    .expect("internal error: a checked conformance selects a method of a bound"),
-                None => requirement.clone(),
-            };
-
-            let local = self.requirement_layout(&selected, RequirementAbi::Lisette)?;
-            let foreign = self.requirement_layout(&selected, RequirementAbi::Go)?;
-            let target = match witness {
-                Some(_) => {
-                    let abi = if is_go_import(&requirement.declaring_interface) {
-                        RequirementAbi::Go
-                    } else {
-                        RequirementAbi::Lisette
-                    };
-                    self.requirement_layout(&requirement, abi)?
-                }
-                None => self.requirement_value_layout(&selected)?,
-            };
-
-            methods.push(AdapterMethod {
-                source_go_name: requirement_go_name(self.facts, &selected),
-                go_name: requirement_go_name(self.facts, &requirement),
-                source_name: selected.name,
-                source_owner: None,
-                source: local,
-                alternate: Some(foreign),
-                target,
-            });
-        }
-        Some(AdapterPlan {
-            concrete: AdapterConcrete::Parameter(name),
-            interface_id: id.clone(),
-            interface_ty: target.clone(),
-            concrete_ty: source.clone(),
-            generic_context: self.adapter_generic_context(source, &methods),
-            methods,
-        })
-    }
-
-    fn dynamic_method_interface(&self, method_name: &str, layout: &FunctionLayout) -> GoType {
-        let parameters: Vec<GoType> = layout
-            .parameters
-            .iter()
-            .map(|parameter| parameter.go_type(self))
-            .collect();
-        let result = layout.result_go_type(self);
-        GoType::method_interface(method_name, &parameters, result.as_ref())
+        is_go_import(&requirement.declaring_interface).then(|| (**requirement).clone())
     }
 
     pub(in crate::lowering) fn interface_adapter(
@@ -839,24 +571,12 @@ impl PlannerQueries<'_, '_> {
         let Type::Nominal { id: target_id, .. } = target else {
             return None;
         };
-        let source_shape = &conversion.source_shape;
-        if let Type::Parameter(name) = source_shape
-            && self.scope.type_params().iter().any(|parameter| {
-                &parameter.name == name
-                    && parameter
-                        .bounds
-                        .iter()
-                        .any(|bound| bound_needs_dispatch(self.facts, bound))
-            })
-        {
-            return self.dynamic_interface_adapter(source_ty, target, conversion.witness.as_ref());
-        }
-        let Type::Nominal { id: source_id, .. } = source_shape else {
+        let Type::Nominal { id: source_id, .. } = &conversion.source_shape else {
             return None;
         };
         let methods = self.adapted_methods(target, conversion.witness.as_ref())?;
         Some(AdapterPlan {
-            concrete: AdapterConcrete::Nominal(source_id.clone()),
+            concrete_id: source_id.clone(),
             interface_id: target_id.clone(),
             interface_ty: target.clone(),
             concrete_ty: source_ty.clone(),
@@ -975,7 +695,6 @@ impl PlannerQueries<'_, '_> {
                 Some(source_owner),
                 checked,
             ),
-            alternate: None,
             source,
             target,
         })
@@ -996,7 +715,7 @@ impl PlannerQueries<'_, '_> {
             go_callable_return_abi(self.facts, id, source.return_type, hints)
         } else if let Some(source_requirement) = source.requirement {
             interface_method_return_abi(self.facts, &source_requirement.method)
-        } else if requirement_uses_tagged_counterpart(self.facts, requirement) {
+        } else if self.facts.requirement_uses_tagged_counterpart(requirement) {
             CallableReturnAbi::Value
         } else {
             return_abi(self.facts, declared_return, ReturnSlot::Method)

@@ -5257,7 +5257,7 @@ fn main() {
   let both = capture(Source {}, false)
   if !both.is_both() { panic("lost Both tag") }
   let err = capture(Source {}, true)
-  if !err.is_both() { panic("Err through a method reads back as Both") }
+  if !err.is_err() { panic("Err through a method lost its tag") }
 }
 "#;
     assert_emit_snapshot!(input);

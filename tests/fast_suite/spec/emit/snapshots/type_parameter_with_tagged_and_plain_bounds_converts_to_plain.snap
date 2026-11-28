@@ -1,0 +1,89 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface Tagged<T> { fn get() -> T }
+  interface Plain { fn get() -> int }
+  
+  interface Combined {
+    embed Tagged<int>
+    embed Plain
+  }
+  
+  fn convert<T: Combined>(t: T) -> Plain { t as Plain }
+  fn two<T: Plain + Tagged<int>>(t: T) -> Plain { t as Plain }
+  fn two_reversed<T: Tagged<int> + Plain>(t: T) -> Plain { t as Plain }
+  fn plain<P: Plain>(p: P) -> int { p.get() }
+  fn forward<T: Tagged<int> + Plain>(t: T) -> int { plain(t) }
+  
+  struct S {}
+  
+  impl S {
+    fn get(self) -> int { 7 }
+  }
+  
+  fn main() {
+    fmt.Println(convert(S {}).get(), two(S {}).get(), two_reversed(S {}).get(), forward(S {}))
+  }
+---
+package main
+
+import "fmt"
+
+type Tagged[T any] interface {
+	get_() T
+}
+
+type Plain interface {
+	get() int
+}
+
+type Combined interface {
+	Tagged[int]
+	Plain
+}
+
+func convert[T Combined](t T) Plain {
+	return t
+}
+
+func two[T interface {
+	Plain
+	Tagged[int]
+}](t T) Plain {
+	return t
+}
+
+func twoReversed[T interface {
+	Tagged[int]
+	Plain
+}](t T) Plain {
+	return t
+}
+
+func plain[P Plain](p P) int {
+	return p.get()
+}
+
+func forward[T interface {
+	Tagged[int]
+	Plain
+}](t T) int {
+	return plain(t)
+}
+
+type S struct{}
+
+func (s S) get() int {
+	return 7
+}
+
+func (s S) get_() int {
+	return s.get()
+}
+
+func main() {
+	fmt.Println(convert(S{}).get(), two(S{}).get(), twoReversed(S{}).get(), forward(S{}))
+}

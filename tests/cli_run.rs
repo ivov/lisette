@@ -3938,16 +3938,16 @@ fn promoted_method_participates_in_adapter() {
         r#"
 import "go:fmt"
 struct Thing { n: int }
-interface Opt { fn find() -> Option<Ref<Thing>>; fn name() -> string }
+interface Opt { #[go(comma_ok)] fn find() -> Option<Ref<Thing>>; fn name() -> string }
 struct Base {}
 impl Base { fn name(self) -> string { "base" } }
-struct Bar<T> { embed Base, x: Option<T> }
-impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
+struct Bar { embed Base, x: Option<Ref<Thing>> }
+impl Bar { fn find(self) -> Option<Ref<Thing>> { self.x } }
 fn show(o: Opt) -> string {
     match o.find() { Some(t) => fmt.Sprintf("%s %d", o.name(), t.n), None => o.name() }
 }
 fn main() {
-    let b: Bar<Ref<Thing>> = Bar { Base: Base {}, x: Some(&Thing { n: 1 }) }
+    let b = Bar { Base: Base {}, x: Some(&Thing { n: 1 }) }
     fmt.Println(show(b))
 }
 "#,
@@ -4099,16 +4099,16 @@ fn adapter_keys_preserve_packages_and_erase_permissions() {
 import "go:fmt"
 import "a"
 import "b"
-interface View<T> { fn find() -> Option<Ref<T>> }
-struct Bar<T> { x: Option<T> }
-impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
-fn first(v: View<a.Item>) -> int { match v.find() { Some(item) => item.n, None => 0 } }
-fn second(v: View<b.Item>) -> int { match v.find() { Some(item) => item.n, None => 0 } }
+struct Thing { n: int }
+interface View { #[go(comma_ok)] fn find() -> Option<Ref<Thing>> }
+struct Bar<T> { x: Option<Ref<Thing>>, items: Slice<T> }
+impl<T> Bar<T> { fn find(self) -> Option<Ref<Thing>> { self.x } }
+fn show(v: View) -> int { match v.find() { Some(thing) => thing.n, None => 0 } }
 fn main() {
-  let mut one: Bar<Ref<a.Item>> = Bar { x: Some(&a.Item { n: 1 }) }
-  let two: Bar<Ref<b.Item>> = Bar { x: Some(&b.Item { n: 2 }) }
-  let writable: mut Ref<Bar<Ref<a.Item>>> = &one
-  fmt.Println(first(&one), first(writable), second(&two))
+  let mut one: Bar<a.Item> = Bar { x: Some(&Thing { n: 1 }), items: [] }
+  let two: Bar<b.Item> = Bar { x: Some(&Thing { n: 2 }), items: [] }
+  let writable: mut Ref<Bar<a.Item>> = &one
+  fmt.Println(show(&one), show(writable), show(&two))
 }
 "#,
     )
@@ -4486,15 +4486,15 @@ fn tuple_binding_return_wraps_interface_adapter() {
         r#"
 import "go:fmt"
 struct Thing { n: int }
-interface Opt { fn find() -> Option<Ref<Thing>> }
-struct Bar<T> { x: Option<T> }
-impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
-fn pair(b: Bar<Ref<Thing>>) -> (Opt, int) {
+interface Opt { #[go(comma_ok)] fn find() -> Option<Ref<Thing>> }
+struct Bar { x: Option<Ref<Thing>> }
+impl Bar { fn find(self) -> Option<Ref<Thing>> { self.x } }
+fn pair(b: Bar) -> (Opt, int) {
   let t = (b, 1)
   t
 }
 fn main() {
-  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let b = Bar { x: Some(&Thing { n: 1 }) }
   let (opt, n) = pair(b)
   fmt.Println(opt.find().is_some(), n)
 }
@@ -4581,9 +4581,9 @@ fn main() {
 const ADAPTED_BAR: &str = r#"
 import "go:fmt"
 struct Thing { n: int }
-interface Opt { fn find() -> Option<Ref<Thing>> }
-struct Bar<T> { x: Option<T> }
-impl<T> Bar<T> { fn find(self) -> Option<T> { self.x } }
+interface Opt { #[go(comma_ok)] fn find() -> Option<Ref<Thing>> }
+struct Bar { x: Option<Ref<Thing>> }
+impl Bar { fn find(self) -> Option<Ref<Thing>> { self.x } }
 "#;
 
 fn assert_adapted_bar_runs(source: &str, expected: &str) {
@@ -4594,7 +4594,7 @@ fn assert_adapted_bar_runs(source: &str, expected: &str) {
 fn tail_binding_in_if_arm_converts_to_interface() {
     assert_adapted_bar_runs(
         r#"
-fn pick(b: Bar<Ref<Thing>>, c: bool, d: bool) -> Opt {
+fn pick(b: Bar, c: bool, d: bool) -> Opt {
   if d {
     let t = if c { b } else { b }
     t
@@ -4604,7 +4604,7 @@ fn pick(b: Bar<Ref<Thing>>, c: bool, d: bool) -> Opt {
   }
 }
 fn main() {
-  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let b = Bar { x: Some(&Thing { n: 1 }) }
   fmt.Println(pick(b, true, false).find().is_some(), pick(b, false, true).find().is_some())
 }
 "#,
@@ -4616,7 +4616,7 @@ fn main() {
 fn tail_binding_in_if_arm_converts_tuple_element() {
     assert_adapted_bar_runs(
         r#"
-fn pick(b: Bar<Ref<Thing>>, c: bool, d: bool) -> (Opt, int) {
+fn pick(b: Bar, c: bool, d: bool) -> (Opt, int) {
   if d {
     let t = if c { (b, 1) } else { (b, 2) }
     t
@@ -4625,7 +4625,7 @@ fn pick(b: Bar<Ref<Thing>>, c: bool, d: bool) -> (Opt, int) {
   }
 }
 fn main() {
-  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let b = Bar { x: Some(&Thing { n: 1 }) }
   let (o, n) = pick(b, true, true)
   fmt.Println(o.find().is_some(), n)
 }
@@ -4638,7 +4638,7 @@ fn main() {
 fn tail_binding_in_match_arm_converts_to_interface() {
     assert_adapted_bar_runs(
         r#"
-fn pick(b: Bar<Ref<Thing>>, c: int) -> Opt {
+fn pick(b: Bar, c: int) -> Opt {
   match c {
     0 => {
       let t = if c == 0 { b } else { b }
@@ -4648,7 +4648,7 @@ fn pick(b: Bar<Ref<Thing>>, c: int) -> Opt {
   }
 }
 fn main() {
-  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let b = Bar { x: Some(&Thing { n: 1 }) }
   fmt.Println(pick(b, 0).find().is_some())
 }
 "#,
@@ -4660,7 +4660,7 @@ fn main() {
 fn tail_binding_in_if_let_arm_converts_to_interface() {
     assert_adapted_bar_runs(
         r#"
-fn pick(o: Option<int>, b: Bar<Ref<Thing>>) -> Opt {
+fn pick(o: Option<int>, b: Bar) -> Opt {
   if let Some(n) = o {
     let t = match n { 0 => b, _ => b }
     t
@@ -4669,7 +4669,7 @@ fn pick(o: Option<int>, b: Bar<Ref<Thing>>) -> Opt {
   }
 }
 fn main() {
-  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let b = Bar { x: Some(&Thing { n: 1 }) }
   fmt.Println(pick(Some(0), b).find().is_some())
 }
 "#,
@@ -4682,7 +4682,7 @@ fn tail_binding_in_closure_arm_converts_to_interface() {
     assert_adapted_bar_runs(
         r#"
 fn main() {
-  let b: Bar<Ref<Thing>> = Bar { x: Some(&Thing { n: 1 }) }
+  let b = Bar { x: Some(&Thing { n: 1 }) }
   let f = |c: bool| -> Opt {
     if c {
       let t = if c { b } else { b }

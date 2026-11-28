@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+   ╭─[test.lis:8:17]
+ 7 │   let b: Box<Ref<X>> = Box { item: None }
+ 8 │   let _ = first(b)
+   ·                 ┬
+   ·                 ╰── unsupported
+ 9 │ }
+   ╰────
+  help: Lisette does not yet support using `Box` where a generic requires `GetX` · code: [infer.unsupported_bound_argument]

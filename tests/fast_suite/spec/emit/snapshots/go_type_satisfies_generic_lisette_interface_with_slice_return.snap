@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:bytes"
+  
+  interface Byteser<T> {
+    fn Bytes() -> Slice<T>
+  }
+  
+  fn count<B: Byteser<byte>>(b: B) -> int { b.Bytes().length() }
+  
+  fn main() {
+    let b = bytes.NewBufferString("abc")
+    if count(b) != 3 { panic("wrong bound length") }
+    let v: Byteser<byte> = b
+    let u: Unknown = v
+    if assert_type<Ref<bytes.Buffer>>(u).is_none() { panic("interface value hides Buffer") }
+  }
+---
+package main
+
+import "bytes"
+
+type Byteser[T any] interface {
+	Bytes() []T
+}
+
+func count[B Byteser[byte]](b B) int {
+	return len(b.Bytes())
+}
+
+func main() {
+	b := bytes.NewBufferString("abc")
+	if count(b) != 3 {
+		panic("wrong bound length")
+	}
+	var v Byteser[byte] = b
+	var u any = v
+	if _, ok := u.(*bytes.Buffer); !ok {
+		panic("interface value hides Buffer")
+	}
+}

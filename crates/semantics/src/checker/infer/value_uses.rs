@@ -8,7 +8,7 @@ use syntax::program::{
     ConformanceWitness, Definition, DefinitionBody, DotAccessResolution, FieldKey, FieldSelection,
     InterfaceConversion, InterfaceRequirement, MethodName, NativeOperation, ReceiverCoercion,
     ValueUseKey, constructor_fields, interface_requirements, is_go_import, resolved_callee,
-    resolved_instantiation,
+    resolved_instantiation, supplying_requirement,
 };
 use syntax::types::{
     CompoundKind, FunctionType, SubstitutionMap, Symbol, Type, TypeVarId, build_substitution_map,
@@ -18,6 +18,7 @@ use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::equality;
 use crate::checker::infer::unify::{are_go_type_aliases, simple_kinds_are_go_aliases};
+use crate::checker::promotion;
 use crate::facts::{GenericBoundOrigin, ValueUseObligation};
 use crate::store::Store;
 
@@ -103,17 +104,11 @@ impl InferCtx<'_> {
         operation: CallOperation,
         type_arguments: SubstitutionMap,
     ) {
-        self.record_method_callee(callee, operation, type_arguments, None);
-    }
-
-    pub(super) fn record_method_callee(
-        &mut self,
-        callee: &Expression,
-        operation: CallOperation,
-        type_arguments: SubstitutionMap,
-        interface_method: Option<Box<InterfaceRequirement>>,
-    ) {
         let callee = callee.unwrap_value_wrappers();
+        let interface_method = match operation {
+            CallOperation::BoundMethod { .. } => None,
+            _ => supplying_interface_method(self.store, callee, |ty| ty.resolve_in(&self.env)),
+        };
         let name = resolved_callee(callee).map(|name| unaliased_callee(self.store, name));
         let copies_storage = matches!(
             &operation,
@@ -337,6 +332,39 @@ impl InferCtx<'_> {
         }
         variables.into_iter().collect()
     }
+}
+
+fn supplying_interface_method(
+    store: &Store,
+    callee: &Expression,
+    resolve: impl FnOnce(&Type) -> Type,
+) -> Option<Box<InterfaceRequirement>> {
+    let Expression::DotAccess {
+        expression: receiver,
+        member,
+        resolution:
+            DotAccessResolution::InstanceMethod { .. } | DotAccessResolution::InstanceMethodValue { .. },
+        ..
+    } = callee
+    else {
+        return None;
+    };
+    let receiver_ty = store.receiver_shape(&resolve(&receiver.get_type()));
+    if !store.is_interface(&receiver_ty) && !promotion::has_direct_embed(store, &receiver_ty) {
+        return None;
+    }
+    let promotion::Resolution::Found(supplier) =
+        promotion::resolve_selector(store, &receiver_ty, member)
+    else {
+        return None;
+    };
+    if !store.is_interface(&supplier.declaring_instance) {
+        return None;
+    }
+    supplying_requirement(&[*supplier.declaring_instance], member, None, |id| {
+        store.get_definition(id)
+    })
+    .map(Box::new)
 }
 
 /// `definition` with an aliased owner type replaced by the type it names.
@@ -685,7 +713,7 @@ impl Finalizer<'_> {
                 .unwrap_or_default(),
             copies_storage: false,
             binds_receiver: false,
-            interface_method: None,
+            interface_method: supplying_interface_method(self.store, expression, Type::clone),
             span: expression.get_span(),
         };
         self.bodies.insert_callee(key, checked);

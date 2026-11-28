@@ -97,6 +97,39 @@ pub fn go_return_contract<'a>(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GoReturnForm {
+    Void,
+    Value,
+    NullableOption,
+    CommaOkOption,
+    Result,
+    BareError,
+    Partial,
+    Tuple(usize),
+}
+
+pub fn go_return_form<'a>(
+    return_ty: &Type,
+    lookup: impl Fn(&str) -> Option<&'a Definition>,
+) -> GoReturnForm {
+    let peeled = types::peel_alias(return_ty, &lookup);
+    let err_is_nilable = || {
+        let err = peeled.err_type();
+        types::is_prelude_error(&err, &lookup) || types::is_nilable_go_type(&err, &lookup)
+    };
+    match go_return_contract(&peeled, &[], &lookup) {
+        GoReturnContract::Error if err_is_nilable() => GoReturnForm::BareError,
+        GoReturnContract::Result if err_is_nilable() => GoReturnForm::Result,
+        GoReturnContract::Partial if err_is_nilable() => GoReturnForm::Partial,
+        GoReturnContract::Nullable => GoReturnForm::NullableOption,
+        GoReturnContract::CommaOk => GoReturnForm::CommaOkOption,
+        GoReturnContract::Tuple(arity) => GoReturnForm::Tuple(arity),
+        _ if peeled.is_unit() || peeled.is_never() => GoReturnForm::Void,
+        _ => GoReturnForm::Value,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GoInteropContract {
     pub declared: Type,

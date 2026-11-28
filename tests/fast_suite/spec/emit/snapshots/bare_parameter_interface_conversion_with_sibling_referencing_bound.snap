@@ -1,0 +1,97 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  interface Holder<T> {
+    fn item() -> T
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  struct IntHolder {}
+  
+  impl IntHolder {
+    fn item(self) -> int {
+      5
+    }
+  }
+  
+  struct Wrap<A, B: Holder<A>> {
+    a: A,
+    b: B,
+  }
+  
+  impl<A, B: Holder<A>> Wrap<A, B> {
+    fn get(self) -> Option<A> {
+      Some(self.a)
+    }
+  }
+  
+  fn consume<A>(box: Box<Option<A>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn use_wrap<A, B: Holder<A>>(w: Wrap<A, B>) {
+    consume(w)
+  }
+  
+  fn main() {
+    use_wrap(Wrap { a: 3, b: IntHolder {} })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Holder[T any] interface {
+	item_() T
+}
+
+type Box[U any] interface {
+	get_() U
+}
+
+type IntHolder struct{}
+
+func (i IntHolder) item() int {
+	return 5
+}
+
+func (i IntHolder) item_() int {
+	return i.item()
+}
+
+type Wrap[A any, B Holder[A]] struct {
+	a A
+	b B
+}
+
+func (w Wrap[A, B]) get() (A, bool) {
+	return w.a, true
+}
+
+func (w Wrap[A, B]) get_() lisette.Option[A] {
+	return lisette.OptionFromCommaOk[A](w.get())
+}
+
+func consume[A any](box Box[lisette.Option[A]]) {
+	subject := box.get_()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
+	}
+}
+
+func useWrap[A any, B Holder[A]](w Wrap[A, B]) {
+	consume(w)
+}
+
+func main() {
+	useWrap(Wrap[int, IntHolder]{
+		a: 3,
+		b: IntHolder{},
+	})
+}

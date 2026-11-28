@@ -5,7 +5,9 @@ use crate::lookup::state::enclosing::ReturnContext;
 use crate::lowering::abi::ReturnSlot;
 use crate::lowering::abi::return_abi;
 use crate::lowering::control_flow::propagation::plain_return;
-use crate::lowering::definitions::interface_adapter::{MethodParameters, has_tagged_counterpart};
+use crate::lowering::definitions::interface_adapter::{
+    MethodBody, MethodParameters, tagged_counterpart_body,
+};
 use crate::lowering::patterns::sites::PatternSubject;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::statements::asserts::test_context_call;
@@ -235,7 +237,13 @@ impl Planner<'_> {
         };
         let (generic_context, signature_generics_start) =
             function_generic_context(owner_generics, receiver_ty, function_definition);
-        let return_ctx = self.function_return_context(function_definition, receiver_ty);
+        let owner = receiver_ty.and_then(Type::nominal_id);
+        let counterpart_body = owner.and_then(|owner| {
+            tagged_counterpart_body(&self.facts, owner, function_definition.name)
+        });
+        let method_body = counterpart_body.unwrap_or(MethodBody::InPlain);
+        let return_ctx =
+            self.function_return_context(function_definition, receiver_ty, method_body);
         let return_shape = return_ctx.lowered_shape();
 
         let (method_parameters, params_to_process) =
@@ -265,9 +273,13 @@ impl Planner<'_> {
             receiver.as_ref(),
         );
 
+        let body_go_name = match method_body {
+            MethodBody::InPlain => go_name.to_string(),
+            MethodBody::InCounterpart => go_name::tagged_counterpart(go_name),
+        };
         let signature = FunctionSignature {
             receiver: receiver.map(|receiver| declared_parameter(&parameters, receiver)),
-            name: go_name.to_string(),
+            name: body_go_name,
             generics,
             parameters: declared_parameters(&parameters, signature_parameters),
             result: return_ty,
@@ -275,13 +287,17 @@ impl Planner<'_> {
 
         let mut declaration = GoDeclaration::new(DeclarationKind::Function { signature, body });
         declaration.position = self.facts.source_position(&function_definition.name_span);
-        let counterpart = self.tagged_counterpart(
-            function_definition,
-            receiver_ty,
-            method_parameters,
-            go_name,
-            &generic_context[..signature_generics_start],
-        );
+        let counterpart = counterpart_body
+            .zip(method_parameters)
+            .map(|(_, method_parameters)| {
+                self.emit_tagged_counterpart(
+                    function_definition,
+                    method_parameters,
+                    go_name,
+                    &generic_context[..signature_generics_start],
+                    method_body,
+                )
+            });
         once(declaration).chain(counterpart).collect()
     }
 
@@ -329,33 +345,14 @@ impl Planner<'_> {
         &self,
         function_definition: FunctionDefinitionView<'_>,
         receiver_ty: Option<&Type>,
+        method_body: MethodBody,
     ) -> ReturnContext {
         let return_type = function_definition.return_type.clone();
-        match receiver_ty {
-            Some(_) => self.return_context_for_method(return_type),
-            None => self.return_context_for_type(return_type),
+        if receiver_ty.is_some() && method_body == MethodBody::InPlain {
+            self.return_context_for_method(return_type)
+        } else {
+            self.return_context_for_type(return_type)
         }
-    }
-
-    fn tagged_counterpart(
-        &mut self,
-        function_definition: FunctionDefinitionView<'_>,
-        receiver_ty: Option<&Type>,
-        method_parameters: Option<MethodParameters<'_>>,
-        go_name: &str,
-        owner_generics: &[(EcoString, Vec<Type>)],
-    ) -> Option<GoDeclaration> {
-        let method_parameters = method_parameters?;
-        let owner = receiver_ty.and_then(Type::nominal_id)?;
-        if !has_tagged_counterpart(&self.facts, owner, function_definition.name) {
-            return None;
-        }
-        Some(self.emit_tagged_counterpart(
-            function_definition,
-            method_parameters,
-            go_name,
-            owner_generics,
-        ))
     }
 
     fn lower_signature_params<'a>(

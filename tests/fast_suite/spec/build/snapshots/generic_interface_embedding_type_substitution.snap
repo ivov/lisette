@@ -7,7 +7,7 @@ package main
 import "fmt"
 
 type Mapper[T any] interface {
-	MapVal() T
+	MapVal_() T
 }
 
 type Filter interface {
@@ -26,6 +26,10 @@ type Score struct {
 
 func (s Score) MapVal() string {
 	return s.name
+}
+
+func (s Score) MapVal_() string {
+	return s.MapVal()
 }
 
 func (s Score) Keep() bool {

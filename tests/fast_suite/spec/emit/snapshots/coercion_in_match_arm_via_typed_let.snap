@@ -30,18 +30,44 @@ description: |
 ---
 package main
 
-import "io"
+import (
+	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
 
 type A struct{}
 
 type B struct{}
 
-func (a A) Read(_ []uint8) (int, error) {
-	return 0, nil
+func (a A) Read_(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](0)
 }
 
-func (b B) Read(_ []uint8) (int, error) {
-	return 0, nil
+func (a A) Read(arg0 []uint8) (int, error) {
+	res := a.Read_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
+}
+
+func (b B) Read_(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](0)
+}
+
+func (b B) Read(arg0 []uint8) (int, error) {
+	res := b.Read_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func main() {

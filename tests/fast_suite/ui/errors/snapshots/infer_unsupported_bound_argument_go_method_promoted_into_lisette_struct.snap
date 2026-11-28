@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+   ╭─[test.lis:6:23]
+ 5 │   let w = Wrapped { Buffer: bytes.NewBufferString("abc") }
+ 6 │   let s: Sizer<int> = w
+   ·                       ┬
+   ·                       ╰── unsupported
+ 7 │   let _ = s.Len()
+   ╰────
+  help: Lisette does not yet support using `Wrapped` as a `Sizer` value · code: [infer.unsupported_bound_argument]

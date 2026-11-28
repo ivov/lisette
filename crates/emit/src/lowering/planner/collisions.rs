@@ -484,7 +484,8 @@ fn collect_interface(
             ..
         } = signature
         {
-            let method_go = facts.interface_method_go_name(method_name, export);
+            let method_go =
+                facts.interface_method_go_name(method_name, &signature.get_type(), export);
             methods.claim(method_go, *method_span);
         }
     }

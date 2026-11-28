@@ -37,16 +37,19 @@ pub use native_operation::{
 
 mod go_interop;
 pub use go_interop::{
-    GoHint, GoInteropContract, GoOptionRepresentation, GoReturnContract, GoTypeRecipe, GoTypeTerm,
-    GoTypeTerms, SlotOrigin, go_boundary_converts_container, go_option_representation,
-    go_return_contract,
+    GoHint, GoInteropContract, GoOptionRepresentation, GoReturnContract, GoReturnForm,
+    GoTypeRecipe, GoTypeTerm, GoTypeTerms, SlotOrigin, go_boundary_converts_container,
+    go_option_representation, go_return_contract, go_return_form,
 };
 
 mod conformance;
 pub use conformance::{CheckedMethod, ConformanceIndex, ConformanceWitness};
 
 mod go_method_policy;
-pub use go_method_policy::GoMethodPolicy;
+pub use go_method_policy::{
+    GoMethodPolicy, interface_method_is_tagged, requirement_uses_tagged_counterpart,
+    supplying_requirement,
+};
 
 mod checked;
 pub use checked::{

@@ -115,33 +115,23 @@ impl InferCtx<'_> {
                 instantiation: instantiation.clone(),
             },
         );
-        let (operation, interface_method) = match selected.bound {
+        let operation = match selected.bound {
             Some(bound) => {
                 let requirement = self
                     .interface_requirement(&bound, arguments.member_name)
                     .expect("internal error: a bound method has a requirement in its bound");
-                (
-                    CallOperation::BoundMethod {
-                        bound,
-                        requirement: Box::new(requirement),
-                    },
-                    None,
-                )
+                CallOperation::BoundMethod {
+                    bound,
+                    requirement: Box::new(requirement),
+                }
             }
-            None => {
-                let interface_method = store
-                    .is_interface(&store.peel_alias(&arguments.deref_ty))
-                    .then(|| self.interface_requirement(&arguments.deref_ty, arguments.member_name))
-                    .flatten()
-                    .map(Box::new);
-                (CallOperation::Function, interface_method)
-            }
+            None => CallOperation::Function,
         };
         let mut type_arguments = selected.owner_arguments;
         for (name, argument) in instantiation.iter() {
             type_arguments.insert(name.clone(), argument.clone());
         }
-        self.record_method_callee(&dot_access, operation, type_arguments, interface_method);
+        self.record_callee(&dot_access, operation, type_arguments);
         Some(dot_access)
     }
 

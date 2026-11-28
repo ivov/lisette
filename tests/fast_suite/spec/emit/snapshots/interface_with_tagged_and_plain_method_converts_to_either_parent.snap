@@ -1,0 +1,79 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface Tagged<T> { fn get() -> T }
+  interface Plain { fn get() -> int }
+  
+  interface TaggedFirst {
+    embed Tagged<int>
+    embed Plain
+  }
+  
+  interface PlainFirst {
+    embed Plain
+    embed Tagged<int>
+  }
+  
+  fn to_plain(b: TaggedFirst) -> Plain { b }
+  fn to_tagged(b: PlainFirst) -> Tagged<int> { b }
+  
+  struct S {}
+  
+  impl S {
+    fn get(self) -> int { 7 }
+  }
+  
+  fn main() {
+    let first: TaggedFirst = S {}
+    let second: PlainFirst = S {}
+    fmt.Println(to_plain(first).get(), to_tagged(second).get(), first.get(), second.get())
+  }
+---
+package main
+
+import "fmt"
+
+type Tagged[T any] interface {
+	get_() T
+}
+
+type Plain interface {
+	get() int
+}
+
+type TaggedFirst interface {
+	Tagged[int]
+	Plain
+}
+
+type PlainFirst interface {
+	Plain
+	Tagged[int]
+}
+
+func toPlain(b TaggedFirst) Plain {
+	return b
+}
+
+func toTagged(b PlainFirst) Tagged[int] {
+	return b
+}
+
+type S struct{}
+
+func (s S) get() int {
+	return 7
+}
+
+func (s S) get_() int {
+	return s.get()
+}
+
+func main() {
+	var first TaggedFirst = S{}
+	var second PlainFirst = S{}
+	fmt.Println(toPlain(first).get(), toTagged(second).get_(), first.get_(), second.get())
+}

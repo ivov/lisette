@@ -1,0 +1,34 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[T any] interface {
+	get_() T
+}
+
+type Bar[T any] struct {
+	value lisette.Option[T]
+}
+
+func (b Bar[Item]) get() (Item, bool) {
+	v := b.value
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	var zero Item
+	return zero, false
+}
+
+func (b Bar[Item]) get_() lisette.Option[Item] {
+	return lisette.OptionFromCommaOk[Item](b.get())
+}
+
+func consume[T any](_ Box[lisette.Option[T]]) {}
+
+func main() {
+	consume(Bar[int]{value: lisette.MakeOptionSome(1)})
+}

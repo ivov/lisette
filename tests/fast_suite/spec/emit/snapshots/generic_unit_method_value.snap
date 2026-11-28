@@ -33,13 +33,15 @@ type Counter struct {
 	n *int
 }
 
-func (c *Counter) Run() Done {
+func (c *Counter) Run() {
 	*c.n++
-	return struct{}{}
+	return
 }
 
 func (c *Counter) Run_() Done {
-	return c.Run()
+	c.Run()
+	var zero Done
+	return zero
 }
 
 func apply[A Child](a A) {

@@ -36,14 +36,27 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Dev struct {
 	id int
 }
 
-func (d Dev) Read(_ []byte) (int, error) {
-	return 0, io.EOF
+func (d Dev) Read_(_ []byte) lisette.Partial[int, error] {
+	return lisette.MakePartialErr[int, error](io.EOF)
+}
+
+func (d Dev) Read(arg0 []byte) (int, error) {
+	res := d.Read_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func (d Dev) WriteTo(w io.Writer) (int64, error) {

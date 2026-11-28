@@ -295,18 +295,19 @@ fn nullable_match_destination_preserves_interface_adapter() {
 struct Thing {}
 
 interface Opt {
-  fn find() -> Option<mut Ref<Thing>>
+  #[go(comma_ok)]
+  fn find() -> Option<Ref<Thing>>
 }
 
-struct Bar<T> {
-  x: Option<T>,
+struct Bar {
+  x: Option<Ref<Thing>>,
 }
 
-impl<T> Bar<T> {
-  fn find(self) -> Option<T> { self.x }
+impl Bar {
+  fn find(self) -> Option<Ref<Thing>> { self.x }
 }
 
-fn maybe_bar(bar: mut Ref<Bar<mut Ref<Thing>>>) -> Option<mut Ref<Bar<mut Ref<Thing>>>> {
+fn maybe_bar(bar: mut Ref<Bar>) -> Option<mut Ref<Bar>> {
   Some(bar)
 }
 
@@ -1447,7 +1448,7 @@ fn test() {
 }
 
 #[test]
-fn tuple_tail_return_wraps_adapter_for_interface_slot() {
+fn tuple_tail_return_converts_to_bare_parameter_interface() {
     let input = r#"
 struct Thing {
   v: int,
@@ -1481,7 +1482,7 @@ fn test() {
 }
 
 #[test]
-fn propagate_widens_error_slot_through_adapter() {
+fn propagate_widens_error_slot_to_bare_parameter_interface() {
     let input = r#"
 interface Failing<T> {
   fn get() -> T
@@ -1524,7 +1525,7 @@ fn main() {
 }
 
 #[test]
-fn return_err_widens_error_slot_through_adapter() {
+fn return_err_widens_error_slot_to_bare_parameter_interface() {
     let input = r#"
 interface Failing<T> {
   fn get() -> T
@@ -1752,35 +1753,6 @@ fn main() {
 }
 
 #[test]
-fn go_type_converts_to_generic_interface_through_tagged_counterpart_adapter() {
-    let input = r#"
-import "go:bytes"
-
-interface Sizer<T> {
-  fn Len() -> T
-}
-
-fn size<S: Sizer<int>>(s: S) -> int {
-  s.Len()
-}
-
-struct Fixed {}
-
-impl Fixed {
-  fn Len(self) -> int { 4 }
-}
-
-fn main() {
-  let b = bytes.NewBufferString("abc")
-  let s: Sizer<int> = b
-  if s.Len() != 3 { panic("wrong buffer length") }
-  if size(Fixed {}) != 4 { panic("wrong generic length") }
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn result_and_option_methods_through_embedding_interface() {
     let input = r#"
 import "go:io"
@@ -1807,7 +1779,7 @@ fn main() {
 }
 
 #[test]
-fn tuple_tail_of_generic_closure_wraps_adapter_once() {
+fn tuple_tail_of_generic_closure_converts_to_bare_parameter_interface() {
     let input = r#"
 struct Thing { v: int }
 interface Box<T> { fn get() -> T }

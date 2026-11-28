@@ -5,18 +5,19 @@ description: |
   struct Thing {}
   
   interface Opt {
-    fn find() -> Option<mut Ref<Thing>>
+    #[go(comma_ok)]
+    fn find() -> Option<Ref<Thing>>
   }
   
-  struct Bar<T> {
-    x: Option<T>,
+  struct Bar {
+    x: Option<Ref<Thing>>,
   }
   
-  impl<T> Bar<T> {
-    fn find(self) -> Option<T> { self.x }
+  impl Bar {
+    fn find(self) -> Option<Ref<Thing>> { self.x }
   }
   
-  fn maybe_bar(bar: mut Ref<Bar<mut Ref<Thing>>>) -> Option<mut Ref<Bar<mut Ref<Thing>>>> {
+  fn maybe_bar(bar: mut Ref<Bar>) -> Option<mut Ref<Bar>> {
     Some(bar)
   }
   
@@ -38,53 +39,47 @@ import lisette "github.com/ivov/lisette/prelude"
 type Thing struct{}
 
 type Opt interface {
-	find() *Thing
+	find() (*Thing, bool)
 }
 
-type Bar[T any] struct {
-	x lisette.Option[T]
+type Bar struct {
+	x lisette.Option[*Thing]
 }
 
-func (b Bar[T]) find() (T, bool) {
+func (b Bar) find() *Thing {
 	v := b.x
 	if v.Tag == lisette.OptionSome {
-		return v.SomeVal, true
+		return v.SomeVal
 	}
-	var zero T
-	return zero, false
+	return nil
 }
 
-func maybeBar(bar *Bar[*Thing]) *Bar[*Thing] {
+func maybeBar(bar *Bar) *Bar {
 	return bar
 }
 
 func main() {
-	bar := Bar[*Thing]{x: lisette.MakeOptionSome(&Thing{})}
+	bar := Bar{x: lisette.MakeOptionSome(&Thing{})}
 	var opt Opt
 	found := maybeBar(&bar)
 	if found == nil {
 		return
 	}
 	opt = _lisAdapter_Bar_Opt_0{inner: found}
-	if thing := opt.find(); thing != nil {
+	if thing, ok := opt.find(); ok && thing != nil {
 		_ = thing
 	}
 }
 
 type _lisAdapter_Bar_Opt_0 struct {
-	inner *Bar[*Thing]
+	inner *Bar
 }
 
-func (a _lisAdapter_Bar_Opt_0) find() *Thing {
-	ret, ret2 := a.inner.find()
-	var option lisette.Option[*Thing]
-	if ret2 && ret != nil {
-		option = lisette.MakeOptionSome[*Thing](ret)
-	} else {
-		option = lisette.MakeOptionNone[*Thing]()
-	}
+func (a _lisAdapter_Bar_Opt_0) find() (*Thing, bool) {
+	raw := a.inner.find()
+	option := lisette.OptionFromNilable[*Thing](raw, raw == nil)
 	if option.Tag == lisette.OptionSome {
-		return option.SomeVal
+		return option.SomeVal, true
 	}
-	return nil
+	return nil, false
 }

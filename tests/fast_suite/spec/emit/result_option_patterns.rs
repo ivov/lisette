@@ -3704,9 +3704,9 @@ import "go:fmt"
 struct Thing { n: int }
 interface Opt { fn find() -> Option<Ref<Thing>> }
 
-struct Holder<T> { value: Option<T> }
-impl<T> Holder<T> {
-  fn find(self) -> Option<T> { self.value }
+struct Holder { value: Option<Ref<Thing>> }
+impl Holder {
+  fn find(self) -> Option<Ref<Thing>> { self.value }
 }
 
 fn seven() -> Option<int> { Some(7) }
@@ -3719,7 +3719,7 @@ fn main() {
     None => panic("wrong function type"),
   }
   let opts: Slice<Opt> = []
-  let fallback: Holder<Ref<Thing>> = Holder { value: None }
+  let fallback = Holder { value: None }
   let chosen = opts.get(0).unwrap_or(fallback)
   fmt.Println(chosen.find().is_none())
 }
@@ -3735,9 +3735,9 @@ import "go:fmt"
 struct Thing { n: int }
 interface Opt { fn find() -> Option<Ref<Thing>> }
 
-struct Holder<T> { value: Option<T> }
-impl<T> Holder<T> {
-  fn find(self) -> Option<T> { self.value }
+struct Holder { value: Option<Ref<Thing>> }
+impl Holder {
+  fn find(self) -> Option<Ref<Thing>> { self.value }
 }
 
 fn seven() -> Option<int> { Some(7) }
@@ -3750,7 +3750,7 @@ fn main() {
     None => panic("wrong function type"),
   }
   let opts = Map.new<string, Opt>()
-  let fallback: Holder<Ref<Thing>> = Holder { value: None }
+  let fallback = Holder { value: None }
   let chosen = opts.get("k").unwrap_or(fallback)
   fmt.Println(chosen.find().is_none())
 }
