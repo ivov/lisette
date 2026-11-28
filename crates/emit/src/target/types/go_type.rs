@@ -52,7 +52,6 @@ pub(crate) enum GoTypeShape {
     Variadic(Box<GoType>),
     Function(Vec<GoType>, Option<Box<GoType>>),
     Struct(Vec<(String, GoType)>),
-    Interface(Vec<(String, GoType)>),
     EmptyInterface,
 }
 
@@ -178,7 +177,6 @@ impl GoType {
             GoTypeShape::Function(..) => "func",
             GoTypeShape::Channel(..) => "chan",
             GoTypeShape::Struct(_) => "struct",
-            GoTypeShape::Interface(_) => "interface",
             GoTypeShape::EmptyInterface => "any",
             GoTypeShape::Arguments(_) | GoTypeShape::Slice(_) | GoTypeShape::Array(..) => "",
         }
@@ -211,7 +209,6 @@ impl GoType {
                 | GoTypeShape::Variadic(_)
                 | GoTypeShape::Function(..)
                 | GoTypeShape::Struct(_)
-                | GoTypeShape::Interface(_)
                 | GoTypeShape::EmptyInterface => GoTypeKind::Value,
             })
     }
@@ -236,7 +233,6 @@ impl GoType {
             | shape @ GoTypeShape::Variadic(_)
             | shape @ GoTypeShape::Function(..)
             | shape @ GoTypeShape::Struct(_)
-            | shape @ GoTypeShape::Interface(_)
             | shape @ GoTypeShape::EmptyInterface => {
                 panic!("internal error: {shape:?} is not a type argument list")
             }
@@ -303,18 +299,6 @@ impl GoType {
         Self::structured(
             GoTypeShape::Struct(fields.clone()),
             fields.iter().map(|(_, ty)| ty),
-        )
-    }
-
-    pub(crate) fn method_interface(
-        name: &str,
-        parameters: &[GoType],
-        result: Option<&GoType>,
-    ) -> Self {
-        let signature = Self::function(parameters, result);
-        Self::structured(
-            GoTypeShape::Interface(vec![(name.to_string(), signature.clone())]),
-            [&signature],
         )
     }
 

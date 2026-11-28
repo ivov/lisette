@@ -1,0 +1,120 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface MaybeInt { fn get() -> Option<int> }
+  interface CheckedInt { fn checked() -> Result<int, error> }
+  interface Pair { fn pair() -> (int, string) }
+  interface Plain { fn plain() -> int }
+  
+  struct Box<T> { item: T }
+  
+  impl<T> Box<T> {
+    fn get(self) -> Option<T> { Some(self.item) }
+    fn checked(self) -> Result<T, error> { Ok(self.item) }
+    fn pair(self) -> (T, string) { (self.item, "x") }
+    fn plain(self) -> T { self.item }
+  }
+  
+  fn via_bound<B: MaybeInt + CheckedInt + Pair + Plain>(b: B) -> int {
+    b.get().unwrap_or(0) + b.checked().unwrap_or(0) + b.pair().0 + b.plain()
+  }
+  
+  fn main() {
+    let b = Box { item: 1 }
+    let m: MaybeInt = b
+    let c: CheckedInt = b
+    let p: Pair = b
+    let q: Plain = b
+    let u: Unknown = m
+    fmt.Println(via_bound(b), m.get().unwrap_or(0) + c.checked().unwrap_or(0) + p.pair().0 + q.plain())
+    fmt.Println(assert_type<Box<int>>(u).is_some())
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type MaybeInt interface {
+	get() (int, bool)
+}
+
+type CheckedInt interface {
+	checked() (int, error)
+}
+
+type Pair interface {
+	pair() (int, string)
+}
+
+type Plain interface {
+	plain() int
+}
+
+type Box[T any] struct {
+	item T
+}
+
+func (b Box[T]) get() (T, bool) {
+	return b.item, true
+}
+
+func (b Box[T]) checked() (T, error) {
+	return b.item, nil
+}
+
+func (b Box[T]) pair() (T, string) {
+	return b.item, "x"
+}
+
+func (b Box[T]) plain() T {
+	return b.item
+}
+
+func viaBound[B interface {
+	MaybeInt
+	CheckedInt
+	Pair
+	Plain
+}](b B) int {
+	ret, ok := b.get()
+	if !ok {
+		ret = 0
+	}
+	ret2, err := b.checked()
+	if err != nil {
+		ret2 = 0
+	}
+	ret3, ret4 := b.pair()
+	tup := lisette.MakeTuple2(ret3, ret4)
+	return ret + ret2 + tup.First + b.plain()
+}
+
+func main() {
+	b := Box[int]{item: 1}
+	var m MaybeInt = b
+	var c CheckedInt = b
+	var p Pair = b
+	var q Plain = b
+	var u any = m
+	arg := viaBound(b)
+	ret, ok := m.get()
+	if !ok {
+		ret = 0
+	}
+	ret2, err := c.checked()
+	if err != nil {
+		ret2 = 0
+	}
+	ret3, ret4 := p.pair()
+	tup := lisette.MakeTuple2(ret3, ret4)
+	fmt.Println(arg, ret+ret2+tup.First+q.plain())
+	_, ok2 := u.(Box[int])
+	fmt.Println(ok2)
+}

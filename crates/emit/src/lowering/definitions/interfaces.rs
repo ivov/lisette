@@ -84,7 +84,9 @@ impl PlannerQueries<'_, '_> {
 
         let return_abi = interface_method_return_abi(self.facts, method);
 
-        let method_name = self.facts.interface_method_go_name(function.name, export);
+        let method_name = self
+            .facts
+            .interface_method_go_name(function.name, &method.ty, export);
 
         InterfaceMethod {
             name: method_name,

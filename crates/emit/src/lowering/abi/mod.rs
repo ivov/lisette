@@ -1,5 +1,5 @@
 use crate::lowering::calls::call_plan::is_prelude_dispatch;
-use crate::lowering::definitions::interface_adapter::requirement_go_return_abi;
+use crate::lowering::definitions::interface_adapter::{MethodUse, requirement_go_return_abi};
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::names::go_name::MemberSpelling;
 use crate::target::types::return_abi::{CallableReturnAbi, go_return_abi};
@@ -46,6 +46,7 @@ pub(in crate::lowering) struct CalleeSignature<'s, 'a> {
     pub(in crate::lowering) function: &'s FunctionType,
     pub(in crate::lowering) declared_return: Option<&'s Type>,
     pub(in crate::lowering) return_type: &'s Type,
+    pub(in crate::lowering) method_use: MethodUse,
 }
 
 impl Planner<'_> {
@@ -92,7 +93,7 @@ pub(in crate::lowering) fn go_callable_return_abi(
         .callable_return_abi(qualified_name)
         .cloned()
         .map_or_else(
-            || CallableReturnAbi::unlowered(declared_return),
+            || facts.unlowered_return_abi(declared_return),
             CallableReturnAbi::Lowered,
         )
 }
@@ -118,7 +119,7 @@ pub(in crate::lowering) fn return_abi(
         }
         ReturnSlot::Go { hints } => go_return_abi(return_ty, hints, facts.type_query_lookup())
             .map_or_else(
-                || CallableReturnAbi::unlowered(return_ty),
+                || facts.unlowered_return_abi(return_ty),
                 CallableReturnAbi::Lowered,
             ),
     }
@@ -141,9 +142,6 @@ impl PlannerQueries<'_, '_> {
         &self,
         signature: &CalleeSignature<'_, '_>,
     ) -> CallableReturnAbi {
-        if let Some(layout) = self.bound_dispatch_layout(signature.callee) {
-            return layout.return_abi();
-        }
         if let Some(abi) = self.go_callee_return_abi(signature) {
             return abi;
         }
@@ -158,7 +156,7 @@ impl PlannerQueries<'_, '_> {
         }
         self.lisette_callee_return_abi(signature)
             .unwrap_or_else(|| {
-                CallableReturnAbi::unlowered(
+                self.facts.unlowered_return_abi(
                     signature.declared_return.unwrap_or(signature.return_type),
                 )
             })
@@ -168,9 +166,6 @@ impl PlannerQueries<'_, '_> {
         &self,
         signature: &CalleeSignature<'_, '_>,
     ) -> Option<CallableReturnAbi> {
-        if self.bound_dispatch_requirement(signature.callee).is_some() {
-            return None;
-        }
         if let Some(requirement) = self.go_bound_requirement(signature.callee) {
             let declared_return = &requirement.method.ty.as_function_type()?.return_type;
             let abi = requirement_go_return_abi(self.facts, &requirement, declared_return);
@@ -209,7 +204,7 @@ impl PlannerQueries<'_, '_> {
         {
             return Some(interface_method_return_abi(self.facts, &requirement.method));
         }
-        if self.member_spelling(callee) == MemberSpelling::TaggedCounterpart {
+        if self.member_spelling(callee, signature.method_use) == MemberSpelling::TaggedCounterpart {
             return Some(CallableReturnAbi::Value);
         }
         let return_ty = signature

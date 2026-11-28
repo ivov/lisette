@@ -5868,6 +5868,303 @@ fn main() {
 }
 
 #[test]
+fn infer_unsupported_bound_argument_go_type_generic_result_ok() {
+    let input = r#"import "go:bytes"
+interface ByteReader<T> {
+  fn ReadByte() -> Result<T, error>
+}
+fn first<T, R: ByteReader<T>>(r: R) -> Result<T, error> { r.ReadByte() }
+fn main() {
+  let mut b = bytes.NewBufferString("abc")
+  let _ = first(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_type_generic_result_error() {
+    let input = r#"import "go:bytes"
+interface ByteReader<E> {
+  fn ReadByte() -> Result<uint8, E>
+}
+fn first<E, R: ByteReader<E>>(r: R) -> Result<uint8, E> { r.ReadByte() }
+fn main() {
+  let mut b = bytes.NewBufferString("abc")
+  let _ = first(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_type_generic_partial() {
+    let input = r#"import "go:bytes"
+interface Reader<E> {
+  fn Read(p: mut Slice<uint8>) -> Partial<int, E>
+}
+fn fill<E, R: Reader<E>>(r: R) -> Partial<int, E> {
+  let mut p: mut Slice<uint8> = Slice.new()
+  r.Read(p)
+}
+fn main() {
+  let mut b = bytes.NewBufferString("abc")
+  let _ = fill(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_type_generic_option_pointer() {
+    let input = r#"import "go:flag"
+interface Finder<T> {
+  fn Lookup(name: string) -> Option<T>
+}
+fn find<T, F: Finder<T>>(f: F) -> Option<T> { f.Lookup("v") }
+fn main() {
+  let mut fs = flag.NewFlagSet("x", flag.ContinueOnError)
+  let _ = fs.Bool("v", false, "verbose")
+  let _ = find(fs)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_type_generic_option_comma_ok() {
+    let input = r#"import "go:sync"
+interface Loader<T> {
+  fn Load(key: Unknown) -> Option<T>
+}
+fn load<T, M: Loader<T>>(m: M) -> Option<T> { m.Load("k") }
+fn main() {
+  let mut m = sync.Map {}
+  m.Store("k", 1)
+  let _ = load(&m)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_type_partial_bound_and_value() {
+    let input = r#"import "go:bytes"
+interface Source {
+  fn Read(p: mut Slice<byte>) -> Partial<int, error>
+}
+fn pull<S: Source>(s: S) -> Partial<int, error> {
+  let mut p: mut Slice<byte> = Slice.new()
+  s.Read(p)
+}
+fn main() {
+  let mut b = bytes.NewBufferString("abc")
+  let _ = pull(b)
+  let _s: Source = b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_type_generic_result_value() {
+    let input = r#"import "go:bytes"
+interface ByteReader<T> {
+  fn ReadByte() -> Result<T, error>
+}
+fn main() {
+  let mut b = bytes.NewBufferString("abc")
+  let _r: ByteReader<uint8> = b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_generic_type_option_pointer_bound() {
+    let input = r#"struct X {}
+interface GetX { fn get() -> Option<Ref<X>> }
+struct Box<T> { item: Option<T> }
+impl<T> Box<T> { fn get(self) -> Option<T> { self.item } }
+fn first<G: GetX>(g: G) -> Option<Ref<X>> { g.get() }
+fn main() {
+  let b: Box<Ref<X>> = Box { item: None }
+  let _ = first(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_generic_type_option_pointer_value() {
+    let input = r#"struct X {}
+interface GetX { fn get() -> Option<Ref<X>> }
+struct Box<T> { item: Option<T> }
+impl<T> Box<T> { fn get(self) -> Option<T> { self.item } }
+fn use_get(g: GetX) -> Option<Ref<X>> { g.get() }
+fn main() {
+  let _ = use_get(Box { item: None })
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_generic_type_result_unit() {
+    let input = r#"interface Check { fn check() -> Result<(), error> }
+struct Box<T> { item: T }
+impl<T> Box<T> { fn check(self) -> Result<T, error> { Ok(self.item) } }
+fn main() {
+  let c: Check = Box { item: () }
+  let _ = c.check()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_generic_type_bare_option() {
+    let input = r#"struct X {}
+interface GetX { fn get() -> Option<Ref<X>> }
+struct Box<T> { item: T }
+impl<T> Box<T> { fn get(self) -> T { self.item } }
+fn main() {
+  let b: Box<Option<Ref<X>>> = Box { item: None }
+  let g: GetX = b
+  let _ = g.get()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_generic_type_bare_unit() {
+    let input = r#"interface Mixed<T> {
+  fn run()
+  fn value() -> T
+}
+struct Bar<T> { item: T }
+impl<T> Bar<T> {
+  fn run(self) -> T { self.item }
+  fn value(self) -> T { self.item }
+}
+fn consume(mixed: Mixed<()>) {
+  mixed.run()
+  let _ = mixed.value()
+}
+fn main() {
+  consume(Bar { item: () })
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_generic_type_error_parameter() {
+    let input = r#"import "go:errors"
+interface Count { fn count() -> Result<int, error> }
+struct Box<T> { item: T }
+impl<T> Box<T> { fn count(self) -> Result<int, T> { Err(self.item) } }
+fn main() {
+  let c: Count = Box { item: errors.New("e") }
+  let _ = c.count()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_embedded_generic_type() {
+    let input = r#"struct X {}
+interface GetX { fn get() -> Option<Ref<X>> }
+struct Box<T> { item: Option<T> }
+impl<T> Box<T> { fn get(self) -> Option<T> { self.item } }
+struct Outer { embed Box<Ref<X>> }
+fn main() {
+  let g: GetX = Outer { Box: Box { item: None } }
+  let _ = g.get()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_tagged_interface_to_untagged_interface() {
+    let input = r#"struct X {}
+interface Get<T> { fn get() -> Option<T> }
+interface GetX { fn get() -> Option<Ref<X>> }
+fn convert(g: Get<Ref<X>>) -> GetX { g }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_untagged_interface_to_tagged_interface() {
+    let input = r#"struct X {}
+interface Get<T> { fn get() -> Option<T> }
+interface GetX { fn get() -> Option<Ref<X>> }
+fn convert(g: GetX) -> Get<Ref<X>> { g }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_tagged_interface_as_untagged_bound() {
+    let input = r#"struct X {}
+interface Get<T> { fn get() -> Option<T> }
+interface GetX { fn get() -> Option<Ref<X>> }
+fn first<G: GetX>(g: G) -> Option<Ref<X>> { g.get() }
+fn forward(g: Get<Ref<X>>) -> Option<Ref<X>> { first(g) }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_method_promoted_into_lisette_struct() {
+    let input = r#"import "go:bytes"
+interface Sizer<T> { fn Len() -> T }
+struct Wrapped { embed Ref<bytes.Buffer> }
+fn main() {
+  let w = Wrapped { Buffer: bytes.NewBufferString("abc") }
+  let s: Sizer<int> = w
+  let _ = s.Len()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_tagged_bound_forwarded_to_untagged_bound() {
+    let input = r#"interface Tagged<T> { fn get() -> T }
+interface Plain { fn get() -> int }
+fn plain<P: Plain>(p: P) -> int { p.get() }
+fn forward<S: Tagged<int>>(s: S) -> int { plain(s) }
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_tagged_interface_to_go_interface() {
+    let input = r#"import "go:fmt"
+pub interface Named<T> { fn string() -> T }
+struct S {}
+impl S { pub fn string(self) -> string { "ok" } }
+fn show<T: fmt.Stringer>(t: T) -> string { t.String() }
+fn main() {
+  let t: Named<string> = S {}
+  let g: fmt.Stringer = t
+  let _ = show(t)
+  let _ = g
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_comma_ok_abi_mismatch() {
     let typedef = r#"
 pub interface Lookup {

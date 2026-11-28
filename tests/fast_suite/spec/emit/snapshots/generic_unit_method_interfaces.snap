@@ -44,7 +44,7 @@ type Perform[T any] interface {
 }
 
 type Plain interface {
-	perform_() Completion
+	perform()
 }
 
 func invoke[T any, A Perform[T]](a A) T {
@@ -55,27 +55,26 @@ type Worker struct {
 	stop bool
 }
 
-func (w Worker) perform() Completion {
+func (w Worker) perform() {
 	fmt.Print("enter,")
 	if w.stop {
-		return struct{}{}
+		return
 	}
 	fmt.Print("tail,")
-	return struct{}{}
 }
 
 func (w Worker) perform_() Completion {
-	return w.perform()
+	w.perform()
+	var zero Completion
+	return zero
 }
 
-func throughInterface(a Plain) Completion {
-	a.perform_()
-	return struct{}{}
+func throughInterface(a Plain) {
+	a.perform()
 }
 
-func throughCallback(f func() Completion) Completion {
+func throughCallback(f func() Completion) {
 	f()
-	return struct{}{}
 }
 
 func main() {
@@ -86,6 +85,6 @@ func main() {
 	throughCallback(early.perform_)
 	invoke[Completion, Worker](normal)
 	var iface Plain = early
-	iface.perform_()
+	iface.perform()
 	fmt.Println("done")
 }

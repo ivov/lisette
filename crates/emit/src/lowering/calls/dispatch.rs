@@ -1,5 +1,6 @@
 use crate::lookup::facts::member_slot::MemberSlot;
 use crate::lowering::calls::predicates::Polarity;
+use crate::lowering::definitions::interface_adapter::MethodUse;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::expressions::access::struct_call::plan_struct_literal;
 use crate::lowering::expressions::values::with_source_positions;
@@ -377,8 +378,12 @@ impl<'a> PlannerQueries<'_, 'a> {
             .map(|receiver| &receiver.ty)
             .expect("a receiver method must take a receiver");
 
-        self.facts
-            .receiver_method_go_name(receiver, method, export, self.member_spelling(callee))
+        self.facts.receiver_method_go_name(
+            receiver,
+            method,
+            export,
+            self.member_spelling(callee, MethodUse::Call),
+        )
     }
 
     fn resolve_tuple_struct_target(

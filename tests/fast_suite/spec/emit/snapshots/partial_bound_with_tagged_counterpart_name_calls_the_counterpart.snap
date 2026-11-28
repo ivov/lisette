@@ -76,19 +76,22 @@ type Src struct {
 	n int
 }
 
-func (s Src) get() (int, error) {
+func (s Src) get_() lisette.Partial[int, error] {
 	if s.n > 0 {
-		return s.n, nil
+		return lisette.MakePartialOk[int, error](s.n)
 	}
-	return 1, errors.New("low")
+	return lisette.MakePartialBoth[int, error](1, errors.New("low"))
 }
 
-func (s Src) get_() lisette.Partial[int, error] {
-	ret, ret2 := s.get()
-	if ret2 != nil {
-		return lisette.MakePartialBoth[int, error](ret, ret2)
+func (s Src) get() (int, error) {
+	res := s.get_()
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
 	}
-	return lisette.MakePartialOk[int, error](ret)
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func read[G Getter[int]](g G) int {

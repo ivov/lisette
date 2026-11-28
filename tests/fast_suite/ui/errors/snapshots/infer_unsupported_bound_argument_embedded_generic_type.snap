@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+   ╭─[test.lis:7:17]
+ 6 │ fn main() {
+ 7 │   let g: GetX = Outer { Box: Box { item: None } }
+   ·                 ────────────────┬────────────────
+   ·                                 ╰── unsupported
+ 8 │   let _ = g.get()
+   ╰────
+  help: Lisette does not yet support using `Outer` as a `GetX` value · code: [infer.unsupported_bound_argument]

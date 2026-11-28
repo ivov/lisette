@@ -1,0 +1,59 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:errors"
+  
+  interface Res<E> {
+    fn res() -> Result<int, E>
+  }
+  
+  pub struct S {}
+  
+  impl S {
+    fn res(self) -> Result<int, error> { Err(errors.New("bad")) }
+  }
+  
+  fn read<E, R: Res<E>>(r: R) -> Result<int, E> { r.res() }
+  
+  fn main() {
+    if !read(S {}).is_err() { panic("bound lost the error") }
+    let r: Res<error> = S {}
+    if !r.res().is_err() { panic("interface value lost the error") }
+  }
+---
+package main
+
+import (
+	"errors"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Res[E any] interface {
+	res_() lisette.Result[int, E]
+}
+
+type S struct{}
+
+func (s S) res() (int, error) {
+	return 0, errors.New("bad")
+}
+
+func (s S) res_() lisette.Result[int, error] {
+	return lisette.ResultFromPair[int](s.res())
+}
+
+func read[E any, R Res[E]](r R) lisette.Result[int, E] {
+	return r.res_()
+}
+
+func main() {
+	if !read[error, S](S{}).IsErr() {
+		panic("bound lost the error")
+	}
+	var r Res[error] = S{}
+	if !r.res_().IsErr() {
+		panic("interface value lost the error")
+	}
+}

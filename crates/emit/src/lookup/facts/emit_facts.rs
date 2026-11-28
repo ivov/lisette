@@ -3,7 +3,9 @@ use crate::lookup::facts::definition_key::{DeclaredName, known_definition, type_
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::program::{
     CallOperation, CalleeName, CheckedExpression, CheckedValueUse, EqualityRecipe, FieldSelection,
-    PRELUDE_PACKAGE_ID, ValueUseKey, is_go_import, is_prelude_symbol,
+    GoReturnForm, InterfaceRequirement, PRELUDE_PACKAGE_ID, ValueUseKey, go_return_form,
+    interface_method_is_tagged, is_go_import, is_prelude_symbol,
+    requirement_uses_tagged_counterpart,
 };
 
 use crate::target::ir::values::Stability;
@@ -23,6 +25,7 @@ use crate::target::ir::prelude::is_prelude_container_type;
 use crate::target::names::go_name;
 use crate::target::types::enum_layout::EnumLayout;
 use crate::target::types::go_type::returns_go_void;
+use crate::target::types::return_abi::CallableReturnAbi;
 
 #[derive(Clone)]
 pub(crate) struct EmitFacts<'a> {
@@ -403,6 +406,14 @@ impl<'a> EmitFacts<'a> {
         returns_go_void(&self.peel_alias(ty))
     }
 
+    pub(crate) fn unlowered_return_abi(&self, ty: &Type) -> CallableReturnAbi {
+        CallableReturnAbi::unlowered(&self.peel_alias(ty))
+    }
+
+    pub(crate) fn go_return_form(&self, ty: &Type) -> GoReturnForm {
+        go_return_form(ty, self.type_query_lookup())
+    }
+
     pub(crate) fn is_reference_underneath(&self, ty: &Type) -> bool {
         self.peel_underlying(ty).is_ref()
     }
@@ -643,6 +654,23 @@ impl<'a> EmitFacts<'a> {
             .contains(&go_name::snake_to_camel(method))
     }
 
+    pub(crate) fn interface_method_is_tagged(&self, method_ty: &Type) -> bool {
+        interface_method_is_tagged(method_ty, self.type_query_lookup())
+    }
+
+    pub(crate) fn requirement_uses_tagged_counterpart(
+        &self,
+        requirement: &InterfaceRequirement,
+    ) -> bool {
+        requirement_uses_tagged_counterpart(requirement, self.type_query_lookup())
+    }
+
+    pub(crate) fn method_returns_partial(&self, owner: &Symbol, method: &str) -> bool {
+        self.method(owner, method)
+            .and_then(|method| method.ty.unwrap_forall().get_function_ret())
+            .is_some_and(|return_ty| self.go_return_form(return_ty) == GoReturnForm::Partial)
+    }
+
     pub(crate) fn enum_layout(&self, enum_id: &Symbol) -> &'a EnumLayout {
         self.shared
             .globals
@@ -776,13 +804,6 @@ fn is_nilable_go_type(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) ->
 
 fn peel_alias(definitions: &FxHashMap<Symbol, Definition>, ty: &Type) -> Type {
     types::peel_alias(ty, type_query_lookup(definitions))
-}
-
-pub(crate) fn ref_stripped_type_parameter(ty: &Type) -> Option<EcoString> {
-    let Type::Parameter(name) = ty.strip_refs() else {
-        return None;
-    };
-    Some(name)
 }
 
 pub(crate) enum NominalZero {

@@ -30,7 +30,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Foo[T any] interface {
-	get() T
+	get_() T
 }
 
 type Bar struct{}
@@ -39,8 +39,12 @@ func (b Bar) get() (int, error) {
 	return 1, nil
 }
 
+func (b Bar) get_() lisette.Result[int, error] {
+	return lisette.ResultFromPair[int](b.get())
+}
+
 func useFoo(foo Foo[lisette.Result[int, error]]) {
-	subject := foo.get()
+	subject := foo.get_()
 	if subject.Tag == lisette.ResultOk {
 		_ = subject.OkVal
 	} else {
@@ -49,13 +53,5 @@ func useFoo(foo Foo[lisette.Result[int, error]]) {
 }
 
 func main() {
-	useFoo(_lisAdapter_Bar_Foo_0{inner: Bar{}})
-}
-
-type _lisAdapter_Bar_Foo_0 struct {
-	inner Bar
-}
-
-func (a _lisAdapter_Bar_Foo_0) get() lisette.Result[int, error] {
-	return lisette.ResultFromPair[int](a.inner.get())
+	useFoo(Bar{})
 }

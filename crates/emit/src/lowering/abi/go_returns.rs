@@ -410,7 +410,7 @@ impl Planner<'_> {
         }
         if !matches!(expression, Expression::Tuple { .. }) {
             let abi = shape.clone().map_or_else(
-                || CallableReturnAbi::unlowered(&return_ty),
+                || self.facts.unlowered_return_abi(&return_ty),
                 CallableReturnAbi::Lowered,
             );
             let source = self

@@ -7,6 +7,8 @@ package main
 import (
 	"fmt"
 	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func first() int {
@@ -20,13 +22,24 @@ func second(_ int) error {
 
 type OrderedWriter struct{}
 
-func (o OrderedWriter) Write(_ []byte) (int, error) {
-	ret2 := first()
+func (o OrderedWriter) Write_(_ []byte) lisette.Partial[int, error] {
+	arg := first()
 	ret, err := fmt.Println("second")
 	if err != nil {
 		ret = 0
 	}
-	return ret2, second(ret)
+	return lisette.MakePartialBoth[int, error](arg, second(ret))
+}
+
+func (o OrderedWriter) Write(arg0 []byte) (int, error) {
+	res := o.Write_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func useWriter(writer io.Writer) {

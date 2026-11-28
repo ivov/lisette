@@ -7226,7 +7226,7 @@ fn main() {
 }
 
 #[test]
-fn generic_struct_adapter_substitutes_and_deduplicates_per_instantiation() {
+fn generic_comma_ok_interface_accepts_generic_struct_per_instantiation() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -7268,7 +7268,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_uses_validated_receiver_context() {
+fn bare_parameter_interface_conversion_inside_bounded_receiver_with_array_argument() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -7313,7 +7313,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_instantiates_renamed_impl_parameters() {
+fn bare_parameter_interface_conversion_with_renamed_impl_parameters() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -7346,7 +7346,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_freshens_method_names_against_type_parameters() {
+fn bare_parameter_interface_conversion_keeps_type_parameters_named_a_and_arg0() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -7383,7 +7383,7 @@ fn main() {
 }
 
 #[test]
-fn adapter_type_name_freshens_against_active_scope() {
+fn bare_parameter_interface_conversion_ignores_adapter_prefixed_names() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(

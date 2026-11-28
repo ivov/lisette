@@ -22,7 +22,7 @@ description: |
     let both = capture(Source {}, false)
     if !both.is_both() { panic("lost Both tag") }
     let err = capture(Source {}, true)
-    if !err.is_both() { panic("Err through a method reads back as Both") }
+    if !err.is_err() { panic("Err through a method lost its tag") }
   }
 ---
 package main
@@ -36,7 +36,7 @@ import (
 type Answer = lisette.Partial[int, error]
 
 type Base interface {
-	fetch(bool) (int, error)
+	fetch_(bool) Answer
 }
 
 type Child interface {
@@ -47,15 +47,26 @@ type Face = Child
 
 type Source struct{}
 
-func (s Source) fetch(fail bool) (int, error) {
+func (s Source) fetch_(fail bool) Answer {
 	if fail {
-		return 0, io.EOF
+		return lisette.MakePartialErr[int, error](io.EOF)
 	}
-	return 0, io.EOF
+	return lisette.MakePartialBoth[int, error](0, io.EOF)
 }
 
-func capture[T any](source T, fail bool) Answer {
-	fetch := _lisAdapter_T_Child_0[T]{inner: source}.fetch
+func (s Source) fetch(arg0 bool) (int, error) {
+	res := s.fetch_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
+}
+
+func capture[T Child](source T, fail bool) Answer {
+	fetch := source.fetch_
 	return fetch(fail)
 }
 
@@ -65,19 +76,7 @@ func main() {
 		panic("lost Both tag")
 	}
 	err := capture(Source{}, true)
-	if !err.IsBoth() {
-		panic("Err through a method reads back as Both")
+	if !err.IsErr() {
+		panic("Err through a method lost its tag")
 	}
-}
-
-type _lisAdapter_T_Child_0[T any] struct {
-	inner T
-}
-
-func (a _lisAdapter_T_Child_0[T]) fetch(arg0 bool) lisette.Partial[int, error] {
-	ret, ret2 := any(a.inner).(interface{ fetch(bool) (int, error) }).fetch(arg0)
-	if ret2 != nil {
-		return lisette.MakePartialBoth[int, error](ret, ret2)
-	}
-	return lisette.MakePartialOk[int, error](ret)
 }

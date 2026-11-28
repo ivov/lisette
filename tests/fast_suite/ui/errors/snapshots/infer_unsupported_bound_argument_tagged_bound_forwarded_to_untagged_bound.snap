@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+   ╭─[test.lis:4:49]
+ 3 │ fn plain<P: Plain>(p: P) -> int { p.get() }
+ 4 │ fn forward<S: Tagged<int>>(s: S) -> int { plain(s) }
+   ·                                                 ┬
+   ·                                                 ╰── unsupported
+ 5 │ fn main() {}
+   ╰────
+  help: Lisette does not yet support using `S` where a generic requires `Plain` · code: [infer.unsupported_bound_argument]

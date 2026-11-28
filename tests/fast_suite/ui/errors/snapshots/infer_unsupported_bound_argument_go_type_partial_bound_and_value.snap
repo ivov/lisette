@@ -1,0 +1,22 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+    ╭─[test.lis:11:16]
+ 10 │   let mut b = bytes.NewBufferString("abc")
+ 11 │   let _ = pull(b)
+    ·                ┬
+    ·                ╰── unsupported
+ 12 │   let _s: Source = b
+    ╰────
+  help: Lisette does not yet support using `Buffer` where a generic requires `Source` · code: [infer.unsupported_bound_argument]
+
+  ✕ Not supported yet
+    ╭─[test.lis:12:20]
+ 11 │   let _ = pull(b)
+ 12 │   let _s: Source = b
+    ·                    ┬
+    ·                    ╰── unsupported
+ 13 │ }
+    ╰────
+  help: Lisette does not yet support using `Buffer` as a `Source` value · code: [infer.unsupported_bound_argument]

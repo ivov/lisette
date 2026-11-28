@@ -1,0 +1,69 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  pub struct X { pub v: int }
+  
+  interface Get<T> {
+    fn get() -> Option<T>
+  }
+  
+  pub struct S { pub x: Ref<X> }
+  
+  impl S {
+    fn get(self) -> Option<Ref<X>> { Some(self.x) }
+  }
+  
+  fn read<T, G: Get<T>>(g: G) -> Option<T> { g.get() }
+  
+  fn main() {
+    let s = S { x: &X { v: 1 } }
+    if read(s).is_none() { panic("bound lost the value") }
+    let g: Get<Ref<X>> = s
+    if g.get().is_none() { panic("interface value lost the value") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type X struct {
+	V int
+}
+
+type Get[T any] interface {
+	get_() lisette.Option[T]
+}
+
+type S struct {
+	X *X
+}
+
+func (s S) get() *X {
+	return s.X
+}
+
+func (s S) get_() lisette.Option[*X] {
+	raw := s.get()
+	return lisette.OptionFromNilable[*X](raw, raw == nil)
+}
+
+func read[T any, G Get[T]](g G) (T, bool) {
+	v := g.get_()
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	var zero T
+	return zero, false
+}
+
+func main() {
+	s := S{X: &X{V: 1}}
+	if ret, ok := read[*X, S](s); !ok || ret == nil {
+		panic("bound lost the value")
+	}
+	var g Get[*X] = s
+	if g.get_().IsNone() {
+		panic("interface value lost the value")
+	}
+}

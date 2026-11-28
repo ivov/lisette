@@ -1,0 +1,68 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:errors"
+  
+  interface Act<T> {
+    fn act() -> Result<T, error>
+  }
+  
+  pub struct S {}
+  
+  impl S {
+    fn act(self) -> Result<(), error> { Err(errors.New("bad")) }
+  }
+  
+  fn run<T, A: Act<T>>(a: A) -> Result<T, error> { a.act() }
+  
+  fn main() {
+    if !run(S {}).is_err() { panic("bound lost the error") }
+    let a: Act<()> = S {}
+    if !a.act().is_err() { panic("interface value lost the error") }
+  }
+---
+package main
+
+import (
+	"errors"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Act[T any] interface {
+	act_() lisette.Result[T, error]
+}
+
+type S struct{}
+
+func (s S) act() error {
+	return errors.New("bad")
+}
+
+func (s S) act_() lisette.Result[struct{}, error] {
+	ret := s.act()
+	if ret != nil {
+		return lisette.MakeResultErr[struct{}, error](ret)
+	}
+	return lisette.MakeResultOk[struct{}, error](struct{}{})
+}
+
+func run[T any, A Act[T]](a A) (T, error) {
+	v := a.act_()
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
+	}
+	var zero T
+	return zero, v.ErrVal
+}
+
+func main() {
+	if _, err := run[struct{}, S](S{}); err == nil {
+		panic("bound lost the error")
+	}
+	var a Act[struct{}] = S{}
+	if !a.act_().IsErr() {
+		panic("interface value lost the error")
+	}
+}

@@ -1,10 +1,10 @@
 use crate::Planner;
 use crate::lookup::facts::emit_facts::EmitFacts;
-use crate::lookup::facts::emit_facts::ref_stripped_type_parameter;
 use crate::lookup::facts::value_layout::{FunctionLayout, ValueLayout};
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::abi::coercion_plan::{CoercionPlan, LayoutChange};
 use crate::lowering::abi::go_result_wrapping::NilGuard;
+use crate::lowering::definitions::interface_adapter::MethodUse;
 use crate::lowering::expressions::access::dot_access_site::DotAccessSite;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
@@ -53,7 +53,12 @@ impl Planner<'_> {
         let expression = site.receiver;
         let resolution = site.resolution;
 
-        let spelling = self.queries().member_spelling(dot_access);
+        let method_use = if ctx.is_callee() {
+            MethodUse::Call
+        } else {
+            MethodUse::Value
+        };
+        let spelling = self.queries().member_spelling(dot_access, method_use);
 
         if let Some(plan) = self.plan_pre_receiver_dot(site, spelling, ctx) {
             return plan;
@@ -69,7 +74,6 @@ impl Planner<'_> {
             dot_member_stability(&self.facts, site, &expression_ty, base_plan.stability());
 
         let (mut setup, base) = base_plan.into_parts();
-        let base = self.plan_bound_dispatch_receiver(&mut setup, dot_access, base, &expression_ty);
         if let Some(member_access) =
             self.queries()
                 .try_plan_tuple_member_dot(&base, &expression_ty, resolution)
@@ -211,28 +215,6 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, wrapped);
         }
         ValuePlan::captured(Vec::new(), component)
-    }
-
-    fn plan_bound_dispatch_receiver(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        dot_access: &Expression,
-        base: GoExpression,
-        expression_ty: &Type,
-    ) -> GoExpression {
-        let Some((bound, _)) = self.queries().bound_dispatch_requirement(dot_access) else {
-            return base;
-        };
-        let receiver_type = ref_stripped_type_parameter(expression_ty)
-            .map(Type::Parameter)
-            .expect("a dispatched bound has a type parameter receiver");
-        let adapter = self
-            .queries()
-            .dynamic_interface_adapter(&receiver_type, &bound, None)
-            .expect("a dispatched bound has an adapter");
-        let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
-        setup.extend(adapter_setup);
-        adapted
     }
 
     fn try_plan_nullable_field_access(

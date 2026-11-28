@@ -38,7 +38,7 @@ import (
 )
 
 type Foo[E error] interface {
-	get(bool) lisette.Result[int, E]
+	get_(bool) lisette.Result[int, E]
 }
 
 type Bar[E error] struct {
@@ -52,8 +52,12 @@ func (b Bar[E]) get(fail bool) lisette.Result[int, E] {
 	return lisette.MakeResultOk[int, E](42)
 }
 
+func (b Bar[E]) get_(arg0 bool) lisette.Result[int, E] {
+	return b.get(arg0)
+}
+
 func run[E error](foo Foo[E]) {
-	subject := foo.get(false)
+	subject := foo.get_(false)
 	if subject.Tag == lisette.ResultOk {
 		_ = subject.OkVal
 	} else {

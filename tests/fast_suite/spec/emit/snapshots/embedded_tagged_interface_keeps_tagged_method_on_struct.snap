@@ -1,0 +1,96 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  pub interface Getter<T> { fn get() -> Option<T> }
+  pub interface Plain { fn get() -> int }
+  
+  struct Wrapped { embed Getter<int> }
+  struct WrappedPlain { embed Plain }
+  
+  struct S {}
+  
+  impl S {
+    pub fn get(self) -> Option<int> { Some(7) }
+  }
+  
+  struct P {}
+  
+  impl P {
+    pub fn get(self) -> int { 8 }
+  }
+  
+  fn main() {
+    let g: Getter<int> = S {}
+    let w = Wrapped { Getter: g }
+    let f = w.get
+    let back: Getter<int> = w
+    let u: Unknown = back
+    fmt.Println(w.get().unwrap_or(0), f().unwrap_or(0), back.get().unwrap_or(0), Wrapped.get(w).unwrap_or(0))
+    fmt.Println(assert_type<Wrapped>(u).is_some())
+    let wp = WrappedPlain { Plain: P {} }
+    let h = wp.get
+    let k = WrappedPlain.get
+    fmt.Println(wp.get(), h(), k(wp))
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Getter[T any] interface {
+	Get_() lisette.Option[T]
+}
+
+type Plain interface {
+	Get() int
+}
+
+type Wrapped struct {
+	Getter[int]
+}
+
+type WrappedPlain struct {
+	Plain
+}
+
+type S struct{}
+
+func (s S) Get() (int, bool) {
+	return 7, true
+}
+
+func (s S) Get_() lisette.Option[int] {
+	return lisette.OptionFromCommaOk[int](s.Get())
+}
+
+type P struct{}
+
+func (p P) Get() int {
+	return 8
+}
+
+func (p P) Get_() int {
+	return p.Get()
+}
+
+func main() {
+	var g Getter[int] = S{}
+	w := Wrapped{Getter: g}
+	f := w.Get_
+	var back Getter[int] = w
+	var u any = back
+	fmt.Println(w.Get_().UnwrapOr(0), f().UnwrapOr(0), back.Get_().UnwrapOr(0), Wrapped.Get_(w).UnwrapOr(0))
+	_, ok := u.(Wrapped)
+	fmt.Println(ok)
+	wp := WrappedPlain{Plain: P{}}
+	h := wp.Get
+	k := WrappedPlain.Get
+	fmt.Println(wp.Get(), h(), k(wp))
+}

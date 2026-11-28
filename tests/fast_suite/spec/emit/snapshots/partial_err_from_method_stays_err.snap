@@ -1,0 +1,66 @@
+---
+source: tests/fast_suite/spec/emit/partial.rs
+description: |
+  
+  import "go:errors"
+  
+  pub struct R {}
+  
+  impl R {
+    fn read(self) -> Partial<int, error> { Partial.Err(errors.New("eof")) }
+  }
+  
+  fn free() -> Partial<int, error> { Partial.Err(errors.New("eof")) }
+  
+  fn main() {
+    if !free().is_err() { panic("free function lost Err") }
+    let r = R {}
+    match r.read() {
+      Partial.Ok(_) => panic("ok"),
+      Partial.Err(_) => {},
+      Partial.Both(_, _) => panic("both"),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type R struct{}
+
+func (r R) read_() lisette.Partial[int, error] {
+	return lisette.MakePartialErr[int, error](errors.New("eof"))
+}
+
+func (r R) read() (int, error) {
+	res := r.read_()
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
+}
+
+func free() lisette.Partial[int, error] {
+	return lisette.MakePartialErr[int, error](errors.New("eof"))
+}
+
+func main() {
+	if !free().IsErr() {
+		panic("free function lost Err")
+	}
+	r := R{}
+	switch r.read_().Tag {
+	case lisette.PartialOk:
+		panic("ok")
+	case lisette.PartialErr:
+	default:
+		panic("both")
+	}
+}
