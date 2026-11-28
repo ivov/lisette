@@ -2,87 +2,35 @@ use crate::lookup::facts::emit_facts::EmitFacts;
 use crate::target::types::return_abi::{
     CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout, go_payload_layout,
 };
-use syntax::program::{GoHint, Method, SlotOrigin};
+use syntax::program::{GoHint, GoReturnForm, Method, SlotOrigin};
 use syntax::types::Type;
 
-fn err_slot_is_nilable(facts: &EmitFacts<'_>, fallible_ty: &Type) -> bool {
-    let err = facts.err_payload(fallible_ty);
-    facts.is_prelude_error(&err) || facts.is_nilable_go_type(&err)
-}
-
-fn lowered_partial(
-    facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    payload: impl FnOnce(&Type) -> PayloadLayout,
-) -> Option<LoweredReturnAbi> {
-    (facts.is_partial(return_ty) && err_slot_is_nilable(facts, return_ty)).then(|| {
-        LoweredReturnAbi::Partial {
-            payload: payload(&facts.ok_payload(return_ty)),
+fn direct_return_abi(form: GoReturnForm, partial: Option<PayloadLayout>) -> CallableReturnAbi {
+    let lowered = match (form, partial) {
+        (GoReturnForm::BareError, _) => LoweredReturnAbi::BareError,
+        (GoReturnForm::Result, _) => LoweredReturnAbi::Result {
+            payload: PayloadLayout::Packed,
+        },
+        (GoReturnForm::NullableOption, _) => LoweredReturnAbi::Option(OptionReturnAbi::Nullable),
+        (GoReturnForm::CommaOkOption, _) => LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
+            payload: PayloadLayout::Packed,
+        }),
+        (GoReturnForm::Tuple(arity), _) => LoweredReturnAbi::Tuple { arity },
+        (GoReturnForm::Partial, Some(payload)) => LoweredReturnAbi::Partial { payload },
+        (GoReturnForm::Void, _) => return CallableReturnAbi::Void,
+        (GoReturnForm::Partial, None) | (GoReturnForm::Value, _) => {
+            return CallableReturnAbi::Value;
         }
-    })
-}
-
-fn classify_direct_emission(facts: &EmitFacts<'_>, return_ty: &Type) -> Option<LoweredReturnAbi> {
-    if facts.is_result(return_ty) && err_slot_is_nilable(facts, return_ty) {
-        return Some(if facts.ok_payload(return_ty).is_unit() {
-            LoweredReturnAbi::BareError
-        } else {
-            LoweredReturnAbi::Result {
-                payload: PayloadLayout::Packed,
-            }
-        });
-    }
-    if facts.is_option(return_ty) {
-        let encoding = if facts.is_nullable_option(return_ty) {
-            OptionReturnAbi::Nullable
-        } else {
-            OptionReturnAbi::CommaOk {
-                payload: PayloadLayout::Packed,
-            }
-        };
-
-        return Some(LoweredReturnAbi::Option(encoding));
-    }
-    if let Some(elements) = facts.tuple_elements(return_ty)
-        && elements.len() >= 2
-    {
-        return Some(LoweredReturnAbi::Tuple {
-            arity: elements.len(),
-        });
-    }
-    None
+    };
+    CallableReturnAbi::Lowered(lowered)
 }
 
 pub(crate) fn function_return_abi(facts: &EmitFacts<'_>, return_ty: &Type) -> CallableReturnAbi {
-    classify_direct_emission(facts, return_ty).map_or_else(
-        || CallableReturnAbi::unlowered(return_ty),
-        CallableReturnAbi::Lowered,
-    )
-}
-
-fn classify_slot_emission(
-    facts: &EmitFacts<'_>,
-    return_ty: &Type,
-    origin: SlotOrigin,
-) -> Option<LoweredReturnAbi> {
-    if origin.declared_by_go()
-        && let Some(abi) = lowered_partial(facts, return_ty, go_payload_layout)
-    {
-        return Some(abi);
-    }
-    let abi = classify_direct_emission(facts, return_ty)?;
-    Some(if origin.declared_by_go() && abi.payload().is_some() {
-        abi.with_payload(go_payload_layout(&facts.ok_payload(return_ty)))
-    } else {
-        abi
-    })
+    direct_return_abi(facts.go_return_form(return_ty), None)
 }
 
 pub(crate) fn method_return_abi(facts: &EmitFacts<'_>, return_ty: &Type) -> CallableReturnAbi {
-    match lowered_partial(facts, return_ty, |_| PayloadLayout::Packed) {
-        Some(abi) => CallableReturnAbi::Lowered(abi),
-        None => function_return_abi(facts, return_ty),
-    }
+    direct_return_abi(facts.go_return_form(return_ty), Some(PayloadLayout::Packed))
 }
 
 pub(crate) fn slot_return_abi(
@@ -96,10 +44,14 @@ pub(crate) fn slot_return_abi(
     if !origin.declared_by_go() {
         return CallableReturnAbi::Value;
     }
-    classify_slot_emission(facts, return_ty, origin).map_or_else(
-        || CallableReturnAbi::unlowered(return_ty),
-        CallableReturnAbi::Lowered,
-    )
+    match direct_return_abi(facts.go_return_form(return_ty), Some(PayloadLayout::Packed)) {
+        CallableReturnAbi::Lowered(abi) if abi.payload().is_some() => CallableReturnAbi::Lowered(
+            abi.with_payload(go_payload_layout(&facts.ok_payload(return_ty))),
+        ),
+        abi @ (CallableReturnAbi::Lowered(_)
+        | CallableReturnAbi::Void
+        | CallableReturnAbi::Value) => abi,
+    }
 }
 
 pub(crate) fn interface_method_return_abi(
@@ -111,15 +63,10 @@ pub(crate) fn interface_method_return_abi(
         .as_function_type()
         .expect("an interface method must have a function type")
         .return_type;
-    if facts.method_uses_tagged_return(&method.source_name) {
+    if facts.interface_method_is_tagged(&method.ty) {
         return CallableReturnAbi::Value;
     }
-    let abi = match method_return_abi(facts, return_ty) {
-        CallableReturnAbi::Value if facts.returns_go_void(return_ty) => CallableReturnAbi::Void,
-        abi @ CallableReturnAbi::Void
-        | abi @ CallableReturnAbi::Value
-        | abi @ CallableReturnAbi::Lowered(_) => abi,
-    };
+    let abi = method_return_abi(facts, return_ty);
     if abi == CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
         && method.go_hints.contains(&GoHint::CommaOk)
     {

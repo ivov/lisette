@@ -23,26 +23,22 @@ description: |
 package main
 
 type Box[T any] interface {
-	get() T
+	get_() T
 }
 
 type Bar struct{}
 
 func (b Bar) get() {}
 
+func (b Bar) get_() struct{} {
+	b.get()
+	return struct{}{}
+}
+
 func consume(box Box[struct{}]) {
-	box.get()
+	box.get_()
 }
 
 func main() {
-	consume(_lisAdapter_Bar_Box_0{inner: Bar{}})
-}
-
-type _lisAdapter_Bar_Box_0 struct {
-	inner Bar
-}
-
-func (a _lisAdapter_Bar_Box_0) get() struct{} {
-	a.inner.get()
-	return struct{}{}
+	consume(Bar{})
 }

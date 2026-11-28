@@ -5,6 +5,7 @@ use crate::lowering::abi::CalleeSignature;
 use crate::lowering::abi::callable::{CallableAbi, CallableParamAbi};
 use crate::lowering::abi::coercion_plan::LayoutChange;
 use crate::lowering::calls::call_site::CallSite;
+use crate::lowering::definitions::interface_adapter::MethodUse;
 use crate::lowering::planner::queries::PlannerQueries;
 use syntax::ast::Expression;
 use syntax::program::SlotOrigin;
@@ -170,7 +171,13 @@ impl<'a> PlannerQueries<'_, 'a> {
         };
         let definition = checked.name.clone();
 
-        let resolved = self.resolve_callee(callee, origin, definition, checked.receiver_offset());
+        let resolved = self.resolve_callee(
+            callee,
+            origin,
+            definition,
+            checked.receiver_offset(),
+            MethodUse::Call,
+        );
         let arguments = args
             .iter()
             .enumerate()
@@ -193,6 +200,7 @@ impl<'a> PlannerQueries<'_, 'a> {
         origin: CallableOrigin<'a>,
         id: Option<CalleeName>,
         receiver_offset: usize,
+        method_use: MethodUse,
     ) -> ResolvedCallee<'a> {
         let callee_ty = function
             .type_ref()
@@ -237,6 +245,7 @@ impl<'a> PlannerQueries<'_, 'a> {
                 function: instantiated_function,
                 declared_return,
                 return_type,
+                method_use,
             },
         );
         let is_prelude_dispatch = is_prelude_dispatch(id.as_ref(), &origin);
@@ -326,7 +335,7 @@ impl<'a> PlannerQueries<'_, 'a> {
             .checked(expression)
             .function_value()
             .map_or(0, CheckedCallee::receiver_offset);
-        Some(self.resolve_callee(expression, origin, id, receiver_offset))
+        Some(self.resolve_callee(expression, origin, id, receiver_offset, MethodUse::Value))
     }
 
     pub(in crate::lowering) fn resolve_callee_definition(
@@ -345,9 +354,6 @@ impl<'a> PlannerQueries<'_, 'a> {
     }
 
     pub(in crate::lowering) fn is_go_callable(&self, expression: &Expression) -> bool {
-        if self.bound_dispatch_requirement(expression).is_some() {
-            return false;
-        }
         resolved_callee(expression).is_some_and(|name| name.is_go())
             || self.go_bound_requirement(expression).is_some()
             || self

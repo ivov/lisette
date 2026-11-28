@@ -1,6 +1,6 @@
 use crate::lookup::state::bindings::BindingValue;
 use crate::lowering::calls::go_interop::build_tuple_literal;
-use crate::lowering::definitions::interface_adapter::has_tagged_counterpart;
+use crate::lowering::definitions::interface_adapter::tagged_counterpart_body;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::values::GoExpression;
@@ -49,7 +49,8 @@ impl PlannerQueries<'_, '_> {
         } else {
             GoExport::Unexported
         };
-        let spelling = if has_tagged_counterpart(self.facts, &symbol.owner, &symbol.name) {
+        let spelling = if tagged_counterpart_body(self.facts, &symbol.owner, &symbol.name).is_some()
+        {
             MemberSpelling::TaggedCounterpart
         } else {
             MemberSpelling::Plain

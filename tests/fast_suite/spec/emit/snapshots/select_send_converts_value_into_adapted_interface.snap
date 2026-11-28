@@ -32,7 +32,7 @@ import (
 )
 
 type Get[T any] interface {
-	get() (T, bool)
+	get_() lisette.Option[T]
 }
 
 type X struct {
@@ -47,23 +47,15 @@ func (s S) get() *X {
 	return &X{V: s.N}
 }
 
+func (s S) get_() lisette.Option[*X] {
+	raw := s.get()
+	return lisette.OptionFromNilable[*X](raw, raw == nil)
+}
+
 func main() {
 	c := make(chan Get[*X], 1)
 	select {
-	case c <- _lisAdapter_S_Get_0{inner: S{N: 3}}:
+	case c <- S{N: 3}:
 		fmt.Println("sent")
 	}
-}
-
-type _lisAdapter_S_Get_0 struct {
-	inner S
-}
-
-func (a _lisAdapter_S_Get_0) get() (*X, bool) {
-	raw := a.inner.get()
-	option := lisette.OptionFromNilable[*X](raw, raw == nil)
-	if option.Tag == lisette.OptionSome {
-		return option.SomeVal, true
-	}
-	return nil, false
 }

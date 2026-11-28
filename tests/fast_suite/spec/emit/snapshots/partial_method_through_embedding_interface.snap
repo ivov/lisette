@@ -24,7 +24,7 @@ import (
 )
 
 type Base interface {
-	fetch() (int, error)
+	fetch_() lisette.Partial[int, error]
 }
 
 type Child interface {
@@ -33,20 +33,24 @@ type Child interface {
 
 type Source struct{}
 
+func (s Source) fetch_() lisette.Partial[int, error] {
+	return lisette.MakePartialBoth[int, error](0, io.EOF)
+}
+
 func (s Source) fetch() (int, error) {
-	return 0, io.EOF
+	res := s.fetch_()
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func main() {
 	var c Child = Source{}
-	ret, ret2 := c.fetch()
-	var result lisette.Partial[int, error]
-	if ret2 != nil {
-		result = lisette.MakePartialBoth[int, error](ret, ret2)
-	} else {
-		result = lisette.MakePartialOk[int, error](ret)
-	}
-	if !result.IsBoth() {
+	if !c.fetch_().IsBoth() {
 		panic("lost")
 	}
 }

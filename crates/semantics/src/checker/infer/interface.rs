@@ -1,9 +1,13 @@
+use std::slice;
+
 use crate::checker::EnvResolve;
 use crate::checker::promotion;
 use crate::checker::resolution::MethodSelection;
 use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
-use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
+use diagnostics::infer::{
+    InterfaceMethodViolation, InterfaceUse, InterfaceViolation, MissingMethod,
+};
 use syntax::ast::Span;
 use syntax::program::ConformanceWitness;
 use syntax::program::GoHint;
@@ -11,8 +15,9 @@ use syntax::program::GoInteropContract;
 use syntax::program::{CheckedMethod, PRELUDE_PACKAGE_ID, is_go_import, is_prelude_symbol};
 use syntax::program::{
     DefinitionBody, InterfaceRequirement, Methods, interface_declares_any_method,
-    interface_requirements,
+    interface_requirements, requirement_uses_tagged_counterpart, supplying_requirement,
 };
+use syntax::program::{GoReturnForm, go_return_form};
 use syntax::types::{Symbol, Type, unqualified_name};
 use syntax::types::{method_receiver_substitution, substitute};
 
@@ -114,67 +119,116 @@ impl InferCtx<'_> {
         } else {
             self.get_all_methods(store, &resolved)
         };
-        if self
-            .satisfies_interface_with_methods(&resolved, &bound, span, &methods)
-            .is_ok()
+        if let Ok(Some(witness)) =
+            self.satisfies_interface_with_methods(&resolved, &bound, span, &methods)
             && self
                 .check_pointer_receivers(&resolved, &bound, span, parameter_hint)
                 .is_ok()
         {
-            self.check_bound_method_shapes(&resolved, &bound, span);
+            let _ = self.check_go_method_forms(&witness, InterfaceUse::Bound, span);
         }
     }
 
-    /// A type argument gets no adapter, so its methods need the Go shapes the bound requires.
-    fn check_bound_method_shapes(&mut self, ty: &Type, bound: &Type, span: &Span) {
+    fn check_go_method_forms(
+        &mut self,
+        witness: &ConformanceWitness,
+        interface_use: InterfaceUse,
+        span: &Span,
+    ) -> Result<(), Vec<InterfaceViolation>> {
         let store = self.store;
-        let receiver = self.conformance_receiver(ty);
-        let Some(receiver_id) = receiver.get_qualified_id() else {
-            return;
-        };
-        let receiver_is_go = is_go_import(receiver_id);
-        let is_parameter = |ty: &Type| matches!(store.peel_alias(ty), Type::Parameter(_));
-        for requirement in interface_requirements(bound, |id| store.get_definition(id)) {
-            let declared_by_go = is_go_import(&requirement.declaring_interface);
-            let unsupported = if receiver_is_go {
-                !declared_by_go
-                    && requirement
-                        .method
-                        .ty
-                        .unwrap_forall()
-                        .get_function_ret()
-                        .is_some_and(is_parameter)
-            } else {
-                declared_by_go && self.lacks_go_method_shape(&receiver, &requirement)
-            };
-            if unsupported {
-                let type_name = receiver
-                    .display_name()
-                    .map_or_else(|| receiver.to_string(), |name| name.to_string());
-                self.sink
-                    .push(diagnostics::infer::unsupported_bound_argument(
-                        unqualified_name(&requirement.declaring_interface),
-                        &type_name,
-                        *span,
-                    ));
-                return;
-            }
-        }
-    }
-
-    /// A slot declared as a bare type parameter never has the Go shape of a lowered type.
-    fn lacks_go_method_shape(&self, receiver: &Type, requirement: &InterfaceRequirement) -> bool {
-        let store = self.store;
-        let promotion::Resolution::Found(member) =
-            promotion::resolve_selector(store, receiver, &requirement.name)
+        let Some(requirement) =
+            interface_requirements(&witness.interface, |id| store.get_definition(id))
+                .into_iter()
+                .find(|requirement| {
+                    self.lacks_go_method(
+                        requirement,
+                        witness.method_for(requirement),
+                        &witness.receiver,
+                        interface_use,
+                    )
+                })
         else {
+            return Ok(());
+        };
+        let receiver = self.conformance_receiver(&witness.receiver);
+        self.push_unsupported_go_type(&receiver, &requirement, interface_use, span);
+        Err(Vec::new())
+    }
+
+    fn lacks_go_method(
+        &self,
+        requirement: &InterfaceRequirement,
+        checked: &CheckedMethod,
+        receiver: &Type,
+        interface_use: InterfaceUse,
+    ) -> bool {
+        let store = self.store;
+        let lookup = |id: &str| store.get_definition(id);
+        let target_is_go = is_go_import(&requirement.declaring_interface);
+        let tagged = requirement_uses_tagged_counterpart(requirement, lookup);
+        match &checked.selected_requirement {
+            Some(source) => requirement_uses_tagged_counterpart(source, lookup) != tagged,
+            None if is_go_import(&checked.selected_owner) => tagged,
+            None if target_is_go => {
+                interface_use == InterfaceUse::Bound
+                    && self.lacks_go_method_shape(&checked.declared_signature, requirement)
+            }
+            None => !tagged && self.lisette_method_form_differs(requirement, checked, receiver),
+        }
+    }
+
+    fn lisette_method_form_differs(
+        &self,
+        requirement: &InterfaceRequirement,
+        checked: &CheckedMethod,
+        receiver: &Type,
+    ) -> bool {
+        let store = self.store;
+        let lookup = |id: &str| store.get_definition(id);
+        let (Some(declared), Some(required)) = (
+            checked
+                .declared_signature
+                .unwrap_forall()
+                .get_function_ret(),
+            requirement.ty.get_function_ret(),
+        ) else {
             return false;
         };
-        let Some(method) = store.get_method(&member.declaring_type, &requirement.name) else {
-            return false;
-        };
+        let provided = go_return_form(declared, lookup);
+        let required = go_return_form(required, lookup);
+        if required == GoReturnForm::NullableOption
+            && requirement.method.go_hints.contains(&GoHint::CommaOk)
+        {
+            let adapter_reconciles =
+                provided == GoReturnForm::NullableOption && self.adapter_capable_receiver(receiver);
+            return provided != GoReturnForm::CommaOkOption && !adapter_reconciles;
+        }
+        provided != required
+    }
+
+    fn push_unsupported_go_type(
+        &mut self,
+        receiver: &Type,
+        requirement: &InterfaceRequirement,
+        interface_use: InterfaceUse,
+        span: &Span,
+    ) {
+        let type_name = receiver
+            .display_name()
+            .map_or_else(|| receiver.to_string(), |name| name.to_string());
+        self.sink
+            .push(diagnostics::infer::unsupported_bound_argument(
+                unqualified_name(&requirement.declaring_interface),
+                &type_name,
+                interface_use,
+                *span,
+            ));
+    }
+
+    fn lacks_go_method_shape(&self, declared: &Type, requirement: &InterfaceRequirement) -> bool {
+        let store = self.store;
         let (Some(declared), Some(go)) = (
-            method.ty.unwrap_forall().as_function_type(),
+            declared.unwrap_forall().as_function_type(),
             requirement.ty.as_function_type(),
         ) else {
             return false;
@@ -202,7 +256,7 @@ impl InferCtx<'_> {
         ty: &Type,
         interface_ty: &Type,
         span: &Span,
-    ) -> Result<(), Vec<InterfaceViolation>> {
+    ) -> Result<Option<ConformanceWitness>, Vec<InterfaceViolation>> {
         let store = self.store;
         let methods = self.get_all_methods(store, ty);
         self.satisfies_interface_with_methods(ty, interface_ty, span, &methods)
@@ -214,8 +268,12 @@ impl InferCtx<'_> {
         interface_ty: &Type,
         span: &Span,
     ) -> Result<(), Vec<InterfaceViolation>> {
-        self.satisfies_interface(ty, interface_ty, span)
-            .and_then(|()| self.check_pointer_receivers(ty, interface_ty, span, None))
+        let witness = self.satisfies_interface(ty, interface_ty, span)?;
+        self.check_pointer_receivers(ty, interface_ty, span, None)?;
+        match witness {
+            Some(witness) => self.check_go_method_forms(&witness, InterfaceUse::Value, span),
+            None => Ok(()),
+        }
     }
 
     fn satisfies_interface_with_methods(
@@ -224,7 +282,7 @@ impl InferCtx<'_> {
         interface_ty: &Type,
         span: &Span,
         methods: &Methods,
-    ) -> Result<(), Vec<InterfaceViolation>> {
+    ) -> Result<Option<ConformanceWitness>, Vec<InterfaceViolation>> {
         let interface_ty = self.store.peel_alias(interface_ty);
         let Type::Nominal {
             id: interface_qualified_id,
@@ -276,7 +334,7 @@ impl InferCtx<'_> {
                 (check.violations, check.reported_violations, check.methods)
             })
         else {
-            return Ok(());
+            return Ok(None);
         };
 
         let builtin_receiver = self.is_builtin_receiver(ty);
@@ -297,10 +355,11 @@ impl InferCtx<'_> {
                     let store = self.store;
                     self.facts
                         .conformances
-                        .insert(witness, |id| store.get_definition(id));
+                        .insert(witness.clone(), |id| store.get_definition(id));
                 }
+                return Ok(Some(witness));
             }
-            return Ok(());
+            return Ok(None);
         }
 
         let violation_count: usize = violations.iter().map(|v| v.methods.len()).sum();
@@ -643,8 +702,6 @@ impl InferCtx<'_> {
         let ty = check.receiver;
         let span = check.span;
         let resolved_receiver = self.conformance_receiver(ty);
-        let receiver_requirements =
-            interface_requirements(&resolved_receiver, |id| self.store.get_definition(id));
         let receiver_id = match &resolved_receiver {
             Type::Nominal { id, .. } => Some(id.clone()),
             _ => None,
@@ -743,7 +800,7 @@ impl InferCtx<'_> {
                     let selected =
                         promotion::resolve_selector(store, &resolved_receiver, &impl_method_name);
                     let promotion::Resolution::Found(member) = selected else {
-                        if let Type::Parameter(_) = resolved_receiver
+                        if let Type::Parameter(parameter) = &resolved_receiver
                             && let Some(MethodSelection {
                                 bound: Some(bound),
                                 method,
@@ -752,8 +809,18 @@ impl InferCtx<'_> {
                                 self.method_of_type(store, &resolved_receiver, &impl_method_name)
                             && let Some(bound_id) = bound.get_qualified_id()
                         {
-                            let selected_requirement =
-                                bound_requirement(store, &bound, &impl_method_name);
+                            let bounds: Vec<Type> = self
+                                .scopes
+                                .bounds_on_param(parameter)
+                                .iter()
+                                .map(|bound| store.peel_alias(bound))
+                                .collect();
+                            let selected_requirement = supplying_requirement(
+                                &bounds,
+                                &impl_method_name,
+                                Some(requirement),
+                                |id| store.get_definition(id),
+                            );
                             check.methods.push(CheckedMethod {
                                 required_interface: interface_qualified_id.clone(),
                                 required_name: method_name.clone(),
@@ -826,10 +893,17 @@ impl InferCtx<'_> {
                         .unwrap_or_default();
                     let instantiated_declared_signature =
                         substitute(declared_signature.unwrap_forall(), &substitutions);
-                    let selected_requirement = receiver_requirements
-                        .iter()
-                        .find(|candidate| candidate.name == impl_method_name)
-                        .cloned();
+                    let selected_requirement = store
+                        .is_interface(&declaring_instance)
+                        .then(|| {
+                            supplying_requirement(
+                                slice::from_ref(&declaring_instance),
+                                &impl_method_name,
+                                Some(requirement),
+                                |id| store.get_definition(id),
+                            )
+                        })
+                        .flatten();
                     check.methods.push(CheckedMethod {
                         required_interface: interface_qualified_id.clone(),
                         required_name: method_name.clone(),
@@ -1281,10 +1355,4 @@ fn without_function_bounds(ty: &Type) -> Type {
         ),
         ty => ty,
     }
-}
-
-fn bound_requirement(store: &Store, bound: &Type, name: &str) -> Option<InterfaceRequirement> {
-    interface_requirements(bound, |id| store.get_definition(id))
-        .into_iter()
-        .find(|candidate| candidate.name == name)
 }

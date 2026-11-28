@@ -38,7 +38,7 @@ type Thing struct {
 }
 
 type Box[T any] interface {
-	get() T
+	get_() T
 }
 
 type Bar struct{}
@@ -47,22 +47,18 @@ func (b Bar) get() *Thing {
 	return nil
 }
 
+func (b Bar) get_() lisette.Option[*Thing] {
+	raw := b.get()
+	return lisette.OptionFromNilable[*Thing](raw, raw == nil)
+}
+
 func useBox(box Box[lisette.Option[*Thing]]) {
-	subject := box.get()
+	subject := box.get_()
 	if subject.Tag == lisette.OptionSome {
 		_ = subject.SomeVal
 	}
 }
 
 func main() {
-	useBox(_lisAdapter_Bar_Box_0{inner: Bar{}})
-}
-
-type _lisAdapter_Bar_Box_0 struct {
-	inner Bar
-}
-
-func (a _lisAdapter_Bar_Box_0) get() lisette.Option[*Thing] {
-	raw := a.inner.get()
-	return lisette.OptionFromNilable[*Thing](raw, raw == nil)
+	useBox(Bar{})
 }

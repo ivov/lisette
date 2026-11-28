@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+    ╭─[test.lis:15:11]
+ 14 │ fn main() {
+ 15 │   consume(Bar { item: () })
+    ·           ────────┬───────
+    ·                   ╰── unsupported
+ 16 │ }
+    ╰────
+  help: Lisette does not yet support using `Bar` as a `Mixed` value · code: [infer.unsupported_bound_argument]

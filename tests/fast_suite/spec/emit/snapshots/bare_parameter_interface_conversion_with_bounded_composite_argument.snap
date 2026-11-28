@@ -1,0 +1,68 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  struct Keyed<K: Comparable> {
+    k: K,
+  }
+  
+  impl<K: Comparable> Keyed<K> {
+    fn get(self) -> Option<K> {
+      Some(self.k)
+    }
+  }
+  
+  interface Box<U> {
+    fn get() -> U
+  }
+  
+  fn consume<T: Comparable>(box: Box<Option<Array<T, 2>>>) {
+    if let Some(v) = box.get() {
+      let _ = v
+    }
+  }
+  
+  fn pass<T: Comparable>(k: Keyed<Array<T, 2>>) {
+    consume(k)
+  }
+  
+  fn main() {
+    let a: Array<int, 2> = [1, 2]
+    pass(Keyed { k: a })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Keyed[K comparable] struct {
+	k K
+}
+
+func (k Keyed[K]) get() (K, bool) {
+	return k.k, true
+}
+
+func (k Keyed[K]) get_() lisette.Option[K] {
+	return lisette.OptionFromCommaOk[K](k.get())
+}
+
+type Box[U any] interface {
+	get_() U
+}
+
+func consume[T comparable](box Box[lisette.Option[[2]T]]) {
+	subject := box.get_()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
+	}
+}
+
+func pass[T comparable](k Keyed[[2]T]) {
+	consume(k)
+}
+
+func main() {
+	a := [2]int{1, 2}
+	pass(Keyed[[2]int]{k: a})
+}

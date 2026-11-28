@@ -3418,18 +3418,32 @@ pub fn unsupported_generic_go_interface(
         ))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InterfaceUse {
+    Bound,
+    Value,
+}
+
 pub fn unsupported_bound_argument(
     interface_name: &str,
     type_name: &str,
+    interface_use: InterfaceUse,
     span: Span,
 ) -> LisetteDiagnostic {
+    let help = match interface_use {
+        InterfaceUse::Bound => format!(
+            "Lisette does not yet support using `{}` where a generic requires `{}`",
+            type_name, interface_name
+        ),
+        InterfaceUse::Value => format!(
+            "Lisette does not yet support using `{}` as a `{}` value",
+            type_name, interface_name
+        ),
+    };
     LisetteDiagnostic::error("Not supported yet")
         .with_infer_code("unsupported_bound_argument")
         .with_span_label(&span, "unsupported")
-        .with_help(format!(
-            "Lisette does not yet support using `{}` where a generic requires `{}`",
-            type_name, interface_name
-        ))
+        .with_help(help)
 }
 
 pub struct BoundParameterHint<'a> {

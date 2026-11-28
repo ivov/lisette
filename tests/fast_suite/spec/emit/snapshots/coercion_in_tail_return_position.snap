@@ -23,12 +23,27 @@ description: |
 ---
 package main
 
-import "io"
+import (
+	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
 
 type Doubler struct{}
 
-func (d Doubler) Read(_ []uint8) (int, error) {
-	return 0, nil
+func (d Doubler) Read_(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](0)
+}
+
+func (d Doubler) Read(arg0 []uint8) (int, error) {
+	res := d.Read_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func make_() io.Reader {

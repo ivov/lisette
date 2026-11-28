@@ -7166,40 +7166,6 @@ fn main() {
 }
 
 #[test]
-fn void_interface_discards_generic_unit_value_and_preserves_value_method() {
-    let input = r#"
-interface Mixed<T> {
-  fn run()
-  fn value() -> T
-}
-
-struct Bar<T> {
-  item: T,
-}
-
-impl<T> Bar<T> {
-  fn run(self) -> T {
-    self.item
-  }
-
-  fn value(self) -> T {
-    self.item
-  }
-}
-
-fn consume(mixed: Mixed<()>) {
-  mixed.run()
-  let _ = mixed.value()
-}
-
-fn main() {
-  consume(Bar { item: () })
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn generic_option_return_interface_bounds_preserve_concrete_types() {
     let input = r#"
 interface Box<U> { fn get() -> U }
@@ -7223,7 +7189,7 @@ fn main() {
 }
 
 #[test]
-fn generic_struct_adapter_declares_its_type_parameters() {
+fn generic_struct_converts_to_bare_parameter_interface() {
     let input = r#"
 interface Box<U> {
   fn get() -> U
@@ -7257,7 +7223,7 @@ fn main() {
 }
 
 #[test]
-fn variadic_arguments_wrap_in_interface_adapter() {
+fn variadic_arguments_convert_to_bare_parameter_interface() {
     let input = r#"
 struct Thing { n: int }
 
@@ -7290,7 +7256,7 @@ fn main() {
 }
 
 #[test]
-fn generic_method_ufcs_argument_wraps_in_interface_adapter() {
+fn generic_method_argument_converts_to_bare_parameter_interface() {
     let input = r#"
 struct Thing { n: int }
 
@@ -7324,7 +7290,7 @@ fn main() {
 }
 
 #[test]
-fn receiver_method_ufcs_argument_wraps_in_interface_adapter() {
+fn receiver_method_ufcs_argument_converts_to_bare_parameter_interface() {
     let input = r#"
 struct Thing { n: int }
 
@@ -7357,7 +7323,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_declares_nested_type_parameter() {
+fn bare_parameter_interface_conversion_with_nested_type_parameter() {
     let input = r#"
 interface Box<U> {
   fn get() -> U
@@ -7391,7 +7357,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_declares_repeated_type_parameter_once() {
+fn bare_parameter_interface_conversion_with_repeated_type_parameter() {
     let input = r#"
 interface Box<U> {
   fn get() -> U
@@ -7426,7 +7392,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_preserves_nested_parameter_constraint() {
+fn bare_parameter_interface_conversion_with_nested_parameter_constraint() {
     let input = r#"
 interface Box<U> {
   fn get() -> U
@@ -7460,7 +7426,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_uses_receiver_generic_bounds() {
+fn bare_parameter_interface_conversion_inside_bounded_receiver_method() {
     let input = r#"
 interface Box<U> {
   fn get() -> U
@@ -7501,7 +7467,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_uses_separate_caller_contexts() {
+fn bare_parameter_interface_conversion_in_two_caller_contexts() {
     let input = r#"
 interface Box<U> {
   fn get() -> U
@@ -7540,7 +7506,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_captures_complete_caller_context() {
+fn bare_parameter_interface_conversion_in_caller_with_bounded_parameters() {
     let input = r#"
 interface Holder<X> {
   fn h() -> X
@@ -7586,7 +7552,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_pointer_map_key_stays_unconstrained() {
+fn bare_parameter_interface_conversion_with_pointer_map_key() {
     let input = r#"
 struct Thing { v: int }
 
@@ -7623,7 +7589,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_struct_map_key_requires_field_comparability() {
+fn bare_parameter_interface_conversion_with_struct_map_key() {
     let input = r#"
 interface Box<U> {
   fn get() -> U
@@ -7663,7 +7629,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_captures_interface_parameter_bound() {
+fn bare_parameter_interface_conversion_with_interface_parameter_bound() {
     let input = r#"
 interface Foo<T: Comparable> {
   fn f() -> T
@@ -7710,7 +7676,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_captures_alias_parameter_bound() {
+fn bare_parameter_interface_conversion_with_alias_parameter_bound() {
     let input = r#"
 type Wrapped<T: Comparable> = Slice<T>
 
@@ -7747,7 +7713,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_copies_context_bound_for_composite_arg() {
+fn bare_parameter_interface_conversion_with_bounded_composite_argument() {
     let input = r#"
 struct Keyed<K: Comparable> {
   k: K,
@@ -7782,7 +7748,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_enum_map_key_requires_payload_comparability() {
+fn bare_parameter_interface_conversion_with_enum_map_key() {
     let input = r#"
 enum Maybe<T> {
   Just(T),
@@ -7822,7 +7788,7 @@ fn main() {
 }
 
 #[test]
-fn generic_adapter_copies_sibling_referencing_bound() {
+fn bare_parameter_interface_conversion_with_sibling_referencing_bound() {
     let input = r#"
 interface Holder<T> {
   fn item() -> T
@@ -7863,41 +7829,6 @@ fn use_wrap<A, B: Holder<A>>(w: Wrap<A, B>) {
 
 fn main() {
   use_wrap(Wrap { a: 3, b: IntHolder {} })
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn nullable_interface_reencodes_comma_ok_option_impl() {
-    let input = r#"
-struct Thing {
-  v: int,
-}
-
-interface Opt {
-  fn find() -> Option<Ref<Thing>>
-}
-
-struct Bar<T> {
-  x: Option<T>,
-}
-
-impl<T> Bar<T> {
-  fn find(self) -> Option<T> {
-    self.x
-  }
-}
-
-fn use_opt(o: Opt) {
-  match o.find() {
-    Some(t) => { let _ = t },
-    None => {},
-  }
-}
-
-fn main() {
-  use_opt(Bar { x: None })
 }
 "#;
     assert_emit_snapshot!(input);
@@ -8180,6 +8111,337 @@ fn main() {
   ts = ts.append(p)
   let t: (int, int) = p
   fmt.Println(ts, t, un(p))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_type_satisfies_interface_when_go_forms_match() {
+    let input = r#"
+import "go:fmt"
+
+interface MaybeInt { fn get() -> Option<int> }
+interface CheckedInt { fn checked() -> Result<int, error> }
+interface Pair { fn pair() -> (int, string) }
+interface Plain { fn plain() -> int }
+
+struct Box<T> { item: T }
+
+impl<T> Box<T> {
+  fn get(self) -> Option<T> { Some(self.item) }
+  fn checked(self) -> Result<T, error> { Ok(self.item) }
+  fn pair(self) -> (T, string) { (self.item, "x") }
+  fn plain(self) -> T { self.item }
+}
+
+fn via_bound<B: MaybeInt + CheckedInt + Pair + Plain>(b: B) -> int {
+  b.get().unwrap_or(0) + b.checked().unwrap_or(0) + b.pair().0 + b.plain()
+}
+
+fn main() {
+  let b = Box { item: 1 }
+  let m: MaybeInt = b
+  let c: CheckedInt = b
+  let p: Pair = b
+  let q: Plain = b
+  let u: Unknown = m
+  fmt.Println(via_bound(b), m.get().unwrap_or(0) + c.checked().unwrap_or(0) + p.pair().0 + q.plain())
+  fmt.Println(assert_type<Box<int>>(u).is_some())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn embedded_tagged_interface_keeps_tagged_method_on_struct() {
+    let input = r#"
+import "go:fmt"
+
+pub interface Getter<T> { fn get() -> Option<T> }
+pub interface Plain { fn get() -> int }
+
+struct Wrapped { embed Getter<int> }
+struct WrappedPlain { embed Plain }
+
+struct S {}
+
+impl S {
+  pub fn get(self) -> Option<int> { Some(7) }
+}
+
+struct P {}
+
+impl P {
+  pub fn get(self) -> int { 8 }
+}
+
+fn main() {
+  let g: Getter<int> = S {}
+  let w = Wrapped { Getter: g }
+  let f = w.get
+  let back: Getter<int> = w
+  let u: Unknown = back
+  fmt.Println(w.get().unwrap_or(0), f().unwrap_or(0), back.get().unwrap_or(0), Wrapped.get(w).unwrap_or(0))
+  fmt.Println(assert_type<Wrapped>(u).is_some())
+  let wp = WrappedPlain { Plain: P {} }
+  let h = wp.get
+  let k = WrappedPlain.get
+  fmt.Println(wp.get(), h(), k(wp))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn type_parameter_with_tagged_and_plain_bounds_converts_to_plain() {
+    let input = r#"
+import "go:fmt"
+
+interface Tagged<T> { fn get() -> T }
+interface Plain { fn get() -> int }
+
+interface Combined {
+  embed Tagged<int>
+  embed Plain
+}
+
+fn convert<T: Combined>(t: T) -> Plain { t as Plain }
+fn two<T: Plain + Tagged<int>>(t: T) -> Plain { t as Plain }
+fn two_reversed<T: Tagged<int> + Plain>(t: T) -> Plain { t as Plain }
+fn plain<P: Plain>(p: P) -> int { p.get() }
+fn forward<T: Tagged<int> + Plain>(t: T) -> int { plain(t) }
+
+struct S {}
+
+impl S {
+  fn get(self) -> int { 7 }
+}
+
+fn main() {
+  fmt.Println(convert(S {}).get(), two(S {}).get(), two_reversed(S {}).get(), forward(S {}))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interface_with_tagged_and_plain_method_converts_to_either_parent() {
+    let input = r#"
+import "go:fmt"
+
+interface Tagged<T> { fn get() -> T }
+interface Plain { fn get() -> int }
+
+interface TaggedFirst {
+  embed Tagged<int>
+  embed Plain
+}
+
+interface PlainFirst {
+  embed Plain
+  embed Tagged<int>
+}
+
+fn to_plain(b: TaggedFirst) -> Plain { b }
+fn to_tagged(b: PlainFirst) -> Tagged<int> { b }
+
+struct S {}
+
+impl S {
+  fn get(self) -> int { 7 }
+}
+
+fn main() {
+  let first: TaggedFirst = S {}
+  let second: PlainFirst = S {}
+  fmt.Println(to_plain(first).get(), to_tagged(second).get(), first.get(), second.get())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_option_interface_accepts_nullable_option_impl() {
+    let input = r#"
+pub struct X { pub v: int }
+
+interface Get<T> {
+  fn get() -> Option<T>
+}
+
+pub struct S { pub x: Ref<X> }
+
+impl S {
+  fn get(self) -> Option<Ref<X>> { Some(self.x) }
+}
+
+fn read<T, G: Get<T>>(g: G) -> Option<T> { g.get() }
+
+fn main() {
+  let s = S { x: &X { v: 1 } }
+  if read(s).is_none() { panic("bound lost the value") }
+  let g: Get<Ref<X>> = s
+  if g.get().is_none() { panic("interface value lost the value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unrelated_bare_parameter_bound_keeps_generic_option_interface_forms() {
+    let input = r#"
+pub struct X { pub v: int }
+
+interface Get<T> {
+  fn get() -> Option<T>
+}
+
+pub struct S { pub x: Ref<X> }
+
+impl S {
+  fn get(self) -> Option<Ref<X>> { Some(self.x) }
+}
+
+fn read<T, G: Get<T>>(g: G) -> Option<T> { g.get() }
+
+fn main() {
+  let s = S { x: &X { v: 1 } }
+  if read(s).is_none() { panic("bound lost the value") }
+  let g: Get<Ref<X>> = s
+  if g.get().is_none() { panic("interface value lost the value") }
+}
+
+interface Bare<T> {
+  fn get() -> T
+}
+
+fn unrelated<T, B: Bare<T>>(b: B) -> T { b.get() }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_interface_value_keeps_the_dynamic_type() {
+    let input = r#"
+pub struct X { pub v: int }
+
+interface Get<T> {
+  fn get() -> Option<T>
+}
+
+pub struct S { pub x: Ref<X> }
+
+impl S {
+  fn get(self) -> Option<Ref<X>> { Some(self.x) }
+}
+
+fn main() {
+  let s = S { x: &X { v: 1 } }
+  let g: Get<Ref<X>> = s
+  let u: Unknown = g
+  match assert_type<S>(u) {
+    Some(back) => {
+      if back.x.v != 1 { panic("wrong value") }
+    },
+    None => panic("interface value hides S"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_error_slot_interface_accepts_concrete_result_impl() {
+    let input = r#"
+import "go:errors"
+
+interface Res<E> {
+  fn res() -> Result<int, E>
+}
+
+pub struct S {}
+
+impl S {
+  fn res(self) -> Result<int, error> { Err(errors.New("bad")) }
+}
+
+fn read<E, R: Res<E>>(r: R) -> Result<int, E> { r.res() }
+
+fn main() {
+  if !read(S {}).is_err() { panic("bound lost the error") }
+  let r: Res<error> = S {}
+  if !r.res().is_err() { panic("interface value lost the error") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_result_interface_accepts_bare_error_impl() {
+    let input = r#"
+import "go:errors"
+
+interface Act<T> {
+  fn act() -> Result<T, error>
+}
+
+pub struct S {}
+
+impl S {
+  fn act(self) -> Result<(), error> { Err(errors.New("bad")) }
+}
+
+fn run<T, A: Act<T>>(a: A) -> Result<T, error> { a.act() }
+
+fn main() {
+  if !run(S {}).is_err() { panic("bound lost the error") }
+  let a: Act<()> = S {}
+  if !a.act().is_err() { panic("interface value lost the error") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_type_satisfies_lisette_interface_with_fixed_return() {
+    let input = r#"
+import "go:bytes"
+
+interface Lener {
+  fn Len() -> int
+}
+
+fn size<L: Lener>(l: L) -> int { l.Len() }
+
+fn main() {
+  let b = bytes.NewBufferString("abc")
+  if size(b) != 3 { panic("wrong bound length") }
+  let l: Lener = b
+  let u: Unknown = l
+  if assert_type<Ref<bytes.Buffer>>(u).is_none() { panic("interface value hides Buffer") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_type_satisfies_generic_lisette_interface_with_slice_return() {
+    let input = r#"
+import "go:bytes"
+
+interface Byteser<T> {
+  fn Bytes() -> Slice<T>
+}
+
+fn count<B: Byteser<byte>>(b: B) -> int { b.Bytes().length() }
+
+fn main() {
+  let b = bytes.NewBufferString("abc")
+  if count(b) != 3 { panic("wrong bound length") }
+  let v: Byteser<byte> = b
+  let u: Unknown = v
+  if assert_type<Ref<bytes.Buffer>>(u).is_none() { panic("interface value hides Buffer") }
 }
 "#;
     assert_emit_snapshot!(input);

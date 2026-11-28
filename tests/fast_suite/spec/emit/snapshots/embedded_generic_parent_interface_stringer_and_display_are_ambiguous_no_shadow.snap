@@ -37,7 +37,7 @@ func (d D) toString() string {
 }
 
 type Base[T any] interface {
-	String() T
+	String_() T
 }
 
 type I interface {

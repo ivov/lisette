@@ -7,9 +7,9 @@ description: |
   struct Thing { n: int }
   interface Opt { fn find() -> Option<Ref<Thing>> }
   
-  struct Holder<T> { value: Option<T> }
-  impl<T> Holder<T> {
-    fn find(self) -> Option<T> { self.value }
+  struct Holder { value: Option<Ref<Thing>> }
+  impl Holder {
+    fn find(self) -> Option<Ref<Thing>> { self.value }
   }
   
   fn seven() -> Option<int> { Some(7) }
@@ -22,7 +22,7 @@ description: |
       None => panic("wrong function type"),
     }
     let opts: Slice<Opt> = []
-    let fallback: Holder<Ref<Thing>> = Holder { value: None }
+    let fallback = Holder { value: None }
     let chosen = opts.get(0).unwrap_or(fallback)
     fmt.Println(chosen.find().is_none())
   }
@@ -43,17 +43,16 @@ type Opt interface {
 	find() *Thing
 }
 
-type Holder[T any] struct {
-	value lisette.Option[T]
+type Holder struct {
+	value lisette.Option[*Thing]
 }
 
-func (h Holder[T]) find() (T, bool) {
+func (h Holder) find() *Thing {
 	v := h.value
 	if v.Tag == lisette.OptionSome {
-		return v.SomeVal, true
+		return v.SomeVal
 	}
-	var zero T
-	return zero, false
+	return nil
 }
 
 func seven() (int, bool) {
@@ -93,29 +92,11 @@ func main() {
 	}
 	fmt.Println(adapted.SomeVal().UnwrapOr(0))
 	opts := []Opt{}
-	fallback := Holder[*Thing]{}
-	var chosen Opt = _lisAdapter_Holder_Opt_0{inner: fallback}
+	fallback := Holder{}
+	var chosen Opt = fallback
 	if len(opts) > 0 {
 		chosen = opts[0]
 	}
 	ret := chosen.find()
 	fmt.Println(ret == nil)
-}
-
-type _lisAdapter_Holder_Opt_0 struct {
-	inner Holder[*Thing]
-}
-
-func (a _lisAdapter_Holder_Opt_0) find() *Thing {
-	ret, ret2 := a.inner.find()
-	var option lisette.Option[*Thing]
-	if ret2 && ret != nil {
-		option = lisette.MakeOptionSome[*Thing](ret)
-	} else {
-		option = lisette.MakeOptionNone[*Thing]()
-	}
-	if option.Tag == lisette.OptionSome {
-		return option.SomeVal
-	}
-	return nil
 }

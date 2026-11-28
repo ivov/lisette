@@ -1,0 +1,43 @@
+---
+source: tests/fast_suite/spec/emit/types.rs
+description: |
+  
+  import "go:bytes"
+  
+  interface Lener {
+    fn Len() -> int
+  }
+  
+  fn size<L: Lener>(l: L) -> int { l.Len() }
+  
+  fn main() {
+    let b = bytes.NewBufferString("abc")
+    if size(b) != 3 { panic("wrong bound length") }
+    let l: Lener = b
+    let u: Unknown = l
+    if assert_type<Ref<bytes.Buffer>>(u).is_none() { panic("interface value hides Buffer") }
+  }
+---
+package main
+
+import "bytes"
+
+type Lener interface {
+	Len() int
+}
+
+func size[L Lener](l L) int {
+	return l.Len()
+}
+
+func main() {
+	b := bytes.NewBufferString("abc")
+	if size(b) != 3 {
+		panic("wrong bound length")
+	}
+	var l Lener = b
+	var u any = l
+	if _, ok := u.(*bytes.Buffer); !ok {
+		panic("interface value hides Buffer")
+	}
+}

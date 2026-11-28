@@ -19,7 +19,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Fetcher interface {
-	fetch() lisette.Partial[int, string]
+	fetch_() lisette.Partial[int, string]
 }
 
 type Source struct{}
@@ -28,8 +28,12 @@ func (s Source) fetch() lisette.Partial[int, string] {
 	return lisette.MakePartialBoth(0, "x")
 }
 
+func (s Source) fetch_() lisette.Partial[int, string] {
+	return s.fetch()
+}
+
 func run[T Fetcher](t T) bool {
-	return t.fetch().IsBoth()
+	return t.fetch_().IsBoth()
 }
 
 func main() {
@@ -37,7 +41,7 @@ func main() {
 		panic("lost")
 	}
 	var f Fetcher = Source{}
-	if !f.fetch().IsBoth() {
+	if !f.fetch_().IsBoth() {
 		panic("lost")
 	}
 }

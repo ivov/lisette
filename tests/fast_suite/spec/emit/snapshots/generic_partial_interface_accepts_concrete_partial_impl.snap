@@ -1,0 +1,84 @@
+---
+source: tests/fast_suite/spec/emit/partial.rs
+description: |
+  
+  import "go:errors"
+  
+  interface Fetch<E> {
+    fn fetch() -> Partial<int, E>
+  }
+  
+  pub struct S {}
+  
+  impl S {
+    fn fetch(self) -> Partial<int, error> { Partial.Both(3, errors.New("eof")) }
+  }
+  
+  fn read<E, F: Fetch<E>>(f: F) -> Partial<int, E> { f.fetch() }
+  
+  fn main() {
+    match read(S {}) {
+      Partial.Both(n, _) => {
+        if n != 3 { panic("bound lost the value") }
+      },
+      _ => panic("bound lost Both"),
+    }
+    let f: Fetch<error> = S {}
+    match f.fetch() {
+      Partial.Both(n, _) => {
+        if n != 3 { panic("interface value lost the value") }
+      },
+      _ => panic("interface value lost Both"),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Fetch[E any] interface {
+	fetch_() lisette.Partial[int, E]
+}
+
+type S struct{}
+
+func (s S) fetch_() lisette.Partial[int, error] {
+	return lisette.MakePartialBoth[int, error](3, errors.New("eof"))
+}
+
+func (s S) fetch() (int, error) {
+	res := s.fetch_()
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
+}
+
+func read[E any, F Fetch[E]](f F) lisette.Partial[int, E] {
+	return f.fetch_()
+}
+
+func main() {
+	subject := read[error, S](S{})
+	if subject.Tag != lisette.PartialBoth {
+		panic("bound lost Both")
+	}
+	if subject.OkVal != 3 {
+		panic("bound lost the value")
+	}
+	var f Fetch[error] = S{}
+	subject2 := f.fetch_()
+	if subject2.Tag != lisette.PartialBoth {
+		panic("interface value lost Both")
+	}
+	if subject2.OkVal != 3 {
+		panic("interface value lost the value")
+	}
+}

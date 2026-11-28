@@ -1,0 +1,39 @@
+---
+source: tests/fast_suite/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Keyed[K comparable] struct {
+	key K
+}
+
+func (k Keyed[K]) get() (K, bool) {
+	return k.key, true
+}
+
+func (k Keyed[K]) get_() lisette.Option[K] {
+	return lisette.OptionFromCommaOk[K](k.get())
+}
+
+type Box[T any] interface {
+	get_() T
+}
+
+func consume[T comparable](_ Box[lisette.Option[[2]T]]) {}
+
+type Runner[T comparable] struct {
+	marker T
+}
+
+func (r Runner[T]) pass(keyed Keyed[[2]T]) {
+	consume(keyed)
+}
+
+func main() {
+	key := [2]int{1, 2}
+	runner := Runner[int]{marker: 0}
+	runner.pass(Keyed[[2]int]{key: key})
+}

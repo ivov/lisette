@@ -27,9 +27,8 @@ type Counter struct {
 	n *int
 }
 
-func (c *Counter) Run() U {
+func (c *Counter) Run() {
 	*c.n++
-	return struct{}{}
 }
 
 func apply[T any](f func() T) T {
@@ -39,7 +38,7 @@ func apply[T any](f func() T) T {
 func main() {
 	n := 0
 	c := Counter{n: &n}
-	action := _lisAdapter_Counter_Action_0{inner: &c}
+	action := &c
 	cb := action.Run
 	var adapted func() U
 	if cb != nil {
@@ -52,12 +51,4 @@ func main() {
 	if n != 1 {
 		panic("direct generic interface method count")
 	}
-}
-
-type _lisAdapter_Counter_Action_0 struct {
-	inner *Counter
-}
-
-func (a _lisAdapter_Counter_Action_0) Run() {
-	a.inner.Run()
 }

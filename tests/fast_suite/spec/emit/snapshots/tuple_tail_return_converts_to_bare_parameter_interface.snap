@@ -1,0 +1,65 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Thing {
+    v: int,
+  }
+  
+  interface Box<T> {
+    fn get() -> T
+  }
+  
+  struct Bar {}
+  
+  impl Bar {
+    fn get(self) -> Option<Ref<Thing>> {
+      None
+    }
+  }
+  
+  fn make() -> (Box<Option<Ref<Thing>>>, int) {
+    (Bar {}, 2)
+  }
+  
+  fn test() {
+    let pair = make()
+    match pair.0.get() {
+      Some(_) => panic("expected None"),
+      None => {},
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Thing struct {
+	v int
+}
+
+type Box[T any] interface {
+	get_() T
+}
+
+type Bar struct{}
+
+func (b Bar) get() *Thing {
+	return nil
+}
+
+func (b Bar) get_() lisette.Option[*Thing] {
+	raw := b.get()
+	return lisette.OptionFromNilable[*Thing](raw, raw == nil)
+}
+
+func make_() (Box[lisette.Option[*Thing]], int) {
+	return Bar{}, 2
+}
+
+func test() {
+	pair0, _ := make_()
+	if pair0.get_().Tag == lisette.OptionSome {
+		panic("expected None")
+	}
+}

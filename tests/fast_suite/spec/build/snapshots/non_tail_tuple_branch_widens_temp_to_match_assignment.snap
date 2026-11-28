@@ -14,12 +14,34 @@ type Reader1 struct{}
 
 type Reader2 struct{}
 
-func (r Reader1) Read(_ []uint8) (int, error) {
-	return 0, nil
+func (r Reader1) Read_(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](0)
 }
 
-func (r Reader2) Read(_ []uint8) (int, error) {
-	return 1, nil
+func (r Reader1) Read(arg0 []uint8) (int, error) {
+	res := r.Read_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
+}
+
+func (r Reader2) Read_(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](1)
+}
+
+func (r Reader2) Read(arg0 []uint8) (int, error) {
+	res := r.Read_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func pick(flag bool) (io.Reader, int) {

@@ -26,16 +26,41 @@ description: |
 ---
 package main
 
-import "example.com/rw"
+import (
+	"example.com/rw"
+	lisette "github.com/ivov/lisette/prelude"
+)
 
 type Dev struct{}
 
-func (d Dev) Read(_ []uint8) (int, error) {
-	return 0, nil
+func (d Dev) Read_(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](0)
 }
 
-func (d Dev) Write(_ []uint8) (int, error) {
-	return 0, nil
+func (d Dev) Read(arg0 []uint8) (int, error) {
+	res := d.Read_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
+}
+
+func (d Dev) Write_(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](0)
+}
+
+func (d Dev) Write(arg0 []uint8) (int, error) {
+	res := d.Write_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func useRw(target rw.ReadWriter) {

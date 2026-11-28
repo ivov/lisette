@@ -1,4 +1,3 @@
-use crate::lowering::definitions::interface_adapter::bound_needs_dispatch;
 use crate::lowering::planner::queries::PlannerQueries;
 use crate::target::ir::declarations::TypeParameter;
 use crate::target::names::go_name;
@@ -33,7 +32,7 @@ impl PlannerQueries<'_, '_> {
                 let has_ordered = bounds.iter().any(is_ordered_bound);
                 let mut planned = Vec::new();
                 for bound in bounds {
-                    if bound_needs_dispatch(self.facts, bound) || is_zeroable_bound(bound) {
+                    if is_zeroable_bound(bound) {
                         continue;
                     }
                     let ty = if is_comparable_bound(bound) {

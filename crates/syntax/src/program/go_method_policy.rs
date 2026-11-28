@@ -1,4 +1,4 @@
-use super::{Definition, DefinitionBody, interface_requirements};
+use super::{Definition, DefinitionBody, InterfaceRequirement, interface_requirements};
 use super::{is_go_import, is_prelude_symbol};
 use crate::go_names::snake_to_camel;
 use crate::types::{Symbol, Type, peel_alias, unqualified_name};
@@ -59,48 +59,30 @@ impl GoMethodPolicy {
         let mut policy = Self::default();
         for (key, definition) in definitions {
             policy.register_exported_methods(key, definition);
-            policy.register_bound_returns(definition, lookup);
+            policy.register_tagged_interface_methods(key, definition, lookup);
         }
         policy
     }
 
-    fn register_bound_returns<'a>(
+    fn register_tagged_interface_methods<'a>(
         &mut self,
+        key: &Symbol,
         definition: &Definition,
         lookup: impl Fn(&str) -> Option<&'a Definition> + Copy,
     ) {
-        let function_bounds = definition
-            .ty
-            .as_function_type()
-            .into_iter()
-            .flat_map(|function| &function.bounds)
-            .map(|bound| &bound.ty);
-        let type_bounds = definition
-            .body
-            .generics()
-            .into_iter()
-            .flatten()
-            .flat_map(|generic| generic.resolved_bounds().into_iter().flatten());
-        let method_bounds = definition
-            .methods()
-            .into_iter()
-            .flat_map(|methods| methods.values())
-            .filter_map(|method| method.ty.as_function_type())
-            .flat_map(|function| &function.bounds)
-            .map(|bound| &bound.ty);
-        for bound in function_bounds.chain(type_bounds).chain(method_bounds) {
-            for requirement in interface_requirements(bound, |id| lookup(id)) {
-                if is_go_import(&requirement.declaring_interface) {
-                    continue;
-                }
-                let Some(return_ty) = requirement.method.ty.unwrap_forall().get_function_ret()
-                else {
-                    continue;
-                };
-                if matches!(peel_alias(return_ty, |id| lookup(id)), Type::Parameter(_)) {
-                    self.tagged_method_names
-                        .insert(snake_to_camel(&requirement.name));
-                }
+        if is_go_import(key) {
+            return;
+        }
+        let DefinitionBody::Interface {
+            definition: interface_definition,
+        } = &definition.body
+        else {
+            return;
+        };
+        for method in interface_definition.methods.values() {
+            if interface_method_is_tagged(&method.ty, lookup) {
+                self.tagged_method_names
+                    .insert(snake_to_camel(&method.source_name));
             }
         }
     }
@@ -141,4 +123,51 @@ impl GoMethodPolicy {
             self.exported_method_names.insert("to_string".to_string());
         }
     }
+}
+
+pub fn interface_method_is_tagged<'a>(
+    method_ty: &Type,
+    lookup: impl Fn(&str) -> Option<&'a Definition> + Copy,
+) -> bool {
+    let Some(return_ty) = method_ty.unwrap_forall().get_function_ret() else {
+        return false;
+    };
+    let peeled = peel_alias(return_ty, lookup);
+    match &peeled {
+        Type::Parameter(_) => true,
+        Type::Nominal { params, .. } if peeled.is_option() || peeled.is_result() => {
+            params.iter().any(Type::contains_type_parameter)
+        }
+        _ => peeled.is_partial(),
+    }
+}
+
+pub fn requirement_uses_tagged_counterpart<'a>(
+    requirement: &InterfaceRequirement,
+    lookup: impl Fn(&str) -> Option<&'a Definition> + Copy,
+) -> bool {
+    !is_go_import(&requirement.declaring_interface)
+        && interface_method_is_tagged(&requirement.method.ty, lookup)
+}
+
+pub fn supplying_requirement<'a>(
+    suppliers: &[Type],
+    name: &str,
+    wanted: Option<&InterfaceRequirement>,
+    lookup: impl Fn(&str) -> Option<&'a Definition> + Copy,
+) -> Option<InterfaceRequirement> {
+    let mut candidates: Vec<InterfaceRequirement> = suppliers
+        .iter()
+        .flat_map(|supplier| interface_requirements(supplier, lookup))
+        .filter(|candidate| candidate.name == name)
+        .collect();
+    let index = wanted
+        .and_then(|wanted| {
+            let tagged = requirement_uses_tagged_counterpart(wanted, lookup);
+            candidates.iter().position(|candidate| {
+                requirement_uses_tagged_counterpart(candidate, lookup) == tagged
+            })
+        })
+        .unwrap_or(0);
+    (index < candidates.len()).then(|| candidates.swap_remove(index))
 }

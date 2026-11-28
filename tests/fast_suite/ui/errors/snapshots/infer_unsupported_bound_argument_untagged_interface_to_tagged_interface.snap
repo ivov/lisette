@@ -1,0 +1,12 @@
+---
+source: tests/fast_suite/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+   ╭─[test.lis:4:38]
+ 3 │ interface GetX { fn get() -> Option<Ref<X>> }
+ 4 │ fn convert(g: GetX) -> Get<Ref<X>> { g }
+   ·                                      ┬
+   ·                                      ╰── unsupported
+ 5 │ fn main() {}
+   ╰────
+  help: Lisette does not yet support using `GetX` as a `Get` value · code: [infer.unsupported_bound_argument]

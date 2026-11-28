@@ -1,0 +1,54 @@
+---
+source: tests/fast_suite/spec/emit/go_interface_adapter.rs
+description: |
+  
+  interface Failing<T> {
+    fn get() -> T
+  }
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn get(self) -> Result<int, error> {
+      Ok(1)
+    }
+  }
+  
+  fn bail() -> Result<int, Failing<Result<int, error>>> {
+    return Err(Boom {})
+  }
+  
+  fn main() {
+    match bail() {
+      Ok(_) => panic("expected error"),
+      Err(_) => {},
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Failing[T any] interface {
+	get_() T
+}
+
+type Boom struct{}
+
+func (b Boom) get() (int, error) {
+	return 1, nil
+}
+
+func (b Boom) get_() lisette.Result[int, error] {
+	return lisette.ResultFromPair[int](b.get())
+}
+
+func bail() (int, Failing[lisette.Result[int, error]]) {
+	return 0, Boom{}
+}
+
+func main() {
+	if _, err := bail(); err == nil {
+		panic("expected error")
+	}
+}

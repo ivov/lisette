@@ -45,6 +45,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Sized interface {
@@ -60,8 +62,19 @@ func (t Temp) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprint(t.c)), nil
 }
 
-func (t Temp) Write(p []byte) (int, error) {
-	return len(p), nil
+func (t Temp) Write_(p []byte) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](len(p))
+}
+
+func (t Temp) Write(arg0 []byte) (int, error) {
+	res := t.Write_(arg0)
+	if res.Tag == lisette.PartialOk {
+		return res.OkVal, nil
+	}
+	if res.Tag == lisette.PartialErr {
+		return 0, res.ErrVal
+	}
+	return res.OkVal, res.ErrVal
 }
 
 func (t Temp) size() int {

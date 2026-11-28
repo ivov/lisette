@@ -47,8 +47,13 @@ impl EmitFacts<'_> {
         }
     }
 
-    pub(crate) fn interface_method_go_name(&self, method: &str, export: GoExport) -> String {
-        let spelling = if self.method_uses_tagged_return(method) {
+    pub(crate) fn interface_method_go_name(
+        &self,
+        method: &str,
+        method_ty: &Type,
+        export: GoExport,
+    ) -> String {
+        let spelling = if self.interface_method_is_tagged(method_ty) {
             MemberSpelling::TaggedCounterpart
         } else {
             MemberSpelling::Plain
