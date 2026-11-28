@@ -18,8 +18,9 @@ mod ufcs;
 pub(in crate::lowering) mod unwrap_or;
 pub(in crate::lowering) mod wrap_err;
 
+use crate::lookup::facts::callables::CallableDeclaration;
 use crate::lowering::abi::callable::CallableAbi;
-use crate::lowering::calls::call_plan::CallableOrigin;
+use crate::lowering::calls::call_plan::{CallableOrigin, ResolvedCallee};
 use crate::lowering::calls::call_site::CallSite;
 use crate::lowering::value_plans::context::ExpressionContext;
 use crate::target::ir::values::CaptureBoundary;
@@ -67,7 +68,8 @@ pub(in crate::lowering) struct NativeCallContext<'a> {
     pub form: NativeCallForm<'a>,
     pub args: &'a [Expression],
     pub spread: Option<&'a Expression>,
-    pub written_type_arguments: usize,
+    pub writes_type_arguments: bool,
+    pub declared_type: Option<&'a Type>,
     pub abi: CallableAbi,
     pub call_ty: Option<&'a Type>,
     pub native_type: NativeTypeKind,
@@ -79,7 +81,7 @@ pub(in crate::lowering) struct NativeCallContext<'a> {
 impl<'a> NativeCallContext<'a> {
     pub(in crate::lowering) fn new(
         site: CallSite<'a>,
-        abi: CallableAbi,
+        callee: &ResolvedCallee<'a>,
         native_type: NativeTypeKind,
         method: &'a str,
     ) -> Self {
@@ -88,8 +90,9 @@ impl<'a> NativeCallContext<'a> {
             form: NativeCallForm::method(site.callee),
             args: site.args,
             spread: site.spread,
-            written_type_arguments: site.written_type_arguments(),
-            abi,
+            writes_type_arguments: site.writes_type_arguments(),
+            declared_type: callee.declaration.map(CallableDeclaration::ty),
+            abi: callee.abi.clone(),
             call_ty: None,
             native_type,
             method,
@@ -136,7 +139,7 @@ impl<'p> PlannerQueries<'_, 'p> {
         };
         let call = NativeCallContext {
             call_ty: Some(site.ty),
-            ..NativeCallContext::new(site, plan.resolved.abi, *kind, method)
+            ..NativeCallContext::new(site, &plan.resolved, *kind, method)
         };
         call.receiver_and_arguments()?;
         Some(call)

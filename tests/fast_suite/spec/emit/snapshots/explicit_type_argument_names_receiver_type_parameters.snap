@@ -1,0 +1,15 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(ch: Channel<int>, rx: Receiver<string>, m: Map<string, int>) -> (Option<int>, Option<string>, Option<int>) {
+    (ch.receive<int>(), rx.receive<string>(), m.get<string, int>("a"))
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(ch chan int, rx <-chan string, m map[string]int) (lisette.Option[int], lisette.Option[string], lisette.Option[int]) {
+	return lisette.ChannelReceive[int](ch), lisette.ReceiverReceive[string](rx), lisette.MapGet[string, int](m, "a")
+}

@@ -723,7 +723,7 @@ impl Planner<'_> {
         let ctx = NativeCallContext {
             form: NativeCallForm::Dot { receiver },
             spread: None,
-            ..NativeCallContext::new(site, plan.resolved.abi, NativeTypeKind::Map, "get")
+            ..NativeCallContext::new(site, &plan.resolved, NativeTypeKind::Map, "get")
         };
 
         let mut operand = self.plan_native_method_operands(&ctx, receiver, site.args);
@@ -994,20 +994,10 @@ impl PlannerQueries<'_, '_> {
             ),
         );
 
-        let written = self
-            .facts
-            .checked(context.function)
-            .callee()
-            .written_type_arguments(context.written_type_arguments);
-        let type_args = match context.form {
-            NativeCallForm::Dot { receiver }
-                if context.written_type_arguments > 0 && context.call_ty.is_some() =>
-            {
-                self.format_type_args_with_receiver(&receiver.get_type(), written)
-            }
-            NativeCallForm::Dot { .. }
-            | NativeCallForm::Identifier
-            | NativeCallForm::Constructor => self.format_type_arg_iter(written),
+        let type_args = if context.writes_type_arguments {
+            self.declared_type_arguments(context.declared_type, context.function)
+        } else {
+            None
         };
 
         let mut emitted_args = vec![operand.receiver.clone()];

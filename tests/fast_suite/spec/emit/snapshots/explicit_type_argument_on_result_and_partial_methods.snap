@@ -1,0 +1,41 @@
+---
+source: tests/fast_suite/spec/emit/prelude.rs
+description: |
+  
+  fn test(r: Result<int, string>, p: Partial<int, string>) -> bool {
+    let mapped = r.map<bool>(|x| x > 0)
+    let chained = r.and_then<bool>(|x| Ok(x > 1))
+    let defaulted = r.map_or<bool>(false, |x| x > 2)
+    let computed = r.map_or_else<bool>(|e| e.is_empty(), |x| x > 3)
+    let spelled = Result.map<int, string, bool>(r, |x| x > 4)
+    let partial = p.map<bool>(|x| x > 5)
+    mapped.is_ok() && chained.is_ok() && defaulted && computed && spelled.is_ok() && partial.is_ok()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(r lisette.Result[int, string], p lisette.Partial[int, string]) bool {
+	mapped := lisette.ResultMap[int, string, bool](r, func(x int) bool {
+		return x > 0
+	})
+	chained := lisette.ResultAndThen[int, string, bool](r, func(x int) lisette.Result[bool, string] {
+		return lisette.MakeResultOk[bool, string](x > 1)
+	})
+	defaulted := lisette.ResultMapOr[int, string, bool](r, false, func(x int) bool {
+		return x > 2
+	})
+	computed := lisette.ResultMapOrElse[int, string, bool](r, func(e string) bool {
+		return e == ""
+	}, func(x int) bool {
+		return x > 3
+	})
+	spelled := lisette.ResultMap[int, string, bool](r, func(x int) bool {
+		return x > 4
+	})
+	partial := lisette.PartialMap[int, string, bool](p, func(x int) bool {
+		return x > 5
+	})
+	return mapped.IsOk() && chained.IsOk() && defaulted && computed && spelled.IsOk() && partial.IsOk()
+}

@@ -165,13 +165,6 @@ impl CheckedCallee {
         usize::from(self.binds_receiver)
     }
 
-    /// The type arguments that a call spells, which are the last `written` of the callee.
-    pub fn written_type_arguments(&self, written: usize) -> impl Iterator<Item = &Type> + Clone {
-        let types = self.type_arguments.types();
-        let skipped = types.len().saturating_sub(written);
-        types.skip(skipped)
-    }
-
     /// The type argument of a callee whose first type parameter decides its result.
     pub fn first_type_argument(&self) -> &Type {
         self.type_arguments

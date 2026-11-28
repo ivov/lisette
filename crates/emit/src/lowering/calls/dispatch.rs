@@ -146,15 +146,14 @@ impl<'a> Planner<'a> {
             CallableOrigin::Source(CallOperation::NativeConstructor { kind, method }) => {
                 let native_ctx = NativeCallContext {
                     form: NativeCallForm::Constructor,
-                    ..NativeCallContext::new(plan.site, plan.resolved.abi, *kind, method)
+                    ..NativeCallContext::new(plan.site, &plan.resolved, *kind, method)
                         .placed(call_ty, ctx)
                 };
                 return self.plan_native_call(&native_ctx);
             }
             CallableOrigin::Source(CallOperation::Native { kind, method }) => {
-                let native_ctx =
-                    NativeCallContext::new(plan.site, plan.resolved.abi, *kind, method)
-                        .placed(call_ty, ctx);
+                let native_ctx = NativeCallContext::new(plan.site, &plan.resolved, *kind, method)
+                    .placed(call_ty, ctx);
                 return self.plan_native_call(&native_ctx);
             }
             CallableOrigin::Source(CallOperation::ReceiverMethod { is_public: true }) => {

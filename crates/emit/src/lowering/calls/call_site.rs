@@ -34,7 +34,7 @@ impl<'e> CallSite<'e> {
         })
     }
 
-    pub(in crate::lowering) fn written_type_arguments(self) -> usize {
-        self.type_arguments.annotations().len()
+    pub(in crate::lowering) fn writes_type_arguments(self) -> bool {
+        self.type_arguments.annotations().next().is_some()
     }
 }

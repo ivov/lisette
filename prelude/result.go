@@ -73,7 +73,7 @@ func (res Result[T, E]) DebugString() string {
 	return fmt.Sprintf("Err(%s)", Debug(res.ErrVal))
 }
 
-func ResultMap[T any, U any, E any](res Result[T, E], f func(T) U) Result[U, E] {
+func ResultMap[T any, E any, U any](res Result[T, E], f func(T) U) Result[U, E] {
 	if res.Tag == ResultOk {
 		return Result[U, E]{Tag: ResultOk, OkVal: f(res.OkVal)}
 	}
@@ -94,21 +94,21 @@ func ResultWrapErr[T any](res Result[T, error], msg string) Result[T, error] {
 	return Result[T, error]{Tag: ResultOk, OkVal: res.OkVal}
 }
 
-func ResultMapOr[T any, U any, E any](res Result[T, E], def U, f func(T) U) U {
+func ResultMapOr[T any, E any, U any](res Result[T, E], def U, f func(T) U) U {
 	if res.Tag == ResultOk {
 		return f(res.OkVal)
 	}
 	return def
 }
 
-func ResultMapOrElse[T any, U any, E any](res Result[T, E], def func(E) U, f func(T) U) U {
+func ResultMapOrElse[T any, E any, U any](res Result[T, E], def func(E) U, f func(T) U) U {
 	if res.Tag == ResultOk {
 		return f(res.OkVal)
 	}
 	return def(res.ErrVal)
 }
 
-func ResultAndThen[T any, U any, E any](res Result[T, E], f func(T) Result[U, E]) Result[U, E] {
+func ResultAndThen[T any, E any, U any](res Result[T, E], f func(T) Result[U, E]) Result[U, E] {
 	if res.Tag == ResultOk {
 		return f(res.OkVal)
 	}

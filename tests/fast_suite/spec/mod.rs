@@ -8,6 +8,7 @@ pub mod infer;
 mod lex;
 mod parse;
 mod pattern_analysis;
+mod prelude_type_parameter_order;
 mod representation;
 mod type_name_guard;
 mod type_reductions;

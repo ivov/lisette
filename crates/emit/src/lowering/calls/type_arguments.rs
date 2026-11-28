@@ -11,7 +11,7 @@ use syntax::types::{CompoundKind, FunctionParameter, FunctionType, SubstitutionM
 pub(in crate::lowering) struct CallTypeArgumentsRequest<'e, 'c> {
     pub(in crate::lowering) function: &'e Expression,
     pub(in crate::lowering) callee: &'e ResolvedCallee<'c>,
-    pub(in crate::lowering) written_type_arguments: usize,
+    pub(in crate::lowering) writes_type_arguments: bool,
     pub(in crate::lowering) call_ty: Option<&'e Type>,
     pub(in crate::lowering) arg_shape: CallArgumentShape,
     pub(in crate::lowering) slot: Option<&'e Type>,
@@ -84,7 +84,7 @@ impl PlannerQueries<'_, '_> {
         let CallTypeArgumentsRequest {
             function,
             callee,
-            written_type_arguments,
+            writes_type_arguments,
             arg_shape,
             slot,
             receiver_passed,
@@ -106,8 +106,8 @@ impl PlannerQueries<'_, '_> {
             return self.recipe_type_arguments(&request, recipe, receiver_count);
         }
 
-        if written_type_arguments > 0 {
-            return self.written_call_type_arguments(&request);
+        if writes_type_arguments {
+            return self.declared_type_arguments(callee.declared_type(), function);
         }
 
         if let Some(pinned) = self.uninferable_type_args(
@@ -145,17 +145,13 @@ impl PlannerQueries<'_, '_> {
         self.reconstruct_collapsed_type_args(recipe, type_arguments)
     }
 
-    fn written_call_type_arguments(
+    pub(in crate::lowering) fn declared_type_arguments(
         &self,
-        request: &CallTypeArgumentsRequest<'_, '_>,
+        declared: Option<&Type>,
+        function: &Expression,
     ) -> Option<GoType> {
-        let callee = self.facts.checked(request.function).callee();
-        if request.receiver_passed {
-            return request.callee.declared_type().and_then(|declared| {
-                self.format_generic_instantiation(declared, &callee.type_arguments)
-            });
-        }
-        self.format_type_arg_iter(callee.written_type_arguments(request.written_type_arguments))
+        let type_arguments = &self.facts.checked(function).callee().type_arguments;
+        self.format_generic_instantiation(declared?, type_arguments)
     }
 
     fn prelude_constructor_type_arguments(
@@ -307,20 +303,6 @@ impl PlannerQueries<'_, '_> {
                 &self.render_recipe_entry(element, mapping),
             ),
         }
-    }
-
-    pub(in crate::lowering) fn format_type_args_with_receiver<'t>(
-        &self,
-        receiver_ty: &Type,
-        type_args: impl Iterator<Item = &'t Type>,
-    ) -> Option<GoType> {
-        let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
-        let arguments: Vec<GoType> = receiver_params
-            .iter()
-            .map(|ty| self.go_type(ty))
-            .chain(type_args.map(|ty| self.go_type(ty)))
-            .collect();
-        GoType::type_arguments(&arguments)
     }
 }
 
